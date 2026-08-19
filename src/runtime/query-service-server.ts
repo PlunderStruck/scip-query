@@ -341,6 +341,14 @@ async function executeRequest(
     const { unusedImports } = await import('../queries/navigation/imports.js');
     return unusedImports(db, request.filePattern, { semantic: defaultSemanticEnrichment(db) });
   }
+  if (request.kind === 'system') {
+    const { system } = await import('../queries/navigation/system.js');
+    const serializedJson = JSON.stringify(system(db, request.modulePattern));
+    return {
+      serializedJson,
+      sha256: createHash('sha256').update(serializedJson).digest('hex'),
+    };
+  }
   if (request.kind === 'surface') {
     const { consumerSurface } = await import('../queries/navigation/surface.js');
     return consumerSurface(db, request.modulePattern);
@@ -532,7 +540,7 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
       },
     };
   }
-  if (requestRecord['kind'] === 'surface') {
+  if (requestRecord['kind'] === 'system' || requestRecord['kind'] === 'surface') {
     if (typeof requestRecord['modulePattern'] !== 'string') {
       throw new Error(`Invalid query service ${requestRecord['kind']} request.`);
     }

@@ -22,6 +22,7 @@ import {
   tryOutlineWithQueryService,
   trySearchSourceWithQueryService,
   tryStatsWithQueryService,
+  trySystemWithQueryService,
   trySurfaceWithQueryService,
   tryTraceWithQueryService,
   tryUnusedImportsWithQueryService,
@@ -136,6 +137,11 @@ interface SurfaceFastPathInvocation {
   modulePattern: string;
 }
 
+interface SystemFastPathInvocation {
+  kind: 'system';
+  modulePattern: string;
+}
+
 type FastPathInvocation =
   | SourceSearchFastPathInvocation
   | OutlineFastPathInvocation
@@ -156,6 +162,7 @@ type FastPathInvocation =
   | SemanticNeighborhoodFastPathInvocation
   | ImportsFastPathInvocation
   | UnusedImportsFastPathInvocation
+  | SystemFastPathInvocation
   | SurfaceFastPathInvocation;
 
 /**
@@ -265,6 +272,12 @@ export async function tryRunQueryServiceFastPath(argv: readonly string[]): Promi
     if (!response || !writeUnpagedJsonResult(response.result)) return false;
     return true;
   }
+  if (invocation.kind === 'system') {
+    const response = trySystemWithQueryService(projectRoot, invocation.modulePattern, { allowDefault: true });
+    if (!response) return false;
+    await writeSerializedJsonResult(response.result.serializedJson, invocation.kind, argv);
+    return true;
+  }
   if (invocation.kind === 'surface') {
     const response = trySurfaceWithQueryService(projectRoot, invocation.modulePattern, { allowDefault: true });
     if (!response || !writeUnpagedJsonResult(response.result)) return false;
@@ -320,6 +333,7 @@ export function parseFastPathInvocation(argv: readonly string[]): FastPathInvoca
   }
   if (argv[0] === 'imports') return parseImportsInvocation(argv);
   if (argv[0] === 'unused-imports') return parseUnusedImportsInvocation(argv);
+  if (argv[0] === 'system') return parseSystemInvocation(argv);
   if (argv[0] === 'surface') return parseSurfaceInvocation(argv);
   return null;
 }
@@ -394,6 +408,11 @@ function parseImportsInvocation(argv: readonly string[]): ImportsFastPathInvocat
 function parseUnusedImportsInvocation(argv: readonly string[]): UnusedImportsFastPathInvocation | null {
   const filePattern = parseExactCompactOperand(argv);
   return filePattern === null ? null : { kind: 'unused-imports', filePattern };
+}
+
+function parseSystemInvocation(argv: readonly string[]): SystemFastPathInvocation | null {
+  const modulePattern = parseExactCompactOperand(argv);
+  return modulePattern === null ? null : { kind: 'system', modulePattern };
 }
 
 function parseSurfaceInvocation(argv: readonly string[]): SurfaceFastPathInvocation | null {

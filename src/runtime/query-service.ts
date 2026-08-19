@@ -42,13 +42,14 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 16;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 17;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
 const QUERY_SERVICE_CATALOG_POOL_SIZE = 4;
 const QUERY_SERVICE_SEMANTIC_NAVIGATION_POOL_SIZE = 5;
 const QUERY_SERVICE_CALL_GRAPH_POOL_SIZE = 3;
 const QUERY_SERVICE_REFERENCE_REACHABILITY_POOL_SIZE = 3;
+const QUERY_SERVICE_SYSTEM_POOL_SIZE = 4;
 const QUERY_SERVICE_VALUE_FLOW_POOL_SIZE = 3;
 const QUERY_SERVICE_MAX_POOL_SIZE = 8;
 const QUERY_SERVICE_TIMEOUT_MS = 30_000;
@@ -188,6 +189,12 @@ export interface QueryServiceSurfaceRequest {
   modulePattern: string;
 }
 
+export interface QueryServiceSystemRequest {
+  kind: 'system';
+  expectedGeneration: string;
+  modulePattern: string;
+}
+
 export interface QueryServiceEntryPointsOptions {
   search?: string;
   scope?: string;
@@ -246,6 +253,7 @@ export type QueryServiceRequest =
   | QueryServiceSemanticNeighborhoodRequest
   | QueryServiceImportsRequest
   | QueryServiceUnusedImportsRequest
+  | QueryServiceSystemRequest
   | QueryServiceSurfaceRequest;
 
 export interface QueryServiceEnvelope {
@@ -296,6 +304,12 @@ export interface QueryServiceSerializedResult {
 }
 
 export interface QueryServiceCodeResult {
+  result: QueryServiceSerializedResult;
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceSystemResult {
   result: QueryServiceSerializedResult;
   generationIdentity: string;
   observationReceipt: ObservationReceiptV2;
@@ -628,6 +642,20 @@ export function trySemanticNeighborhoodWithQueryService(
   );
 }
 
+export function trySystemWithQueryService(
+  projectRoot: string,
+  modulePattern: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceSystemResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'system', expectedGeneration, modulePattern }),
+    isSerializedJsonResult,
+    'system result',
+    policy,
+  );
+}
+
 export function tryImportsWithQueryService(
   projectRoot: string,
   filePattern: string,
@@ -823,7 +851,7 @@ function requestQuery<Result>(
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const operationKey = boundedMailboxOperationKey('query-service-v16', { clientId, request });
+  const operationKey = boundedMailboxOperationKey('query-service-v17', { clientId, request });
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -1336,6 +1364,7 @@ function requestPoolSize(request: QueryServiceRequest): number {
   const configured = configuredPoolSize();
   if (request.kind === 'value-flow') return Math.min(configured, QUERY_SERVICE_VALUE_FLOW_POOL_SIZE);
   if (request.kind === 'call-graph') return Math.min(configured, QUERY_SERVICE_CALL_GRAPH_POOL_SIZE);
+  if (request.kind === 'system') return Math.min(configured, QUERY_SERVICE_SYSTEM_POOL_SIZE);
   if (request.kind === 'reference-reachability' || request.kind === 'slice') {
     return Math.min(configured, QUERY_SERVICE_REFERENCE_REACHABILITY_POOL_SIZE);
   }

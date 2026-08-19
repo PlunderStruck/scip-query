@@ -50,6 +50,7 @@ function mayUseQueryServiceFastPath(argv: readonly string[]): boolean {
       argv[0] === 'dataflow' ||
       argv[0] === 'imports' ||
       argv[0] === 'unused-imports' ||
+      argv[0] === 'system' ||
       argv[0] === 'surface') &&
     argv.includes('--json') &&
     argv.includes('--result-only') &&

@@ -232,6 +232,10 @@ describe('query service fast path', () => {
       kind: 'surface',
       modulePattern: 'src/runtime',
     });
+    expect(parseFastPathInvocation(['system', 'src/runtime', '--json', '--result-only', '--compact'])).toEqual({
+      kind: 'system',
+      modulePattern: 'src/runtime',
+    });
   });
 
   it.each([
@@ -293,7 +297,8 @@ describe('query service fast path', () => {
     ['imports', '--json', '--result-only', '--compact'],
     ['unused-imports', 'src/runtime/cli.ts', '--json', '--result-only', '--compact', '--full'],
     ['unused-imports', '--json', '--result-only', '--compact'],
-    ['system', 'src/runtime', '--json', '--result-only', '--compact'],
+    ['system', 'src/runtime', '--json', '--result-only', '--compact', '--full'],
+    ['system', '--json', '--result-only', '--compact'],
     ['surface', 'src/runtime', '--json', '--result-only', '--compact', '--limit', '10'],
     ['surface', '--json', '--result-only', '--compact'],
   ])('falls through for an ambiguous or unsupported invocation: %j', (...argv) => {
