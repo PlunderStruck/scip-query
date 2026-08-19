@@ -424,6 +424,7 @@ describe('CLI contract', () => {
       '--daemon',
       '--status',
       '--stop',
+      '--prune',
       '--debounce <ms>',
       '--cooldown <ms>',
       '--git-poll <ms>',

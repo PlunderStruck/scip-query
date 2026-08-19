@@ -1521,10 +1521,44 @@ describe('watch command config gate', () => {
     try {
       handleWatch({ daemon: true, status: true });
       expect(process.exitCode).toBe(1);
-      expect(error).toHaveBeenCalledWith('error: choose only one of --daemon, --status, or --stop.');
+      expect(error).toHaveBeenCalledWith('error: choose only one of --daemon, --status, --stop, or --prune.');
     } finally {
       error.mockRestore();
       process.exitCode = previousExitCode;
+    }
+  });
+
+  it('prunes global watcher caches without requiring a current project', () => {
+    const scratch = createProject();
+    const previousProjectRoot = process.env['SCIP_QUERY_PROJECT_ROOT'];
+    const previousXdgCache = process.env['XDG_CACHE_HOME'];
+    const previousExitCode = process.exitCode;
+    process.env['SCIP_QUERY_PROJECT_ROOT'] = join(scratch, 'missing-project');
+    process.env['XDG_CACHE_HOME'] = join(scratch, 'empty-cache-home');
+    process.exitCode = undefined;
+    const writes: string[] = [];
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
+
+    try {
+      handleWatch({ prune: true, json: true });
+      const payload = JSON.parse(writes[0]!) as { result: Record<string, unknown> };
+      expect(payload.result).toMatchObject({
+        scannedCacheDirs: 0,
+        orphanedRoots: 0,
+        stoppedServices: 0,
+        failures: [],
+      });
+      expect(process.exitCode).toBeUndefined();
+    } finally {
+      stdout.mockRestore();
+      process.exitCode = previousExitCode;
+      if (previousProjectRoot === undefined) delete process.env['SCIP_QUERY_PROJECT_ROOT'];
+      else process.env['SCIP_QUERY_PROJECT_ROOT'] = previousProjectRoot;
+      if (previousXdgCache === undefined) delete process.env['XDG_CACHE_HOME'];
+      else process.env['XDG_CACHE_HOME'] = previousXdgCache;
     }
   });
 

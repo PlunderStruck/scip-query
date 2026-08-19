@@ -230,6 +230,20 @@ export function assertOwnedCacheDir(projectRoot: string, cacheDir: string): Cach
   return readAndValidateOwnership(physicalCacheDir, canonicalProjectRoot, physicalCacheDir);
 }
 
+/**
+ * Reads a cache's durable ownership credential without requiring its project
+ * root to still exist. Global maintenance uses this proof to discover only
+ * scip-query-owned cache directories after a worktree has been removed.
+ */
+export function readCacheOwnershipProof(cacheDir: string): CacheOwnershipProof {
+  const cacheStat = lstatSync(cacheDir);
+  if (cacheStat.isSymbolicLink() || !cacheStat.isDirectory()) {
+    throw cacheOwnershipError(cacheDir, 'cache path is not a regular directory');
+  }
+  const physicalCacheDir = realpathSync(cacheDir);
+  return readAndValidateOwnership(physicalCacheDir, undefined, physicalCacheDir);
+}
+
 export function hardenOwnedCacheTreeIfOwned(projectRoot: string, cacheDir: string): boolean {
   if (!existsSync(join(cacheDir, CACHE_OWNERSHIP_FILE))) return false;
   assertOwnedCacheDir(projectRoot, cacheDir);
@@ -272,7 +286,7 @@ function nearestExistingAncestor(path: string): string {
 
 function readAndValidateOwnership(
   physicalCacheDir: string,
-  canonicalProjectRoot: string,
+  canonicalProjectRoot: string | undefined,
   expectedCanonicalCacheDir: string,
 ): CacheOwnershipProof {
   const ownerPath = join(physicalCacheDir, CACHE_OWNERSHIP_FILE);
@@ -285,7 +299,7 @@ function readAndValidateOwnership(
   }
   const payload = readSmallArtifactText(ownerPath, 'cache ownership record');
   const record = parseOwnershipRecord(payload, physicalCacheDir);
-  if (record.canonicalProjectRoot !== canonicalProjectRoot) {
+  if (canonicalProjectRoot !== undefined && record.canonicalProjectRoot !== canonicalProjectRoot) {
     throw cacheOwnershipError(physicalCacheDir, 'ownership record belongs to a different project');
   }
   if (record.canonicalCacheDir !== expectedCanonicalCacheDir) {

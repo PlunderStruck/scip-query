@@ -6,8 +6,10 @@ import { sanitizeTerminalLine } from '../platform/terminal-output.js';
 import { monotonicNowMs } from '../domain/time.js';
 import type { RefreshTrigger, WatcherStatus } from '../domain/types.js';
 import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
+import { resolveGitWorktreeIdentity } from '../platform/git-worktree.js';
 import { createPathChangeWake } from '../platform/path-change-wake.js';
 import { readProcessIdentity } from '../platform/process-identity.js';
+import { captureWorktreeLivenessIdentity, worktreeLivenessIdentityIsCurrent } from '../platform/worktree-liveness.js';
 import {
   WATCH_SERVICE_PROTOCOL_VERSION,
   watchServicePaths,
@@ -39,6 +41,7 @@ import { createTypeScriptIndexMailboxLane, createTypeScriptSemanticMailboxLane }
 
 const HEARTBEAT_INTERVAL_MS = 2_000;
 const ACTIVITY_POLL_INTERVAL_MS = 5_000;
+const WORKTREE_LIVENESS_POLL_INTERVAL_MS = 5_000;
 const MAILBOX_MAINTENANCE_INTERVAL_MS = 60_000;
 const BUSY_SERVICE_LOOP_INTERVAL_MS = 10;
 const IDLE_SERVICE_LOOP_INTERVAL_MS = 50;
@@ -117,6 +120,11 @@ export async function runWatchServiceServer(
 ): Promise<void> {
   const serviceIdentity = resolveWatchServiceIdentity(projectRootInput, cliVersion);
   const projectRoot = serviceIdentity.projectRoot;
+  const gitControlDirectory =
+    serviceIdentity.worktreeKind === 'git'
+      ? resolveCurrentGitControlDirectory(projectRoot, serviceIdentity.worktreeId)
+      : undefined;
+  const worktreeLiveness = captureWorktreeLivenessIdentity(projectRoot, gitControlDirectory);
   const config = loadProjectConfig(projectRoot);
   config.watch = { ...config.watch, ...watchOverrides };
   const watchConfig = resolveWatchConfig(config);
@@ -150,6 +158,7 @@ export async function runWatchServiceServer(
   let lastRefreshRequestAtMs = 0;
   let lastHeartbeatAtMonotonicMs = Number.NEGATIVE_INFINITY;
   let lastActivityPollAtMonotonicMs = Number.NEGATIVE_INFINITY;
+  let lastWorktreeLivenessPollAtMonotonicMs = Number.NEGATIVE_INFINITY;
   let lastCacheSweepAtMonotonicMs = Number.NEGATIVE_INFINITY;
   let lastMailboxMaintenanceAtMonotonicMs = Number.NEGATIVE_INFINITY;
   let semanticBusyUntilMs: number | undefined;
@@ -333,6 +342,13 @@ export async function runWatchServiceServer(
         processSemanticRequests: () => semanticLane.poll(),
         afterMailboxPoll: ({ processedRequests }) => {
           const nowMonotonicMs = monotonicNowMs();
+          if (nowMonotonicMs - lastWorktreeLivenessPollAtMonotonicMs >= WORKTREE_LIVENESS_POLL_INTERVAL_MS) {
+            lastWorktreeLivenessPollAtMonotonicMs = nowMonotonicMs;
+            if (!worktreeLivenessIdentityIsCurrent(worktreeLiveness)) {
+              stopping = true;
+              return;
+            }
+          }
           if (nowMonotonicMs - lastMailboxMaintenanceAtMonotonicMs >= MAILBOX_MAINTENANCE_INTERVAL_MS) {
             lastMailboxMaintenanceAtMonotonicMs = nowMonotonicMs;
             maintainBoundedMailbox(indexMailboxPaths);
@@ -419,6 +435,14 @@ export async function runWatchServiceServer(
   }
   if (executionFailed) throw executionError;
   if (shutdownError) throw shutdownError;
+}
+
+function resolveCurrentGitControlDirectory(projectRoot: string, expectedWorktreeId: string): string {
+  const resolution = resolveGitWorktreeIdentity(projectRoot);
+  if (resolution.kind !== 'worktree' || resolution.identity.worktreeId !== expectedWorktreeId) {
+    throw new Error(`Git worktree identity changed while starting the watch service for ${projectRoot}.`);
+  }
+  return resolution.identity.gitDir;
 }
 
 export function terminateWatchServiceProcess(

@@ -21,6 +21,7 @@ import {
   ensureOwnedCacheDirWithDurability,
   hardenOwnedCacheTreeIfOwned,
   NODE_CACHE_OWNERSHIP_RUNTIME,
+  readCacheOwnershipProof,
   resolveIndexStoragePaths,
 } from '../../src/platform/cache-layout.js';
 
@@ -65,10 +66,27 @@ describe('owned project caches', () => {
       canonicalProjectRoot: realpathSync(root),
       canonicalCacheDir: paths.cacheDir,
     });
+
     if (process.platform !== 'win32') {
       expect(statSync(paths.cacheDir).mode & 0o777).toBe(0o700);
       expect(statSync(join(paths.cacheDir, CACHE_OWNERSHIP_FILE)).mode & 0o777).toBe(0o600);
     }
+  });
+
+  it('proves global cache ownership after the project root has been removed', () => {
+    const root = project();
+    const cacheParent = project();
+    const cache = join(cacheParent, 'detached-cache');
+    mkdirSync(cache);
+    const physicalCache = ensureOwnedCacheDir(root, cache);
+    const canonicalRoot = realpathSync(root);
+
+    rmSync(root, { recursive: true, force: true });
+
+    expect(readCacheOwnershipProof(physicalCache).record).toMatchObject({
+      canonicalProjectRoot: canonicalRoot,
+      canonicalCacheDir: physicalCache,
+    });
   });
 
   it('repairs file and directory modes only for an owned cache tree', () => {

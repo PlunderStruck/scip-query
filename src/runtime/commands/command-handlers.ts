@@ -50,6 +50,7 @@ import { astParserLanguages } from '../ast-parser-setup.js';
 import { installSkills, isScipInstalled, printScipInstallInstructions } from '../setup.js';
 import { formatUninstallReport, runUninstall, selectUninstallScope } from '../uninstall.js';
 import { inspectSharedCacheStatus, type SharedCacheStatus } from '../repository-cache-lifecycle.js';
+import { pruneOrphanWatchServices } from '../watch-service-prune.js';
 import { rustSemanticSessionStatus } from '../../semantic/rust/lsp-session.js';
 import { healthPhases } from '../../queries/health/health.js';
 import { discloseHealthCapabilities } from '../health-capability-disclosure.js';
@@ -762,8 +763,6 @@ export function handleUninstall(rawOpts: unknown): void {
 // one process action.
 export function handleWatch(rawOpts: unknown): void {
   const opts = commandOptions(rawOpts);
-  const projectRoot = resolveProjectRoot();
-  const config = loadProjectConfig(projectRoot);
   const debounce = numberOptionValue(opts, 'debounce');
   const cooldown = numberOptionValue(opts, 'cooldown');
   const gitPoll = numberOptionValue(opts, 'gitPoll');
@@ -771,15 +770,16 @@ export function handleWatch(rawOpts: unknown): void {
   const daemon = booleanOptionValue(opts, 'daemon');
   const status = booleanOptionValue(opts, 'status');
   const stop = booleanOptionValue(opts, 'stop');
+  const prune = booleanOptionValue(opts, 'prune');
   const json = booleanOptionValue(opts, 'json');
-  const lifecycleModes = [daemon, status, stop].filter(Boolean).length;
+  const lifecycleModes = [daemon, status, stop, prune].filter(Boolean).length;
   if (lifecycleModes > 1) {
-    console.error('error: choose only one of --daemon, --status, or --stop.');
+    console.error('error: choose only one of --daemon, --status, --stop, or --prune.');
     process.exitCode = 1;
     return;
   }
   if (json && lifecycleModes === 0) {
-    console.error('error: --json requires --daemon, --status, or --stop.');
+    console.error('error: --json requires --daemon, --status, --stop, or --prune.');
     process.exitCode = 1;
     return;
   }
@@ -790,9 +790,9 @@ export function handleWatch(rawOpts: unknown): void {
     ['--idle-timeout', idleTimeout],
   ] as const;
   const providedTimingOptions = timingOptions.filter(([, value]) => value !== undefined);
-  if ((status || stop) && providedTimingOptions.length > 0) {
+  if ((status || stop || prune) && providedTimingOptions.length > 0) {
     console.error(
-      `error: timing options (${providedTimingOptions.map(([flag]) => flag).join(', ')}) only apply when starting a foreground or daemon watcher; --status and --stop do not accept them.`,
+      `error: timing options (${providedTimingOptions.map(([flag]) => flag).join(', ')}) only apply when starting a foreground or daemon watcher; ${prune ? '--prune does' : '--status and --stop do'} not accept them.`,
     );
     process.exitCode = 1;
     return;
@@ -810,6 +810,13 @@ export function handleWatch(rawOpts: unknown): void {
     process.exitCode = 1;
     return;
   }
+  if (prune) {
+    handleWatchPrune(opts, json);
+    return;
+  }
+
+  const projectRoot = resolveProjectRoot();
+  const config = loadProjectConfig(projectRoot);
   const watchOverrides = {
     ...(debounce === undefined ? {} : { debounceMs: debounce }),
     ...(cooldown === undefined ? {} : { cooldownMs: cooldown }),
@@ -944,6 +951,29 @@ export function handleWatch(rawOpts: unknown): void {
   };
   process.on('SIGINT', stopForegroundWatcher);
   process.on('SIGTERM', stopForegroundWatcher);
+}
+
+function handleWatchPrune(opts: ReturnType<typeof commandOptions>, json: boolean): void {
+  try {
+    const report = pruneOrphanWatchServices();
+    if (json) {
+      printJsonEnvelope('watch', [], opts, report);
+    } else {
+      console.log(
+        `Watcher cleanup scanned ${report.scannedCacheDirs} cache ${report.scannedCacheDirs === 1 ? 'directory' : 'directories'}: ` +
+          `stopped ${report.stoppedServices} orphaned service(s), found ${report.alreadyStoppedServices} already stopped, ` +
+          `retained ${report.retainedRoots} live root(s), and skipped ${report.skipped.length} unowned or invalid entry/entries.`,
+      );
+      for (const skipped of report.skipped) console.log(`Skipped ${skipped.cacheDir}: ${skipped.message}`);
+      for (const failure of report.failures) {
+        console.error(`error: could not clean ${failure.cacheDir}: ${failure.message}`);
+      }
+    }
+    if (report.failures.length > 0) process.exitCode = 1;
+  } catch (error) {
+    console.error(`error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+  }
 }
 
 function watchServiceReport(inspection: WatchServiceInspection, enabled = true) {

@@ -163,10 +163,11 @@
           "src/runtime/watch-refresh-coordinator.ts",
           "src/runtime/watch-server.ts",
           "src/runtime/watch-service.ts",
+          "src/runtime/watch-service-prune.ts",
           "src/runtime/watch.ts",
           "src/runtime/worker-request-lane.ts"
         ],
-        "maxFiles": 45
+        "maxFiles": 46
       },
       {
         "name": "test-fixtures",

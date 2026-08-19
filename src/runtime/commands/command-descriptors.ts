@@ -381,7 +381,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     id: 'watch',
     command: 'watch',
     agent: maintenanceAgentContract(
-      'What is the watcher doing, or can its background service be started or stopped?',
+      'What is the watcher doing, or can background services be started, stopped, or pruned?',
       'watcher state, generation, activity, and errors',
       [],
       'complete',
@@ -395,6 +395,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       option('--daemon', 'Make sure that the background service is running'),
       option('--status', 'Show the watcher state'),
       option('--stop', 'Stop the watcher for this project'),
+      option('--prune', 'Stop watcher services whose owned worktree roots no longer exist'),
       option('--debounce <ms>', 'Milliseconds after the last change', parseNonNegativeInteger),
       option('--cooldown <ms>', 'Minimum milliseconds between indexes', parseNonNegativeInteger),
       option('--git-poll <ms>', 'Milliseconds between Git state checks', parseNonNegativeInteger),
