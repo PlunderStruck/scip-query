@@ -145,6 +145,7 @@ function benchmarkArguments(): string[] {
     benchmarkCommand === 'call-graph' ||
     benchmarkCommand === 'slice' ||
     benchmarkCommand === 'reference-reachability' ||
+    benchmarkCommand === 'dependence-slice' ||
     benchmarkCommand === 'reference-neighborhood' ||
     benchmarkCommand === 'dataflow' ||
     benchmarkCommand === 'value-flow' ||
@@ -224,6 +225,7 @@ type BenchmarkCommand =
   | 'call-graph'
   | 'slice'
   | 'reference-reachability'
+  | 'dependence-slice'
   | 'reference-neighborhood'
   | 'dataflow'
   | 'value-flow'
@@ -265,6 +267,7 @@ function parseBenchmarkCommand(configured: string | undefined): BenchmarkCommand
     configured === 'call-graph' ||
     configured === 'reference-neighborhood' ||
     configured === 'reference-reachability' ||
+    configured === 'dependence-slice' ||
     configured === 'slice' ||
     configured === 'dataflow' ||
     configured === 'value-flow' ||
@@ -276,6 +279,6 @@ function parseBenchmarkCommand(configured: string | undefined): BenchmarkCommand
     return configured;
   }
   throw new Error(
-    'SCIP_QUERY_BENCH_COMMAND must be search, outline, code, entrypoints, files, stats, members, methods, deps, rdeps, imported-by, hierarchy, by-kind, kind-counts, refs, trace, call-graph, reference-neighborhood, reference-reachability, slice, dataflow, value-flow, imports, unused-imports, system, or surface.',
+    'SCIP_QUERY_BENCH_COMMAND must be search, outline, code, entrypoints, files, stats, members, methods, deps, rdeps, imported-by, hierarchy, by-kind, kind-counts, refs, trace, call-graph, reference-neighborhood, reference-reachability, dependence-slice, slice, dataflow, value-flow, imports, unused-imports, system, or surface.',
   );
 }

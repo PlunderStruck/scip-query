@@ -8,6 +8,7 @@ import { assertNavigationDetailAllowed } from './navigation-session.js';
 import {
   tryCodeWithQueryService,
   tryByKindWithQueryService,
+  tryDependenceSliceWithQueryService,
   tryEntryPointsWithQueryService,
   tryFileDependenciesWithQueryService,
   tryFilesWithQueryService,
@@ -115,6 +116,11 @@ interface ValueFlowFastPathInvocation {
   symbolPattern: string;
 }
 
+interface DependenceSliceFastPathInvocation {
+  kind: 'dependence-slice';
+  criterion: string;
+}
+
 type SemanticNeighborhoodFastPathInvocation =
   | { kind: 'call-graph'; symbolPattern: string }
   | { kind: 'reference-neighborhood'; symbolPattern: string }
@@ -159,6 +165,7 @@ type FastPathInvocation =
   | RefsFastPathInvocation
   | TraceFastPathInvocation
   | ValueFlowFastPathInvocation
+  | DependenceSliceFastPathInvocation
   | SemanticNeighborhoodFastPathInvocation
   | ImportsFastPathInvocation
   | UnusedImportsFastPathInvocation
@@ -248,6 +255,12 @@ export async function tryRunQueryServiceFastPath(argv: readonly string[]): Promi
     await writeSerializedJsonResult(response.result.serializedJson, invocation.kind, argv);
     return true;
   }
+  if (invocation.kind === 'dependence-slice') {
+    const response = tryDependenceSliceWithQueryService(projectRoot, invocation.criterion, { allowDefault: true });
+    if (!response) return false;
+    await writeSerializedJsonResult(response.result.serializedJson, invocation.kind, argv);
+    return true;
+  }
   if (
     invocation.kind === 'call-graph' ||
     invocation.kind === 'reference-neighborhood' ||
@@ -322,6 +335,7 @@ export function parseFastPathInvocation(argv: readonly string[]): FastPathInvoca
   if (argv[0] === 'refs') return parseRefsInvocation(argv);
   if (argv[0] === 'trace') return parseTraceInvocation(argv);
   if (argv[0] === 'value-flow') return parseValueFlowInvocation(argv);
+  if (argv[0] === 'dependence-slice') return parseDependenceSliceInvocation(argv);
   if (
     argv[0] === 'call-graph' ||
     argv[0] === 'reference-neighborhood' ||
@@ -383,6 +397,11 @@ function parseTraceInvocation(argv: readonly string[]): TraceFastPathInvocation 
 function parseValueFlowInvocation(argv: readonly string[]): ValueFlowFastPathInvocation | null {
   const symbolPattern = parseExactCompactOperand(argv);
   return symbolPattern === null ? null : { kind: 'value-flow', symbolPattern };
+}
+
+function parseDependenceSliceInvocation(argv: readonly string[]): DependenceSliceFastPathInvocation | null {
+  const criterion = parseExactCompactOperand(argv);
+  return criterion === null ? null : { kind: 'dependence-slice', criterion };
 }
 
 function parseSemanticNeighborhoodInvocation(argv: readonly string[]): SemanticNeighborhoodFastPathInvocation | null {

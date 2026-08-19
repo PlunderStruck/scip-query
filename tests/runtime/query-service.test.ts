@@ -183,6 +183,12 @@ describe('query service fast path', () => {
       symbolPattern: 'queryServiceSessionIdentity',
     });
     expect(
+      parseFastPathInvocation(['dependence-slice', 'executeRequest', '--json', '--result-only', '--compact']),
+    ).toEqual({
+      kind: 'dependence-slice',
+      criterion: 'executeRequest',
+    });
+    expect(
       parseFastPathInvocation([
         'reference-neighborhood',
         'queryServiceSessionIdentity',
@@ -279,6 +285,10 @@ describe('query service fast path', () => {
     ['value-flow', 'queryServiceSessionIdentity', '--depth', '3', '--json', '--result-only', '--compact'],
     ['value-flow', 'queryServiceSessionIdentity', '--max-edges', '12', '--json', '--result-only', '--compact'],
     ['value-flow', '--json', '--result-only', '--compact'],
+    ['dependence-slice', 'executeRequest', '--forward', '--json', '--result-only', '--compact'],
+    ['dependence-slice', 'executeRequest', '--depth', '2', '--json', '--result-only', '--compact'],
+    ['dependence-slice', 'executeRequest', '--max-edges', '12', '--json', '--result-only', '--compact'],
+    ['dependence-slice', '--json', '--result-only', '--compact'],
     ['call-graph', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact', '--full'],
     ['call-graph', '--json', '--result-only', '--compact'],
     ['reference-neighborhood', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact', '--full'],

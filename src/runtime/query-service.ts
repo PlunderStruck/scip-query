@@ -42,7 +42,7 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 17;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 18;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
 const QUERY_SERVICE_CATALOG_POOL_SIZE = 4;
@@ -51,6 +51,7 @@ const QUERY_SERVICE_CALL_GRAPH_POOL_SIZE = 3;
 const QUERY_SERVICE_REFERENCE_REACHABILITY_POOL_SIZE = 3;
 const QUERY_SERVICE_SYSTEM_POOL_SIZE = 4;
 const QUERY_SERVICE_VALUE_FLOW_POOL_SIZE = 3;
+const QUERY_SERVICE_DEPENDENCE_SLICE_POOL_SIZE = 3;
 const QUERY_SERVICE_MAX_POOL_SIZE = 8;
 const QUERY_SERVICE_TIMEOUT_MS = 30_000;
 const QUERY_SERVICE_STARTUP_TIMEOUT_MS = 5_000;
@@ -164,6 +165,12 @@ export interface QueryServiceValueFlowRequest {
   symbolPattern: string;
 }
 
+export interface QueryServiceDependenceSliceRequest {
+  kind: 'dependence-slice';
+  expectedGeneration: string;
+  criterion: string;
+}
+
 export type QueryServiceSemanticNeighborhoodRequest =
   | { kind: 'call-graph'; expectedGeneration: string; symbolPattern: string }
   | { kind: 'reference-neighborhood'; expectedGeneration: string; symbolPattern: string }
@@ -250,6 +257,7 @@ export type QueryServiceRequest =
   | QueryServiceRefsRequest
   | QueryServiceTraceRequest
   | QueryServiceValueFlowRequest
+  | QueryServiceDependenceSliceRequest
   | QueryServiceSemanticNeighborhoodRequest
   | QueryServiceImportsRequest
   | QueryServiceUnusedImportsRequest
@@ -388,6 +396,12 @@ export interface QueryServiceTraceResult {
 }
 
 export interface QueryServiceValueFlowResult {
+  result: QueryServiceSerializedResult;
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceDependenceSliceResult {
   result: QueryServiceSerializedResult;
   generationIdentity: string;
   observationReceipt: ObservationReceiptV2;
@@ -627,6 +641,20 @@ export function tryValueFlowWithQueryService(
   );
 }
 
+export function tryDependenceSliceWithQueryService(
+  projectRoot: string,
+  criterion: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceDependenceSliceResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'dependence-slice', expectedGeneration, criterion }),
+    isSerializedJsonResult,
+    'dependence-slice result',
+    policy,
+  );
+}
+
 export function trySemanticNeighborhoodWithQueryService(
   projectRoot: string,
   kind: QueryServiceSemanticNeighborhoodRequest['kind'],
@@ -851,7 +879,7 @@ function requestQuery<Result>(
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const operationKey = boundedMailboxOperationKey('query-service-v17', { clientId, request });
+  const operationKey = boundedMailboxOperationKey('query-service-v18', { clientId, request });
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -1363,6 +1391,7 @@ function configuredPoolSize(): number {
 function requestPoolSize(request: QueryServiceRequest): number {
   const configured = configuredPoolSize();
   if (request.kind === 'value-flow') return Math.min(configured, QUERY_SERVICE_VALUE_FLOW_POOL_SIZE);
+  if (request.kind === 'dependence-slice') return Math.min(configured, QUERY_SERVICE_DEPENDENCE_SLICE_POOL_SIZE);
   if (request.kind === 'call-graph') return Math.min(configured, QUERY_SERVICE_CALL_GRAPH_POOL_SIZE);
   if (request.kind === 'system') return Math.min(configured, QUERY_SERVICE_SYSTEM_POOL_SIZE);
   if (request.kind === 'reference-reachability' || request.kind === 'slice') {

@@ -285,6 +285,14 @@ async function executeRequest(
       sha256: createHash('sha256').update(serializedJson).digest('hex'),
     };
   }
+  if (request.kind === 'dependence-slice') {
+    const { dependenceSlice } = await import('../queries/graph/dependence-slice.js');
+    const serializedJson = JSON.stringify(dependenceSlice(db, request.criterion));
+    return {
+      serializedJson,
+      sha256: createHash('sha256').update(serializedJson).digest('hex'),
+    };
+  }
   if (request.kind === 'call-graph') {
     const [{ callGraph }, { symbolResolutionJson }] = await Promise.all([
       import('../queries/navigation/call-graph.js'),
@@ -505,6 +513,19 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
         kind: requestRecord['kind'],
         expectedGeneration: requestRecord['expectedGeneration'],
         symbolPattern: requestRecord['symbolPattern'],
+      },
+    };
+  }
+  if (requestRecord['kind'] === 'dependence-slice') {
+    if (typeof requestRecord['criterion'] !== 'string') {
+      throw new Error('Invalid query service dependence-slice request.');
+    }
+    return {
+      ...envelope,
+      request: {
+        kind: 'dependence-slice',
+        expectedGeneration: requestRecord['expectedGeneration'],
+        criterion: requestRecord['criterion'],
       },
     };
   }
