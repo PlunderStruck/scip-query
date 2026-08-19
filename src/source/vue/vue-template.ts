@@ -1,21 +1,21 @@
-import {
-  ElementTypes,
-  NodeTypes,
-  parse as parseTemplate,
-  type AttributeNode,
-  type DirectiveNode,
-  type ElementNode,
-  type ExpressionNode,
-  type RootNode,
-  type TemplateChildNode,
+import { createRequire } from 'node:module';
+import type {
+  AttributeNode,
+  DirectiveNode,
+  ElementNode,
+  ElementTypes as VueElementTypes,
+  ExpressionNode,
+  NodeTypes as VueNodeTypes,
+  parse as parseVueTemplate,
+  RootNode,
+  TemplateChildNode,
 } from '@vue/compiler-dom';
-import { parse as parseSfc } from '@vue/compiler-sfc';
 import type { ScipDatabase } from '../../storage/db.js';
 import { createSourceFileCache } from '../../storage/per-db-cache.js';
 import { isFrontendIdentifierStopWord } from '../primitives/frontend-identifier-stoplist.js';
 import { pascalCaseSeparated } from '../primitives/name-normalization.js';
 import { getSourceText } from '../primitives/source-text.js';
-import { getVueSfcUnit, type VueSfcResolvedBlock } from '../ast/vue-sfc.js';
+import { getVueSfcUnit, parseVueSfc, type VueSfcResolvedBlock } from '../ast/vue-sfc.js';
 
 export interface VueTemplateBlock {
   body: string;
@@ -62,6 +62,17 @@ export interface VueTemplateFacts {
 }
 
 const VUE_TEMPLATE_FACTS_CACHE = createSourceFileCache<VueTemplateFacts>('vue-template-facts');
+type VueTemplateCompiler = {
+  ElementTypes: typeof VueElementTypes;
+  NodeTypes: typeof VueNodeTypes;
+  parse: typeof parseVueTemplate;
+};
+const requireVueTemplateCompiler = createRequire(import.meta.url);
+let loadedVueTemplateCompiler: VueTemplateCompiler | undefined;
+
+function vueTemplateCompiler(): VueTemplateCompiler {
+  return (loadedVueTemplateCompiler ??= requireVueTemplateCompiler('@vue/compiler-dom') as VueTemplateCompiler);
+}
 
 const BUILTIN_TAGS = new Set([
   'component',
@@ -247,7 +258,7 @@ export function getVueTemplateFacts(db: ScipDatabase, relativePath: string): Vue
 }
 
 export function extractVueTemplateBlock(source: string): VueTemplateBlock | null {
-  const parsed = parseSfc(source);
+  const parsed = parseVueSfc(source);
   const template = parsed.descriptor.template;
   if (!template) return null;
   const startLine = Math.max(0, template.loc.start.line - 1);
@@ -279,7 +290,7 @@ function buildVueTemplateFactsFromBlock(
 
   let root: RootNode;
   try {
-    root = parseTemplate(template.body, { comments: false });
+    root = vueTemplateCompiler().parse(template.body, { comments: false });
   } catch {
     return facts;
   }
@@ -301,10 +312,10 @@ function walkTemplateChildren(
   addToken: (token: string) => void,
 ): void {
   for (const child of children) {
-    if (child.type === NodeTypes.ELEMENT) {
+    if (child.type === vueTemplateCompiler().NodeTypes.ELEMENT) {
       recordElement(child, lineOffset, facts, addToken);
       walkTemplateChildren(child.children, lineOffset, facts, addToken);
-    } else if (child.type === NodeTypes.INTERPOLATION) {
+    } else if (child.type === vueTemplateCompiler().NodeTypes.INTERPOLATION) {
       addToken('interpolation');
       const value = expressionSource(child.content);
       if (value) recordExpressionIdentifiers(value, lineOffset, child.loc.start.line, facts, addToken);
@@ -350,7 +361,7 @@ function recordProp(
   facts: VueTemplateFacts,
   addToken: (token: string) => void,
 ): void {
-  if (prop.type === NodeTypes.ATTRIBUTE) {
+  if (prop.type === vueTemplateCompiler().NodeTypes.ATTRIBUTE) {
     const value = prop.value?.content ?? null;
     const fact = bindingFact('prop', prop.name, value, lineOffset, prop.loc.start.line, prop.loc.end.line);
     facts.props.push(fact);
@@ -473,7 +484,7 @@ function stripExpressionStrings(expression: string): string {
 
 function classifyTag(element: ElementNode): VueTemplateTagFact['kind'] {
   const tag = element.tag;
-  if (element.tagType === ElementTypes.COMPONENT) return 'component';
+  if (element.tagType === vueTemplateCompiler().ElementTypes.COMPONENT) return 'component';
   if (BUILTIN_TAGS.has(tag)) return 'builtin';
   if (NATIVE_HTML_TAGS.has(tag)) return 'native';
   return /^[A-Z]/.test(tag) || tag.includes('-') ? 'component' : 'native';

@@ -1,10 +1,11 @@
+import { createRequire } from 'node:module';
 import { posix } from 'node:path';
-import {
-  parse as parseSfc,
-  type SFCBlock,
-  type SFCScriptBlock,
-  type SFCStyleBlock,
-  type SFCTemplateBlock,
+import type {
+  parse as parseVueSfcCompiler,
+  SFCBlock,
+  SFCScriptBlock,
+  SFCStyleBlock,
+  SFCTemplateBlock,
 } from '@vue/compiler-sfc';
 import type { AstLanguage } from './ast-language.js';
 import { getSourceText } from '../primitives/source-text.js';
@@ -43,6 +44,17 @@ export interface VueSfcUnit {
 }
 
 const VUE_SFC_UNIT_CACHE = createSourceFileCache<VueSfcUnit>('vue-sfc-units');
+type VueSfcCompiler = { parse: typeof parseVueSfcCompiler };
+const requireVueSfcCompiler = createRequire(import.meta.url);
+let loadedVueSfcCompiler: VueSfcCompiler | undefined;
+
+function vueSfcCompiler(): VueSfcCompiler {
+  return (loadedVueSfcCompiler ??= requireVueSfcCompiler('@vue/compiler-sfc') as VueSfcCompiler);
+}
+
+export function parseVueSfc(...args: Parameters<VueSfcCompiler['parse']>): ReturnType<VueSfcCompiler['parse']> {
+  return vueSfcCompiler().parse(...args);
+}
 
 export function getVueSfcUnit(db: ScipDatabase, relativePath: string): VueSfcUnit {
   const normalized = normalizeProjectPath(relativePath);
@@ -80,9 +92,9 @@ export function buildVueSfcUnit(db: ScipDatabase, relativePath: string, source: 
   };
   if (!source) return unit;
 
-  let parsed: ReturnType<typeof parseSfc>;
+  let parsed: ReturnType<typeof parseVueSfc>;
   try {
-    parsed = parseSfc(source, { filename: relativePath });
+    parsed = parseVueSfc(source, { filename: relativePath });
   } catch (error) {
     unit.errors.push(errorMessage(error));
     return unit;
