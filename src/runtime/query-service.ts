@@ -58,6 +58,9 @@ const QUERY_SERVICE_MAX_POOL_SIZE = 8;
 const QUERY_SERVICE_TIMEOUT_MS = 30_000;
 const QUERY_SERVICE_STARTUP_TIMEOUT_MS = 5_000;
 const QUERY_SERVICE_POLL_INTERVAL_MS = 5;
+const QUERY_SERVICE_FAST_RESPONSE_POLL_ATTEMPTS = 10;
+const QUERY_SERVICE_FAST_RESPONSE_POLL_INTERVAL_MS = 1;
+const QUERY_SERVICE_FAST_RESPONSE_HEALTH_CHECK_ATTEMPTS = 5;
 const QUERY_SERVICE_MAX_ITEM_BYTES = 64 * 1024 * 1024;
 const QUERY_SERVICE_MAILBOX_LIMITS: Partial<BoundedMailboxLimits> = {
   maxItems: 64,
@@ -865,6 +868,17 @@ export function isQueryServiceServerStateUsable(state: QueryServiceServerState, 
   return actual !== null && sameProcessIdentity(state.processIdentity, actual);
 }
 
+export function queryServiceResponsePollPlan(attempt: number): {
+  intervalMs: number;
+  checkServerState: boolean;
+} {
+  const fast = attempt < QUERY_SERVICE_FAST_RESPONSE_POLL_ATTEMPTS;
+  return {
+    intervalMs: fast ? QUERY_SERVICE_FAST_RESPONSE_POLL_INTERVAL_MS : QUERY_SERVICE_POLL_INTERVAL_MS,
+    checkServerState: !fast || attempt % QUERY_SERVICE_FAST_RESPONSE_HEALTH_CHECK_ATTEMPTS === 0,
+  };
+}
+
 function requestQuery<Result>(
   context: { projectRoot: string; dbPath: string; generationIdentity: string },
   request: QueryServiceRequest,
@@ -905,6 +919,7 @@ function requestQuery<Result>(
   );
 
   ensureQueryServiceServer(sessionDir, context.projectRoot, serverPath, monotonicDeadlineAtMs);
+  let responsePollAttempt = 0;
   while (monotonicNowMs() <= monotonicDeadlineAtMs) {
     if (existsSync(admitted.responsePath)) {
       return parseQueryServiceResponse(
@@ -923,11 +938,15 @@ function requestQuery<Result>(
         resultName,
       );
     }
-    const state = readQueryServiceServerState(sessionDir);
-    if (!state || !isQueryServiceServerStateUsable(state)) {
-      ensureQueryServiceServer(sessionDir, context.projectRoot, serverPath, monotonicDeadlineAtMs);
+    const pollPlan = queryServiceResponsePollPlan(responsePollAttempt);
+    if (pollPlan.checkServerState) {
+      const state = readQueryServiceServerState(sessionDir);
+      if (!state || !isQueryServiceServerStateUsable(state)) {
+        ensureQueryServiceServer(sessionDir, context.projectRoot, serverPath, monotonicDeadlineAtMs);
+      }
     }
-    sleepSync(QUERY_SERVICE_POLL_INTERVAL_MS);
+    sleepSync(pollPlan.intervalMs);
+    responsePollAttempt += 1;
   }
   throw new Error('Persistent query service timed out.');
 }

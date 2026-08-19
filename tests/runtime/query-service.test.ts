@@ -7,6 +7,7 @@ import { parseFastPathInvocation } from '../../src/runtime/query-service-fastpat
 import {
   QUERY_SERVICE_PROTOCOL_VERSION,
   isQueryServiceServerStateUsable,
+  queryServiceResponsePollPlan,
   queryServiceSessionIdentity,
   readQueryServiceServerState,
 } from '../../src/runtime/query-service.js';
@@ -380,5 +381,13 @@ describe('query service state identity', () => {
     expect(isQueryServiceServerStateUsable(state, nowMs)).toBe(true);
     expect(isQueryServiceServerStateUsable({ ...state, heartbeatAtMs: nowMs - 2_001 }, nowMs)).toBe(false);
     expect(isQueryServiceServerStateUsable({ ...state, heartbeatAtMs: nowMs + 1 }, nowMs)).toBe(false);
+  });
+
+  it('bounds fast response polling while preserving the server health-check cadence', () => {
+    expect(queryServiceResponsePollPlan(0)).toEqual({ intervalMs: 1, checkServerState: true });
+    expect(queryServiceResponsePollPlan(4)).toEqual({ intervalMs: 1, checkServerState: false });
+    expect(queryServiceResponsePollPlan(5)).toEqual({ intervalMs: 1, checkServerState: true });
+    expect(queryServiceResponsePollPlan(9)).toEqual({ intervalMs: 1, checkServerState: false });
+    expect(queryServiceResponsePollPlan(10)).toEqual({ intervalMs: 5, checkServerState: true });
   });
 });
