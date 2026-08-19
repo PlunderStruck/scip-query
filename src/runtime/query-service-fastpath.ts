@@ -22,6 +22,7 @@ import {
   trySearchSourceWithQueryService,
   tryStatsWithQueryService,
   trySurfaceWithQueryService,
+  tryTraceWithQueryService,
   tryUnusedImportsWithQueryService,
 } from './query-service.js';
 
@@ -100,6 +101,11 @@ interface RefsFastPathInvocation {
   symbolPattern: string;
 }
 
+interface TraceFastPathInvocation {
+  kind: 'trace';
+  symbolPattern: string;
+}
+
 interface ImportsFastPathInvocation {
   kind: 'imports';
   filePattern: string;
@@ -130,6 +136,7 @@ type FastPathInvocation =
   | ByKindFastPathInvocation
   | KindCountsFastPathInvocation
   | RefsFastPathInvocation
+  | TraceFastPathInvocation
   | ImportsFastPathInvocation
   | UnusedImportsFastPathInvocation
   | SurfaceFastPathInvocation;
@@ -206,6 +213,11 @@ export function tryRunQueryServiceFastPath(argv: readonly string[]): boolean {
     if (!response || !writeUnpagedJsonResult(response.result)) return false;
     return true;
   }
+  if (invocation.kind === 'trace') {
+    const response = tryTraceWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true });
+    if (!response || !writeUnpagedSerializedJsonResult(response.result.serializedJson)) return false;
+    return true;
+  }
   if (invocation.kind === 'imports') {
     const response = tryImportsWithQueryService(projectRoot, invocation.filePattern, { allowDefault: true });
     if (!response || !writeUnpagedJsonResult(response.result)) return false;
@@ -258,6 +270,7 @@ export function parseFastPathInvocation(argv: readonly string[]): FastPathInvoca
   if (argv[0] === 'hierarchy') return parseHierarchyInvocation(argv);
   if (argv[0] === 'by-kind') return parseByKindInvocation(argv);
   if (argv[0] === 'refs') return parseRefsInvocation(argv);
+  if (argv[0] === 'trace') return parseTraceInvocation(argv);
   if (argv[0] === 'imports') return parseImportsInvocation(argv);
   if (argv[0] === 'unused-imports') return parseUnusedImportsInvocation(argv);
   if (argv[0] === 'surface') return parseSurfaceInvocation(argv);
@@ -299,6 +312,11 @@ function parseByKindInvocation(argv: readonly string[]): ByKindFastPathInvocatio
 function parseRefsInvocation(argv: readonly string[]): RefsFastPathInvocation | null {
   const symbolPattern = parseExactCompactOperand(argv);
   return symbolPattern === null ? null : { kind: 'refs', symbolPattern };
+}
+
+function parseTraceInvocation(argv: readonly string[]): TraceFastPathInvocation | null {
+  const symbolPattern = parseExactCompactOperand(argv);
+  return symbolPattern === null ? null : { kind: 'trace', symbolPattern };
 }
 
 function parseImportsInvocation(argv: readonly string[]): ImportsFastPathInvocation | null {
@@ -351,7 +369,10 @@ function parseExactCompactOperand(argv: readonly string[]): string | null {
 }
 
 function writeUnpagedJsonResult(result: unknown): boolean {
-  const serialized = JSON.stringify(result);
+  return writeUnpagedSerializedJsonResult(JSON.stringify(result));
+}
+
+function writeUnpagedSerializedJsonResult(serialized: string): boolean {
   // The full CLI owns pagination warnings. Fall through when it needs to emit
   // them rather than silently changing stderr on the lightweight path.
   if (serialized.length + 1 > DEFAULT_OUTPUT_PAGE_SIZE) return false;

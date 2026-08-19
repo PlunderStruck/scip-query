@@ -41,6 +41,7 @@ function mayUseQueryServiceFastPath(argv: readonly string[]): boolean {
       argv[0] === 'by-kind' ||
       argv[0] === 'kind-counts' ||
       argv[0] === 'refs' ||
+      argv[0] === 'trace' ||
       argv[0] === 'imports' ||
       argv[0] === 'unused-imports' ||
       argv[0] === 'surface') &&

@@ -164,6 +164,12 @@ describe('query service fast path', () => {
       kind: 'refs',
       symbolPattern: 'queryServiceSessionIdentity',
     });
+    expect(
+      parseFastPathInvocation(['trace', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact']),
+    ).toEqual({
+      kind: 'trace',
+      symbolPattern: 'queryServiceSessionIdentity',
+    });
     expect(parseFastPathInvocation(['imports', 'src/runtime/cli.ts', '--json', '--result-only', '--compact'])).toEqual({
       kind: 'imports',
       filePattern: 'src/runtime/cli.ts',
@@ -216,6 +222,8 @@ describe('query service fast path', () => {
     ['refs', 'queryServiceSessionIdentity', '--limit', '10', '--json', '--result-only', '--compact'],
     ['refs', 'queryServiceSessionIdentity', '--cursor', 'next', '--json', '--result-only', '--compact'],
     ['refs', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact', '--full'],
+    ['trace', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact', '--full'],
+    ['trace', '--json', '--result-only', '--compact'],
     ['imports', 'src/runtime/cli.ts', '--json', '--result-only', '--compact', '--full'],
     ['imports', '--json', '--result-only', '--compact'],
     ['unused-imports', 'src/runtime/cli.ts', '--json', '--result-only', '--compact', '--full'],

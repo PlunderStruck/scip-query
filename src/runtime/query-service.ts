@@ -42,7 +42,7 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 11;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 12;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
 const QUERY_SERVICE_CATALOG_POOL_SIZE = 4;
@@ -148,6 +148,12 @@ export interface QueryServiceRefsRequest {
   symbolPattern: string;
 }
 
+export interface QueryServiceTraceRequest {
+  kind: 'trace';
+  expectedGeneration: string;
+  symbolPattern: string;
+}
+
 export interface QueryServiceImportsRequest {
   kind: 'imports';
   expectedGeneration: string;
@@ -219,6 +225,7 @@ export type QueryServiceRequest =
   | QueryServiceByKindRequest
   | QueryServiceKindCountsRequest
   | QueryServiceRefsRequest
+  | QueryServiceTraceRequest
   | QueryServiceImportsRequest
   | QueryServiceUnusedImportsRequest
   | QueryServiceSurfaceRequest;
@@ -338,6 +345,12 @@ export interface QueryServiceKindCountsResult {
 
 export interface QueryServiceRefsResult {
   result: QueryServiceRefsTransportResult;
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceTraceResult {
+  result: QueryServiceSerializedResult;
   generationIdentity: string;
   observationReceipt: ObservationReceiptV2;
 }
@@ -542,6 +555,20 @@ export function tryRefsWithQueryService(
   );
 }
 
+export function tryTraceWithQueryService(
+  projectRoot: string,
+  symbolPattern: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceTraceResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'trace', expectedGeneration, symbolPattern }),
+    isSerializedJsonResult,
+    'trace result',
+    policy,
+  );
+}
+
 export function tryImportsWithQueryService(
   projectRoot: string,
   filePattern: string,
@@ -737,7 +764,7 @@ function requestQuery<Result>(
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const operationKey = boundedMailboxOperationKey('query-service-v11', { clientId, request });
+  const operationKey = boundedMailboxOperationKey('query-service-v12', { clientId, request });
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -1248,7 +1275,12 @@ function configuredPoolSize(): number {
 
 function requestPoolSize(request: QueryServiceRequest): number {
   const configured = configuredPoolSize();
-  if (request.kind === 'refs' || request.kind === 'imports' || request.kind === 'unused-imports') {
+  if (
+    request.kind === 'refs' ||
+    request.kind === 'trace' ||
+    request.kind === 'imports' ||
+    request.kind === 'unused-imports'
+  ) {
     return Math.min(configured, QUERY_SERVICE_SEMANTIC_NAVIGATION_POOL_SIZE);
   }
   return request.kind === 'imported-by' ||

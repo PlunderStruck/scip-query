@@ -261,6 +261,20 @@ async function executeRequest(
       pagination: { cursorVersion: 2, producer: 'complete-only', semanticEnrichment: semantic },
     };
   }
+  if (request.kind === 'trace') {
+    const [{ qualifiedTraceEvidence }, { symbolResolutionJson }] = await Promise.all([
+      import('../queries/navigation/trace.js'),
+      import('./query-commands/symbol-resolution.js'),
+    ]);
+    const serializedJson = JSON.stringify({
+      ...symbolResolutionJson(db, request.symbolPattern),
+      ...qualifiedTraceEvidence(db, request.symbolPattern, { semantic: defaultSemanticEnrichment(db) }),
+    });
+    return {
+      serializedJson,
+      sha256: createHash('sha256').update(serializedJson).digest('hex'),
+    };
+  }
   if (request.kind === 'imports') {
     const { imports } = await import('../queries/navigation/imports.js');
     return imports(db, request.filePattern, { semantic: defaultSemanticEnrichment(db) });
@@ -407,7 +421,8 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
   if (
     requestRecord['kind'] === 'imported-by' ||
     requestRecord['kind'] === 'hierarchy' ||
-    requestRecord['kind'] === 'refs'
+    requestRecord['kind'] === 'refs' ||
+    requestRecord['kind'] === 'trace'
   ) {
     if (typeof requestRecord['symbolPattern'] !== 'string') {
       throw new Error(`Invalid query service ${requestRecord['kind']} request.`);

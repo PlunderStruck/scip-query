@@ -141,6 +141,7 @@ function benchmarkArguments(): string[] {
     benchmarkCommand === 'hierarchy' ||
     benchmarkCommand === 'by-kind' ||
     benchmarkCommand === 'refs' ||
+    benchmarkCommand === 'trace' ||
     benchmarkCommand === 'imports' ||
     benchmarkCommand === 'unused-imports' ||
     benchmarkCommand === 'system' ||
@@ -213,6 +214,7 @@ type BenchmarkCommand =
   | 'by-kind'
   | 'kind-counts'
   | 'refs'
+  | 'trace'
   | 'imports'
   | 'unused-imports'
   | 'system'
@@ -247,6 +249,7 @@ function parseBenchmarkCommand(configured: string | undefined): BenchmarkCommand
     configured === 'by-kind' ||
     configured === 'kind-counts' ||
     configured === 'refs' ||
+    configured === 'trace' ||
     configured === 'imports' ||
     configured === 'unused-imports' ||
     configured === 'system' ||
@@ -255,6 +258,6 @@ function parseBenchmarkCommand(configured: string | undefined): BenchmarkCommand
     return configured;
   }
   throw new Error(
-    'SCIP_QUERY_BENCH_COMMAND must be search, outline, code, entrypoints, files, stats, members, methods, deps, rdeps, imported-by, hierarchy, by-kind, kind-counts, refs, imports, unused-imports, system, or surface.',
+    'SCIP_QUERY_BENCH_COMMAND must be search, outline, code, entrypoints, files, stats, members, methods, deps, rdeps, imported-by, hierarchy, by-kind, kind-counts, refs, trace, imports, unused-imports, system, or surface.',
   );
 }
