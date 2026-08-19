@@ -40,7 +40,7 @@ import {
   persistProjectFileFingerprintCache,
   rememberProjectFileFingerprint,
 } from './fingerprint-stat-cache.js';
-import { cachedProjectFileListing } from './project-file-inventory-context.js';
+import { cachedCanonicalProjectRoot, cachedProjectFileListing } from './project-file-inventory-context.js';
 
 export {
   normalizeSafeProjectRelativePath,
@@ -150,7 +150,7 @@ export function resolveProjectFile(
   opts: ProjectFileReadOptions = {},
 ): ResolvedProjectFile {
   const relativePath = normalizeSafeProjectRelativePath(candidatePath);
-  const canonicalProjectRoot = realpathSync(projectRoot);
+  const canonicalProjectRoot = cachedCanonicalProjectRoot(projectRoot, () => realpathSync(projectRoot));
   const joinedPath = resolve(canonicalProjectRoot, ...relativePath.split('/'));
   if (!isPathInsideProject(canonicalProjectRoot, joinedPath) || joinedPath === canonicalProjectRoot) {
     throw new UnsafeProjectPathError(candidatePath, 'outside-project');

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cachedCanonicalProjectRoot,
   cachedProjectFileListing,
   enterProjectFileListingCache,
   withProjectFileListingCache,
@@ -79,6 +80,21 @@ describe('project file inventory context', () => {
     });
 
     expect(loads).toBe(1);
+  });
+
+  it('keeps one physical project-root identity for a command and releases it afterward', () => {
+    let loads = 0;
+
+    withProjectFileListingCache(() => {
+      expect(cachedCanonicalProjectRoot('/repo', () => `/physical-${++loads}`)).toBe('/physical-1');
+      expect(cachedCanonicalProjectRoot('/repo', () => `/physical-${++loads}`)).toBe('/physical-1');
+      expect(cachedCanonicalProjectRoot('/repo-b', () => `/physical-${++loads}`)).toBe('/physical-2');
+      withProjectFileListingCache(() => {
+        expect(cachedCanonicalProjectRoot('/repo', () => `/physical-${++loads}`)).toBe('/physical-1');
+      });
+    });
+
+    expect(cachedCanonicalProjectRoot('/repo', () => `/physical-${++loads}`)).toBe('/physical-3');
   });
 
   it('carries a pre-action inventory into asynchronous command work and releases it afterward', async () => {

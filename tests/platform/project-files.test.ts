@@ -19,6 +19,7 @@ import {
   projectFileFingerprintCacheStats,
   resetProjectFileFingerprintCacheForTest,
 } from '../../src/platform/fingerprint-stat-cache.js';
+import { withProjectFileListingCache } from '../../src/platform/project-file-inventory-context.js';
 import { LANGUAGE_INDEX_MARKERS } from '../../src/domain/project-input.js';
 
 const tempDirs: string[] = [];
@@ -372,6 +373,25 @@ describe('project file authority boundary', () => {
 
     expect(readProjectFileText(projectRoot, './src/value.ts')).toBe('export const value = 1;\n');
     expect(readProjectFileText(projectRoot, 'src/alias.ts')).toBe('export const value = 1;\n');
+  });
+
+  it('keeps one physical root when a project-root symlink moves during a command', () => {
+    const linkParent = temporaryDirectory('scip-query-project-root-link-');
+    const firstRoot = temporaryDirectory('scip-query-project-root-first-');
+    const secondRoot = temporaryDirectory('scip-query-project-root-second-');
+    const projectRoot = join(linkParent, 'project');
+    writeFileSync(join(firstRoot, 'value.ts'), 'first\n');
+    writeFileSync(join(secondRoot, 'value.ts'), 'second\n');
+    symlinkSync(firstRoot, projectRoot, 'dir');
+
+    withProjectFileListingCache(() => {
+      expect(readProjectFileText(projectRoot, 'value.ts')).toBe('first\n');
+      rmSync(projectRoot);
+      symlinkSync(secondRoot, projectRoot, 'dir');
+      expect(readProjectFileText(projectRoot, 'value.ts')).toBe('first\n');
+    });
+
+    expect(readProjectFileText(projectRoot, 'value.ts')).toBe('second\n');
   });
 
   it('rejects a safe-looking symlink whose canonical target is outside the project', () => {
