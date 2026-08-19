@@ -216,7 +216,9 @@ export async function tryRunQueryServiceFastPath(argv: readonly string[]): Promi
     const response = tryFileDependenciesWithQueryService(projectRoot, invocation.direction, invocation.filePattern, {
       allowDefault: true,
     });
-    if (!response || !writeUnpagedJsonResult(response.result)) return false;
+    if (!response) return false;
+    const command = invocation.direction === 'outgoing' ? 'deps' : 'rdeps';
+    await writeSerializedJsonResult(JSON.stringify(response.result), command, argv);
     return true;
   }
   if (invocation.kind === 'imported-by') {
