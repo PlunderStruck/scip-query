@@ -317,6 +317,22 @@ async function executeRequest(
       sha256: createHash('sha256').update(serializedJson).digest('hex'),
     };
   }
+  if (request.kind === 'reference-reachability' || request.kind === 'slice') {
+    const [{ referenceReachability }, { symbolResolutionJson }] = await Promise.all([
+      import('../queries/navigation/slice.js'),
+      import('./query-commands/symbol-resolution.js'),
+    ]);
+    const serializedJson = JSON.stringify({
+      ...symbolResolutionJson(db, request.symbolPattern),
+      [request.kind]: referenceReachability(db, request.symbolPattern, {
+        semantic: defaultSemanticEnrichment(db),
+      }),
+    });
+    return {
+      serializedJson,
+      sha256: createHash('sha256').update(serializedJson).digest('hex'),
+    };
+  }
   if (request.kind === 'imports') {
     const { imports } = await import('../queries/navigation/imports.js');
     return imports(db, request.filePattern, { semantic: defaultSemanticEnrichment(db) });
@@ -468,6 +484,8 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
     requestRecord['kind'] === 'value-flow' ||
     requestRecord['kind'] === 'call-graph' ||
     requestRecord['kind'] === 'reference-neighborhood' ||
+    requestRecord['kind'] === 'reference-reachability' ||
+    requestRecord['kind'] === 'slice' ||
     requestRecord['kind'] === 'dataflow'
   ) {
     if (typeof requestRecord['symbolPattern'] !== 'string') {

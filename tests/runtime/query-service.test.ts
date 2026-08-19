@@ -200,6 +200,24 @@ describe('query service fast path', () => {
       kind: 'dataflow',
       symbolPattern: 'queryServiceSessionIdentity',
     });
+    expect(
+      parseFastPathInvocation([
+        'reference-reachability',
+        'queryServiceSessionIdentity',
+        '--json',
+        '--result-only',
+        '--compact',
+      ]),
+    ).toEqual({
+      kind: 'reference-reachability',
+      symbolPattern: 'queryServiceSessionIdentity',
+    });
+    expect(
+      parseFastPathInvocation(['slice', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact']),
+    ).toEqual({
+      kind: 'slice',
+      symbolPattern: 'queryServiceSessionIdentity',
+    });
     expect(parseFastPathInvocation(['imports', 'src/runtime/cli.ts', '--json', '--result-only', '--compact'])).toEqual({
       kind: 'imports',
       filePattern: 'src/runtime/cli.ts',
@@ -263,6 +281,14 @@ describe('query service fast path', () => {
     ['reference-neighborhood', '--json', '--result-only', '--compact'],
     ['dataflow', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact', '--full'],
     ['dataflow', '--json', '--result-only', '--compact'],
+    ['reference-reachability', 'queryServiceSessionIdentity', '--forward', '--json', '--result-only', '--compact'],
+    ['reference-reachability', 'queryServiceSessionIdentity', '--depth', '2', '--json', '--result-only', '--compact'],
+    ['reference-reachability', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact', '--full'],
+    ['reference-reachability', '--json', '--result-only', '--compact'],
+    ['slice', 'queryServiceSessionIdentity', '--forward', '--json', '--result-only', '--compact'],
+    ['slice', 'queryServiceSessionIdentity', '--depth', '2', '--json', '--result-only', '--compact'],
+    ['slice', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact', '--full'],
+    ['slice', '--json', '--result-only', '--compact'],
     ['imports', 'src/runtime/cli.ts', '--json', '--result-only', '--compact', '--full'],
     ['imports', '--json', '--result-only', '--compact'],
     ['unused-imports', 'src/runtime/cli.ts', '--json', '--result-only', '--compact', '--full'],

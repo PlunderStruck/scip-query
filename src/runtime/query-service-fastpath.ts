@@ -117,6 +117,8 @@ interface ValueFlowFastPathInvocation {
 type SemanticNeighborhoodFastPathInvocation =
   | { kind: 'call-graph'; symbolPattern: string }
   | { kind: 'reference-neighborhood'; symbolPattern: string }
+  | { kind: 'reference-reachability'; symbolPattern: string }
+  | { kind: 'slice'; symbolPattern: string }
   | { kind: 'dataflow'; symbolPattern: string };
 
 interface ImportsFastPathInvocation {
@@ -242,6 +244,8 @@ export async function tryRunQueryServiceFastPath(argv: readonly string[]): Promi
   if (
     invocation.kind === 'call-graph' ||
     invocation.kind === 'reference-neighborhood' ||
+    invocation.kind === 'reference-reachability' ||
+    invocation.kind === 'slice' ||
     invocation.kind === 'dataflow'
   ) {
     const response = trySemanticNeighborhoodWithQueryService(projectRoot, invocation.kind, invocation.symbolPattern, {
@@ -305,7 +309,13 @@ export function parseFastPathInvocation(argv: readonly string[]): FastPathInvoca
   if (argv[0] === 'refs') return parseRefsInvocation(argv);
   if (argv[0] === 'trace') return parseTraceInvocation(argv);
   if (argv[0] === 'value-flow') return parseValueFlowInvocation(argv);
-  if (argv[0] === 'call-graph' || argv[0] === 'reference-neighborhood' || argv[0] === 'dataflow') {
+  if (
+    argv[0] === 'call-graph' ||
+    argv[0] === 'reference-neighborhood' ||
+    argv[0] === 'reference-reachability' ||
+    argv[0] === 'slice' ||
+    argv[0] === 'dataflow'
+  ) {
     return parseSemanticNeighborhoodInvocation(argv);
   }
   if (argv[0] === 'imports') return parseImportsInvocation(argv);
@@ -363,7 +373,15 @@ function parseValueFlowInvocation(argv: readonly string[]): ValueFlowFastPathInv
 
 function parseSemanticNeighborhoodInvocation(argv: readonly string[]): SemanticNeighborhoodFastPathInvocation | null {
   const kind = argv[0];
-  if (kind !== 'call-graph' && kind !== 'reference-neighborhood' && kind !== 'dataflow') return null;
+  if (
+    kind !== 'call-graph' &&
+    kind !== 'reference-neighborhood' &&
+    kind !== 'reference-reachability' &&
+    kind !== 'slice' &&
+    kind !== 'dataflow'
+  ) {
+    return null;
+  }
   const symbolPattern = parseExactCompactOperand(argv);
   return symbolPattern === null ? null : { kind, symbolPattern };
 }

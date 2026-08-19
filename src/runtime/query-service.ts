@@ -42,12 +42,13 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 15;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 16;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
 const QUERY_SERVICE_CATALOG_POOL_SIZE = 4;
 const QUERY_SERVICE_SEMANTIC_NAVIGATION_POOL_SIZE = 5;
 const QUERY_SERVICE_CALL_GRAPH_POOL_SIZE = 3;
+const QUERY_SERVICE_REFERENCE_REACHABILITY_POOL_SIZE = 3;
 const QUERY_SERVICE_VALUE_FLOW_POOL_SIZE = 3;
 const QUERY_SERVICE_MAX_POOL_SIZE = 8;
 const QUERY_SERVICE_TIMEOUT_MS = 30_000;
@@ -165,6 +166,8 @@ export interface QueryServiceValueFlowRequest {
 export type QueryServiceSemanticNeighborhoodRequest =
   | { kind: 'call-graph'; expectedGeneration: string; symbolPattern: string }
   | { kind: 'reference-neighborhood'; expectedGeneration: string; symbolPattern: string }
+  | { kind: 'reference-reachability'; expectedGeneration: string; symbolPattern: string }
+  | { kind: 'slice'; expectedGeneration: string; symbolPattern: string }
   | { kind: 'dataflow'; expectedGeneration: string; symbolPattern: string };
 
 export interface QueryServiceImportsRequest {
@@ -820,7 +823,7 @@ function requestQuery<Result>(
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const operationKey = boundedMailboxOperationKey('query-service-v15', { clientId, request });
+  const operationKey = boundedMailboxOperationKey('query-service-v16', { clientId, request });
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -1333,6 +1336,9 @@ function requestPoolSize(request: QueryServiceRequest): number {
   const configured = configuredPoolSize();
   if (request.kind === 'value-flow') return Math.min(configured, QUERY_SERVICE_VALUE_FLOW_POOL_SIZE);
   if (request.kind === 'call-graph') return Math.min(configured, QUERY_SERVICE_CALL_GRAPH_POOL_SIZE);
+  if (request.kind === 'reference-reachability' || request.kind === 'slice') {
+    return Math.min(configured, QUERY_SERVICE_REFERENCE_REACHABILITY_POOL_SIZE);
+  }
   if (
     request.kind === 'refs' ||
     request.kind === 'trace' ||
