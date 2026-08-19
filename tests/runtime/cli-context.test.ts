@@ -153,9 +153,12 @@ describe('cli context', () => {
         })}\n`,
       );
 
-      expect(prepareWorktreeIndex(root, { languages: ['typescript'] }, paths)).toEqual({
-        kind: 'local-fresh',
-      });
+      expect(prepareWorktreeIndex(root, { languages: ['typescript'] }, paths)).toEqual(
+        expect.objectContaining({
+          kind: 'local-fresh',
+          freshness: expect.objectContaining({ state: 'fresh' }),
+        }),
+      );
     } finally {
       if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];
       else process.env['XDG_CACHE_HOME'] = previousCacheHome;

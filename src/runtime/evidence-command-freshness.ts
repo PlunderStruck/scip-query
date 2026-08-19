@@ -77,9 +77,12 @@ export async function ensureEvidenceCommandFreshness(
     gitContext: workspace.gitContext,
     ...(watcherGeneration ? { watcherGeneration } : {}),
   });
-  let freshness = dependencies.freshness(workspace.projectRoot, workspace.config, workspace.paths, {
-    gitContext: workspace.gitContext,
-  });
+  let freshness =
+    prepared.kind === 'local-fresh' && prepared.freshness
+      ? prepared.freshness
+      : dependencies.freshness(workspace.projectRoot, workspace.config, workspace.paths, {
+          gitContext: workspace.gitContext,
+        });
   const service = dependencies.ensureService({
     commandName: workspace.commandName,
     projectRoot: workspace.projectRoot,

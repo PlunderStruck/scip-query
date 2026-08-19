@@ -42,6 +42,21 @@ describe('evidence command freshness', () => {
     );
   });
 
+  it('reuses the fresh observation returned by local preflight', async () => {
+    const dependencies = fixtureDependencies([freshness('stale')]);
+    vi.mocked(dependencies.prepare).mockReturnValueOnce({
+      kind: 'local-fresh',
+      freshness: freshness('fresh'),
+    });
+
+    await expect(ensureEvidenceCommandFreshness(workspace(), dependencies)).resolves.toMatchObject({
+      source: 'existing',
+    });
+
+    expect(dependencies.freshness).not.toHaveBeenCalled();
+    expect(dependencies.ensureService).toHaveBeenCalledOnce();
+  });
+
   it('answers from a stale readable index without waiting or starting a second reindex', async () => {
     const dependencies = fixtureDependencies([freshness('stale')]);
 
