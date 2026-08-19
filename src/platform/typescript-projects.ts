@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
-import type * as TsMorph from 'ts-morph';
+import type * as TsMorphCommon from '@ts-morph/common';
 import { isPathInsideProject as isInsideProject } from '../domain/path-normalization.js';
 import { readSmallArtifactText } from './bounded-file.js';
 import { projectSnapshotFile, projectSnapshotPaths, projectSnapshotPathState } from './project-snapshot-context.js';
@@ -56,9 +56,9 @@ export function typeScriptProjectInputPaths(
   projectMode: 'single' | 'workspace' | undefined,
   configuredProjects: readonly string[] = [],
 ): ReadonlySet<string> | null {
-  let tsMorph: typeof TsMorph;
+  let tsMorphCommon: typeof TsMorphCommon;
   try {
-    tsMorph = require('ts-morph') as typeof TsMorph;
+    tsMorphCommon = require('@ts-morph/common') as typeof TsMorphCommon;
   } catch {
     return null;
   }
@@ -69,11 +69,11 @@ export function typeScriptProjectInputPaths(
   for (const project of projects) {
     const projectDirectory = project === '.' ? root : path.join(root, project);
     const tsconfigPath = path.join(projectDirectory, 'tsconfig.json');
-    const host = compilerConfigHost(tsMorph.ts, root);
+    const host = compilerConfigHost(tsMorphCommon.ts, root);
     if (!host.fileExists(tsconfigPath)) return null;
-    const read = tsMorph.ts.readConfigFile(tsconfigPath, host.readFile);
+    const read = tsMorphCommon.ts.readConfigFile(tsconfigPath, host.readFile);
     if (read.error) return null;
-    const parsed = tsMorph.ts.parseJsonConfigFileContent(read.config as object, host, projectDirectory);
+    const parsed = tsMorphCommon.ts.parseJsonConfigFileContent(read.config as object, host, projectDirectory);
     if (parsed.errors.length > 0) return null;
     for (const fileName of parsed.fileNames) {
       const absolute = path.resolve(fileName);
@@ -229,7 +229,7 @@ interface CompilerConfigHost {
   readFile(filePath: string): string | undefined;
 }
 
-type TypeScriptRuntime = typeof TsMorph.ts & {
+type TypeScriptRuntime = typeof TsMorphCommon.ts & {
   matchFiles(
     rootDir: string,
     extensions: readonly string[],
@@ -243,7 +243,7 @@ type TypeScriptRuntime = typeof TsMorph.ts & {
   ): string[];
 };
 
-function compilerConfigHost(ts: typeof TsMorph.ts, projectRoot: string): CompilerConfigHost {
+function compilerConfigHost(ts: typeof TsMorphCommon.ts, projectRoot: string): CompilerConfigHost {
   const snapshotPaths = projectSnapshotPaths(projectRoot);
   if (!snapshotPaths) return ts.sys;
 
