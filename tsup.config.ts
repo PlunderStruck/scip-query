@@ -23,7 +23,25 @@ export default defineConfig([
     target: 'node22',
   },
   {
-    entry: { cli: 'src/runtime/cli.ts', 'cli-main': 'src/runtime/cli-main.ts' },
+    entry: { cli: 'src/runtime/cli.ts' },
+    external: ['./cli-main.js', './query-service-fastpath.js'],
+    format: ['esm'],
+    sourcemap: true,
+    minify: true,
+    target: 'node22',
+    banner: {
+      js: '#!/usr/bin/env node',
+    },
+  },
+  {
+    entry: { 'query-service-fastpath': 'src/runtime/query-service-fastpath.ts' },
+    format: ['esm'],
+    sourcemap: true,
+    minify: true,
+    target: 'node22',
+  },
+  {
+    entry: { 'cli-main': 'src/runtime/cli-main.ts' },
     format: ['esm'],
     sourcemap: true,
     minify: true,

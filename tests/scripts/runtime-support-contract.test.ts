@@ -42,7 +42,9 @@ describe('runtime support contract', () => {
     expect(packageJson.engines?.node).toBe('>=22.0.0');
     expect(packageJson.dependencies?.['better-sqlite3']).toBe('^13.0.2');
     expect(packageJson.allowScripts?.['better-sqlite3']).toBe(false);
-    expect(buildConfig.match(/target: 'node22'/g)).toHaveLength(3);
+    expect(buildConfig.match(/target: 'node22'/g)).toHaveLength(5);
+    expect(buildConfig).toContain("external: ['./cli-main.js', './query-service-fastpath.js']");
+    expect(buildConfig).toContain("entry: { 'query-service-fastpath': 'src/runtime/query-service-fastpath.ts' }");
     expect(buildConfig).not.toContain("target: 'node18'");
 
     expect(rootLock?.version).toBe('0.20.0');

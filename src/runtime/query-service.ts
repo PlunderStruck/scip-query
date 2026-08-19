@@ -750,16 +750,14 @@ function tryQueryWithService<Result>(
 ): { result: Result; generationIdentity: string; observationReceipt: ObservationReceiptV2 } | null {
   if (!queryServiceEnabled(policy.allowDefault === true)) return null;
   try {
-    const gitContext = resolveGitWorktreeContext(projectRoot);
+    const requiresTrustedWatchGeneration =
+      policy.allowDefault === true && process.env['SCIP_QUERY_QUERY_SERVICE'] !== '1';
+    const gitContext = requiresTrustedWatchGeneration ? resolveGitWorktreeContext(projectRoot) : undefined;
     const project = resolveCliProjectContext(projectRoot, gitContext);
     if (!existsSync(project.dbPath)) return null;
     const generationIdentity = publishedSqliteGenerationIdentity(project.dbPath);
     if (!generationIdentity) return null;
-    if (
-      policy.allowDefault === true &&
-      process.env['SCIP_QUERY_QUERY_SERVICE'] !== '1' &&
-      !hasTrustedWatchGeneration(project, gitContext, generationIdentity)
-    ) {
+    if (requiresTrustedWatchGeneration && !hasTrustedWatchGeneration(project, gitContext, generationIdentity)) {
       return null;
     }
     const response = requestQuery(
