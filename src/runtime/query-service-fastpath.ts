@@ -1,9 +1,9 @@
 import type { SourceSearchOptions } from '../queries/navigation/source-search.js';
 import type { CodeFileMemberMode } from '../queries/navigation/code.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../domain/source-inspection-limits.js';
+import { cliVersion } from '../platform/cli-version.js';
 import { DEFAULT_OUTPUT_PAGE_SIZE, writeSerializedJson } from '../platform/terminal-output.js';
 import { resolveProjectRoot } from './cli-context.js';
-import { cliVersion } from './cli-support.js';
 import { assertNavigationDetailAllowed } from './navigation-session.js';
 import {
   tryCodeWithQueryService,

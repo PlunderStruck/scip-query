@@ -9,6 +9,7 @@ import { monotonicNowMs } from '../domain/time.js';
 import { stableJson } from '../domain/stable-json.js';
 import { decodeObservationReceipt, type ObservationReceiptV2 } from '../domain/observation-receipt.js';
 import { readTextFileWithinLimit } from '../platform/bounded-file.js';
+import { cliVersion } from '../platform/cli-version.js';
 import { resolveGitWorktreeContext } from '../platform/git-worktree.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
 import {
@@ -39,7 +40,6 @@ import {
 } from '../storage/bounded-mailbox.js';
 import { publishedSqliteGenerationIdentity } from '../storage/sqlite-generation.js';
 import { resolveCliProjectContext } from './cli-context.js';
-import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
 export const QUERY_SERVICE_PROTOCOL_VERSION = 18;
