@@ -36,6 +36,7 @@ const HEARTBEAT_INTERVAL_MS = 1_000;
 const POLL_INTERVAL_MS = 5;
 const MAX_IDLE_POLL_INTERVAL_MS = 100;
 const SERIALIZED_RESULT_CACHE_MAX_BYTES = 1024 * 1024;
+const TRACE_SERIALIZED_RESULT_CACHE_MAX_BYTES = 1280 * 1024;
 const MAILBOX_LIMITS: Partial<BoundedMailboxLimits> = {
   maxItems: 64,
   maxBytes: 128 * 1024 * 1024,
@@ -264,18 +265,27 @@ async function executeRequest(
     };
   }
   if (request.kind === 'trace') {
+    const semantic = defaultSemanticEnrichment(db);
+    if (!semantic) {
+      const cached = cachedSerializedResult(db, request.kind, request.symbolPattern);
+      if (cached) return cached;
+    }
     const [{ qualifiedTraceEvidence }, { symbolResolutionJson }] = await Promise.all([
       import('../queries/navigation/trace.js'),
       import('./query-commands/symbol-resolution.js'),
     ]);
     const serializedJson = JSON.stringify({
       ...symbolResolutionJson(db, request.symbolPattern),
-      ...qualifiedTraceEvidence(db, request.symbolPattern, { semantic: defaultSemanticEnrichment(db) }),
+      ...qualifiedTraceEvidence(db, request.symbolPattern, { semantic }),
     });
-    return {
+    const result = {
       serializedJson,
       sha256: createHash('sha256').update(serializedJson).digest('hex'),
     };
+    if (!semantic) {
+      retainSerializedResult(db, request.kind, request.symbolPattern, result, TRACE_SERIALIZED_RESULT_CACHE_MAX_BYTES);
+    }
+    return result;
   }
   if (request.kind === 'value-flow') {
     const cached = cachedSerializedResult(db, request.kind, request.symbolPattern);
@@ -711,6 +721,7 @@ type SerializedResultCacheKind =
   | 'reference-reachability'
   | 'slice'
   | 'system'
+  | 'trace'
   | 'value-flow';
 const serializedResultByDb = new WeakMap<
   object,
@@ -735,8 +746,9 @@ function retainSerializedResult(
   kind: SerializedResultCacheKind,
   operand: string,
   result: QueryServiceSerializedResult,
+  maxBytes = SERIALIZED_RESULT_CACHE_MAX_BYTES,
 ): void {
-  if (Buffer.byteLength(result.serializedJson) <= SERIALIZED_RESULT_CACHE_MAX_BYTES) {
+  if (Buffer.byteLength(result.serializedJson) <= maxBytes) {
     serializedResultByDb.set(db, { kind, operand, result });
   }
 }
