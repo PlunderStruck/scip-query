@@ -58,6 +58,7 @@ const BATCHED_WORKTREE_CONTEXT_ARGS = [
   'HEAD',
   'HEAD^{tree}',
 ] as const;
+const LIVE_WORKTREE_STATUS_ARGS = ['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all'] as const;
 const GIT_OBJECT_ID = /^[0-9a-f]{40,64}$/;
 
 export function resolveGitCommit(projectRoot: string, revision: string, git: GitReader = DEFAULT_GIT_READER): string {
@@ -89,6 +90,23 @@ export function resolveGitWorktreeContext(
 }
 
 /**
+ * Rechecks the mutable parts of a previously resolved worktree observation in
+ * one Git process. A matching commit preserves the commit-bound tree and
+ * identity fields; any changed, missing, or malformed HEAD fails closed.
+ */
+export function refreshGitWorktreeContext(
+  context: GitWorktreeContext,
+  git: GitReader = DEFAULT_GIT_READER,
+): GitWorktreeContext | undefined {
+  if (!context.headCommit) return undefined;
+  const status = git.run(context.projectRoot, LIVE_WORKTREE_STATUS_ARGS);
+  if (status === undefined) return undefined;
+  const observation = parseLiveWorktreeStatus(status);
+  if (!observation?.headCommit || observation.headCommit !== context.headCommit) return undefined;
+  return { ...context, clean: observation.clean };
+}
+
+/**
  * True when Git observes every tracked path normally. Assume-unchanged and
  * skip-worktree entries can hide byte changes from a clean status result, so
  * they cannot support tree-only freshness reuse.
@@ -108,6 +126,18 @@ interface GitWorktreeContextMetadata {
   commonDir: string;
   headCommit: string;
   treeOid: string;
+}
+
+function parseLiveWorktreeStatus(output: string): { headCommit?: string; clean: boolean } | undefined {
+  const entries = output.split('\0').filter(Boolean);
+  const oid = entries.find((entry) => entry.startsWith('# branch.oid '))?.slice('# branch.oid '.length);
+  const headCommit = oid === '(initial)' ? undefined : oid;
+  if (headCommit !== undefined && !GIT_OBJECT_ID.test(headCommit)) return undefined;
+  if (oid === undefined) return undefined;
+  return {
+    headCommit,
+    clean: entries.every((entry) => entry.startsWith('# ')),
+  };
 }
 
 function parseBatchedWorktreeContext(output: string): GitWorktreeContextMetadata | undefined {

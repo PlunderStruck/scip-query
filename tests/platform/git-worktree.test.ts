@@ -8,6 +8,7 @@ import {
   gitIndexAllowsTreeFingerprintReuse,
   listGitWorktrees,
   parseGitWorktreeList,
+  refreshGitWorktreeContext,
   resolveGitCommit,
   resolveGitWorktreeContext,
   resolveGitWorktreeIdentity,
@@ -143,6 +144,78 @@ describe('Git worktree identity', () => {
     expect(resolveGitWorktreeContext(root, gitReader)).toEqual(
       expect.objectContaining({ headCommit, treeOid, clean: true }),
     );
+  });
+
+  it('refreshes status and HEAD together while preserving commit-bound identity', () => {
+    const context = {
+      projectRoot: '/repo',
+      gitDir: '/repo/.git',
+      commonDir: '/repo/.git',
+      repositoryId: 'repository',
+      worktreeId: 'worktree',
+      headCommit: 'a'.repeat(40),
+      treeOid: 'b'.repeat(40),
+      clean: true,
+    };
+    const calls: string[][] = [];
+    const gitReader: GitReader = {
+      run: (_projectRoot, args) => {
+        calls.push([...args]);
+        return `# branch.oid ${context.headCommit}\0# branch.head main\0? src/new.ts\0`;
+      },
+      runResult: () => ({ kind: 'error', message: 'unexpected' }),
+    };
+
+    expect(refreshGitWorktreeContext(context, gitReader)).toEqual({ ...context, clean: false });
+    expect(calls).toEqual([['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all']]);
+  });
+
+  it('fails closed when the live status omits or changes HEAD', () => {
+    const context = {
+      projectRoot: '/repo',
+      gitDir: '/repo/.git',
+      commonDir: '/repo/.git',
+      repositoryId: 'repository',
+      worktreeId: 'worktree',
+      headCommit: 'a'.repeat(40),
+      treeOid: 'b'.repeat(40),
+      clean: true,
+    };
+    const outputs = [
+      `# branch.oid ${'c'.repeat(40)}\0# branch.head main\0`,
+      '# branch.oid not-an-object\0# branch.head main\0',
+      '# branch.head main\0',
+      undefined,
+    ];
+
+    for (const output of outputs) {
+      const gitReader: GitReader = {
+        run: () => output,
+        runResult: () => ({ kind: 'error', message: 'unexpected' }),
+      };
+      expect(refreshGitWorktreeContext(context, gitReader)).toBeUndefined();
+    }
+
+    const unbornContext = { ...context, headCommit: undefined, treeOid: undefined };
+    const gitReader: GitReader = {
+      run: () => '# branch.oid (initial)\0# branch.head main\0',
+      runResult: () => ({ kind: 'error', message: 'unexpected' }),
+    };
+    expect(refreshGitWorktreeContext(unbornContext, gitReader)).toBeUndefined();
+  });
+
+  it('refreshes a real worktree and rejects a later commit', () => {
+    const root = createRepository();
+    const context = resolveGitWorktreeContext(root);
+
+    expect(context).toBeDefined();
+    expect(refreshGitWorktreeContext(context!)).toEqual(context);
+
+    writeFileSync(join(root, 'src/value.ts'), 'export const value = 2;\n');
+    git(root, ['add', '.']);
+    git(root, ['commit', '-qm', 'second']);
+
+    expect(refreshGitWorktreeContext(context!)).toBeUndefined();
   });
 
   it('preserves worktree identity before the repository has a first commit', () => {

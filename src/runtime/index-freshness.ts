@@ -6,7 +6,7 @@ import type { LastRefreshMetadata, ProjectConfig, SupportedLanguage } from '../d
 import { normalizeSafeProjectRelativePath } from '../domain/path-normalization.js';
 import {
   gitIndexAllowsTreeFingerprintReuse,
-  resolveGitWorktreeContext,
+  refreshGitWorktreeContext,
   type GitWorktreeContext,
 } from '../platform/git-worktree.js';
 import {
@@ -98,10 +98,11 @@ export function getIndexFreshness(
         : undefined;
     const observedGitContext =
       paths.cacheDir &&
+      opts.gitContext &&
       managedFingerprint &&
       fingerprintConfigurationMatches(managedFingerprint, languages, config) &&
       projectSelectionIsTreeOwned(projectRoot, managedFingerprint, config)
-        ? resolveGitWorktreeContext(projectRoot)
+        ? refreshGitWorktreeContext(opts.gitContext)
         : undefined;
     const currentGitContext =
       observedGitContext?.clean && gitIndexAllowsTreeFingerprintReuse(projectRoot) ? observedGitContext : undefined;
