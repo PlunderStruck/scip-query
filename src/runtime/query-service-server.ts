@@ -318,22 +318,30 @@ async function executeRequest(
     };
   }
   if (request.kind === 'reference-neighborhood' || request.kind === 'dataflow') {
+    const semantic = defaultSemanticEnrichment(db);
+    const cacheable = request.kind === 'reference-neighborhood' && !semantic;
+    if (cacheable) {
+      const cached = cachedSerializedResult(db, request.kind, request.symbolPattern);
+      if (cached) return cached;
+    }
     const [{ dataflow, referenceNeighborhood }, { symbolResolutionJson }] = await Promise.all([
       import('../queries/navigation/dataflow.js'),
       import('./query-commands/symbol-resolution.js'),
     ]);
     const payload =
       request.kind === 'dataflow'
-        ? dataflow(db, request.symbolPattern, { semantic: defaultSemanticEnrichment(db) })
-        : referenceNeighborhood(db, request.symbolPattern, { semantic: defaultSemanticEnrichment(db) });
+        ? dataflow(db, request.symbolPattern, { semantic })
+        : referenceNeighborhood(db, request.symbolPattern, { semantic });
     const serializedJson = JSON.stringify({
       ...symbolResolutionJson(db, request.symbolPattern),
       [request.kind]: payload,
     });
-    return {
+    const result = {
       serializedJson,
       sha256: createHash('sha256').update(serializedJson).digest('hex'),
     };
+    if (cacheable) retainSerializedResult(db, request.kind, request.symbolPattern, result);
+    return result;
   }
   if (request.kind === 'reference-reachability' || request.kind === 'slice') {
     const semantic = defaultSemanticEnrichment(db);
@@ -697,10 +705,17 @@ function requiredNonNegativeInteger(value: unknown, name: string): number {
 }
 
 const semanticEnrichmentByDb = new WeakMap<object, boolean>();
+type SerializedResultCacheKind =
+  | 'dependence-slice'
+  | 'reference-neighborhood'
+  | 'reference-reachability'
+  | 'slice'
+  | 'system'
+  | 'value-flow';
 const serializedResultByDb = new WeakMap<
   object,
   {
-    kind: 'dependence-slice' | 'reference-reachability' | 'slice' | 'system' | 'value-flow';
+    kind: SerializedResultCacheKind;
     operand: string;
     result: QueryServiceSerializedResult;
   }
@@ -708,7 +723,7 @@ const serializedResultByDb = new WeakMap<
 
 function cachedSerializedResult(
   db: ReturnType<typeof openProjectDb>,
-  kind: 'dependence-slice' | 'reference-reachability' | 'slice' | 'system' | 'value-flow',
+  kind: SerializedResultCacheKind,
   operand: string,
 ): QueryServiceSerializedResult | null {
   const cached = serializedResultByDb.get(db);
@@ -717,7 +732,7 @@ function cachedSerializedResult(
 
 function retainSerializedResult(
   db: ReturnType<typeof openProjectDb>,
-  kind: 'dependence-slice' | 'reference-reachability' | 'slice' | 'system' | 'value-flow',
+  kind: SerializedResultCacheKind,
   operand: string,
   result: QueryServiceSerializedResult,
 ): void {
