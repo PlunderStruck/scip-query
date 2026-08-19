@@ -1,10 +1,11 @@
 import type { ScipDatabase } from '../../storage/db.js';
+import { createSourceFileCache } from '../../storage/per-db-cache.js';
 import type { ParserControlRelationSubtype } from '../../domain/graph-relation-providers.js';
 import { getAst } from '../ast/ast-core.js';
 import { smallestNodeCoveringLines } from '../ast/ast-callables.js';
 import type { SyntaxNode } from '../ast/ast-types.js';
 import { classifyFile } from '../primitives/file-kind.js';
-import { getSourceLines } from '../primitives/source-text.js';
+import { getSourceLines, getSourceText } from '../primitives/source-text.js';
 import { getSourceFacts } from './source-facts.js';
 
 const MAX_TEST_CASES = 12;
@@ -12,6 +13,9 @@ const MIN_RECEIPT_BODY_LINES = 20;
 const MAX_RECEIPT_LINE_CHARACTERS = 200;
 const MAX_OUTLINE_LINE_CHARACTERS = 800;
 const OUTLINE_SAVINGS_RATIO = 0.9;
+const BEHAVIOR_CONSTRUCT_RANGE_CACHE_LIMIT = 64;
+const BEHAVIOR_CONSTRUCT_RANGE_CACHE =
+  createSourceFileCache<Map<string, readonly [number, number]>>('behavior-construct-ranges');
 
 export type BehaviorSignal =
   | 'anchor'
@@ -387,6 +391,35 @@ export function behaviorConstructRange(
   focusLines: readonly number[] = [],
 ): BehaviorConstructRange {
   const selectedFocusLines = focusLines.filter((line) => line >= startLine && line <= endLine);
+  const rangeCache = BEHAVIOR_CONSTRUCT_RANGE_CACHE.get(
+    db,
+    relativePath,
+    getSourceText(db, relativePath) ?? '',
+    () => new Map(),
+  );
+  const cacheKey = `${startLine}:${endLine}:${selectedFocusLines.join(',')}`;
+  const cached = rangeCache.get(cacheKey);
+  if (cached) {
+    rangeCache.delete(cacheKey);
+    rangeCache.set(cacheKey, cached);
+    return { startLine: cached[0], endLine: cached[1] };
+  }
+  const result = computeBehaviorConstructRange(db, relativePath, startLine, endLine, selectedFocusLines);
+  rangeCache.set(cacheKey, [result.startLine, result.endLine]);
+  if (rangeCache.size > BEHAVIOR_CONSTRUCT_RANGE_CACHE_LIMIT) {
+    const oldest = rangeCache.keys().next().value;
+    if (oldest !== undefined) rangeCache.delete(oldest);
+  }
+  return result;
+}
+
+function computeBehaviorConstructRange(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+  selectedFocusLines: readonly number[],
+): BehaviorConstructRange {
   const tree = getAst(db, relativePath);
   if (selectedFocusLines.length > 0 && tree) {
     const focusedNodes: SyntaxNode[] = [];
