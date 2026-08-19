@@ -141,7 +141,9 @@ function benchmarkArguments(): string[] {
     benchmarkCommand === 'hierarchy' ||
     benchmarkCommand === 'by-kind' ||
     benchmarkCommand === 'refs' ||
-    benchmarkCommand === 'imports'
+    benchmarkCommand === 'imports' ||
+    benchmarkCommand === 'system' ||
+    benchmarkCommand === 'surface'
   ) {
     return [benchmarkCommand, operand, '--json', '--result-only', '--compact'];
   }
@@ -210,7 +212,9 @@ type BenchmarkCommand =
   | 'by-kind'
   | 'kind-counts'
   | 'refs'
-  | 'imports';
+  | 'imports'
+  | 'system'
+  | 'surface';
 
 function defaultOperand(command: BenchmarkCommand): string {
   if (command === 'outline') return 'src/runtime/cli.ts';
@@ -218,6 +222,7 @@ function defaultOperand(command: BenchmarkCommand): string {
   if (command === 'members' || command === 'methods') return 'ScipDatabase';
   if (command === 'deps' || command === 'rdeps') return 'src/runtime/query-service.ts';
   if (command === 'imports') return 'src/runtime/query-service.ts';
+  if (command === 'system' || command === 'surface') return 'src/runtime';
   if (command === 'by-kind') return 'function';
   if (command === 'kind-counts') return '';
   return 'queryServiceSessionIdentity';
@@ -240,11 +245,13 @@ function parseBenchmarkCommand(configured: string | undefined): BenchmarkCommand
     configured === 'by-kind' ||
     configured === 'kind-counts' ||
     configured === 'refs' ||
-    configured === 'imports'
+    configured === 'imports' ||
+    configured === 'system' ||
+    configured === 'surface'
   ) {
     return configured;
   }
   throw new Error(
-    'SCIP_QUERY_BENCH_COMMAND must be search, outline, code, entrypoints, files, stats, members, methods, deps, rdeps, imported-by, hierarchy, by-kind, kind-counts, refs, or imports.',
+    'SCIP_QUERY_BENCH_COMMAND must be search, outline, code, entrypoints, files, stats, members, methods, deps, rdeps, imported-by, hierarchy, by-kind, kind-counts, refs, imports, system, or surface.',
   );
 }

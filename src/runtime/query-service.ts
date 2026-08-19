@@ -25,6 +25,7 @@ import type { ByKindResult } from '../queries/navigation/by-kind.js';
 import type { HierarchyNode } from '../queries/navigation/hierarchy.js';
 import type { ImportResult } from '../queries/navigation/imports.js';
 import type { RefResult } from '../queries/navigation/refs.js';
+import type { ConsumerSurfaceResult } from '../queries/navigation/surface.js';
 import type { MemberResult } from '../queries/navigation/members.js';
 import type { MethodsResolution } from '../queries/navigation/methods.js';
 import type { SourceSearchOptions, SourceSearchResult } from '../queries/navigation/source-search.js';
@@ -41,7 +42,7 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 9;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 10;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
 const QUERY_SERVICE_CATALOG_POOL_SIZE = 4;
@@ -153,6 +154,12 @@ export interface QueryServiceImportsRequest {
   filePattern: string;
 }
 
+export interface QueryServiceSurfaceRequest {
+  kind: 'surface';
+  expectedGeneration: string;
+  modulePattern: string;
+}
+
 export interface QueryServiceEntryPointsOptions {
   search?: string;
   scope?: string;
@@ -206,7 +213,8 @@ export type QueryServiceRequest =
   | QueryServiceByKindRequest
   | QueryServiceKindCountsRequest
   | QueryServiceRefsRequest
-  | QueryServiceImportsRequest;
+  | QueryServiceImportsRequest
+  | QueryServiceSurfaceRequest;
 
 export interface QueryServiceEnvelope {
   mailboxVersion: typeof BOUNDED_MAILBOX_VERSION;
@@ -329,6 +337,12 @@ export interface QueryServiceRefsResult {
 
 export interface QueryServiceImportsResult {
   result: ImportResult[];
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceSurfaceResult {
+  result: ConsumerSurfaceResult[];
   generationIdentity: string;
   observationReceipt: ObservationReceiptV2;
 }
@@ -529,6 +543,20 @@ export function tryImportsWithQueryService(
   );
 }
 
+export function trySurfaceWithQueryService(
+  projectRoot: string,
+  modulePattern: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceSurfaceResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'surface', expectedGeneration, modulePattern }),
+    isSurfaceResult,
+    'surface result',
+    policy,
+  );
+}
+
 export function tryCodeWithQueryService(
   projectRoot: string,
   selectors: readonly string[],
@@ -682,7 +710,7 @@ function requestQuery<Result>(
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const operationKey = boundedMailboxOperationKey('query-service-v9', { clientId, request });
+  const operationKey = boundedMailboxOperationKey('query-service-v10', { clientId, request });
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -1010,6 +1038,21 @@ function isRefResult(value: unknown): value is RefResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   return typeof record['relativePath'] === 'string' && isNonNegativeSafeInteger(record['line']);
+}
+
+function isSurfaceResult(value: unknown): value is ConsumerSurfaceResult[] {
+  return Array.isArray(value) && value.every(isConsumerSurfaceResult);
+}
+
+function isConsumerSurfaceResult(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record['consumer'] === 'string' &&
+    typeof record['symbol'] === 'string' &&
+    typeof record['shortName'] === 'string' &&
+    record['basis'] === 'external-reference'
+  );
 }
 
 function isMemberResult(value: unknown): value is MemberResult {

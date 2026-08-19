@@ -265,6 +265,10 @@ async function executeRequest(
     const { imports } = await import('../queries/navigation/imports.js');
     return imports(db, request.filePattern, { semantic: defaultSemanticEnrichment(db) });
   }
+  if (request.kind === 'surface') {
+    const { consumerSurface } = await import('../queries/navigation/surface.js');
+    return consumerSurface(db, request.modulePattern);
+  }
   const [{ codeBatch }, { codeBatchResultOnlyJsonForSelectors }] = await Promise.all([
     import('../queries/navigation/code.js'),
     import('../queries/navigation/code-result-json.js'),
@@ -442,6 +446,19 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
         kind: 'imports',
         expectedGeneration: requestRecord['expectedGeneration'],
         filePattern: requestRecord['filePattern'],
+      },
+    };
+  }
+  if (requestRecord['kind'] === 'surface') {
+    if (typeof requestRecord['modulePattern'] !== 'string') {
+      throw new Error(`Invalid query service ${requestRecord['kind']} request.`);
+    }
+    return {
+      ...envelope,
+      request: {
+        kind: requestRecord['kind'],
+        expectedGeneration: requestRecord['expectedGeneration'],
+        modulePattern: requestRecord['modulePattern'],
       },
     };
   }
