@@ -6,7 +6,7 @@ import { createGitignoreFilter } from '../source/primitives/gitignore-filter.js'
 import { loadProjectConfig } from './config.js';
 import type { ProjectConfig, ScipQueryConfig, WatcherStatus } from '../domain/types.js';
 import { getIndexFreshness, type IndexFreshness } from './index-freshness.js';
-import type { GitWorktreeContext } from '../platform/git-worktree.js';
+import type { GitWorktreeContext, GitWorktreeContextObservation } from '../platform/git-worktree.js';
 import { withProjectFileListingCache } from '../platform/project-file-inventory-context.js';
 import { publishedGenerationIdentity } from '../semantic/typescript/session-protocol.js';
 import { readSuppressionDir } from '../storage/suppression-store.js';
@@ -81,7 +81,11 @@ export function prepareWorktreeIndex(
   projectRoot: string,
   config: ProjectConfig,
   paths: ReturnType<typeof resolveIndexStoragePaths>,
-  opts: { gitContext?: GitWorktreeContext; watcherGeneration?: string } = {},
+  opts: {
+    gitContext?: GitWorktreeContext;
+    gitObservation?: GitWorktreeContextObservation;
+    watcherGeneration?: string;
+  } = {},
 ): WorktreeIndexPreparation {
   if (
     existsSync(paths.dbPath) &&
@@ -91,7 +95,10 @@ export function prepareWorktreeIndex(
   ) {
     return publishFreshLocalGenerationForProject(projectRoot, config, paths, opts.gitContext);
   }
-  const freshness = getIndexFreshness(projectRoot, config, paths, { gitContext: opts.gitContext });
+  const freshness = getIndexFreshness(projectRoot, config, paths, {
+    gitContext: opts.gitContext,
+    gitObservation: opts.gitObservation,
+  });
   if (freshness.state === 'fresh') {
     return { kind: 'local-fresh', freshness };
   }

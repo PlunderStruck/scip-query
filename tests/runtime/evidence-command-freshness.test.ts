@@ -22,14 +22,22 @@ describe('evidence command freshness', () => {
 
   it('reuses a fresh generation and keeps the watcher ready for later edits', async () => {
     const currentWorkspace = workspace();
+    const gitObservation = { context: currentWorkspace.gitContext };
+    const observedWorkspace = { ...currentWorkspace, gitObservation };
     const dependencies = fixtureDependencies([freshness('fresh')]);
 
-    await expect(ensureEvidenceCommandFreshness(currentWorkspace, dependencies)).resolves.toMatchObject({
+    await expect(ensureEvidenceCommandFreshness(observedWorkspace, dependencies)).resolves.toMatchObject({
       source: 'existing',
       service: { kind: 'reused' },
     });
 
     expect(dependencies.prepare).toHaveBeenCalledOnce();
+    expect(dependencies.prepare).toHaveBeenCalledWith(
+      currentWorkspace.projectRoot,
+      currentWorkspace.config,
+      currentWorkspace.paths,
+      { gitContext: currentWorkspace.gitContext, gitObservation },
+    );
     expect(dependencies.ensureService).toHaveBeenCalledOnce();
     expect(dependencies.requestRefresh).not.toHaveBeenCalled();
     expect(dependencies.reindex).not.toHaveBeenCalled();

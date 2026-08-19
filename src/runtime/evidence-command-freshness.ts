@@ -1,5 +1,5 @@
 import type { ProjectConfig } from '../domain/types.js';
-import type { GitWorktreeContext } from '../platform/git-worktree.js';
+import type { GitWorktreeContext, GitWorktreeContextObservation } from '../platform/git-worktree.js';
 import type { resolveIndexStoragePaths } from '../platform/cache-layout.js';
 import { getIndexFreshness, indexCanAnswerQueries, type IndexFreshness } from './index-freshness.js';
 import { prepareWorktreeIndex } from './cli-context.js';
@@ -24,6 +24,7 @@ interface EvidenceCommandWorkspace {
   paths: ReturnType<typeof resolveIndexStoragePaths>;
   dbPathSource: 'env' | 'configured' | 'root-fallback';
   gitContext?: GitWorktreeContext;
+  gitObservation?: GitWorktreeContextObservation;
 }
 
 export interface EvidenceCommandFreshnessResult {
@@ -75,6 +76,7 @@ export async function ensureEvidenceCommandFreshness(
   const watcherGeneration = trustedGeneration(workspace, dependencies);
   const prepared = dependencies.prepare(workspace.projectRoot, workspace.config, workspace.paths, {
     gitContext: workspace.gitContext,
+    gitObservation: workspace.gitObservation,
     ...(watcherGeneration ? { watcherGeneration } : {}),
   });
   let freshness =

@@ -27,7 +27,7 @@ import {
 } from '../instrumentation/profile.js';
 import { projectEvidenceFingerprint } from '../storage/evidence-cache.js';
 import { maybeSweepRepositoryCache } from './repository-cache-lifecycle.js';
-import { resolveGitWorktreeContext } from '../platform/git-worktree.js';
+import { observeGitWorktreeContext } from '../platform/git-worktree.js';
 import { installTerminalConsoleSanitizer, sanitizeTerminalText } from '../platform/terminal-output.js';
 import { enterProjectFileListingCache } from '../platform/project-file-inventory-context.js';
 import { parseOutputPageSize } from './output-pagination.js';
@@ -75,11 +75,14 @@ program.hook('preAction', async (_thisCommand, actionCommand) => {
     return;
   }
   const projectRoot = resolveProjectRoot();
-  const gitContext = resolveGitWorktreeContext(projectRoot);
-  const projectContext = resolveCliProjectContext(projectRoot, gitContext);
+  let projectContext = resolveCliProjectContext(projectRoot);
   activateCliProjectContext(projectContext);
   initializeProfileContext();
   await maybePrintUpdateNotice({ commandName });
+  const gitObservation = observeGitWorktreeContext(projectRoot);
+  const gitContext = gitObservation?.context;
+  projectContext = { ...projectContext, gitContext };
+  activateCliProjectContext(projectContext);
   const { config, paths } = projectContext;
   if (prepareSharedCache) {
     const freshness = await ensureEvidenceCommandFreshness({
@@ -89,6 +92,7 @@ program.hook('preAction', async (_thisCommand, actionCommand) => {
       paths,
       dbPathSource: projectContext.dbPathSource,
       gitContext,
+      gitObservation,
     });
     if (process.env['SCIP_QUERY_DEBUG']) {
       console.error(`evidence-freshness: ${freshness.source}`);

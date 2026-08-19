@@ -8,6 +8,7 @@ import {
   gitIndexAllowsTreeFingerprintReuse,
   refreshGitWorktreeContext,
   type GitWorktreeContext,
+  type GitWorktreeContextObservation,
 } from '../platform/git-worktree.js';
 import {
   buildProjectInputFingerprint,
@@ -45,7 +46,7 @@ export function getIndexFreshness(
   projectRoot: string,
   config: ProjectConfig,
   paths: { dbPath: string; metaPath: string; cacheDir?: string },
-  opts: { gitContext?: GitWorktreeContext } = {},
+  opts: { gitContext?: GitWorktreeContext; gitObservation?: GitWorktreeContextObservation } = {},
 ): IndexFreshness {
   const checkedAt = new Date().toISOString();
   if (!existsSync(paths.dbPath)) {
@@ -102,7 +103,9 @@ export function getIndexFreshness(
       managedFingerprint &&
       fingerprintConfigurationMatches(managedFingerprint, languages, config) &&
       projectSelectionIsTreeOwned(projectRoot, managedFingerprint, config)
-        ? refreshGitWorktreeContext(opts.gitContext)
+        ? opts.gitObservation?.context === opts.gitContext
+          ? opts.gitContext
+          : refreshGitWorktreeContext(opts.gitContext)
         : undefined;
     const currentGitContext =
       observedGitContext?.clean && gitIndexAllowsTreeFingerprintReuse(projectRoot) ? observedGitContext : undefined;

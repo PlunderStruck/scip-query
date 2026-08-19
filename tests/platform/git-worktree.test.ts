@@ -7,6 +7,7 @@ import {
   findGitRoot,
   gitIndexAllowsTreeFingerprintReuse,
   listGitWorktrees,
+  observeGitWorktreeContext,
   parseGitWorktreeList,
   refreshGitWorktreeContext,
   resolveGitCommit,
@@ -92,7 +93,10 @@ describe('Git worktree identity', () => {
     const gitReader: GitReader = {
       run: (_projectRoot, args) => {
         calls.push({ method: 'run', args });
-        return ' M src/value.ts';
+        return (
+          `# branch.oid ${headCommit}\0# branch.head main\0` +
+          `1 .M N... 100644 100644 100644 ${'c'.repeat(40)} ${'c'.repeat(40)} src/value.ts\0`
+        );
       },
       runResult: (_projectRoot, args) => {
         calls.push({ method: 'runResult', args });
@@ -100,7 +104,8 @@ describe('Git worktree identity', () => {
       },
     };
 
-    expect(resolveGitWorktreeContext(root, gitReader)).toEqual(
+    const observation = observeGitWorktreeContext(root, gitReader);
+    expect(observation?.context).toEqual(
       expect.objectContaining({
         projectRoot: realpathSync(root),
         gitDir: realpathSync(gitDir),
@@ -115,7 +120,7 @@ describe('Git worktree identity', () => {
         method: 'runResult',
         args: ['rev-parse', '--show-toplevel', '--absolute-git-dir', '--git-common-dir', 'HEAD', 'HEAD^{tree}'],
       },
-      { method: 'run', args: ['status', '--porcelain=v1', '-z', '--untracked-files=all'] },
+      { method: 'run', args: ['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all'] },
     ]);
   });
 
@@ -132,7 +137,9 @@ describe('Git worktree identity', () => {
         if (command === 'rev-parse --git-common-dir') return '.git';
         if (command === 'rev-parse --verify HEAD') return headCommit;
         if (command === 'rev-parse --verify HEAD^{tree}') return treeOid;
-        if (command === 'status --porcelain=v1 -z --untracked-files=all') return '';
+        if (command === 'status --porcelain=v2 --branch -z --untracked-files=all') {
+          return `# branch.oid ${headCommit}\0# branch.head main\0`;
+        }
         return undefined;
       },
       runResult: (_projectRoot, args) =>
@@ -144,6 +151,34 @@ describe('Git worktree identity', () => {
     expect(resolveGitWorktreeContext(root, gitReader)).toEqual(
       expect.objectContaining({ headCommit, treeOid, clean: true }),
     );
+  });
+
+  it('rejects a context when HEAD moves between metadata and status', () => {
+    const root = temporaryDirectory('scip-query-moving-git-context-');
+    const gitDir = join(root, '.git');
+    mkdirSync(gitDir);
+    const metadataHead = 'a'.repeat(40);
+    const liveHead = 'c'.repeat(40);
+    const treeOid = 'b'.repeat(40);
+    const gitReader: GitReader = {
+      run: (_projectRoot, args) => {
+        const command = args.join(' ');
+        if (command === 'rev-parse --absolute-git-dir') return gitDir;
+        if (command === 'rev-parse --git-common-dir') return '.git';
+        if (command === 'rev-parse --verify HEAD') return metadataHead;
+        if (command === 'rev-parse --verify HEAD^{tree}') return treeOid;
+        if (command === 'status --porcelain=v2 --branch -z --untracked-files=all') {
+          return `# branch.oid ${liveHead}\0# branch.head main\0`;
+        }
+        return undefined;
+      },
+      runResult: (_projectRoot, args) =>
+        args.length > 2
+          ? { kind: 'success', output: [root, gitDir, '.git', metadataHead, treeOid].join('\n') }
+          : { kind: 'success', output: root },
+    };
+
+    expect(observeGitWorktreeContext(root, gitReader)).toBeUndefined();
   });
 
   it('refreshes status and HEAD together while preserving commit-bound identity', () => {

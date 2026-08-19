@@ -35,6 +35,15 @@ export interface GitWorktreeContext {
   clean: boolean;
 }
 
+/**
+ * One paired observation of a worktree's full HEAD and porcelain status.
+ * Consume it only in the mutation-free preflight that immediately follows;
+ * any cache attachment, rebuild, wait, or later check must observe Git again.
+ */
+export interface GitWorktreeContextObservation {
+  context: GitWorktreeContext;
+}
+
 export type GitWorktreeIdentity = Pick<GitWorktreeContext, 'projectRoot' | 'gitDir' | 'worktreeId'>;
 
 export type GitWorktreeIdentityResolution =
@@ -81,12 +90,23 @@ export function resolveGitWorktreeContext(
   projectRoot: string,
   git: GitReader = DEFAULT_GIT_READER,
 ): GitWorktreeContext | undefined {
+  return observeGitWorktreeContext(projectRoot, git)?.context;
+}
+
+export function observeGitWorktreeContext(
+  projectRoot: string,
+  git: GitReader = DEFAULT_GIT_READER,
+): GitWorktreeContextObservation | undefined {
   const batchedResult = git.runResult(projectRoot, BATCHED_WORKTREE_CONTEXT_ARGS);
   if (batchedResult.kind === 'success') {
     const metadata = parseBatchedWorktreeContext(batchedResult.output);
-    if (metadata) return resolveGitWorktreeContextFromMetadata(metadata, git);
+    if (metadata) {
+      const context = resolveGitWorktreeContextFromMetadata(metadata, git);
+      if (context) return { context };
+    }
   }
-  return resolveGitWorktreeContextIndividually(projectRoot, git);
+  const context = resolveGitWorktreeContextIndividually(projectRoot, git);
+  return context ? { context } : undefined;
 }
 
 /**
@@ -160,8 +180,10 @@ function resolveGitWorktreeContextFromMetadata(
   metadata: GitWorktreeContextMetadata,
   git: GitReader,
 ): GitWorktreeContext | undefined {
-  const status = git.run(metadata.root, ['status', '--porcelain=v1', '-z', '--untracked-files=all']);
+  const status = git.run(metadata.root, LIVE_WORKTREE_STATUS_ARGS);
   if (status === undefined) return undefined;
+  const observation = parseLiveWorktreeStatus(status);
+  if (observation?.headCommit !== metadata.headCommit) return undefined;
   const identity = gitWorktreeIdentity(metadata.root, metadata.gitDir);
   return {
     ...identity,
@@ -169,7 +191,7 @@ function resolveGitWorktreeContextFromMetadata(
     repositoryId: stablePathId('repository', metadata.commonDir),
     headCommit: metadata.headCommit,
     treeOid: metadata.treeOid,
-    clean: status.length === 0,
+    clean: observation.clean,
   };
 }
 
@@ -184,8 +206,10 @@ function resolveGitWorktreeContextIndividually(projectRoot: string, git: GitRead
   const commonDir = canonicalPath(resolveGitPath(root, rawCommonDir));
   const headCommit = nonEmpty(git.run(root, ['rev-parse', '--verify', 'HEAD']));
   const treeOid = nonEmpty(git.run(root, ['rev-parse', '--verify', 'HEAD^{tree}']));
-  const status = git.run(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all']);
+  const status = git.run(root, LIVE_WORKTREE_STATUS_ARGS);
   if (status === undefined) return undefined;
+  const observation = parseLiveWorktreeStatus(status);
+  if (!observation || observation.headCommit !== headCommit) return undefined;
 
   return {
     ...identity,
@@ -193,7 +217,7 @@ function resolveGitWorktreeContextIndividually(projectRoot: string, git: GitRead
     repositoryId: stablePathId('repository', commonDir),
     headCommit,
     treeOid,
-    clean: status.length === 0,
+    clean: observation.clean,
   };
 }
 
