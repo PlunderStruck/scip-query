@@ -12,6 +12,7 @@ import {
   mergeDirectorySyncStatus,
   syncDirectoryDurable,
   type AchievedFileDurability,
+  type AtomicFileDurability,
   type DirectorySyncStatus,
 } from './atomic-file.js';
 import { writeJsonDurable } from './atomic-json.js';
@@ -487,6 +488,8 @@ export function completeBoundedMailboxClaim(
   options: {
     nowMs?: number;
     limits?: Partial<BoundedMailboxLimits>;
+    /** Visibility is for ephemeral responses that callers can safely recompute after a host crash. */
+    durability?: AtomicFileDurability;
     /** @internal deterministic crash-after-publication test boundary. */
     onAfterResponsePublished?: () => void;
   } = {},
@@ -511,11 +514,14 @@ export function completeBoundedMailboxClaim(
   if (nextTotalBytes > limits.maxBytes && nextTotalBytes > status.totalBytes) {
     throw new MailboxBackpressureError('byte-capacity', status, limits, responseBytes);
   }
-  publishCompletion(paths, claim, value);
+  const durability = options.durability ?? 'durable';
+  publishCompletion(paths, claim, value, durability);
   options.onAfterResponsePublished?.();
   rmSync(claim.path, { force: true });
-  const claimDirectory = dirname(claim.path);
-  syncDirectoryDurable(existsSync(claimDirectory) ? claimDirectory : paths.inflightDir);
+  if (durability === 'durable') {
+    const claimDirectory = dirname(claim.path);
+    syncDirectoryDurable(existsSync(claimDirectory) ? claimDirectory : paths.inflightDir);
+  }
 }
 
 /** Records an explicit rejection response and retains the rejected input. */
@@ -686,11 +692,12 @@ function publishCompletion(
   paths: BoundedMailboxPaths,
   claim: BoundedMailboxClaim,
   response: Record<string, unknown>,
+  durability: AtomicFileDurability,
 ): void {
   const path = join(paths.responseDir, `${claim.requestId}.json`);
   const serialized = `${JSON.stringify(response)}\n`;
   try {
-    createFileAtomicExclusive(path, serialized, { durability: 'durable' });
+    createFileAtomicExclusive(path, serialized, { durability });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
     const existing = readRequestHeader(path);

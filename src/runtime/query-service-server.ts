@@ -155,7 +155,7 @@ async function processRequests(
             errorCode: 'generation-mismatch',
             error: 'Persistent query service opened a different generation.',
           },
-          { nowMs: Date.now(), limits: MAILBOX_LIMITS },
+          { nowMs: Date.now(), limits: MAILBOX_LIMITS, durability: 'visibility' },
         );
         onGenerationMismatch();
         processed += 1;
@@ -180,7 +180,7 @@ async function processRequests(
           result,
           observationReceipt,
         },
-        { nowMs: completedAtMs, limits: MAILBOX_LIMITS },
+        { nowMs: completedAtMs, limits: MAILBOX_LIMITS, durability: 'visibility' },
       );
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);

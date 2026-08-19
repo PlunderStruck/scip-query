@@ -107,6 +107,7 @@ describe('bounded filesystem mailbox', () => {
         { ok: true, id: request.id },
         {
           nowMs: NOW + 15_002,
+          durability: 'visibility',
           onAfterResponsePublished() {
             throw new Error('simulated crash after response publication');
           },
