@@ -198,7 +198,7 @@ export async function tryRunQueryServiceFastPath(argv: readonly string[]): Promi
   if (invocation.kind === 'files') {
     const response = tryFilesWithQueryService(projectRoot, invocation.pattern, { allowDefault: true });
     if (!response) return false;
-    if (!writeUnpagedJsonResult(response.result)) return false;
+    await writeSerializedJsonResult(JSON.stringify(response.result), invocation.kind, argv);
     return true;
   }
   if (invocation.kind === 'members') {
