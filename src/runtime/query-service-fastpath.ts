@@ -4,6 +4,7 @@ import { SOURCE_INSPECTION_MAX_SELECTORS } from '../domain/source-inspection-lim
 import { cliVersion } from '../platform/cli-version.js';
 import { CLIENT_SAFE_OUTPUT_BYTES, writeSerializedJson } from '../platform/terminal-output.js';
 import { resolveProjectRoot } from './cli-context.js';
+import { cliInvocationPrefix } from './cli-invocation.js';
 import { assertNavigationDetailAllowed } from './navigation-session.js';
 import {
   tryCodeWithQueryService,
@@ -502,7 +503,7 @@ async function writeSerializedJsonResult(serialized: string, command: string, ar
     {
       command,
       producerVersion: cliVersion,
-      invocationPrefix: process.argv[1] ? [process.execPath, process.argv[1]] : ['scip-query'],
+      invocationPrefix: cliInvocationPrefix(),
       argv: [...argv],
       cwd: process.cwd(),
       json: true,

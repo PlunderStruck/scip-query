@@ -19,13 +19,11 @@ export function pickAstCallCandidate<T extends { symbol: string; file: string }>
   memberAccess: boolean,
   calleeQualifier?: string,
 ): T | null {
-  const sameFile = candidates.find((candidate) => candidate.file === sourceFile);
-  if (sameFile) return sameFile;
+  const sourceImports = getSourceImports(db, sourceFile);
 
   if (memberAccess) {
     const receiverRoot = calleeQualifier?.match(/^[A-Za-z_$][\w$]*/u)?.[0];
     if (!receiverRoot) return null;
-    const sourceImports = getSourceImports(db, sourceFile);
     const importedSourcePaths = new Set(
       sourceImports
         .filter((entry) => entry.localName === receiverRoot || entry.importedName === receiverRoot)
@@ -36,6 +34,13 @@ export function pickAstCallCandidate<T extends { symbol: string; file: string }>
       for (const sourcePath of importedSourcePaths) {
         if (pathsResolveSame(sourcePath, candidate.file)) return candidate;
       }
+    }
+
+    if (receiverRoot === 'this' || receiverRoot === 'self' || receiverRoot === 'cls') {
+      const implicitOwnerMatches = candidates.filter(
+        (candidate) => candidate.file === sourceFile && parentTypeName(candidate.symbol) !== null,
+      );
+      if (implicitOwnerMatches.length === 1) return implicitOwnerMatches[0]!;
     }
 
     const ownerNames = localReceiverOwnerNames(getSourceText(db, sourceFile) ?? '', receiverRoot);
@@ -49,13 +54,32 @@ export function pickAstCallCandidate<T extends { symbol: string; file: string }>
     const ownerMatches = candidates.filter(
       (candidate) =>
         ownerNames.has(parentTypeName(candidate.symbol) ?? '') &&
-        [...ownerSourcePaths].some((sourcePath) => pathsResolveSame(sourcePath, candidate.file)),
+        (candidate.file === sourceFile ||
+          [...ownerSourcePaths].some((sourcePath) => pathsResolveSame(sourcePath, candidate.file))),
     );
     if (ownerMatches.length === 1) return ownerMatches[0]!;
     return null;
   }
 
-  return candidates.length === 1 ? candidates[0]! : null;
+  const directCandidates = candidates.filter((candidate) => parentTypeName(candidate.symbol) === null);
+  const sameFile = directCandidates.find((candidate) => candidate.file === sourceFile);
+  if (sameFile) return sameFile;
+
+  const calleeLeaf = leafName(candidates[0]!.symbol);
+  const directImports = sourceImports.filter(
+    (entry) =>
+      entry.kind !== 'namespace' &&
+      entry.kind !== 'side-effect' &&
+      (entry.localName === calleeLeaf || (entry.localName === null && entry.importedName === calleeLeaf)),
+  );
+  if (directImports.length > 0) {
+    const importedMatches = directCandidates.filter((candidate) =>
+      directImports.some((entry) => entry.sourcePath !== null && pathsResolveSame(entry.sourcePath, candidate.file)),
+    );
+    return importedMatches.length === 1 ? importedMatches[0]! : null;
+  }
+
+  return directCandidates.length === 1 ? directCandidates[0]! : null;
 }
 
 /**

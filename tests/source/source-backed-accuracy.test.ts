@@ -7,6 +7,7 @@ import { ScipDatabase } from '../../src/storage/db.js';
 import { callGraph } from '../../src/queries/navigation/call-graph.js';
 import { code } from '../../src/queries/navigation/code.js';
 import { dataflow } from '../../src/queries/navigation/dataflow.js';
+import { inspectSource } from '../../src/queries/navigation/source-inspection.js';
 import { symbols } from '../../src/queries/navigation/symbols.js';
 import { trace } from '../../src/queries/navigation/trace.js';
 import { byKind, kindCounts } from '../../src/queries/navigation/by-kind.js';
@@ -291,6 +292,78 @@ describe('source-backed accuracy regressions', () => {
         expect(pickAstCallCandidate(db, 'src/caller.ts', [candidate], true, 'Correct')).toEqual(candidate);
         expect(pickAstCallCandidate(db, 'src/caller.ts', [candidate], true, 'Other')).toBeNull();
         expect(pickAstCallCandidate(db, 'src/caller.ts', [candidate], true, 'localService')).toBeNull();
+      },
+    );
+  });
+
+  it('requires same-file call shape and receiver ownership before selecting a callee', () => {
+    withFixture(
+      'same-file-callee-shape',
+      {
+        'src/caller.ts': [
+          'interface Runtime { write(value: string): void; }',
+          "export function run(runtime: Runtime) { runtime.write('ok'); }",
+        ].join('\n'),
+      },
+      (sqliteDb) => {
+        sqliteDb.exec("INSERT INTO documents (id, language, relative_path) VALUES (1, 'typescript', 'src/caller.ts');");
+      },
+      (db) => {
+        const matchingMember = {
+          symbol: 'scip-typescript npm fixture 1.0.0 src/`caller.ts`/Runtime#write().',
+          file: 'src/caller.ts',
+        };
+        const wrongMember = {
+          symbol: 'scip-typescript npm fixture 1.0.0 src/`caller.ts`/Snapshot#write().',
+          file: 'src/caller.ts',
+        };
+
+        expect(pickAstCallCandidate(db, 'src/caller.ts', [matchingMember], true, 'runtime')).toEqual(matchingMember);
+        expect(pickAstCallCandidate(db, 'src/caller.ts', [matchingMember], true, 'self')).toEqual(matchingMember);
+        expect(pickAstCallCandidate(db, 'src/caller.ts', [wrongMember], true, 'runtime')).toBeNull();
+        expect(pickAstCallCandidate(db, 'src/caller.ts', [wrongMember], false)).toBeNull();
+      },
+    );
+  });
+
+  it('does not attribute an imported external function call to an unrelated indexed symbol', () => {
+    withFixture(
+      'external-direct-callee',
+      {
+        'src/caller.ts': ["import { mkdirSync } from 'node:fs';", "export function run() { mkdirSync('tmp'); }"].join(
+          '\n',
+        ),
+        'src/unrelated.ts': 'export function mkdirSync() { return false; }\n',
+      },
+      (sqliteDb) => {
+        sqliteDb.exec(`
+          INSERT INTO documents (id, language, relative_path) VALUES
+            (1, 'typescript', 'src/caller.ts'),
+            (2, 'typescript', 'src/unrelated.ts');
+          INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+            (1, 'scip-typescript npm fixture 1.0.0 src/\`caller.ts\`/run().', 'run', 12, 'function run'),
+            (2, 'scip-typescript npm fixture 1.0.0 src/\`unrelated.ts\`/mkdirSync().', 'mkdirSync', 12, 'function mkdirSync');
+          INSERT INTO defn_enclosing_ranges
+            (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+            (1, 1, 1, 1, 0, 1, 45),
+            (2, 2, 2, 0, 0, 0, 47);
+          INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+            (1, 1, 0, 1, 1, X'00'),
+            (2, 2, 0, 0, 0, X'00');
+          INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+            (1, 1, 1),
+            (2, 2, 1);
+        `);
+      },
+      (db) => {
+        const packet = inspectSource(db, {
+          symbols: ['run'],
+          evidence: { parts: ['definition', 'callees'] },
+        });
+
+        expect(packet.units?.filter((unit) => unit.kind === 'source').map((unit) => unit.relativePath)).not.toContain(
+          'src/unrelated.ts',
+        );
       },
     );
   });

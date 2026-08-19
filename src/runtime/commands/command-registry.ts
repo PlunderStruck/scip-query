@@ -11,6 +11,7 @@ import { sanitizeTerminalLine } from '../../platform/terminal-output.js';
 import { cliVersion } from '../cli-support.js';
 import { CLI_OUTPUT_CONTINUATION_COMMAND, runWithCliOutputPagination } from '../output-pagination.js';
 import { resolveCommandOperationRole } from '../command-operation.js';
+import { cliInvocationPrefix } from '../cli-invocation.js';
 
 type PlainCommanderDefault = string | boolean | string[] | undefined;
 
@@ -85,7 +86,7 @@ export function registerCommandDescriptors(
                 {
                   command: descriptor.id,
                   producerVersion: cliVersion,
-                  invocationPrefix: process.argv[1] ? [process.execPath, process.argv[1]] : ['scip-query'],
+                  invocationPrefix: cliInvocationPrefix(),
                   argv: process.argv.slice(2),
                   cwd: process.cwd(),
                   json: opts['json'] === true,

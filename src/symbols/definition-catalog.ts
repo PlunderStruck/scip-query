@@ -617,7 +617,11 @@ export function findEnclosingDefinition(definitions: IndexedDefinition[], line: 
  * what would otherwise be a symbol-lookup ↔ definition-catalog cycle.
  */
 export function hydrateSymbolMatch(db: ScipDatabase, row: SymbolQueryRow): SymbolMatch {
-  const corrected = getDefinitionsForFile(db, row.relative_path).find((definition) => definition.symbolId === row.id);
+  const corrected =
+    getDefinitionsForFile(db, row.relative_path).find((definition) => definition.symbolId === row.id) ??
+    (parentTypeName(row.symbol) === null || !isFunctionLikeSymbol(row.symbol)
+      ? undefined
+      : correctDefinitionRangesFromSource(db, row.relative_path, [indexedDefinitionFromRow(row)])[0]);
 
   if (corrected) {
     return {

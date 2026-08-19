@@ -38,4 +38,19 @@ describe('human renderer terminal safety', () => {
       ]),
     );
   });
+
+  it('preserves source-shaped line breaks only when a section opts in', () => {
+    const output: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((value) => output.push(String(value)));
+
+    render.sectionedReport([
+      { title: 'SOURCE', rows: ['file.ts:1-2\n     1  first\n     2  second'], preserveRowNewlines: true },
+      { title: 'UNTRUSTED', rows: ['first\nsecond'] },
+    ]);
+
+    expect(output).toContain('file.ts:1-2');
+    expect(output).toContain('     1  first');
+    expect(output).toContain('     2  second');
+    expect(output).toContain('first␤second');
+  });
 });

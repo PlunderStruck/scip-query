@@ -49,6 +49,8 @@ export interface ReportSection {
   explanation?: string;
   /** Rows printed verbatim under the title. */
   rows: string[];
+  /** Render intentional row newlines as separate sanitized lines. Default false keeps untrusted rows structurally inert. */
+  preserveRowNewlines?: boolean;
   /** When true, the section is dropped if `rows` is empty. Default false (always render header + body, even if rows is empty). */
   skipIfEmpty?: boolean;
 }
@@ -113,7 +115,10 @@ export const render = {
       first = false;
       if (section.title !== undefined) console.log(`═══ ${sanitizeTerminalLine(section.title)} ═══`);
       if (section.explanation !== undefined) console.log(sanitizeTerminalLine(section.explanation));
-      for (const row of section.rows) console.log(sanitizeTerminalLine(row));
+      for (const row of section.rows) {
+        const lines = section.preserveRowNewlines ? row.split('\n') : [row];
+        for (const line of lines) console.log(sanitizeTerminalLine(line));
+      }
     }
   },
 

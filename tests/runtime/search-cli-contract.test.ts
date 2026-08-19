@@ -136,6 +136,7 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
     expect(invocation.stdout).toContain('Identity manifest: 30/30 matching line(s); complete.');
     expect(invocation.stdout).toContain('Recover every unmaterialized owning unit in 2 bounded batch command(s)');
     expect(invocation.stdout).toContain('src/group-30/match.ts');
+    expect(invocation.stdout).not.toContain('␤');
     expect(invocation.stdout).not.toContain('[scip-query output page:');
   });
 

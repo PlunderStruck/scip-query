@@ -135,8 +135,8 @@ function traceSections(result: queries.QualifiedTraceEvidenceResult): ReportSect
   }
 
   return [
-    { title: 'DEFINITION', rows: definitionRows },
-    { title: 'REFERENCED BY', rows: refRows },
+    { title: 'DEFINITION', rows: definitionRows, preserveRowNewlines: true },
+    { title: 'REFERENCED BY', rows: refRows, preserveRowNewlines: true },
     { title: 'CLAIM SUPPORT', rows: claimSupportRows(result.claimSupport), skipIfEmpty: true },
   ];
 }
@@ -334,6 +334,7 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
     {
       title: `OBSERVED SOURCE (${result.matches.length}/${result.matchingLines} WINDOWS)`,
       rows: sourceRows,
+      preserveRowNewlines: true,
     },
     {
       title: 'EVIDENCE CALIBRATION',
@@ -814,7 +815,12 @@ function sourceInspectionSections(result: queries.SourceInspectionResult): Repor
         ...resolutionRows.map((row) => `  symbol ${row.trimStart()}`),
       ],
     },
-    { title: 'OBSERVED FACTS', rows: [...sourceRows, ...bindingRows], skipIfEmpty: true },
+    {
+      title: 'OBSERVED FACTS',
+      rows: [...sourceRows, ...bindingRows],
+      preserveRowNewlines: true,
+      skipIfEmpty: true,
+    },
     {
       title: 'EVIDENCE CALIBRATION',
       rows: [
@@ -1050,10 +1056,10 @@ function evidenceSections(result: queries.QualifiedEvidenceResult): ReportSectio
       }),
     );
   return [
-    { title: 'DEFINITION', rows: definitionRows, skipIfEmpty: true },
-    { title: 'REFERENCE SITES', rows: referenceRows, skipIfEmpty: true },
-    { title: 'CALLERS', rows: relatedRows(result.callers), skipIfEmpty: true },
-    { title: 'CALLEES', rows: relatedRows(result.callees), skipIfEmpty: true },
+    { title: 'DEFINITION', rows: definitionRows, preserveRowNewlines: true, skipIfEmpty: true },
+    { title: 'REFERENCE SITES', rows: referenceRows, preserveRowNewlines: true, skipIfEmpty: true },
+    { title: 'CALLERS', rows: relatedRows(result.callers), preserveRowNewlines: true, skipIfEmpty: true },
+    { title: 'CALLEES', rows: relatedRows(result.callees), preserveRowNewlines: true, skipIfEmpty: true },
     { title: 'DEPENDENCIES', rows: result.dependencies.map((row) => `  ${row.relativePath}`), skipIfEmpty: true },
     { title: 'CONSUMERS', rows: result.consumers.map((row) => `  ${row.relativePath}`), skipIfEmpty: true },
     { title: 'CLAIM SUPPORT', rows: claimSupportRows(result.claimSupport), skipIfEmpty: true },

@@ -93,6 +93,45 @@ describe('symbol resolution metadata', () => {
     }
   });
 
+  it('corrects an exact fallback-only member to its source declaration range', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-symbol-member-resolution-'));
+    writeFixtureFiles(tempDir, {
+      'src/runtime.ts': [
+        'export interface Runtime {',
+        '  writeStdout(value: string): void;',
+        '}',
+        'export function run(runtime: Runtime) { runtime.writeStdout("ok"); }',
+      ],
+    });
+    const member = 'scip-typescript npm pkg 1.0.0 src/`runtime.ts`/Runtime#writeStdout().';
+    const dbPath = join(tempDir, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/runtime.ts')
+      .symbol(1, member, 'writeStdout', 6)
+      .symbol(2, 'scip-typescript npm pkg 1.0.0 src/`runtime.ts`/run().', 'run', 12)
+      .definition(1, 1, 2, 3, 0, 3, 70)
+      .chunk(1, 1, 0, 3)
+      .mention(1, 1, 1)
+      .write();
+    const db = new ScipDatabase({
+      dbPath,
+      indexPath: join(tempDir, 'index.scip'),
+      projectRoot: tempDir,
+    });
+    try {
+      expect(resolveSymbol(db, member)).toMatchObject({
+        total: 1,
+        match: {
+          symbol: member,
+          startLine: 1,
+          endLine: 1,
+        },
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   function createResolutionDb(): ScipDatabase {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-symbol-resolution-'));
     mkdirSync(tempDir, { recursive: true });
