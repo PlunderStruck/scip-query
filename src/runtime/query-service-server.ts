@@ -336,6 +336,11 @@ async function executeRequest(
     };
   }
   if (request.kind === 'reference-reachability' || request.kind === 'slice') {
+    const semantic = defaultSemanticEnrichment(db);
+    if (!semantic) {
+      const cached = cachedSerializedResult(db, request.kind, request.symbolPattern);
+      if (cached) return cached;
+    }
     const [{ referenceReachability }, { symbolResolutionJson }] = await Promise.all([
       import('../queries/navigation/slice.js'),
       import('./query-commands/symbol-resolution.js'),
@@ -343,13 +348,15 @@ async function executeRequest(
     const serializedJson = JSON.stringify({
       ...symbolResolutionJson(db, request.symbolPattern),
       [request.kind]: referenceReachability(db, request.symbolPattern, {
-        semantic: defaultSemanticEnrichment(db),
+        semantic,
       }),
     });
-    return {
+    const result = {
       serializedJson,
       sha256: createHash('sha256').update(serializedJson).digest('hex'),
     };
+    if (!semantic) retainSerializedResult(db, request.kind, request.symbolPattern, result);
+    return result;
   }
   if (request.kind === 'imports') {
     const { imports } = await import('../queries/navigation/imports.js');
@@ -692,12 +699,16 @@ function requiredNonNegativeInteger(value: unknown, name: string): number {
 const semanticEnrichmentByDb = new WeakMap<object, boolean>();
 const serializedResultByDb = new WeakMap<
   object,
-  { kind: 'dependence-slice' | 'system' | 'value-flow'; operand: string; result: QueryServiceSerializedResult }
+  {
+    kind: 'dependence-slice' | 'reference-reachability' | 'slice' | 'system' | 'value-flow';
+    operand: string;
+    result: QueryServiceSerializedResult;
+  }
 >();
 
 function cachedSerializedResult(
   db: ReturnType<typeof openProjectDb>,
-  kind: 'dependence-slice' | 'system' | 'value-flow',
+  kind: 'dependence-slice' | 'reference-reachability' | 'slice' | 'system' | 'value-flow',
   operand: string,
 ): QueryServiceSerializedResult | null {
   const cached = serializedResultByDb.get(db);
@@ -706,7 +717,7 @@ function cachedSerializedResult(
 
 function retainSerializedResult(
   db: ReturnType<typeof openProjectDb>,
-  kind: 'dependence-slice' | 'system' | 'value-flow',
+  kind: 'dependence-slice' | 'reference-reachability' | 'slice' | 'system' | 'value-flow',
   operand: string,
   result: QueryServiceSerializedResult,
 ): void {

@@ -11,6 +11,7 @@ const configuredPoolSize = process.env.SCIP_QUERY_QUERY_SERVICE_POOL_SIZE;
 const poolSize = configuredPoolSize === undefined ? 'default' : Number.parseInt(configuredPoolSize, 10);
 const concurrencyLevels = parseConcurrencyLevels(process.env.SCIP_QUERY_BENCH_CONCURRENCY);
 const serviceModes = process.env.SCIP_QUERY_BENCH_SERVICE_ONLY === '1' ? [true] : [false, true];
+const forceService = process.env.SCIP_QUERY_BENCH_FORCE_SERVICE === '1';
 const scenarios = [];
 
 for (const service of serviceModes) {
@@ -35,6 +36,7 @@ process.stdout.write(
     operand,
     ...(benchmarkCommand === 'search' ? { pattern: operand } : {}),
     poolSize,
+    forceService,
     scenarios,
   })}\n`,
 );
@@ -97,7 +99,8 @@ function startClient(service: boolean): {
   };
   if (configuredPoolSize === undefined) delete env.SCIP_QUERY_QUERY_SERVICE_POOL_SIZE;
   else env.SCIP_QUERY_QUERY_SERVICE_POOL_SIZE = configuredPoolSize;
-  if (service) delete env.SCIP_QUERY_QUERY_SERVICE;
+  if (service && forceService) env.SCIP_QUERY_QUERY_SERVICE = '1';
+  else if (service) delete env.SCIP_QUERY_QUERY_SERVICE;
   else env.SCIP_QUERY_QUERY_SERVICE = '0';
   const child = spawn(process.execPath, [cliPath, ...benchmarkArguments()], {
     cwd: projectRoot,
