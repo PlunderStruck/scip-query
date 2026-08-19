@@ -121,6 +121,12 @@ publishes a lease containing its random token, generation identity, PID, and
 operating-system process-start identity when available. Closing the database
 removes that exact lease idempotently.
 
+Reader admission flushes the lock's complete ownership record but deliberately
+does not force its directory entry to durable storage. The lock coordinates
+live processes immediately; after a host storage crash every reader is dead, so
+a lost name is safe and a resurrected complete name is attributable and
+reclaimable. Publication and collection locks remain directory-durable.
+
 Publication and collection use the same token-owned process lock. Collection
 always protects the current generation, the named recovery generation, and
 every live reader generation. It removes only oldest unprotected generations

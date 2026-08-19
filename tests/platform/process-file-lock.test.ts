@@ -104,6 +104,42 @@ describe('process file lock protocol', () => {
     expect(events.slice(-3)).toEqual(['remove:lock', 'open:directory', 'sync:directory']);
   });
 
+  it('keeps the ownership record durable while allowing recoverable directory entries', () => {
+    const lockPath = temporaryLockPath();
+    const syncedPaths: string[] = [];
+    const fileDescriptors = new Map<number, string>();
+    const runtime = lockRuntime({
+      randomToken: () => 'recoverable-token',
+      readProcessIdentity: () => OWNER_IDENTITY,
+      openFile(path, flags, mode) {
+        const fd = NODE_PROCESS_FILE_LOCK_RUNTIME.openFile(path, flags, mode);
+        fileDescriptors.set(fd, path);
+        return fd;
+      },
+      syncFile(fd) {
+        syncedPaths.push(fileDescriptors.get(fd) ?? '<unknown>');
+        NODE_PROCESS_FILE_LOCK_RUNTIME.syncFile(fd);
+      },
+      closeFile(fd) {
+        NODE_PROCESS_FILE_LOCK_RUNTIME.closeFile(fd);
+        fileDescriptors.delete(fd);
+      },
+    });
+
+    const result = tryAcquireProcessFileLock(lockPath, {
+      kind: 'reader-admission',
+      pid: OWNER_IDENTITY.pid,
+      directoryDurability: 'recoverable',
+      runtime,
+    });
+
+    expect(result.kind).toBe('acquired');
+    expect(syncedPaths).toEqual([expect.stringMatching(/\.candidate$/)]);
+    if (result.kind === 'acquired') expect(result.lock.release()).toBe(true);
+    expect(syncedPaths).toHaveLength(1);
+    expect(existsSync(lockPath)).toBe(false);
+  });
+
   it('removes an exclusively created record when a synchronous ownership write fails', () => {
     const lockPath = temporaryLockPath();
     let injected = false;

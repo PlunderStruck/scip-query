@@ -1,7 +1,12 @@
 import { join } from 'node:path';
 import { monotonicNowMs } from '../domain/time.js';
 import { abortSignalReason, throwIfSignalAborted } from './abort-signal.js';
-import { tryAcquireProcessFileLock, type LegacyProcessLockDecoder, type ProcessFileLock } from './process-file-lock.js';
+import {
+  tryAcquireProcessFileLock,
+  type LegacyProcessLockDecoder,
+  type ProcessFileLock,
+  type ProcessFileLockDirectoryDurability,
+} from './process-file-lock.js';
 
 export interface RepositoryCacheLock {
   release(): void;
@@ -26,10 +31,15 @@ export function acquireRepositoryCacheLock(
   return acquireProcessFileLock(join(repositoryDir, 'gc.lock'), opts);
 }
 
-/** Acquires one durable token-owned process lock with conservative recovery. */
+/** Acquires one token-owned process lock with conservative recovery; directory durability defaults to durable. */
 export function acquireProcessFileLock(
   lockPath: string,
-  opts: { waitMs?: number; pollMs?: number; now?: () => number } = {},
+  opts: {
+    waitMs?: number;
+    pollMs?: number;
+    now?: () => number;
+    directoryDurability?: ProcessFileLockDirectoryDurability;
+  } = {},
 ): RepositoryCacheLock | null {
   const waitMs = opts.waitMs ?? 0;
   const pollMs = opts.pollMs ?? 10;
@@ -37,7 +47,7 @@ export function acquireProcessFileLock(
   const deadline = now() + waitMs;
 
   do {
-    const result = tryAcquireGenericLock(lockPath);
+    const result = tryAcquireGenericLock(lockPath, opts.directoryDurability);
     if (result) return asRepositoryLock(result);
     const remainingMs = deadline - now();
     if (remainingMs <= 0) return null;
@@ -52,7 +62,13 @@ export function acquireProcessFileLock(
  */
 export async function acquireProcessFileLockAsync(
   lockPath: string,
-  opts: { waitMs?: number; pollMs?: number; now?: () => number; signal?: AbortSignal } = {},
+  opts: {
+    waitMs?: number;
+    pollMs?: number;
+    now?: () => number;
+    signal?: AbortSignal;
+    directoryDurability?: ProcessFileLockDirectoryDurability;
+  } = {},
 ): Promise<RepositoryCacheLock | null> {
   const waitMs = opts.waitMs ?? 0;
   const pollMs = opts.pollMs ?? 10;
@@ -61,7 +77,7 @@ export async function acquireProcessFileLockAsync(
 
   do {
     throwIfSignalAborted(opts.signal, 'Lock acquisition was aborted.');
-    const result = tryAcquireGenericLock(lockPath);
+    const result = tryAcquireGenericLock(lockPath, opts.directoryDurability);
     if (result) return asRepositoryLock(result);
     const remainingMs = deadline - now();
     if (remainingMs <= 0) return null;
@@ -70,10 +86,14 @@ export async function acquireProcessFileLockAsync(
   return null;
 }
 
-function tryAcquireGenericLock(lockPath: string): ProcessFileLock | null {
+function tryAcquireGenericLock(
+  lockPath: string,
+  directoryDurability?: ProcessFileLockDirectoryDurability,
+): ProcessFileLock | null {
   const result = tryAcquireProcessFileLock(lockPath, {
     kind: 'generic',
     parseLegacy: parseLegacyGenericLock,
+    ...(directoryDurability ? { directoryDurability } : {}),
   });
   return result.kind === 'acquired' ? result.lock : null;
 }

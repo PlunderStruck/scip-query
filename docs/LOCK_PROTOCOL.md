@@ -58,6 +58,14 @@ owner. A crash before the link can leave a private candidate, but it cannot
 expose an empty or truncated public lock. Successful publication removes the
 private name and flushes the containing directory where supported.
 
+The SQLite generation reader-admission lock is the one narrower durability
+class. It still flushes the complete private ownership record before exclusive
+publication, but it does not force the containing directory on acquire or
+release. A host storage crash ends every admitted reader: losing the public name
+is then harmless, while a resurrected name contains the flushed record for a
+dead process instance and is reclaimed through the same guarded recovery path.
+All other process locks retain directory-durable acquire and release.
+
 ## Observation and Recovery
 
 | Observed state                                                     | Recovery decision                                                       |

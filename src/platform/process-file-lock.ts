@@ -85,6 +85,14 @@ export interface ProcessFileLock {
   release(): boolean;
 }
 
+/**
+ * Controls whether lock-directory mutations must survive a host storage crash.
+ * A recoverable lock still flushes its complete ownership record; after a host
+ * restart, a missing name is harmless and a resurrected record names a dead
+ * process instance that the normal guarded recovery path can reclaim.
+ */
+export type ProcessFileLockDirectoryDurability = 'durable' | 'recoverable';
+
 // scip-query: ignore-stale -- Capability port isolates process and filesystem effects for fault testing.
 export interface ProcessFileLockRuntime {
   wallNow(): number;
@@ -128,6 +136,7 @@ export interface TryAcquireProcessFileLockOptions {
   detail?: Record<string, unknown>;
   pid?: number;
   processIdentity?: ProcessIdentity | null;
+  directoryDurability?: ProcessFileLockDirectoryDurability;
   /** @deprecated Accepted for source compatibility; malformed public locks now fail closed. */
   creationGraceMs?: number;
   parseLegacy?: LegacyProcessLockDecoder;
@@ -272,6 +281,7 @@ function createOwnedLock(
   options: TryAcquireProcessFileLockOptions,
   runtime: ProcessFileLockRuntime,
 ): ProcessFileLock {
+  const directoryDurability = options.directoryDurability ?? 'durable';
   const pid = options.pid ?? process.pid;
   const token = runtime.randomToken();
   const processIdentity =
@@ -314,11 +324,13 @@ function createOwnedLock(
     throw error;
   }
   removeCandidateFile(candidatePath, runtime);
-  try {
-    syncLockDirectory(dirname(path), runtime);
-  } catch (error) {
-    releaseOwnedProcessFileLock(path, record, runtime);
-    throw error;
+  if (directoryDurability === 'durable') {
+    try {
+      syncLockDirectory(dirname(path), runtime);
+    } catch (error) {
+      releaseOwnedProcessFileLock(path, record, runtime);
+      throw error;
+    }
   }
   let released = false;
   return {
@@ -327,7 +339,7 @@ function createOwnedLock(
     release: () => {
       if (released) return false;
       released = true;
-      return releaseOwnedProcessFileLock(path, record, runtime);
+      return releaseOwnedProcessFileLockWithDirectoryDurability(path, record, runtime, directoryDurability);
     },
   };
 }
@@ -336,6 +348,15 @@ export function releaseOwnedProcessFileLock(
   path: string,
   expected: Pick<ProcessFileLockRecord, 'pid' | 'token' | 'processIdentity'>,
   runtime: ProcessFileLockRuntime = NODE_PROCESS_FILE_LOCK_RUNTIME,
+): boolean {
+  return releaseOwnedProcessFileLockWithDirectoryDurability(path, expected, runtime, 'durable');
+}
+
+function releaseOwnedProcessFileLockWithDirectoryDurability(
+  path: string,
+  expected: Pick<ProcessFileLockRecord, 'pid' | 'token' | 'processIdentity'>,
+  runtime: ProcessFileLockRuntime,
+  directoryDurability: ProcessFileLockDirectoryDurability,
 ): boolean {
   const current = readProcessFileLock(path, { runtime });
   if (current.state !== 'valid' || !current.record) return false;
@@ -346,7 +367,7 @@ export function releaseOwnedProcessFileLock(
   ) {
     return false;
   }
-  return removeLockFile(path, runtime);
+  return removeLockFile(path, runtime, directoryDurability);
 }
 
 function acquireReclaimGuard(path: string, runtime: ProcessFileLockRuntime): ProcessFileLock | null {
@@ -413,10 +434,14 @@ function syncLockDirectory(path: string, runtime: ProcessFileLockRuntime): void 
   }
 }
 
-function removeLockFile(path: string, runtime: ProcessFileLockRuntime): boolean {
+function removeLockFile(
+  path: string,
+  runtime: ProcessFileLockRuntime,
+  directoryDurability: ProcessFileLockDirectoryDurability = 'durable',
+): boolean {
   try {
     runtime.removeFile(path);
-    syncLockDirectory(dirname(path), runtime);
+    if (directoryDurability === 'durable') syncLockDirectory(dirname(path), runtime);
     return true;
   } catch {
     return false;

@@ -134,7 +134,10 @@ export function acquireSqliteGenerationReader(
   config: ScipQueryConfig,
   runtime: SqliteGenerationReaderRuntime = NODE_SQLITE_GENERATION_READER_RUNTIME,
 ): { generation: SqliteGenerationHandle; release(): void } {
-  const lock = acquireProcessFileLock(sqliteGenerationGcLockPath(config.dbPath), { waitMs: 5_000 });
+  const lock = acquireProcessFileLock(sqliteGenerationGcLockPath(config.dbPath), {
+    waitMs: 5_000,
+    directoryDurability: 'recoverable',
+  });
   if (!lock) throw new Error('SQLite generation retention is busy; retry opening the index.');
   let leasePath: string | undefined;
   try {
