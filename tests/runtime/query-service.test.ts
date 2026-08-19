@@ -176,6 +176,24 @@ describe('query service fast path', () => {
       kind: 'value-flow',
       symbolPattern: 'queryServiceSessionIdentity',
     });
+    expect(
+      parseFastPathInvocation([
+        'reference-neighborhood',
+        'queryServiceSessionIdentity',
+        '--json',
+        '--result-only',
+        '--compact',
+      ]),
+    ).toEqual({
+      kind: 'reference-neighborhood',
+      symbolPattern: 'queryServiceSessionIdentity',
+    });
+    expect(
+      parseFastPathInvocation(['dataflow', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact']),
+    ).toEqual({
+      kind: 'dataflow',
+      symbolPattern: 'queryServiceSessionIdentity',
+    });
     expect(parseFastPathInvocation(['imports', 'src/runtime/cli.ts', '--json', '--result-only', '--compact'])).toEqual({
       kind: 'imports',
       filePattern: 'src/runtime/cli.ts',
@@ -233,6 +251,10 @@ describe('query service fast path', () => {
     ['value-flow', 'queryServiceSessionIdentity', '--depth', '3', '--json', '--result-only', '--compact'],
     ['value-flow', 'queryServiceSessionIdentity', '--max-edges', '12', '--json', '--result-only', '--compact'],
     ['value-flow', '--json', '--result-only', '--compact'],
+    ['reference-neighborhood', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact', '--full'],
+    ['reference-neighborhood', '--json', '--result-only', '--compact'],
+    ['dataflow', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact', '--full'],
+    ['dataflow', '--json', '--result-only', '--compact'],
     ['imports', 'src/runtime/cli.ts', '--json', '--result-only', '--compact', '--full'],
     ['imports', '--json', '--result-only', '--compact'],
     ['unused-imports', 'src/runtime/cli.ts', '--json', '--result-only', '--compact', '--full'],

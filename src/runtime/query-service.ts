@@ -42,7 +42,7 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 13;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 14;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
 const QUERY_SERVICE_CATALOG_POOL_SIZE = 4;
@@ -161,6 +161,10 @@ export interface QueryServiceValueFlowRequest {
   symbolPattern: string;
 }
 
+export type QueryServiceSemanticNeighborhoodRequest =
+  | { kind: 'reference-neighborhood'; expectedGeneration: string; symbolPattern: string }
+  | { kind: 'dataflow'; expectedGeneration: string; symbolPattern: string };
+
 export interface QueryServiceImportsRequest {
   kind: 'imports';
   expectedGeneration: string;
@@ -234,6 +238,7 @@ export type QueryServiceRequest =
   | QueryServiceRefsRequest
   | QueryServiceTraceRequest
   | QueryServiceValueFlowRequest
+  | QueryServiceSemanticNeighborhoodRequest
   | QueryServiceImportsRequest
   | QueryServiceUnusedImportsRequest
   | QueryServiceSurfaceRequest;
@@ -364,6 +369,12 @@ export interface QueryServiceTraceResult {
 }
 
 export interface QueryServiceValueFlowResult {
+  result: QueryServiceSerializedResult;
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceSemanticNeighborhoodResult {
   result: QueryServiceSerializedResult;
   generationIdentity: string;
   observationReceipt: ObservationReceiptV2;
@@ -597,6 +608,21 @@ export function tryValueFlowWithQueryService(
   );
 }
 
+export function trySemanticNeighborhoodWithQueryService(
+  projectRoot: string,
+  kind: QueryServiceSemanticNeighborhoodRequest['kind'],
+  symbolPattern: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceSemanticNeighborhoodResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind, expectedGeneration, symbolPattern }),
+    isSerializedJsonResult,
+    `${kind} result`,
+    policy,
+  );
+}
+
 export function tryImportsWithQueryService(
   projectRoot: string,
   filePattern: string,
@@ -792,7 +818,7 @@ function requestQuery<Result>(
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const operationKey = boundedMailboxOperationKey('query-service-v13', { clientId, request });
+  const operationKey = boundedMailboxOperationKey('query-service-v14', { clientId, request });
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -1307,6 +1333,8 @@ function requestPoolSize(request: QueryServiceRequest): number {
   if (
     request.kind === 'refs' ||
     request.kind === 'trace' ||
+    request.kind === 'reference-neighborhood' ||
+    request.kind === 'dataflow' ||
     request.kind === 'imports' ||
     request.kind === 'unused-imports'
   ) {

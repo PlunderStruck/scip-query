@@ -26,6 +26,7 @@ import {
   tryTraceWithQueryService,
   tryUnusedImportsWithQueryService,
   tryValueFlowWithQueryService,
+  trySemanticNeighborhoodWithQueryService,
 } from './query-service.js';
 
 interface SourceSearchFastPathInvocation {
@@ -113,6 +114,10 @@ interface ValueFlowFastPathInvocation {
   symbolPattern: string;
 }
 
+type SemanticNeighborhoodFastPathInvocation =
+  | { kind: 'reference-neighborhood'; symbolPattern: string }
+  | { kind: 'dataflow'; symbolPattern: string };
+
 interface ImportsFastPathInvocation {
   kind: 'imports';
   filePattern: string;
@@ -145,6 +150,7 @@ type FastPathInvocation =
   | RefsFastPathInvocation
   | TraceFastPathInvocation
   | ValueFlowFastPathInvocation
+  | SemanticNeighborhoodFastPathInvocation
   | ImportsFastPathInvocation
   | UnusedImportsFastPathInvocation
   | SurfaceFastPathInvocation;
@@ -232,6 +238,14 @@ export async function tryRunQueryServiceFastPath(argv: readonly string[]): Promi
     await writeSerializedJsonResult(response.result.serializedJson, invocation.kind, argv);
     return true;
   }
+  if (invocation.kind === 'reference-neighborhood' || invocation.kind === 'dataflow') {
+    const response = trySemanticNeighborhoodWithQueryService(projectRoot, invocation.kind, invocation.symbolPattern, {
+      allowDefault: true,
+    });
+    if (!response) return false;
+    await writeSerializedJsonResult(response.result.serializedJson, invocation.kind, argv);
+    return true;
+  }
   if (invocation.kind === 'imports') {
     const response = tryImportsWithQueryService(projectRoot, invocation.filePattern, { allowDefault: true });
     if (!response || !writeUnpagedJsonResult(response.result)) return false;
@@ -286,6 +300,9 @@ export function parseFastPathInvocation(argv: readonly string[]): FastPathInvoca
   if (argv[0] === 'refs') return parseRefsInvocation(argv);
   if (argv[0] === 'trace') return parseTraceInvocation(argv);
   if (argv[0] === 'value-flow') return parseValueFlowInvocation(argv);
+  if (argv[0] === 'reference-neighborhood' || argv[0] === 'dataflow') {
+    return parseSemanticNeighborhoodInvocation(argv);
+  }
   if (argv[0] === 'imports') return parseImportsInvocation(argv);
   if (argv[0] === 'unused-imports') return parseUnusedImportsInvocation(argv);
   if (argv[0] === 'surface') return parseSurfaceInvocation(argv);
@@ -337,6 +354,13 @@ function parseTraceInvocation(argv: readonly string[]): TraceFastPathInvocation 
 function parseValueFlowInvocation(argv: readonly string[]): ValueFlowFastPathInvocation | null {
   const symbolPattern = parseExactCompactOperand(argv);
   return symbolPattern === null ? null : { kind: 'value-flow', symbolPattern };
+}
+
+function parseSemanticNeighborhoodInvocation(argv: readonly string[]): SemanticNeighborhoodFastPathInvocation | null {
+  const kind = argv[0];
+  if (kind !== 'reference-neighborhood' && kind !== 'dataflow') return null;
+  const symbolPattern = parseExactCompactOperand(argv);
+  return symbolPattern === null ? null : { kind, symbolPattern };
 }
 
 function parseImportsInvocation(argv: readonly string[]): ImportsFastPathInvocation | null {

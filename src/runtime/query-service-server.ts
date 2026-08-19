@@ -285,6 +285,24 @@ async function executeRequest(
       sha256: createHash('sha256').update(serializedJson).digest('hex'),
     };
   }
+  if (request.kind === 'reference-neighborhood' || request.kind === 'dataflow') {
+    const [{ dataflow, referenceNeighborhood }, { symbolResolutionJson }] = await Promise.all([
+      import('../queries/navigation/dataflow.js'),
+      import('./query-commands/symbol-resolution.js'),
+    ]);
+    const payload =
+      request.kind === 'dataflow'
+        ? dataflow(db, request.symbolPattern, { semantic: defaultSemanticEnrichment(db) })
+        : referenceNeighborhood(db, request.symbolPattern, { semantic: defaultSemanticEnrichment(db) });
+    const serializedJson = JSON.stringify({
+      ...symbolResolutionJson(db, request.symbolPattern),
+      [request.kind]: payload,
+    });
+    return {
+      serializedJson,
+      sha256: createHash('sha256').update(serializedJson).digest('hex'),
+    };
+  }
   if (request.kind === 'imports') {
     const { imports } = await import('../queries/navigation/imports.js');
     return imports(db, request.filePattern, { semantic: defaultSemanticEnrichment(db) });
@@ -433,7 +451,9 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
     requestRecord['kind'] === 'hierarchy' ||
     requestRecord['kind'] === 'refs' ||
     requestRecord['kind'] === 'trace' ||
-    requestRecord['kind'] === 'value-flow'
+    requestRecord['kind'] === 'value-flow' ||
+    requestRecord['kind'] === 'reference-neighborhood' ||
+    requestRecord['kind'] === 'dataflow'
   ) {
     if (typeof requestRecord['symbolPattern'] !== 'string') {
       throw new Error(`Invalid query service ${requestRecord['kind']} request.`);
