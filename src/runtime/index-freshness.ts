@@ -19,6 +19,7 @@ import {
 } from '../platform/project-files.js';
 import { typeScriptProjectSelectionIsTreeOwned } from '../platform/typescript-projects.js';
 import { detectLanguages } from '../reindex/detect.js';
+import { inspectIndexDocumentCoverage } from '../reindex/index-coverage.js';
 import { managedGenerationMatchesFingerprint } from '../reindex/shared-generation-store.js';
 import { inspectSqliteGeneration } from '../reindex/sqlite-generation-store.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
@@ -130,7 +131,11 @@ export function getIndexFreshness(
       JSON.stringify(metadataLanguages) === JSON.stringify(current.languages);
     const generation = inspectSqliteGeneration(paths.dbPath, paths.metaPath);
     const generationDrift = generation.state === 'invalid' || generation.state === 'drifted';
-    const accepted = fresh && !generationDrift;
+    const documentCoverage = fresh
+      ? inspectIndexDocumentCoverage(paths.dbPath, current, metadataLanguages as SupportedLanguage[])
+      : undefined;
+    const incompleteDocuments = documentCoverage?.state === 'incomplete';
+    const accepted = fresh && !generationDrift && !incompleteDocuments;
     return {
       state: accepted ? 'fresh' : 'stale',
       checkedAt,
@@ -139,9 +144,11 @@ export function getIndexFreshness(
       lastRefresh: metadata.lastRefresh,
       reason: generationDrift
         ? `SQLite generation requires repair: ${generation.reason}`
-        : fresh
-          ? 'Index metadata fingerprint matches current source files.'
-          : 'Index metadata fingerprint differs from current source files.',
+        : incompleteDocuments
+          ? `SQLite generation is missing ${documentCoverage.missingDocumentCount} indexed source document(s): ${documentCoverage.missingPaths.join(', ')}`
+          : fresh
+            ? 'Index metadata fingerprint matches current source files.'
+            : 'Index metadata fingerprint differs from current source files.',
       remedy: accepted ? undefined : 'Run: scip-query reindex',
     };
   } catch (error) {

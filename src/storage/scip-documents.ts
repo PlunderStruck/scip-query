@@ -15,6 +15,12 @@ export interface IndexedDocumentPathCandidate {
   score: number;
 }
 
+export interface IndexedDocumentCandidateOptions {
+  allowMultiple: boolean;
+  /** Require an exact or suffix-qualified path; never degrade to basename or substring matching. */
+  requirePathMatch?: boolean;
+}
+
 const INDEXED_DOCUMENT_PATHS_CACHE = createPerDbCache<string, readonly string[]>('indexed-document-paths', {
   clearGroups: ['whole-project'],
 });
@@ -69,7 +75,7 @@ function indexedDocumentPathCacheKey(opts: IndexedDocumentPathOptions): string {
 export function resolveIndexedDocumentCandidates(
   db: ScipDatabase,
   filePattern: string,
-  opts: { allowMultiple: boolean },
+  opts: IndexedDocumentCandidateOptions,
 ): IndexedDocumentPathCandidate[] {
   const normalizedPattern = normalizeLookupPath(filePattern);
   if (!normalizedPattern) return [];
@@ -101,6 +107,8 @@ export function resolveIndexedDocumentCandidates(
   if (exactPathMatches.length > 0) {
     return opts.allowMultiple ? exactPathMatches : [exactPathMatches[0]!];
   }
+
+  if (opts.requirePathMatch) return [];
 
   const basenameMatches = scored.filter((row) => row.score >= 800);
   if (basenameMatches.length > 0) {

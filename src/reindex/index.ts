@@ -84,6 +84,9 @@ import { patchIncrementalSqliteGeneration } from './incremental-sqlite-publicati
 import { optimizeSqliteQueryLayout } from './sqlite-index-maintenance.js';
 import { runPostIndexAugmentation } from './augmentation/post-index-augmentation.js';
 import { recordFailedReindexActivity, recordReindexRunActivity } from './reindex-activity.js';
+import { inspectIndexDocumentCoverage, type IndexDocumentCoverage } from './index-coverage.js';
+import type { ReindexResult, ReindexShardDiagnostic } from './reindex-result.js';
+export type { ReindexResult, ReindexShardDiagnostic } from './reindex-result.js';
 import {
   assignFilesToProjects,
   computeProjectShardFingerprints,
@@ -162,54 +165,6 @@ export interface ReindexOptions {
   allowExpensiveRebuild?: boolean;
   /** Cancel this reindex and every bounded child process. */
   signal?: AbortSignal;
-}
-
-// Plan 6 6.5.2 — shard-reuse diagnostics: one entry per cached indexing unit
-// (a language shard, or one TypeScript workspace project shard within a
-// language) explaining whether it was reused and, if not, why.
-export interface ReindexShardDiagnostic {
-  /** Unique id for this shard: the language, or `<language>:<projectPath>` for a TS workspace sub-project. */
-  id: string;
-  language: SupportedLanguage;
-  /** True when the cached shard was reused without rerunning its indexer. */
-  reused: boolean;
-  /** How this shard was obtained during the refresh. */
-  strategy: 'reused' | 'incremental' | 'full';
-  /** Present only when `reused` is false: why the cached shard could not be used. */
-  missReason?: string;
-  /** Present when a preferred refresh strategy failed and the shard was rebuilt another way. */
-  fallbackReason?: string;
-  /** Short hash of this shard's fingerprint inputs (source content + indexer options). */
-  fingerprint: string;
-  /** Size in bytes of the shard's cached SCIP output, or null when unavailable. */
-  outputBytes: number | null;
-  /** Bytes newly emitted by this run; absent when outputBytes is already the produced size. */
-  producedOutputBytes?: number;
-  /** Wall time spent producing this shard; 0 when reused. */
-  durationMs: number;
-  /** Indexer command invoked to produce this shard; absent when reused. */
-  command?: string;
-}
-
-export interface ReindexResult {
-  /** Languages that were successfully indexed. */
-  languages: SupportedLanguage[];
-  indexPath: string;
-  dbPath: string;
-  durationMs: number;
-  /** True when existing SCIP/SQLite outputs were reused because inputs were unchanged. */
-  reused: boolean;
-  /**
-   * Languages detected in the project but skipped because their indexer
-   * could not be located, installed, or run. Each entry includes the reason.
-   */
-  skipped: { language: SupportedLanguage; reason: string }[];
-  /** Persisted description of this refresh attempt. */
-  lastRefresh?: LastRefreshMetadata;
-  /** Per-shard reuse diagnostics (plan6 6.5.2); one entry per language/workspace shard. */
-  shards?: ReindexShardDiagnostic[];
-  /** Staging-copy cost split by copy-on-write clones and real byte-copy fallbacks. */
-  writeTelemetry?: ReindexWriteTelemetry;
 }
 
 interface PreparedIndexerPlan {
@@ -448,7 +403,10 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
   });
   if (!cacheLifecycleLock) {
     releaseSharedBuildLock?.();
-    throw new Error(`Could not acquire scip-query cache lifecycle lock for ${dirname(paths.outputDb)}.`);
+    throw new Error(
+      `Could not acquire scip-query cache lifecycle lock for ${dirname(paths.outputDb)}. ` +
+        'A watch daemon or another reindex may hold it. Run "scip-query watch --stop", retry the reindex, then restart with "scip-query watch --daemon".',
+    );
   }
   let releaseLock: (() => void) | undefined;
   try {
@@ -715,6 +673,12 @@ function reuseExistingIndexIfPossible(opts: {
     generation.state === 'invalid' ||
     generation.state === 'drifted'
   ) {
+    return null;
+  }
+
+  const coverage = inspectIndexDocumentCoverage(opts.paths.outputDb, opts.fingerprint, opts.languages);
+  if (coverage.state !== 'complete') {
+    opts.onStatus(describeIndexCoverageFailure('Accepted SQLite index', coverage));
     return null;
   }
 
@@ -1172,6 +1136,7 @@ function planTypeScriptProjectShardReuse(
 ): TypeScriptProjectShardPlan | undefined {
   const tsClassification = classification.get('typescript');
   if (!tsClassification || tsClassification.reused) return undefined;
+  if (tsClassification.cacheIntegrityFailed) return undefined;
   if (runOpts.opts.typescriptProjectMode !== 'workspace') return undefined;
 
   const allProjects = discoverTypeScriptProjectRoots(runOpts.projectRoot, runOpts.opts.typescriptProjects);
@@ -1283,6 +1248,7 @@ function buildCachedTypeScriptProjectRunResults(opts: {
 interface LanguageShardClassification {
   reused: boolean;
   reason?: string;
+  cacheIntegrityFailed?: boolean;
   fingerprint: ReindexFingerprint;
   scipPath: string;
 }
@@ -1306,6 +1272,10 @@ function classifyLanguageShardReuse(opts: {
 }): Map<SupportedLanguage, LanguageShardClassification> {
   const meta = readReindexMetaOrNull(opts.paths.metaPath);
   const current = computeLanguageFingerprints(opts.projectFingerprint, opts.languages, opts);
+  const acceptedCoverage =
+    meta && existsSync(opts.paths.outputDb)
+      ? inspectIndexDocumentCoverage(opts.paths.outputDb, opts.projectFingerprint, opts.languages)
+      : null;
   const result = new Map<SupportedLanguage, LanguageShardClassification>();
   for (const language of opts.languages) {
     const scipPath = languageShardPath(opts.paths.outputDb, language);
@@ -1350,6 +1320,19 @@ function classifyLanguageShardReuse(opts: {
       result.set(language, {
         reused: false,
         reason: 'language inputs changed since last index',
+        fingerprint,
+        scipPath,
+      });
+      continue;
+    }
+    if (
+      acceptedCoverage?.state === 'unavailable' ||
+      (acceptedCoverage?.state === 'incomplete' && acceptedCoverage.affectedLanguages.includes(language))
+    ) {
+      result.set(language, {
+        reused: false,
+        reason: describeIndexCoverageFailure('accepted SQLite index', acceptedCoverage),
+        cacheIntegrityFailed: true,
         fingerprint,
         scipPath,
       });
@@ -1538,6 +1521,11 @@ async function publishFreshReindexArtifacts(
   if (indexMaintenance.removed.length > 0) {
     opts.onStatus(`Removed redundant SQLite indexes: ${indexMaintenance.removed.join(', ')}`);
   }
+  assertCandidateIndexCoverage(
+    opts,
+    opts.tempPaths.tempOutputDb,
+    indexedOutputs.map((output) => output.language),
+  );
 
   if (sqliteMaterialization.mode === 'incremental' && incrementalTypeScript) {
     let candidateDb: ScipDatabase | null = null;
@@ -1605,6 +1593,7 @@ async function publishFreshReindexArtifacts(
     lastRefresh,
   });
   metadata.scipCompanion = deferredScipCompanion ? 'deferred' : 'current';
+  assertProjectInputsUnchanged(opts);
   pruneTypeScriptProjectShardCache(opts.paths.outputDb, pruneProjects);
   writeReindexMeta(opts.tempPaths.tempMetaPath, metadata);
   const localGenerationPublication = promoteReindexArtifacts({
@@ -1722,6 +1711,12 @@ function publishFullyReusedLanguageShardArtifacts(
     opts.onStatus(`Removed redundant SQLite indexes: ${indexMaintenance.removed.join(', ')}`);
   }
 
+  assertCandidateIndexCoverage(
+    opts,
+    opts.paths.outputDb,
+    indexedOutputs.map((output) => output.language),
+  );
+
   shadowRecord ??= collectAffectedSetShadowRecord({
     projectRoot: opts.projectRoot,
     previousDbPath: opts.tempPaths.tempOutputDb,
@@ -1750,6 +1745,7 @@ function publishFullyReusedLanguageShardArtifacts(
     typescriptProjectShardContext,
     lastRefresh,
   });
+  assertProjectInputsUnchanged(opts);
   pruneTypeScriptProjectShardCache(opts.paths.outputDb, pruneProjects);
   writeReindexMeta(opts.paths.metaPath, metadata);
   refreshSqliteGenerationMetadata(opts.paths.outputDb, opts.paths.metaPath);
@@ -1813,6 +1809,45 @@ function buildPublishedReindexMetadata(opts: {
     },
     pruneProjects: typescriptProjectShards.pruneProjects,
   };
+}
+
+function assertProjectInputsUnchanged(opts: Parameters<typeof runFreshReindex>[0]): void {
+  throwIfSignalAborted(opts.opts.signal, 'Reindex cancelled by its owner.');
+  const currentFingerprint = buildProjectInputFingerprint(opts.projectRoot, opts.languages, {
+    pnpmWorkspaces: opts.opts.pnpmWorkspaces,
+    typescriptProjectMode: opts.opts.typescriptProjectMode,
+    typescriptProjects: opts.opts.typescriptProjects,
+    clojureConfigPath: opts.opts.clojureConfigPath,
+  });
+  if (stableJson(currentFingerprint) === stableJson(opts.fingerprint)) return;
+
+  throw new Error(
+    'Project inputs changed during reindex; refusing to publish artifacts built from a different filesystem snapshot.',
+  );
+}
+
+function assertCandidateIndexCoverage(
+  opts: Parameters<typeof runFreshReindex>[0],
+  dbPath: string,
+  indexedLanguages: readonly SupportedLanguage[],
+): void {
+  const coverage = inspectIndexDocumentCoverage(dbPath, opts.fingerprint, indexedLanguages);
+  if (coverage.state === 'complete') return;
+  throw new Error(`${describeIndexCoverageFailure('Candidate SQLite index', coverage)} Refusing to publish it.`);
+}
+
+function describeIndexCoverageFailure(
+  label: string,
+  coverage: Exclude<IndexDocumentCoverage, { state: 'complete' }>,
+): string {
+  if (coverage.state === 'unavailable') {
+    return `${label} document coverage could not be verified (${coverage.reason}); rebuilding cached language shards.`;
+  }
+  const sample = coverage.missingPaths.length > 0 ? ` First missing path: ${coverage.missingPaths[0]}.` : '';
+  return (
+    `${label} is missing ${coverage.missingDocumentCount} fingerprinted source document` +
+    `${coverage.missingDocumentCount === 1 ? '' : 's'}; rebuilding affected language shards.${sample}`
+  );
 }
 
 /**

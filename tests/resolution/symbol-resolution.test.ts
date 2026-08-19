@@ -68,6 +68,18 @@ describe('symbol resolution metadata', () => {
     }
   });
 
+  it('does not resolve an unindexed file location through a same-basename document', () => {
+    const db = createResolutionDb();
+    try {
+      expect(resolveSymbol(db, 'src/unindexed/a.ts:3')).toMatchObject({
+        total: 0,
+        match: null,
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   it('prefers an exact callable leaf over same-prefix type declarations', () => {
     const db = createResolutionDb();
     try {
@@ -142,6 +154,7 @@ describe('symbol resolution metadata', () => {
         "export type SystemMapAnchorKind = 'symbol';",
       ],
       'src/nested/b.ts': 'export function duplicateHelper() { return 2; }\n',
+      'src/unindexed/a.ts': ['export const first = 1;', 'export const second = 2;', 'export const third = 3;'],
     });
     const dbPath = join(tempDir, 'index.db');
     evidenceFixtureDb(dbPath)

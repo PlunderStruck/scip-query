@@ -5,7 +5,7 @@
  * views of "current findings" must come from identical detector runs.
  */
 export const HEALTH_DETECTOR_PROFILES = {
-  dead: { minLoc: 3, skipBarrels: true, deadCodeOnly: true },
+  dead: { minLoc: 1, skipBarrels: false, deadCodeOnly: false },
   isolated: { minLoc: 3 },
   similar: { minSimilarity: 0.6, limit: 50, minCallees: 4 },
   duplicateBodies: { maxLoc: 15, limit: 50 },

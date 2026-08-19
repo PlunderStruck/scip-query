@@ -1,40 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
-
-export type FileDependencyDirection = 'forward' | 'reverse';
-
-/**
- * Returns compiler-resolved file relationships by entering through the exact
- * selected documents. Project-wide graph builders intentionally use their own
- * complete queries; this helper is only for target-bounded commands.
- */
-export function fileDependencyPaths(
-  db: ScipDatabase,
-  direction: FileDependencyDirection,
-  selectedPaths: readonly string[],
-): string[] {
-  if (selectedPaths.length === 0) return [];
-  const selected = new Set(selectedPaths);
-  const graph = buildFileDepGraph(db);
-  const related = new Set<string>();
-
-  if (direction === 'forward') {
-    for (const path of selected) {
-      for (const dependency of graph.get(path) ?? []) {
-        if (!selected.has(dependency)) related.add(dependency);
-      }
-    }
-  } else {
-    for (const [source, dependencies] of graph) {
-      if (selected.has(source)) continue;
-      for (const target of selected) {
-        if (dependencies.has(target)) related.add(source);
-      }
-    }
-  }
-
-  return [...related].sort();
-}
+import type { FileDependencyDirection } from '../../symbols/graph/file-dep-graph.js';
 
 /**
  * Legacy SQL projection retained for callers that inspect the raw SCIP

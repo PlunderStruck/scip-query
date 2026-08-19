@@ -294,6 +294,9 @@ function mergePackageVisibility(
 const HTTP_METHOD_EXPORTS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
 const NEXT_APP_PAGE_EXPORTS = new Set(['default', 'generateMetadata', 'generateStaticParams']);
 const NEXT_PAGES_EXPORTS = new Set(['default', 'getStaticProps', 'getServerSideProps', 'getStaticPaths', 'config']);
+const NEXT_MIDDLEWARE_EXPORTS = new Set(['default', 'middleware', 'config']);
+const NEXT_INSTRUMENTATION_EXPORTS = new Set(['register', 'onRequestError']);
+const NEXT_INSTRUMENTATION_CLIENT_EXPORTS = new Set(['onRouterTransitionStart']);
 const REMIX_ROUTE_EXPORTS = new Set([
   'default',
   'loader',
@@ -317,6 +320,9 @@ function isFrameworkDiscoveredEntrypointSymbol(symbol: string, normalized: strin
   if (isNextAppRoutePath(normalized)) return HTTP_METHOD_EXPORTS.has(name);
   if (isNextAppPagePath(normalized)) return NEXT_APP_PAGE_EXPORTS.has(name);
   if (isNextPagesPath(normalized)) return NEXT_PAGES_EXPORTS.has(name);
+  if (isNextMiddlewarePath(normalized)) return NEXT_MIDDLEWARE_EXPORTS.has(name);
+  if (isNextInstrumentationPath(normalized)) return NEXT_INSTRUMENTATION_EXPORTS.has(name);
+  if (isNextInstrumentationClientPath(normalized)) return NEXT_INSTRUMENTATION_CLIENT_EXPORTS.has(name);
   if (isRemixRoutePath(normalized)) return REMIX_ROUTE_EXPORTS.has(name);
   if (isSvelteKitRoutePath(normalized)) return SVELTEKIT_ROUTE_EXPORTS.has(name);
   if (isViteRoutePath(normalized)) return VITE_ROUTE_EXPORTS.has(name);
@@ -335,6 +341,8 @@ export function isFrameworkEntrypointPath(normalized: string): boolean {
     isNextAppPagePath(normalized) ||
     isNextPagesPath(normalized) ||
     isNextMiddlewarePath(normalized) ||
+    isNextInstrumentationPath(normalized) ||
+    isNextInstrumentationClientPath(normalized) ||
     isRemixRoutePath(normalized) ||
     isSvelteKitRoutePath(normalized)
   );
@@ -355,7 +363,18 @@ function isNextPagesPath(normalized: string): boolean {
 }
 
 function isNextMiddlewarePath(normalized: string): boolean {
-  const basename = '(?:middleware|proxy|instrumentation)\\.(?:ts|js|mts|mjs)';
+  return matchesNextRootConvention(normalized, '(?:middleware|proxy)\\.(?:ts|js|mts|mjs)');
+}
+
+function isNextInstrumentationPath(normalized: string): boolean {
+  return matchesNextRootConvention(normalized, 'instrumentation\\.(?:ts|js|mts|mjs)');
+}
+
+function isNextInstrumentationClientPath(normalized: string): boolean {
+  return matchesNextRootConvention(normalized, 'instrumentation-client\\.(?:ts|js|mts|mjs)');
+}
+
+function matchesNextRootConvention(normalized: string, basename: string): boolean {
   return (
     new RegExp(`^(?:src/)?${basename}$`).test(normalized) ||
     new RegExp(`(?:^|/)src/${basename}$`).test(normalized) ||

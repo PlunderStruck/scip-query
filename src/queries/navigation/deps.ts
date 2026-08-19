@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { fileDependencyPaths } from '../internal/file-dependencies.js';
+import { fileDependencyPaths } from '../../symbols/graph/file-dep-graph.js';
 import { resolveIndexedFile } from '../internal/file-resolution.js';
 
 export interface DepResult {

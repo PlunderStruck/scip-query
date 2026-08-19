@@ -16,7 +16,7 @@ import {
   isNonNegativeInteger,
   isValidRecordTimestamp,
 } from '../domain/record-validation.js';
-import type { ReindexResult } from './index.js';
+import type { ReindexResult } from './reindex-result.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import {
   appendRotatingJsonlRecord,

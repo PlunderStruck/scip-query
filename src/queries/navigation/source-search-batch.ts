@@ -19,7 +19,7 @@ import type {
   SourceSearchOptions,
   SourceSearchResult,
   SourceSearchScopeHint,
-} from './source-search.js';
+} from './source-search-types.js';
 import type { SourceSnippet } from './source-snippet.js';
 
 const SOURCE_SEARCH_IDENTITY_RENDER_LIMIT = 64;

@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { detectAstLanguage, getCallSites } from '../../source/ast.js';
-import { getSourceImports } from '../../language-parsers/index.js';
+import { findNamedSourceImportBinding, getSourceImports } from '../../language-parsers/index.js';
 import { createPerDbValue } from '../../storage/per-db-cache.js';
 import { getIdentifiersByLine } from '../identifier-index.js';
 import { isCallableSymbol, leafName } from '../symbol-parser.js';
@@ -17,6 +17,7 @@ import type { GlobalLeafCandidate } from '../leaf-symbol-index.js';
 import { scipFunctionLikeKindNumbers, scipTypeLikeKindNumbers } from '../symbol-kind.js';
 import { pathsResolveSame } from '../../domain/path-normalization.js';
 import type { SymbolSemanticEvidencePort } from '../semantic-evidence-port.js';
+import { fileDependencyPaths } from './file-dep-graph.js';
 
 export type CalleeEvidenceSource = 'ast-callsite' | 'semantic-callee' | 'scip-chunk';
 export type CallerEvidenceSource = 'caller-map-inversion' | 'resolved-reference' | 'semantic-reference';
@@ -179,6 +180,24 @@ function targetedCallerRowsMapForSymbols(
   const definitionBySymbolId = new Map(definitions.map((definition) => [definition.symbolId, definition]));
   const semanticReferences = opts.semanticEvidence?.referenceMap(db, definitions) ?? new Map();
   const resolvedReferences = getResolvedReferenceSitesMap(db, symbols);
+  const targetSymbols = new Set(symbols.map((symbol) => symbol.symbol));
+  const importerFiles = new Set(symbols.flatMap((symbol) => fileDependencyPaths(db, 'reverse', [symbol.relativePath])));
+  const importerDefinitions = [...importerFiles].flatMap((file) => getDefinitionsForFile(db, file));
+  const astCallersByTarget = new Map<string, CallerRow[]>();
+  const astCallees = buildAstCalleeMap(db, importerDefinitions);
+  for (const caller of importerDefinitions) {
+    for (const callee of astCallees.get(caller.symbolId) ?? []) {
+      if (!targetSymbols.has(callee.symbol)) continue;
+      const rows = astCallersByTarget.get(callee.symbol) ?? [];
+      rows.push({
+        symbol: caller.symbol,
+        file: caller.relativePath,
+        source: 'caller-map-inversion',
+        callEvidence: callee.source,
+      });
+      astCallersByTarget.set(callee.symbol, rows);
+    }
+  }
   const result = new Map<number, CallerRow[]>();
 
   for (const symbol of symbols) {
@@ -191,6 +210,10 @@ function targetedCallerRowsMapForSymbols(
       seen.add(key);
       rows.push(row);
     };
+
+    // Prefer syntax-confirmed calls over broad reference hits for the same
+    // caller. The stable de-duplication key below keeps the first observation.
+    for (const caller of astCallersByTarget.get(symbol.symbol) ?? []) add(caller);
 
     for (const site of resolvedReferences.get(symbol.symbolId) ?? []) {
       if (site.file === symbol.relativePath) continue;
@@ -392,6 +415,14 @@ function resolveAstCalleeCandidate(
   leafIndex: Map<string, GlobalLeafCandidate[]>,
   site: { calleeLeaf: string; calleeQualifier?: string; memberAccess: boolean },
 ): GlobalLeafCandidate | null {
+  const importBinding = findNamedSourceImportBinding(db, file, site.calleeLeaf);
+  if (importBinding) {
+    const importedCandidates = sameLanguageCandidates(file, leafIndex.get(importBinding.importedName) ?? []).filter(
+      (candidate) => pathsResolveSame(importBinding.sourcePath!, candidate.file),
+    );
+    return importedCandidates.length === 1 ? importedCandidates[0]! : null;
+  }
+
   const candidates = sameLanguageCandidates(file, leafIndex.get(site.calleeLeaf) ?? []);
   if (candidates.length === 0) return null;
   const clojurePick = pickClojureQualifiedCandidate(db, file, candidates, site.calleeQualifier);

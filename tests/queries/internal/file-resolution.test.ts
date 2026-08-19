@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import Database from 'better-sqlite3';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -102,11 +102,26 @@ describe('path resolver', () => {
     });
   });
 
+  it('never treats a nonexistent path as a basename search', () => {
+    withPathFixture((db) => {
+      expect(resolveIndexedPaths(db, 'src/totally/made/up/horses.ts')).toEqual([]);
+    });
+  });
+
   it('does not reinterpret an exact unindexed disk path as a fuzzy symbol', () => {
     withPathFixture((db, root) => {
       writeFileSync(join(root, 'AGENTS.md'), '# Repository instructions\n');
       expect(findFirstSymbolMatch(db, 'AGENTS.md')?.relativePath).toBe('backend/src/routes/horses.ts');
       expect(resolveIndexedPaths(db, 'AGENTS.md')).toEqual([]);
+    });
+  });
+
+  it('does not reinterpret an exact unindexed disk path as an indexed same-basename file', () => {
+    withPathFixture((db, root) => {
+      mkdirSync(join(root, 'frontend/src/routes'), { recursive: true });
+      writeFileSync(join(root, 'frontend/src/routes/horses.ts'), 'export const frontendHorse = true;\n');
+
+      expect(resolveIndexedPaths(db, 'frontend/src/routes/horses.ts')).toEqual([]);
     });
   });
 });

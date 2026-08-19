@@ -161,6 +161,14 @@ describe('commandAnalysisBudget', () => {
     expect(error).toHaveBeenCalledWith(expect.stringContaining('Candidate scans, when this command uses one'));
     expect(error).not.toHaveBeenCalledWith(expect.stringContaining('will scan the highest-priority'));
   });
+
+  it('keeps dead full scans memory-bounded by withholding whole-project semantic enrichment', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    expect(commandAnalysisBudget(fakeLargeDb(), 'dead', true)).toEqual({ semantic: false });
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('scanning all candidates'));
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('semantic enrichment disabled'));
+  });
 });
 
 describe('healthPhaseConcurrency', () => {

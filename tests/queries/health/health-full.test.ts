@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { health } from '../../../src/queries/health/health.js';
+import { dead } from '../../../src/queries/cleanup/dead.js';
+import { HEALTH_DETECTOR_PROFILES } from '../../../src/queries/internal/health-detector-profiles.js';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
 
 function createHealthFullFixtureDb(dbPath: string): void {
@@ -208,5 +210,16 @@ describe('health --full', () => {
       ]),
     );
     expect(fullReport.hygieneScore).toBeLessThan(regularReport.hygieneScore);
+  });
+
+  it('uses the public dead-command defaults for its dead-code count', () => {
+    expect(HEALTH_DETECTOR_PROFILES.dead).toEqual({ minLoc: 1, skipBarrels: false, deadCodeOnly: false });
+    const report = health(db);
+    const direct = dead(db, { semantic: true });
+
+    expect(report.findings.deadSymbols).toBe(direct.deadCodeCount);
+    expect(report.findings.deadLoc).toBe(
+      direct.symbols.filter((symbol) => symbol.kind === 'dead-code').reduce((sum, symbol) => sum + symbol.loc, 0),
+    );
   });
 });

@@ -1,0 +1,49 @@
+{
+  "acceptedAt": "2026-08-19T18:45:56.220Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "92aeb3801723ad6b42f765be48b72b1d853e608a889b3b22abc97b82e5b0f9c4",
+  "changes": [
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries; review their variance and runtime meaning.",
+      "target": "./queries"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/index; review their variance and runtime meaning.",
+      "target": "./queries/index"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/source-inspection; review their variance and runtime meaning.",
+      "target": "./queries/source-inspection"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/source-search; review their variance and runtime meaning.",
+      "target": "./queries/source-search"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./reindex; review their variance and runtime meaning.",
+      "target": "./reindex"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module source-search-types-<hash>.d.ts was added or renamed.",
+      "target": "source-search-types-<hash>.d.ts"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "6fba243b84e8ecfa535e1662beb39bdef3a3ca55bf0caa0821101f8e82e93edc",
+  "reason": "Move shared TypeScript contracts to dependency-light modules to eliminate file cycles without changing exported names, shapes, or import paths.",
+  "schemaVersion": 1
+}

@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
+import { getSourceText, splitSearchableSourceLines } from '../../source/primitives/source-text.js';
 import { loadFileSymbols } from '../../symbols/definition-catalog.js';
-import { resolveIndexedPaths } from '../internal/file-resolution.js';
+import { resolveUniqueIndexedPath } from '../internal/file-resolution.js';
 import { isAncestorSymbol } from '../../symbols/symbol-parser.js';
 
 export interface OutlineNode {
@@ -20,15 +21,17 @@ export interface OutlineNode {
  * numbers match `scip symbols` output exactly.
  */
 export function outline(db: ScipDatabase, filePattern: string): OutlineNode[] {
-  const paths = resolveIndexedPaths(db, filePattern);
-  const definitions = loadFileSymbols(db, paths, { sort: true });
+  const path = resolveUniqueIndexedPath(db, filePattern);
+  if (!path) return [];
+  const definitions = loadFileSymbols(db, [path], { sort: true });
   if (definitions.length === 0) return [];
+  const sourceEndLine = Math.max(0, splitSearchableSourceLines(getSourceText(db, path)).length - 1);
 
   const nodes: OutlineNode[] = definitions.map((d) => ({
     symbol: d.symbol,
     shortName: d.shortName,
     startLine: d.startLine,
-    endLine: d.endLine,
+    endLine: Math.min(d.endLine, sourceEndLine),
     signature: d.signature,
     children: [],
   }));

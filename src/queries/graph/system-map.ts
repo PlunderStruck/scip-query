@@ -10,9 +10,10 @@ import type { BoundaryObservation } from '../../analysis/runtime-boundaries/type
 import { runtimeBoundarySourceScope } from '../../analysis/runtime-boundaries/source-scope.js';
 import type { BoundarySourceScope } from '../../analysis/runtime-boundaries/types.js';
 import { groupBy } from '../../domain/group-by.js';
+import { pathsResolveSame } from '../../domain/path-normalization.js';
 import { compareSystemMapDrilldownSymbols, systemMapOriginRank } from '../../domain/system-map-origin-rank.js';
 import type { IndexedDefinition, SymbolMatch, SymbolResolutionCandidate } from '../../domain/types.js';
-import { getSourceImports } from '../../language-parsers/index.js';
+import { findNamedSourceImportBinding, getSourceImports } from '../../language-parsers/index.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
 import { getAst, type SyntaxNode } from '../../source/ast.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
@@ -1023,7 +1024,8 @@ function executeSystemMap(
               const isCallsite =
                 relationPolicy.has('call') &&
                 getSourceFacts(db, site.file)?.callSites.some(
-                  (callsite) => callsite.line === site.line && callsite.calleeLeaf === definition.leaf,
+                  (callsite) =>
+                    callsite.line === site.line && sourceCallsiteTargetsDefinition(db, site.file, callsite, definition),
                 ) === true;
               if (!isCallsite || !site.enclosingSymbol) return [];
               const owner = resolveIndexedDefinitions(db, index, site.enclosingSymbol).matches[0];
@@ -1063,7 +1065,8 @@ function executeSystemMap(
           const isCallsite =
             relationPolicy.has('call') &&
             getSourceFacts(db, site.file)?.callSites.some(
-              (callsite) => callsite.line === site.line && callsite.calleeLeaf === definition.leaf,
+              (callsite) =>
+                callsite.line === site.line && sourceCallsiteTargetsDefinition(db, site.file, callsite, definition),
             ) === true;
           let referenceOwnerSymbol: string | null = null;
           let referenceSourceConstruct: SourceConstructState | null = null;
@@ -1934,6 +1937,22 @@ function sourceConstructIdentity(construct: SystemMapSourceConstruct): SystemMap
     startLine: construct.startLine,
     endLine: construct.endLine,
   };
+}
+
+function sourceCallsiteTargetsDefinition(
+  db: ScipDatabase,
+  sourceFile: string,
+  callsite: { calleeLeaf: string },
+  definition: IndexedDefinition,
+): boolean {
+  if (callsite.calleeLeaf === definition.leaf) return true;
+  const binding = findNamedSourceImportBinding(db, sourceFile, callsite.calleeLeaf);
+  return (
+    binding !== null &&
+    binding.importedName === definition.leaf &&
+    binding.sourcePath !== null &&
+    pathsResolveSame(binding.sourcePath, definition.relativePath)
+  );
 }
 
 /**
@@ -3307,7 +3326,19 @@ function systemMapReferenceSites(
   const files = index.callerFileMap([definition], { semantic: false }).get(definition.symbolId) ?? new Set<string>();
   const sites: ReferenceSite[] = [];
   for (const file of [...files].sort()) {
-    const lines = definition.leaf ? findIdentifierLines(db, file, definition.leaf) : [];
+    const targetBindings = getSourceImports(db, file).filter(
+      (entry) =>
+        entry.importedName === definition.leaf &&
+        entry.sourcePath !== null &&
+        pathsResolveSame(entry.sourcePath, definition.relativePath),
+    );
+    const names = new Set<string>();
+    if (targetBindings.length > 0) {
+      for (const entry of targetBindings) names.add(entry.localName ?? entry.importedName);
+    } else if (definition.leaf) {
+      names.add(definition.leaf);
+    }
+    const lines = [...new Set([...names].flatMap((name) => findIdentifierLines(db, file, name)))].sort((a, b) => a - b);
     if (lines.length === 0) {
       sites.push({ file, line: null, enclosingSymbol: null });
       continue;

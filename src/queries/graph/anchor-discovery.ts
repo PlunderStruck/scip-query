@@ -5,6 +5,8 @@ import { readRuntimeBoundaryGraph } from '../../analysis/runtime-boundaries/inde
 import type { BoundaryLink, BoundaryObservation } from '../../analysis/runtime-boundaries/types.js';
 import { behaviorConstructRange } from '../../source/facts/behavior-skeleton.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
+import { findNamedSourceImportBinding } from '../../language-parsers/index.js';
+import { pathsResolveSame } from '../../domain/path-normalization.js';
 import { smallestSourceCallableAtLine } from '../../source/facts/source-callables.js';
 import { getSourceLines, splitSearchableSourceLines } from '../../source/primitives/source-text.js';
 import { classifyFile, fileKindRank, type FileKind } from '../../source/primitives/file-kind.js';
@@ -843,12 +845,18 @@ function astCallsiteConfirmsTarget(
   if (callsiteLine === undefined) return false;
   const targetLeaf = normalizedCallableLeaf(target.leaf);
   return (
-    getSourceFacts(db, from.relativePath)?.callSites.some(
-      (callsite) => callsite.line === callsiteLine && normalizedCallableLeaf(callsite.calleeLeaf) === targetLeaf,
-    ) ?? false
+    getSourceFacts(db, from.relativePath)?.callSites.some((callsite) => {
+      if (callsite.line !== callsiteLine) return false;
+      if (normalizedCallableLeaf(callsite.calleeLeaf) === targetLeaf) return true;
+      const importBinding = findNamedSourceImportBinding(db, from.relativePath, callsite.calleeLeaf);
+      return (
+        importBinding !== null &&
+        normalizedCallableLeaf(importBinding.importedName) === targetLeaf &&
+        pathsResolveSame(importBinding.sourcePath!, target.relativePath)
+      );
+    }) ?? false
   );
 }
-
 
 function connectedRootGroups(
   neighborhoods: readonly RootNeighborhood[],

@@ -76,6 +76,7 @@ const PRIVATE_QUERY_SOURCE_PATHS = {
   'query-utils': 'src/queries/query-utils.ts',
   'source-inspection-selection': 'src/queries/navigation/source-inspection-selection.ts',
   'source-search-batch': 'src/queries/navigation/source-search-batch.ts',
+  'source-search-types': 'src/queries/navigation/source-search-types.ts',
   'source-snippet': 'src/queries/navigation/source-snippet.ts',
   'architecture-baseline': 'src/queries/graph/architecture-baseline.ts',
   'program-control-edges': 'src/queries/graph/program-control-edges.ts',

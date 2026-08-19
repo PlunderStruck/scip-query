@@ -15,6 +15,8 @@ const internalSym = (name: string) => `scip-typescript npm fixture 1.0.0 src/\`i
 const contractSym = (owner: string, name: string) =>
   `scip-typescript npm fixture 1.0.0 src/\`contracts.ts\`/${owner}#${name}().`;
 const routeSym = (name: string) => `scip-typescript npm fixture 1.0.0 src/app/api/health/\`route.ts\`/${name}().`;
+const instrumentationClientSym = (name: string) =>
+  `scip-typescript npm fixture 1.0.0 \`instrumentation-client.ts\`/${name}().`;
 const rustSym = (file: string, name: string) => `rust-analyzer cargo fixture 0.1.0 ${file}/${name}().`;
 
 function withDeadFixture(run: (db: ScipDatabase) => void): void {
@@ -97,6 +99,10 @@ function withDeadFixture(run: (db: ScipDatabase) => void): void {
       ].join('\n'),
     );
     writeFileSync(
+      join(projectRoot, 'instrumentation-client.ts'),
+      'export function onRouterTransitionStart() { return true; }\n',
+    );
+    writeFileSync(
       join(projectRoot, 'package.json'),
       JSON.stringify({
         exports: {
@@ -115,7 +121,8 @@ function withDeadFixture(run: (db: ScipDatabase) => void): void {
         (3, 'typescript', 'src/app/api/health/route.ts'),
         (4, 'typescript', 'src/index.ts'),
         (5, 'typescript', 'src/internal.ts'),
-        (6, 'typescript', 'src/contracts.ts');
+          (6, 'typescript', 'src/contracts.ts'),
+          (7, 'typescript', 'instrumentation-client.ts');
 
       INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
         (1, '${sym('unusedExport')}', 'unusedExport', 3, 'function unusedExport'),
@@ -130,7 +137,8 @@ function withDeadFixture(run: (db: ScipDatabase) => void): void {
         (10, '${contractSym('Base', '`<constructor>`')}', '<constructor>', 9, 'constructor'),
         (11, '${contractSym('Boundary', 'getDerivedStateFromError')}', 'getDerivedStateFromError', 6, 'method getDerivedStateFromError'),
         (12, '${contractSym('Provider', 'readFile')}', 'readFile', 6, 'method readFile'),
-        (13, '${contractSym('Plain', 'unusedMethod')}', 'unusedMethod', 6, 'method unusedMethod');
+          (13, '${contractSym('Plain', 'unusedMethod')}', 'unusedMethod', 6, 'method unusedMethod'),
+          (14, '${instrumentationClientSym('onRouterTransitionStart')}', 'onRouterTransitionStart', 3, 'function onRouterTransitionStart');
 
       INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
         (1, 1, 1, 0, 0, 2, 1),
@@ -145,7 +153,8 @@ function withDeadFixture(run: (db: ScipDatabase) => void): void {
         (10, 6, 10, 4, 2, 4, 52),
         (11, 6, 11, 7, 2, 7, 57),
         (12, 6, 12, 10, 2, 10, 65),
-        (13, 6, 13, 13, 2, 13, 34);
+          (13, 6, 13, 13, 2, 13, 34),
+          (14, 7, 14, 0, 0, 0, 59);
 
       INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
         (1, 1, 0, 0, 2, X'00'),
@@ -160,7 +169,8 @@ function withDeadFixture(run: (db: ScipDatabase) => void): void {
         (10, 6, 1, 4, 4, X'00'),
         (11, 6, 2, 7, 7, X'00'),
         (12, 6, 3, 10, 10, X'00'),
-        (13, 6, 4, 13, 13, X'00');
+          (13, 6, 4, 13, 13, X'00'),
+          (14, 7, 0, 0, 0, X'00');
 
       INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
         (1, 1, 1),
@@ -176,7 +186,8 @@ function withDeadFixture(run: (db: ScipDatabase) => void): void {
         (10, 10, 1),
         (11, 11, 1),
         (12, 12, 1),
-        (13, 13, 1);
+          (13, 13, 1),
+          (14, 14, 1);
     `);
     sqliteDb.close();
 
@@ -319,6 +330,7 @@ describe('dead output contract', () => {
           expect.objectContaining({ shortName: expect.stringContaining('<constructor>') }),
           expect.objectContaining({ shortName: expect.stringContaining('getDerivedStateFromError') }),
           expect.objectContaining({ shortName: expect.stringContaining('Provider:readFile') }),
+          expect.objectContaining({ shortName: expect.stringContaining('onRouterTransitionStart') }),
         ]),
       );
     });

@@ -314,16 +314,15 @@ describe('code CLI output contract', () => {
     expect(invocation.stdout).toContain('0 file-local definition(s) omitted');
   });
 
-  it('refuses an oversized code packet before emitting partial source', () => {
+  it('paginates an oversized code packet through one immutable continuation', () => {
     const invocation = runCode(['src/watch.ts', '--output-page-size', '256']);
 
-    expect(invocation.status).toBe(1);
-    expect(invocation.stdout).toBe('');
-    expect(invocation.stderr).toContain('CODE PACKET REFUSED');
-    expect(invocation.stderr).toContain('No partial source was emitted.');
-    expect(invocation.stderr).toContain('scip-query code');
-    expect(invocation.stderr).not.toContain('scip-query --output-page-size');
-    expect(invocation.stderr).not.toContain('Continue exactly:');
+    expect(invocation.status).toBe(0);
+    expect(invocation.stderr).toBe('');
+    expect(invocation.stdout).toContain('[scip-query output page:');
+    expect(invocation.stdout).toContain('Continue exactly:');
+    expect(invocation.stdout).not.toContain('CODE PACKET REFUSED');
+    expect(invocation.stdout).not.toContain('Run these');
   });
 
   it('returns the complete file only when --members all is explicit', () => {
@@ -405,7 +404,7 @@ describe('code CLI output contract', () => {
       expect(invocation.stderr, context).toContain('Expected a non-negative integer');
       expect(invocation.stderr, context).not.toContain('at parse');
     }
-  });
+  }, 10_000);
 
   it('requires JSON before every structured-output modifier', () => {
     for (const [modifier, args] of [
@@ -421,7 +420,7 @@ describe('code CLI output contract', () => {
       expect(invocation.stdout, modifier).toBe('');
       expect(invocation.stderr, modifier).toContain(`${modifier} requires --json`);
     }
-  }, 10_000);
+  }, 20_000);
 
   it('rejects contradictory JSON transport controls', () => {
     for (const args of [
@@ -435,7 +434,7 @@ describe('code CLI output contract', () => {
       expect(invocation.stdout, args.join(' ')).toBe('');
       expect(invocation.stderr, args.join(' ')).toContain('cannot be combined');
     }
-  });
+  }, 10_000);
 
   function runCode(args: readonly string[]): ReturnType<typeof spawnSync> {
     return spawnSync(

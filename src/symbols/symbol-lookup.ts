@@ -226,7 +226,10 @@ function findFileLineSymbolRow(db: ScipDatabase, symbolPattern: string): SymbolQ
   }
 
   const [, filePath, startStr, endStr] = fileLineMatch;
-  const relativePath = resolveIndexedDocumentCandidates(db, filePath!, { allowMultiple: false })[0]?.relativePath;
+  const relativePath = resolveIndexedDocumentCandidates(db, filePath!, {
+    allowMultiple: false,
+    requirePathMatch: true,
+  })[0]?.relativePath;
   if (!relativePath) return undefined;
   const userStart0 = Math.max(0, parseInt(startStr!, 10) - 1);
   const userEnd0 = endStr ? Math.max(userStart0, parseInt(endStr, 10) - 1) : userStart0;

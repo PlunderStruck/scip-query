@@ -25,6 +25,7 @@ const SOURCE_EXPORT_CACHE = createPerDbCache<string, ParsedSourceExport[]>('sour
 const SOURCE_REEXPORT_CACHE = createPerDbCache<string, ParsedReExport[]>('source-reexports', PARSER_CACHE_GROUPS);
 
 interface SerializedSourceImports {
+  parserVersion: 2;
   resolutionFingerprint: string;
   imports: ParsedSourceImport[];
 }
@@ -81,9 +82,27 @@ export function getSourceImports(db: ScipDatabase, relativePath: string): Parsed
       return cached.imports;
     }
     const imports = parser.parseImports(db, normalized, source);
-    SOURCE_IMPORTS_PRODUCT.write(db, normalized, contentHash, { resolutionFingerprint, imports });
+    SOURCE_IMPORTS_PRODUCT.write(db, normalized, contentHash, { parserVersion: 2, resolutionFingerprint, imports });
     return imports;
   });
+}
+
+/**
+ * Returns the one runtime named-import binding for a local identifier.
+ * A binding connects the name written at a callsite to the exported name and
+ * resolved project file that actually own the callable. Ambiguous, type-only,
+ * and unresolved imports fail closed because none can establish runtime identity.
+ */
+export function findNamedSourceImportBinding(
+  db: ScipDatabase,
+  relativePath: string,
+  localName: string,
+): ParsedSourceImport | null {
+  const matches = getSourceImports(db, relativePath).filter(
+    (entry) =>
+      entry.kind === 'named' && entry.isTypeOnly !== true && entry.localName === localName && entry.sourcePath !== null,
+  );
+  return matches.length === 1 ? matches[0]! : null;
 }
 
 export function getSourceExports(db: ScipDatabase, relativePath: string): ParsedSourceExport[] {
@@ -104,10 +123,19 @@ function serializeSourceImports(payload: SerializedSourceImports): string {
 function deserializeSourceImports(payload: string): SerializedSourceImports | null {
   try {
     const raw = JSON.parse(payload) as unknown;
-    if (!isRecord(raw) || typeof raw.resolutionFingerprint !== 'string' || !Array.isArray(raw.imports)) {
+    if (
+      !isRecord(raw) ||
+      raw.parserVersion !== 2 ||
+      typeof raw.resolutionFingerprint !== 'string' ||
+      !Array.isArray(raw.imports)
+    ) {
       return null;
     }
-    return { resolutionFingerprint: raw.resolutionFingerprint, imports: raw.imports as ParsedSourceImport[] };
+    return {
+      parserVersion: 2,
+      resolutionFingerprint: raw.resolutionFingerprint,
+      imports: raw.imports as ParsedSourceImport[],
+    };
   } catch {
     return null;
   }

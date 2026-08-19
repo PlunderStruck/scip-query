@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { loadFileSymbols } from '../../symbols/definition-catalog.js';
-import { fileDependencyPaths } from '../internal/file-dependencies.js';
+import { fileDependencyPaths } from '../../symbols/graph/file-dep-graph.js';
 import { resolveIndexedPaths } from '../internal/file-resolution.js';
 import type { SymbolResult } from './symbols.js';
 

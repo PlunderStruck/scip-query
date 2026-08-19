@@ -208,6 +208,14 @@ export function commandAnalysisBudget(
   if (!isLargeCommandIndex(db)) return { semantic: true };
 
   if (full) {
+    if (commandName === 'dead') {
+      if (!opts.quiet) {
+        console.error(
+          'Large index detected; dead is scanning all candidates with semantic enrichment disabled to keep memory bounded.',
+        );
+      }
+      return { semantic: false };
+    }
     if (!opts.quiet) {
       console.error(
         `Large index detected; ${commandName} is running the unbounded semantic pass because --full was supplied.`,
@@ -220,7 +228,9 @@ export function commandAnalysisBudget(
     const expansionGuidance =
       commandName === 'inspect'
         ? 'Use --full only when every omitted semantic candidate can change the decision; it does not override source or behavior materialization ceilings.'
-        : `Run "scip-query ${commandName} --full" for the unbounded semantic pass.`;
+        : commandName === 'dead'
+          ? `Run "scip-query dead --full" for an unbounded candidate scan; semantic enrichment remains disabled on large indexes to keep memory bounded.`
+          : `Run "scip-query ${commandName} --full" for the unbounded semantic pass.`;
     console.error(
       `Large index detected; ${commandName} is using its bounded default analysis with semantic enrichment disabled. ` +
         `Candidate scans, when this command uses one, are capped at ${DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT}. ` +
@@ -233,7 +243,10 @@ export function commandAnalysisBudget(
     analysisBudget: {
       scanLimit: DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT,
       semanticEnrichment: false,
-      reason: 'large index default budget; pass --full for unbounded semantic analysis',
+      reason:
+        commandName === 'dead'
+          ? 'large index default budget; pass --full for an unbounded memory-safe candidate scan'
+          : 'large index default budget; pass --full for unbounded semantic analysis',
     },
   };
 }

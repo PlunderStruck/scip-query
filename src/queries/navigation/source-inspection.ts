@@ -11,7 +11,7 @@ import {
 import { classifyFile, fileKindRank, type FileKind } from '../../source/primitives/file-kind.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
 import { uniqueNonEmpty } from '../query-utils.js';
-import { resolveIndexedFile } from '../internal/file-resolution.js';
+import { resolveIndexedLocationPath } from '../internal/file-resolution.js';
 import { evidence, type EvidenceOptions, type EvidenceResult } from './evidence.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../../domain/source-inspection-limits.js';
 import type { ExplorationCompletionStatus } from '../internal/exploration-topology.js';
@@ -631,7 +631,7 @@ function buildInspection(db: ScipDatabase, request: InspectionRequest): BuiltIns
 
   const locationResults = request.locations.map((target) => {
     const parsed = parseLocation(target);
-    const relativePath = parsed ? resolveIndexedFile(db, parsed.path) : null;
+    const relativePath = parsed ? resolveIndexedLocationPath(db, parsed.path) : null;
     const unit = relativePath
       ? enclosingSourceUnitSnippet(db, relativePath, parsed!.line - 1, UNBOUNDED_LIMIT, request.context)
       : null;

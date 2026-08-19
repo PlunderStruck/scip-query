@@ -94,6 +94,32 @@ describe('reindex cache cleanup', () => {
 });
 
 describe('reindex reliability', () => {
+  it('refuses to publish artifacts when project inputs change during indexing', async () => {
+    const projectRoot = createProject('scip-query-reindex-moving-inputs-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const { reindex } = await loadReindexFixture({
+      languages: ['typescript'],
+      afterIndexerOutput: () => {
+        writeFileSync(join(projectRoot, 'src', 'arrived-during-index.ts'), 'export const arrived = true;\n');
+      },
+    });
+
+    await expect(
+      reindex({
+        projectRoot,
+        outputScip,
+        outputDb,
+        onStatus: () => undefined,
+        indexerConcurrency: 1,
+      }),
+    ).rejects.toThrow(/project inputs changed during reindex/i);
+    expect(existsSync(outputScip)).toBe(false);
+    expect(existsSync(outputDb)).toBe(false);
+  });
+
   it('fails closed when a detected language fails and does not cache a partial index as complete', async () => {
     const projectRoot = createProject('scip-query-reindex-partial-');
     const cacheDir = join(projectRoot, '.cache');
@@ -674,6 +700,41 @@ describe('reindex reliability', () => {
     expect(history).toHaveLength(1);
     expect(history).toEqual([expect.objectContaining({ historyVersion: 1, sourceVersion: 1 })]);
     expect(history.every((record) => !('manifest' in record))).toBe(true);
+  });
+
+  it('reruns cached language shards when the accepted SQLite generation omits a fingerprinted source file', async () => {
+    const projectRoot = createProject('scip-query-reindex-incomplete-generation-');
+    const cacheDir = join(projectRoot, '.scipquery-cache');
+    mkdirSync(cacheDir);
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const statuses: string[] = [];
+    const { reindex, attempts } = await loadReindexFixture({
+      languages: ['typescript'],
+      indexCoverage: (dbPath) =>
+        dbPath === outputDb
+          ? {
+              state: 'incomplete',
+              expectedDocumentCount: 1,
+              actualDocumentCount: 0,
+              missingDocumentCount: 1,
+              missingPaths: ['src/main.ts'],
+              affectedLanguages: ['typescript'],
+            }
+          : { state: 'complete', expectedDocumentCount: 1, actualDocumentCount: 1 },
+    });
+
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+    const repaired = await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      onStatus: (message) => statuses.push(message),
+    });
+
+    expect(repaired.reused).toBe(false);
+    expect(attempts.get('typescript')).toBe(2);
+    expect(statuses.join('\n')).toContain('missing 1 fingerprinted source document');
   });
 
   it('reruns only the language shard whose dependency lock changed', async () => {
@@ -1441,6 +1502,18 @@ async function loadReindexFixture(opts: {
     tryInstallScipCli?: (onStatus: (message: string) => void) => boolean;
   };
   processIdentities?: ReadonlyMap<number, ProcessIdentityModule.ProcessIdentity>;
+  afterIndexerOutput?: () => void;
+  indexCoverage?: (dbPath: string) =>
+    | { state: 'complete'; expectedDocumentCount: number; actualDocumentCount: number }
+    | {
+        state: 'incomplete';
+        expectedDocumentCount: number;
+        actualDocumentCount: number;
+        missingDocumentCount: number;
+        missingPaths: string[];
+        affectedLanguages: SupportedLanguage[];
+      }
+    | { state: 'unavailable'; reason: string };
 }) {
   vi.resetModules();
   vi.doUnmock('node:fs');
@@ -1450,6 +1523,24 @@ async function loadReindexFixture(opts: {
   const attempts = new Map<SupportedLanguage, number>();
   const commands: { binary: string; args: readonly string[] }[] = [];
   const fragmentPruneCalls: string[][] = [];
+  let afterIndexerOutputCalled = false;
+  const afterIndexerOutput = (): void => {
+    if (afterIndexerOutputCalled) return;
+    afterIndexerOutputCalled = true;
+    opts.afterIndexerOutput?.();
+  };
+
+  vi.doMock('../../src/reindex/index-coverage.js', async () => {
+    const actual = await vi.importActual<typeof import('../../src/reindex/index-coverage.js')>(
+      '../../src/reindex/index-coverage.js',
+    );
+    return {
+      ...actual,
+      inspectIndexDocumentCoverage:
+        opts.indexCoverage ??
+        (() => ({ state: 'complete' as const, expectedDocumentCount: 1, actualDocumentCount: 1 })),
+    };
+  });
 
   vi.doMock('../../src/reindex/typescript-fragment-store.js', async () => {
     const actual = await vi.importActual<typeof TypeScriptFragmentStore>(
@@ -1613,6 +1704,7 @@ async function loadReindexFixture(opts: {
           fs.mkdirSync(dirname(outputPath), { recursive: true });
           fs.writeFileSync(outputPath, `${input.command} scip`);
         }
+        if (language) afterIndexerOutput();
         return {
           status: 0,
           signal: null,
@@ -1647,6 +1739,7 @@ async function loadReindexFixture(opts: {
           fs.mkdirSync(dirname(outputPath), { recursive: true });
           fs.writeFileSync(outputPath, `${binary} scip`);
         }
+        if (language) afterIndexerOutput();
         callback(null);
       },
     );

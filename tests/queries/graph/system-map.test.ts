@@ -176,6 +176,31 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
+  it('confirms incoming calls made through a named import alias', () => {
+    const db = createSystemMapDb({ indexedAliasedCaller: true });
+    try {
+      const result = graphEvidence(
+        db,
+        { symbols: [symbols.companionAppend] },
+        { families: ['execution'], direction: 'incoming', maxDepth: 1, maxEdges: 20 },
+      );
+
+      expect(result.edges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            family: 'execution',
+            subtype: 'call',
+            evidenceStrength: 'derived',
+            from: expect.objectContaining({ label: expect.stringContaining('sessionStreamEvents') }),
+            to: expect.objectContaining({ label: expect.stringContaining('appendStreamEvents') }),
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('projects explicit directions and reports exact inventory without materializing edges', () => {
     const db = createSystemMapDb();
     try {
@@ -2824,10 +2849,20 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       moduleOwnedReference?: boolean;
       unindexedRuntimeParticipant?: boolean;
       unindexedSourceAnchor?: boolean;
+      indexedAliasedCaller?: boolean;
     } = {},
   ): ScipDatabase {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-'));
     const source = fixtureSource();
+    if (options.indexedAliasedCaller) {
+      source['packages/companion/src/command.ts'] = [
+        "import { appendStreamEvents as deliverStreamEvents } from './client.js';",
+        '',
+        'export function sessionStreamEvents(events: unknown[]) {',
+        '  return deliverStreamEvents(events);',
+        '}',
+      ];
+    }
     if (options.broadLiteral) {
       for (const [file, lines] of Object.entries(source)) {
         if (!file.includes('/empty-')) continue;

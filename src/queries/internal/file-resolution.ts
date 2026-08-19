@@ -9,8 +9,8 @@
  *   - `resolveIndexedPaths`: every reasonable match (for queries that
  *     accept a pattern matching multiple files).
  *
- * Resolution order (used by both): exact path → suffix path → basename
- * → substring → fall back to symbol lookup. Scoring lives in
+ * Resolution order for a path-shaped selector: exact path → suffix path.
+ * Bare filenames may additionally use basename → substring → symbol lookup. Scoring lives in
  * `scoreDocumentPath`; symbol-lookup is the soft fallback when no
  * document path scores > 0.
  *
@@ -42,6 +42,21 @@ export function resolveIndexedPaths(db: ScipDatabase, filePattern: string): stri
   return resolveDocumentCandidates(db, filePattern, { allowMultiple: true }).map((candidate) => candidate.relativePath);
 }
 
+/** Resolve a file selector only when it identifies one indexed document. */
+export function resolveUniqueIndexedPath(db: ScipDatabase, filePattern: string): string | null {
+  const candidates = resolveDocumentCandidates(db, filePattern, { allowMultiple: true });
+  return candidates.length === 1 ? candidates[0]!.relativePath : null;
+}
+
+/** Resolve a file:line path without ever degrading to a basename or substring match. */
+export function resolveIndexedLocationPath(db: ScipDatabase, filePattern: string): string | null {
+  const candidates = resolveIndexedDocumentCandidates(db, filePattern, {
+    allowMultiple: true,
+    requirePathMatch: true,
+  });
+  return candidates.length === 1 ? candidates[0]!.relativePath : null;
+}
+
 export function resolveOnDiskFile(db: ScipDatabase, filePattern: string): string | null {
   if (!filePattern) return null;
   const normalized = filePattern.replace(/\\/g, '/').replace(/^\.\//, '');
@@ -62,14 +77,25 @@ export function resolveDocumentCandidates(
   filePattern: string,
   opts: { allowMultiple: boolean },
 ): IndexedDocumentPathCandidate[] {
-  const indexed = resolveIndexedDocumentCandidates(db, filePattern, opts);
+  const onDiskFile = resolveOnDiskFile(db, filePattern);
+  if (onDiskFile) {
+    return resolveIndexedDocumentCandidates(db, onDiskFile, opts).filter(
+      (candidate) => candidate.relativePath === onDiskFile,
+    );
+  }
+
+  const normalizedPattern = filePattern.replace(/\\/g, '/').replace(/^\.\//, '');
+  const pathIntent = isAbsolutePath(normalizedPattern) || normalizedPattern.includes('/');
+  const indexed = resolveIndexedDocumentCandidates(db, filePattern, {
+    ...opts,
+    requirePathMatch: pathIntent,
+  });
   if (indexed.length === 0) {
+    if (pathIntent) return [];
     // A concrete tracked path is authoritative even when no compiler indexer
     // emitted a document for it. Falling through to fuzzy symbol lookup can
     // attach an unrelated same-name symbol's file to Markdown, Vue, generated,
     // or otherwise unindexed source.
-    if (resolveOnDiskFile(db, filePattern)) return [];
-
     const symbolMatch = findFirstSymbolMatch(db, filePattern);
     if (!symbolMatch || db.isIgnored(symbolMatch.relativePath)) {
       return [];

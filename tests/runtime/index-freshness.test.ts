@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -279,6 +280,34 @@ describe('index freshness', () => {
       const freshness = getIndexFreshness(root, config, { dbPath, metaPath });
       expect(freshness.state).toBe('stale');
       expect(freshness.remedy).toContain('reindex');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports stale when the fingerprint matches but SQLite omits an indexed source document', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-freshness-incomplete-documents-'));
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(join(root, 'tsconfig.json'), '{}');
+      writeFileSync(join(root, 'src', 'a.ts'), 'export const a = 1;\n');
+      const dbPath = join(root, 'index.db');
+      const metaPath = join(root, 'meta.json');
+      const db = new Database(dbPath);
+      db.exec('CREATE TABLE documents (relative_path TEXT NOT NULL)');
+      db.close();
+      writeMeta(root, metaPath, ['typescript']);
+      const config: ProjectConfig = {
+        dbPath,
+        indexPath: join(root, 'index.scip'),
+        projectRoot: root,
+        languages: ['typescript'],
+      };
+
+      const freshness = getIndexFreshness(root, config, { dbPath, metaPath });
+      expect(freshness.state).toBe('stale');
+      expect(freshness.reason).toContain('missing 1 indexed source document');
+      expect(freshness.reason).toContain('src/a.ts');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

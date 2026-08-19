@@ -9,6 +9,8 @@ describe('framework entrypoint paths', () => {
     expect(isFrameworkEntrypointPath('ee/apps/landing/middleware.ts')).toBe(true);
     expect(isFrameworkEntrypointPath('ee/apps/landing/src/proxy.ts')).toBe(true);
     expect(isFrameworkEntrypointPath('frontend/ui/src/proxy.ts')).toBe(true);
+    expect(isFrameworkEntrypointPath('instrumentation-client.ts')).toBe(true);
+    expect(isFrameworkEntrypointPath('apps/web/src/instrumentation-client.ts')).toBe(true);
   });
 
   it('does not turn ordinary similarly named modules into framework roots', () => {

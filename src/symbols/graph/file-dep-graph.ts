@@ -36,6 +36,7 @@ interface SourceDependencyEdgeSet {
 export type SourceDependencyEdgeMode = 'imports-only' | 'imports-and-reexports';
 /** The public relation selected by file dependency analyses. */
 export type FileDependencyEdgeBasis = 'symbol-references' | 'imports';
+export type FileDependencyDirection = 'forward' | 'reverse';
 
 const FILE_DEPENDENCY_GRAPH_PRODUCT = createProjectEvidenceProduct<FileDependencyGraphPayload>({
   kind: 'file-dependency-graph',
@@ -49,6 +50,35 @@ const FILE_DEPENDENCY_GRAPH_PRODUCT = createProjectEvidenceProduct<FileDependenc
 const FILE_DEP_GRAPH_CACHE = createPerDbCache<string, Map<string, Set<string>>>('file-dep-graph', {
   clearGroups: ['whole-project'],
 });
+
+/** Returns the files directly related to the selected paths in one graph direction. */
+export function fileDependencyPaths(
+  db: ScipDatabase,
+  direction: FileDependencyDirection,
+  selectedPaths: readonly string[],
+): string[] {
+  if (selectedPaths.length === 0) return [];
+  const selected = new Set(selectedPaths);
+  const graph = buildFileDepGraph(db);
+  const related = new Set<string>();
+
+  if (direction === 'forward') {
+    for (const path of selected) {
+      for (const dependency of graph.get(path) ?? []) {
+        if (!selected.has(dependency)) related.add(dependency);
+      }
+    }
+  } else {
+    for (const [source, dependencies] of graph) {
+      if (selected.has(source)) continue;
+      for (const target of selected) {
+        if (dependencies.has(target)) related.add(source);
+      }
+    }
+  }
+
+  return [...related].sort();
+}
 
 // scip-query: ignore-extract — this builds the file dependency graph from
 // SCIP edges plus source-import fallback edges; the two sources intentionally

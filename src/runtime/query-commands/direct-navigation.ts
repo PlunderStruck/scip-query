@@ -35,14 +35,8 @@ import {
   stringOptionValue,
 } from '../command-kit/command-execution.js';
 import { decodeCompatibleResultCursor, encodeResultCursor, indexGenerationIdentity } from '../result-pagination.js';
-import { DEFAULT_OUTPUT_PAGE_SIZE } from '../output-pagination.js';
 import { displayLine, displayPathRange, displayRange, render } from '../render.js';
-import {
-  renderSourceEvidence,
-  rollbackSourceEmission,
-  sourceEmissionCheckpoint,
-  sourceEmissionSessionSummary,
-} from '../source-emission-session.js';
+import { renderSourceEvidence, sourceEmissionSessionSummary } from '../source-emission-session.js';
 import {
   noMatchMessage,
   symbolResolutionBefore,
@@ -317,17 +311,7 @@ const handleCode = dbCommand(({ db, args, opts }) => {
     });
     return;
   }
-  const emissionCheckpoint = sourceEmissionCheckpoint();
   const packet = single ? codeResultText(single, result.bindingClosure, true) : codeBatchText(result, true);
-  const pageSize = definedNumberOption(opts, 'outputPageSize', DEFAULT_OUTPUT_PAGE_SIZE);
-  if (packet.length > pageSize) {
-    rollbackSourceEmission(emissionCheckpoint);
-    console.error(
-      codePacketRefusal(result, selectors, { context, members, pageSize, packetCharacters: packet.length }),
-    );
-    process.exitCode = 1;
-    return;
-  }
   if (single) {
     process.stdout.write(packet);
     return;
@@ -604,138 +588,6 @@ function appendCodeCoverage(lines: string[], result: CodeBatchResult): void {
     '═══ COVERAGE ═══',
     `  ${result.requested}/${result.requested} selectors resolved; ${details.join('; ')}. Source lines use absolute file line numbers and are citation-ready.`,
   );
-}
-
-interface CodePacketRefusalOptions {
-  context: number;
-  members: CodeFileMemberMode;
-  pageSize: number;
-  packetCharacters: number;
-}
-
-function codePacketRefusal(
-  result: CodeBatchResult,
-  selectors: readonly string[],
-  options: CodePacketRefusalOptions,
-): string {
-  const lines = [
-    `CODE PACKET REFUSED: the complete packet needs ${options.packetCharacters.toLocaleString()} characters; the active output page is ${options.pageSize.toLocaleString()}.`,
-    'No partial source was emitted.',
-  ];
-  const split = completeCodePacketSplits(result, selectors, options);
-  lines.push(
-    `Run these ${split.commands.length} complete packet(s):`,
-    ...split.commands.map((command) => `  ${command}`),
-  );
-  if (split.ledgerCommands.length > 0) {
-    lines.push(
-      'Then inspect each complete omitted-definition ledger before making file-absence claims:',
-      ...split.ledgerCommands.map((command) => `  ${command}`),
-    );
-  }
-  return lines.join('\n');
-}
-
-function completeCodePacketSplits(
-  result: CodeBatchResult,
-  selectors: readonly string[],
-  options: CodePacketRefusalOptions,
-): { commands: string[]; ledgerCommands: string[] } {
-  const commands: string[] = [];
-  const ledgerCommands: string[] = [];
-  let pendingEntries: CodeBatchEntry[] = [];
-  let pendingSelectors: string[] = [];
-  const flush = (): void => {
-    if (pendingSelectors.length === 0) return;
-    commands.push(codeInvocation(pendingSelectors, options));
-    pendingEntries = [];
-    pendingSelectors = [];
-  };
-
-  for (let index = 0; index < result.entries.length; index++) {
-    const entry = result.entries[index]!;
-    const selector = selectors[index]!;
-    const singleEntryCharacters = codeBatchText(codeBatchSubset(result, [entry])).length;
-    if (singleEntryCharacters > DEFAULT_OUTPUT_PAGE_SIZE) {
-      flush();
-      const sourceSelectors = entry.results.flatMap((source) => completeRangeSelectors(source));
-      for (const sourceSelector of sourceSelectors) {
-        commands.push(
-          codeInvocation([sourceSelector], {
-            ...options,
-            members: 'exported',
-          }),
-        );
-      }
-      if (entry.fileCoverage?.omittedDefinitions) {
-        ledgerCommands.push(`scip-query outline ${shellArgument(entry.selector)} --signatures`);
-      }
-      continue;
-    }
-
-    const trialEntries = [...pendingEntries, entry];
-    if (
-      pendingEntries.length > 0 &&
-      codeBatchText(codeBatchSubset(result, trialEntries)).length > DEFAULT_OUTPUT_PAGE_SIZE
-    ) {
-      flush();
-    }
-    pendingEntries.push(entry);
-    pendingSelectors.push(selector);
-  }
-  flush();
-  return { commands, ledgerCommands };
-}
-
-const SOURCE_PACKET_CHARACTER_TARGET = DEFAULT_OUTPUT_PAGE_SIZE - 8_000;
-
-function completeRangeSelectors(source: CodeResult): string[] {
-  if (codeResultText(source).length <= SOURCE_PACKET_CHARACTER_TARGET) {
-    return [`${source.relativePath}:${displayLine(source.startLine)}-${displayLine(source.endLine)}`];
-  }
-  const selectors: string[] = [];
-  const sourceLines = source.source.split('\n');
-  let chunkStart = 0;
-  let chunkCharacters = 0;
-  for (let index = 0; index < sourceLines.length; index++) {
-    const lineCharacters = sourceLines[index]!.length + 12;
-    if (index > chunkStart && chunkCharacters + lineCharacters > SOURCE_PACKET_CHARACTER_TARGET) {
-      selectors.push(
-        `${source.relativePath}:${displayLine(source.startLine + chunkStart)}-${displayLine(source.startLine + index - 1)}`,
-      );
-      chunkStart = index;
-      chunkCharacters = 0;
-    }
-    chunkCharacters += lineCharacters;
-  }
-  selectors.push(`${source.relativePath}:${displayLine(source.startLine + chunkStart)}-${displayLine(source.endLine)}`);
-  return selectors;
-}
-
-function codeBatchSubset(result: CodeBatchResult, entries: readonly CodeBatchEntry[]): CodeBatchResult {
-  return {
-    requested: entries.length,
-    matched: entries.filter((entry) => entry.status === 'matched').length,
-    ambiguous: entries.filter((entry) => entry.status === 'ambiguous').length,
-    missing: entries.filter((entry) => entry.status === 'missing').length,
-    entries: [...entries],
-    // Keeping the full closure deliberately overestimates every split. The
-    // command that is actually run can only render the same or fewer literals.
-    bindingClosure: result.bindingClosure,
-  };
-}
-
-function codeInvocation(
-  selectors: readonly string[],
-  options: Pick<CodePacketRefusalOptions, 'context' | 'members'>,
-): string {
-  return [
-    'scip-query',
-    'code',
-    ...selectors.map(shellArgument),
-    ...(options.members === 'all' ? ['--members', 'all'] : []),
-    ...(options.context > 0 ? ['--context', String(options.context)] : []),
-  ].join(' ');
 }
 
 function shellArgument(value: string): string {

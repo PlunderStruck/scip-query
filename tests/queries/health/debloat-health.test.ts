@@ -198,13 +198,13 @@ describe('debloat liveness regressions', () => {
     expect(barrelFiles).not.toContain('src/queries/index.ts');
   });
 
-  it('reuses entry-surface rules in health scoring', () => {
+  it('uses the standalone conservative dead-code profile in health scoring', () => {
     const report = health(db);
 
-    expect(report.findings.deadSymbols).toBe(1);
+    expect(report.findings.deadSymbols).toBe(0);
     expect(report.findings.isolatedSymbols).toBe(0);
     expect(report.warnings).toBeUndefined();
-    expect(report.actions.some((action) => action.category === 'Dead code' && action.count === 1)).toBe(true);
+    expect(report.actions.some((action) => action.category === 'Dead code')).toBe(false);
     expect(report.actions.some((action) => action.category === 'Isolated symbols')).toBe(false);
   });
 
@@ -225,21 +225,22 @@ describe('debloat liveness regressions', () => {
     expect(result.scores).toEqual([]);
   });
 
-  it('ratchets findings through write-baseline / check-baseline round trips', () => {
+  it('ratchets fixed findings through write-baseline / check-baseline round trips', () => {
     const written = writeHealthBaseline(db);
-    expect(written.findingCount).toBeGreaterThan(0);
+    expect(written.findingCount).toBe(0);
 
     // Same findings → no new, no fixed.
     const clean = checkHealthBaseline(db);
     expect(clean.newFindings).toEqual([]);
     expect(clean.fixedFindings).toEqual([]);
 
-    // Tamper: drop one baselined finding → the check reports it as new.
+    // Add one historical finding → the check reports that it is now fixed.
     const baseline = JSON.parse(readFileSync(written.path, 'utf-8')) as { version: 1; findings: string[] };
-    const removed = baseline.findings.pop()!;
+    const fixed = 'architecture:forbidden:runtime>domain';
+    baseline.findings.push(fixed);
     writeFileSync(written.path, JSON.stringify(baseline));
-    const regressed = checkHealthBaseline(db);
-    expect(regressed.newFindings).toEqual([removed]);
+    const improved = checkHealthBaseline(db);
+    expect(improved.fixedFindings).toEqual([fixed]);
   });
 
   it('keeps pair identities stable across SCIP package versions and legacy baselines', () => {

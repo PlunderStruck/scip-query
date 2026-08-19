@@ -12,7 +12,12 @@ import { symbols } from '../../src/queries/navigation/symbols.js';
 import { trace } from '../../src/queries/navigation/trace.js';
 import { byKind, kindCounts } from '../../src/queries/navigation/by-kind.js';
 import { complexityHotspots } from '../../src/queries/quality/complexity-hotspots.js';
-import { buildAstCalleeMap, buildCalleeMap, buildChunkCalleeMap } from '../../src/symbols/graph/call-graph-evidence.js';
+import {
+  buildAstCalleeMap,
+  buildCalleeMap,
+  buildChunkCalleeMap,
+  getCallerRowsMapForSymbols,
+} from '../../src/symbols/graph/call-graph-evidence.js';
 import { buildCrossFileCallerMap } from '../../src/symbols/references/reference-callers.js';
 import { pickAstCallCandidate } from '../../src/symbols/leaf-symbol-index.js';
 import type { ScipQueryConfig } from '../../src/domain/types.js';
@@ -211,11 +216,24 @@ describe('source-backed accuracy regressions', () => {
             (2, 1, 1, 1, 3, X'00'),
             (3, 1, 2, 7, 9, X'00');
 
-          INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
-            (1, 1, 1),
-            (2, 2, 1),
-            (3, 3, 1);
-        `);
+            INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+              (1, 1, 1),
+              (2, 2, 1),
+              (3, 3, 1);
+            WITH RECURSIVE ids(id) AS (
+              SELECT 10
+              UNION ALL
+              SELECT id + 1 FROM ids WHERE id < 20010
+            )
+            INSERT INTO global_symbols (id, symbol, display_name, kind, documentation)
+            SELECT
+              id,
+              'scip-typescript npm fixture 1.0.0 src/\`dummy.ts\`/dummy' || id || '().',
+              'dummy' || id,
+              12,
+              'dummy'
+            FROM ids;
+          `);
       },
       (db) => {
         const map = buildAstCalleeMap(db, [
@@ -292,6 +310,98 @@ describe('source-backed accuracy regressions', () => {
         expect(pickAstCallCandidate(db, 'src/caller.ts', [candidate], true, 'Correct')).toEqual(candidate);
         expect(pickAstCallCandidate(db, 'src/caller.ts', [candidate], true, 'Other')).toBeNull();
         expect(pickAstCallCandidate(db, 'src/caller.ts', [candidate], true, 'localService')).toBeNull();
+      },
+    );
+  });
+
+  it('resolves a named import alias to the exported callable without admitting a same-named bystander', () => {
+    withFixture(
+      'named-import-alias-callee',
+      {
+        'tsconfig.json': JSON.stringify({ compilerOptions: { baseUrl: '.', paths: { '@/*': ['src/*'] } } }),
+        'src/caller.ts': [
+          "import { unorderedPixelPairKey as pairKey } from '@/keys';",
+          "export function run() { return pairKey('left', 'right'); }",
+        ].join('\n'),
+        'src/keys.ts':
+          'export function unorderedPixelPairKey(left: string, right: string) { return `${left}:${right}`; }\n',
+        'src/bystander.ts': 'export function pairKey() { return false; }\n',
+      },
+      (sqliteDb) => {
+        sqliteDb.exec(`
+          INSERT INTO documents (id, language, relative_path) VALUES
+            (1, 'typescript', 'src/caller.ts'),
+            (2, 'typescript', 'src/keys.ts'),
+            (3, 'typescript', 'src/bystander.ts');
+          INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
+            (1, 'scip-typescript npm fixture 1.0.0 src/\`caller.ts\`/run().', 'run', 12, 'function run'),
+            (2, 'scip-typescript npm fixture 1.0.0 src/\`keys.ts\`/unorderedPixelPairKey().', 'unorderedPixelPairKey', 12, 'function unorderedPixelPairKey'),
+            (3, 'scip-typescript npm fixture 1.0.0 src/\`bystander.ts\`/pairKey().', 'pairKey', 12, 'function pairKey');
+          INSERT INTO defn_enclosing_ranges
+            (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
+            (1, 1, 1, 1, 0, 1, 59),
+            (2, 2, 2, 0, 0, 0, 98),
+            (3, 3, 3, 0, 0, 0, 44);
+          INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
+            (1, 1, 0, 1, 1, X'00'),
+            (2, 2, 0, 0, 0, X'00'),
+            (3, 3, 0, 0, 0, X'00');
+          INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
+            (1, 1, 1),
+            (2, 2, 1),
+            (3, 3, 1);
+        `);
+      },
+      (db) => {
+        const callees = buildAstCalleeMap(db, [
+          {
+            symbolId: 1,
+            documentId: 1,
+            startLine: 1,
+            endLine: 1,
+            symbol: 'scip-typescript npm fixture 1.0.0 src/`caller.ts`/run().',
+            relativePath: 'src/caller.ts',
+          },
+        ]).get(1);
+
+        expect(callees).toEqual([
+          {
+            symbol: 'scip-typescript npm fixture 1.0.0 src/`keys.ts`/unorderedPixelPairKey().',
+            file: 'src/keys.ts',
+            chunkId: 1,
+            source: 'ast-callsite',
+            callsiteLine: 1,
+          },
+        ]);
+
+        const semanticEvidence: SymbolSemanticEvidencePort = {
+          references: () => [],
+          referenceMap: () => new Map(),
+          callerMap: () => new Map(),
+          calleeMap: () => new Map(),
+        };
+        const callers = getCallerRowsMapForSymbols(
+          db,
+          [
+            {
+              symbolId: 2,
+              documentId: 2,
+              startLine: 0,
+              endLine: 0,
+              symbol: 'scip-typescript npm fixture 1.0.0 src/`keys.ts`/unorderedPixelPairKey().',
+              relativePath: 'src/keys.ts',
+            },
+          ],
+          { semantic: false, semanticEvidence },
+        );
+        expect(callers.get(2)).toEqual([
+          {
+            symbol: 'scip-typescript npm fixture 1.0.0 src/`caller.ts`/run().',
+            file: 'src/caller.ts',
+            source: 'caller-map-inversion',
+            callEvidence: 'ast-callsite',
+          },
+        ]);
       },
     );
   });
