@@ -331,6 +331,7 @@ function assertAdoptableLegacyCache(cacheDir: string): void {
 
 function isRecognizedCacheEntry(name: string): boolean {
   if (name.startsWith(`${CACHE_OWNERSHIP_FILE}.tmp-`)) return true;
+  if (name.startsWith('git-worktree-context.json.tmp-')) return true;
   if (
     [
       '.scipquery-generations',
@@ -343,6 +344,7 @@ function isRecognizedCacheEntry(name: string): boolean {
       'evidence.db-shm',
       'evidence.db-wal',
       'health-report-cache.json',
+      'git-worktree-context.json',
       'index.db',
       'index.db-shm',
       'index.db-wal',

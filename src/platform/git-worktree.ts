@@ -1,7 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, realpathSync } from 'node:fs';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { existsSync, lstatSync, realpathSync, type Stats } from 'node:fs';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { readTextFileWithinLimit } from '../filesystem/bounded-file.js';
 import {
   cachedGitProjectFileIndexVisibilityAfter,
   gitProjectFileInventorySequence,
@@ -48,6 +49,8 @@ export interface GitWorktreeContextObservation {
   context: GitWorktreeContext;
   projectFileInventorySequence: number;
 }
+
+export type GitWorktreeContextHint = Omit<GitWorktreeContext, 'clean'>;
 
 export type GitWorktreeIdentity = Pick<GitWorktreeContext, 'projectRoot' | 'gitDir' | 'worktreeId'>;
 
@@ -129,6 +132,37 @@ export function refreshGitWorktreeContext(
   const observation = parseLiveWorktreeStatus(status);
   if (!observation?.headCommit || observation.headCommit !== context.headCommit) return undefined;
   return { ...context, clean: observation.clean };
+}
+
+/**
+ * Reuses commit-bound metadata only after the checkout still proves the same
+ * physical Git control directories. Live porcelain status remains the source
+ * of truth for HEAD and worktree cleanliness.
+ */
+export function observeGitWorktreeContextFromHint(
+  projectRoot: string,
+  hint: GitWorktreeContextHint,
+  git: GitReader = DEFAULT_GIT_READER,
+): GitWorktreeContextObservation | undefined {
+  if (!hint.headCommit || !hint.treeOid || !GIT_OBJECT_ID.test(hint.headCommit) || !GIT_OBJECT_ID.test(hint.treeOid)) {
+    return undefined;
+  }
+  if (git === DEFAULT_GIT_READER && !gitWorktreeContextHintEnvironmentSupported()) return undefined;
+  if (!gitControlDirectoriesMatchHint(projectRoot, hint)) return undefined;
+  const context = refreshGitWorktreeContext(
+    {
+      projectRoot: hint.projectRoot,
+      gitDir: hint.gitDir,
+      commonDir: hint.commonDir,
+      repositoryId: hint.repositoryId,
+      worktreeId: hint.worktreeId,
+      headCommit: hint.headCommit,
+      treeOid: hint.treeOid,
+      clean: true,
+    },
+    git,
+  );
+  return context ? gitWorktreeContextObservation(context) : undefined;
 }
 
 /**
@@ -265,6 +299,86 @@ function gitWorktreeIdentity(projectRoot: string, gitDir: string): GitWorktreeId
     gitDir,
     worktreeId: stablePathId('worktree', `${projectRoot}\0${gitDir}`),
   };
+}
+
+function gitControlDirectoriesMatchHint(projectRoot: string, hint: GitWorktreeContextHint): boolean {
+  try {
+    const worktreeRoot = canonicalPath(hint.projectRoot);
+    const requestedRoot = resolve(projectRoot) === worktreeRoot ? worktreeRoot : canonicalPath(projectRoot);
+    if (hint.projectRoot !== worktreeRoot || !pathIsWithin(worktreeRoot, requestedRoot)) return false;
+
+    const dotGit = join(worktreeRoot, '.git');
+    const dotGitStat = lstatSync(dotGit);
+    if (dotGitStat.isSymbolicLink()) return false;
+    const gitDir = dotGitStat.isDirectory()
+      ? canonicalPath(dotGit)
+      : dotGitStat.isFile()
+        ? readGitDirectoryPointer(dotGit, worktreeRoot, dotGitStat)
+        : undefined;
+    if (!gitDir || gitDir !== hint.gitDir) return false;
+
+    const commonDir = readGitCommonDirectory(gitDir);
+    if (!commonDir || commonDir !== hint.commonDir) return false;
+    return (
+      hint.worktreeId === stablePathId('worktree', `${worktreeRoot}\0${gitDir}`) &&
+      hint.repositoryId === stablePathId('repository', commonDir)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function readGitDirectoryPointer(path: string, worktreeRoot: string, stat: Stats): string | undefined {
+  const value = readSingleGitPath(path, 'gitdir: ', stat);
+  return value ? canonicalPath(resolve(worktreeRoot, value)) : undefined;
+}
+
+function readGitCommonDirectory(gitDir: string): string | undefined {
+  const path = join(gitDir, 'commondir');
+  try {
+    const stat = lstatSync(path);
+    if (stat.isSymbolicLink() || !stat.isFile()) return undefined;
+    const value = readSingleGitPath(path, '', stat);
+    return value ? canonicalPath(resolve(gitDir, value)) : undefined;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === 'ENOENT' || code === 'ENOTDIR' ? gitDir : undefined;
+  }
+}
+
+function readSingleGitPath(path: string, prefix = '', stat: Stats = lstatSync(path)): string | undefined {
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 4 * 1024) return undefined;
+  const lines = readTextFileWithinLimit(path, { inputKind: 'Git control path', maxBytes: 4 * 1024 })
+    .split(/\r?\n/)
+    .filter((line) => line.length > 0);
+  if (lines.length !== 1 || !lines[0]!.startsWith(prefix)) return undefined;
+  const value = lines[0]!.slice(prefix.length);
+  return value && !value.includes('\0') ? value : undefined;
+}
+
+function pathIsWithin(parent: string, candidate: string): boolean {
+  const path = relative(parent, candidate);
+  return path === '' || (!path.startsWith(`..${sep}`) && path !== '..' && !isAbsolute(path));
+}
+
+export function gitWorktreeContextHintEnvironmentSupported(env: NodeJS.ProcessEnv = process.env): boolean {
+  const exactOverrides = [
+    'GIT_DIR',
+    'GIT_WORK_TREE',
+    'GIT_COMMON_DIR',
+    'GIT_INDEX_FILE',
+    'GIT_OBJECT_DIRECTORY',
+    'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+    'GIT_NAMESPACE',
+    'GIT_REPLACE_REF_BASE',
+    'GIT_NO_REPLACE_OBJECTS',
+    'GIT_SHALLOW_FILE',
+    'GIT_GRAFT_FILE',
+  ];
+  return !(
+    exactOverrides.some((name) => env[name] !== undefined) ||
+    Object.keys(env).some((name) => name.startsWith('GIT_CONFIG_'))
+  );
 }
 
 export function listGitWorktrees(projectRoot: string, git: GitReader = DEFAULT_GIT_READER): GitWorktreeRecord[] {

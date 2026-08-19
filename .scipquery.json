@@ -132,6 +132,7 @@
           "src/runtime/cursor-codec.ts",
           "src/runtime/evidence-command-freshness.ts",
           "src/runtime/generated-agent-command-catalog.ts",
+          "src/runtime/git-worktree-context-cache.ts",
           "src/runtime/health-capability-disclosure.ts",
           "src/runtime/health-dossier.ts",
           "src/runtime/health-report-cache.ts",
@@ -165,7 +166,7 @@
           "src/runtime/watch.ts",
           "src/runtime/worker-request-lane.ts"
         ],
-        "maxFiles": 44
+        "maxFiles": 45
       },
       {
         "name": "test-fixtures",

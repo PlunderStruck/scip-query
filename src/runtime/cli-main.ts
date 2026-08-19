@@ -15,6 +15,7 @@ import {
   sharedCachePreparationEligible,
   withDb,
 } from './cli-context.js';
+import { observeGitWorktreeContextWithCache } from './git-worktree-context-cache.js';
 import { maybePrintUpdateNotice } from './update-notice.js';
 import { ensureWatchServiceForCommand, watchServiceAutoStartEligible } from './watch-service.js';
 import { ensureEvidenceCommandFreshness } from './evidence-command-freshness.js';
@@ -27,7 +28,6 @@ import {
 } from '../instrumentation/profile.js';
 import { projectEvidenceFingerprint } from '../storage/evidence-cache.js';
 import { maybeSweepRepositoryCache } from './repository-cache-lifecycle.js';
-import { observeGitWorktreeContext } from '../platform/git-worktree.js';
 import { installTerminalConsoleSanitizer, sanitizeTerminalText } from '../platform/terminal-output.js';
 import { enterProjectFileListingCache } from '../platform/project-file-inventory-context.js';
 import { parseOutputPageSize } from './output-pagination.js';
@@ -79,7 +79,7 @@ program.hook('preAction', async (_thisCommand, actionCommand) => {
   activateCliProjectContext(projectContext);
   initializeProfileContext();
   await maybePrintUpdateNotice({ commandName });
-  const gitObservation = observeGitWorktreeContext(projectRoot);
+  const gitObservation = observeGitWorktreeContextWithCache(projectRoot, projectContext.paths.cacheDir);
   const gitContext = gitObservation?.context;
   projectContext = { ...projectContext, gitContext };
   activateCliProjectContext(projectContext);

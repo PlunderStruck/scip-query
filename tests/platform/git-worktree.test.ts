@@ -10,8 +10,10 @@ import {
 import {
   findGitRoot,
   gitIndexAllowsTreeFingerprintReuse,
+  gitWorktreeContextHintEnvironmentSupported,
   listGitWorktrees,
   observeGitWorktreeContext,
+  observeGitWorktreeContextFromHint,
   parseGitWorktreeList,
   refreshGitWorktreeContext,
   resolveGitCommit,
@@ -255,6 +257,58 @@ describe('Git worktree identity', () => {
     git(root, ['commit', '-qm', 'second']);
 
     expect(refreshGitWorktreeContext(context!)).toBeUndefined();
+  });
+
+  it('accepts a commit hint only for the same physical checkout and live HEAD', () => {
+    const root = createRepository();
+    const context = resolveGitWorktreeContext(root)!;
+    const calls: string[][] = [];
+    const gitReader: GitReader = {
+      run: (projectRoot, args) => {
+        calls.push([...args]);
+        return git(projectRoot, args);
+      },
+      runResult: () => {
+        throw new Error('hint validation performed metadata discovery');
+      },
+    };
+
+    expect(observeGitWorktreeContextFromHint(join(root, 'src'), context, gitReader)?.context).toEqual(context);
+    expect(calls).toEqual([['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all']]);
+
+    calls.length = 0;
+    const unrelated = temporaryDirectory('scip-query-unrelated-hint-');
+    expect(observeGitWorktreeContextFromHint(unrelated, context, gitReader)).toBeUndefined();
+    expect(observeGitWorktreeContextFromHint(root, { ...context, gitDir: unrelated }, gitReader)).toBeUndefined();
+    expect(calls).toEqual([]);
+  });
+
+  it('validates linked-worktree gitdir and commondir pointers without metadata discovery', () => {
+    const primary = createRepository();
+    const linked = temporaryDirectory('scip-query-linked-hint-');
+    rmSync(linked, { recursive: true, force: true });
+    git(primary, ['worktree', 'add', '--detach', linked, 'HEAD']);
+    const context = resolveGitWorktreeContext(linked)!;
+    const calls: string[][] = [];
+    const gitReader: GitReader = {
+      run: (projectRoot, args) => {
+        calls.push([...args]);
+        return git(projectRoot, args);
+      },
+      runResult: () => {
+        throw new Error('linked hint validation performed metadata discovery');
+      },
+    };
+
+    expect(observeGitWorktreeContextFromHint(linked, context, gitReader)?.context).toEqual(context);
+    expect(calls).toEqual([['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all']]);
+  });
+
+  it('disables context hints for environment overrides that can change repository meaning', () => {
+    expect(gitWorktreeContextHintEnvironmentSupported({ GIT_PAGER: 'cat' })).toBe(true);
+    expect(gitWorktreeContextHintEnvironmentSupported({ GIT_INDEX_FILE: '/tmp/alternate-index' })).toBe(false);
+    expect(gitWorktreeContextHintEnvironmentSupported({ GIT_NO_REPLACE_OBJECTS: '1' })).toBe(false);
+    expect(gitWorktreeContextHintEnvironmentSupported({ GIT_CONFIG_COUNT: '1' })).toBe(false);
   });
 
   it('preserves worktree identity before the repository has a first commit', () => {
