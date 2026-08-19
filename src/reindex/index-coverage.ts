@@ -5,6 +5,12 @@ import type { SupportedLanguage } from '../domain/types.js';
 
 const MAX_REPORTED_MISSING_PATHS = 25;
 
+// These providers index the complete configured project-file inventory. Other
+// compiler-backed providers may intentionally omit files excluded by the active
+// build target (for example Rust cfg attributes), so path absence alone cannot
+// prove that their candidate index is incomplete.
+const EXHAUSTIVE_DOCUMENT_COVERAGE_LANGUAGES = new Set<SupportedLanguage>(['typescript', 'javascript']);
+
 export type IndexDocumentCoverage =
   | {
       state: 'complete';
@@ -75,10 +81,11 @@ function expectedSourcePathsByLanguage(
   languages: readonly SupportedLanguage[],
 ): Map<SupportedLanguage, Set<string>> {
   const result = new Map<SupportedLanguage, Set<string>>();
-  for (const language of languages) result.set(language, new Set());
+  const exhaustiveLanguages = languages.filter((language) => EXHAUSTIVE_DOCUMENT_COVERAGE_LANGUAGES.has(language));
+  for (const language of exhaustiveLanguages) result.set(language, new Set());
   for (const file of snapshot.files) {
     const path = normalizeRelativePath(file.path);
-    for (const language of languages) {
+    for (const language of exhaustiveLanguages) {
       if (classifyProjectInputPath(path, [language]) === 'source') result.get(language)!.add(path);
     }
   }

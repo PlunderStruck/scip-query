@@ -109,6 +109,11 @@ export function sharedCachePreparationEligible(commandName: string): boolean {
   return !commandName.startsWith('__') && !SHARED_CACHE_PREPARATION_EXCLUDED_COMMANDS.has(commandName);
 }
 
+/** Commands that can still return exact working-tree text from an existing index after refresh fails. */
+export function existingIndexFallbackEligible(commandName: string): boolean {
+  return commandName === 'search' || commandName === 'code';
+}
+
 const SHARED_CACHE_PREPARATION_EXCLUDED_COMMANDS = new Set([
   'capabilities',
   'check-deps',

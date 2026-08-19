@@ -1,17 +1,20 @@
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { runCliWithErrorBoundary } from './cli-error-boundary.js';
 
 if (isCliEntrypoint()) {
-  const argv = process.argv.slice(2);
-  let handled = false;
-  if (mayUseQueryServiceFastPath(argv)) {
-    const { tryRunQueryServiceFastPath } = await import('./query-service-fastpath.js');
-    handled = await tryRunQueryServiceFastPath(argv);
-  }
-  if (!handled) {
-    const { runCli } = await import('./cli-main.js');
-    await runCli();
-  }
+  await runCliWithErrorBoundary(async () => {
+    const argv = process.argv.slice(2);
+    let handled = false;
+    if (mayUseQueryServiceFastPath(argv)) {
+      const { tryRunQueryServiceFastPath } = await import('./query-service-fastpath.js');
+      handled = await tryRunQueryServiceFastPath(argv);
+    }
+    if (!handled) {
+      const { runCli } = await import('./cli-main.js');
+      await runCli();
+    }
+  });
 }
 
 function isCliEntrypoint(): boolean {

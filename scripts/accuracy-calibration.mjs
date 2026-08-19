@@ -114,7 +114,7 @@ const navigationCases = [
     expectedCallGraph: ['app:run()'],
     expectedDataflow: ['═══ DEFINED AT ═══', 'src/main.rs'],
     sliceArgs: [],
-    expectedSlice: ['backward slice of main()', 'No connected symbols found.'],
+    expectedSlice: ['backward slice of main()', 'app:run()', 'app:build_app()'],
   },
 ];
 
@@ -1931,7 +1931,7 @@ function runNavigationCase(testCase, projectRoot, cacheDir) {
   const source = readFileSync(join(projectRoot, testCase.file), 'utf8');
   checks.push(assertIncludes('source oracle', source, testCase.sourceIncludes));
   const commands = {
-    symbols: runCli(['symbols', testCase.file], projectRoot, env, 60_000),
+    outline: runCli(['outline', testCase.file], projectRoot, env, 60_000),
     code: runCli(['code', testCase.symbol], projectRoot, env, 60_000),
     refs: runCli(['refs', testCase.symbol], projectRoot, env, 60_000),
     trace: runCli(['trace', testCase.symbol], projectRoot, env, 60_000),
@@ -1941,7 +1941,7 @@ function runNavigationCase(testCase, projectRoot, cacheDir) {
     slice: runCli(['slice', testCase.symbol, ...(testCase.sliceArgs ?? [])], projectRoot, env, 60_000),
   };
   for (const [name, result] of Object.entries(commands)) checks.push(checkExit(name, result));
-  checks.push(assertIncludes('symbols output', commands.symbols.stdout, [testCase.symbol]));
+  checks.push(assertIncludes('outline output', commands.outline.stdout, [testCase.symbol]));
   checks.push(assertIncludes('code output', commands.code.stdout, testCase.sourceIncludes));
   checks.push(assertIncludes('refs output', commands.refs.stdout, testCase.expectedRefs));
   checks.push(assertIncludes('trace output', commands.trace.stdout, ['═══ DEFINITION ═══', testCase.file]));
@@ -2078,7 +2078,7 @@ function performanceMetadata(cacheDir, commands) {
 function commandDurations(commands) {
   return {
     name: 'command durations',
-    pass: true,
+    pass: Object.values(commands).every((result) => result.status === 0),
     evidence: Object.entries(commands)
       .map(([name, result]) => `${name}: ${result.durationMs}ms`)
       .join('\n'),

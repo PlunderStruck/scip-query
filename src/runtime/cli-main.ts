@@ -1,5 +1,5 @@
 import { Help, program } from 'commander';
-import { realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { cliVersion, renderHeuristicNotice } from './cli-support.js';
 import {
@@ -10,6 +10,7 @@ import { registerCommandDescriptors } from './commands/command-registry.js';
 import { renderRootCommandHelp } from './commands/command-panels.js';
 import {
   activateCliProjectContext,
+  existingIndexFallbackEligible,
   resolveCliProjectContext,
   resolveProjectRoot,
   sharedCachePreparationEligible,
@@ -31,6 +32,7 @@ import { maybeSweepRepositoryCache } from './repository-cache-lifecycle.js';
 import { installTerminalConsoleSanitizer, sanitizeTerminalText } from '../platform/terminal-output.js';
 import { enterProjectFileListingCache } from '../platform/project-file-inventory-context.js';
 import { parseOutputPageSize } from './output-pagination.js';
+import { runCliWithErrorBoundary } from './cli-error-boundary.js';
 
 const cliEntrypoint = isCliEntrypoint();
 if (cliEntrypoint) {
@@ -92,15 +94,26 @@ program.hook('preAction', async (_thisCommand, actionCommand) => {
   activateCliProjectContext(projectContext);
   const { config, paths } = projectContext;
   if (prepareSharedCache) {
-    const freshness = await ensureEvidenceCommandFreshness({
-      commandName,
-      projectRoot,
-      config,
-      paths,
-      dbPathSource: projectContext.dbPathSource,
-      gitContext,
-      gitObservation,
-    });
+    let freshness;
+    try {
+      freshness = await ensureEvidenceCommandFreshness({
+        commandName,
+        projectRoot,
+        config,
+        paths,
+        dbPathSource: projectContext.dbPathSource,
+        gitContext,
+        gitObservation,
+      });
+    } catch (error) {
+      if (!existingIndexFallbackEligible(commandName) || !existsSync(projectContext.dbPath)) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        `warning: index refresh failed; ${commandName} is using the existing index. Current file text remains exact, but index-derived symbols and relationships may be stale. ${message}`,
+      );
+      maybeSweepRepositoryCache(projectRoot, cliVersion, { repositoryId: gitContext?.repositoryId ?? null });
+      return;
+    }
     if (process.env['SCIP_QUERY_DEBUG']) {
       console.error(`evidence-freshness: ${freshness.source}`);
     }
@@ -168,7 +181,7 @@ export async function runCli(): Promise<void> {
   }
 }
 
-if (cliEntrypoint) await runCli();
+if (cliEntrypoint) await runCliWithErrorBoundary(runCli);
 
 function isCliEntrypoint(): boolean {
   if (!process.argv[1]) {

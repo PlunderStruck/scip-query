@@ -111,7 +111,13 @@
       },
       {
         "name": "runtime-entry",
-        "paths": ["src/runtime/cli.ts", "src/runtime/cli-main.ts", "src/runtime/index.ts", "src/runtime/postinstall.ts"]
+        "paths": [
+          "src/runtime/cli.ts",
+          "src/runtime/cli-error-boundary.ts",
+          "src/runtime/cli-main.ts",
+          "src/runtime/index.ts",
+          "src/runtime/postinstall.ts"
+        ]
       },
       {
         "name": "runtime-query-commands",

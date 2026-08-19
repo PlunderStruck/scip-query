@@ -47,4 +47,41 @@ describe('index document coverage', () => {
       affectedLanguages: ['typescript'],
     });
   });
+
+  it('does not require compiler-target-excluded files from providers without an exhaustive document contract', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-index-coverage-provider-'));
+    tempDirs.push(root);
+    const dbPath = join(root, 'index.db');
+    const db = new Database(dbPath);
+    db.exec(`
+      CREATE TABLE documents (id INTEGER PRIMARY KEY, relative_path TEXT NOT NULL UNIQUE);
+      INSERT INTO documents (id, relative_path) VALUES
+        (1, 'src/present.ts'),
+        (2, 'src/main.rs');
+    `);
+    db.close();
+
+    const snapshot: ProjectInputSnapshot = {
+      version: 1,
+      languages: ['typescript', 'rust'],
+      pnpmWorkspaces: false,
+      typescriptProjectMode: 'single',
+      typescriptProjects: [],
+      files: [
+        { path: 'src/present.ts', size: 1, hash: 'present' },
+        { path: 'src/missing.ts', size: 1, hash: 'missing' },
+        { path: 'src/main.rs', size: 1, hash: 'main' },
+        { path: 'src/browser_audio.rs', size: 1, hash: 'cfg-disabled' },
+      ],
+    };
+
+    expect(inspectIndexDocumentCoverage(dbPath, snapshot, ['typescript', 'rust'])).toEqual({
+      state: 'incomplete',
+      expectedDocumentCount: 2,
+      actualDocumentCount: 2,
+      missingDocumentCount: 1,
+      missingPaths: ['src/missing.ts'],
+      affectedLanguages: ['typescript'],
+    });
+  });
 });

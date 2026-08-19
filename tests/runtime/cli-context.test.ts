@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   activateCliProjectContext,
+  existingIndexFallbackEligible,
   prepareWorktreeIndex,
   resolveCliProjectContext,
   rootIndexFallbackWarning,
@@ -55,6 +56,13 @@ describe('cli context', () => {
     expect(sharedCachePreparationEligible('init')).toBe(false);
     expect(sharedCachePreparationEligible('setup')).toBe(false);
     expect(sharedCachePreparationEligible('suppress')).toBe(false);
+  });
+
+  it('allows disk-backed navigation to use an existing index when refresh fails', () => {
+    expect(existingIndexFallbackEligible('search')).toBe(true);
+    expect(existingIndexFallbackEligible('code')).toBe(true);
+    expect(existingIndexFallbackEligible('outline')).toBe(false);
+    expect(existingIndexFallbackEligible('evidence')).toBe(false);
   });
 
   it('reuses an activated project and Git context only for the matching root', () => {
