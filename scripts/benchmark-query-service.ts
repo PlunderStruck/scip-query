@@ -1,12 +1,13 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 
 const projectRoot = resolve(process.argv[2] ?? process.cwd());
 const benchmarkCommand = parseBenchmarkCommand(process.env.SCIP_QUERY_BENCH_COMMAND);
 const operand = process.argv[3] ?? defaultOperand(benchmarkCommand);
-const cliPath = resolve(projectRoot, 'dist/cli.js');
+const cliPath = resolve(process.env.SCIP_QUERY_BENCH_CLI_PATH ?? resolve(projectRoot, 'dist/cli.js'));
+const queryServiceServerPath = resolve(dirname(cliPath), 'query-service-server.js');
 const configuredPoolSize = process.env.SCIP_QUERY_QUERY_SERVICE_POOL_SIZE;
 const poolSize = configuredPoolSize === undefined ? 'default' : Number.parseInt(configuredPoolSize, 10);
 const concurrencyLevels = parseConcurrencyLevels(process.env.SCIP_QUERY_BENCH_CONCURRENCY);
@@ -68,6 +69,15 @@ async function runScenario(service: boolean, concurrency: number) {
 
   try {
     const runs = await Promise.all(clients.map((client) => client.result));
+    const fallbackDiagnostics = runs.flatMap((run) =>
+      run.stderr
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith('query-service fallback:')),
+    );
+    if (service && forceService && fallbackDiagnostics.length > 0) {
+      throw new Error(`Forced query-service benchmark fell back locally:\n${fallbackDiagnostics.join('\n')}`);
+    }
     sample();
     const wallMs = performance.now() - startedAt;
     const identities = new Set(runs.map((run) => sha256(run.stdout)));
@@ -81,6 +91,7 @@ async function runScenario(service: boolean, concurrency: number) {
       serverPeakRssBytes: serverPeakRssKiB * 1024,
       clientPeakRssBytes: [...clientPeakRssKiB.values()].reduce((sum, rssKiB) => sum + rssKiB * 1024, 0),
       samples,
+      queryServiceFallbacks: fallbackDiagnostics.length,
       identitySha256: [...identities][0],
     };
   } finally {
@@ -90,7 +101,7 @@ async function runScenario(service: boolean, concurrency: number) {
 
 function startClient(service: boolean): {
   pid: number;
-  result: Promise<{ stdout: string; elapsedMs: number }>;
+  result: Promise<{ stdout: string; stderr: string; elapsedMs: number }>;
 } {
   const startedAt = performance.now();
   const env = {
@@ -99,8 +110,10 @@ function startClient(service: boolean): {
   };
   if (configuredPoolSize === undefined) delete env.SCIP_QUERY_QUERY_SERVICE_POOL_SIZE;
   else env.SCIP_QUERY_QUERY_SERVICE_POOL_SIZE = configuredPoolSize;
-  if (service && forceService) env.SCIP_QUERY_QUERY_SERVICE = '1';
-  else if (service) delete env.SCIP_QUERY_QUERY_SERVICE;
+  if (service && forceService) {
+    env.SCIP_QUERY_QUERY_SERVICE = '1';
+    env.SCIP_QUERY_QUERY_SERVICE_DEBUG = '1';
+  } else if (service) delete env.SCIP_QUERY_QUERY_SERVICE;
   else env.SCIP_QUERY_QUERY_SERVICE = '0';
   const child = spawn(process.execPath, [cliPath, ...benchmarkArguments()], {
     cwd: projectRoot,
@@ -121,7 +134,7 @@ function startClient(service: boolean): {
       child.on('error', reject);
       child.on('exit', (code) => {
         clearTimeout(timeout);
-        if (code === 0) resolvePromise({ stdout, elapsedMs: performance.now() - startedAt });
+        if (code === 0) resolvePromise({ stdout, stderr, elapsedMs: performance.now() - startedAt });
         else reject(new Error(`CLI benchmark child exited ${code}: ${stderr.trim()}`));
       });
     }),
@@ -177,9 +190,7 @@ function processSnapshot(): Array<{ pid: number; rssKiB: number; command: string
 }
 
 function isQueryServiceProcess(command: string): boolean {
-  return (
-    command.includes(`${resolve(projectRoot, 'dist/query-service-server.js')} `) && command.endsWith(` ${projectRoot}`)
-  );
+  return command.includes(`${queryServiceServerPath} `) && command.endsWith(` ${projectRoot}`);
 }
 
 function summarize(values: readonly number[]) {

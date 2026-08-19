@@ -136,6 +136,31 @@ describe('bounded filesystem mailbox', () => {
     );
   });
 
+  it('publishes recomputable requests with visibility durability when explicitly requested', () => {
+    const paths = fixture();
+    const request = operation('ephemeral', NOW, NOW + 10_000);
+
+    expect(
+      enqueueBoundedMailboxRequest(paths, request, {
+        nowMs: NOW,
+        durability: 'visibility',
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        disposition: 'accepted',
+        achievedDurability: 'visibility',
+        directorySync: 'not-requested',
+      }),
+    );
+
+    const [claim] = claimBoundedMailboxRequests(paths, {
+      ownerId: 'ephemeral-server',
+      nowMs: NOW + 1,
+    });
+    expect(claim).toEqual(expect.objectContaining({ requestId: request.id }));
+    expect(readBoundedMailboxClaim(claim!)).toContain('"clientId":"client-ephemeral"');
+  });
+
   it('deduplicates a retained completion larger than the metadata read ceiling by its content-addressed name', () => {
     const paths = fixture();
     const request = operation('large-completion', NOW, NOW + 10_000);

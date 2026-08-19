@@ -127,8 +127,8 @@ export type EnqueueBoundedMailboxResult =
       requestId: string;
       responsePath: string;
       authoritativeDeadlineAtMs: number;
-      achievedDurability: Exclude<AchievedFileDurability, 'visibility'>;
-      directorySync: Exclude<DirectorySyncStatus, 'not-requested'>;
+      achievedDurability: AchievedFileDurability;
+      directorySync: DirectorySyncStatus;
     }
   | {
       disposition: 'duplicate';
@@ -246,6 +246,8 @@ export function enqueueBoundedMailboxRequest(
     onBeforePublish?: () => void;
     admissionLockTimeoutMs?: number;
     monotonicNow?: () => number;
+    /** Visibility is for ephemeral work whose caller can safely recompute after a host crash. */
+    durability?: AtomicFileDurability;
   } = {},
 ): EnqueueBoundedMailboxResult {
   const limits = resolveBoundedMailboxLimits(options.limits);
@@ -257,6 +259,7 @@ export function enqueueBoundedMailboxRequest(
     limits,
     options.admissionLockTimeoutMs ?? 2_000,
     options.monotonicNow ?? monotonicNowMs,
+    options.durability ?? 'durable',
     () => {
       maintainBoundedMailboxUnlocked(paths, nowMs, limits);
       const requestPath = join(paths.pendingDir, `${request.id}.json`);
@@ -285,17 +288,18 @@ export function enqueueBoundedMailboxRequest(
       }
       options.onBeforePublish?.();
       try {
-        const publication = createFileAtomicExclusive(requestPath, serialized, { durability: 'durable' });
-        const directorySync = mergeDirectorySyncStatus(mailboxDirectorySync, publication.directorySync) as Exclude<
-          DirectorySyncStatus,
-          'not-requested'
-        >;
+        const durability = options.durability ?? 'durable';
+        const publication = createFileAtomicExclusive(requestPath, serialized, { durability });
+        const directorySync =
+          durability === 'durable'
+            ? mergeDirectorySyncStatus(mailboxDirectorySync, publication.directorySync)
+            : 'not-requested';
         return {
           disposition: 'accepted',
           requestId: request.id,
           responsePath,
           authoritativeDeadlineAtMs: request.deadlineAtMs,
-          achievedDurability: directorySync === 'synced' ? 'directory-durable' : 'file-flushed',
+          achievedDurability: publication.achievedDurability,
           directorySync,
         };
       } catch (error) {
@@ -345,7 +349,7 @@ export function claimBoundedMailboxRequests(
   const limits = resolveBoundedMailboxLimits(options.limits);
   const mailboxDirectorySync = initializeBoundedMailbox(paths);
   try {
-    return withMailboxAdmissionLock(paths, limits, 2_000, options.monotonicNow ?? monotonicNowMs, () =>
+    return withMailboxAdmissionLock(paths, limits, 2_000, options.monotonicNow ?? monotonicNowMs, 'durable', () =>
       claimBoundedMailboxRequestsUnlocked(
         paths,
         options.ownerId,
@@ -574,7 +578,7 @@ export function maintainBoundedMailbox(
   const nowMs = options.nowMs ?? Date.now();
   const limits = resolveBoundedMailboxLimits(options.limits);
   initializeBoundedMailbox(paths);
-  return withMailboxAdmissionLock(paths, limits, 2_000, options.monotonicNow ?? monotonicNowMs, () =>
+  return withMailboxAdmissionLock(paths, limits, 2_000, options.monotonicNow ?? monotonicNowMs, 'durable', () =>
     maintainBoundedMailboxUnlocked(paths, nowMs, limits, options.liveness ?? DEFAULT_MAILBOX_LIVENESS_RUNTIME),
   );
 }
@@ -645,7 +649,14 @@ function maintainBoundedMailboxUnlocked(
     for (const path of regularFilesRecursive(directory)) {
       if (remaining <= 0) break;
       if (!basename(path).includes('.tmp-')) continue;
-      if (lstatSync(path).mtimeMs + limits.temporaryRetentionMs > nowMs) continue;
+      let mtimeMs: number;
+      try {
+        mtimeMs = lstatSync(path).mtimeMs;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+        throw error;
+      }
+      if (mtimeMs + limits.temporaryRetentionMs > nowMs) continue;
       rmSync(path, { force: true });
       result.temporaryFilesRemoved++;
       remaining--;
@@ -673,7 +684,15 @@ export function inspectBoundedMailbox(paths: BoundedMailboxPaths): BoundedMailbo
       invalid++;
       continue;
     }
-    const enqueuedAtMs = header.enqueuedAtMs ?? lstatSync(file.path).mtimeMs;
+    let enqueuedAtMs = header.enqueuedAtMs;
+    if (enqueuedAtMs === undefined) {
+      try {
+        enqueuedAtMs = lstatSync(file.path).mtimeMs;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+        throw error;
+      }
+    }
     oldestPendingMs = oldestPendingMs === undefined ? enqueuedAtMs : Math.min(oldestPendingMs, enqueuedAtMs);
   }
   return {
@@ -715,13 +734,14 @@ function withMailboxAdmissionLock<T>(
   limits: BoundedMailboxLimits,
   timeoutMs: number,
   now: () => number,
+  durability: AtomicFileDurability,
   operation: () => T,
 ): T {
   const lockPath = join(paths.rootDir, '.admission.lock');
   const ownerToken = `${process.pid}-${randomUUID()}`;
   const deadline = now() + Math.max(0, timeoutMs);
   for (;;) {
-    if (tryPublishAdmissionLock(paths.rootDir, lockPath, ownerToken)) break;
+    if (tryPublishAdmissionLock(paths.rootDir, lockPath, ownerToken, durability)) break;
     reclaimAbandonedAdmissionLock(lockPath);
     if (now() >= deadline) {
       throw new MailboxBackpressureError('admission-busy', inspectBoundedMailbox(paths), limits, 0);
@@ -735,7 +755,7 @@ function withMailboxAdmissionLock<T>(
       const owner = readAdmissionLockOwner(lockPath);
       if (owner.ownerToken === ownerToken) {
         rmSync(lockPath, { recursive: true, force: true });
-        syncDirectoryDurable(paths.rootDir);
+        if (durability === 'durable') syncDirectoryDurable(paths.rootDir);
       }
     } catch {
       // A stale-lock reclaimer may have moved this owner's directory. Token
@@ -744,14 +764,19 @@ function withMailboxAdmissionLock<T>(
   }
 }
 
-function tryPublishAdmissionLock(rootDirectory: string, lockPath: string, ownerToken: string): boolean {
+function tryPublishAdmissionLock(
+  rootDirectory: string,
+  lockPath: string,
+  ownerToken: string,
+  durability: AtomicFileDurability,
+): boolean {
   const serialized = `${JSON.stringify({
     ownerToken,
     pid: process.pid,
     acquiredAtMs: Date.now(),
   })}\n`;
   try {
-    createFileAtomicExclusive(lockPath, serialized, { durability: 'durable' });
+    createFileAtomicExclusive(lockPath, serialized, { durability });
     return true;
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
@@ -759,7 +784,7 @@ function tryPublishAdmissionLock(rootDirectory: string, lockPath: string, ownerT
     try {
       if (readAdmissionLockOwner(lockPath).ownerToken === ownerToken) {
         rmSync(lockPath, { force: true });
-        syncDirectoryDurable(rootDirectory);
+        if (durability === 'durable') syncDirectoryDurable(rootDirectory);
       }
     } catch {
       // Keep the publication failure as the primary error.
@@ -974,7 +999,13 @@ function inflightClaims(directory: string): BoundedMailboxClaim[] {
       }
       const path = join(ownerDirectory, entry.name);
       const header = readRequestHeader(path) ?? { id: basename(originalFile, '.json') };
-      const stat = lstatSync(path);
+      let stat;
+      try {
+        stat = lstatSync(path);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+        throw error;
+      }
       claims.push({
         requestId: header.id,
         ownerId,
@@ -1019,7 +1050,13 @@ function removeExpiredFiles(
 ): number {
   for (const path of regularFiles(directory)) {
     if (remaining <= 0) break;
-    const stat = lstatSync(path);
+    let stat;
+    try {
+      stat = lstatSync(path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+      throw error;
+    }
     if (expiresAt(path, stat.mtimeMs) > nowMs) continue;
     rmSync(path, { force: true });
     removed();

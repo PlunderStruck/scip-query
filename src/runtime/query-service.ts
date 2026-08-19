@@ -895,7 +895,11 @@ function requestQuery<Result>(
       sessionIdentity,
       request,
     } satisfies QueryServiceEnvelope,
-    { nowMs: startedAtMs, limits: QUERY_SERVICE_MAILBOX_LIMITS },
+    {
+      nowMs: startedAtMs,
+      limits: QUERY_SERVICE_MAILBOX_LIMITS,
+      durability: 'visibility',
+    },
   );
 
   ensureQueryServiceServer(sessionDir, context.projectRoot, serverPath, monotonicDeadlineAtMs);
