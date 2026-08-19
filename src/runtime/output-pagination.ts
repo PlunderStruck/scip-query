@@ -14,7 +14,7 @@ import {
   writeSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { InvalidArgumentError } from 'commander';
 import {
@@ -25,14 +25,25 @@ import {
 } from '../platform/process-identity.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
 import { tryAcquireProcessFileLock } from '../platform/process-file-lock.js';
-import { DEFAULT_OUTPUT_PAGE_SIZE, sanitizeTerminalLine } from '../platform/terminal-output.js';
+import {
+  CLIENT_SAFE_OUTPUT_BYTES,
+  DEFAULT_OUTPUT_PAGE_SIZE,
+  HUMAN_OUTPUT_PAGE_CONTENT_BYTES,
+  JSON_OUTPUT_PAGE_CONTENT_BYTES,
+  sanitizeTerminalLine,
+} from '../platform/terminal-output.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { quoteShellArgument } from '../platform/shell-arguments.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { isNonNegativeInteger, isRecordObject, isSha256Hex } from '../domain/record-validation.js';
 import { finalizeSourceEmission, runWithSourceEmissionInvocation } from './source-emission-session.js';
 import { assertNavigationMapCanStart, recordNavigationOutputDelivery } from './navigation-session.js';
-export { DEFAULT_OUTPUT_PAGE_SIZE } from '../platform/terminal-output.js';
+export {
+  CLIENT_SAFE_OUTPUT_BYTES,
+  DEFAULT_OUTPUT_PAGE_SIZE,
+  HUMAN_OUTPUT_PAGE_CONTENT_BYTES,
+  JSON_OUTPUT_PAGE_CONTENT_BYTES,
+} from '../platform/terminal-output.js';
 
 export const CLI_OUTPUT_PAGE_KIND = 'scip-query-output-page' as const;
 export const CLI_OUTPUT_PAGE_SCHEMA_VERSION = 1 as const;
@@ -45,7 +56,13 @@ export const MAX_OUTPUT_SNAPSHOT_BYTES = 64 * 1024 * 1024;
 export const MAX_OUTPUT_SNAPSHOT_AGGREGATE_BYTES = 256 * 1024 * 1024;
 export const MAX_OUTPUT_SNAPSHOT_COUNT = 32;
 export const MAX_OUTPUT_SNAPSHOT_PAGES = 32_768;
+export const MAX_AGENT_OUTPUT_PAGES = 16;
+export const MAX_AGENT_OUTPUT_CHARACTERS = JSON_OUTPUT_PAGE_CONTENT_BYTES * MAX_AGENT_OUTPUT_PAGES;
+export const MAX_JSON_OUTPUT_PATH_LENGTH = 4_096;
+export const MAX_JSON_OUTPUT_FILE_BYTES = MAX_OUTPUT_SNAPSHOT_BYTES;
 export const OUTPUT_SNAPSHOT_TTL_MS = 60 * 60 * 1_000;
+export const CLI_JSON_EXPORT_RECEIPT_KIND = 'scip-query-json-export' as const;
+export const CLI_JSON_EXPORT_RECEIPT_SCHEMA_VERSION = 1 as const;
 
 const OUTPUT_SNAPSHOT_VERSION = 3;
 function outputSnapshotRoot(): string {
@@ -259,6 +276,10 @@ export interface CliOutputPaginationOptions {
   argv: readonly string[];
   cwd: string;
   json: boolean;
+  /** Emit a bounded command-owned projection intended for model consumption. */
+  agentOutput?: boolean;
+  /** Atomically write the complete JSON result and print only a bounded receipt. */
+  jsonOutputPath?: string;
   /** Reuse an agent-scoped ledger to replace repeated source and graph evidence with citations. */
   sourceSession?: boolean;
   /** Render complete evidence even when the current agent session saw it already. */
@@ -272,6 +293,16 @@ export interface CliOutputPaginationOptions {
   snapshotRoot?: string;
   /** @internal observe continuation I/O without patching filesystem globals. */
   onSnapshotRead?: (bytes: number) => void;
+}
+
+export interface CliJsonExportReceiptV1 {
+  kind: typeof CLI_JSON_EXPORT_RECEIPT_KIND;
+  schemaVersion: typeof CLI_JSON_EXPORT_RECEIPT_SCHEMA_VERSION;
+  producer: { name: 'scip-query'; version: string };
+  command: string;
+  path: string;
+  bytes: number;
+  sha256: string;
 }
 
 export interface CliOutputPaginationRuntime {
@@ -292,9 +323,9 @@ const defaultRuntime: CliOutputPaginationRuntime = {
  * Run one command behind a bounded output transport.
  *
  * Human output is captured and paged when it exceeds the default safe page.
- * JSON stays byte-compatible unless paging is explicitly requested; large
- * unpaged JSON gets an early stderr instruction naming the exact opt-in
- * paging command.
+ * JSON stays byte-compatible unless bounded agent output, file export, or
+ * paging is explicitly requested. Large unpaged JSON gets an early stderr
+ * instruction naming the exact opt-in paging command.
  */
 export async function runWithCliOutputPagination(
   options: CliOutputPaginationOptions,
@@ -332,7 +363,11 @@ async function runWithCliOutputPaginationInSession(
   if (!Number.isSafeInteger(requestedMaxOutputCharacters) || requestedMaxOutputCharacters <= 0) {
     throw new Error('Output character safety limit must be a positive integer.');
   }
-  const maxOutputCharacters = Math.min(requestedMaxOutputCharacters, MAX_TRACKED_OUTPUT_CHARACTERS);
+  const maxOutputCharacters = Math.min(
+    requestedMaxOutputCharacters,
+    MAX_TRACKED_OUTPUT_CHARACTERS,
+    options.agentOutput ? MAX_AGENT_OUTPUT_CHARACTERS : MAX_TRACKED_OUTPUT_CHARACTERS,
+  );
   validatePageSize(pageSize);
   if (options.cursor !== undefined && options.cursor.length > MAX_OUTPUT_CURSOR_LENGTH) {
     throw new Error(
@@ -340,7 +375,19 @@ async function runWithCliOutputPaginationInSession(
     );
   }
 
-  if (options.json && options.pageSize === undefined && options.cursor === undefined) {
+  if (options.jsonOutputPath !== undefined) {
+    if (!options.json) throw new Error('--json-output requires --json.');
+    if (options.agentOutput || options.pageSize !== undefined || options.cursor !== undefined) {
+      throw new Error('--json-output cannot be combined with --agent-output or output pagination.');
+    }
+    if (options.command === 'system-map') {
+      assertNavigationMapCanStart(options.cwd, options.sourceSession !== false);
+    }
+    await runJsonToOutputFile(options, action, runtime, maxOutputCharacters);
+    return;
+  }
+
+  if (options.json && !options.agentOutput && options.pageSize === undefined && options.cursor === undefined) {
     if (options.command === 'system-map') {
       assertNavigationMapCanStart(options.cwd, options.sourceSession !== false);
     }
@@ -389,9 +436,12 @@ async function runWithCliOutputPaginationInSession(
       filteredArgv,
       pageSize,
       maxOutputCharacters,
+      pageContentByteLimit(options, invocationPrefix),
       snapshotRoot,
       snapshotLimits,
+      options.agentOutput ? MAX_AGENT_OUTPUT_PAGES : MAX_OUTPUT_SNAPSHOT_PAGES,
       !options.json,
+      outputSafetyLimitMessage(maxOutputCharacters, options.agentOutput === true),
     );
     const restore = installStdoutCapture((bytes) => snapshot.write(bytes));
     let actionCompleted = false;
@@ -508,6 +558,7 @@ export async function continueCliOutput(
       cwd: metadata.cwd,
       json: metadata.argv.some((argument) => argument === '--json' || argument.startsWith('--json=')),
       sourceSession: !metadata.argv.some((argument) => argument === '--no-session'),
+      agentOutput: metadata.argv.some((argument) => argument === '--agent-output'),
       pageSize: metadata.pageSize,
       cursor,
       snapshotRoot,
@@ -517,6 +568,102 @@ export async function continueCliOutput(
     },
     runtime,
   );
+}
+
+async function runJsonToOutputFile(
+  options: CliOutputPaginationOptions,
+  action: () => void | Promise<void>,
+  runtime: CliOutputPaginationRuntime,
+  maxOutputCharacters: number,
+): Promise<void> {
+  const requestedPath = options.jsonOutputPath;
+  if (
+    requestedPath === undefined ||
+    requestedPath.length === 0 ||
+    Buffer.byteLength(requestedPath) > MAX_JSON_OUTPUT_PATH_LENGTH ||
+    requestedPath.includes('\0')
+  ) {
+    throw new Error(`--json-output requires a path from 1 through ${MAX_JSON_OUTPUT_PATH_LENGTH} UTF-8 bytes.`);
+  }
+  const outputPath = resolve(options.cwd, requestedPath);
+  if (Buffer.byteLength(outputPath) > MAX_JSON_OUTPUT_PATH_LENGTH) {
+    throw new Error(`The resolved --json-output path exceeds ${MAX_JSON_OUTPUT_PATH_LENGTH} UTF-8 bytes.`);
+  }
+  const decoder = new StringDecoder('utf8');
+  const hash = createHash('sha256');
+  let totalBytes = 0;
+  let totalCharacters = 0;
+  const addCharacters = (value: string): void => {
+    totalCharacters += value.length;
+    if (!Number.isSafeInteger(totalCharacters) || totalCharacters > maxOutputCharacters) {
+      throw new Error(outputSafetyLimitMessage(maxOutputCharacters, false));
+    }
+  };
+  mkdirSync(dirname(outputPath), { recursive: true });
+  const temporaryPath = `${outputPath}.tmp-${randomBytes(12).toString('hex')}`;
+  let descriptor: number | undefined = openSync(temporaryPath, 'wx', 0o600);
+  let temporaryOwned = true;
+  const restore = installStdoutCapture((bytes) => {
+    const nextTotalBytes = totalBytes + bytes.length;
+    if (!Number.isSafeInteger(nextTotalBytes) || nextTotalBytes > MAX_JSON_OUTPUT_FILE_BYTES) {
+      throw new Error(
+        `JSON export exceeds the ${MAX_JSON_OUTPUT_FILE_BYTES}-byte file safety limit. Narrow the query before retrying.`,
+      );
+    }
+    addCharacters(decoder.write(bytes));
+    if (descriptor === undefined) throw new Error('JSON export writer is closed.');
+    writeAll(descriptor, bytes);
+    hash.update(bytes);
+    totalBytes = nextTotalBytes;
+  });
+  try {
+    await action();
+    addCharacters(decoder.end());
+    restore();
+    closeSync(descriptor);
+    descriptor = undefined;
+    renameSync(temporaryPath, outputPath);
+    temporaryOwned = false;
+  } finally {
+    restore();
+    if (descriptor !== undefined) {
+      try {
+        closeSync(descriptor);
+      } catch {
+        // Preserve the command or write error; owned temporary cleanup follows.
+      }
+    }
+    if (temporaryOwned) rmSync(temporaryPath, { force: true });
+  }
+
+  const receipt: CliJsonExportReceiptV1 = {
+    kind: CLI_JSON_EXPORT_RECEIPT_KIND,
+    schemaVersion: CLI_JSON_EXPORT_RECEIPT_SCHEMA_VERSION,
+    producer: { name: 'scip-query', version: options.producerVersion },
+    command: options.command,
+    path: outputPath,
+    bytes: totalBytes,
+    sha256: hash.digest('hex'),
+  };
+  runtime.writeStdout(`${JSON.stringify(receipt)}\n`);
+  recordNavigationOutputDelivery(options.command, options.cwd, true, options.sourceSession !== false);
+  finalizeSourceEmission(true);
+}
+
+function writeAll(descriptor: number, bytes: Buffer): void {
+  let offset = 0;
+  while (offset < bytes.length) {
+    const written = writeSync(descriptor, bytes, offset, bytes.length - offset);
+    if (written <= 0) throw new Error('JSON export write made no forward progress.');
+    offset += written;
+  }
+}
+
+function outputSafetyLimitMessage(limit: number, agentOutput: boolean): string {
+  const base = `Command output exceeds the ${limit}-character safety limit. Narrow the query before retrying.`;
+  return agentOutput
+    ? `${base} For the complete machine result, use --json --json-output <path> and inspect the file programmatically.`
+    : base;
 }
 
 export function parseOutputPageSize(value: string): number {
@@ -550,15 +697,15 @@ async function runJsonWithOversizeWarning(
   runtime: CliOutputPaginationRuntime,
 ): Promise<void> {
   const buffered = new PrefixBuffer(
-    DEFAULT_OUTPUT_PAGE_SIZE,
+    CLIENT_SAFE_OUTPUT_BYTES,
     options.maxOutputCharacters ?? MAX_TRACKED_OUTPUT_CHARACTERS,
   );
   const originalWrite = process.stdout.write;
   let warningWritten = false;
   const warning = `${sanitizeTerminalLine(
-    `scip-query: JSON output exceeds ${DEFAULT_OUTPUT_PAGE_SIZE} characters and may be truncated by the client. Do not use possibly partial client output as evidence. Read every page with: ${renderInitialPageCommand(
+    `scip-query: JSON output exceeds the ${CLIENT_SAFE_OUTPUT_BYTES}-byte client-safe budget and may be truncated by the client. Do not use possibly partial client output as evidence. Read every page with: ${renderInitialPageCommand(
       normalizeInvocationPrefix(options.invocationPrefix),
-      withoutOutputPaginationArgs(options.argv),
+      withoutRawJsonArg(withoutOutputPaginationArgs(options.argv)),
       DEFAULT_OUTPUT_PAGE_SIZE,
     )}`,
   )}\n`;
@@ -618,9 +765,10 @@ class PrefixBuffer {
   private readonly chunks: Buffer[] = [];
   private overflowed = false;
   private totalCharacters = 0;
+  private totalBytes = 0;
 
   constructor(
-    private readonly limit: number,
+    private readonly byteLimit: number,
     private readonly maxOutputCharacters: number,
   ) {}
 
@@ -629,10 +777,11 @@ class PrefixBuffer {
       typeof chunk === 'string'
         ? Buffer.from(chunk, typeof encodingOrCallback === 'string' ? (encodingOrCallback as BufferEncoding) : 'utf8')
         : Buffer.from(chunk);
+    this.totalBytes += bytes.length;
     this.addCharacters(this.decoder.write(bytes));
     if (this.overflowed) return bytes;
     this.chunks.push(bytes);
-    if (this.totalCharacters <= this.limit) return undefined;
+    if (this.totalBytes <= this.byteLimit) return undefined;
     this.overflowed = true;
     const complete = Buffer.concat(this.chunks);
     this.chunks.length = 0;
@@ -641,7 +790,7 @@ class PrefixBuffer {
 
   finish(): { bytes: Buffer; crossedPageBoundary: boolean } {
     this.addCharacters(this.decoder.end());
-    const crossedPageBoundary = this.totalCharacters > this.limit;
+    const crossedPageBoundary = this.totalBytes > this.byteLimit;
     const bytes = Buffer.concat(this.chunks);
     this.chunks.length = 0;
     return { bytes, crossedPageBoundary };
@@ -681,9 +830,12 @@ class OutputSnapshotWriter {
     private readonly argv: readonly string[],
     private readonly pageSize: number,
     private readonly maxOutputCharacters: number,
+    private readonly pageContentByteLimit: number,
     private readonly snapshotRoot: string,
     private readonly limits: OutputSnapshotLimits,
+    private readonly maxPages: number,
     private readonly preferLineBoundaries: boolean,
+    private readonly overflowMessage = outputSafetyLimitMessage(maxOutputCharacters, false),
   ) {
     ensureOutputSnapshotRoot(snapshotRoot);
     do {
@@ -776,16 +928,14 @@ class OutputSnapshotWriter {
     if (value.length === 0) return;
     const nextTotal = this.totalCharacters + value.length;
     if (!Number.isSafeInteger(nextTotal) || nextTotal > this.maxOutputCharacters) {
-      throw new Error(
-        `Command output exceeds the ${this.maxOutputCharacters}-character safety limit. Narrow the query before retrying.`,
-      );
+      throw new Error(this.overflowMessage);
     }
     this.totalCharacters = nextTotal;
     this.pending += value;
     this.assertWithinByteLimit(this.byteLength + Buffer.byteLength(this.pending));
-    while (this.pending.length > this.pageSize) {
+    while (this.pending.length > this.pageSize || Buffer.byteLength(this.pending) > this.pageContentByteLimit) {
       this.open();
-      const pageEnd = outputPageEnd(this.pending, this.pageSize, this.preferLineBoundaries);
+      const pageEnd = outputPageEnd(this.pending, this.pageSize, this.pageContentByteLimit, this.preferLineBoundaries);
       const page = this.pending.slice(0, pageEnd);
       this.pending = this.pending.slice(pageEnd);
       this.flushPage(page);
@@ -806,9 +956,9 @@ class OutputSnapshotWriter {
 
   private flushPage(content: string): void {
     if (this.descriptor === null) throw new Error('Output snapshot writer is not open.');
-    if (this.pages.length >= MAX_OUTPUT_SNAPSHOT_PAGES) {
+    if (this.pages.length >= this.maxPages) {
       throw new Error(
-        `Command output requires more than ${MAX_OUTPUT_SNAPSHOT_PAGES} snapshot pages. Retry with a larger --output-page-size or narrow the query.`,
+        `Command output requires more than ${this.maxPages} snapshot pages. Retry with a larger --output-page-size, narrow the query, or use --json --json-output <path>.`,
       );
     }
     const bytes = Buffer.from(content);
@@ -1251,12 +1401,36 @@ function isHighSurrogate(code: number): boolean {
   return code >= 0xd800 && code <= 0xdbff;
 }
 
-function outputPageEnd(content: string, pageSize: number, preferLineBoundaries: boolean): number {
+function outputPageEnd(
+  content: string,
+  pageSize: number,
+  pageContentByteLimit: number,
+  preferLineBoundaries: boolean,
+): number {
+  let boundedEnd = Math.min(content.length, pageSize);
+  if (isHighSurrogate(content.charCodeAt(boundedEnd - 1))) boundedEnd -= 1;
+  if (Buffer.byteLength(content.slice(0, boundedEnd)) > pageContentByteLimit) {
+    let lower = 0;
+    let upper = boundedEnd;
+    while (lower < upper) {
+      const candidate = Math.ceil((lower + upper) / 2);
+      if (Buffer.byteLength(content.slice(0, candidate)) <= pageContentByteLimit) {
+        lower = candidate;
+      } else {
+        upper = candidate - 1;
+      }
+    }
+    boundedEnd = lower;
+    if (isHighSurrogate(content.charCodeAt(boundedEnd - 1))) boundedEnd -= 1;
+  }
+  if (boundedEnd <= 0) {
+    throw new Error('Output page byte limit cannot contain one UTF-8 character.');
+  }
   if (preferLineBoundaries) {
-    const newline = content.lastIndexOf('\n', pageSize - 1);
+    const newline = content.lastIndexOf('\n', boundedEnd - 1);
     if (newline >= 0) return newline + 1;
   }
-  return isHighSurrogate(content.charCodeAt(pageSize - 1)) ? pageSize - 1 : pageSize;
+  return boundedEnd;
 }
 
 function createContinuation(input: {
@@ -1272,6 +1446,56 @@ function createContinuation(input: {
     cursor,
     command: renderContinuationCommand(input.invocationPrefix, cursor),
   };
+}
+
+function pageContentByteLimit(
+  options: Pick<CliOutputPaginationOptions, 'command' | 'json' | 'producerVersion'>,
+  invocationPrefix: readonly string[],
+): number {
+  const cursor = 'c'.repeat(64);
+  const continuation = {
+    cursor,
+    command: renderContinuationCommand(invocationPrefix, cursor),
+  };
+  if (!options.json) {
+    const digits = '9'.repeat(String(MAX_TRACKED_OUTPUT_CHARACTERS).length);
+    const wrapper =
+      `[scip-query output page: characters ${digits}-${digits} of ${digits}]\n` +
+      `\n[Incomplete: ${digits} characters remain. Continue exactly:\n${continuation.command}]\n`;
+    return pageContentBudgetAfterWrapper(HUMAN_OUTPUT_PAGE_CONTENT_BYTES, Buffer.byteLength(wrapper), 1);
+  }
+  const envelope: CliOutputPageEnvelopeV1 = {
+    kind: CLI_OUTPUT_PAGE_KIND,
+    schemaVersion: CLI_OUTPUT_PAGE_SCHEMA_VERSION,
+    producer: { name: 'scip-query', version: options.producerVersion },
+    command: options.command,
+    contentType: 'application/json',
+    agentInstruction:
+      'INCOMPLETE EVIDENCE: do not draw conclusions or report completion from this partial page. Run page.continuation.command exactly, then repeat until page.complete is true.',
+    page: {
+      offset: MAX_TRACKED_OUTPUT_CHARACTERS,
+      returnedCharacters: MAX_TRACKED_OUTPUT_CHARACTERS,
+      totalCharacters: MAX_TRACKED_OUTPUT_CHARACTERS,
+      omittedCharacters: MAX_TRACKED_OUTPUT_CHARACTERS,
+      remainingCharacters: MAX_TRACKED_OUTPUT_CHARACTERS,
+      complete: false,
+      outputHash: 'f'.repeat(64),
+      continuation,
+    },
+    content: '',
+  };
+  const wrapperBytes = Buffer.byteLength(`${JSON.stringify(envelope)}\n`);
+  return pageContentBudgetAfterWrapper(JSON_OUTPUT_PAGE_CONTENT_BYTES, wrapperBytes, 2);
+}
+
+function pageContentBudgetAfterWrapper(maximum: number, wrapperBytes: number, escapingMultiplier: number): number {
+  const available = Math.floor((CLIENT_SAFE_OUTPUT_BYTES - wrapperBytes) / escapingMultiplier);
+  if (available < MIN_OUTPUT_PAGE_SIZE) {
+    throw new Error(
+      `The command invocation leaves fewer than ${MIN_OUTPUT_PAGE_SIZE} bytes for client-safe output content. Use a shorter executable path.`,
+    );
+  }
+  return Math.min(maximum, available);
 }
 
 function encodeOutputCursor(payload: Omit<ShortOutputCursorPayload, 'version'>): string {
@@ -1420,6 +1644,10 @@ function withoutOutputPaginationArgs(argv: readonly string[]): string[] {
     filtered.push(arg);
   }
   return filtered;
+}
+
+function withoutRawJsonArg(argv: readonly string[]): string[] {
+  return argv.filter((argument) => argument !== '--raw-json' && argument !== '--raw-json=true');
 }
 
 function renderInitialPageCommand(

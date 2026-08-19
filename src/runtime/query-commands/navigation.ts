@@ -305,18 +305,10 @@ function inspectionEvidenceBudgets(values: readonly string[]): queries.SourceIns
 function sourceSearchSections(result: queries.SourceSearchResult): ReportSection[] {
   const identities = sourceSearchRenderedIdentities(result);
   const identityCoverage = sourceSearchIdentityCoverage(result, identities);
-  const sourceRows = result.matches.map((match) => {
-    const owner = match.ownerShort ? `  in ${match.ownerShort}` : '';
-    return renderSourceEvidence({
-      relativePath: match.relativePath,
-      startLine: match.startLine,
-      source: match.source,
-      sessionPolicy: 'preview',
-      focusLines: new Set([match.focusLine]),
-      ownerSymbol: match.ownerShort ?? undefined,
-      headerSuffix: owner,
-    });
-  });
+  const sourcePreviews = result.matches.map((match) => sourceSearchPreview(result, match));
+  const sourceRows = sourcePreviews.map((preview) => preview.text);
+  const shortenedSourceLines = sourcePreviews.reduce((total, preview) => total + preview.shortenedLines, 0);
+  const omittedPreviewContextLines = sourcePreviews.reduce((total, preview) => total + preview.omittedContextLines, 0);
   const identityRows = sourceSearchIdentityRows(identities);
   const recoveryCommands = identityCoverage.mode === 'complete' ? sourceSearchRecoveryCommands(result, identities) : [];
   const textCoverage = result.textCoverage;
@@ -328,7 +320,6 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
         ? [
             `  Recover every unmaterialized owning unit in ${recoveryCommands.length} bounded batch command(s):`,
             ...recoveryCommands.map((command) => `  ${command}`),
-            `  Or inspect any chosen locations together at behavior level: scip-query inspect --at 'path:line' --at 'path:line' --view behavior`,
           ]
         : ['  Every matching source window was materialized; no drilldown remains.'];
   return [
@@ -347,22 +338,26 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
     {
       title: 'EVIDENCE CALIBRATION',
       rows: [
-        `  ${exactTextComplete ? 'Exact' : 'Observed'} cardinality comes from current project text scanned at query time.`,
-        '  Compiler ownership is an aligned semantic overlay; unavailable or stale overlays do not change exact text identity.',
-        '  Structural ordering and co-occurrence do not establish task relevance or a graph relationship.',
+        `  ${exactTextComplete ? 'Exact' : 'Observed'} cardinality is current project text; compiler ownership is an aligned semantic overlay. Neither ownership nor co-occurrence proves task relevance or a graph relationship.`,
+        ...(shortenedSourceLines > 0
+          ? [
+              `  ${shortenedSourceLines} overlong matched line(s) were shortened; every exact path:line identity remains recoverable with scip-query code.`,
+            ]
+          : []),
+        ...(omittedPreviewContextLines > 0
+          ? [
+              `  ${omittedPreviewContextLines} nonfocus context line(s) were omitted from expensive previews; the matched lines remain visible and JSON retains complete windows.`,
+            ]
+          : []),
       ],
     },
     {
       title: 'COVERAGE',
       rows: [
-        `  ${exactTextComplete ? 'Exact' : 'Observed'} cardinality: ${result.matchingLines} matching line(s) across ${result.matchingFiles ?? result.fileCoverage?.length ?? 0} file(s).`,
-        `  Identity manifest: ${identities.length}/${result.matchingLines} matching line(s); ${identityCoverage.mode === 'complete' ? 'complete' : `${identityCoverage.omitted} lower-ranked identities withheld before rendering`}.`,
-        `  Source materialization: ${result.matches.length}/${result.matchingLines} window(s); ${result.omittedMatches} exact match location(s) were not expanded into source.`,
+        `  ${exactTextComplete ? 'Exact' : 'Observed'} cardinality: ${result.matchingLines} matching line(s) across ${result.matchingFiles ?? result.fileCoverage?.length ?? 0} file(s). Identity manifest: ${identities.length}/${result.matchingLines} matching line(s); ${identityCoverage.mode === 'complete' ? 'complete' : `${identityCoverage.omitted} lower-ranked identities withheld before rendering`}. Source materialization: ${result.matches.length}/${result.matchingLines} window(s); ${result.omittedMatches} exact match location(s) were not expanded into source.`,
         ...(textCoverage
           ? [
-              `  Exact text: ${textCoverage.scannedTextFiles}/${textCoverage.candidateFiles} current project text file(s), ${textCoverage.scannedBytes.toLocaleString()} byte(s) scanned at query time.`,
-              `  Semantic ownership overlay: ${textCoverage.semanticFiles.aligned} aligned, ${textCoverage.semanticFiles.stale} stale, ${textCoverage.semanticFiles.unavailable} unavailable file(s).`,
-              `  Non-text/unreadable exclusions: ${textCoverage.skippedBinaryPaths.length} binary, ${textCoverage.skippedUnreadablePaths.length} unreadable, ${textCoverage.skippedOversizedPaths.length} oversized path(s); exact identities remain in textCoverage.`,
+              `  Exact text: ${textCoverage.scannedTextFiles}/${textCoverage.candidateFiles} current project text file(s), ${textCoverage.scannedBytes.toLocaleString()} byte(s); semantic owners ${textCoverage.semanticFiles.aligned} aligned, ${textCoverage.semanticFiles.stale} stale, ${textCoverage.semanticFiles.unavailable} unavailable; exclusions ${textCoverage.skippedBinaryPaths.length} binary, ${textCoverage.skippedUnreadablePaths.length} unreadable, ${textCoverage.skippedOversizedPaths.length} oversized.`,
               ...(exactTextComplete
                 ? []
                 : ['  Text coverage is incomplete: unreadable or oversized text may contain additional matches.']),
@@ -372,6 +367,80 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
     },
     { title: 'RECOVERY', rows: recoveryRows },
   ];
+}
+
+const SOURCE_SEARCH_PREVIEW_LINE_CHARACTERS = 320;
+const SOURCE_SEARCH_PREVIEW_WINDOW_CHARACTERS = 1_200;
+
+function sourceSearchPreview(
+  result: queries.SourceSearchResult,
+  match: queries.SourceSearchResult['matches'][number],
+): { text: string; shortenedLines: number; omittedContextLines: number } {
+  const sourceLines = match.source.split('\n');
+  const hasOverlongLine = sourceLines.some((line) => line.length > SOURCE_SEARCH_PREVIEW_LINE_CHARACTERS);
+  const expensiveWindow = hasOverlongLine || match.source.length > SOURCE_SEARCH_PREVIEW_WINDOW_CHARACTERS;
+  if (!expensiveWindow) {
+    const owner = match.ownerShort ? `  in ${match.ownerShort}` : '';
+    return {
+      text: renderSourceEvidence({
+        relativePath: match.relativePath,
+        startLine: match.startLine,
+        source: match.source,
+        sessionPolicy: 'preview',
+        focusLines: new Set([match.focusLine]),
+        ownerSymbol: match.ownerShort ?? undefined,
+        headerSuffix: owner,
+      }),
+      shortenedLines: 0,
+      omittedContextLines: 0,
+    };
+  }
+
+  const owner = match.ownerShort ? `  in ${match.ownerShort}` : '';
+  const focusIndex = Math.max(0, Math.min(sourceLines.length - 1, match.focusLine - match.startLine));
+  const focusLine = sourceLines[focusIndex] ?? '';
+  const shortenedLines = focusLine.length > SOURCE_SEARCH_PREVIEW_LINE_CHARACTERS ? 1 : 0;
+  const renderedFocus = `    >${String(displayLine(match.focusLine)).padStart(5)}  ${sourceSearchLinePreview(result, focusLine)}`;
+  const omittedContextLines = Math.max(0, sourceLines.length - 1);
+  return {
+    text: [
+      `  ${displayPathRange(match.relativePath, match.startLine, match.endLine)}${owner}`,
+      renderedFocus,
+      ...(omittedContextLines > 0 ? [`    …[${omittedContextLines} nonfocus context line(s) omitted]`] : []),
+    ].join('\n'),
+    shortenedLines,
+    omittedContextLines,
+  };
+}
+
+function sourceSearchLinePreview(result: queries.SourceSearchResult, line: string): string {
+  if (line.length <= SOURCE_SEARCH_PREVIEW_LINE_CHARACTERS) return line;
+  const matchIndex = sourceSearchLineMatchIndex(result, line);
+  if (matchIndex < 0) {
+    const half = SOURCE_SEARCH_PREVIEW_LINE_CHARACTERS / 2;
+    const omitted = line.length - SOURCE_SEARCH_PREVIEW_LINE_CHARACTERS;
+    return `${line.slice(0, half)}…[${omitted} characters omitted]…${line.slice(-half)}`;
+  }
+  const matchWidth =
+    result.mode === 'literal' ? Math.min(result.pattern.length, SOURCE_SEARCH_PREVIEW_LINE_CHARACTERS) : 1;
+  const idealStart = matchIndex - Math.floor((SOURCE_SEARCH_PREVIEW_LINE_CHARACTERS - matchWidth) / 2);
+  const start = Math.max(0, Math.min(idealStart, line.length - SOURCE_SEARCH_PREVIEW_LINE_CHARACTERS));
+  const end = start + SOURCE_SEARCH_PREVIEW_LINE_CHARACTERS;
+  const prefix = start > 0 ? `…[${start} characters omitted]…` : '';
+  const suffix = end < line.length ? `…[${line.length - end} characters omitted]…` : '';
+  return `${prefix}${line.slice(start, end)}${suffix}`;
+}
+
+function sourceSearchLineMatchIndex(result: queries.SourceSearchResult, line: string): number {
+  if (result.mode === 'literal') {
+    const exact = line.indexOf(result.pattern);
+    return exact >= 0 ? exact : line.toLowerCase().indexOf(result.pattern.toLowerCase());
+  }
+  try {
+    return new RegExp(result.pattern, 'u').exec(line)?.index ?? -1;
+  } catch {
+    return -1;
+  }
 }
 
 function anchorDiscoverySections(result: queries.AnchorDiscoveryResult): ReportSection[] {
@@ -493,86 +562,33 @@ function sourceSearchIdentityCoverage(
 
 function sourceSearchScopeRows(result: queries.SourceSearchResult): string[] {
   const files = result.fileCoverage ?? [];
-  const identitiesByFile = new Map<string, queries.SourceSearchIdentity[]>();
-  for (const identity of sourceSearchIdentities(result)) {
-    const rows = identitiesByFile.get(identity.relativePath) ?? [];
-    rows.push(identity);
-    identitiesByFile.set(identity.relativePath, rows);
+  const byScope = new Map<string, queries.SourceSearchFileCoverage[]>();
+  for (const file of files) {
+    const separator = file.relativePath.indexOf('/');
+    const scope = separator < 0 ? '<root>' : file.relativePath.slice(0, separator);
+    const rows = byScope.get(scope) ?? [];
+    rows.push(file);
+    byScope.set(scope, rows);
   }
-  const maxScopeDepth = files.reduce((maximum, file) => {
-    const directories = file.relativePath.split('/').slice(0, -1);
-    return Math.max(maximum, directories.length);
-  }, 1);
-  const manifestAtDepth = (depth: number): string[] => {
-    const byScope = new Map<string, queries.SourceSearchFileCoverage[]>();
-    for (const file of files) {
-      const directories = file.relativePath.split('/').slice(0, -1);
-      const scope = directories.length === 0 ? '<root>' : directories.slice(0, depth).join('/');
-      const rows = byScope.get(scope) ?? [];
-      rows.push(file);
-      byScope.set(scope, rows);
-    }
-    return [...byScope]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .flatMap(([scope, scopeFiles]) => {
-        const orderedFiles = [...scopeFiles].sort((left, right) => left.relativePath.localeCompare(right.relativePath));
-        const matchingLines = orderedFiles.reduce((total, file) => total + file.matchingLines, 0);
-        if (orderedFiles.length > 12) {
-          const recovery =
-            scope === '<root>'
-              ? `scip-query search ${shellArgument(result.pattern)}`
-              : `scip-query search ${shellArgument(result.pattern)} --scope ${shellArgument(scope)}`;
-          return [
-            `    ${scope}: ${matchingLines} matching line(s) across ${orderedFiles.length} file(s); expand this structural region with ${recovery}`,
-          ];
-        }
-        return [
-          `    ${scope}: ${matchingLines} matching line(s) across ${orderedFiles.length} file(s)`,
-          ...orderedFiles.map((file) => {
-            const owners = [...(identitiesByFile.get(file.relativePath) ?? [])]
-              .sort((left, right) => left.focusLine - right.focusLine)
-              .filter(
-                (identity, index, rows) =>
-                  rows.findIndex(
-                    (candidate) =>
-                      candidate.ownerSymbol === identity.ownerSymbol &&
-                      candidate.ownerStartLine === identity.ownerStartLine,
-                  ) === index,
-              );
-            const visibleOwners = owners.slice(0, 2).map((identity) => {
-              const label = identity.ownerShort ?? '<file scope>';
-              const line = displayLine(identity.ownerStartLine ?? identity.focusLine);
-              return `${label} @ ${line}`;
-            });
-            const omittedOwners = Math.max(0, owners.length - visibleOwners.length);
-            const ownerSummary =
-              visibleOwners.length === 0
-                ? ''
-                : `; exact starting construct(s): ${visibleOwners.join('; ')}${
-                    omittedOwners > 0
-                      ? `; +${omittedOwners} more via scip-query outline ${shellArgument(file.relativePath)}`
-                      : ''
-                  }`;
-            return `      ${file.relativePath}: ${file.matchingLines} match(es)${ownerSummary}`;
-          }),
-        ];
-      });
-  };
-  let manifestDepth = maxScopeDepth;
-  let manifestRows = manifestAtDepth(manifestDepth);
-  while (manifestDepth > 1 && manifestRows.join('\n').length > 12_000) {
-    manifestDepth -= 1;
-    manifestRows = manifestAtDepth(manifestDepth);
-  }
+  const manifestRows = [...byScope]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .flatMap(([scope, scopeFiles]) => {
+      const orderedFiles = [...scopeFiles].sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+      const matchingLines = orderedFiles.reduce((total, file) => total + file.matchingLines, 0);
+      if (scope === '<root>') {
+        return orderedFiles.map(
+          (file) =>
+            `    ${file.relativePath}: ${file.matchingLines} match(es); scip-query search ${shellArgument(result.pattern)} --scope ${shellArgument(file.relativePath)}`,
+        );
+      }
+      return [
+        `    ${scope}: ${matchingLines} matching line(s) across ${orderedFiles.length} file(s); scip-query search ${shellArgument(result.pattern)} --scope ${shellArgument(scope)}`,
+      ];
+    });
   return [
     '  Broad selector: identity enumeration stopped before output transport; there is no cursor to drain.',
-    ...(manifestRows.length > 0
-      ? [
-          `  Complete structural file manifest at directory depth ${manifestDepth}; small regions expose exact starting constructs and large regions remain recoverable as one scope:`,
-          ...manifestRows,
-        ]
-      : []),
-    '  Choose explicit file/line roots from this manifest or narrow one structural region; the ordering does not infer task relevance.',
+    ...(manifestRows.length > 0 ? ['  Complete top-level recovery manifest:', ...manifestRows] : []),
+    '  Narrow one structural region; ordering does not infer task relevance.',
   ];
 }
 

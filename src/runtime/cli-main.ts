@@ -51,6 +51,9 @@ program
     parseOutputPageSize,
   )
   .option('--output-cursor <cursor>', 'Continue a bounded output page')
+  .option('--agent-output', 'Emit a bounded JSON projection for model-facing clients (requires --json)')
+  .option('--json-output <path>', 'Atomically write the complete JSON result and print a small receipt')
+  .option('--raw-json', 'Explicitly retain the legacy unpaged JSON stream (requires --json)')
   .option('--no-session', 'Disable the explicit exploration evidence ledger')
   .option('--reemit', 'Recovery only: render source and graph evidence again instead of citing session receipts')
   .option('--help-all', 'Display every command, including compatibility and deprecated controls');
@@ -66,6 +69,10 @@ program.configureHelp({
 });
 program.hook('preAction', async (_thisCommand, actionCommand) => {
   const commandName = actionCommand.name();
+  if (commandName === 'continue') {
+    initializeProfileContext();
+    return;
+  }
   const prepareSharedCache = sharedCachePreparationEligible(commandName);
   const startWatchService = watchServiceAutoStartEligible(commandName);
   if (prepareSharedCache) releaseProjectFileListingCache = enterProjectFileListingCache();

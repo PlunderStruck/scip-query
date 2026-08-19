@@ -40,14 +40,14 @@ An input budget is a maximum amount of untrusted data one operation will
 materialize or ask a parser to compile, distinguished from silent truncation by
 failing explicitly with the input kind, observed amount, and accepted limit.
 
-| Input class                                            |                    Limit | Representative users                                                     |
-| ------------------------------------------------------ | -----------------------: | ------------------------------------------------------------------------ |
-| Config, manifest, lock, lease, and other small records |                    8 MiB | `.scipquery.json`, package manifests, generation metadata                |
-| One source or per-document fragment                    |                   64 MiB | indexed source reads, TypeScript/Vue snapshots, mailbox result payloads  |
-| One SCIP index artifact                                |                  512 MiB | merge, sanitize, Rust occurrence fallback, shared-generation hydration   |
-| Profile or retained JSONL artifact                     |                  256 MiB | profiling output and rotating diagnostic segments                         |
-| Generated TLA trace                                    | 16 MiB and 100,000 steps | `tla instrument` recorder                                                |
-| Repository-supplied regular-expression pattern         |         4,096 characters | entry-root patterns and TLA statement bindings                           |
+| Input class                                            |                    Limit | Representative users                                                    |
+| ------------------------------------------------------ | -----------------------: | ----------------------------------------------------------------------- |
+| Config, manifest, lock, lease, and other small records |                    8 MiB | `.scipquery.json`, package manifests, generation metadata               |
+| One source or per-document fragment                    |                   64 MiB | indexed source reads, TypeScript/Vue snapshots, mailbox result payloads |
+| One SCIP index artifact                                |                  512 MiB | merge, sanitize, Rust occurrence fallback, shared-generation hydration  |
+| Profile or retained JSONL artifact                     |                  256 MiB | profiling output and rotating diagnostic segments                       |
+| Generated TLA trace                                    | 16 MiB and 100,000 steps | `tla instrument` recorder                                               |
+| Repository-supplied regular-expression pattern         |         4,096 characters | entry-root patterns and TLA statement bindings                          |
 
 Regular files are opened first, checked through that descriptor, read, and
 checked again so replacement or growth cannot bypass the pre-read limit.
@@ -63,15 +63,20 @@ coverage metadata and `--full` remediation.
 
 Output pagination is a resumable transport for one rendered command result,
 distinguished from a result limit by preserving every rendered character.
-Human output above 12,000 characters automatically includes the exact command
-for the next page. Large default JSON remains byte-compatible and writes the
-exact opt-in paging command to stderr before and after the JSON stream.
+Human output above 6,500 characters, or above the smaller content allowance
+required to keep its wrapped page under 8,000 UTF-8 bytes, automatically
+includes the exact command for the next page. Large default JSON remains
+byte-compatible and writes the exact opt-in paging command to stderr before
+and after the JSON stream.
 
 Every command accepts:
 
 ```text
 --output-page-size <characters>
 --output-cursor <cursor>
+--agent-output
+--json-output <path>
+--raw-json
 ```
 
 The opaque cursor binds the command, working directory, non-pagination
@@ -87,13 +92,26 @@ under a process-identity-aware lock. Abandoned writers are reclaimed without
 removing a live writer; complete snapshots expire after one hour and are
 removed after their final page.
 
+`--agent-output` requires JSON, selects the command-owned bounded projection,
+and limits the complete rendered stream to 16 JSON content pages (currently
+56,000 characters). The command fails before delivering partial stdout when
+that fuse is exceeded. This bounds model-context consumption even when every
+individual page would be transport-safe.
+
+`--json-output <path>` requires JSON and captures the complete serialized
+result before publishing it through an atomic mode-`0600` file replacement.
+The destination path is limited to 4,096 UTF-8 bytes and the file to 32 million
+characters and 64 MiB. Stdout receives only a bounded receipt containing the
+absolute path, byte count, and SHA-256 digest. Paging, agent projection, and
+explicit raw streaming are mutually exclusive with file export.
+
 Run commands normally without selecting a page size. If human output is
 oversized, the readable multiline page prints one `Continue exactly:` command;
 run it unchanged until the transport-complete marker. That marker proves every
 rendered character was retrieved; command coverage remains a separate claim.
-Explicit paged `--json`
-returns the versioned object envelope and must be followed until
-`page.complete` is `true`. Do not pipe output through `head`, `tail`, or a
+Explicit paged `--json` and automatic `--json --agent-output` return the
+versioned object envelope and must be followed until `page.complete` is
+`true`. Do not pipe output through `head`, `tail`, or a
 line-range `sed`; those programs discard data without creating a resumable
 position. See [CLI JSON output](CLI_JSON_OUTPUT.md) and the [output-page
 schema](schemas/cli-output-page.schema.json).

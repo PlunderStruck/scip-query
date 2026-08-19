@@ -85,6 +85,10 @@ describe('CLI JSON envelope compatibility', () => {
       kind: 'malformed',
       reason: expect.stringContaining('resultSchemaVersion'),
     });
+    expect(decodeCliJsonEnvelope({ ...current, resultProjection: 'full' })).toMatchObject({
+      kind: 'malformed',
+      reason: expect.stringContaining('resultProjection'),
+    });
     expect(decodeCliJsonEnvelope({ ...current, resultSchemaVersion: 2 })).toEqual({
       kind: 'unsupported-result',
       schemaVersion: 1,
@@ -307,6 +311,7 @@ describe('CLI JSON envelope compatibility', () => {
       'environment-observation',
       'tool-information',
     ]);
+    expect(schema.properties['resultProjection']?.['const']).toBe('agent');
     expect(schema.properties['evidenceContext']?.['$ref']).toBe('#/$defs/evidenceContextV1');
     expect(schema.$defs['evidenceContextV1']?.properties?.['receipt']?.['$ref']).toBe(
       './observation-receipt.schema.json',

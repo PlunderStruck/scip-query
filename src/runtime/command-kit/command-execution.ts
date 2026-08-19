@@ -452,8 +452,18 @@ export function printJsonEnvelope(
   const coverage =
     baseCoverage && resolution && !baseCoverage.resolution ? { ...baseCoverage, resolution } : baseCoverage;
   if (coverage) validateInvocationCoverage(coverage);
+  const agentOutput = booleanOptionValue(options, 'agentOutput');
+  const projectedResult = agentOutput && extra.agentResult !== undefined ? extra.agentResult : result;
   if (booleanOptionValue(options, 'resultOnly')) {
-    const resultOnly = Object.hasOwn(extra, 'resultOnly') ? extra.resultOnly : result;
+    const resultOnly = agentOutput
+      ? extra.agentResult !== undefined
+        ? extra.agentResult
+        : Object.hasOwn(extra, 'resultOnly')
+          ? extra.resultOnly
+          : result
+      : Object.hasOwn(extra, 'resultOnly')
+        ? extra.resultOnly
+        : result;
     writeSerializedJson(JSON.stringify(resultOnly, null, booleanOptionValue(options, 'compact') ? 0 : 2));
     return;
   }
@@ -465,9 +475,10 @@ export function printJsonEnvelope(
     ...(extra.analysisBudget ? { analysisBudget: extra.analysisBudget } : {}),
     args: jsonPositionals(args),
     options,
-    result,
+    result: projectedResult,
+    ...(agentOutput ? { resultProjection: 'agent' as const } : {}),
     ...(coverage ? { coverage } : {}),
-    ...(extra.agentResult !== undefined ? { agentResult: extra.agentResult } : {}),
+    ...(extra.agentResult !== undefined && !agentOutput ? { agentResult: extra.agentResult } : {}),
     ...optionalEvidenceContext(
       operationRole,
       evidence,

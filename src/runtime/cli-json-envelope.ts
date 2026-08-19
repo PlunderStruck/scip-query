@@ -60,6 +60,8 @@ export interface CliJsonEnvelopeV1<Result = unknown> {
   args: readonly unknown[];
   options: Readonly<Record<string, unknown>>;
   result: Result;
+  /** Present only when `result` is the bounded command-owned agent projection. */
+  resultProjection?: 'agent';
   coverage?: unknown;
   agentResult?: unknown;
   evidenceContext?: CliEvidenceContextV1;
@@ -184,6 +186,12 @@ export function decodeCliJsonEnvelope<Result = unknown>(input: unknown): Decoded
     return {
       kind: 'malformed',
       reason: 'CLI JSON envelope v1: resultSchemaVersion must be a positive safe integer.',
+    };
+  }
+  if (input['resultProjection'] !== undefined && input['resultProjection'] !== 'agent') {
+    return {
+      kind: 'malformed',
+      reason: 'CLI JSON envelope v1: resultProjection must be "agent" when present.',
     };
   }
   const supportedResultSchemaVersions = supportedCliResultSchemaVersions(input['command'] as string);

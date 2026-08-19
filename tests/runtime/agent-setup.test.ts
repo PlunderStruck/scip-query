@@ -57,6 +57,12 @@ describe('setupAgent', () => {
     expect(agentsMd).toContain('do not select one by path, naming, apparent recency, or result order');
     expect(agentsMd).toContain('Missing or bounded output is not evidence of absence');
     expect(agentsMd).toContain('candidate observations require confirmation');
+    expect(agentsMd).toContain('An emitted `Continue exactly:` command is a cursor');
+    expect(agentsMd).toContain('required transport, not optional evidence expansion');
+    expect(agentsMd).toContain('without repository preparation, reindexing, or watcher startup');
+    expect(agentsMd).toContain('add `--json --agent-output`');
+    expect(agentsMd).toContain('Never send raw `--json` output through a model-facing terminal or tool');
+    expect(agentsMd).toContain('use `--json --json-output <path>`');
     expect(agentsMd).toContain('Batch independent roots and source gaps');
     expect(agentsMd).not.toContain('scip-query system-map');
     expect(agentsMd).not.toContain('scip-query anchors');

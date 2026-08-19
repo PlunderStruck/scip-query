@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-08-19T17:08:23.109Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "6fba243b84e8ecfa535e1662beb39bdef3a3ca55bf0caa0821101f8e82e93edc",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CliJsonEnvelopeV1 changed from interface CliJsonEnvelopeV1<Result = unknown> { kind: typeof CLI_JSON_ENVELOPE_KIND; schemaVersion: typeof CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION; producer: CliJsonProducer; c... to interface CliJsonEnvelopeV1<Result = unknown> { kind: typeof CLI_JSON_ENVELOPE_KIND; schemaVersion: typeof CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION; producer: CliJsonProducer; c....",
+      "target": "./runtime:CliJsonEnvelopeV1"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.20.0",
+  "previousDigest": "8c1ff827dec45dc140f7b4b51c0d688d0cd3fbd0dc631fcf8ee30bea33cbb251",
+  "reason": "Agent-output envelopes add an optional resultProjection marker while existing raw JSON shapes remain unchanged.",
+  "schemaVersion": 1
+}

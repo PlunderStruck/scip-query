@@ -6,8 +6,17 @@ const CONTROL_PICTURES = new Map<number, string>([
   [0x0d, '\u240D'],
 ]);
 
-/** Shared boundary for unpaged JSON output and its canonical oversize warning. */
-export const DEFAULT_OUTPUT_PAGE_SIZE = 32_000;
+/** Default character ceiling; UTF-8 byte ceilings may make a transport page smaller. */
+export const DEFAULT_OUTPUT_PAGE_SIZE = 6_500;
+
+/** Conservative model-facing tool-output budget below the measured 10,000-token client ceiling. */
+export const CLIENT_SAFE_OUTPUT_BYTES = 8_000;
+
+/** Human page content leaves room inside the client budget for its cursor wrapper. */
+export const HUMAN_OUTPUT_PAGE_CONTENT_BYTES = 6_500;
+
+/** JSON page content leaves room for envelope escaping, which can nearly double serialized bytes. */
+export const JSON_OUTPUT_PAGE_CONTENT_BYTES = 3_500;
 
 export interface TerminalSanitizationOptions {
   allowNewlines?: boolean;

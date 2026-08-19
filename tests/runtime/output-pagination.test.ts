@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   existsSync,
   mkdtempSync,
@@ -15,8 +15,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CLI_OUTPUT_PAGE_KIND,
   CLI_OUTPUT_PAGE_SCHEMA_VERSION,
+  CLI_JSON_EXPORT_RECEIPT_KIND,
+  CLI_JSON_EXPORT_RECEIPT_SCHEMA_VERSION,
+  CLIENT_SAFE_OUTPUT_BYTES,
   DEFAULT_OUTPUT_PAGE_SIZE,
+  HUMAN_OUTPUT_PAGE_CONTENT_BYTES,
+  JSON_OUTPUT_PAGE_CONTENT_BYTES,
   MAX_OUTPUT_CURSOR_LENGTH,
+  MAX_AGENT_OUTPUT_CHARACTERS,
   MAX_OUTPUT_PAGE_SIZE,
   MIN_OUTPUT_PAGE_SIZE,
   continueCliOutput,
@@ -274,6 +280,53 @@ describe('universal CLI output pagination', () => {
     expect(result.stdout).toContain(`/usr/local/bin/node '/repo with spaces/dist/cli.js' continue `);
   });
 
+  it('keeps every default human page under the client-safe byte budget and reconstructs multibyte output', async () => {
+    const content = `${'界'.repeat(DEFAULT_OUTPUT_PAGE_SIZE)}TAIL`;
+    const root = freshSnapshotRoot();
+    const outputs: string[] = [];
+    const pages: string[] = [];
+    let result = await invoke(content, { snapshotRoot: root, invocationPrefix: ['x'.repeat(2_000)] });
+
+    while (true) {
+      outputs.push(result.stdout);
+      const page = parseHumanPage(result.stdout);
+      pages.push(page.content);
+      expect(Buffer.byteLength(page.content)).toBeLessThanOrEqual(HUMAN_OUTPUT_PAGE_CONTENT_BYTES);
+      if (!page.cursor) break;
+      result = await continueOutput(page.cursor, root);
+    }
+
+    expect(pages.join('')).toBe(content);
+    expect(outputs.every((output) => Buffer.byteLength(output) <= CLIENT_SAFE_OUTPUT_BYTES)).toBe(true);
+  });
+
+  it('keeps escaped JSON page envelopes under the client-safe byte budget', async () => {
+    const payload = `${JSON.stringify({ value: '\\'.repeat(DEFAULT_OUTPUT_PAGE_SIZE) })}\n`;
+    const root = freshSnapshotRoot();
+    const pages: CliOutputPageEnvelopeV1[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const result = await invoke(payload, {
+        argv: ['demo', '--json', '--output-page-size', String(DEFAULT_OUTPUT_PAGE_SIZE)],
+        json: true,
+        pageSize: DEFAULT_OUTPUT_PAGE_SIZE,
+        snapshotRoot: root,
+        invocationPrefix: ['x'.repeat(1_000)],
+        ...(cursor ? { cursor } : {}),
+      });
+      expect(Buffer.byteLength(result.stdout)).toBeLessThanOrEqual(CLIENT_SAFE_OUTPUT_BYTES);
+      const page = parsePage(result.stdout);
+      expect(Buffer.byteLength(page.content)).toBeLessThanOrEqual(JSON_OUTPUT_PAGE_CONTENT_BYTES);
+      pages.push(page);
+      cursor = page.page.continuation?.cursor;
+    } while (cursor);
+
+    expect(JSON.parse(pages.map((page) => page.content).join(''))).toEqual({
+      value: '\\'.repeat(DEFAULT_OUTPUT_PAGE_SIZE),
+    });
+  });
+
   it('keeps human page boundaries aligned to complete lines when a newline fits the page', async () => {
     const content = Array.from(
       { length: 20 },
@@ -304,7 +357,7 @@ describe('universal CLI output pagination', () => {
   });
 
   it('keeps unpaged JSON byte-compatible and warns before oversized output with an exact paging command', async () => {
-    const payload = `${JSON.stringify({ rows: ['x'.repeat(DEFAULT_OUTPUT_PAGE_SIZE)] })}\n`;
+    const payload = `${JSON.stringify({ rows: ['x'.repeat(CLIENT_SAFE_OUTPUT_BYTES)] })}\n`;
     const result = await invoke(payload, {
       argv: ['demo', '--json', '--compact'],
       invocationPrefix: ['pnpm', 'exec', 'scip-query'],
@@ -312,7 +365,7 @@ describe('universal CLI output pagination', () => {
     });
 
     expect(result.stdout).toBe(payload);
-    expect(result.stderr).toContain(`JSON output exceeds ${DEFAULT_OUTPUT_PAGE_SIZE} characters`);
+    expect(result.stderr).toContain(`JSON output exceeds the ${CLIENT_SAFE_OUTPUT_BYTES}-byte client-safe budget`);
     expect(result.stderr).toContain('Do not use possibly partial client output as evidence');
     expect(result.stderr).toContain(
       `Read every page with: pnpm exec scip-query demo --json --compact --output-page-size ${DEFAULT_OUTPUT_PAGE_SIZE}`,
@@ -320,8 +373,130 @@ describe('universal CLI output pagination', () => {
     expect(result.stderr.match(/Read every page with:/gu)).toHaveLength(2);
   });
 
+  it('removes the explicit raw marker from the warning paging command', async () => {
+    const payload = `${JSON.stringify({ rows: ['x'.repeat(CLIENT_SAFE_OUTPUT_BYTES)] })}\n`;
+    const result = await invoke(payload, {
+      argv: ['demo', '--json', '--raw-json'],
+      json: true,
+    });
+
+    expect(result.stdout).toBe(payload);
+    expect(result.stderr).toContain(`demo --json --output-page-size ${DEFAULT_OUTPUT_PAGE_SIZE}`);
+    expect(result.stderr).not.toContain('--raw-json --output-page-size');
+  });
+
+  it('forces agent JSON through bounded cursor pages without changing legacy raw JSON', async () => {
+    const payload = `${JSON.stringify({ rows: ['x'.repeat(DEFAULT_OUTPUT_PAGE_SIZE + 500)] })}\n`;
+    const root = freshSnapshotRoot();
+    const first = await invoke(payload, {
+      argv: ['demo', '--json', '--agent-output'],
+      json: true,
+      agentOutput: true,
+      snapshotRoot: root,
+    });
+    const firstPage = parsePage(first.stdout);
+
+    expect(first.stderr).toBe('');
+    expect(Buffer.byteLength(first.stdout)).toBeLessThanOrEqual(CLIENT_SAFE_OUTPUT_BYTES);
+    expect(firstPage.page.complete).toBe(false);
+    expect(firstPage.page.continuation?.command).toContain(' continue ');
+
+    const pages = [firstPage];
+    let cursor = firstPage.page.continuation?.cursor;
+    while (cursor) {
+      const page = parsePage((await continueOutput(cursor, root)).stdout);
+      pages.push(page);
+      cursor = page.page.continuation?.cursor;
+    }
+    expect(pages.map((page) => page.content).join('')).toBe(payload);
+    expect(pages.every((page) => Buffer.byteLength(JSON.stringify(page)) + 1 <= CLIENT_SAFE_OUTPUT_BYTES)).toBe(true);
+  });
+
+  it('refuses agent output that would require an unbounded number of model-facing pages', async () => {
+    const root = freshSnapshotRoot();
+    await expect(
+      invoke('x'.repeat(MAX_AGENT_OUTPUT_CHARACTERS + 1), {
+        argv: ['demo', '--json', '--agent-output'],
+        json: true,
+        agentOutput: true,
+        snapshotRoot: root,
+      }),
+    ).rejects.toThrow(/complete machine result.*--json-output/u);
+    expect(readdirSync(root)).toEqual([]);
+  });
+
+  it('enforces the agent page-count fuse even when the caller requests tiny pages', async () => {
+    const root = freshSnapshotRoot();
+    await expect(
+      invoke('x'.repeat(256 * 17), {
+        argv: ['demo', '--json', '--agent-output', '--output-page-size', '256'],
+        json: true,
+        agentOutput: true,
+        pageSize: 256,
+        snapshotRoot: root,
+      }),
+    ).rejects.toThrow(/more than 16 snapshot pages.*--json-output/u);
+    expect(readdirSync(root)).toEqual([]);
+  });
+
+  it('atomically exports complete JSON and prints only a bounded integrity receipt', async () => {
+    const root = freshSnapshotRoot();
+    const outputPath = join(root, 'nested', 'result.json');
+    const payload = `${JSON.stringify({ rows: ['π', 'x'.repeat(CLIENT_SAFE_OUTPUT_BYTES)] })}\n`;
+    const result = await invoke(payload, {
+      argv: ['demo', '--json', '--json-output', outputPath],
+      cwd: root,
+      json: true,
+      jsonOutputPath: outputPath,
+    });
+    const receipt = JSON.parse(result.stdout) as {
+      kind: string;
+      path: string;
+      bytes: number;
+      sha256: string;
+    };
+
+    expect(result.stderr).toBe('');
+    expect(Buffer.byteLength(result.stdout)).toBeLessThanOrEqual(CLIENT_SAFE_OUTPUT_BYTES);
+    expect(receipt).toEqual({
+      kind: CLI_JSON_EXPORT_RECEIPT_KIND,
+      schemaVersion: 1,
+      producer: { name: 'scip-query', version: 'test' },
+      command: 'demo',
+      path: outputPath,
+      bytes: Buffer.byteLength(payload),
+      sha256: createHash('sha256').update(payload).digest('hex'),
+    });
+    expect(readFileSync(outputPath, 'utf8')).toBe(payload);
+    expect(statSync(outputPath).mode & 0o777).toBe(0o600);
+  });
+
+  it('keeps the previous JSON export intact when result production fails', async () => {
+    const root = freshSnapshotRoot();
+    const outputPath = join(root, 'result.json');
+    writeFileSync(outputPath, '{"old":true}\n');
+
+    await expect(
+      invoke(
+        () => {
+          process.stdout.write('{"partial":');
+          throw new Error('query failed');
+        },
+        {
+          argv: ['demo', '--json', '--json-output', outputPath],
+          cwd: root,
+          json: true,
+          jsonOutputPath: outputPath,
+        },
+      ),
+    ).rejects.toThrow('query failed');
+
+    expect(readFileSync(outputPath, 'utf8')).toBe('{"old":true}\n');
+    expect(readdirSync(root)).toEqual(['result.json']);
+  });
+
   it('preserves raw JSON bytes when a multi-byte character is split across writes', async () => {
-    const payload = `${JSON.stringify({ value: `${'x'.repeat(DEFAULT_OUTPUT_PAGE_SIZE)}π` })}\n`;
+    const payload = `${JSON.stringify({ value: `${'x'.repeat(CLIENT_SAFE_OUTPUT_BYTES)}π` })}\n`;
     const bytes = Buffer.from(payload);
     const split = bytes.indexOf(Buffer.from('π')) + 1;
     const result = await invoke([bytes.subarray(0, split), bytes.subarray(split)], {
@@ -330,7 +505,7 @@ describe('universal CLI output pagination', () => {
     });
 
     expect(result.stdout).toBe(payload);
-    expect(JSON.parse(result.stdout)).toEqual({ value: `${'x'.repeat(DEFAULT_OUTPUT_PAGE_SIZE)}π` });
+    expect(JSON.parse(result.stdout)).toEqual({ value: `${'x'.repeat(CLIENT_SAFE_OUTPUT_BYTES)}π` });
     expect(result.stderr.match(/Read every page with:/gu)).toHaveLength(2);
   });
 
@@ -953,6 +1128,24 @@ describe('universal CLI output pagination', () => {
     expect(schema.properties['agentInstruction']?.['type']).toBe('string');
     expect(schema.required).toEqual(
       expect.arrayContaining(['kind', 'schemaVersion', 'producer', 'command', 'contentType', 'page', 'content']),
+    );
+    expect(schema.additionalProperties).toBe(false);
+  });
+
+  it('keeps the published JSON-export receipt schema synchronized with the runtime contract', () => {
+    const schema = JSON.parse(
+      readFileSync(join(process.cwd(), 'docs', 'schemas', 'cli-json-export-receipt.schema.json'), 'utf8'),
+    ) as {
+      required: string[];
+      properties: Record<string, Record<string, unknown>>;
+      additionalProperties: boolean;
+    };
+
+    expect(schema.properties['kind']?.['const']).toBe(CLI_JSON_EXPORT_RECEIPT_KIND);
+    expect(schema.properties['schemaVersion']?.['const']).toBe(CLI_JSON_EXPORT_RECEIPT_SCHEMA_VERSION);
+    expect(schema.properties['bytes']?.['maximum']).toBe(64 * 1024 * 1024);
+    expect(schema.required).toEqual(
+      expect.arrayContaining(['kind', 'schemaVersion', 'producer', 'command', 'path', 'bytes', 'sha256']),
     );
     expect(schema.additionalProperties).toBe(false);
   });

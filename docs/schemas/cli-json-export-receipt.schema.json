@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/aydansalois/scip-query/schemas/cli-json-export-receipt.schema.json",
+  "title": "scip-query JSON export receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "schemaVersion", "producer", "command", "path", "bytes", "sha256"],
+  "properties": {
+    "kind": { "const": "scip-query-json-export" },
+    "schemaVersion": { "const": 1 },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "scip-query" },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "command": { "type": "string", "minLength": 1 },
+    "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "bytes": { "type": "integer", "minimum": 0, "maximum": 67108864 },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

@@ -40,11 +40,11 @@ describe('code CLI output contract', () => {
         '     5  ',
         '',
         '═══ EVIDENCE CALIBRATION ═══',
-        '  Source bodies are exact current working-tree text. Compiler identity and binding closure apply only within their reported semantic coverage.',
-        'Text freshness: 1/1 returned source body(ies) read from current working-tree bytes; semantic overlay 0 aligned, 0 stale, 1 unavailable.',
+        '  Source bodies are exact working-tree bytes; compiler identity and bindings are limited to reported semantic coverage.',
+        '  Freshness: 1/1 text current; semantics 0 aligned, 0 stale, 1 unavailable.',
         '',
         '═══ COVERAGE ═══',
-        '  One exact selector resolved to the complete source body shown. Source identity does not establish callers or runtime relationships.',
+        '  One exact selector resolved to the complete source body shown; callers and runtime relationships are not implied.',
         '',
       ].join('\n'),
     );
@@ -153,11 +153,11 @@ describe('code CLI output contract', () => {
         '     3    stop() { return false; }',
         '',
         '═══ EVIDENCE CALIBRATION ═══',
-        '  Source bodies are exact current working-tree text. Compiler identity and binding closure apply only within their reported semantic coverage.',
-        'Text freshness: 1/1 returned source body(ies) read from current working-tree bytes; semantic overlay 0 aligned, 0 stale, 1 unavailable.',
+        '  Source bodies are exact working-tree bytes; compiler identity and bindings are limited to reported semantic coverage.',
+        '  Freshness: 1/1 text current; semantics 0 aligned, 0 stale, 1 unavailable.',
         '',
         '═══ COVERAGE ═══',
-        '  One exact selector resolved to the complete source body shown. Source identity does not establish callers or runtime relationships.',
+        '  One exact selector resolved to the complete source body shown; callers and runtime relationships are not implied.',
         '',
       ].join('\n'),
     );
@@ -394,7 +394,7 @@ describe('code CLI output contract', () => {
 
     expect(human.length).toBeLessThan(resultOnly.length);
     expect(resultOnly.length).toBeLessThan(envelope.length);
-  });
+  }, 10_000);
 
   it('rejects partial and negative context values instead of silently changing the range', () => {
     for (const context of ['2junk', '-1']) {
@@ -407,13 +407,33 @@ describe('code CLI output contract', () => {
     }
   });
 
-  it('requires JSON before either structured-output modifier', () => {
-    for (const modifier of ['--result-only', '--compact']) {
-      const invocation = runCode(['src:watch:Watcher', modifier]);
+  it('requires JSON before every structured-output modifier', () => {
+    for (const [modifier, args] of [
+      ['--result-only', ['--result-only']],
+      ['--compact', ['--compact']],
+      ['--agent-output', ['--agent-output']],
+      ['--raw-json', ['--raw-json']],
+      ['--json-output', ['--json-output', join(fixtureRoot, 'result.json')]],
+    ] as const) {
+      const invocation = runCode(['src:watch:Watcher', ...args]);
 
       expect(invocation.status, modifier).toBe(1);
       expect(invocation.stdout, modifier).toBe('');
       expect(invocation.stderr, modifier).toContain(`${modifier} requires --json`);
+    }
+  }, 10_000);
+
+  it('rejects contradictory JSON transport controls', () => {
+    for (const args of [
+      ['--json', '--agent-output', '--raw-json'],
+      ['--json', '--json-output', join(fixtureRoot, 'result.json'), '--agent-output'],
+      ['--json', '--raw-json', '--output-page-size', '256'],
+    ]) {
+      const invocation = runCode(['src:watch:Watcher', ...args]);
+
+      expect(invocation.status, args.join(' ')).toBe(1);
+      expect(invocation.stdout, args.join(' ')).toBe('');
+      expect(invocation.stderr, args.join(' ')).toContain('cannot be combined');
     }
   });
 

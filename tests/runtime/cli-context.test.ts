@@ -44,6 +44,7 @@ describe('cli context', () => {
 
   it('prepares graph commands but leaves passive, explicit-index, and setup commands alone', () => {
     expect(sharedCachePreparationEligible('refs')).toBe(true);
+    expect(sharedCachePreparationEligible('continue')).toBe(false);
     expect(sharedCachePreparationEligible('status')).toBe(false);
     expect(sharedCachePreparationEligible('watch')).toBe(false);
     expect(sharedCachePreparationEligible('reindex')).toBe(false);

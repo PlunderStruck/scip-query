@@ -58,6 +58,7 @@ const AUTO_START_EXCLUDED_COMMANDS = new Set([
   'capabilities',
   'check-deps',
   'config-validate',
+  'continue',
   'doctor',
   'init',
   'install-skills',

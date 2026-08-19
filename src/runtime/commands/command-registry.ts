@@ -89,6 +89,8 @@ export function registerCommandDescriptors(
                   argv: process.argv.slice(2),
                   cwd: process.cwd(),
                   json: opts['json'] === true,
+                  agentOutput: opts['agentOutput'] === true,
+                  ...(typeof opts['jsonOutput'] === 'string' ? { jsonOutputPath: opts['jsonOutput'] } : {}),
                   sourceSession: opts['session'] !== false,
                   reemitSource: opts['reemit'] === true,
                   ...(typeof opts['outputPageSize'] === 'number' ? { pageSize: opts['outputPageSize'] } : {}),
@@ -117,6 +119,32 @@ function validateJsonOutputOptions(options: Readonly<Record<string, unknown>>): 
   }
   if (options['compact'] === true && options['json'] !== true) {
     throw new Error('--compact requires --json.');
+  }
+  if (options['agentOutput'] === true && options['json'] !== true) {
+    throw new Error('--agent-output requires --json.');
+  }
+  if (typeof options['jsonOutput'] === 'string' && options['json'] !== true) {
+    throw new Error('--json-output requires --json.');
+  }
+  if (options['rawJson'] === true && options['json'] !== true) {
+    throw new Error('--raw-json requires --json.');
+  }
+  if (options['agentOutput'] === true && options['rawJson'] === true) {
+    throw new Error('--agent-output cannot be combined with --raw-json.');
+  }
+  if (typeof options['jsonOutput'] === 'string') {
+    if (options['agentOutput'] === true || options['rawJson'] === true) {
+      throw new Error('--json-output cannot be combined with --agent-output or --raw-json.');
+    }
+    if (options['outputPageSize'] !== undefined || options['outputCursor'] !== undefined) {
+      throw new Error('--json-output cannot be combined with output pagination.');
+    }
+  }
+  if (
+    options['rawJson'] === true &&
+    (options['outputPageSize'] !== undefined || options['outputCursor'] !== undefined)
+  ) {
+    throw new Error('--raw-json cannot be combined with output pagination.');
   }
 }
 

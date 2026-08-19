@@ -34,6 +34,7 @@
     "args": { "type": "array" },
     "options": { "type": "object", "additionalProperties": true },
     "result": {},
+    "resultProjection": { "const": "agent" },
     "coverage": {},
     "agentResult": {},
     "evidenceContext": { "$ref": "#/$defs/evidenceContextV1" }

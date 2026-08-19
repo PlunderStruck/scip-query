@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
+import { CLIENT_SAFE_OUTPUT_BYTES } from '../../src/platform/terminal-output.js';
 
 describe('search CLI identity and materialization contract', { timeout: 10_000 }, () => {
   const repositoryRoot = process.cwd();
@@ -80,12 +81,19 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
       '',
     ];
     files['src/expansive-behavior.ts'] = expansiveBehavior.join('\n');
+    files['src/long-line.ts'] = [
+      "export const beforeLine = 'context-before';",
+      `export const giantLine = '${'x'.repeat(6_000)}long_line_token${'y'.repeat(6_000)}';`,
+      "export const afterLine = 'context-after';",
+      '',
+    ].join('\n');
     fixture
       .document(182, 'typescript', 'src/anchor-download.ts')
       .document(183, 'typescript', 'src/anchor-store.ts')
       .document(184, 'typescript', 'src/anchor-mutex.ts')
       .document(185, 'typescript', 'src/expansive-flow.ts')
       .document(186, 'typescript', 'src/expansive-behavior.ts')
+      .document(187, 'typescript', 'src/long-line.ts')
       .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`anchor-download.ts`/executeDownload().', 'executeDownload', 12)
       .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`anchor-store.ts`/persistPaper().', 'persistPaper', 12)
       .symbol(
@@ -138,6 +146,25 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
     expect(invocation.stdout).toContain('OBSERVED MATCH IDENTITIES (30/30, COMPLETE)');
     expect(invocation.stdout).toContain('OBSERVED SOURCE (6/30 WINDOWS)');
     expect(invocation.stdout).toContain('Identity manifest: 30/30 matching line(s); complete.');
+  });
+
+  it('centers overlong human source previews on the match without changing JSON evidence', () => {
+    const human = runSearch(['long_line_token']);
+
+    expect(human.status).toBe(0);
+    expect(human.stderr).toBe('');
+    expect(human.stdout).toContain('src/long-line.ts');
+    expect(human.stdout).toContain('long_line_token');
+    expect(human.stdout).toContain('characters omitted');
+    expect(human.stdout).toContain('overlong matched line(s) were shortened');
+    expect(human.stdout).toContain('nonfocus context line(s) omitted');
+    expect(Math.max(...human.stdout.split('\n').map((line) => Buffer.byteLength(line)))).toBeLessThan(1_000);
+
+    const json = runSearch(['long_line_token', '--json']);
+    expect(json.status).toBe(0);
+    const envelope = JSON.parse(json.stdout);
+    expect(envelope.result.matches[0].source).toContain('x'.repeat(6_000));
+    expect(envelope.result.matches[0].source).toContain('y'.repeat(6_000));
   });
 
   it('keeps machine-readable identity coverage separate from source materialization', () => {
@@ -214,6 +241,37 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
     expect(envelope.result.scopeHints.length).toBeGreaterThan(0);
   });
 
+  it('keeps legacy JSON exhaustive while agent JSON selects the bounded command projection', () => {
+    const raw = runSearch(['broad_selector_token', '--limit', '2', '--context', '0', '--json', '--result-only']);
+    const agent = runJsonCommandFully('search', [
+      'broad_selector_token',
+      '--limit',
+      '2',
+      '--context',
+      '0',
+      '--json',
+      '--result-only',
+      '--compact',
+      '--agent-output',
+    ]);
+
+    expect(raw.status).toBe(0);
+    expect(JSON.parse(raw.stdout).identities).toHaveLength(150);
+    expect(agent.status).toBe(0);
+    expect(agent.pageBytes.every((bytes) => bytes <= CLIENT_SAFE_OUTPUT_BYTES)).toBe(true);
+    expect(agent.pageBytes.length).toBeLessThanOrEqual(16);
+    expect(JSON.parse(agent.stdout)).toMatchObject({
+      identityCoverage: { mode: 'bounded', returned: 64, total: 150, omitted: 86 },
+      returnedMatches: 64,
+      totalMatches: 150,
+      omittedMatches: 86,
+      materializedSourceWindows: 2,
+      unmaterializedSourceWindows: 148,
+      matchIdentities: expect.arrayContaining(['src/broad-001/match-031.ts:1']),
+    });
+    expect(JSON.parse(agent.stdout)).not.toHaveProperty('identities');
+  });
+
   it('attributes an unindexed object method to its exact source callable instead of the module', () => {
     const invocation = runSearch(['sourceOwnedCommand']);
 
@@ -263,7 +321,7 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
     expect(premature.stderr).toContain('NAVIGATION MAP REQUIRED');
     expect(premature.stderr).toContain('map and detail exploration cannot run concurrently');
 
-    const mapped = runCommand(
+    const mapped = runCommandFully(
       'system-map',
       ['--symbol', 'src/anchor-store.ts:2-5', '--symbol', 'src/anchor-mutex.ts:1-3'],
       navigationEnv,
@@ -279,7 +337,7 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
     const inspected = runCommand('inspect', ['--at', 'src/anchor-store.ts:2', '--view', 'behavior'], navigationEnv);
     expect(inspected.status).toBe(0);
     expect(inspected.stdout).toContain('persistPaper');
-  });
+  }, 20_000);
 
   it('prints the answer contract when disconnected anchors still render behavior', () => {
     const mapped = runCommand('system-map', [
@@ -384,5 +442,69 @@ describe('search CLI identity and materialization contract', { timeout: 10_000 }
         },
       },
     );
+  }
+
+  function runCommandFully(
+    command: string,
+    args: readonly string[],
+    extraEnvironment: Readonly<Record<string, string>> = {},
+  ): { status: number | null; stdout: string; stderr: string } {
+    let invocation = runCommand(command, args, extraEnvironment);
+    const stdout: string[] = [];
+    let stderr = '';
+    while (true) {
+      stderr += invocation.stderr;
+      const page = humanPage(invocation.stdout);
+      stdout.push(page.content);
+      if (invocation.status !== 0 || !page.cursor) {
+        return { status: invocation.status, stdout: stdout.join(''), stderr };
+      }
+      invocation = runCommand('continue', [page.cursor], extraEnvironment);
+    }
+  }
+
+  function runJsonCommandFully(
+    command: string,
+    args: readonly string[],
+    extraEnvironment: Readonly<Record<string, string>> = {},
+  ): { status: number | null; stdout: string; stderr: string; pageBytes: number[] } {
+    let invocation = runCommand(command, args, extraEnvironment);
+    const stdout: string[] = [];
+    const pageBytes: number[] = [];
+    let stderr = '';
+    while (true) {
+      stderr += invocation.stderr;
+      pageBytes.push(Buffer.byteLength(invocation.stdout));
+      const decoded = JSON.parse(invocation.stdout) as {
+        kind?: string;
+        content?: string;
+        page?: { continuation?: { cursor?: string } };
+      };
+      if (decoded.kind !== 'scip-query-output-page') {
+        stdout.push(invocation.stdout);
+        return { status: invocation.status, stdout: stdout.join(''), stderr, pageBytes };
+      }
+      if (typeof decoded.content !== 'string') throw new Error('Malformed JSON output page.');
+      stdout.push(decoded.content);
+      const cursor = decoded.page?.continuation?.cursor;
+      if (invocation.status !== 0 || typeof cursor !== 'string') {
+        return { status: invocation.status, stdout: stdout.join(''), stderr, pageBytes };
+      }
+      invocation = runCommand('continue', [cursor], extraEnvironment);
+    }
+  }
+
+  function humanPage(output: string): { content: string; cursor?: string } {
+    if (!output.startsWith('[scip-query output page:')) return { content: output };
+    const contentStart = output.indexOf('\n') + 1;
+    const incompleteStart = output.lastIndexOf('\n[Incomplete:');
+    const completeStart = output.lastIndexOf('\n[scip-query transport complete; evaluate command coverage separately]');
+    const contentEnd = Math.max(incompleteStart, completeStart);
+    if (contentStart <= 0 || contentEnd < contentStart) throw new Error('Malformed human output page.');
+    const cursor = output.match(/\bcontinue ([A-Za-z0-9_.-]+)/u)?.[1];
+    return {
+      content: output.slice(contentStart, contentEnd),
+      ...(cursor ? { cursor } : {}),
+    };
   }
 });

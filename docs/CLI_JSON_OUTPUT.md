@@ -13,11 +13,42 @@ Public commands that support structured output share the same three options:
 --compact      With --json, minify the selected JSON form for a program.
 ```
 
-Use plain `--json` for an integration that depends on producer, schema,
+Three global controls select where that JSON is allowed to go:
+
+```text
+--agent-output        With --json, emit the bounded command-owned agent projection through cursor transport.
+--json-output <path>  With --json, atomically write the complete result and print only an integrity receipt.
+--raw-json            With --json, explicitly retain the legacy unpaged stdout stream.
+```
+
+Use plain `--json` for an existing integration that depends on producer, schema,
 coverage, evidence, arguments, or invocation options. Use `--json
 --result-only` for a program that needs just the result. Agents should run the
-ordinary command instead; pretty JSON remains structurally noisier than the
-human renderer. Both modifiers are rejected without `--json`.
+ordinary command when possible; pretty JSON remains structurally noisier than
+the human renderer. When an agent genuinely needs JSON, it must add
+`--agent-output`. A program that needs the complete machine payload without
+placing it in model context should add `--json-output <path>`. The JSON
+modifiers are rejected without `--json`, and mutually exclusive transport
+controls are rejected instead of silently choosing one.
+
+An agent projection is the command-owned summary intended for model-facing
+clients. Its real-world units are the bounded `result` objects emitted after a
+caller selects `--agent-output`; it differs from the full command payload by
+retaining the identities, counts, coverage, recovery hints, and other facts
+the command declares material while omitting exhaustive machine-only rows.
+When a command has no specialized projection, scip-query keeps its ordinary
+result but applies the same hard transport fuse. A normal envelope marks the
+projected shape with `"resultProjection": "agent"`; absence of that additive
+field retains the full-result meaning. Result-only output carries no common
+envelope, so the explicit invocation flag identifies its projection.
+
+A JSON export receipt is a small record identifying one complete JSON file.
+Its real-world units are the `scip-query-json-export` objects printed after an
+atomic file replacement; it differs from the exported result by containing
+only the absolute path, byte count, and SHA-256 digest needed to locate and
+verify those bytes. Exported files use mode `0600`, become visible old-or-new
+rather than partially written, and are limited to a 4,096-byte resolved path,
+32 million characters, and 64 MiB.
 
 For example, one exact `scip-query code <selector>` prints source directly. Its
 single-result result-only form contains only `file`, resolved `symbol`,
@@ -213,23 +244,24 @@ Every command accepts these global options:
 ```
 
 Run commands normally without choosing a page size. Human output larger than
-12,000 characters is paged automatically as ordinary multiline text, not as a
+6,500 characters is paged automatically as ordinary multiline text, not as a
 JSON object. Each incomplete page prints one exact continuation command after
 its content. Agents must run that command unchanged until the output-complete
-marker. Supplying `--output-page-size` changes the character budget; it does
-not select JSON. The value counts rendered JavaScript string characters, not
-rows, results, model tokens, or bytes. If the complete result fits, scip-query
-returns it unchanged and removes the temporary snapshot; a page wrapper exists
-only when more content remains. Partial human pages end at the last complete
-line within that budget whenever one exists, so the next page begins with its
-own heading or source line number; a single line longer than the budget is the
-only case that requires a character-boundary split. Do not pipe scip-query
-through `head`, `tail`, or a line-range `sed`; those programs discard output
-without creating a resumable position.
+marker. Supplying `--output-page-size` changes the maximum character budget; it
+does not select JSON. A page may be smaller so its UTF-8 content plus the actual
+continuation wrapper stays within the 8,000-byte client-safe budget. The option
+does not count rows, results, or model tokens. If the complete result fits,
+scip-query returns it unchanged and removes the temporary snapshot; a page
+wrapper exists only when more content remains. Partial human pages end at the
+last complete line within both budgets whenever one exists, so the next page
+begins with its own heading or source line number; a single line longer than a
+budget is the only case that requires a character-boundary split. Do not pipe
+scip-query through `head`, `tail`, or a line-range `sed`; those programs discard
+output without creating a resumable position.
 
 Default `--json` output remains the ordinary, additively extensible
 `scip-query-result` envelope. When that envelope exceeds
-12,000 characters, scip-query writes an early stderr warning containing the
+8,000 UTF-8 bytes, scip-query writes an early stderr warning containing the
 exact command that opts into output pages. The paged command returns:
 
 ```json
@@ -242,15 +274,15 @@ exact command that opts into output pages. The paged command returns:
   "agentInstruction": "INCOMPLETE EVIDENCE: do not draw conclusions or report completion from this partial page. Run page.continuation.command exactly, then repeat until page.complete is true.",
   "page": {
     "offset": 0,
-    "returnedCharacters": 12000,
+    "returnedCharacters": 3500,
     "totalCharacters": 48152,
-    "omittedCharacters": 36152,
-    "remainingCharacters": 36152,
+    "omittedCharacters": 44652,
+    "remainingCharacters": 44652,
     "complete": false,
     "outputHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     "continuation": {
       "cursor": "<opaque cursor>",
-      "command": "scip-query architecture --json --output-page-size 12000 --output-cursor <opaque cursor>"
+      "command": "scip-query architecture --json --output-page-size 6500 --output-cursor <opaque cursor>"
     }
   },
   "content": "{\n  \"kind\": \"scip-query-result\",\n  ..."
@@ -271,7 +303,17 @@ A genuinely partial JSON page must carry `content` as a string because an
 arbitrary character boundary is not necessarily valid nested JSON. Run the
 emitted continuation exactly until completion. Normal agent work should use
 human output, where partial pages remain multiline text rather than a JSON
-string.
+string. Model-facing JSON must use `--agent-output`; that mode selects the
+command's bounded projection and automatically enables cursor transport even
+when the caller did not provide `--output-page-size`.
+
+Agent output is capped at 16 JSON content pages, currently 56,000 rendered
+characters. Exceeding that cap fails before any partial result reaches stdout
+and directs the caller to narrow the query or use `--json-output <path>`.
+This fuse prevents a technically resumable result from consuming an
+unbounded number of model turns. It does not weaken query coverage: the
+projection must still report its own returned, total, omitted, and recovery
+facts.
 
 One snapshot is bounded to 32 million characters, 64 MiB, and 32,768 pages.
 The per-user pool is bounded to 32 snapshots and 256 MiB under atomic
@@ -312,12 +354,15 @@ cursor is rejected after the index generation changes.
 
 The machine-readable page schema is
 [`schemas/cli-output-page.schema.json`](schemas/cli-output-page.schema.json).
+The bounded export-receipt schema is
+[`schemas/cli-json-export-receipt.schema.json`](schemas/cli-json-export-receipt.schema.json).
 Page sizes range from 256 through 100,000 characters and cursors are limited
 to 4,096 characters. The first paged invocation streams the complete output
 to a mode-`0600` snapshot beneath a current-user mode-`0700` temporary
 directory while retaining only the requested page in memory. Snapshots expire
-after one hour and are removed after the final page. Pagination imposes no
-arbitrary total-output ceiling and does not silently discard later pages;
+after one hour and are removed after the final page. Ordinary explicit
+pagination keeps the existing 32-million-character snapshot ceiling and does
+not silently discard later pages. Agent output adds the smaller 16-page fuse;
 command-level result budgets still apply and report their own completeness.
 
 ## Compatibility policy

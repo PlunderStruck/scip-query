@@ -387,7 +387,15 @@ describe('watch service contract', () => {
   });
 
   it('auto-starts only eligible commands in enabled projects', () => {
-    const excludedCommands = ['capabilities', 'check-deps', 'doctor', 'install-skills', 'status', 'suppress'];
+    const excludedCommands = [
+      'capabilities',
+      'check-deps',
+      'continue',
+      'doctor',
+      'install-skills',
+      'status',
+      'suppress',
+    ];
     for (const commandName of excludedCommands) {
       expect(watchServiceAutoStartEligible(commandName, {}), commandName).toBe(false);
     }

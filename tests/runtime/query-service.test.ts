@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readProcessIdentity } from '../../src/platform/process-identity.js';
-import { parseFastPathInvocation } from '../../src/runtime/query-service-fastpath.js';
+import { CLIENT_SAFE_OUTPUT_BYTES } from '../../src/platform/terminal-output.js';
+import { parseFastPathInvocation, serializedJsonFitsClientBudget } from '../../src/runtime/query-service-fastpath.js';
 import {
   QUERY_SERVICE_PROTOCOL_VERSION,
   isQueryServiceServerStateUsable,
@@ -13,6 +14,12 @@ import {
 } from '../../src/runtime/query-service.js';
 
 describe('query service fast path', () => {
+  it('uses UTF-8 bytes rather than characters for the unpaged client budget', () => {
+    expect(serializedJsonFitsClientBudget('x'.repeat(CLIENT_SAFE_OUTPUT_BYTES - 1))).toBe(true);
+    expect(serializedJsonFitsClientBudget('x'.repeat(CLIENT_SAFE_OUTPUT_BYTES))).toBe(false);
+    expect(serializedJsonFitsClientBudget('界'.repeat(Math.ceil(CLIENT_SAFE_OUTPUT_BYTES / 3)))).toBe(false);
+  });
+
   it('parses the bounded machine-readable search form', () => {
     expect(
       parseFastPathInvocation(['call-graph', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact']),

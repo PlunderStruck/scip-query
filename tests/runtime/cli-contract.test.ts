@@ -179,7 +179,13 @@ describe('CLI contract', () => {
 
   it('registers universal resumable output options at the program boundary', () => {
     expect(program.options.map((option) => option.flags)).toEqual(
-      expect.arrayContaining(['--output-page-size <characters>', '--output-cursor <cursor>']),
+      expect.arrayContaining([
+        '--output-page-size <characters>',
+        '--output-cursor <cursor>',
+        '--agent-output',
+        '--json-output <path>',
+        '--raw-json',
+      ]),
     );
   });
 
@@ -583,6 +589,31 @@ describe('CLI contract', () => {
       result: { rows: [] },
       coverage: { complete: null, totalKnown: false, returned: 0 },
     });
+  });
+
+  it('replaces full command payloads with bounded agent projections only when requested', () => {
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
+    const full = { identities: Array.from({ length: 150 }, (_, index) => `identity-${index}`) };
+    const projection = { returnedMatches: 64, totalMatches: 150, omittedMatches: 86 };
+
+    printJsonEnvelope('fan-in', [], { json: true }, full, { agentResult: projection });
+    printJsonEnvelope('fan-in', [], { json: true, agentOutput: true }, full, { agentResult: projection });
+    printJsonEnvelope('fan-in', [], { json: true, agentOutput: true, resultOnly: true }, full, {
+      agentResult: projection,
+    });
+
+    expect(JSON.parse(writes[0]!)).toMatchObject({ result: full, agentResult: projection });
+    expect(JSON.parse(writes[1]!)).toMatchObject({
+      options: { json: true, agentOutput: true },
+      result: projection,
+      resultProjection: 'agent',
+    });
+    expect(JSON.parse(writes[1]!)).not.toHaveProperty('agentResult');
+    expect(JSON.parse(writes[2]!)).toEqual(projection);
   });
 
   it('counts descriptor-owned semantic units without summing unrelated arrays', () => {

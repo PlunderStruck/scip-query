@@ -446,7 +446,7 @@ function codeResultText(result: CodeResult, closure?: CodeResult['bindingClosure
   lines.push(
     '',
     '═══ COVERAGE ═══',
-    '  One exact selector resolved to the complete source body shown. Source identity does not establish callers or runtime relationships.',
+    '  One exact selector resolved to the complete source body shown; callers and runtime relationships are not implied.',
   );
   return `${lines.join('\n')}\n`;
 }
@@ -456,7 +456,7 @@ function appendCodeFreshness(lines: string[], results: readonly CodeResult[]): v
   lines.push(
     '',
     '═══ EVIDENCE CALIBRATION ═══',
-    '  Source bodies are exact current working-tree text. Compiler identity and binding closure apply only within their reported semantic coverage.',
+    '  Source bodies are exact working-tree bytes; compiler identity and bindings are limited to reported semantic coverage.',
   );
   if (observations.length === 0) {
     lines.push('  No source-freshness overlay was available.');
@@ -468,8 +468,7 @@ function appendCodeFreshness(lines: string[], results: readonly CodeResult[]): v
     unavailable: observations.filter((item) => item.semantic.state === 'unavailable').length,
   };
   lines.push(
-    `Text freshness: ${observations.length}/${results.length} returned source body(ies) read from current working-tree bytes; ` +
-      `semantic overlay ${semantic.aligned} aligned, ${semantic.stale} stale, ${semantic.unavailable} unavailable.`,
+    `  Freshness: ${observations.length}/${results.length} text current; semantics ${semantic.aligned} aligned, ${semantic.stale} stale, ${semantic.unavailable} unavailable.`,
   );
 }
 
@@ -574,7 +573,7 @@ function appendCodeCoverage(lines: string[], result: CodeBatchResult): void {
     lines.push(
       '',
       '═══ COVERAGE ═══',
-      `  ${result.requested}/${result.requested} selector(s) resolved to the source bodies shown. Selector accounting does not claim that referenced definitions or runtime relationships are complete. Source lines use absolute file line numbers and are citation-ready.`,
+      `  ${result.requested}/${result.requested} selector(s) resolved to shown source bodies; referenced definitions and runtime relationships are not claimed. Source lines use absolute file line numbers and are citation-ready.`,
     );
     return;
   }

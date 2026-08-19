@@ -2,7 +2,7 @@ import type { SourceSearchOptions } from '../queries/navigation/source-search.js
 import type { CodeFileMemberMode } from '../queries/navigation/code.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../domain/source-inspection-limits.js';
 import { cliVersion } from '../platform/cli-version.js';
-import { DEFAULT_OUTPUT_PAGE_SIZE, writeSerializedJson } from '../platform/terminal-output.js';
+import { CLIENT_SAFE_OUTPUT_BYTES, writeSerializedJson } from '../platform/terminal-output.js';
 import { resolveProjectRoot } from './cli-context.js';
 import { assertNavigationDetailAllowed } from './navigation-session.js';
 import {
@@ -487,13 +487,13 @@ function writeUnpagedJsonResult(result: unknown): boolean {
 function writeUnpagedSerializedJsonResult(serialized: string): boolean {
   // The full CLI owns pagination warnings. Fall through when it needs to emit
   // them rather than silently changing stderr on the lightweight path.
-  if (serialized.length + 1 > DEFAULT_OUTPUT_PAGE_SIZE) return false;
+  if (!serializedJsonFitsClientBudget(serialized)) return false;
   writeSerializedJson(serialized);
   return true;
 }
 
 async function writeSerializedJsonResult(serialized: string, command: string, argv: readonly string[]): Promise<void> {
-  if (serialized.length + 1 <= DEFAULT_OUTPUT_PAGE_SIZE) {
+  if (serializedJsonFitsClientBudget(serialized)) {
     writeSerializedJson(serialized);
     return;
   }
@@ -511,6 +511,10 @@ async function writeSerializedJsonResult(serialized: string, command: string, ar
     },
     () => writeSerializedJson(serialized),
   );
+}
+
+export function serializedJsonFitsClientBudget(serialized: string): boolean {
+  return Buffer.byteLength(serialized) + 1 <= CLIENT_SAFE_OUTPUT_BYTES;
 }
 
 function parseFilesInvocation(argv: readonly string[]): FilesFastPathInvocation | null {
