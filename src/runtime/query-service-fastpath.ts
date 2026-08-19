@@ -22,6 +22,7 @@ import {
   trySearchSourceWithQueryService,
   tryStatsWithQueryService,
   trySurfaceWithQueryService,
+  tryUnusedImportsWithQueryService,
 } from './query-service.js';
 
 interface SourceSearchFastPathInvocation {
@@ -104,6 +105,11 @@ interface ImportsFastPathInvocation {
   filePattern: string;
 }
 
+interface UnusedImportsFastPathInvocation {
+  kind: 'unused-imports';
+  filePattern: string;
+}
+
 interface SurfaceFastPathInvocation {
   kind: 'surface';
   modulePattern: string;
@@ -125,6 +131,7 @@ type FastPathInvocation =
   | KindCountsFastPathInvocation
   | RefsFastPathInvocation
   | ImportsFastPathInvocation
+  | UnusedImportsFastPathInvocation
   | SurfaceFastPathInvocation;
 
 /**
@@ -204,6 +211,11 @@ export function tryRunQueryServiceFastPath(argv: readonly string[]): boolean {
     if (!response || !writeUnpagedJsonResult(response.result)) return false;
     return true;
   }
+  if (invocation.kind === 'unused-imports') {
+    const response = tryUnusedImportsWithQueryService(projectRoot, invocation.filePattern, { allowDefault: true });
+    if (!response || !writeUnpagedJsonResult(response.result)) return false;
+    return true;
+  }
   if (invocation.kind === 'surface') {
     const response = trySurfaceWithQueryService(projectRoot, invocation.modulePattern, { allowDefault: true });
     if (!response || !writeUnpagedJsonResult(response.result)) return false;
@@ -247,6 +259,7 @@ export function parseFastPathInvocation(argv: readonly string[]): FastPathInvoca
   if (argv[0] === 'by-kind') return parseByKindInvocation(argv);
   if (argv[0] === 'refs') return parseRefsInvocation(argv);
   if (argv[0] === 'imports') return parseImportsInvocation(argv);
+  if (argv[0] === 'unused-imports') return parseUnusedImportsInvocation(argv);
   if (argv[0] === 'surface') return parseSurfaceInvocation(argv);
   return null;
 }
@@ -291,6 +304,11 @@ function parseRefsInvocation(argv: readonly string[]): RefsFastPathInvocation | 
 function parseImportsInvocation(argv: readonly string[]): ImportsFastPathInvocation | null {
   const filePattern = parseExactCompactOperand(argv);
   return filePattern === null ? null : { kind: 'imports', filePattern };
+}
+
+function parseUnusedImportsInvocation(argv: readonly string[]): UnusedImportsFastPathInvocation | null {
+  const filePattern = parseExactCompactOperand(argv);
+  return filePattern === null ? null : { kind: 'unused-imports', filePattern };
 }
 
 function parseSurfaceInvocation(argv: readonly string[]): SurfaceFastPathInvocation | null {

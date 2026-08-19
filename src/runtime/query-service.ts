@@ -23,7 +23,7 @@ import type { SymbolResolutionJson } from '../queries/navigation/code-result-jso
 import type { DepResult } from '../queries/navigation/deps.js';
 import type { ByKindResult } from '../queries/navigation/by-kind.js';
 import type { HierarchyNode } from '../queries/navigation/hierarchy.js';
-import type { ImportResult } from '../queries/navigation/imports.js';
+import type { ImportResult, UnusedImportResult } from '../queries/navigation/imports.js';
 import type { RefResult } from '../queries/navigation/refs.js';
 import type { ConsumerSurfaceResult } from '../queries/navigation/surface.js';
 import type { MemberResult } from '../queries/navigation/members.js';
@@ -42,7 +42,7 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 10;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 11;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
 const QUERY_SERVICE_CATALOG_POOL_SIZE = 4;
@@ -154,6 +154,12 @@ export interface QueryServiceImportsRequest {
   filePattern: string;
 }
 
+export interface QueryServiceUnusedImportsRequest {
+  kind: 'unused-imports';
+  expectedGeneration: string;
+  filePattern: string;
+}
+
 export interface QueryServiceSurfaceRequest {
   kind: 'surface';
   expectedGeneration: string;
@@ -214,6 +220,7 @@ export type QueryServiceRequest =
   | QueryServiceKindCountsRequest
   | QueryServiceRefsRequest
   | QueryServiceImportsRequest
+  | QueryServiceUnusedImportsRequest
   | QueryServiceSurfaceRequest;
 
 export interface QueryServiceEnvelope {
@@ -337,6 +344,12 @@ export interface QueryServiceRefsResult {
 
 export interface QueryServiceImportsResult {
   result: ImportResult[];
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceUnusedImportsResult {
+  result: UnusedImportResult[];
   generationIdentity: string;
   observationReceipt: ObservationReceiptV2;
 }
@@ -543,6 +556,20 @@ export function tryImportsWithQueryService(
   );
 }
 
+export function tryUnusedImportsWithQueryService(
+  projectRoot: string,
+  filePattern: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceUnusedImportsResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'unused-imports', expectedGeneration, filePattern }),
+    isUnusedImportsResult,
+    'unused imports result',
+    policy,
+  );
+}
+
 export function trySurfaceWithQueryService(
   projectRoot: string,
   modulePattern: string,
@@ -710,7 +737,7 @@ function requestQuery<Result>(
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const operationKey = boundedMailboxOperationKey('query-service-v10', { clientId, request });
+  const operationKey = boundedMailboxOperationKey('query-service-v11', { clientId, request });
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -962,6 +989,20 @@ function isImportedByResult(value: unknown): value is ImportResult[] {
   return Array.isArray(value) && value.every(isImportResult);
 }
 
+function isUnusedImportsResult(value: unknown): value is UnusedImportResult[] {
+  return Array.isArray(value) && value.every(isUnusedImportResult);
+}
+
+function isUnusedImportResult(value: unknown): value is UnusedImportResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record['symbol'] === 'string' &&
+    typeof record['shortName'] === 'string' &&
+    typeof record['importedIn'] === 'string'
+  );
+}
+
 function isImportResult(value: unknown): value is ImportResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
@@ -1207,7 +1248,7 @@ function configuredPoolSize(): number {
 
 function requestPoolSize(request: QueryServiceRequest): number {
   const configured = configuredPoolSize();
-  if (request.kind === 'refs' || request.kind === 'imports') {
+  if (request.kind === 'refs' || request.kind === 'imports' || request.kind === 'unused-imports') {
     return Math.min(configured, QUERY_SERVICE_SEMANTIC_NAVIGATION_POOL_SIZE);
   }
   return request.kind === 'imported-by' ||

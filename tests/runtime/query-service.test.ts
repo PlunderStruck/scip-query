@@ -168,6 +168,12 @@ describe('query service fast path', () => {
       kind: 'imports',
       filePattern: 'src/runtime/cli.ts',
     });
+    expect(
+      parseFastPathInvocation(['unused-imports', 'src/runtime/cli.ts', '--json', '--result-only', '--compact']),
+    ).toEqual({
+      kind: 'unused-imports',
+      filePattern: 'src/runtime/cli.ts',
+    });
     expect(parseFastPathInvocation(['surface', 'src/runtime', '--json', '--result-only', '--compact'])).toEqual({
       kind: 'surface',
       modulePattern: 'src/runtime',
@@ -212,6 +218,8 @@ describe('query service fast path', () => {
     ['refs', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact', '--full'],
     ['imports', 'src/runtime/cli.ts', '--json', '--result-only', '--compact', '--full'],
     ['imports', '--json', '--result-only', '--compact'],
+    ['unused-imports', 'src/runtime/cli.ts', '--json', '--result-only', '--compact', '--full'],
+    ['unused-imports', '--json', '--result-only', '--compact'],
     ['system', 'src/runtime', '--json', '--result-only', '--compact'],
     ['surface', 'src/runtime', '--json', '--result-only', '--compact', '--limit', '10'],
     ['surface', '--json', '--result-only', '--compact'],

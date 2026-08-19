@@ -265,6 +265,10 @@ async function executeRequest(
     const { imports } = await import('../queries/navigation/imports.js');
     return imports(db, request.filePattern, { semantic: defaultSemanticEnrichment(db) });
   }
+  if (request.kind === 'unused-imports') {
+    const { unusedImports } = await import('../queries/navigation/imports.js');
+    return unusedImports(db, request.filePattern, { semantic: defaultSemanticEnrichment(db) });
+  }
   if (request.kind === 'surface') {
     const { consumerSurface } = await import('../queries/navigation/surface.js');
     return consumerSurface(db, request.modulePattern);
@@ -436,14 +440,14 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
       request: { kind: 'kind-counts', expectedGeneration: requestRecord['expectedGeneration'] },
     };
   }
-  if (requestRecord['kind'] === 'imports') {
+  if (requestRecord['kind'] === 'imports' || requestRecord['kind'] === 'unused-imports') {
     if (typeof requestRecord['filePattern'] !== 'string') {
-      throw new Error('Invalid query service imports request.');
+      throw new Error(`Invalid query service ${requestRecord['kind']} request.`);
     }
     return {
       ...envelope,
       request: {
-        kind: 'imports',
+        kind: requestRecord['kind'],
         expectedGeneration: requestRecord['expectedGeneration'],
         filePattern: requestRecord['filePattern'],
       },
