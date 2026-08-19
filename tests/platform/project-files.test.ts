@@ -10,6 +10,7 @@ import {
   fingerprintProjectFiles,
   InputTooLargeError,
   probeProjectFileBytes,
+  probeProjectFileBytesForLiterals,
   readProjectFileText,
   resolveProjectFile,
   UnsafeProjectPathError,
@@ -417,6 +418,19 @@ describe('project file authority boundary', () => {
       sha256: createHash('sha256').update(source).digest('hex'),
     });
     expect(match.bytes?.toString('utf8')).toBe(source);
+    const batch = probeProjectFileBytesForLiterals(
+      projectRoot,
+      'source.ts',
+      [Buffer.from('needle'), Buffer.from('a🙂'), Buffer.from('absent')],
+      { computeSha256: true },
+    );
+    expect(batch).toMatchObject({
+      byteLength: Buffer.byteLength(source),
+      isUtf8Text: true,
+      matchedLiteralIndexes: [0, 1],
+      sha256: createHash('sha256').update(source).digest('hex'),
+    });
+    expect(batch.bytes?.toString('utf8')).toBe(source);
     expect(probeProjectFileBytes(projectRoot, 'source.ts', Buffer.from('absent')).bytes).toBeNull();
     expect(() =>
       probeProjectFileBytes(projectRoot, 'source.ts', Buffer.from('needle'), {
@@ -426,6 +440,13 @@ describe('project file authority boundary', () => {
     expect(probeProjectFileBytes(projectRoot, 'binary.bin', Buffer.from('needle'))).toMatchObject({
       isUtf8Text: false,
       includesLiteral: false,
+      bytes: null,
+    });
+    expect(
+      probeProjectFileBytesForLiterals(projectRoot, 'binary.bin', [Buffer.from('needle'), Buffer.from('binary')]),
+    ).toMatchObject({
+      isUtf8Text: false,
+      matchedLiteralIndexes: [],
       bytes: null,
     });
     expect(probeProjectFileBytes(projectRoot, 'invalid-utf8.bin', Buffer.from('needle'))).toMatchObject({

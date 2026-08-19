@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { codeBatch } from '../../../src/queries/navigation/code.js';
 import { files } from '../../../src/queries/navigation/files.js';
+import { searchSourceBatch } from '../../../src/queries/navigation/source-search-batch.js';
 import { searchSource } from '../../../src/queries/navigation/source-search.js';
 import { scanRepositoryText } from '../../../src/source/primitives/repository-text.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -121,6 +122,29 @@ describe('lossless repository text sensor', () => {
     );
 
     expect({ scan: streaming, files: streamingFiles }).toEqual({ scan: materialized, files: materializedFiles });
+  });
+
+  it('keeps one-pass multi-literal searches identical to independent source searches', () => {
+    const patterns = ['sensorNeedle', 'sensorBranch'];
+    const options = { context: 0, limit: Number.MAX_SAFE_INTEGER } as const;
+
+    expect(searchSourceBatch(db, patterns, options)).toEqual(
+      patterns.map((pattern) => searchSource(db, pattern, options)),
+    );
+
+    const literals = patterns.map((pattern) => Buffer.from(pattern));
+    const batchFiles = literals.map(() => [] as string[]);
+    const batchScan = scanRepositoryText(db, { literalBytes: literals }, (file, matchedLiteralIndexes) => {
+      for (const index of matchedLiteralIndexes) batchFiles[index]?.push(file.relativePath);
+    });
+    const independent = literals.map((literal) => {
+      const relativePaths: string[] = [];
+      const scan = scanRepositoryText(db, { literalBytes: literal }, (file) => relativePaths.push(file.relativePath));
+      return { relativePaths, scan };
+    });
+
+    expect(batchScan).toEqual(independent[0]?.scan);
+    expect(batchFiles).toEqual(independent.map(({ relativePaths }) => relativePaths));
   });
 
   it('returns exact current ranges and whole files without compiler facts', () => {

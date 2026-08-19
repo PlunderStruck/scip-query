@@ -103,6 +103,10 @@ export interface ProjectFileByteProbe {
   sha256?: string;
 }
 
+export interface ProjectFileByteProbeBatch extends Omit<ProjectFileByteProbe, 'includesLiteral'> {
+  matchedLiteralIndexes: number[];
+}
+
 export interface ProjectInputFingerprint {
   version: 3;
   languages: SupportedLanguage[];
@@ -236,6 +240,24 @@ export function probeProjectFileBytes(
   opts: ProjectFileByteProbeOptions = {},
 ): ProjectFileByteProbe {
   if (literal.byteLength === 0) throw new Error('Project file probe literal must not be empty.');
+  const { matchedLiteralIndexes, ...probe } = probeProjectFileBytesForLiterals(
+    projectRoot,
+    candidatePath,
+    [literal],
+    opts,
+  );
+  return { ...probe, includesLiteral: matchedLiteralIndexes.length > 0 };
+}
+
+export function probeProjectFileBytesForLiterals(
+  projectRoot: string,
+  candidatePath: string,
+  literals: readonly Buffer[],
+  opts: ProjectFileByteProbeOptions = {},
+): ProjectFileByteProbeBatch {
+  if (literals.length === 0 || literals.some((literal) => literal.byteLength === 0)) {
+    throw new Error('Project file probe literals must not be empty.');
+  }
   const relativePath = normalizeSafeProjectRelativePath(candidatePath);
   const snapshotState = projectSnapshotPathState(projectRoot, relativePath);
   if (snapshotState) {
@@ -252,12 +274,12 @@ export function probeProjectFileBytes(
       throw new InputTooLargeError(opts.inputKind ?? 'project file', relativePath, snapshotFile.size, maxBytes);
     }
     const isUtf8Text = !snapshotFile.content.includes(0) && isUtf8(snapshotFile.content);
-    const includesLiteral = isUtf8Text && snapshotFile.content.includes(literal);
+    const matchedLiteralIndexes = isUtf8Text ? matchingLiteralIndexes(snapshotFile.content, literals) : [];
     return {
       byteLength: snapshotFile.size,
       isUtf8Text,
-      includesLiteral,
-      bytes: includesLiteral ? Buffer.from(snapshotFile.content) : null,
+      matchedLiteralIndexes,
+      bytes: matchedLiteralIndexes.length > 0 ? Buffer.from(snapshotFile.content) : null,
       ...(opts.computeSha256 ? { sha256: snapshotFile.sha256 } : {}),
     };
   }
@@ -271,11 +293,11 @@ export function probeProjectFileBytes(
     const scratch = opts.scratchBuffer ?? Buffer.allocUnsafe(PROJECT_FILE_PROBE_BUFFER_BYTES);
     if (scratch.byteLength === 0) throw new Error('Project file probe scratch buffer must not be empty.');
     let offset = 0;
-    let includesLiteral = false;
+    const includesLiterals = literals.map(() => false);
     let containsNul = false;
     let validUtf8 = true;
     let utf8Carry: Buffer = Buffer.alloc(0);
-    let literalTail: Buffer = Buffer.alloc(0);
+    const literalTails: Buffer[] = literals.map(() => Buffer.alloc(0));
 
     while (offset < before.size) {
       const bytesRead = readSync(descriptor, scratch, 0, Math.min(scratch.byteLength, before.size - offset), offset);
@@ -289,16 +311,24 @@ export function probeProjectFileBytes(
         validUtf8 = isUtf8(validationBytes.subarray(0, completePrefixLength));
         utf8Carry = Buffer.from(validationBytes.subarray(completePrefixLength));
       }
-      if (!includesLiteral) includesLiteral = chunkIncludesLiteral(chunk, literal, literalTail);
-      literalTail = nextLiteralTail(chunk, literal, literalTail);
+      for (let index = 0; index < literals.length; index += 1) {
+        if (includesLiterals[index]) continue;
+        const literal = literals[index]!;
+        const literalTail = literalTails[index]!;
+        includesLiterals[index] = chunkIncludesLiteral(chunk, literal, literalTail);
+        literalTails[index] = nextLiteralTail(chunk, literal, literalTail);
+      }
       offset += bytesRead;
     }
 
     validUtf8 &&= utf8Carry.byteLength === 0;
     assertResolvedProjectFileIdentity(fstatSync(descriptor), resolvedFile, candidatePath);
     const isUtf8Text = !containsNul && validUtf8;
+    const matchedLiteralIndexes = isUtf8Text
+      ? includesLiterals.flatMap((matched, index) => (matched ? [index] : []))
+      : [];
     let bytes: Buffer | null = null;
-    if (isUtf8Text && includesLiteral) {
+    if (matchedLiteralIndexes.length > 0) {
       bytes = Buffer.allocUnsafe(before.size);
       let materialized = 0;
       while (materialized < bytes.byteLength) {
@@ -311,7 +341,7 @@ export function probeProjectFileBytes(
     return {
       byteLength: before.size,
       isUtf8Text,
-      includesLiteral: isUtf8Text && includesLiteral,
+      matchedLiteralIndexes,
       bytes,
       ...(hash ? { sha256: hash.digest('hex') } : {}),
     };
@@ -356,6 +386,10 @@ function completeUtf8PrefixLength(bytes: Buffer): number {
   const expectedBytes =
     (lead & 0x80) === 0 ? 1 : (lead & 0xe0) === 0xc0 ? 2 : (lead & 0xf0) === 0xe0 ? 3 : (lead & 0xf8) === 0xf0 ? 4 : 0;
   return expectedBytes > bytes.byteLength - leadIndex ? leadIndex : bytes.byteLength;
+}
+
+function matchingLiteralIndexes(bytes: Buffer, literals: readonly Buffer[]): number[] {
+  return literals.flatMap((literal, index) => (bytes.includes(literal) ? [index] : []));
 }
 
 function chunkIncludesLiteral(chunk: Buffer, literal: Buffer, previousTail: Buffer): boolean {

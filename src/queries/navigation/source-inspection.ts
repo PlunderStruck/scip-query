@@ -27,7 +27,8 @@ import {
   type BindingClosure,
 } from './binding-closure.js';
 import { selectInspectionCandidates, selectInspectionCandidatesByChannel } from './source-inspection-selection.js';
-import { searchSource, type SourceSearchTextCoverage } from './source-search.js';
+import { searchSourceBatch } from './source-search-batch.js';
+import type { SourceSearchTextCoverage } from './source-search.js';
 import { enclosingSourceUnitSnippet, sourceSnippet, type SourceUnitSnippet } from './source-snippet.js';
 import { sourceRangeNextAnchorPacket, type SystemMapNextAnchorPacket } from '../internal/next-anchor-candidates.js';
 
@@ -571,13 +572,13 @@ function unboundedEvidenceBudgets(): Record<SourceInspectionEvidenceChannel, num
 function buildInspection(db: ScipDatabase, request: InspectionRequest): BuiltInspection {
   const candidates: CandidateUnit[] = [];
   let sequence = 0;
-  const pendingSearches = request.searches.map((pattern) => {
-    const result = searchSource(db, pattern, {
-      scope: request.scope,
-      context: 0,
-      limit: request.searchLimit,
-      ranking: 'structural',
-    });
+  const pendingSearches = searchSourceBatch(db, request.searches, {
+    scope: request.scope,
+    context: 0,
+    limit: request.searchLimit,
+    ranking: 'structural',
+  }).map((result, index) => {
+    const pattern = request.searches[index]!;
     return { pattern, result, matches: result.matches };
   });
   const maxSearchMatches = Math.max(0, ...pendingSearches.map((item) => item.matches.length));
@@ -1272,7 +1273,6 @@ function parseLocation(target: string): { path: string; line: number } | null {
   const line = Number(match[2]);
   return Number.isSafeInteger(line) && line > 0 ? { path: match[1]!, line } : null;
 }
-
 
 function unique<T>(values: readonly T[]): T[] {
   return [...new Set(values)];

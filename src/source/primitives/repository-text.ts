@@ -9,6 +9,7 @@ import {
   isMissingProjectFileError,
   normalizeSafeProjectRelativePath,
   probeProjectFileBytes,
+  probeProjectFileBytesForLiterals,
   readProjectFile,
 } from './project-file-boundary.js';
 
@@ -55,7 +56,7 @@ export interface RepositoryTextScanResult extends Omit<RepositoryTextInventory, 
 export interface RepositoryTextScanOptions {
   scope?: string;
   includeBytes?: (relativePath: string, bytes: Buffer) => boolean;
-  literalBytes?: Buffer;
+  literalBytes?: Buffer | readonly Buffer[];
 }
 
 const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
@@ -102,7 +103,7 @@ export function repositoryTextInventory(db: ScipDatabase, opts: { scope?: string
 export function scanRepositoryText(
   db: ScipDatabase,
   opts: RepositoryTextScanOptions,
-  visit: (file: RepositoryTextFile) => void,
+  visit: (file: RepositoryTextFile, matchedLiteralIndexes: readonly number[]) => void,
 ): RepositoryTextScanResult {
   const paths = repositoryProjectPaths(db).filter((relativePath) => !opts.scope || relativePath.includes(opts.scope));
   const fingerprints = indexedFingerprintMap(db);
@@ -113,19 +114,32 @@ export function scanRepositoryText(
   let scannedBytes = 0;
   let scannedTextFiles = 0;
   const semanticFiles: Record<SourceSemanticFreshnessState, number> = { aligned: 0, stale: 0, unavailable: 0 };
-  const literalScratchBuffer = opts.literalBytes ? Buffer.allocUnsafe(1024 * 1024) : undefined;
+  const literalBytes = opts.literalBytes
+    ? Buffer.isBuffer(opts.literalBytes)
+      ? [opts.literalBytes]
+      : [...opts.literalBytes]
+    : [];
+  const literalScratchBuffer = literalBytes.length > 0 ? Buffer.allocUnsafe(1024 * 1024) : undefined;
 
   for (const relativePath of paths) {
     let bytes: Buffer;
     let knownSha256: string | undefined;
+    let matchedLiteralIndexes: readonly number[] = [];
     const indexed = indexedDocuments.has(relativePath);
     try {
-      if (opts.literalBytes) {
-        const probe = probeProjectFileBytes(db.config.projectRoot, relativePath, opts.literalBytes, {
-          inputKind: 'repository text file',
-          computeSha256: indexed,
-          scratchBuffer: literalScratchBuffer,
-        });
+      if (literalBytes.length > 0) {
+        const probe =
+          literalBytes.length === 1
+            ? probeProjectFileBytes(db.config.projectRoot, relativePath, literalBytes[0]!, {
+                inputKind: 'repository text file',
+                computeSha256: indexed,
+                scratchBuffer: literalScratchBuffer,
+              })
+            : probeProjectFileBytesForLiterals(db.config.projectRoot, relativePath, literalBytes, {
+                inputKind: 'repository text file',
+                computeSha256: indexed,
+                scratchBuffer: literalScratchBuffer,
+              });
         if (!probe.isUtf8Text) {
           skippedBinaryPaths.push(relativePath);
           continue;
@@ -135,7 +149,9 @@ export function scanRepositoryText(
         knownSha256 = probe.sha256;
         const semantic = semanticFreshness(relativePath, knownSha256, fingerprints, indexedDocuments);
         semanticFiles[semantic.state] += 1;
-        if (!probe.includesLiteral || !probe.bytes) continue;
+        matchedLiteralIndexes =
+          'matchedLiteralIndexes' in probe ? probe.matchedLiteralIndexes : probe.includesLiteral ? [0] : [];
+        if (matchedLiteralIndexes.length === 0 || !probe.bytes) continue;
         bytes = probe.bytes;
       } else {
         bytes = readProjectFile(db.config.projectRoot, relativePath, { inputKind: 'repository text file' });
@@ -149,11 +165,11 @@ export function scanRepositoryText(
       skippedUnreadablePaths.push(relativePath);
       continue;
     }
-    if (!opts.literalBytes && !isTextBytes(bytes)) {
+    if (literalBytes.length === 0 && !isTextBytes(bytes)) {
       skippedBinaryPaths.push(relativePath);
       continue;
     }
-    if (!opts.literalBytes) {
+    if (literalBytes.length === 0) {
       scannedBytes += bytes.byteLength;
       scannedTextFiles += 1;
       knownSha256 = indexed ? hashBytes(bytes) : undefined;
@@ -162,7 +178,10 @@ export function scanRepositoryText(
     }
     if (opts.includeBytes && !opts.includeBytes(relativePath, bytes)) continue;
     const text = UTF8_DECODER.decode(bytes);
-    visit(repositoryTextFile(relativePath, bytes, text, fingerprints, indexedDocuments, knownSha256));
+    visit(
+      repositoryTextFile(relativePath, bytes, text, fingerprints, indexedDocuments, knownSha256),
+      matchedLiteralIndexes,
+    );
   }
 
   return {

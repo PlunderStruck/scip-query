@@ -10,11 +10,13 @@ export {
   isMissingProjectFileError,
   projectFileExists,
   probeProjectFileBytes,
+  probeProjectFileBytesForLiterals,
   readProjectFile,
   readProjectFileText,
   resolveProjectFile,
   type ProjectFileReadOptions,
   type ProjectFileByteProbe,
+  type ProjectFileByteProbeBatch,
   type ProjectFileByteProbeOptions,
   type ResolvedProjectFile,
 } from '../../platform/project-files.js';
