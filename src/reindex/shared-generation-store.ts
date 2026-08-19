@@ -219,6 +219,50 @@ export function buildSharedGenerationSnapshot(
   };
 }
 
+/**
+ * Proves that a managed local cache still names the generation derived from
+ * this clean Git tree and this exact project-input fingerprint. The check is
+ * read-only: concurrent publication can make it return a conservative miss,
+ * but this path cannot overwrite or resurrect newer lease state.
+ */
+export function managedGenerationMatchesFingerprint(
+  context: GitWorktreeContext,
+  localCacheDir: string,
+  fingerprint: unknown,
+): fingerprint is ProjectInputFingerprint {
+  if (!isProjectInputFingerprint(fingerprint)) return false;
+  const snapshot = buildSharedGenerationSnapshot(context, fingerprint);
+  if (!snapshot) return false;
+  try {
+    const pointer = readWorktreeCachePointer(localCacheDir);
+    if (!pointer || pointer.repositoryId !== context.repositoryId || pointer.worktreeId !== context.worktreeId) {
+      return false;
+    }
+    const lease = JSON.parse(
+      readTextFileWithinLimit(join(snapshot.repositoryCacheDir, 'worktrees', `${pointer.worktreeId}.json`), {
+        inputKind: 'worktree cache lease',
+        maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+      }),
+    ) as WorktreeCacheLease;
+    if (
+      lease.version !== 1 ||
+      lease.repositoryId !== pointer.repositoryId ||
+      lease.worktreeId !== pointer.worktreeId ||
+      resolve(lease.projectRoot) !== resolve(context.projectRoot) ||
+      lease.treeOid !== context.treeOid ||
+      resolve(lease.localCacheDir) !== resolve(localCacheDir) ||
+      lease.ownershipChecksum !== worktreeLeaseOwnershipChecksum(lease) ||
+      lease.baseGenerationId !== snapshot.generationId ||
+      lease.activeGenerationId !== snapshot.generationId
+    ) {
+      return false;
+    }
+    return readSharedGeneration(snapshot, false) !== null;
+  } catch {
+    return false;
+  }
+}
+
 export function sharedCacheBypassReason(
   projectRoot: string,
   outputDb: string,

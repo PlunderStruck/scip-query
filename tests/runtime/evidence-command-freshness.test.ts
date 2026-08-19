@@ -21,9 +21,10 @@ describe('evidence command freshness', () => {
   });
 
   it('reuses a fresh generation and keeps the watcher ready for later edits', async () => {
+    const currentWorkspace = workspace();
     const dependencies = fixtureDependencies([freshness('fresh')]);
 
-    await expect(ensureEvidenceCommandFreshness(workspace(), dependencies)).resolves.toMatchObject({
+    await expect(ensureEvidenceCommandFreshness(currentWorkspace, dependencies)).resolves.toMatchObject({
       source: 'existing',
       service: { kind: 'reused' },
     });
@@ -32,6 +33,13 @@ describe('evidence command freshness', () => {
     expect(dependencies.ensureService).toHaveBeenCalledOnce();
     expect(dependencies.requestRefresh).not.toHaveBeenCalled();
     expect(dependencies.reindex).not.toHaveBeenCalled();
+    expect(dependencies.freshness).toHaveBeenNthCalledWith(
+      1,
+      currentWorkspace.projectRoot,
+      currentWorkspace.config,
+      currentWorkspace.paths,
+      { gitContext: currentWorkspace.gitContext },
+    );
   });
 
   it('answers from a stale readable index without waiting or starting a second reindex', async () => {
@@ -69,29 +77,45 @@ describe('evidence command freshness', () => {
   });
 
   it('still rebuilds when the stale generation requires repair and the watcher is idle', async () => {
+    const currentWorkspace = workspace();
     const dependencies = fixtureDependencies([
       freshness('stale', 'SQLite generation requires repair: generation checksum drifted'),
       freshness('fresh'),
     ]);
 
-    await expect(
-      ensureEvidenceCommandFreshness(workspace(), dependencies, { waitMs: 0 }),
-    ).resolves.toMatchObject({ source: 'synchronous-reindex' });
+    await expect(ensureEvidenceCommandFreshness(currentWorkspace, dependencies, { waitMs: 0 })).resolves.toMatchObject({
+      source: 'synchronous-reindex',
+    });
 
     expect(dependencies.requestRefresh).toHaveBeenCalledOnce();
     expect(dependencies.reindex).toHaveBeenCalledOnce();
+    expect(dependencies.freshness).toHaveBeenNthCalledWith(
+      2,
+      currentWorkspace.projectRoot,
+      currentWorkspace.config,
+      currentWorkspace.paths,
+      { gitContext: currentWorkspace.gitContext },
+    );
   });
 
   it('waits for a missing index only until the watcher publishes one', async () => {
+    const currentWorkspace = workspace();
     const dependencies = fixtureDependencies([freshness('missing'), freshness('fresh')]);
 
     await expect(
-      ensureEvidenceCommandFreshness(workspace(), dependencies, { waitMs: 20, pollMs: 10 }),
+      ensureEvidenceCommandFreshness(currentWorkspace, dependencies, { waitMs: 20, pollMs: 10 }),
     ).resolves.toMatchObject({ source: 'watcher' });
 
     expect(dependencies.requestRefresh).toHaveBeenCalledOnce();
     expect(dependencies.wait).toHaveBeenCalledOnce();
     expect(dependencies.reindex).not.toHaveBeenCalled();
+    expect(dependencies.freshness).toHaveBeenNthCalledWith(
+      2,
+      currentWorkspace.projectRoot,
+      currentWorkspace.config,
+      currentWorkspace.paths,
+      { gitContext: currentWorkspace.gitContext },
+    );
   });
 
   it('fails fast when no readable index exists and the watcher is already rebuilding', async () => {
@@ -146,6 +170,16 @@ function workspace() {
       metaPath: '/cache/meta.json',
     } as ReturnType<typeof resolveIndexStoragePaths>,
     dbPathSource: 'configured' as const,
+    gitContext: {
+      projectRoot: '/repo',
+      gitDir: '/repo/.git',
+      commonDir: '/repo/.git',
+      repositoryId: 'repository',
+      worktreeId: 'worktree',
+      headCommit: 'commit',
+      treeOid: 'tree',
+      clean: true,
+    },
   };
 }
 

@@ -77,7 +77,9 @@ export async function ensureEvidenceCommandFreshness(
     gitContext: workspace.gitContext,
     ...(watcherGeneration ? { watcherGeneration } : {}),
   });
-  let freshness = dependencies.freshness(workspace.projectRoot, workspace.config, workspace.paths);
+  let freshness = dependencies.freshness(workspace.projectRoot, workspace.config, workspace.paths, {
+    gitContext: workspace.gitContext,
+  });
   const service = dependencies.ensureService({
     commandName: workspace.commandName,
     projectRoot: workspace.projectRoot,
@@ -130,7 +132,9 @@ export async function ensureEvidenceCommandFreshness(
       { cause: error },
     );
   }
-  freshness = dependencies.freshness(workspace.projectRoot, workspace.config, workspace.paths);
+  freshness = dependencies.freshness(workspace.projectRoot, workspace.config, workspace.paths, {
+    gitContext: workspace.gitContext,
+  });
   if (freshness.state !== 'fresh' && !indexCanAnswerQueries(freshness)) {
     throw new Error(
       `Could not prepare fresh evidence for scip-query ${workspace.commandName}: index remained ${freshness.state} (${freshness.reason})`,
@@ -172,7 +176,9 @@ async function waitForFreshness(
   let current = initial;
   while (dependencies.now() < deadline) {
     await dependencies.wait(Math.min(pollMs, Math.max(1, deadline - dependencies.now())));
-    current = dependencies.freshness(workspace.projectRoot, workspace.config, workspace.paths);
+    current = dependencies.freshness(workspace.projectRoot, workspace.config, workspace.paths, {
+      gitContext: workspace.gitContext,
+    });
     if (current.state === 'fresh') return current;
   }
   return current;

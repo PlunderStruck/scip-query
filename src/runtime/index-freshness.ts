@@ -1,9 +1,24 @@
-import { existsSync } from 'node:fs';
+import { existsSync, lstatSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { decodeReindexMetadata } from '../domain/reindex-metadata.js';
 import { projectInputSnapshotOrNull } from '../domain/project-input.js';
 import type { LastRefreshMetadata, ProjectConfig, SupportedLanguage } from '../domain/types.js';
-import { buildProjectInputFingerprint, type ProjectInputFingerprint } from '../platform/project-files.js';
+import { normalizeSafeProjectRelativePath } from '../domain/path-normalization.js';
+import {
+  gitIndexAllowsTreeFingerprintReuse,
+  resolveGitWorktreeContext,
+  type GitWorktreeContext,
+} from '../platform/git-worktree.js';
+import {
+  buildProjectInputFingerprint,
+  listProjectFiles,
+  normalizeProjectInputFingerprintConfiguration,
+  type ProjectInputFingerprint,
+  type ProjectInputFingerprintConfiguration,
+} from '../platform/project-files.js';
+import { typeScriptProjectSelectionIsTreeOwned } from '../platform/typescript-projects.js';
 import { detectLanguages } from '../reindex/detect.js';
+import { managedGenerationMatchesFingerprint } from '../reindex/shared-generation-store.js';
 import { inspectSqliteGeneration } from '../reindex/sqlite-generation-store.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 
@@ -29,7 +44,8 @@ export function indexCanAnswerQueries(freshness: IndexFreshness): boolean {
 export function getIndexFreshness(
   projectRoot: string,
   config: ProjectConfig,
-  paths: { dbPath: string; metaPath: string },
+  paths: { dbPath: string; metaPath: string; cacheDir?: string },
+  opts: { gitContext?: GitWorktreeContext } = {},
 ): IndexFreshness {
   const checkedAt = new Date().toISOString();
   if (!existsSync(paths.dbPath)) {
@@ -73,7 +89,29 @@ export function getIndexFreshness(
     }
     const metadata = decoded.metadata;
     const languages = config.languages ?? detectLanguages(projectRoot);
-    const current = runtimeFingerprint(projectRoot, languages, config);
+    const storedFingerprint = metadata.fingerprint;
+    const managedFingerprint =
+      paths.cacheDir &&
+      opts.gitContext &&
+      managedGenerationMatchesFingerprint(opts.gitContext, paths.cacheDir, storedFingerprint)
+        ? storedFingerprint
+        : undefined;
+    const observedGitContext =
+      paths.cacheDir &&
+      managedFingerprint &&
+      fingerprintConfigurationMatches(managedFingerprint, languages, config) &&
+      projectSelectionIsTreeOwned(projectRoot, managedFingerprint, config)
+        ? resolveGitWorktreeContext(projectRoot)
+        : undefined;
+    const currentGitContext =
+      observedGitContext?.clean && gitIndexAllowsTreeFingerprintReuse(projectRoot) ? observedGitContext : undefined;
+    const current =
+      paths.cacheDir &&
+      currentGitContext &&
+      managedFingerprint &&
+      managedGenerationMatchesFingerprint(currentGitContext, paths.cacheDir, managedFingerprint)
+        ? managedFingerprint
+        : runtimeFingerprint(projectRoot, languages, config);
     const metadataLanguages = [...(metadata.indexedLanguages ?? [])].sort();
     const fresh =
       decoded.capabilities.publishableGeneration &&
@@ -192,6 +230,62 @@ export function runtimeFingerprint(
   config: ProjectConfig,
 ): ProjectInputFingerprint {
   return buildProjectInputFingerprint(projectRoot, languages, {
+    pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
+    typescriptProjectMode: config.indexer?.typescript?.projectMode,
+    typescriptProjects: config.indexer?.typescript?.projects,
+    clojureConfigPath: config.indexer?.clojure?.configPath,
+  });
+}
+
+function fingerprintConfigurationMatches(
+  fingerprint: ProjectInputFingerprint,
+  languages: readonly SupportedLanguage[],
+  config: ProjectConfig,
+): boolean {
+  const current = normalizedFingerprintConfiguration(languages, config);
+  return (
+    fingerprint.version === current.version &&
+    JSON.stringify([...fingerprint.languages].sort()) === JSON.stringify(current.languages) &&
+    fingerprint.pnpmWorkspaces === current.pnpmWorkspaces &&
+    fingerprint.typescriptProjectMode === current.typescriptProjectMode &&
+    JSON.stringify([...fingerprint.typescriptProjects].sort()) === JSON.stringify(current.typescriptProjects) &&
+    fingerprint.clojureConfigPath === current.clojureConfigPath
+  );
+}
+
+function projectSelectionIsTreeOwned(
+  projectRoot: string,
+  fingerprint: ProjectInputFingerprint,
+  config: ProjectConfig,
+): boolean {
+  const needsTrackedPaths = fingerprint.languages.includes('typescript') || Boolean(fingerprint.clojureConfigPath);
+  if (!needsTrackedPaths) return true;
+  const trackedPaths = listProjectFiles(projectRoot);
+  if (fingerprint.clojureConfigPath) {
+    const relativeConfigPath = normalizeSafeProjectRelativePath(fingerprint.clojureConfigPath);
+    if (!trackedPaths.includes(relativeConfigPath)) return false;
+    try {
+      if (!lstatSync(resolve(projectRoot, relativeConfigPath)).isFile()) return false;
+    } catch {
+      return false;
+    }
+  }
+  return (
+    !fingerprint.languages.includes('typescript') ||
+    typeScriptProjectSelectionIsTreeOwned(
+      projectRoot,
+      config.indexer?.typescript?.projectMode,
+      config.indexer?.typescript?.projects ?? [],
+      trackedPaths,
+    )
+  );
+}
+
+function normalizedFingerprintConfiguration(
+  languages: readonly SupportedLanguage[],
+  config: ProjectConfig,
+): ProjectInputFingerprintConfiguration {
+  return normalizeProjectInputFingerprintConfiguration(languages, {
     pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
     typescriptProjectMode: config.indexer?.typescript?.projectMode,
     typescriptProjects: config.indexer?.typescript?.projects,

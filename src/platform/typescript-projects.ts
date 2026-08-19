@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type * as TsMorphCommon from '@ts-morph/common';
 import { isPathInsideProject as isInsideProject } from '../domain/path-normalization.js';
@@ -82,6 +82,50 @@ export function typeScriptProjectInputPaths(
     }
   }
   return sourcePaths;
+}
+
+/**
+ * A tree-owned project selection is one whose source membership can change
+ * only when the clean Git tree changes. Config symlinks, ignored configs, and
+ * `extends` chains stay on the full compiler path because their effective
+ * bytes can change without changing the repository tree object.
+ */
+export function typeScriptProjectSelectionIsTreeOwned(
+  projectRoot: string,
+  projectMode: 'single' | 'workspace' | undefined,
+  configuredProjects: readonly string[],
+  trackedPaths: readonly string[],
+): boolean {
+  const root = path.resolve(projectRoot);
+  const tracked = new Set(trackedPaths);
+  for (const configured of configuredProjects) {
+    const absolute = path.resolve(root, configured);
+    if (!isInsideProject(root, absolute)) continue;
+    try {
+      const stats = lstatSync(absolute);
+      if (stats.isSymbolicLink()) return false;
+      if (stats.isFile() && !tracked.has(relativeProjectPath(root, absolute))) return false;
+    } catch {
+      // Missing configured entries normalize away during ordinary discovery.
+    }
+  }
+
+  const projects = projectMode === 'workspace' ? discoverTypeScriptProjectRoots(root, configuredProjects) : ['.'];
+  for (const project of projects) {
+    const projectDirectory = project === '.' ? root : path.join(root, project);
+    const tsconfigPath = path.join(projectDirectory, 'tsconfig.json');
+    if (!projectFileExists(root, tsconfigPath)) continue;
+    const relativePath = relativeProjectPath(root, tsconfigPath);
+    if (!tracked.has(relativePath)) return false;
+    try {
+      if (lstatSync(tsconfigPath).isSymbolicLink()) return false;
+      const source = readProjectConfigText(root, tsconfigPath);
+      if (source.includes('extends') || source.includes('\\')) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }
 
 function sortRelativeProjectPaths(root: string, projects: readonly string[]): string[] {

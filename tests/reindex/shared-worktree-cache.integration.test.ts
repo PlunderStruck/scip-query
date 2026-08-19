@@ -138,11 +138,13 @@ describe('shared Git worktree cache integration', () => {
     expect(attached.reused).toBe(true);
     expect(linkedStatuses.some((message) => message.includes('Attached shared generation'))).toBe(true);
     expect(documentPaths(linkedPaths.dbPath)).toEqual(documentPaths(primaryPaths.dbPath));
-    expect(getIndexFreshness(linked, {}, linkedPaths).state).toBe('fresh');
+    const linkedCleanContext = resolveGitWorktreeContext(linked)!;
+    expect(getIndexFreshness(linked, {}, linkedPaths, { gitContext: linkedCleanContext }).state).toBe('fresh');
 
     const sharedDb = join(snapshot.repositoryCacheDir, 'generations', snapshot.generationId, 'index.db');
     const sharedHash = fileHash(sharedDb);
     writeFileSync(join(linked, 'src/value.ts'), 'export const value = 2;\n');
+    expect(getIndexFreshness(linked, {}, linkedPaths, { gitContext: linkedCleanContext }).state).toBe('stale');
     const dirtyStatuses: string[] = [];
     const dirty = await reindex({
       projectRoot: linked,

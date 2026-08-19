@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   findGitRoot,
+  gitIndexAllowsTreeFingerprintReuse,
   listGitWorktrees,
   parseGitWorktreeList,
   resolveGitCommit,
@@ -156,6 +157,22 @@ describe('Git worktree identity', () => {
         clean: true,
       }),
     );
+  });
+
+  it('rejects index flags that can hide tracked-file changes from clean status', () => {
+    const root = createRepository();
+    const sourcePath = 'src/value.ts';
+
+    expect(gitIndexAllowsTreeFingerprintReuse(root)).toBe(true);
+
+    git(root, ['update-index', '--assume-unchanged', sourcePath]);
+    expect(gitIndexAllowsTreeFingerprintReuse(root)).toBe(false);
+    git(root, ['update-index', '--no-assume-unchanged', sourcePath]);
+
+    git(root, ['update-index', '--skip-worktree', sourcePath]);
+    expect(gitIndexAllowsTreeFingerprintReuse(root)).toBe(false);
+    git(root, ['update-index', '--no-skip-worktree', sourcePath]);
+    expect(gitIndexAllowsTreeFingerprintReuse(root)).toBe(true);
   });
 
   it('gives linked worktrees one repository identity and distinct worktree identities', () => {

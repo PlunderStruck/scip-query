@@ -26,6 +26,7 @@ import {
   buildSharedGenerationSnapshot,
   findSharedBaselineGeneration,
   hydrateSharedGeneration,
+  managedGenerationMatchesFingerprint,
   parseSharedGenerationManifest,
   publishFreshLocalGenerationForProject,
   prepareSharedGenerationForProject,
@@ -560,6 +561,60 @@ describe('shared generation store', () => {
       git(root, ['add', '.']);
       git(root, ['commit', '-qm', 'second']);
       expect(touchExistingWorktreeLease(root, localCache)).toBeNull();
+    } finally {
+      if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];
+      else process.env['XDG_CACHE_HOME'] = previousCacheHome;
+    }
+  });
+
+  it('trusts only a complete managed generation bound to the live clean tree', () => {
+    const root = temporaryDirectory('scip-query-shared-fingerprint-proof-');
+    const cacheHome = temporaryDirectory('scip-query-shared-fingerprint-proof-cache-');
+    const localCache = join(cacheHome, 'scip-query', 'projects', 'managed');
+    const previousCacheHome = process.env['XDG_CACHE_HOME'];
+    process.env['XDG_CACHE_HOME'] = cacheHome;
+    try {
+      git(root, ['init', '-q', '-b', 'main']);
+      git(root, ['config', 'user.email', 'test@example.com']);
+      git(root, ['config', 'user.name', 'Test User']);
+      writeFileSync(join(root, 'value.ts'), 'export const value = 1;\n');
+      git(root, ['add', '.']);
+      git(root, ['commit', '-qm', 'initial']);
+      const context = resolveGitWorktreeContext(root)!;
+      const currentFingerprint = buildProjectInputFingerprint(root, ['typescript'], {});
+      const snapshot = buildSharedGenerationSnapshot(context, currentFingerprint)!;
+      createCache(localCache, root, 'managed-proof', { fingerprint: currentFingerprint });
+      publishSharedGeneration({
+        snapshot,
+        sourceCacheDir: localCache,
+        sourceProjectRoot: root,
+      });
+      writeWorktreeLease(snapshot, localCache, 'attached');
+
+      expect(managedGenerationMatchesFingerprint(context, localCache, currentFingerprint)).toBe(true);
+      expect(
+        managedGenerationMatchesFingerprint(context, localCache, {
+          ...currentFingerprint,
+          languages: ['python'],
+        }),
+      ).toBe(false);
+
+      const leasePath = join(snapshot.repositoryCacheDir, 'worktrees', `${snapshot.worktreeId}.json`);
+      const lease = JSON.parse(readFileSync(leasePath, 'utf8')) as WorktreeCacheLease;
+      writeFileSync(leasePath, `${JSON.stringify({ ...lease, activeGenerationId: 'f'.repeat(64) })}\n`);
+      expect(managedGenerationMatchesFingerprint(context, localCache, currentFingerprint)).toBe(false);
+      writeWorktreeLease(snapshot, localCache, 'attached');
+
+      writeFileSync(join(root, 'value.ts'), 'export const value = 2;\n');
+      expect(
+        managedGenerationMatchesFingerprint(resolveGitWorktreeContext(root)!, localCache, currentFingerprint),
+      ).toBe(false);
+
+      writeFileSync(join(root, 'value.ts'), 'export const value = 1;\n');
+      rmSync(join(snapshot.repositoryCacheDir, 'generations', snapshot.generationId, 'manifest.json'));
+      expect(
+        managedGenerationMatchesFingerprint(resolveGitWorktreeContext(root)!, localCache, currentFingerprint),
+      ).toBe(false);
     } finally {
       if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];
       else process.env['XDG_CACHE_HOME'] = previousCacheHome;

@@ -88,6 +88,20 @@ export function resolveGitWorktreeContext(
   return resolveGitWorktreeContextIndividually(projectRoot, git);
 }
 
+/**
+ * True when Git observes every tracked path normally. Assume-unchanged and
+ * skip-worktree entries can hide byte changes from a clean status result, so
+ * they cannot support tree-only freshness reuse.
+ */
+export function gitIndexAllowsTreeFingerprintReuse(projectRoot: string, git: GitReader = DEFAULT_GIT_READER): boolean {
+  const entries = git.run(projectRoot, ['ls-files', '-v', '-z']);
+  if (entries === undefined) return false;
+  return entries
+    .split('\0')
+    .filter(Boolean)
+    .every((entry) => entry.startsWith('H '));
+}
+
 interface GitWorktreeContextMetadata {
   root: string;
   gitDir: string;

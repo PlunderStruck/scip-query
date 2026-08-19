@@ -87,7 +87,7 @@ export function prepareWorktreeIndex(
   ) {
     return publishFreshLocalGenerationForProject(projectRoot, config, paths, opts.gitContext);
   }
-  const freshness = getIndexFreshness(projectRoot, config, paths);
+  const freshness = getIndexFreshness(projectRoot, config, paths, { gitContext: opts.gitContext });
   if (freshness.state === 'fresh') {
     return { kind: 'local-fresh' };
   }
