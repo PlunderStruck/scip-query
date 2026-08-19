@@ -421,9 +421,16 @@ function computeBehaviorConstructRange(
   selectedFocusLines: readonly number[],
 ): BehaviorConstructRange {
   const tree = getAst(db, relativePath);
+  const astCallables: SyntaxNode[] = [];
   if (selectedFocusLines.length > 0 && tree) {
     const focusedNodes: SyntaxNode[] = [];
-    walk(tree.rootNode, (node) => {
+    let firstFocusLine = selectedFocusLines[0]!;
+    let lastFocusLine = firstFocusLine;
+    for (const line of selectedFocusLines) {
+      firstFocusLine = Math.min(firstFocusLine, line);
+      lastFocusLine = Math.max(lastFocusLine, line);
+    }
+    walkNodesCoveringLineRange(tree.rootNode, firstFocusLine, lastFocusLine, (node) => {
       if (
         isBehaviorFocusNode(node) &&
         node.startPosition.row >= startLine &&
@@ -431,6 +438,14 @@ function computeBehaviorConstructRange(
         selectedFocusLines.every((line) => node.startPosition.row <= line && node.endPosition.row >= line)
       ) {
         focusedNodes.push(node);
+      }
+      if (
+        CALLABLE_NODE_TYPES.has(node.type) &&
+        node.startPosition.row >= startLine &&
+        node.endPosition.row <= endLine &&
+        selectedFocusLines.every((line) => node.startPosition.row <= line && node.endPosition.row >= line)
+      ) {
+        astCallables.push(node);
       }
     });
     const focusedNode = focusedNodes.sort(
@@ -459,17 +474,6 @@ function computeBehaviorConstructRange(
   if (!tree) {
     return focused ? { startLine: focused.startLine, endLine: focused.endLine } : { startLine, endLine };
   }
-  const astCallables: SyntaxNode[] = [];
-  walk(tree.rootNode, (node) => {
-    if (
-      CALLABLE_NODE_TYPES.has(node.type) &&
-      node.startPosition.row >= startLine &&
-      node.endPosition.row <= endLine &&
-      selectedFocusLines.every((line) => node.startPosition.row <= line && node.endPosition.row >= line)
-    ) {
-      astCallables.push(node);
-    }
-  });
   const astFocused = astCallables.sort(
     (left, right) =>
       left.endPosition.row - left.startPosition.row - (right.endPosition.row - right.startPosition.row) ||
@@ -1412,6 +1416,19 @@ function smallestCoveringCallable(
 function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
   visit(node);
   for (const child of node.namedChildren) walk(child, visit);
+}
+
+function walkNodesCoveringLineRange(
+  node: SyntaxNode,
+  firstLine: number,
+  lastLine: number,
+  visit: (node: SyntaxNode) => void,
+): void {
+  visit(node);
+  for (const child of node.namedChildren) {
+    if (child.startPosition.row > firstLine || child.endPosition.row < lastLine) continue;
+    walkNodesCoveringLineRange(child, firstLine, lastLine, visit);
+  }
 }
 
 function normalizeSourceLine(sourceLine: string): string {
