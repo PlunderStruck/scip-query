@@ -8,6 +8,7 @@ import type { SupportedLanguage } from '../../src/domain/types.js';
 import type * as ProcessIdentityModule from '../../src/platform/process-identity.js';
 import type * as BoundedProcessModule from '../../src/platform/bounded-process.js';
 import type * as AffectedShadow from '../../src/reindex/affected-shadow.js';
+import type * as IndexCoverage from '../../src/reindex/index-coverage.js';
 import type * as TypeScriptFragmentStore from '../../src/reindex/typescript-fragment-store.js';
 import { resolveIndexerConcurrency } from '../../src/reindex/indexer-runner.js';
 import { projectShardSlug } from '../../src/reindex/project-shards.js';
@@ -1531,9 +1532,7 @@ async function loadReindexFixture(opts: {
   };
 
   vi.doMock('../../src/reindex/index-coverage.js', async () => {
-    const actual = await vi.importActual<typeof import('../../src/reindex/index-coverage.js')>(
-      '../../src/reindex/index-coverage.js',
-    );
+    const actual = await vi.importActual<typeof IndexCoverage>('../../src/reindex/index-coverage.js');
     return {
       ...actual,
       inspectIndexDocumentCoverage:

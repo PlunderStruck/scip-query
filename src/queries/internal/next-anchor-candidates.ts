@@ -169,52 +169,56 @@ export function systemMapNextAnchorPacket(
 
   for (const step of behavior.steps) {
     if (!step.location || !step.behavior) continue;
-      const graphRelationCandidates = collectNextAnchorGraphRelationCandidates(step, {
+    const graphRelationCandidates = collectNextAnchorGraphRelationCandidates(step, {
+      db,
+      topology,
+      nodeById,
+      returnedNodeIds,
+      sourceAllowed,
+      alternativeAlreadyReturned,
+    });
+    candidates.push(...graphRelationCandidates.candidates);
+    upstreamCandidates += graphRelationCandidates.upstreamCandidates;
+    runtimeCandidates += graphRelationCandidates.runtimeCandidates;
+    resultCandidates += graphRelationCandidates.resultCandidates;
+
+    const exactOccurrenceCandidates = collectNextAnchorExactOccurrenceCandidates(
+      step,
+      {
         db,
         topology,
         nodeById,
         returnedNodeIds,
         sourceAllowed,
         alternativeAlreadyReturned,
-      });
-      candidates.push(...graphRelationCandidates.candidates);
-      upstreamCandidates += graphRelationCandidates.upstreamCandidates;
-      runtimeCandidates += graphRelationCandidates.runtimeCandidates;
-      resultCandidates += graphRelationCandidates.resultCandidates;
+      },
+      evidencedCallsiteKeys,
+    );
+    candidates.push(...exactOccurrenceCandidates);
 
-      const exactOccurrenceCandidates = collectNextAnchorExactOccurrenceCandidates(step, {
+    const callsiteCandidates = collectNextAnchorCallsiteCandidates(
+      step,
+      {
         db,
         topology,
         nodeById,
         returnedNodeIds,
         sourceAllowed,
         alternativeAlreadyReturned,
-      }, evidencedCallsiteKeys);
-      candidates.push(...exactOccurrenceCandidates);
-
-      const callsiteCandidates = collectNextAnchorCallsiteCandidates(
-        step,
-        {
-          db,
-          topology,
-          nodeById,
-          returnedNodeIds,
-          sourceAllowed,
-          alternativeAlreadyReturned,
-        },
-        {
-          evidencedCallsiteKeys,
-          consideredCandidateKeys,
-          calleeMap,
-          stepDefinition: stepDefinitions.get(step.id),
-        },
-      );
-      candidates.push(...callsiteCandidates.candidates);
-      scannedBehaviorSteps += callsiteCandidates.scannedBehaviorSteps;
-      visibleCallsites += callsiteCandidates.visibleCallsites;
-      identityCandidateCallsites += callsiteCandidates.identityCandidateCallsites;
-      ambiguousCallsites += callsiteCandidates.ambiguousCallsites;
-      unresolvedCallsites += callsiteCandidates.unresolvedCallsites;
+      },
+      {
+        evidencedCallsiteKeys,
+        consideredCandidateKeys,
+        calleeMap,
+        stepDefinition: stepDefinitions.get(step.id),
+      },
+    );
+    candidates.push(...callsiteCandidates.candidates);
+    scannedBehaviorSteps += callsiteCandidates.scannedBehaviorSteps;
+    visibleCallsites += callsiteCandidates.visibleCallsites;
+    identityCandidateCallsites += callsiteCandidates.identityCandidateCallsites;
+    ambiguousCallsites += callsiteCandidates.ambiguousCallsites;
+    unresolvedCallsites += callsiteCandidates.unresolvedCallsites;
   }
 
   return nextAnchorPacketFromCandidates(
@@ -268,9 +272,7 @@ function collectNextAnchorGraphRelationCandidates(
     const candidateNode = context.nodeById.get(candidateNodeId);
     if (!candidateNode?.location || !context.sourceAllowed(candidateNode.location.file)) continue;
     const alternative =
-      edge.kind === 'call'
-        ? callableAlternativeForNode(context.db, candidateNode)
-        : alternativeForNode(candidateNode);
+      edge.kind === 'call' ? callableAlternativeForNode(context.db, candidateNode) : alternativeForNode(candidateNode);
     if (!alternative) continue;
     if (context.alternativeAlreadyReturned(alternative)) continue;
     const location = evidenceLocation(edge, candidateNode.location.file) ?? candidateNode.location;
@@ -331,8 +333,7 @@ function collectNextAnchorGraphRelationCandidates(
     const line = evidenceLocation(edge, step.location.file)?.line;
     const materialLine = step.behavior.lines.find(
       (candidate) =>
-        (line === undefined || (line >= candidate.line && line <= candidate.endLine)) &&
-        candidate.text.includes(leaf),
+        (line === undefined || (line >= candidate.line && line <= candidate.endLine)) && candidate.text.includes(leaf),
     );
     if (!materialLine) continue;
     const causalRole = callableReferenceCausalRole(materialLine.signals);
@@ -1113,7 +1114,6 @@ function nodeLeaf(node: ExplorationTopologyNode): string {
   const label = node.label.slice(node.label.lastIndexOf(':') + 1);
   return normalizedCallableLeaf(label);
 }
-
 
 function symbolIdentityForNode(node: ExplorationTopologyNode | undefined): string | null {
   if (node?.kind !== 'symbol' || !node.id.startsWith('symbol:')) return null;

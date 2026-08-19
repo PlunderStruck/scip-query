@@ -1,9 +1,6 @@
 import type { IndexedDefinition } from '../../domain/types.js';
 import { getAst } from '../../source/ast/ast-core.js';
-import {
-  callableParameterNames,
-  smallestCoveringCallable,
-} from '../../source/ast/ast-callables.js';
+import { callableParameterNames, smallestCoveringCallable } from '../../source/ast/ast-callables.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 import type { ResolvedCallSite } from './resolved-call-sites.js';

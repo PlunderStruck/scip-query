@@ -634,7 +634,7 @@ function isObservationIdentity(value: unknown): value is ObservationIdentity {
     value['hashAlgorithm'] === OBSERVATION_IDENTITY_HASH_ALGORITHM &&
     isBoundedRecordString(value['projection']['name']) &&
     isPositiveInteger(value['projection']['version']) &&
-      isSha256Hex(value['digest'])
+    isSha256Hex(value['digest'])
   );
 }
 

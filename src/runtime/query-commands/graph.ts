@@ -1445,8 +1445,8 @@ function shellArgument(value: string): string {
 }
 
 function printSystemMapChildFiles(region: ReturnType<typeof queries.systemMap>['regions'][number]): void {
-    const symbolsByFile = groupBy(region.symbols, (symbol) => symbol.file);
-    const hitsByFile = groupBy(region.literalHits, (hit) => hit.file);
+  const symbolsByFile = groupBy(region.symbols, (symbol) => symbol.file);
+  const hitsByFile = groupBy(region.literalHits, (hit) => hit.file);
   const relationsByFile = new Map<string, typeof region.relations>();
   for (const relation of region.relations) {
     for (const file of new Set([relation.fromFile, relation.toFile])) {

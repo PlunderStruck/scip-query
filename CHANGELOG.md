@@ -4,6 +4,75 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.21.0]
+
+### Faster indexing and warm queries
+
+- A bounded persistent query service now keeps common navigation, reference,
+  dependency, graph, and source reads warm across CLI invocations. Repeated
+  commands reuse generation-scoped graph and source products instead of
+  reconstructing them in every process.
+- Cold reindexing reuses language and workspace shards more aggressively,
+  scopes invalidation to affected compiler inputs, and records per-language
+  cost. Incremental TypeScript publication inserts newly added documents and
+  no longer rewrites the complete SCIP artifact for ordinary edits.
+- Git inventory, worktree identity, project fingerprints, syntax ranges, and
+  repeated graph projections are cached or batched. Query startup lazily loads
+  expensive TypeScript and Vue components and avoids unnecessary durability
+  work for recomputable mailbox traffic.
+- Watchers use bounded warm compiler sessions, settle edit bursts, retire idle
+  or orphaned processes reliably, and clean up records for removed worktrees or
+  reused process identifiers.
+
+### Exact, bounded exploration evidence
+
+- `search`, `outline`, `entrypoints`, `evidence`, `inspect`, and `code` form the
+  canonical exploration workflow. Typed projections cover execution, data
+  flow, runtime crossings, state, temporal ordering, contracts, identity,
+  ownership, and static dependencies without inferring task relevance.
+- System maps and connected behavior packets preserve predicates, sibling
+  outcomes, call and value-flow evidence, runtime participants, and exact
+  source identities while keeping graph and source budgets independently
+  recoverable.
+- Large human outputs use immutable `scip-query continue` cursors. Source
+  snippets retain ordinary indentation and line numbers, repeated evidence can
+  use generation-bound receipts, and recovery output is grouped instead of
+  emitting hundreds of one-line commands.
+
+### Index and navigation correctness
+
+- Exact file paths now fail closed instead of falling back to unrelated files
+  with the same basename. `outline`, `inspect --at`, and graph roots no longer
+  merge or relabel symbols from a different module.
+- Caller discovery follows named import aliases and rejects same-file callee
+  guesses unless call shape and receiver ownership agree.
+- Candidate publication verifies exhaustive TypeScript and JavaScript document
+  coverage while respecting compiler-target exclusions from providers such as
+  Rust. Disk-backed search and source reads remain usable from an existing
+  index when refresh fails, with explicit stale-evidence disclosure.
+- CLI failures are concise by default, continuation commands use the installed
+  executable form, and source/index freshness is disclosed consistently across
+  navigation and health commands.
+
+### Workflow and compatibility
+
+- The primary skills now teach the bounded cursor protocol and the canonical
+  evidence loop directly. Setup, architecture hooks, and watcher lifecycle
+  commands share the same worktree-aware cache and cleanup rules.
+- The old `symbols` CLI spelling is replaced by `outline`. Materialized graph
+  evidence requires explicit edge family, direction, depth, and edge budget.
+- Autonomous work-state, outcome-journal, blocking diff-gate, and cleanup-apply
+  subsystems were removed. scip-query now owns repository evidence; the calling
+  agent owns task state, mutation authorization, and completion judgment.
+
+### Release reliability
+
+- The default test command caps Vitest at two workers, matching the repository's
+  proven memory envelope and preventing release preflight worker RPC timeouts.
+- Release calibration exercises TypeScript, Python, and Rust repositories with
+  source-backed assertions for reindex, outline, code, references, call graphs,
+  complexity, data flow, and slices.
+
 ## [0.20.0]
 
 ### Maintained native SQLite distribution

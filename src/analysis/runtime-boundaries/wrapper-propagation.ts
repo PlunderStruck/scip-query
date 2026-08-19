@@ -2,11 +2,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { referenceEvidenceForSymbol } from '../../symbols/references/reference-sites.js';
 import { leafName } from '../../symbols/symbol-parser.js';
-import {
-  parameterName,
-  smallestCoveringCallable,
-  walkNamedSyntax as walk,
-} from '../../source/ast/ast-callables.js';
+import { parameterName, smallestCoveringCallable, walkNamedSyntax as walk } from '../../source/ast/ast-callables.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import { boundaryFileContext, createBoundaryObservation, type BoundaryFileContext } from './extractors.js';
 import type { BoundaryKeyPart, BoundaryObservation } from './types.js';

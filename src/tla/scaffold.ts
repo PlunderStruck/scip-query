@@ -448,4 +448,3 @@ function renderMap(
   };
   return `${JSON.stringify(contract, null, 2)}\n`;
 }
-

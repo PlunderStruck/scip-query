@@ -49,9 +49,7 @@ describe('skill installation', () => {
     expect([...module.INSTALLABLE_SKILLS].sort()).toEqual(
       [...module.BUILTIN_SKILLS, ...module.COMPATIBILITY_SKILLS].sort(),
     );
-    expect([...module.INSTALLABLE_SKILLS].sort()).toEqual(
-      readdirSync(join(process.cwd(), 'skills')).sort(),
-    );
+    expect([...module.INSTALLABLE_SKILLS].sort()).toEqual(readdirSync(join(process.cwd(), 'skills')).sort());
   });
 
   it('ships the primary router, workflow skills, and integrity audit', async () => {

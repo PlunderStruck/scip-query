@@ -81,7 +81,11 @@ describe('incremental SQLite publication', () => {
     const pathsInDb = candidate.prepare('SELECT relative_path FROM documents ORDER BY relative_path').all();
     const symbols = candidate.prepare('SELECT symbol FROM global_symbols ORDER BY symbol').all();
     candidate.close();
-    expect(pathsInDb).toEqual([{ relative_path: 'src/a.ts' }, { relative_path: 'src/b.ts' }, { relative_path: 'src/c.ts' }]);
+    expect(pathsInDb).toEqual([
+      { relative_path: 'src/a.ts' },
+      { relative_path: 'src/b.ts' },
+      { relative_path: 'src/c.ts' },
+    ]);
     expect(symbols).toEqual([{ symbol: 'symbol/A' }, { symbol: 'symbol/B' }, { symbol: 'symbol/C' }]);
   });
 

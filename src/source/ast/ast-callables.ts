@@ -34,11 +34,7 @@ export function walkNamedSyntax(node: SyntaxNode, visit: (node: SyntaxNode) => v
 }
 
 /** Smallest function-like node whose range covers `[startLine, endLine]`. */
-export function smallestCoveringCallable(
-  root: SyntaxNode,
-  startLine: number,
-  endLine: number,
-): SyntaxNode | null {
+export function smallestCoveringCallable(root: SyntaxNode, startLine: number, endLine: number): SyntaxNode | null {
   let match: SyntaxNode | null = null;
   walkNamedSyntax(root, (node) => {
     if (!/(?:function|method|lambda)/u.test(node.type) && node.type !== 'arrow_function') return;
@@ -49,11 +45,7 @@ export function smallestCoveringCallable(
 }
 
 /** Innermost named node whose range covers `[startLine, endLine]`. */
-export function smallestNodeCoveringLines(
-  node: SyntaxNode,
-  startLine: number,
-  endLine: number,
-): SyntaxNode | null {
+export function smallestNodeCoveringLines(node: SyntaxNode, startLine: number, endLine: number): SyntaxNode | null {
   if (node.startPosition.row > startLine || node.endPosition.row < endLine) return null;
   for (const child of node.namedChildren) {
     const match = smallestNodeCoveringLines(child, startLine, endLine);

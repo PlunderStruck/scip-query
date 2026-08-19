@@ -1,10 +1,6 @@
 import { getSourceImports } from '../../language-parsers/index.js';
 import { getAst } from '../../source/ast/ast-core.js';
-import {
-  smallestCoveringCallable,
-  unwrapExpression,
-  walkNamedSyntax as walk,
-} from '../../source/ast/ast-callables.js';
+import { smallestCoveringCallable, unwrapExpression, walkNamedSyntax as walk } from '../../source/ast/ast-callables.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';

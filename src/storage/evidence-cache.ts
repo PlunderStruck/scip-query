@@ -139,9 +139,9 @@ const LEGACY_VERSION_PREDICATE = "version NOT LIKE 'evidence-%'";
 
 // scip-query: ignore-wrapper — canonical hash helper; the cache key contract
 // (one algorithm, hex form) lives here instead of being repeated per caller.
-  export function sha256Hex(value: string | Uint8Array): string {
-    return createHash('sha256').update(value).digest('hex');
-  }
+export function sha256Hex(value: string | Uint8Array): string {
+  return createHash('sha256').update(value).digest('hex');
+}
 
 /** Per-file content hash, memoized per (db, path) like the source-text cache. */
 export function fileContentHash(db: ScipDatabase, relativePath: string, content: string): string {

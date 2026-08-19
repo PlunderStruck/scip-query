@@ -552,7 +552,6 @@ function deduplicateObservations(values: readonly BoundaryObservation[]): Bounda
   return [...new Map(values.map((value) => [value.id, value])).values()];
 }
 
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }

@@ -11,9 +11,9 @@ import { createRustAnalyzerTransport, RustAnalyzerLspClient } from './lsp-client
 import type { LspInitializeResult } from './lsp-types.js';
 import type { RustImportDefinitionWorkerRequest, RustImportDefinitionWorkerResponse } from './lsp-session.js';
 import {
-    rustAnalyzerReadinessWorkerErrorEnvelope,
-    sleep,
-    waitForRustAnalyzerDiagnosticsWithinDeadline,
+  rustAnalyzerReadinessWorkerErrorEnvelope,
+  sleep,
+  waitForRustAnalyzerDiagnosticsWithinDeadline,
   waitForRustAnalyzerInitialPostOpenReadiness,
   waitForRustAnalyzerPostOpenReadiness,
   withRustAnalyzerReadinessInvalidation,
@@ -25,8 +25,8 @@ import {
   runWithConcurrency,
   rustAnalyzerInitializationOptions,
   rustAnalyzerSessionRoot,
-    signatureForDefinition,
-    openDefinitionDocuments,
+  signatureForDefinition,
+  openDefinitionDocuments,
   waitForOpenedDocuments,
   rustRequestCalleeDefinitions,
   rustRequestReferenceDefinitions,

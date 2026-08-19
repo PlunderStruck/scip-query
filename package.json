@@ -1,6 +1,6 @@
 {
   "name": "scip-query",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "description": "Evidence and verification for AI coding agents: map code, reuse concepts, finish migrations, and gate diffs.",
   "type": "module",
   "main": "dist/index.js",
@@ -362,7 +362,7 @@
     "dev": "tsup --watch",
     "format": "prettier --write \"{src,tests,scripts}/**/*.{ts,tsx,js,mjs,json}\" \"*.{ts,js,json}\"",
     "format:check": "prettier --check \"{src,tests,scripts}/**/*.{ts,tsx,js,mjs,json}\" \"*.{ts,js,json}\"",
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=2",
     "soak:cache-lifecycle": "npm run build && vite-node scripts/cache-lifecycle-soak.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && tsc -p tests/fixtures/invocation-coverage-contract/tsconfig.json && tsc -p tests/fixtures/protocol-state-contract/tsconfig.json",

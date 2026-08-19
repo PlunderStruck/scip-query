@@ -5,10 +5,10 @@ import {
   isNonNegativeFiniteNumber,
   isNonNegativeInteger,
   isNonEmptyString,
-    isPositiveInteger,
-    isRecordObject,
-    isSha256Hex,
-    isStringOrNullRecord,
+  isPositiveInteger,
+  isRecordObject,
+  isSha256Hex,
+  isStringOrNullRecord,
 } from '../../domain/record-validation.js';
 import { stableJson } from '../../domain/stable-json.js';
 import type { IndexedDefinition } from '../../domain/types.js';
@@ -556,7 +556,6 @@ function malformedResponse(error: string): Extract<DurableRustMailboxResponseDec
 function incompatibleResponse(error: string): Extract<DurableRustMailboxResponseDecodeResult, { ok: false }> {
   return { ok: false, code: 'incompatible-response', error };
 }
-
 
 function optionalPositiveInteger(value: unknown): boolean {
   return value === undefined || isPositiveInteger(value);

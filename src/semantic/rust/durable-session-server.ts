@@ -260,7 +260,6 @@ function configuredIdleTimeoutMs(): number {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : DEFAULT_IDLE_TIMEOUT_MS;
 }
 
-
 const invokedPath = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : null;
 if (invokedPath === import.meta.url) {
   const sessionDir = process.argv[2];

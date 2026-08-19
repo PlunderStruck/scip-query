@@ -713,4 +713,3 @@ function evidenceStrengthRank(strength: ExplorationEvidenceStrength): number {
       return 4;
   }
 }
-

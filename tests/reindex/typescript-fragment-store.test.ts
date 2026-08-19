@@ -184,20 +184,22 @@ describe('TypeScript fragment store', () => {
       }
     }
 
-      expect(() =>
-        assembleTypeScriptIndex({
-          runtime: availability.runtime,
-          baseIndexBytes: baseline,
-          fragments: [{ ...update.fragments[0]!, relativePath: 'src/missing.ts' }],
-        }),
-      ).toThrow('path mismatch');
-      expect(() =>
-        assembleTypeScriptIndex({
-          runtime: availability.runtime,
-          baseIndexBytes: baseline,
-          fragments: [{ relativePath: 'src/missing.ts', bytes: null, occurrences: 0, symbols: 0, referenceFragments: [] }],
-        }),
-      ).toThrow('deletion has no prior document');
+    expect(() =>
+      assembleTypeScriptIndex({
+        runtime: availability.runtime,
+        baseIndexBytes: baseline,
+        fragments: [{ ...update.fragments[0]!, relativePath: 'src/missing.ts' }],
+      }),
+    ).toThrow('path mismatch');
+    expect(() =>
+      assembleTypeScriptIndex({
+        runtime: availability.runtime,
+        baseIndexBytes: baseline,
+        fragments: [
+          { relativePath: 'src/missing.ts', bytes: null, occurrences: 0, symbols: 0, referenceFragments: [] },
+        ],
+      }),
+    ).toThrow('deletion has no prior document');
     expect(() =>
       readTypeScriptFragmentGeneration({
         cacheDir,

@@ -794,4 +794,3 @@ function findLastMatching<T>(values: readonly T[], predicate: (value: T) => bool
   }
   return undefined;
 }
-
