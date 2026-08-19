@@ -221,7 +221,8 @@ export async function tryRunQueryServiceFastPath(argv: readonly string[]): Promi
   }
   if (invocation.kind === 'imported-by') {
     const response = tryImportedByWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true });
-    if (!response || !writeUnpagedJsonResult(response.result)) return false;
+    if (!response) return false;
+    await writeSerializedJsonResult(JSON.stringify(response.result), invocation.kind, argv);
     return true;
   }
   if (invocation.kind === 'hierarchy') {
