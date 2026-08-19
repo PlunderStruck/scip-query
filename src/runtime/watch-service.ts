@@ -353,7 +353,7 @@ export function stopWatchService(opts: WatchServiceControllerOptions): WatchServ
   const state = readWatchServiceState(paths.statePath);
   const classification: WatchServiceClassification = !state
     ? { kind: 'stopped' }
-    : runtime.isProcessAlive(state.pid)
+    : ownedProcessIsLive(state, runtime)
       ? { kind: 'live', state }
       : { kind: 'stale', state, reason: 'dead-process' };
   const action = planWatchServiceAction('stop', classification);
@@ -367,8 +367,8 @@ export function stopWatchService(opts: WatchServiceControllerOptions): WatchServ
     return { disposition: 'stopped', pid: action.state.pid };
   }
   const lock = readWatchProcessLock(paths.lockPath);
-  if (action.kind === 'already-stopped' && lock && runtime.isProcessAlive(lock.pid)) {
-    stopLiveWatchProcess(lock, opts, runtime);
+  if (action.kind === 'already-stopped' && lock) {
+    if (ownedProcessIsLive(lock, runtime)) stopLiveWatchProcess(lock, opts, runtime);
     cleanupWatchServiceFiles(paths, lock.pid, runtime);
     return { disposition: 'stopped', pid: lock.pid };
   }
@@ -675,7 +675,7 @@ function cleanupWatchServiceFiles(paths: WatchServicePaths, expectedPid: number,
   rmSync(paths.statePath, { force: true });
   rmSync(paths.activityPath, { force: true });
   const lock = readWatchProcessLock(paths.lockPath);
-  if (lock?.pid === expectedPid && !runtime.isProcessAlive(expectedPid)) {
+  if (lock?.pid === expectedPid) {
     const lockRuntime = {
       ...NODE_PROCESS_FILE_LOCK_RUNTIME,
       wallNow: runtime.now,
@@ -691,6 +691,19 @@ function cleanupWatchServiceFiles(paths: WatchServicePaths, expectedPid: number,
       runtime: lockRuntime,
     });
   }
+}
+
+function ownedProcessIsLive(
+  owner: { pid: number; processIdentity?: ProcessIdentity },
+  runtime: Pick<WatchServiceRuntime, 'isProcessAlive' | 'readProcessIdentity'>,
+): boolean {
+  if (!runtime.isProcessAlive(owner.pid)) return false;
+  // Legacy records and temporarily unavailable OS identity observations cannot
+  // authorize deletion. Keep treating them as live so the signal path refuses
+  // them explicitly instead of discarding a possibly current owner's lock.
+  if (!owner.processIdentity) return true;
+  const actual = runtime.readProcessIdentity(owner.pid);
+  return actual === null || sameProcessIdentity(owner.processIdentity, actual);
 }
 
 function runningWatchMessage(lockPath: string, projectRoot: string, existing: WatchProcessLockMetadata | null): string {

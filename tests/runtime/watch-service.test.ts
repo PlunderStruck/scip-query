@@ -518,6 +518,37 @@ describe('watch service contract', () => {
     });
   });
 
+  it('cleans stale ownership records without signaling a process that reused the PID', () => {
+    withTempCache((cacheDir) => {
+      const paths = watchServicePaths(cacheDir);
+      const runtime = fakeRuntime(paths.statePath);
+      runtime.alive.add(123);
+      runtime.processIdentities.set(123, { ...WATCH_PROCESS_IDENTITY, startToken: 'pid-successor' });
+      writeWatchServiceState(paths.statePath, {
+        ...liveState(),
+        projectRoot: realpathSync(IDENTITY.projectRoot),
+      });
+      writeFileSync(
+        paths.lockPath,
+        `${JSON.stringify({
+          version: 1,
+          pid: 123,
+          processIdentity: WATCH_PROCESS_IDENTITY,
+          projectRoot: realpathSync(IDENTITY.projectRoot),
+          startedAt: new Date(NOW - 60_000).toISOString(),
+        })}\n`,
+      );
+
+      expect(stopWatchService(controllerOptions(cacheDir, runtime))).toEqual({
+        disposition: 'stopped',
+        pid: 123,
+      });
+      expect(runtime.signaled).toEqual([]);
+      expect(existsSync(paths.statePath)).toBe(false);
+      expect(existsSync(paths.lockPath)).toBe(false);
+    });
+  });
+
   it('forces an identity-verified stuck service, observes exit, then cleans ownership files', () => {
     withTempCache((cacheDir) => {
       const paths = watchServicePaths(cacheDir);
@@ -604,7 +635,7 @@ describe('watch service contract', () => {
     });
   });
 
-  it('never signals a reused PID whose birth identity differs from the watch record', () => {
+  it('never signals a reused PID and cleans the stale watch record', () => {
     withTempCache((cacheDir) => {
       const paths = watchServicePaths(cacheDir);
       const runtime = fakeRuntime(paths.statePath);
@@ -615,8 +646,9 @@ describe('watch service contract', () => {
       });
       writeWatchServiceState(paths.statePath, liveState());
 
-      expect(() => stopWatchService(controllerOptions(cacheDir, runtime))).toThrow(/process identity.*does not match/i);
+      expect(stopWatchService(controllerOptions(cacheDir, runtime))).toEqual({ disposition: 'stopped', pid: 123 });
       expect(runtime.signaled).toEqual([]);
+      expect(existsSync(paths.statePath)).toBe(false);
     });
   });
 
