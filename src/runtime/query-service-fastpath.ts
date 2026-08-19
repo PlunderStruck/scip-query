@@ -246,7 +246,8 @@ export async function tryRunQueryServiceFastPath(argv: readonly string[]): Promi
   }
   if (invocation.kind === 'trace') {
     const response = tryTraceWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true });
-    if (!response || !writeUnpagedSerializedJsonResult(response.result.serializedJson)) return false;
+    if (!response) return false;
+    await writeSerializedJsonResult(response.result.serializedJson, invocation.kind, argv);
     return true;
   }
   if (invocation.kind === 'value-flow') {
