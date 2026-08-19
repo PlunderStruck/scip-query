@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createPathChangeWake,
+  createWatchServiceShutdown,
   runWatchServiceLoopIteration,
   terminateWatchServiceProcess,
   watchServiceLoopDelayMs,
@@ -109,6 +110,42 @@ describe('runWatchServiceLoopIteration', () => {
       }),
     ).rejects.toThrow('mailbox corrupt');
     expect(events).toEqual(['index']);
+  });
+});
+
+describe('createWatchServiceShutdown', () => {
+  it('starts watcher cancellation immediately and shares one completion across shutdown phases', async () => {
+    const events: string[] = [];
+    let resolveStop: ((result: { state: 'stopped' }) => void) | undefined;
+    const completion = new Promise<{ state: 'stopped' }>((resolve) => {
+      resolveStop = resolve;
+    });
+    const shutdown = createWatchServiceShutdown(
+      {
+        stop() {
+          events.push('watcher-stop');
+          return completion;
+        },
+      },
+      {
+        requestStop() {
+          events.push('request-stop');
+        },
+        closeWake() {
+          events.push('wake-close');
+        },
+      },
+    );
+
+    const signalPhase = shutdown.begin();
+    const finallyPhase = shutdown.begin();
+
+    expect(signalPhase).toBe(completion);
+    expect(finallyPhase).toBe(completion);
+    expect(events).toEqual(['request-stop', 'wake-close', 'watcher-stop']);
+
+    resolveStop?.({ state: 'stopped' });
+    await expect(signalPhase).resolves.toEqual({ state: 'stopped' });
   });
 });
 

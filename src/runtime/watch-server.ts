@@ -17,7 +17,7 @@ import {
 } from '../platform/watch-service-state.js';
 import { loadProjectConfig, resolveWatchConfig } from './config.js';
 import { getIndexFreshness, getPublishedIndexFreshness, type IndexFreshnessState } from './index-freshness.js';
-import { Watcher } from './watch.js';
+import { Watcher, type WatcherStopResult } from './watch.js';
 import { initializeTypeScriptSemanticMailbox } from '../semantic/typescript/session-service.js';
 import {
   publishedGenerationIdentity,
@@ -61,6 +61,38 @@ export interface WatchServiceLoopIterationRuntime {
   afterMailboxPoll(result: { indexRequests: number; semanticRequests: number; processedRequests: number }): void;
   shouldStop(): boolean;
   wait(durationMs: number): Promise<void>;
+}
+
+export interface WatchServiceShutdown {
+  begin(): Promise<WatcherStopResult>;
+}
+
+/**
+ * Starts the time-critical part of service shutdown exactly once. Reindex
+ * cancellation must begin when shutdown is requested, not after unrelated
+ * mailbox drains that can consume the controller's graceful-stop deadline.
+ */
+export function createWatchServiceShutdown(
+  watcher: Pick<Watcher, 'stop'>,
+  runtime: {
+    requestStop(): void;
+    closeWake(): void;
+  },
+): WatchServiceShutdown {
+  let stopPromise: Promise<WatcherStopResult> | undefined;
+  return {
+    begin() {
+      if (!stopPromise) {
+        runtime.requestStop();
+        runtime.closeWake();
+        stopPromise = watcher.stop();
+        // The signal handler cannot await. Attach a rejection observer now;
+        // the server's finally block still awaits and reports the same promise.
+        void stopPromise.catch(() => undefined);
+      }
+      return stopPromise;
+    },
+  };
 }
 
 interface WatchServiceLoopIterationResultBase {
@@ -309,9 +341,16 @@ export async function runWatchServiceServer(
     },
   });
 
+  const shutdown = createWatchServiceShutdown(watcher, {
+    requestStop() {
+      stopping = true;
+    },
+    closeWake() {
+      mailboxWake.close();
+    },
+  });
   const stop = (): void => {
-    stopping = true;
-    mailboxWake.close();
+    void shutdown.begin();
   };
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
@@ -407,12 +446,12 @@ export async function runWatchServiceServer(
     process.off('SIGINT', stop);
     process.off('SIGTERM', stop);
     if (heartbeatTimer !== undefined) clearInterval(heartbeatTimer);
-    mailboxWake.close();
+    const watcherStop = shutdown.begin();
     await Promise.all([
       semanticLane.close('TypeScript semantic service stopped before completing the request.'),
       indexLane.close('TypeScript index service stopped before completing the request.'),
     ]);
-    const stopResult = await watcher.stop();
+    const stopResult = await watcherStop;
     if (stopResult.state === 'stopped') {
       rmSync(servicePaths.statePath, { force: true });
       rmSync(servicePaths.activityPath, { force: true });
