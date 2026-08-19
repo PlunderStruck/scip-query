@@ -27,6 +27,7 @@ import {
   QUERY_SERVICE_PROTOCOL_VERSION,
   queryServiceSessionIdentity,
   type QueryServiceEnvelope,
+  type QueryServiceSerializedResult,
   type QueryServiceServerState,
 } from './query-service.js';
 
@@ -34,6 +35,7 @@ const DEFAULT_IDLE_TIMEOUT_MS = 30_000;
 const HEARTBEAT_INTERVAL_MS = 1_000;
 const POLL_INTERVAL_MS = 5;
 const MAX_IDLE_POLL_INTERVAL_MS = 100;
+const DEPENDENCE_SLICE_CACHE_MAX_BYTES = 1024 * 1024;
 const MAILBOX_LIMITS: Partial<BoundedMailboxLimits> = {
   maxItems: 64,
   maxBytes: 128 * 1024 * 1024,
@@ -286,12 +288,18 @@ async function executeRequest(
     };
   }
   if (request.kind === 'dependence-slice') {
+    const cached = dependenceSliceResultByDb.get(db);
+    if (cached?.criterion === request.criterion) return cached.result;
     const { dependenceSlice } = await import('../queries/graph/dependence-slice.js');
     const serializedJson = JSON.stringify(dependenceSlice(db, request.criterion));
-    return {
+    const result = {
       serializedJson,
       sha256: createHash('sha256').update(serializedJson).digest('hex'),
     };
+    if (Buffer.byteLength(serializedJson) <= DEPENDENCE_SLICE_CACHE_MAX_BYTES) {
+      dependenceSliceResultByDb.set(db, { criterion: request.criterion, result });
+    }
+    return result;
   }
   if (request.kind === 'call-graph') {
     const [{ callGraph }, { symbolResolutionJson }] = await Promise.all([
@@ -676,6 +684,7 @@ function requiredNonNegativeInteger(value: unknown, name: string): number {
 }
 
 const semanticEnrichmentByDb = new WeakMap<object, boolean>();
+const dependenceSliceResultByDb = new WeakMap<object, { criterion: string; result: QueryServiceSerializedResult }>();
 
 function defaultSemanticEnrichment(db: ReturnType<typeof openProjectDb>): boolean {
   const cached = semanticEnrichmentByDb.get(db);
