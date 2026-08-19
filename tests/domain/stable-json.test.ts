@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { stableJson } from '../../src/domain/stable-json.js';
+import { codeUnitStableJson, stableJson } from '../../src/domain/stable-json.js';
 
 describe('stableJson', () => {
   it('converges equal nested objects regardless of insertion order', () => {
@@ -25,5 +25,9 @@ describe('stableJson', () => {
     expect(stableJson({ escaped: 'a\n"b"', enabled: true, count: 2, empty: null })).toBe(
       '{"count":2,"empty":null,"enabled":true,"escaped":"a\\n\\"b\\""}',
     );
+  });
+
+  it('can order process-local identity keys without locale collation', () => {
+    expect(codeUnitStableJson({ a: { z: 1, b: 2 }, B: true })).toBe('{"B":true,"a":{"b":2,"z":1}}');
   });
 });

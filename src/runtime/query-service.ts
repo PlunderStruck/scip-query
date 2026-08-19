@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { monotonicNowMs } from '../domain/time.js';
-import { stableJson } from '../domain/stable-json.js';
+import { codeUnitStableJson } from '../domain/stable-json.js';
 import { decodeObservationReceipt, type ObservationReceiptV2 } from '../domain/observation-receipt.js';
 import { readTextFileWithinLimit } from '../platform/bounded-file.js';
 import { cliVersion } from '../platform/cli-version.js';
@@ -32,7 +32,6 @@ import type { MethodsResolution } from '../queries/navigation/methods.js';
 import type { SourceSearchOptions, SourceSearchResult } from '../queries/navigation/source-search.js';
 import {
   BOUNDED_MAILBOX_VERSION,
-  boundedMailboxOperationKey,
   boundedMailboxPaths,
   boundedMailboxRequestId,
   enqueueBoundedMailboxRequest,
@@ -813,7 +812,7 @@ function hasTrustedWatchGeneration(
 export function queryServiceSessionIdentity(sessionDir: string): string {
   return createHash('sha256')
     .update(
-      stableJson({
+      codeUnitStableJson({
         kind: 'scip-query-service-mailbox',
         protocolVersion: QUERY_SERVICE_PROTOCOL_VERSION,
         sessionDir: resolve(sessionDir),
@@ -895,7 +894,7 @@ function requestQuery<Result>(
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const operationKey = boundedMailboxOperationKey('query-service-v18', { clientId, request });
+  const operationKey = queryServiceOperationKey(clientId, request);
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -949,6 +948,12 @@ function requestQuery<Result>(
     responsePollAttempt += 1;
   }
   throw new Error('Persistent query service timed out.');
+}
+
+function queryServiceOperationKey(clientId: string, request: QueryServiceRequest): string {
+  return createHash('sha256')
+    .update(codeUnitStableJson({ namespace: 'query-service-v18', payload: { clientId, request } }))
+    .digest('hex');
 }
 
 function ensureQueryServiceServer(
@@ -1376,7 +1381,7 @@ function queryServiceSessionDirectory(
   const projectRoot = canonicalPath(context.projectRoot);
   const identity = createHash('sha256')
     .update(
-      stableJson({
+      codeUnitStableJson({
         protocolVersion: QUERY_SERVICE_PROTOCOL_VERSION,
         projectRoot,
         dbPath: resolve(context.dbPath),
