@@ -278,14 +278,18 @@ async function executeRequest(
     };
   }
   if (request.kind === 'value-flow') {
+    const cached = cachedSerializedResult(db, request.kind, request.symbolPattern);
+    if (cached) return cached;
     const { valueFlow } = await import('../queries/graph/value-flow.js');
     const serializedJson = JSON.stringify(
       valueFlow(db, { symbols: [request.symbolPattern] }, { maxDepth: 2, maxEdges: 48 }),
     );
-    return {
+    const result = {
       serializedJson,
       sha256: createHash('sha256').update(serializedJson).digest('hex'),
     };
+    retainSerializedResult(db, request.kind, request.symbolPattern, result);
+    return result;
   }
   if (request.kind === 'dependence-slice') {
     const cached = cachedSerializedResult(db, request.kind, request.criterion);
@@ -688,12 +692,12 @@ function requiredNonNegativeInteger(value: unknown, name: string): number {
 const semanticEnrichmentByDb = new WeakMap<object, boolean>();
 const serializedResultByDb = new WeakMap<
   object,
-  { kind: 'dependence-slice' | 'system'; operand: string; result: QueryServiceSerializedResult }
+  { kind: 'dependence-slice' | 'system' | 'value-flow'; operand: string; result: QueryServiceSerializedResult }
 >();
 
 function cachedSerializedResult(
   db: ReturnType<typeof openProjectDb>,
-  kind: 'dependence-slice' | 'system',
+  kind: 'dependence-slice' | 'system' | 'value-flow',
   operand: string,
 ): QueryServiceSerializedResult | null {
   const cached = serializedResultByDb.get(db);
@@ -702,7 +706,7 @@ function cachedSerializedResult(
 
 function retainSerializedResult(
   db: ReturnType<typeof openProjectDb>,
-  kind: 'dependence-slice' | 'system',
+  kind: 'dependence-slice' | 'system' | 'value-flow',
   operand: string,
   result: QueryServiceSerializedResult,
 ): void {
