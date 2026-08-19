@@ -405,7 +405,7 @@ describe('project file authority boundary', () => {
   it('probes UTF-8 literals across read-buffer boundaries without materializing misses', () => {
     const projectRoot = temporaryDirectory('scip-query-project-probe-');
     const bufferBytes = 1024 * 1024;
-    const source = `${'a'.repeat(bufferBytes - 1)}🙂${'b'.repeat(bufferBytes - 6)}needle-tail`;
+    const source = `${'a'.repeat(bufferBytes - 1)}🙂${'b'.repeat(bufferBytes - 6)}ProbeNeedle-needle-tail`;
     writeFileSync(join(projectRoot, 'source.ts'), source);
     writeFileSync(join(projectRoot, 'binary.bin'), Buffer.from([0, 110, 101, 101, 100, 108, 101]));
     writeFileSync(join(projectRoot, 'invalid-utf8.bin'), Buffer.from([0xc3]));
@@ -421,13 +421,13 @@ describe('project file authority boundary', () => {
     const batch = probeProjectFileBytesForLiterals(
       projectRoot,
       'source.ts',
-      [Buffer.from('needle'), Buffer.from('a🙂'), Buffer.from('absent')],
+      [Buffer.from('needle'), Buffer.from('a🙂'), Buffer.from('ProbeNeedle'), Buffer.from('absent')],
       { computeSha256: true },
     );
     expect(batch).toMatchObject({
       byteLength: Buffer.byteLength(source),
       isUtf8Text: true,
-      matchedLiteralIndexes: [0, 1],
+      matchedLiteralIndexes: [0, 1, 2],
       sha256: createHash('sha256').update(source).digest('hex'),
     });
     expect(batch.bytes?.toString('utf8')).toBe(source);
@@ -453,6 +453,22 @@ describe('project file authority boundary', () => {
       isUtf8Text: false,
       includesLiteral: false,
       bytes: null,
+    });
+  });
+
+  it('bounds uppercase anchor probes before falling back to the complete literal search', () => {
+    const projectRoot = temporaryDirectory('scip-query-project-anchor-probe-');
+    const source = `${'N'.repeat(2048)}ProbeNeedle`;
+    writeFileSync(join(projectRoot, 'source.ts'), source);
+
+    expect(
+      probeProjectFileBytesForLiterals(projectRoot, 'source.ts', [
+        Buffer.from('ProbeNeedle'),
+        Buffer.from('MissingNeedle'),
+      ]),
+    ).toMatchObject({
+      isUtf8Text: true,
+      matchedLiteralIndexes: [0],
     });
   });
 });

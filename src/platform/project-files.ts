@@ -50,6 +50,7 @@ export {
 
 export const DEFAULT_PROJECT_SOURCE_LIMIT_BYTES = 64 * 1024 * 1024;
 const PROJECT_FILE_PROBE_BUFFER_BYTES = 1024 * 1024;
+const MAX_LITERAL_ANCHOR_CANDIDATES = 1024;
 
 /**
  * A project-file proof identifies one existing regular file whose canonical
@@ -275,7 +276,10 @@ export function probeProjectFileBytesForLiterals(
       throw new InputTooLargeError(opts.inputKind ?? 'project file', relativePath, snapshotFile.size, maxBytes);
     }
     const isUtf8Text = !snapshotFile.content.includes(0) && isUtf8(snapshotFile.content);
-    const matchedLiteralIndexes = isUtf8Text ? matchingLiteralIndexes(snapshotFile.content, literals) : [];
+    const literalAnchorIndexes = literals.map(literalAnchorIndex);
+    const matchedLiteralIndexes = isUtf8Text
+      ? matchingLiteralIndexes(snapshotFile.content, literals, literalAnchorIndexes)
+      : [];
     return {
       byteLength: snapshotFile.size,
       isUtf8Text,
@@ -299,6 +303,7 @@ export function probeProjectFileBytesForLiterals(
     let validUtf8 = true;
     let utf8Carry: Buffer = Buffer.alloc(0);
     const literalTails: Buffer[] = literals.map(() => Buffer.alloc(0));
+    const literalAnchorIndexes = literals.map(literalAnchorIndex);
 
     while (offset < before.size) {
       const bytesRead = readSync(descriptor, scratch, 0, Math.min(scratch.byteLength, before.size - offset), offset);
@@ -316,7 +321,7 @@ export function probeProjectFileBytesForLiterals(
         if (includesLiterals[index]) continue;
         const literal = literals[index]!;
         const literalTail = literalTails[index]!;
-        includesLiterals[index] = chunkIncludesLiteral(chunk, literal, literalTail);
+        includesLiterals[index] = chunkIncludesLiteral(chunk, literal, literalTail, literalAnchorIndexes[index]!);
         literalTails[index] = nextLiteralTail(chunk, literal, literalTail);
       }
       offset += bytesRead;
@@ -389,15 +394,51 @@ function completeUtf8PrefixLength(bytes: Buffer): number {
   return expectedBytes > bytes.byteLength - leadIndex ? leadIndex : bytes.byteLength;
 }
 
-function matchingLiteralIndexes(bytes: Buffer, literals: readonly Buffer[]): number[] {
-  return literals.flatMap((literal, index) => (bytes.includes(literal) ? [index] : []));
+function matchingLiteralIndexes(
+  bytes: Buffer,
+  literals: readonly Buffer[],
+  literalAnchorIndexes: readonly number[],
+): number[] {
+  return literals.flatMap((literal, index) =>
+    bufferIncludesLiteral(bytes, literal, literalAnchorIndexes[index]!) ? [index] : [],
+  );
 }
 
-function chunkIncludesLiteral(chunk: Buffer, literal: Buffer, previousTail: Buffer): boolean {
-  if (chunk.includes(literal)) return true;
+function chunkIncludesLiteral(chunk: Buffer, literal: Buffer, previousTail: Buffer, anchorIndex: number): boolean {
+  if (bufferIncludesLiteral(chunk, literal, anchorIndex)) return true;
   if (previousTail.byteLength === 0 || literal.byteLength === 1) return false;
   const prefix = chunk.subarray(0, Math.min(chunk.byteLength, literal.byteLength - 1));
-  return Buffer.concat([previousTail, prefix]).includes(literal);
+  return bufferIncludesLiteral(Buffer.concat([previousTail, prefix]), literal, anchorIndex);
+}
+
+function bufferIncludesLiteral(bytes: Buffer, literal: Buffer, anchorIndex: number): boolean {
+  if (anchorIndex < 0) return bytes.includes(literal);
+  const anchorByte = literal[anchorIndex]!;
+  let candidate = bytes.indexOf(anchorByte);
+  let candidateCount = 0;
+  while (candidate >= 0) {
+    candidateCount += 1;
+    if (candidateCount > MAX_LITERAL_ANCHOR_CANDIDATES) return bytes.includes(literal);
+    const start = candidate - anchorIndex;
+    if (
+      start >= 0 &&
+      start + literal.byteLength <= bytes.byteLength &&
+      bytes.compare(literal, 0, literal.byteLength, start, start + literal.byteLength) === 0
+    ) {
+      return true;
+    }
+    candidate = bytes.indexOf(anchorByte, candidate + 1);
+  }
+  return false;
+}
+
+function literalAnchorIndex(literal: Buffer): number {
+  for (let index = 1; index < literal.byteLength; index += 1) {
+    const byte = literal[index]!;
+    if (byte >= 0x41 && byte <= 0x5a) return index;
+  }
+  const first = literal[0]!;
+  return first >= 0x41 && first <= 0x5a ? 0 : -1;
 }
 
 function nextLiteralTail(chunk: Buffer, literal: Buffer, previousTail: Buffer): Buffer {
