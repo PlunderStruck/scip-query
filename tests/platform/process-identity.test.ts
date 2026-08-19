@@ -48,6 +48,32 @@ describe('process identity', () => {
     expect(calls).toEqual([{ binary: 'ps', args: ['-p', '77', '-o', 'lstart='] }]);
   });
 
+  it('does not reuse current-PID identities supplied by an injected runtime', () => {
+    let reads = 0;
+    const runtime = {
+      platform: 'darwin' as const,
+      readFile: () => {
+        throw new Error('unexpected read');
+      },
+      run: () => `start-${++reads}`,
+    };
+
+    expect(readProcessIdentity(process.pid, runtime)?.startToken).toBe('start-1');
+    expect(readProcessIdentity(process.pid, runtime)?.startToken).toBe('start-2');
+    expect(reads).toBe(2);
+  });
+
+  it('returns independent records for the cached current host process identity', () => {
+    const first = readProcessIdentity(process.pid);
+    const second = readProcessIdentity(process.pid);
+
+    expect(first).not.toBeNull();
+    expect(second).toEqual(first);
+    expect(second).not.toBe(first);
+    if (first) first.startToken = 'caller-mutation';
+    expect(readProcessIdentity(process.pid)).toEqual(second);
+  });
+
   it('uses a millisecond process-start token on Windows', () => {
     const identity = readProcessIdentity(88, {
       platform: 'win32',

@@ -13,14 +13,22 @@ export interface ProcessIdentityRuntime {
 
 const PROCESS_IDENTITY_COMMAND_TIMEOUT_MS = 1_000;
 const PROCESS_IDENTITY_MAX_OUTPUT_BYTES = 16 * 1024;
+let cachedCurrentProcessIdentity: ProcessIdentity | undefined;
 export function readProcessIdentity(
   pid: number,
   runtime: ProcessIdentityRuntime = DEFAULT_PROCESS_IDENTITY_RUNTIME,
 ): ProcessIdentity | null {
   if (!Number.isSafeInteger(pid) || pid <= 0) return null;
+  const isCurrentHostProcess = pid === process.pid && runtime === DEFAULT_PROCESS_IDENTITY_RUNTIME;
+  if (isCurrentHostProcess && cachedCurrentProcessIdentity) return { ...cachedCurrentProcessIdentity };
   try {
     const startToken = processStartToken(pid, runtime);
-    return startToken ? { version: 1, pid, platform: runtime.platform, startToken } : null;
+    if (!startToken) return null;
+    const identity: ProcessIdentity = { version: 1, pid, platform: runtime.platform, startToken };
+    // A process's start token cannot change during that process's lifetime. Cache only our own
+    // successful host lookup: other PIDs may be reused, and injected runtimes may model change.
+    if (isCurrentHostProcess) cachedCurrentProcessIdentity = identity;
+    return { ...identity };
   } catch {
     return null;
   }
