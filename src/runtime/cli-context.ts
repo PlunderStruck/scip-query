@@ -7,6 +7,7 @@ import { loadProjectConfig } from './config.js';
 import type { ProjectConfig, ScipQueryConfig, WatcherStatus } from '../domain/types.js';
 import { getIndexFreshness } from './index-freshness.js';
 import type { GitWorktreeContext } from '../platform/git-worktree.js';
+import { withProjectFileListingCache } from '../platform/project-file-inventory-context.js';
 import { publishedGenerationIdentity } from '../semantic/typescript/session-protocol.js';
 import { readSuppressionDir } from '../storage/suppression-store.js';
 import {
@@ -162,15 +163,17 @@ export function rootIndexFallbackWarning(dbPath: string, configuredDbPath: strin
 }
 
 export function withDb<T>(run: (db: ScipDatabase) => T): T {
-  const db = openDb();
-  const previous = activeCliDatabase;
-  activeCliDatabase = db;
-  try {
-    return run(db);
-  } finally {
-    activeCliDatabase = previous;
-    db.close();
-  }
+  return withProjectFileListingCache(() => {
+    const db = openDb();
+    const previous = activeCliDatabase;
+    activeCliDatabase = db;
+    try {
+      return run(db);
+    } finally {
+      activeCliDatabase = previous;
+      db.close();
+    }
+  });
 }
 
 export function collect(value: string, prev: string[]): string[] {

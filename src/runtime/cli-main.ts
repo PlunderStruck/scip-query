@@ -29,6 +29,7 @@ import { projectEvidenceFingerprint } from '../storage/evidence-cache.js';
 import { maybeSweepRepositoryCache } from './repository-cache-lifecycle.js';
 import { resolveGitWorktreeContext } from '../platform/git-worktree.js';
 import { installTerminalConsoleSanitizer, sanitizeTerminalText } from '../platform/terminal-output.js';
+import { enterProjectFileListingCache } from '../platform/project-file-inventory-context.js';
 import { parseOutputPageSize } from './output-pagination.js';
 
 const cliEntrypoint = isCliEntrypoint();
@@ -57,6 +58,7 @@ program
 if (cliEntrypoint) normalizeLegacyEvidenceInvocation(process.argv);
 const commandDescriptors = await loadInvocationCommandDescriptors(cliEntrypoint ? process.argv[2] : undefined);
 registerCommandDescriptors(program, commandDescriptors);
+let releaseProjectFileListingCache: (() => void) | undefined;
 const defaultHelp = new Help();
 program.configureHelp({
   formatHelp: (command, helper) =>
@@ -66,6 +68,7 @@ program.hook('preAction', async (_thisCommand, actionCommand) => {
   const commandName = actionCommand.name();
   const prepareSharedCache = sharedCachePreparationEligible(commandName);
   const startWatchService = watchServiceAutoStartEligible(commandName);
+  if (prepareSharedCache) releaseProjectFileListingCache = enterProjectFileListingCache();
   if (!prepareSharedCache && !startWatchService) {
     initializeProfileContext();
     await maybePrintUpdateNotice({ commandName });
@@ -117,7 +120,11 @@ program.hook('preAction', async (_thisCommand, actionCommand) => {
     maybeSweepRepositoryCache(projectRoot, cliVersion);
   }
 });
-program.hook('postAction', () => activateCliProjectContext(undefined));
+program.hook('postAction', () => {
+  activateCliProjectContext(undefined);
+  releaseProjectFileListingCache?.();
+  releaseProjectFileListingCache = undefined;
+});
 
 function initializeProfileContext(): void {
   profileRunId();
@@ -138,10 +145,15 @@ function initializeProfileContext(): void {
 export { program, renderHeuristicNotice };
 
 export async function runCli(): Promise<void> {
-  if (process.argv.includes('--help-all')) {
-    process.stdout.write(renderRootCommandHelp(program, commandDescriptors, { includeCompatibility: true }));
-  } else {
-    await program.parseAsync();
+  try {
+    if (process.argv.includes('--help-all')) {
+      process.stdout.write(renderRootCommandHelp(program, commandDescriptors, { includeCompatibility: true }));
+    } else {
+      await program.parseAsync();
+    }
+  } finally {
+    releaseProjectFileListingCache?.();
+    releaseProjectFileListingCache = undefined;
   }
 }
 

@@ -40,6 +40,7 @@ import {
   persistProjectFileFingerprintCache,
   rememberProjectFileFingerprint,
 } from './fingerprint-stat-cache.js';
+import { cachedProjectFileListing } from './project-file-inventory-context.js';
 
 export {
   normalizeSafeProjectRelativePath,
@@ -427,11 +428,9 @@ export function projectFileExists(projectRoot: string, candidatePath: string): b
 }
 
 export function listProjectFiles(projectRoot: string): string[] {
-  return (
-    projectSnapshotPaths(projectRoot) ??
-    listGitProjectFiles(projectRoot) ??
-    listFilesystemProjectFiles(projectRoot)
-  )
+  const snapshotPaths = projectSnapshotPaths(projectRoot);
+  if (snapshotPaths) return snapshotPaths.filter((file) => file && !isProjectArtifactPath(file)).sort();
+  return (listGitProjectFiles(projectRoot) ?? listFilesystemProjectFiles(projectRoot))
     .filter((file) => file && !isProjectArtifactPath(file))
     .sort();
 }
@@ -716,13 +715,15 @@ function normalizeOptionalPath(path: string | undefined): string | undefined {
 
 function listGitProjectFiles(projectRoot: string): string[] | null {
   try {
-    return execFileSync('git', ['-C', projectRoot, 'ls-files', '-co', '--exclude-standard', '--', '.'], {
-      encoding: 'utf-8',
-      maxBuffer: 50 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'ignore'],
-      timeout: 30_000,
-      killSignal: 'SIGKILL',
-    })
+    return cachedProjectFileListing(projectRoot, 50 * 1024 * 1024, () =>
+      execFileSync('git', ['-C', projectRoot, 'ls-files', '-co', '--exclude-standard', '--', '.'], {
+        encoding: 'utf-8',
+        maxBuffer: 50 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 30_000,
+        killSignal: 'SIGKILL',
+      }),
+    )
       .split('\n')
       .filter(Boolean);
   } catch {

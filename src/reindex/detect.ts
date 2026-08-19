@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import type { SupportedLanguage } from '../domain/types.js';
+import { cachedProjectFileListing } from '../platform/project-file-inventory-context.js';
 
 interface LanguageMarker {
   language: SupportedLanguage;
@@ -188,13 +189,15 @@ function collectExtensions(projectRoot: string): Set<string> {
 
 function collectGitTrackedExtensions(projectRoot: string): Set<string> | null {
   try {
-    const stdout = execFileSync('git', ['-C', projectRoot, 'ls-files', '-co', '--exclude-standard', '--', '.'], {
-      encoding: 'utf-8',
-      maxBuffer: 25 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'ignore'],
-      timeout: 30_000,
-      killSignal: 'SIGKILL',
-    });
+    const stdout = cachedProjectFileListing(projectRoot, 25 * 1024 * 1024, () =>
+      execFileSync('git', ['-C', projectRoot, 'ls-files', '-co', '--exclude-standard', '--', '.'], {
+        encoding: 'utf-8',
+        maxBuffer: 25 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 30_000,
+        killSignal: 'SIGKILL',
+      }),
+    );
     const found = new Set<string>();
     for (const line of stdout.split('\n')) {
       if (!line) continue;
