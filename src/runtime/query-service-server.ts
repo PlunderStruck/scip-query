@@ -25,6 +25,7 @@ import { openProjectDb } from './cli-context.js';
 import { isLargeCommandIndex } from './cli-support.js';
 import { buildObservationReceipt } from './observation-receipt.js';
 import {
+  QUERY_SERVICE_HEARTBEAT_INTERVAL_MS,
   QUERY_SERVICE_PROTOCOL_VERSION,
   queryServiceSessionIdentity,
   type QueryServiceEnvelope,
@@ -33,7 +34,6 @@ import {
 } from './query-service.js';
 
 const DEFAULT_IDLE_TIMEOUT_MS = 30_000;
-const HEARTBEAT_INTERVAL_MS = 1_000;
 const POLL_INTERVAL_MS = 5;
 const MAX_IDLE_POLL_INTERVAL_MS = 100;
 const SERIALIZED_RESULT_CACHE_MAX_BYTES = 1024 * 1024;
@@ -79,7 +79,7 @@ export async function runQueryServiceServer(sessionDir: string, projectRoot: str
 
   const writeState = (durable = false): void => {
     const now = monotonicNowMs();
-    if (!durable && now - lastHeartbeatAtMs < HEARTBEAT_INTERVAL_MS) return;
+    if (!durable && now - lastHeartbeatAtMs < QUERY_SERVICE_HEARTBEAT_INTERVAL_MS) return;
     lastHeartbeatAtMs = now;
     const state: QueryServiceServerState = {
       protocolVersion: QUERY_SERVICE_PROTOCOL_VERSION,

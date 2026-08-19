@@ -43,6 +43,8 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
 export const QUERY_SERVICE_PROTOCOL_VERSION = 18;
+export const QUERY_SERVICE_HEARTBEAT_INTERVAL_MS = 1_000;
+const QUERY_SERVICE_FRESH_HEARTBEAT_MAX_AGE_MS = 2 * QUERY_SERVICE_HEARTBEAT_INTERVAL_MS;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
 const QUERY_SERVICE_CATALOG_POOL_SIZE = 4;
@@ -854,8 +856,10 @@ export function readQueryServiceServerState(sessionDir: string): QueryServiceSer
   }
 }
 
-export function isQueryServiceServerStateLive(state: QueryServiceServerState): boolean {
+export function isQueryServiceServerStateUsable(state: QueryServiceServerState, nowMs = Date.now()): boolean {
   if (!isProcessAlive(state.pid)) return false;
+  const heartbeatAgeMs = nowMs - state.heartbeatAtMs;
+  if (heartbeatAgeMs >= 0 && heartbeatAgeMs <= QUERY_SERVICE_FRESH_HEARTBEAT_MAX_AGE_MS) return true;
   if (!state.processIdentity) return true;
   const actual = readProcessIdentity(state.pid);
   return actual !== null && sameProcessIdentity(state.processIdentity, actual);
@@ -920,7 +924,7 @@ function requestQuery<Result>(
       );
     }
     const state = readQueryServiceServerState(sessionDir);
-    if (!state || !isQueryServiceServerStateLive(state)) {
+    if (!state || !isQueryServiceServerStateUsable(state)) {
       ensureQueryServiceServer(sessionDir, context.projectRoot, serverPath, monotonicDeadlineAtMs);
     }
     sleepSync(QUERY_SERVICE_POLL_INTERVAL_MS);
@@ -935,7 +939,7 @@ function ensureQueryServiceServer(
   requestDeadlineAtMs: number,
 ): void {
   const current = readQueryServiceServerState(sessionDir);
-  if (current && isQueryServiceServerStateLive(current)) return;
+  if (current && isQueryServiceServerStateUsable(current)) return;
 
   const debug = queryServiceDebugEnabled();
   // scip-query: process-lifetime-reviewed -- the detached service is owned by
@@ -950,7 +954,7 @@ function ensureQueryServiceServer(
   const startupDeadlineAtMs = Math.min(requestDeadlineAtMs, monotonicNowMs() + QUERY_SERVICE_STARTUP_TIMEOUT_MS);
   while (monotonicNowMs() <= startupDeadlineAtMs) {
     const state = readQueryServiceServerState(sessionDir);
-    if (state && isQueryServiceServerStateLive(state)) return;
+    if (state && isQueryServiceServerStateUsable(state)) return;
     sleepSync(QUERY_SERVICE_POLL_INTERVAL_MS);
   }
   throw new Error('Persistent query service did not become ready within 5s.');

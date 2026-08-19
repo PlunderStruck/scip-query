@@ -6,6 +6,7 @@ import { readProcessIdentity } from '../../src/platform/process-identity.js';
 import { parseFastPathInvocation } from '../../src/runtime/query-service-fastpath.js';
 import {
   QUERY_SERVICE_PROTOCOL_VERSION,
+  isQueryServiceServerStateUsable,
   queryServiceSessionIdentity,
   readQueryServiceServerState,
 } from '../../src/runtime/query-service.js';
@@ -361,5 +362,23 @@ describe('query service state identity', () => {
     );
 
     expect(readQueryServiceServerState(sessionDir)).toBeNull();
+  });
+
+  it('uses a fresh heartbeat before paying for exact process identity and rechecks stale state exactly', () => {
+    const processIdentity = readProcessIdentity(process.pid);
+    expect(processIdentity).not.toBeNull();
+    const nowMs = Date.now();
+    const state = {
+      protocolVersion: QUERY_SERVICE_PROTOCOL_VERSION,
+      sessionIdentity: 'session-a',
+      pid: process.pid,
+      processIdentity: { ...processIdentity!, startToken: `${processIdentity!.startToken}-reused` },
+      generation: 'generation-a',
+      heartbeatAtMs: nowMs,
+    };
+
+    expect(isQueryServiceServerStateUsable(state, nowMs)).toBe(true);
+    expect(isQueryServiceServerStateUsable({ ...state, heartbeatAtMs: nowMs - 2_001 }, nowMs)).toBe(false);
+    expect(isQueryServiceServerStateUsable({ ...state, heartbeatAtMs: nowMs + 1 }, nowMs)).toBe(false);
   });
 });
