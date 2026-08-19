@@ -3,6 +3,7 @@ import type { CodeFileMemberMode } from '../queries/navigation/code.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../domain/source-inspection-limits.js';
 import { DEFAULT_OUTPUT_PAGE_SIZE, writeSerializedJson } from '../platform/terminal-output.js';
 import { resolveProjectRoot } from './cli-context.js';
+import { cliVersion } from './cli-support.js';
 import { assertNavigationDetailAllowed } from './navigation-session.js';
 import {
   tryCodeWithQueryService,
@@ -24,6 +25,7 @@ import {
   trySurfaceWithQueryService,
   tryTraceWithQueryService,
   tryUnusedImportsWithQueryService,
+  tryValueFlowWithQueryService,
 } from './query-service.js';
 
 interface SourceSearchFastPathInvocation {
@@ -106,6 +108,11 @@ interface TraceFastPathInvocation {
   symbolPattern: string;
 }
 
+interface ValueFlowFastPathInvocation {
+  kind: 'value-flow';
+  symbolPattern: string;
+}
+
 interface ImportsFastPathInvocation {
   kind: 'imports';
   filePattern: string;
@@ -137,6 +144,7 @@ type FastPathInvocation =
   | KindCountsFastPathInvocation
   | RefsFastPathInvocation
   | TraceFastPathInvocation
+  | ValueFlowFastPathInvocation
   | ImportsFastPathInvocation
   | UnusedImportsFastPathInvocation
   | SurfaceFastPathInvocation;
@@ -146,7 +154,7 @@ type FastPathInvocation =
  * command registry. Any ambiguity falls through to Commander so errors and
  * uncommon invocations retain the canonical CLI behavior.
  */
-export function tryRunQueryServiceFastPath(argv: readonly string[]): boolean {
+export async function tryRunQueryServiceFastPath(argv: readonly string[]): Promise<boolean> {
   if (process.env['SCIP_QUERY_PROFILE'] === '1' || process.env['SCIP_QUERY_PROFILE'] === 'true') return false;
   const invocation = parseFastPathInvocation(argv);
   if (!invocation) return false;
@@ -218,6 +226,12 @@ export function tryRunQueryServiceFastPath(argv: readonly string[]): boolean {
     if (!response || !writeUnpagedSerializedJsonResult(response.result.serializedJson)) return false;
     return true;
   }
+  if (invocation.kind === 'value-flow') {
+    const response = tryValueFlowWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true });
+    if (!response) return false;
+    await writeSerializedJsonResult(response.result.serializedJson, invocation.kind, argv);
+    return true;
+  }
   if (invocation.kind === 'imports') {
     const response = tryImportsWithQueryService(projectRoot, invocation.filePattern, { allowDefault: true });
     if (!response || !writeUnpagedJsonResult(response.result)) return false;
@@ -271,6 +285,7 @@ export function parseFastPathInvocation(argv: readonly string[]): FastPathInvoca
   if (argv[0] === 'by-kind') return parseByKindInvocation(argv);
   if (argv[0] === 'refs') return parseRefsInvocation(argv);
   if (argv[0] === 'trace') return parseTraceInvocation(argv);
+  if (argv[0] === 'value-flow') return parseValueFlowInvocation(argv);
   if (argv[0] === 'imports') return parseImportsInvocation(argv);
   if (argv[0] === 'unused-imports') return parseUnusedImportsInvocation(argv);
   if (argv[0] === 'surface') return parseSurfaceInvocation(argv);
@@ -317,6 +332,11 @@ function parseRefsInvocation(argv: readonly string[]): RefsFastPathInvocation | 
 function parseTraceInvocation(argv: readonly string[]): TraceFastPathInvocation | null {
   const symbolPattern = parseExactCompactOperand(argv);
   return symbolPattern === null ? null : { kind: 'trace', symbolPattern };
+}
+
+function parseValueFlowInvocation(argv: readonly string[]): ValueFlowFastPathInvocation | null {
+  const symbolPattern = parseExactCompactOperand(argv);
+  return symbolPattern === null ? null : { kind: 'value-flow', symbolPattern };
 }
 
 function parseImportsInvocation(argv: readonly string[]): ImportsFastPathInvocation | null {
@@ -378,6 +398,27 @@ function writeUnpagedSerializedJsonResult(serialized: string): boolean {
   if (serialized.length + 1 > DEFAULT_OUTPUT_PAGE_SIZE) return false;
   writeSerializedJson(serialized);
   return true;
+}
+
+async function writeSerializedJsonResult(serialized: string, command: string, argv: readonly string[]): Promise<void> {
+  if (serialized.length + 1 <= DEFAULT_OUTPUT_PAGE_SIZE) {
+    writeSerializedJson(serialized);
+    return;
+  }
+  const { runWithCliOutputPagination } = await import('./output-pagination.js');
+  await runWithCliOutputPagination(
+    {
+      command,
+      producerVersion: cliVersion,
+      invocationPrefix: process.argv[1] ? [process.execPath, process.argv[1]] : ['scip-query'],
+      argv: [...argv],
+      cwd: process.cwd(),
+      json: true,
+      sourceSession: true,
+      reemitSource: false,
+    },
+    () => writeSerializedJson(serialized),
+  );
 }
 
 function parseFilesInvocation(argv: readonly string[]): FilesFastPathInvocation | null {

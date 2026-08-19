@@ -6,7 +6,7 @@ if (isCliEntrypoint()) {
   let handled = false;
   if (mayUseQueryServiceFastPath(argv)) {
     const { tryRunQueryServiceFastPath } = await import('./query-service-fastpath.js');
-    handled = tryRunQueryServiceFastPath(argv);
+    handled = await tryRunQueryServiceFastPath(argv);
   }
   if (!handled) {
     const { runCli } = await import('./cli-main.js');
@@ -42,6 +42,7 @@ function mayUseQueryServiceFastPath(argv: readonly string[]): boolean {
       argv[0] === 'kind-counts' ||
       argv[0] === 'refs' ||
       argv[0] === 'trace' ||
+      argv[0] === 'value-flow' ||
       argv[0] === 'imports' ||
       argv[0] === 'unused-imports' ||
       argv[0] === 'surface') &&

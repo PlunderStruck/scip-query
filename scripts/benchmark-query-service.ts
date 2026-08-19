@@ -142,6 +142,10 @@ function benchmarkArguments(): string[] {
     benchmarkCommand === 'by-kind' ||
     benchmarkCommand === 'refs' ||
     benchmarkCommand === 'trace' ||
+    benchmarkCommand === 'call-graph' ||
+    benchmarkCommand === 'reference-neighborhood' ||
+    benchmarkCommand === 'dataflow' ||
+    benchmarkCommand === 'value-flow' ||
     benchmarkCommand === 'imports' ||
     benchmarkCommand === 'unused-imports' ||
     benchmarkCommand === 'system' ||
@@ -215,6 +219,10 @@ type BenchmarkCommand =
   | 'kind-counts'
   | 'refs'
   | 'trace'
+  | 'call-graph'
+  | 'reference-neighborhood'
+  | 'dataflow'
+  | 'value-flow'
   | 'imports'
   | 'unused-imports'
   | 'system'
@@ -250,6 +258,10 @@ function parseBenchmarkCommand(configured: string | undefined): BenchmarkCommand
     configured === 'kind-counts' ||
     configured === 'refs' ||
     configured === 'trace' ||
+    configured === 'call-graph' ||
+    configured === 'reference-neighborhood' ||
+    configured === 'dataflow' ||
+    configured === 'value-flow' ||
     configured === 'imports' ||
     configured === 'unused-imports' ||
     configured === 'system' ||
@@ -258,6 +270,6 @@ function parseBenchmarkCommand(configured: string | undefined): BenchmarkCommand
     return configured;
   }
   throw new Error(
-    'SCIP_QUERY_BENCH_COMMAND must be search, outline, code, entrypoints, files, stats, members, methods, deps, rdeps, imported-by, hierarchy, by-kind, kind-counts, refs, trace, imports, unused-imports, system, or surface.',
+    'SCIP_QUERY_BENCH_COMMAND must be search, outline, code, entrypoints, files, stats, members, methods, deps, rdeps, imported-by, hierarchy, by-kind, kind-counts, refs, trace, call-graph, reference-neighborhood, dataflow, value-flow, imports, unused-imports, system, or surface.',
   );
 }

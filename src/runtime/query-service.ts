@@ -42,11 +42,12 @@ import { resolveCliProjectContext } from './cli-context.js';
 import { cliVersion } from './cli-support.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 12;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 13;
 
 const QUERY_SERVICE_POOL_SIZE = 6;
 const QUERY_SERVICE_CATALOG_POOL_SIZE = 4;
 const QUERY_SERVICE_SEMANTIC_NAVIGATION_POOL_SIZE = 5;
+const QUERY_SERVICE_VALUE_FLOW_POOL_SIZE = 3;
 const QUERY_SERVICE_MAX_POOL_SIZE = 8;
 const QUERY_SERVICE_TIMEOUT_MS = 30_000;
 const QUERY_SERVICE_STARTUP_TIMEOUT_MS = 5_000;
@@ -154,6 +155,12 @@ export interface QueryServiceTraceRequest {
   symbolPattern: string;
 }
 
+export interface QueryServiceValueFlowRequest {
+  kind: 'value-flow';
+  expectedGeneration: string;
+  symbolPattern: string;
+}
+
 export interface QueryServiceImportsRequest {
   kind: 'imports';
   expectedGeneration: string;
@@ -226,6 +233,7 @@ export type QueryServiceRequest =
   | QueryServiceKindCountsRequest
   | QueryServiceRefsRequest
   | QueryServiceTraceRequest
+  | QueryServiceValueFlowRequest
   | QueryServiceImportsRequest
   | QueryServiceUnusedImportsRequest
   | QueryServiceSurfaceRequest;
@@ -350,6 +358,12 @@ export interface QueryServiceRefsResult {
 }
 
 export interface QueryServiceTraceResult {
+  result: QueryServiceSerializedResult;
+  generationIdentity: string;
+  observationReceipt: ObservationReceiptV2;
+}
+
+export interface QueryServiceValueFlowResult {
   result: QueryServiceSerializedResult;
   generationIdentity: string;
   observationReceipt: ObservationReceiptV2;
@@ -569,6 +583,20 @@ export function tryTraceWithQueryService(
   );
 }
 
+export function tryValueFlowWithQueryService(
+  projectRoot: string,
+  symbolPattern: string,
+  policy: { allowDefault?: boolean } = {},
+): QueryServiceValueFlowResult | null {
+  return tryQueryWithService(
+    projectRoot,
+    (expectedGeneration) => ({ kind: 'value-flow', expectedGeneration, symbolPattern }),
+    isSerializedJsonResult,
+    'value-flow result',
+    policy,
+  );
+}
+
 export function tryImportsWithQueryService(
   projectRoot: string,
   filePattern: string,
@@ -764,7 +792,7 @@ function requestQuery<Result>(
   const deadlineAtMs = startedAtMs + QUERY_SERVICE_TIMEOUT_MS;
   const monotonicDeadlineAtMs = monotonicNowMs() + QUERY_SERVICE_TIMEOUT_MS;
   const clientId = randomUUID();
-  const operationKey = boundedMailboxOperationKey('query-service-v12', { clientId, request });
+  const operationKey = boundedMailboxOperationKey('query-service-v13', { clientId, request });
   const id = boundedMailboxRequestId(operationKey);
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const admitted = enqueueBoundedMailboxRequest(
@@ -1275,6 +1303,7 @@ function configuredPoolSize(): number {
 
 function requestPoolSize(request: QueryServiceRequest): number {
   const configured = configuredPoolSize();
+  if (request.kind === 'value-flow') return Math.min(configured, QUERY_SERVICE_VALUE_FLOW_POOL_SIZE);
   if (
     request.kind === 'refs' ||
     request.kind === 'trace' ||

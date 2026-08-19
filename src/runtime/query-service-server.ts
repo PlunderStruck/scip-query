@@ -275,6 +275,16 @@ async function executeRequest(
       sha256: createHash('sha256').update(serializedJson).digest('hex'),
     };
   }
+  if (request.kind === 'value-flow') {
+    const { valueFlow } = await import('../queries/graph/value-flow.js');
+    const serializedJson = JSON.stringify(
+      valueFlow(db, { symbols: [request.symbolPattern] }, { maxDepth: 2, maxEdges: 48 }),
+    );
+    return {
+      serializedJson,
+      sha256: createHash('sha256').update(serializedJson).digest('hex'),
+    };
+  }
   if (request.kind === 'imports') {
     const { imports } = await import('../queries/navigation/imports.js');
     return imports(db, request.filePattern, { semantic: defaultSemanticEnrichment(db) });
@@ -422,7 +432,8 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
     requestRecord['kind'] === 'imported-by' ||
     requestRecord['kind'] === 'hierarchy' ||
     requestRecord['kind'] === 'refs' ||
-    requestRecord['kind'] === 'trace'
+    requestRecord['kind'] === 'trace' ||
+    requestRecord['kind'] === 'value-flow'
   ) {
     if (typeof requestRecord['symbolPattern'] !== 'string') {
       throw new Error(`Invalid query service ${requestRecord['kind']} request.`);
