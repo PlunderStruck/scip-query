@@ -285,6 +285,20 @@ async function executeRequest(
       sha256: createHash('sha256').update(serializedJson).digest('hex'),
     };
   }
+  if (request.kind === 'call-graph') {
+    const [{ callGraph }, { symbolResolutionJson }] = await Promise.all([
+      import('../queries/navigation/call-graph.js'),
+      import('./query-commands/symbol-resolution.js'),
+    ]);
+    const serializedJson = JSON.stringify({
+      ...symbolResolutionJson(db, request.symbolPattern),
+      callGraph: callGraph(db, request.symbolPattern, { semantic: defaultSemanticEnrichment(db) }),
+    });
+    return {
+      serializedJson,
+      sha256: createHash('sha256').update(serializedJson).digest('hex'),
+    };
+  }
   if (request.kind === 'reference-neighborhood' || request.kind === 'dataflow') {
     const [{ dataflow, referenceNeighborhood }, { symbolResolutionJson }] = await Promise.all([
       import('../queries/navigation/dataflow.js'),
@@ -452,6 +466,7 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
     requestRecord['kind'] === 'refs' ||
     requestRecord['kind'] === 'trace' ||
     requestRecord['kind'] === 'value-flow' ||
+    requestRecord['kind'] === 'call-graph' ||
     requestRecord['kind'] === 'reference-neighborhood' ||
     requestRecord['kind'] === 'dataflow'
   ) {

@@ -13,6 +13,12 @@ import {
 describe('query service fast path', () => {
   it('parses the bounded machine-readable search form', () => {
     expect(
+      parseFastPathInvocation(['call-graph', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact']),
+    ).toEqual({
+      kind: 'call-graph',
+      symbolPattern: 'queryServiceSessionIdentity',
+    });
+    expect(
       parseFastPathInvocation([
         'search',
         '--json',
@@ -251,6 +257,8 @@ describe('query service fast path', () => {
     ['value-flow', 'queryServiceSessionIdentity', '--depth', '3', '--json', '--result-only', '--compact'],
     ['value-flow', 'queryServiceSessionIdentity', '--max-edges', '12', '--json', '--result-only', '--compact'],
     ['value-flow', '--json', '--result-only', '--compact'],
+    ['call-graph', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact', '--full'],
+    ['call-graph', '--json', '--result-only', '--compact'],
     ['reference-neighborhood', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact', '--full'],
     ['reference-neighborhood', '--json', '--result-only', '--compact'],
     ['dataflow', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact', '--full'],

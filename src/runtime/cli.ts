@@ -43,6 +43,7 @@ function mayUseQueryServiceFastPath(argv: readonly string[]): boolean {
       argv[0] === 'refs' ||
       argv[0] === 'trace' ||
       argv[0] === 'value-flow' ||
+      argv[0] === 'call-graph' ||
       argv[0] === 'reference-neighborhood' ||
       argv[0] === 'dataflow' ||
       argv[0] === 'imports' ||

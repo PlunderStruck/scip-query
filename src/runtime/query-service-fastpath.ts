@@ -115,6 +115,7 @@ interface ValueFlowFastPathInvocation {
 }
 
 type SemanticNeighborhoodFastPathInvocation =
+  | { kind: 'call-graph'; symbolPattern: string }
   | { kind: 'reference-neighborhood'; symbolPattern: string }
   | { kind: 'dataflow'; symbolPattern: string };
 
@@ -238,7 +239,11 @@ export async function tryRunQueryServiceFastPath(argv: readonly string[]): Promi
     await writeSerializedJsonResult(response.result.serializedJson, invocation.kind, argv);
     return true;
   }
-  if (invocation.kind === 'reference-neighborhood' || invocation.kind === 'dataflow') {
+  if (
+    invocation.kind === 'call-graph' ||
+    invocation.kind === 'reference-neighborhood' ||
+    invocation.kind === 'dataflow'
+  ) {
     const response = trySemanticNeighborhoodWithQueryService(projectRoot, invocation.kind, invocation.symbolPattern, {
       allowDefault: true,
     });
@@ -300,7 +305,7 @@ export function parseFastPathInvocation(argv: readonly string[]): FastPathInvoca
   if (argv[0] === 'refs') return parseRefsInvocation(argv);
   if (argv[0] === 'trace') return parseTraceInvocation(argv);
   if (argv[0] === 'value-flow') return parseValueFlowInvocation(argv);
-  if (argv[0] === 'reference-neighborhood' || argv[0] === 'dataflow') {
+  if (argv[0] === 'call-graph' || argv[0] === 'reference-neighborhood' || argv[0] === 'dataflow') {
     return parseSemanticNeighborhoodInvocation(argv);
   }
   if (argv[0] === 'imports') return parseImportsInvocation(argv);
@@ -358,7 +363,7 @@ function parseValueFlowInvocation(argv: readonly string[]): ValueFlowFastPathInv
 
 function parseSemanticNeighborhoodInvocation(argv: readonly string[]): SemanticNeighborhoodFastPathInvocation | null {
   const kind = argv[0];
-  if (kind !== 'reference-neighborhood' && kind !== 'dataflow') return null;
+  if (kind !== 'call-graph' && kind !== 'reference-neighborhood' && kind !== 'dataflow') return null;
   const symbolPattern = parseExactCompactOperand(argv);
   return symbolPattern === null ? null : { kind, symbolPattern };
 }
