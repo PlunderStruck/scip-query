@@ -35,6 +35,7 @@ import {
   SHARED_GENERATION_PRODUCER_IDENTITY,
   touchExistingWorktreeLease,
   worktreeLeaseOwnershipChecksum,
+  writeManagedWorktreeLease,
   writeWorktreeLease,
   writeWorktreeOverlayLease,
   type SharedGenerationSnapshot,
@@ -712,6 +713,31 @@ describe('shared generation store', () => {
           lastReason: 'worktree is not a clean committed snapshot',
         }),
       );
+
+      const initialLease = JSON.parse(readFileSync(leasePath, 'utf8')) as WorktreeCacheLease;
+      const recentLastSeenAt = new Date(Date.now() - 10_000).toISOString();
+      writeFileSync(leasePath, `${JSON.stringify({ ...initialLease, lastSeenAt: recentLastSeenAt }, null, 2)}\n`);
+      expect(publishFreshLocalGenerationForProject(root, config, paths, context)).toEqual({
+        kind: 'missed',
+        reason: 'worktree is not a clean committed snapshot',
+      });
+      expect((JSON.parse(readFileSync(leasePath, 'utf8')) as WorktreeCacheLease).lastSeenAt).toBe(recentLastSeenAt);
+
+      writeManagedWorktreeLease(context, paths.cacheDir, 'failed', () => new Date(), 'managed lease state changed');
+      expect(JSON.parse(readFileSync(leasePath, 'utf8'))).toEqual(
+        expect.objectContaining({
+          lastAction: 'failed',
+          lastReason: 'managed lease state changed',
+        }),
+      );
+
+      const staleLastSeenAt = new Date(Date.now() - 120_000).toISOString();
+      writeFileSync(leasePath, `${JSON.stringify({ ...initialLease, lastSeenAt: staleLastSeenAt }, null, 2)}\n`);
+      expect(publishFreshLocalGenerationForProject(root, config, paths, context)).toEqual({
+        kind: 'missed',
+        reason: 'worktree is not a clean committed snapshot',
+      });
+      expect((JSON.parse(readFileSync(leasePath, 'utf8')) as WorktreeCacheLease).lastSeenAt).not.toBe(staleLastSeenAt);
     } finally {
       if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];
       else process.env['XDG_CACHE_HOME'] = previousCacheHome;

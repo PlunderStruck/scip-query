@@ -87,6 +87,7 @@ export const SHARED_GENERATION_PRODUCER_IDENTITY = JSON.stringify({
 });
 const SHARED_GENERATION_MANIFEST = 'manifest.json';
 const WORKTREE_CACHE_POINTER = 'shared-cache.json';
+const WORKTREE_LEASE_TOUCH_INTERVAL_MS = 60_000;
 const MANAGED_ARTIFACT_DIRECTORIES = [
   LANGUAGE_INDEX_DIRECTORY,
   TYPESCRIPT_FRAGMENT_STORE_DIRECTORY,
@@ -849,8 +850,59 @@ export function writeManagedWorktreeLease(
     ...leaseWithoutChecksum,
     ownershipChecksum: worktreeLeaseOwnershipChecksum(leaseWithoutChecksum),
   };
-  persistWorktreeLease(resolveRepositoryCacheDir(context.repositoryId), lease, false);
+  const repositoryCacheDir = resolveRepositoryCacheDir(context.repositoryId);
+  const reusableLease = readReusableManagedWorktreeLease(repositoryCacheDir, lease);
+  if (reusableLease) return reusableLease;
+  persistWorktreeLease(repositoryCacheDir, lease, false);
   return lease;
+}
+
+function readReusableManagedWorktreeLease(
+  repositoryCacheDir: string,
+  requestedLease: WorktreeCacheLease,
+): WorktreeCacheLease | null {
+  // This fast path is read-only: a concurrent writer can make the observation
+  // stale, but this process cannot overwrite or resurrect that writer's state.
+  try {
+    const pointer = readWorktreeCachePointer(requestedLease.localCacheDir);
+    if (
+      !pointer ||
+      pointer.repositoryId !== requestedLease.repositoryId ||
+      pointer.worktreeId !== requestedLease.worktreeId
+    ) {
+      return null;
+    }
+    const existing = JSON.parse(
+      readTextFileWithinLimit(join(repositoryCacheDir, 'worktrees', `${requestedLease.worktreeId}.json`), {
+        inputKind: 'worktree cache lease',
+        maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+      }),
+    ) as WorktreeCacheLease;
+    const elapsedMs = Date.parse(requestedLease.lastSeenAt) - Date.parse(existing.lastSeenAt);
+    return worktreeLeaseEqualsExceptLastSeen(existing, requestedLease) &&
+      Number.isFinite(elapsedMs) &&
+      elapsedMs < WORKTREE_LEASE_TOUCH_INTERVAL_MS
+      ? existing
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function worktreeLeaseEqualsExceptLastSeen(left: WorktreeCacheLease, right: WorktreeCacheLease): boolean {
+  return (
+    left.version === right.version &&
+    left.repositoryId === right.repositoryId &&
+    left.worktreeId === right.worktreeId &&
+    left.projectRoot === right.projectRoot &&
+    left.treeOid === right.treeOid &&
+    left.localCacheDir === right.localCacheDir &&
+    left.baseGenerationId === right.baseGenerationId &&
+    left.activeGenerationId === right.activeGenerationId &&
+    left.ownershipChecksum === right.ownershipChecksum &&
+    left.lastAction === right.lastAction &&
+    left.lastReason === right.lastReason
+  );
 }
 
 /** A deterministic ownership proof binding a lease to its managed path and worktree identity. */
@@ -928,7 +980,10 @@ export function touchExistingWorktreeLease(
         return null;
       }
       const current = (now ?? (() => new Date()))();
-      if (Number.isFinite(Date.parse(lease.lastSeenAt)) && current.getTime() - Date.parse(lease.lastSeenAt) < 60_000) {
+      if (
+        Number.isFinite(Date.parse(lease.lastSeenAt)) &&
+        current.getTime() - Date.parse(lease.lastSeenAt) < WORKTREE_LEASE_TOUCH_INTERVAL_MS
+      ) {
         return lease;
       }
       const touched = { ...lease, lastSeenAt: current.toISOString() };
