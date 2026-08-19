@@ -35,7 +35,7 @@ const DEFAULT_IDLE_TIMEOUT_MS = 30_000;
 const HEARTBEAT_INTERVAL_MS = 1_000;
 const POLL_INTERVAL_MS = 5;
 const MAX_IDLE_POLL_INTERVAL_MS = 100;
-const DEPENDENCE_SLICE_CACHE_MAX_BYTES = 1024 * 1024;
+const SERIALIZED_RESULT_CACHE_MAX_BYTES = 1024 * 1024;
 const MAILBOX_LIMITS: Partial<BoundedMailboxLimits> = {
   maxItems: 64,
   maxBytes: 128 * 1024 * 1024,
@@ -288,17 +288,15 @@ async function executeRequest(
     };
   }
   if (request.kind === 'dependence-slice') {
-    const cached = dependenceSliceResultByDb.get(db);
-    if (cached?.criterion === request.criterion) return cached.result;
+    const cached = cachedSerializedResult(db, request.kind, request.criterion);
+    if (cached) return cached;
     const { dependenceSlice } = await import('../queries/graph/dependence-slice.js');
     const serializedJson = JSON.stringify(dependenceSlice(db, request.criterion));
     const result = {
       serializedJson,
       sha256: createHash('sha256').update(serializedJson).digest('hex'),
     };
-    if (Buffer.byteLength(serializedJson) <= DEPENDENCE_SLICE_CACHE_MAX_BYTES) {
-      dependenceSliceResultByDb.set(db, { criterion: request.criterion, result });
-    }
+    retainSerializedResult(db, request.kind, request.criterion, result);
     return result;
   }
   if (request.kind === 'call-graph') {
@@ -358,12 +356,16 @@ async function executeRequest(
     return unusedImports(db, request.filePattern, { semantic: defaultSemanticEnrichment(db) });
   }
   if (request.kind === 'system') {
+    const cached = cachedSerializedResult(db, request.kind, request.modulePattern);
+    if (cached) return cached;
     const { system } = await import('../queries/navigation/system.js');
     const serializedJson = JSON.stringify(system(db, request.modulePattern));
-    return {
+    const result = {
       serializedJson,
       sha256: createHash('sha256').update(serializedJson).digest('hex'),
     };
+    retainSerializedResult(db, request.kind, request.modulePattern, result);
+    return result;
   }
   if (request.kind === 'surface') {
     const { consumerSurface } = await import('../queries/navigation/surface.js');
@@ -684,7 +686,30 @@ function requiredNonNegativeInteger(value: unknown, name: string): number {
 }
 
 const semanticEnrichmentByDb = new WeakMap<object, boolean>();
-const dependenceSliceResultByDb = new WeakMap<object, { criterion: string; result: QueryServiceSerializedResult }>();
+const serializedResultByDb = new WeakMap<
+  object,
+  { kind: 'dependence-slice' | 'system'; operand: string; result: QueryServiceSerializedResult }
+>();
+
+function cachedSerializedResult(
+  db: ReturnType<typeof openProjectDb>,
+  kind: 'dependence-slice' | 'system',
+  operand: string,
+): QueryServiceSerializedResult | null {
+  const cached = serializedResultByDb.get(db);
+  return cached?.kind === kind && cached.operand === operand ? cached.result : null;
+}
+
+function retainSerializedResult(
+  db: ReturnType<typeof openProjectDb>,
+  kind: 'dependence-slice' | 'system',
+  operand: string,
+  result: QueryServiceSerializedResult,
+): void {
+  if (Buffer.byteLength(result.serializedJson) <= SERIALIZED_RESULT_CACHE_MAX_BYTES) {
+    serializedResultByDb.set(db, { kind, operand, result });
+  }
+}
 
 function defaultSemanticEnrichment(db: ReturnType<typeof openProjectDb>): boolean {
   const cached = semanticEnrichmentByDb.get(db);
