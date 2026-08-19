@@ -310,6 +310,21 @@ describe('repository cache lifecycle policy', () => {
 
     expect(existsSync(orphanGenerationDir)).toBe(false);
   });
+
+  it('uses a command-start repository identity without repeating Git repository discovery', () => {
+    const root = temporaryDirectory('scip-query-observed-repository-');
+    process.env['XDG_CACHE_HOME'] = join(root, 'xdg-cache');
+    const active = managedRepositoryFixture(root, 'active');
+    const nonRepositoryRoot = join(root, 'not-a-worktree');
+
+    const result = maybeSweepRepositoryCache(nonRepositoryRoot, 'test', {
+      force: true,
+      now: () => 0,
+      repositoryId: active.snapshot.repositoryId,
+    });
+
+    expect(result).toEqual(expect.objectContaining({ kind: 'swept' }));
+  });
 });
 
 function managedRepositoryFixture(

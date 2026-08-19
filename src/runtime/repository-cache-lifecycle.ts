@@ -186,17 +186,19 @@ export function maybeSweepRepositoryCache(
     force?: boolean;
     now?: () => number;
     policy?: Partial<RepositoryCacheSweepPolicy>;
+    repositoryId?: string | null;
   } = {},
 ): RepositoryCacheSweepResult {
   if (!automaticSharedCacheEnabled()) return { kind: 'disabled' };
-  const context = resolveGitWorktreeContext(projectRoot);
-  if (!context) return { kind: 'unavailable' };
-  const repositoryDir = join(resolveScipQueryCacheRoot(), 'repositories', context.repositoryId);
+  const repositoryId =
+    opts.repositoryId === undefined ? resolveGitWorktreeContext(projectRoot)?.repositoryId : opts.repositoryId;
+  if (!repositoryId) return { kind: 'unavailable' };
+  const repositoryDir = join(resolveScipQueryCacheRoot(), 'repositories', repositoryId);
   const nowMs = (opts.now ?? Date.now)();
   const result = existsSync(repositoryDir)
-    ? sweepRepositoryCacheDirectory(projectRoot, repositoryDir, context.repositoryId, cliVersion, nowMs, opts)
+    ? sweepRepositoryCacheDirectory(projectRoot, repositoryDir, repositoryId, cliVersion, nowMs, opts)
     : ({ kind: 'unavailable' } satisfies RepositoryCacheSweepResult);
-  maybeSweepInactiveRepositoryCaches(projectRoot, context.repositoryId, cliVersion, nowMs, opts);
+  maybeSweepInactiveRepositoryCaches(projectRoot, repositoryId, cliVersion, nowMs, opts);
   return result;
 }
 

@@ -97,12 +97,12 @@ program.hook('preAction', async (_thisCommand, actionCommand) => {
       console.error(`warning: scip-query watch service did not start: ${freshness.service.message}`);
     }
     if (freshness.service.kind === 'failed' || freshness.service.kind === 'skipped') {
-      maybeSweepRepositoryCache(projectRoot, cliVersion);
+      maybeSweepRepositoryCache(projectRoot, cliVersion, { repositoryId: gitContext?.repositoryId ?? null });
     }
     return;
   }
   if (!startWatchService) {
-    maybeSweepRepositoryCache(projectRoot, cliVersion);
+    maybeSweepRepositoryCache(projectRoot, cliVersion, { repositoryId: gitContext?.repositoryId ?? null });
     return;
   }
   const service = ensureWatchServiceForCommand({
@@ -117,7 +117,7 @@ program.hook('preAction', async (_thisCommand, actionCommand) => {
     console.error(`warning: scip-query watch service did not start: ${service.message}`);
   }
   if (service.kind === 'failed' || service.kind === 'skipped') {
-    maybeSweepRepositoryCache(projectRoot, cliVersion);
+    maybeSweepRepositoryCache(projectRoot, cliVersion, { repositoryId: gitContext?.repositoryId ?? null });
   }
 });
 program.hook('postAction', () => {
