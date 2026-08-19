@@ -56,9 +56,9 @@ export function typeScriptProjectInputPaths(
   projectMode: 'single' | 'workspace' | undefined,
   configuredProjects: readonly string[] = [],
 ): ReadonlySet<string> | null {
-  let tsMorphCommon: typeof TsMorphCommon;
+  let ts: typeof TsMorphCommon.ts;
   try {
-    tsMorphCommon = require('@ts-morph/common') as typeof TsMorphCommon;
+    ts = require('@ts-morph/common/dist/typescript.js') as typeof TsMorphCommon.ts;
   } catch {
     return null;
   }
@@ -69,11 +69,11 @@ export function typeScriptProjectInputPaths(
   for (const project of projects) {
     const projectDirectory = project === '.' ? root : path.join(root, project);
     const tsconfigPath = path.join(projectDirectory, 'tsconfig.json');
-    const host = compilerConfigHost(tsMorphCommon.ts, root);
+    const host = compilerConfigHost(ts, root);
     if (!host.fileExists(tsconfigPath)) return null;
-    const read = tsMorphCommon.ts.readConfigFile(tsconfigPath, host.readFile);
+    const read = ts.readConfigFile(tsconfigPath, host.readFile);
     if (read.error) return null;
-    const parsed = tsMorphCommon.ts.parseJsonConfigFileContent(read.config as object, host, projectDirectory);
+    const parsed = ts.parseJsonConfigFileContent(read.config as object, host, projectDirectory);
     if (parsed.errors.length > 0) return null;
     for (const fileName of parsed.fileNames) {
       const absolute = path.resolve(fileName);
