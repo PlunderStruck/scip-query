@@ -69,7 +69,11 @@ import { writeJsonDurable } from '../storage/atomic-json.js';
 import { ScipDatabase } from '../storage/db.js';
 import { EVIDENCE_DB_FILENAME } from '../storage/evidence-cache.js';
 import { seedTypeScriptReferenceFragments } from '../semantic/typescript/reference-fragment-shadow.js';
-import { carryFileDependencyGraph, materializeCarriedFileDependencyGraph } from '../symbols/graph/file-dep-graph.js';
+import {
+  captureTypeScriptPlanningDependencyGraph,
+  carryFileDependencyGraph,
+  materializeCarriedFileDependencyGraph,
+} from '../symbols/graph/file-dep-graph.js';
 import { auxiliaryDocumentsAugmentationStage } from './augmentation/augment.js';
 import { runtimeBoundaryAugmentationStage } from './runtime-boundaries.js';
 import {
@@ -274,7 +278,8 @@ interface ReindexLockMetadata {
 // reindex; hiding the ordered steps behind another helper would make failure
 // behavior harder to audit.
 export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
-  const { projectRoot, maxHeapMb = 8192, onStatus = console.log } = opts;
+  const { projectRoot, onStatus = console.log } = opts;
+  const maxHeapMb = opts.maxHeapMb ?? inheritedMaxOldSpaceMb(process.env['NODE_OPTIONS']) ?? 8192;
   // Compatibility note: skipAutoInstall=true still wins, but false does not
   // grant host-mutation authority. Only installMissing=true does.
   const skipAutoInstall = opts.skipAutoInstall === true || opts.installMissing !== true;
@@ -337,12 +342,17 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     const context = resolveGitWorktreeContext(projectRoot);
     sharedSnapshot = context?.clean ? buildSharedGenerationSnapshot(context, fingerprint) : undefined;
     if (context && !context.clean && !localArtifactsCanSeedIncrementalReindex(paths)) {
-      const baseline = findSharedBaselineGeneration(context, languages, {
-        pnpmWorkspaces: opts.pnpmWorkspaces,
-        typescriptProjectMode: opts.typescriptProjectMode,
-        typescriptProjects: opts.typescriptProjects,
-        clojureConfigPath: opts.clojureConfigPath,
-      });
+      const baseline = findSharedBaselineGeneration(
+        context,
+        languages,
+        {
+          pnpmWorkspaces: opts.pnpmWorkspaces,
+          typescriptProjectMode: opts.typescriptProjectMode,
+          typescriptProjects: opts.typescriptProjects,
+          clojureConfigPath: opts.clojureConfigPath,
+        },
+        fingerprint,
+      );
       if (baseline) {
         try {
           hydrateSharedGeneration({
@@ -375,6 +385,36 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
           }
         }
       } else {
+        if (context && !localArtifactsCanSeedIncrementalReindex(paths)) {
+          const baseline = findSharedBaselineGeneration(
+            context,
+            languages,
+            {
+              pnpmWorkspaces: opts.pnpmWorkspaces,
+              typescriptProjectMode: opts.typescriptProjectMode,
+              typescriptProjects: opts.typescriptProjects,
+              clojureConfigPath: opts.clojureConfigPath,
+            },
+            fingerprint,
+          );
+          if (baseline) {
+            try {
+              hydrateSharedGeneration({
+                snapshot: baseline.snapshot,
+                manifest: baseline.manifest,
+                targetCacheDir: dirname(paths.outputDb),
+                targetProjectRoot: projectRoot,
+                persistLease: false,
+              });
+              writeWorktreeOverlayLease(baseline.snapshot, dirname(paths.outputDb));
+              onStatus(
+                `Forked compatible shared baseline ${baseline.snapshot.generationId.slice(0, 12)} for cold worktree reindex`,
+              );
+            } catch (error) {
+              onStatus(`Compatible shared baseline fork failed; continuing locally: ${errorMessage(error)}`);
+            }
+          }
+        }
         const sharedLock = await acquireSharedGenerationBuildLock(sharedSnapshot);
         if (sharedLock.kind === 'owner') {
           releaseSharedBuildLock = sharedLock.release;
@@ -606,6 +646,18 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function inheritedMaxOldSpaceMb(nodeOptions: string | undefined): number | undefined {
+  const match = nodeOptions?.match(/--max[-_]old[-_]space[-_]size(?:=|\s+)(\d+)/u);
+  if (!match) return undefined;
+  const value = Number.parseInt(match[1]!, 10);
+  return Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+function nodeOptionsWithMaxOldSpace(nodeOptions: string | undefined, maxHeapMb: number): string {
+  const preserved = (nodeOptions ?? '').replace(/(?:^|\s)--max[-_]old[-_]space[-_]size(?:=|\s+)\d+/gu, ' ').trim();
+  return [preserved, `--max-old-space-size=${maxHeapMb}`].filter(Boolean).join(' ');
+}
+
 export { detectLanguages } from './detect.js';
 export { augmentAuxiliaryDocuments, auxiliaryDocumentsAugmentationStage } from './augmentation/augment.js';
 export { runPostIndexAugmentation } from './augmentation/post-index-augmentation.js';
@@ -623,10 +675,17 @@ function runRuntimeBoundaryAugmentation(
   reuseExisting: boolean,
   affectedFiles?: readonly string[],
   evidenceDbPath?: string,
+  forceDerivedRebuild = false,
 ): void {
   try {
     runPostIndexAugmentation(
-      runtimeBoundaryAugmentationStage({ indexPath, evidenceDbPath, reuseExisting, affectedFiles }),
+      runtimeBoundaryAugmentationStage({
+        indexPath,
+        evidenceDbPath,
+        reuseExisting,
+        affectedFiles,
+        forceDerivedRebuild,
+      }),
       {
         projectRoot,
         dbPath,
@@ -809,7 +868,7 @@ async function runFreshReindex(opts: {
 }): Promise<ReindexResult> {
   const env = {
     ...process.env,
-    NODE_OPTIONS: `--max-old-space-size=${opts.maxHeapMb}`,
+    NODE_OPTIONS: nodeOptionsWithMaxOldSpace(process.env['NODE_OPTIONS'], opts.maxHeapMb),
   };
 
   let indexerObservation: FreshIndexRun | undefined;
@@ -988,16 +1047,18 @@ async function runLanguageIndexersForFreshReindex(
   const incrementallyIndexed = new Set<SupportedLanguage>(incrementalTypeScript ? ['typescript'] : []);
 
   if (opts.opts.allowExpensiveRebuild === false) {
-    for (const language of opts.languages) {
-      if (reused.has(language) || incrementallyIndexed.has(language)) continue;
-      const info = classification.get(language);
-      if (info && existsSync(info.scipPath)) {
-        reusableOutputs.push({ language, scipPath: info.scipPath });
-        reused.add(language);
-        opts.onStatus(
-          `Skipping expensive ${language} full rebuild because the watch full-rebuild budget is exhausted.`,
-        );
-      }
+    const unavailable = opts.languages.filter(
+      (language) => !reused.has(language) && !incrementallyIndexed.has(language),
+    );
+    if (unavailable.length > 0) {
+      const detail =
+        unavailable.length === 1 && unavailable[0] === 'typescript' && typescriptIncrementalUnavailableReason
+          ? `: ${typescriptIncrementalUnavailableReason}`
+          : '';
+      throw new Error(
+        `Incremental indexing is unavailable for ${unavailable.join(', ')}${detail}. ` +
+          'The accepted index was preserved because whole-project rebuilds are disabled; run scip-query reindex --allow-expensive-rebuild only when you explicitly want that fallback.',
+      );
     }
   }
 
@@ -1508,17 +1569,24 @@ async function publishFreshReindexArtifacts(
       onStatus: opts.onStatus,
     });
   });
-  profileSpan('reindex.publish.runtime-boundaries', () =>
+  profileSpan('reindex.publish.runtime-boundaries', () => {
+    const replacingWholeTypeScriptProject = incrementalTypeScript?.plan.mode === 'full-project';
+    if (replacingWholeTypeScriptProject) {
+      opts.onStatus(
+        'Rebuilding compiler-derived runtime-boundary relationships while retaining unchanged per-file extraction facts.',
+      );
+    }
     runRuntimeBoundaryAugmentation(
       opts.projectRoot,
       opts.tempPaths.tempOutputDb,
       opts.tempPaths.tempOutputScip,
       opts.onStatus,
       false,
-      incrementalTypeScript?.affectedFiles,
+      replacingWholeTypeScriptProject ? incrementalTypeScript?.changedFiles : incrementalTypeScript?.affectedFiles,
       join(dirname(opts.paths.outputDb), EVIDENCE_DB_FILENAME),
-    ),
-  );
+      replacingWholeTypeScriptProject,
+    );
+  });
   const indexMaintenance = profileSpan('reindex.publish.sqlite-layout', () =>
     optimizeSqliteQueryLayout(opts.tempPaths.tempOutputDb),
   );
@@ -1553,11 +1621,13 @@ async function publishFreshReindexArtifacts(
         opts.fingerprint,
         incrementalTypeScript.referenceFragmentsByFile,
         evidenceDb,
-        materializeCarriedFileDependencyGraph(
-          candidateDb,
-          incrementalTypeScript.dependencyGraphSnapshot,
-          incrementalTypeScript.affectedFiles,
-        ) ?? undefined,
+        incrementalTypeScript.dependencyGraphSnapshot
+          ? (materializeCarriedFileDependencyGraph(
+              candidateDb,
+              incrementalTypeScript.dependencyGraphSnapshot,
+              incrementalTypeScript.affectedFiles,
+            ) ?? undefined)
+          : undefined,
       );
       opts.onStatus(`Cached exact TypeScript reference fragments for ${written} affected document(s).`);
     } catch (error) {
@@ -1655,15 +1725,20 @@ async function publishFreshReindexArtifacts(
         dbPath: opts.paths.outputDb,
         indexPath: opts.paths.outputScip,
       });
-      const carried = carryFileDependencyGraph(
-        acceptedDb,
-        incrementalTypeScript.dependencyGraphSnapshot,
-        incrementalTypeScript.affectedFiles,
-      );
+      const replacementFiles =
+        incrementalTypeScript.plan.mode === 'full-project' && incrementalTypeScript.plan.reasons.length === 0
+          ? incrementalTypeScript.changedFiles
+          : incrementalTypeScript.affectedFiles;
+      let carried = false;
+      if (incrementalTypeScript.dependencyGraphSnapshot) {
+        carried = carryFileDependencyGraph(acceptedDb, incrementalTypeScript.dependencyGraphSnapshot, replacementFiles);
+      } else {
+        captureTypeScriptPlanningDependencyGraph(acceptedDb);
+      }
       opts.onStatus(
         carried
-          ? `Carried the dependency graph forward by replacing ${incrementalTypeScript.affectedFiles.length} affected document(s).`
-          : 'Dependency graph carry-forward was ineligible; the next graph consumer will rebuild it.',
+          ? `Carried the dependency graph forward by replacing ${replacementFiles.length} changed dependency owner(s).`
+          : 'Materialized a fresh dependency graph for the accepted generation because no compatible prior graph was available.',
       );
     } catch (error) {
       opts.onStatus(
@@ -2317,44 +2392,63 @@ async function materializeSqliteOutput(opts: {
 }): Promise<SqliteMaterializationResult> {
   let fallbackReason: string | undefined;
   if (canPublishIncrementalSqlite(opts)) {
-    const miniDbPath = join(opts.run.tempPaths.runDir, 'typescript-affected.db');
     try {
-      sanitizeScipForSqlite(opts.incrementalTypeScript.affectedScipPath, opts.run.onStatus);
+      const batches =
+        opts.incrementalTypeScript.affectedBatches.length > 0
+          ? opts.incrementalTypeScript.affectedBatches
+          : [
+              {
+                scipPath: opts.incrementalTypeScript.affectedScipPath,
+                affectedFiles: opts.incrementalTypeScript.affectedFiles,
+                deletedFiles: opts.incrementalTypeScript.deletedFiles,
+              },
+            ];
+      const changedDocumentPaths = new Set<string>();
+      let converterDurationMs = 0;
+      let patchDurationMs = 0;
+      for (const [batchIndex, batch] of batches.entries()) {
+        const miniDbPath = join(opts.run.tempPaths.runDir, `typescript-affected-${batchIndex}.db`);
+        sanitizeScipForSqlite(batch.scipPath, opts.run.onStatus);
+        opts.run.onStatus(
+          `Converting bounded TypeScript batch ${batchIndex + 1}/${batches.length} (${batch.affectedFiles.length - batch.deletedFiles.length} emitted, ${batch.deletedFiles.length} removed) to SQLite...`,
+        );
+        const convertStartedAt = performance.now();
+        await convertScipToSqlite(batch.scipPath, miniDbPath, opts.env, opts.run.onStatus, true, opts.run.opts.signal);
+        converterDurationMs += performance.now() - convertStartedAt;
+        const patched = patchIncrementalSqliteGeneration({
+          previousDbPath: opts.run.paths.outputDb,
+          miniDbPath,
+          candidateDbPath: opts.run.tempPaths.tempOutputDb,
+          affectedFiles: batch.affectedFiles,
+          deletedFiles: batch.deletedFiles,
+          reuseCandidate: batchIndex > 0,
+          deferIntegrity: batchIndex < batches.length - 1,
+          writeTelemetry: batchIndex === 0 ? opts.run.writeTelemetry : undefined,
+        });
+        patchDurationMs += patched.durationMs;
+        for (const path of patched.changedDocumentPaths) changedDocumentPaths.add(path);
+        rmSync(miniDbPath, { force: true });
+      }
       opts.run.onStatus(
-        `Converting ${opts.incrementalTypeScript.affectedFiles.length} affected TypeScript document(s) to SQLite...`,
-      );
-      const convertStartedAt = performance.now();
-      await convertScipToSqlite(
-        opts.incrementalTypeScript.affectedScipPath,
-        miniDbPath,
-        opts.env,
-        opts.run.onStatus,
-        true,
-        opts.run.opts.signal,
-      );
-      opts.run.onStatus(`Converted affected SCIP documents in ${(performance.now() - convertStartedAt).toFixed(0)}ms.`);
-      const patched = patchIncrementalSqliteGeneration({
-        previousDbPath: opts.run.paths.outputDb,
-        miniDbPath,
-        candidateDbPath: opts.run.tempPaths.tempOutputDb,
-        affectedFiles: opts.incrementalTypeScript.affectedFiles,
-        writeTelemetry: opts.run.writeTelemetry,
-      });
-      opts.run.onStatus(
-        `Patched ${patched.affectedDocumentCount} SQLite document(s) in ${(patched.durationMs / 1000).toFixed(3)}s.`,
+        `Patched ${opts.incrementalTypeScript.affectedFiles.length} SQLite document path(s) across ${batches.length} bounded batch(es) in ${(patchDurationMs / 1000).toFixed(3)}s.`,
       );
       return {
         mode: 'incremental',
-        changedDocumentPaths: patched.changedDocumentPaths,
-        patchDurationMs: patched.durationMs,
-        converterDurationMs: performance.now() - convertStartedAt,
+        changedDocumentPaths: [...changedDocumentPaths].sort(),
+        patchDurationMs,
+        converterDurationMs,
         scipCompanion: opts.incrementalTypeScript.completeScipUpdated ? 'current' : 'deferred',
       };
     } catch (error) {
       throwIfSignalAborted(opts.run.opts.signal, 'Reindex cancelled by its owner.');
       fallbackReason = error instanceof Error ? error.message : String(error);
-      rmSync(miniDbPath, { force: true });
       rmSync(opts.run.tempPaths.tempOutputDb, { force: true });
+      if (opts.run.opts.allowExpensiveRebuild === false) {
+        throw new Error(
+          `Bounded incremental SQLite publication failed and the whole-project fallback is disabled: ${fallbackReason}`,
+          { cause: error },
+        );
+      }
       opts.run.onStatus(
         `Incremental SQLite publication unavailable: ${fallbackReason}. Falling back to complete conversion.`,
       );

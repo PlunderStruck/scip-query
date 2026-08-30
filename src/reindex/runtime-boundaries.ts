@@ -26,6 +26,7 @@ export function runtimeBoundaryAugmentationStage(
     evidenceDbPath?: string;
     reuseExisting?: boolean;
     affectedFiles?: readonly string[];
+    forceDerivedRebuild?: boolean;
   } = {},
 ): PostIndexAugmentationStage<RuntimeBoundaryAugmentationResult> {
   return {
@@ -50,6 +51,7 @@ export function runtimeBoundaryAugmentationStage(
           graph = collectRuntimeBoundaryGraph(index, {
             ...(stored ? { previousGraph: stored } : {}),
             ...(opts.affectedFiles ? { affectedFiles: opts.affectedFiles } : {}),
+            ...(opts.forceDerivedRebuild ? { forceDerivedRebuild: true } : {}),
             profileSpan,
           });
           incrementallyUpdated = (graph.coverage.filesReused ?? 0) > 0;

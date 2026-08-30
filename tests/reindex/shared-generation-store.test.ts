@@ -2,6 +2,7 @@ import { create } from '@bufbuild/protobuf';
 import { deserializeSCIP, IndexSchema, MetadataSchema, serializeSCIP } from '@c4312/scip';
 import Database from 'better-sqlite3';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   chmodSync,
   existsSync,
@@ -122,7 +123,35 @@ describe('shared generation store', () => {
         }),
       );
 
-      const newerDb = join(newerSnapshot.repositoryCacheDir, 'generations', newerSnapshot.generationId, 'index.db');
+      const newerGenerationDir = join(newerSnapshot.repositoryCacheDir, 'generations', newerSnapshot.generationId);
+      const newerMetaPath = join(newerGenerationDir, 'meta.json');
+      const newerManifestPath = join(newerGenerationDir, 'manifest.json');
+      chmodSync(newerMetaPath, 0o644);
+      chmodSync(newerManifestPath, 0o644);
+      const newerMetadata = JSON.parse(readFileSync(newerMetaPath, 'utf8')) as Record<string, unknown>;
+      newerMetadata.scipCompanion = 'deferred';
+      const deferredMetadataBytes = Buffer.from(`${JSON.stringify(newerMetadata)}\n`);
+      writeFileSync(newerMetaPath, deferredMetadataBytes);
+      const newerManifest = JSON.parse(readFileSync(newerManifestPath, 'utf8')) as {
+        artifacts: Array<{ path: string; size: number; sha256: string }>;
+      };
+      const metadataArtifact = newerManifest.artifacts.find((artifact) => artifact.path === 'meta.json')!;
+      metadataArtifact.size = deferredMetadataBytes.length;
+      metadataArtifact.sha256 = createHash('sha256').update(deferredMetadataBytes).digest('hex');
+      writeFileSync(newerManifestPath, `${JSON.stringify(newerManifest)}\n`);
+      expect(findSharedBaselineGeneration(dirtyContext, ['typescript'], {})).toEqual(
+        expect.objectContaining({
+          snapshot: expect.objectContaining({ generationId: olderSnapshot.generationId }),
+        }),
+      );
+
+      newerMetadata.scipCompanion = 'current';
+      const currentMetadataBytes = Buffer.from(`${JSON.stringify(newerMetadata)}\n`);
+      writeFileSync(newerMetaPath, currentMetadataBytes);
+      metadataArtifact.size = currentMetadataBytes.length;
+      metadataArtifact.sha256 = createHash('sha256').update(currentMetadataBytes).digest('hex');
+      writeFileSync(newerManifestPath, `${JSON.stringify(newerManifest)}\n`);
+      const newerDb = join(newerGenerationDir, 'index.db');
       chmodSync(newerDb, 0o644);
       writeFileSync(newerDb, 'corrupt');
       expect(findSharedBaselineGeneration(dirtyContext, ['typescript'], {})).toEqual(
@@ -176,6 +205,48 @@ describe('shared generation store', () => {
     }
   });
 
+  it('forks the closest compatible generation into a clean cold worktree on a newer tree', () => {
+    const root = temporaryDirectory('scip-query-shared-clean-cold-');
+    const sourceCache = temporaryDirectory('scip-query-shared-clean-cold-source-');
+    const cacheHome = temporaryDirectory('scip-query-shared-clean-cold-cache-');
+    const previousCacheHome = process.env['XDG_CACHE_HOME'];
+    process.env['XDG_CACHE_HOME'] = cacheHome;
+    try {
+      git(root, ['init', '-q', '-b', 'main']);
+      git(root, ['config', 'user.email', 'test@example.com']);
+      git(root, ['config', 'user.name', 'Test User']);
+      writeFileSync(join(root, 'value.ts'), 'export const value = 1;\n');
+      git(root, ['add', '.']);
+      git(root, ['commit', '-qm', 'initial']);
+      const baselineContext = resolveGitWorktreeContext(root)!;
+      const baselineFingerprint = buildProjectInputFingerprint(root, ['typescript'], {});
+      const baselineSnapshot = buildSharedGenerationSnapshot(baselineContext, baselineFingerprint)!;
+      createCache(sourceCache, root, 'compatible-baseline', { fingerprint: baselineFingerprint });
+      publishSharedGeneration({
+        snapshot: baselineSnapshot,
+        sourceCacheDir: sourceCache,
+        sourceProjectRoot: root,
+      });
+
+      writeFileSync(join(root, 'value.ts'), 'export const value = 2;\n');
+      git(root, ['add', 'value.ts']);
+      git(root, ['commit', '-qm', 'new tree']);
+      const currentContext = resolveGitWorktreeContext(root)!;
+      expect(currentContext.clean).toBe(true);
+      expect(currentContext.treeOid).not.toBe(baselineContext.treeOid);
+      const paths = resolveIndexStoragePaths(root, { languages: ['typescript'] });
+      expect(existsSync(paths.dbPath)).toBe(false);
+
+      expect(prepareSharedGenerationForProject(root, { languages: ['typescript'] }, paths, currentContext)).toEqual({
+        kind: 'overlay',
+      });
+      expect(readValue(paths.dbPath)).toBe('compatible-baseline');
+    } finally {
+      if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];
+      else process.env['XDG_CACHE_HOME'] = previousCacheHome;
+    }
+  });
+
   it('keeps an existing dirty local database instead of overlaying a shared HEAD generation', () => {
     const root = temporaryDirectory('scip-query-shared-overlay-keep-');
     const cacheHome = temporaryDirectory('scip-query-shared-overlay-keep-cache-');
@@ -216,7 +287,7 @@ describe('shared generation store', () => {
     }
   });
 
-  it('rejects baseline generations with a different tree or indexer configuration', () => {
+  it('accepts a compatible different-tree baseline but rejects a different indexer configuration', () => {
     const root = temporaryDirectory('scip-query-shared-baseline-mismatch-');
     const cacheHome = temporaryDirectory('scip-query-shared-baseline-mismatch-cache-');
     const previousCacheHome = process.env['XDG_CACHE_HOME'];
@@ -262,7 +333,11 @@ describe('shared generation store', () => {
           clojureConfigPath: 'deps.edn',
         }),
       ).toBeNull();
-      expect(findSharedBaselineGeneration({ ...dirtyContext, treeOid: 'f'.repeat(40) }, ['typescript'], {})).toBeNull();
+      expect(findSharedBaselineGeneration({ ...dirtyContext, treeOid: 'f'.repeat(40) }, ['typescript'], {})).toEqual(
+        expect.objectContaining({
+          manifest: expect.objectContaining({ generationId: baselineSnapshot.generationId }),
+        }),
+      );
     } finally {
       if (previousCacheHome === undefined) delete process.env['XDG_CACHE_HOME'];
       else process.env['XDG_CACHE_HOME'] = previousCacheHome;

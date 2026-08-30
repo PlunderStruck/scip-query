@@ -89,6 +89,64 @@ describe('incremental SQLite publication', () => {
     expect(symbols).toEqual([{ symbol: 'symbol/A' }, { symbol: 'symbol/B' }, { symbol: 'symbol/C' }]);
   });
 
+  test('deletes a document through an explicit tombstone and prunes its unowned symbols', () => {
+    const paths = fixturePaths();
+    createDatabase(paths.previous, populatePrevious);
+    createDatabase(paths.mini, () => undefined);
+
+    const result = patchIncrementalSqliteGeneration({
+      previousDbPath: paths.previous,
+      miniDbPath: paths.mini,
+      candidateDbPath: paths.candidate,
+      affectedFiles: ['src/a.ts'],
+      deletedFiles: ['src/a.ts'],
+    });
+
+    expect(result.changedDocumentPaths).toEqual(['src/a.ts']);
+    const candidate = new Database(paths.candidate, { readonly: true });
+    const documents = candidate.prepare('SELECT relative_path FROM documents ORDER BY relative_path').all();
+    const symbols = candidate.prepare('SELECT symbol FROM global_symbols ORDER BY symbol').all();
+    candidate.close();
+    expect(documents).toEqual([{ relative_path: 'src/b.ts' }]);
+    expect(symbols).toEqual([{ symbol: 'symbol/B' }]);
+  });
+
+  test('applies successive bounded batches to one candidate without recloning the accepted database', () => {
+    const paths = fixturePaths();
+    createDatabase(paths.previous, populatePrevious);
+    createDatabase(paths.mini, populateMini);
+    patchIncrementalSqliteGeneration({
+      previousDbPath: paths.previous,
+      miniDbPath: paths.mini,
+      candidateDbPath: paths.candidate,
+      affectedFiles: ['src/a.ts'],
+      deferIntegrity: true,
+    });
+
+    const secondMini = join(paths.mini, '..', 'second-mini.db');
+    createDatabase(secondMini, (db) => {
+      insertDocument(db, 1, 'src/c.ts', 'new c', 'new-c');
+      insertSymbol(db, 1, 'symbol/D', 'D', 'new D documentation');
+      insertDefinition(db, 1, 1, 1);
+    });
+    patchIncrementalSqliteGeneration({
+      previousDbPath: paths.previous,
+      miniDbPath: secondMini,
+      candidateDbPath: paths.candidate,
+      affectedFiles: ['src/c.ts'],
+      reuseCandidate: true,
+    });
+
+    const candidate = new Database(paths.candidate, { readonly: true });
+    const documents = candidate.prepare('SELECT relative_path FROM documents ORDER BY relative_path').all();
+    candidate.close();
+    expect(documents).toEqual([
+      { relative_path: 'src/a.ts' },
+      { relative_path: 'src/b.ts' },
+      { relative_path: 'src/c.ts' },
+    ]);
+  });
+
   test('rejects omitted affected documents, schema drift, corrupt input, and shared definitions', () => {
     const omitted = fixturePaths();
     createDatabase(omitted.previous, populatePrevious);

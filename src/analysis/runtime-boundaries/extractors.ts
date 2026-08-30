@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
-import { getAst } from '../../source/ast/ast-core.js';
+import { getAst, parseAstSourceText } from '../../source/ast/ast-core.js';
 import { parameterName } from '../../source/ast/ast-callables.js';
 import { detectAstLanguage } from '../../source/ast/ast-language.js';
-import type { SyntaxNode } from '../../source/ast/ast-types.js';
+import type { SyntaxNode, Tree } from '../../source/ast/ast-types.js';
 import { callableSitesFromRoot, getCallableSites, type CallableSite } from '../../source/facts/ast-facts.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
 import { resolveCallableExpression } from './object-members.js';
@@ -20,6 +20,9 @@ export interface BoundaryFileContext {
   constants: ReadonlyMap<string, string>;
   ownerAt(line: number): BoundaryOwner;
 }
+
+/** Keeps an uncached native tree alive only while its root node is reachable. */
+const BOUNDARY_CONTEXT_TREES = new WeakMap<object, Tree>();
 
 export interface BoundaryExtractor {
   id: string;
@@ -156,13 +159,12 @@ export function boundaryFileContext(
   knownSource?: string,
   profileSpan?: RuntimeBoundaryProfileSpan,
 ): BoundaryFileContext | null {
-  const root = profileBoundaryWork(
-    profileSpan,
-    'runtime-boundaries.context.ast',
-    file,
-    () => getAst(db, file)?.rootNode,
+  const tree = profileBoundaryWork(profileSpan, 'runtime-boundaries.context.ast', file, () =>
+    knownSource === undefined ? getAst(db, file) : parseAstSourceText(db, file, knownSource)?.tree,
   );
-  if (!root) return null;
+  if (!tree) return null;
+  const root = tree.rootNode;
+  if (knownSource !== undefined) BOUNDARY_CONTEXT_TREES.set(root, tree);
   const source = knownSource ?? getSourceText(db, file);
   let definitions: ReturnType<typeof getDefinitionsForFile> | undefined;
   let callables: readonly CallableSite[] | null | undefined;

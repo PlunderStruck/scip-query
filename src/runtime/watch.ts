@@ -456,7 +456,7 @@ export class Watcher {
     if (this.reindexInFlight || this.stopped) return;
 
     const budget = this.inspectBudget();
-    const allowExpensiveRebuild = budget.state !== 'paused';
+    const allowExpensiveRebuild = this.watchConfig.allowExpensiveRebuild && budget.state !== 'paused';
     if (budget.state === 'paused' && budget.reason !== 'rebuild-count') {
       this.dirty = true;
       const until = Math.max(this.wallNow() + 1, budget.until);
@@ -989,6 +989,7 @@ export function resolveReindexWorkerLaunch(
       SCIP_REINDEX_TYPESCRIPT_CONFIG: JSON.stringify({
         projectMode: latestTypeScript?.projectMode ?? typescriptProjectMode,
         projects: latestTypeScript?.projects ?? typescriptProjects ?? [],
+        maxHeapMb: latestTypeScript?.maxHeapMb,
       }),
       SCIP_REINDEX_CLOJURE_CONFIG_PATH: latestClojure?.configPath ?? clojureConfigPath ?? '',
       SCIP_REINDEX_TRIGGER_KIND: trigger.kind,

@@ -13,8 +13,8 @@ import {
 } from '../storage/bounded-mailbox.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 
-export const TYPESCRIPT_INDEX_PROTOCOL_VERSION = 4;
-export const TYPESCRIPT_INDEX_PREVIOUS_PROTOCOL_VERSION = 3;
+export const TYPESCRIPT_INDEX_PROTOCOL_VERSION = 5;
+export const TYPESCRIPT_INDEX_PREVIOUS_PROTOCOL_VERSION = 4;
 export const TYPESCRIPT_INDEX_LEGACY_PROTOCOL_VERSION = 2;
 export const TYPESCRIPT_INDEX_MAILBOX_DIRECTORY = 'typescript-index';
 
@@ -25,6 +25,7 @@ export interface TypeScriptIndexDocumentRequest {
   projectIdentity: string;
   producerIdentity: string;
   modifiedFiles: string[];
+  removedFiles: string[];
   affectedFiles: string[];
 }
 
@@ -101,6 +102,11 @@ export function parseTypeScriptIndexEnvelope(raw: string): TypeScriptIndexEnvelo
   const protocolVersion = (parsed as { protocolVersion?: unknown }).protocolVersion;
   const legacy = protocolVersion === TYPESCRIPT_INDEX_LEGACY_PROTOCOL_VERSION;
   const previous = protocolVersion === TYPESCRIPT_INDEX_PREVIOUS_PROTOCOL_VERSION;
+  const rawRequest = parsed.request;
+  const normalizedRequest =
+    (legacy || previous) && rawRequest && typeof rawRequest === 'object' && !Array.isArray(rawRequest)
+      ? ({ ...rawRequest, removedFiles: rawRequest.removedFiles ?? [] } as TypeScriptIndexDocumentRequest)
+      : rawRequest;
   if (
     (!legacy && !previous && protocolVersion !== TYPESCRIPT_INDEX_PROTOCOL_VERSION) ||
     typeof parsed.id !== 'string' ||
@@ -109,7 +115,7 @@ export function parseTypeScriptIndexEnvelope(raw: string): TypeScriptIndexEnvelo
     !parsed.baseGeneration ||
     typeof parsed.deadlineAtMs !== 'number' ||
     !Number.isFinite(parsed.deadlineAtMs) ||
-    !isTypeScriptIndexRequest(parsed.request) ||
+    !isTypeScriptIndexRequest(normalizedRequest) ||
     (!legacy &&
       (parsed.mailboxVersion !== BOUNDED_MAILBOX_VERSION ||
         typeof parsed.operationKey !== 'string' ||
@@ -125,19 +131,19 @@ export function parseTypeScriptIndexEnvelope(raw: string): TypeScriptIndexEnvelo
   }
   if (!legacy) {
     const current = parsed as TypeScriptIndexEnvelope;
-    const expectedOperationKey = boundedMailboxOperationKey(previous ? 'typescript-index-v3' : 'typescript-index-v4', {
+    const expectedOperationKey = boundedMailboxOperationKey(previous ? 'typescript-index-v4' : 'typescript-index-v5', {
       baseGeneration: current.baseGeneration,
-      request: current.request,
+      request: rawRequest,
     });
     if (current.operationKey !== expectedOperationKey) {
       throw new Error('TypeScript index service received a mismatched mailbox operation identity.');
     }
-    return { ...current, protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION };
+    return { ...current, protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION, request: normalizedRequest };
   }
   const operationKey = boundedMailboxOperationKey('typescript-index-v2', {
     id: parsed.id,
     baseGeneration: parsed.baseGeneration,
-    request: parsed.request,
+    request: rawRequest,
   });
   return {
     protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
@@ -148,7 +154,7 @@ export function parseTypeScriptIndexEnvelope(raw: string): TypeScriptIndexEnvelo
     enqueuedAtMs: parsed.deadlineAtMs,
     deadlineAtMs: parsed.deadlineAtMs,
     baseGeneration: parsed.baseGeneration,
-    request: parsed.request,
+    request: normalizedRequest,
   };
 }
 
@@ -167,6 +173,7 @@ function isTypeScriptIndexRequest(value: unknown): value is TypeScriptIndexDocum
   if (!value || typeof value !== 'object') return false;
   const request = value as Partial<TypeScriptIndexDocumentRequest>;
   const modifiedFiles = stringArray(request.modifiedFiles) ? request.modifiedFiles : null;
+  const removedFiles = stringArray(request.removedFiles) ? request.removedFiles : null;
   const affectedFiles = stringArray(request.affectedFiles) ? request.affectedFiles : null;
   return (
     request.kind === 'emit-documents' &&
@@ -179,10 +186,11 @@ function isTypeScriptIndexRequest(value: unknown): value is TypeScriptIndexDocum
     typeof request.producerIdentity === 'string' &&
     Boolean(request.producerIdentity) &&
     modifiedFiles !== null &&
-    modifiedFiles.length > 0 &&
     new Set(modifiedFiles).size === modifiedFiles.length &&
+    removedFiles !== null &&
+    new Set(removedFiles).size === removedFiles.length &&
     affectedFiles !== null &&
-    affectedFiles.length > 0 &&
+    (affectedFiles.length > 0 || removedFiles.length > 0) &&
     new Set(affectedFiles).size === affectedFiles.length
   );
 }

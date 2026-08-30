@@ -518,7 +518,7 @@ describe('Watcher', () => {
         }),
         SCIP_REINDEX_TRIGGER_KIND: 'watch-source',
         SCIP_REINDEX_TRIGGER_DETAIL: 'src/a.ts',
-        SCIP_REINDEX_ALLOW_EXPENSIVE: '1',
+        SCIP_REINDEX_ALLOW_EXPENSIVE: '0',
         SCIP_REINDEX_PARENT_IDENTITY: expect.any(String),
       }),
     );

@@ -5,10 +5,12 @@
   "indexerConcurrency": 2,
   "watch": {
     "enabled": true,
+    "autoStart": false,
+    "allowExpensiveRebuild": false,
     "autoRefresh": true,
     "debounceMs": 2000,
     "cooldownMs": 5000,
-    "idleTimeoutMs": 0,
+    "idleTimeoutMs": 900000,
     "gitPollMs": 2000
   },
   "indexer": {
@@ -16,7 +18,8 @@
       "projectMode": "workspace",
       "maxWarmSessions": 2,
       "workerIdleMs": 300000,
-      "workerSoftMemoryMb": 6144
+      "workerSoftMemoryMb": 3686,
+      "workerHeapMb": 4096
     }
   },
   "architecture": {

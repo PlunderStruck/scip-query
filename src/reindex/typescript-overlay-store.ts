@@ -16,6 +16,7 @@ export const TYPESCRIPT_OVERLAY_STORE_VERSION = 1;
 /** Incremental TypeScript never rewrites the complete language shard; overlays patch changed documents. */
 export const TYPESCRIPT_DEFERRED_SCIP_THRESHOLD_BYTES = 0;
 export const TYPESCRIPT_OVERLAY_STORE_DIRECTORY = 'typescript-scip-overlays';
+const TYPESCRIPT_PROJECT_IDENTITY_V2_PREFIX = 'typescript-project-v2:';
 
 export interface TypeScriptOverlayRecord {
   relativePath: string;
@@ -41,6 +42,10 @@ export interface CommitTypeScriptOverlayInput {
   projectIdentity: string;
   baseShardCurrent: boolean;
   fragments: readonly TypeScriptDocumentFragment[];
+  /** Permit a complete project refresh to carry the prior overlay onto a new compiler-project identity. */
+  allowProjectIdentityChange?: boolean;
+  /** Permit a one-time migration from the pre-v2 source-membership identity after validating the accepted snapshot. */
+  allowLegacyProjectIdentityMigration?: boolean;
   now?: () => Date;
 }
 
@@ -56,11 +61,21 @@ export function commitTypeScriptOverlay(input: CommitTypeScriptOverlayInput): Ty
   if (!previous && !input.baseShardCurrent) {
     throw new Error('deferred TypeScript SCIP base has no matching overlay generation');
   }
+  if (previous?.producerIdentity !== undefined && previous.producerIdentity !== input.producerIdentity) {
+    throw new Error('TypeScript overlay producer identity changed');
+  }
+  const legacyIdentityMigration =
+    input.allowLegacyProjectIdentityMigration === true &&
+    previous !== null &&
+    !previous.projectIdentity.startsWith(TYPESCRIPT_PROJECT_IDENTITY_V2_PREFIX) &&
+    input.projectIdentity.startsWith(TYPESCRIPT_PROJECT_IDENTITY_V2_PREFIX);
   if (
     previous &&
-    (previous.producerIdentity !== input.producerIdentity || previous.projectIdentity !== input.projectIdentity)
+    previous.projectIdentity !== input.projectIdentity &&
+    !input.allowProjectIdentityChange &&
+    !legacyIdentityMigration
   ) {
-    throw new Error('TypeScript overlay producer or project identity changed');
+    throw new Error('TypeScript overlay project identity changed');
   }
   const overlays = new Map((previous?.overlays ?? []).map((record) => [record.relativePath, record]));
   const replaced = new Set<string>();

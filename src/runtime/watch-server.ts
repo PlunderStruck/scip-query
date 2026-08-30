@@ -286,6 +286,9 @@ export async function runWatchServiceServer(
     ...(config.indexer?.typescript?.workerSoftMemoryMb === undefined
       ? {}
       : { workerSoftMemoryMb: config.indexer.typescript.workerSoftMemoryMb }),
+    ...(config.indexer?.typescript?.workerHeapMb === undefined
+      ? {}
+      : { workerHeapMb: config.indexer.typescript.workerHeapMb }),
     onBusy(deadlineAtMs) {
       indexBusyUntilMs = deadlineAtMs === undefined ? undefined : deadlineAtMs + 5_000;
       persistState(true, 'visibility');

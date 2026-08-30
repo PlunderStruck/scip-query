@@ -1,5 +1,14 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
@@ -144,6 +153,10 @@ describe('TypeScript fragment store', () => {
     const directAffected = availability.runtime.Index.deserializeBinary(directAffectedBytes);
     expect(directAffected.documents).toEqual(affected.documents);
     expect(directAffected.external_symbols).toEqual([]);
+    const deletionOnlyAffectedBytes = assembleAffectedTypeScriptFragments([]);
+    const deletionOnlyAffected = availability.runtime.Index.deserializeBinary(deletionOnlyAffectedBytes);
+    expect(deletionOnlyAffected.documents).toEqual([]);
+    expect(deletionOnlyAffected.external_symbols).toEqual([]);
     const combined = assembleTypeScriptIndexes({
       runtime: availability.runtime,
       baseIndexBytes: baseline,
@@ -157,16 +170,21 @@ describe('TypeScript fragment store', () => {
     if (scipBinary) {
       const baseScipPath = join(root, 'base.scip');
       const miniScipPath = join(root, 'mini.scip');
+      const deletionMiniScipPath = join(root, 'deletion-mini.scip');
       const cleanScipPath = join(root, 'clean.scip');
       const baseDbPath = join(root, 'base.db');
       const miniDbPath = join(root, 'mini.db');
+      const deletionMiniDbPath = join(root, 'deletion-mini.db');
       const candidateDbPath = join(root, 'candidate.db');
+      const deletionCandidateDbPath = join(root, 'deletion-candidate.db');
       const cleanDbPath = join(root, 'clean.db');
       writeFileSync(baseScipPath, baseline);
       writeFileSync(miniScipPath, directAffectedBytes);
+      writeFileSync(deletionMiniScipPath, deletionOnlyAffectedBytes);
       writeFileSync(cleanScipPath, cleanEdited);
       convertScip(scipBinary, baseScipPath, baseDbPath);
       convertScip(scipBinary, miniScipPath, miniDbPath);
+      convertScip(scipBinary, deletionMiniScipPath, deletionMiniDbPath);
       convertScip(scipBinary, cleanScipPath, cleanDbPath);
       patchIncrementalSqliteGeneration({
         previousDbPath: baseDbPath,
@@ -182,6 +200,23 @@ describe('TypeScript fragment store', () => {
         candidateDb.close();
         cleanDb.close();
       }
+      patchIncrementalSqliteGeneration({
+        previousDbPath: baseDbPath,
+        miniDbPath: deletionMiniDbPath,
+        candidateDbPath: deletionCandidateDbPath,
+        affectedFiles: ['src/a.ts'],
+        deletedFiles: ['src/a.ts'],
+      });
+      const deletionCandidateDb = new ScipDatabase({
+        projectRoot: root,
+        dbPath: deletionCandidateDbPath,
+        indexPath: baseScipPath,
+      });
+      try {
+        expect(readDocumentFactDigests(deletionCandidateDb).has('src/a.ts')).toBe(false);
+      } finally {
+        deletionCandidateDb.close();
+      }
     }
 
     expect(() =>
@@ -191,15 +226,17 @@ describe('TypeScript fragment store', () => {
         fragments: [{ ...update.fragments[0]!, relativePath: 'src/missing.ts' }],
       }),
     ).toThrow('path mismatch');
-    expect(() =>
-      assembleTypeScriptIndex({
-        runtime: availability.runtime,
-        baseIndexBytes: baseline,
-        fragments: [
-          { relativePath: 'src/missing.ts', bytes: null, occurrences: 0, symbols: 0, referenceFragments: [] },
-        ],
-      }),
-    ).toThrow('deletion has no prior document');
+    expect(
+      Buffer.from(
+        assembleTypeScriptIndex({
+          runtime: availability.runtime,
+          baseIndexBytes: baseline,
+          fragments: [
+            { relativePath: 'src/missing.ts', bytes: null, occurrences: 0, symbols: 0, referenceFragments: [] },
+          ],
+        }),
+      ),
+    ).toEqual(baseline);
     expect(() =>
       readTypeScriptFragmentGeneration({
         cacheDir,
@@ -273,15 +310,28 @@ describe('TypeScript fragment store', () => {
       "import { origin } from './a.js';\nexport const selected = { ...origin, z: 3 };\n",
     );
     const second = created.emitter.advance({ modifiedFiles: ['src/b.ts'], affectedFiles: ['src/b.ts'] });
+    expect(() =>
+      commitTypeScriptOverlay({
+        cacheDir,
+        previousGenerationIdentity: 'generation-2',
+        nextGenerationIdentity: 'generation-3',
+        producerIdentity: second.producerIdentity,
+        projectIdentity: 'typescript-project-v2:fixture',
+        baseShardCurrent: false,
+        fragments: second.fragments,
+      }),
+    ).toThrow('project identity changed');
     const secondManifest = commitTypeScriptOverlay({
       cacheDir,
       previousGenerationIdentity: 'generation-2',
       nextGenerationIdentity: 'generation-3',
       producerIdentity: second.producerIdentity,
-      projectIdentity: 'fixture-project-v1',
+      projectIdentity: 'typescript-project-v2:fixture',
       baseShardCurrent: false,
       fragments: second.fragments,
+      allowLegacyProjectIdentityMigration: true,
     });
+    expect(secondManifest.projectIdentity).toBe('typescript-project-v2:fixture');
     expect(secondManifest.overlays.map((overlay) => overlay.relativePath)).toEqual(['src/a.ts', 'src/b.ts']);
     expect(
       Buffer.from(
@@ -293,6 +343,19 @@ describe('TypeScript fragment store', () => {
         }),
       ),
     ).toEqual(cleanOracle(root));
+
+    expect(() =>
+      commitTypeScriptOverlay({
+        cacheDir,
+        previousGenerationIdentity: 'generation-3',
+        nextGenerationIdentity: 'generation-4',
+        producerIdentity: second.producerIdentity,
+        projectIdentity: 'typescript-project-v2:different',
+        baseShardCurrent: false,
+        fragments: second.fragments,
+        allowLegacyProjectIdentityMigration: true,
+      }),
+    ).toThrow('project identity changed');
 
     expect(() =>
       commitTypeScriptOverlay({
@@ -357,6 +420,40 @@ describe('TypeScript fragment store', () => {
         materializeTypeScriptOverlay({
           cacheDir,
           generationIdentity: 'generation-2',
+          baseIndexBytes: baseline,
+          packageVersion: availability.runtime.packageVersion,
+        }),
+      ),
+    ).toEqual(cleanOracle(root));
+
+    rmSync(join(root, 'src/c.ts'));
+    const removed = created.emitter.advance({ modifiedFiles: [], removedFiles: ['src/c.ts'], affectedFiles: [] });
+    expect(removed.fragments).toEqual([]);
+    const removedManifest = commitTypeScriptOverlay({
+      cacheDir,
+      previousGenerationIdentity: 'generation-2',
+      nextGenerationIdentity: 'generation-3',
+      producerIdentity: removed.producerIdentity,
+      projectIdentity: 'fixture-project-v1',
+      baseShardCurrent: false,
+      fragments: [
+        {
+          relativePath: 'src/c.ts',
+          bytes: null,
+          occurrences: 0,
+          symbols: 0,
+          referenceFragments: [],
+        },
+      ],
+    });
+    expect(removedManifest.overlays).toEqual([
+      expect.objectContaining({ relativePath: 'src/c.ts', blobHash: null, byteLength: 0 }),
+    ]);
+    expect(
+      Buffer.from(
+        materializeTypeScriptOverlay({
+          cacheDir,
+          generationIdentity: 'generation-3',
           baseIndexBytes: baseline,
           packageVersion: availability.runtime.packageVersion,
         }),

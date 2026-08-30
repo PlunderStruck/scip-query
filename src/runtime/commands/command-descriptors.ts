@@ -55,6 +55,10 @@ export const commandDescriptors: CommandDescriptor[] = [
       option('--pnpm-workspaces', 'Enable pnpm workspace support (TypeScript)'),
       option('--force', 'Rebuild even if source inputs are unchanged'),
       option('--allow-partial', 'Write an incomplete index when one or more detected languages fail'),
+      option(
+        '--allow-expensive-rebuild',
+        'Explicitly permit a whole-project indexer when incremental and shared-generation paths are unavailable',
+      ),
       option('--trust-project-tools', 'Permit reviewed indexers from this repository for this run'),
       option('--install-missing', 'Install missing global tools at reviewed immutable versions for this run'),
       option('--indexer-concurrency <n>', 'Number of language indexers to run at once', parsePositiveInteger),

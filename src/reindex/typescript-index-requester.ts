@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { monotonicNowMs } from '../domain/time.js';
 import {
   WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
@@ -99,7 +99,7 @@ export class TypeScriptIndexRequester {
     const enqueuedAtMs = this.runtime.now();
     const deadlineAtMs = enqueuedAtMs + this.timeoutMs;
     const monotonicDeadlineAtMs = (this.runtime.monotonicNow ?? monotonicNowMs)() + this.timeoutMs;
-    const operationKey = boundedMailboxOperationKey('typescript-index-v4', {
+    const operationKey = boundedMailboxOperationKey('typescript-index-v5', {
       baseGeneration: this.baseGeneration,
       request,
     });
@@ -122,7 +122,7 @@ export class TypeScriptIndexRequester {
 
     while ((this.runtime.monotonicNow ?? monotonicNowMs)() <= monotonicDeadlineAtMs) {
       if (existsSync(admitted.responsePath)) {
-        return parseResponse(
+        const response = parseResponse(
           readTextFileWithinLimit(admitted.responsePath, {
             maxBytes: this.mailboxLimits.maxItemBytes ?? 64 * 1024 * 1024,
             inputKind: 'TypeScript index mailbox response',
@@ -133,6 +133,11 @@ export class TypeScriptIndexRequester {
           request.producerIdentity,
           request.affectedFiles,
         );
+        // Index fragments can be tens of MiB. The synchronous requester is
+        // their sole consumer, so acknowledge a valid response immediately
+        // instead of retaining every batch until periodic mailbox expiry.
+        rmSync(admitted.responsePath, { force: true });
+        return response;
       }
       const liveState = readWatchServiceState(servicePaths.statePath);
       if (!usableServiceState(liveState, this.projectRoot, this.runtime)) {

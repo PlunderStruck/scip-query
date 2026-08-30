@@ -560,6 +560,11 @@ describe('runtime-boundary evidence', () => {
         previousGraph: baseline,
         affectedFiles: ['src/unrelated.ts'],
       });
+      const forced = collectRuntimeBoundaryGraph(db, {
+        previousGraph: baseline,
+        affectedFiles: ['src/unrelated.ts'],
+        forceDerivedRebuild: true,
+      });
 
       expect(refreshed.observations).toEqual(baseline.observations);
       expect(refreshed.relationGroups).toEqual(baseline.relationGroups);
@@ -569,6 +574,9 @@ describe('runtime-boundary evidence', () => {
           expect.objectContaining({ id: 'carrier', durationMs: 0, filesVisited: 0 }),
         ]),
       );
+      expect(forced.observations).toEqual(baseline.observations);
+      expect(forced.coverage.filesReused).toBe(1);
+      expect(forced.coverage.phases?.find((phase) => phase.id === 'http-summary')?.durationMs).toBeGreaterThan(0);
     } finally {
       db.close();
     }

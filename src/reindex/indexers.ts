@@ -26,18 +26,18 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
       if (projectPath) {
         return {
           binary: indexerBinary,
-          args: ['index', '--output', outputPath, '--no-progress-bar', projectPath],
+          args: ['index', '--output', outputPath, '--no-progress-bar', '--no-global-caches', projectPath],
         };
       }
       if (pnpmWorkspaces) {
         return {
           binary: indexerBinary,
-          args: ['index', '--pnpm-workspaces', '--output', outputPath, '--no-progress-bar'],
+          args: ['index', '--pnpm-workspaces', '--output', outputPath, '--no-progress-bar', '--no-global-caches'],
         };
       }
       return {
         binary: indexerBinary,
-        args: ['index', '--output', outputPath, '--no-progress-bar'],
+        args: ['index', '--output', outputPath, '--no-progress-bar', '--no-global-caches'],
       };
     },
     markerFiles: [...LANGUAGE_INDEX_MARKERS.typescript],
@@ -61,7 +61,7 @@ export const INDEXER_CONFIGS: Record<SupportedLanguage, IndexerConfig> = {
     checkCommand: 'npx scip-typescript --version',
     indexArgs: ({ outputPath, indexerBinary }) => ({
       binary: indexerBinary,
-      args: ['index', '--output', outputPath, '--no-progress-bar'],
+      args: ['index', '--output', outputPath, '--no-progress-bar', '--no-global-caches'],
     }),
     markerFiles: [...LANGUAGE_INDEX_MARKERS.javascript],
     installMethods: [

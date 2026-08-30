@@ -132,6 +132,7 @@ export async function handleReindex(rawOpts: unknown): Promise<void> {
       languages: languages.length > 0 ? languages : config.languages,
       force: booleanOptionValue(opts, 'force'),
       allowPartial: booleanOptionValue(opts, 'allowPartial'),
+      allowExpensiveRebuild: booleanOptionValue(opts, 'allowExpensiveRebuild'),
       skipAutoInstall: process.env['SCIP_QUERY_SKIP_AUTO_INSTALL'] === '1',
       installMissing: booleanOptionValue(opts, 'installMissing'),
       trustProjectTools: booleanOptionValue(opts, 'trustProjectTools'),

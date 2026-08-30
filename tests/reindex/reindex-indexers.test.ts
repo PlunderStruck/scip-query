@@ -30,7 +30,14 @@ describe('indexer configs', () => {
 
     expect(command).toEqual({
       binary: '/tmp/scip-typescript',
-      args: ['index', '--pnpm-workspaces', '--output', '/tmp/project/index.scip', '--no-progress-bar'],
+      args: [
+        'index',
+        '--pnpm-workspaces',
+        '--output',
+        '/tmp/project/index.scip',
+        '--no-progress-bar',
+        '--no-global-caches',
+      ],
     });
   });
 
@@ -66,7 +73,7 @@ describe('indexer configs', () => {
 
     expect(command).toEqual({
       binary: '/tmp/scip-typescript',
-      args: ['index', '--output', '/tmp/project/index.scip', '--no-progress-bar', 'packages/web'],
+      args: ['index', '--output', '/tmp/project/index.scip', '--no-progress-bar', '--no-global-caches', 'packages/web'],
     });
   });
 

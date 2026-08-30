@@ -92,7 +92,6 @@ export interface AssembledTypeScriptIndexes {
  * helpers, this path never opens the previous whole-project SCIP file.
  */
 export function assembleAffectedTypeScriptFragments(fragments: readonly TypeScriptDocumentFragment[]): Uint8Array {
-  if (fragments.length === 0) throw new Error('affected TypeScript mini index requires documents');
   const seen = new Set<string>();
   const documents: Document[] = [];
   for (const fragment of fragments) {
@@ -332,7 +331,9 @@ function prepareTypeScriptIndexAssembly(input: AssembleTypeScriptIndexInput): {
   for (const relativePath of [...replacements.keys()].sort()) {
     const replacement = replacements.get(relativePath)!;
     if (replacement.bytes === null) {
-      throw new Error(`TypeScript fragment deletion has no prior document: ${relativePath}`);
+      // Deletion is idempotent: an added document can be introduced and then
+      // removed entirely within the overlay without ever existing in the base.
+      continue;
     }
     if (seen.has(relativePath)) throw new Error(`duplicate TypeScript SCIP document path: ${relativePath}`);
     seen.add(relativePath);

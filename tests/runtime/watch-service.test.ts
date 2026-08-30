@@ -440,6 +440,17 @@ describe('watch service contract', () => {
           projectRoot: IDENTITY.projectRoot,
           cacheDir,
           cliVersion: IDENTITY.cliVersion,
+          config: { watch: { enabled: true, autoStart: false } },
+          env: {},
+          runtime,
+        }),
+      ).toEqual({ kind: 'skipped', reason: 'auto-start-disabled' });
+      expect(
+        ensureWatchServiceForCommand({
+          commandName: 'refs',
+          projectRoot: IDENTITY.projectRoot,
+          cacheDir,
+          cliVersion: IDENTITY.cliVersion,
           config: { watch: { enabled: true } },
           env: {},
           runtime,

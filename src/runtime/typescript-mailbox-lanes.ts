@@ -46,6 +46,7 @@ interface TypeScriptMailboxLaneCommonOptions {
   onBusy?(deadlineAtMs: number | undefined): void;
   onFatal(error: Error): void;
   createWorker?(data: unknown): RequestWorkerLike;
+  workerHeapMb?: number;
 }
 
 export interface TypeScriptIndexMailboxLaneOptions extends TypeScriptMailboxLaneCommonOptions {
@@ -66,7 +67,7 @@ export function createTypeScriptIndexMailboxLane(
   options: TypeScriptIndexMailboxLaneOptions,
 ): TypeScriptMailboxWorkerLane<TypeScriptIndexServiceStatus> {
   const maxActiveSessions = options.maxActiveSessions ?? 8;
-  const softMemoryLimitMb = options.workerSoftMemoryMb ?? typescriptWorkerSoftMemoryMb();
+  const softMemoryLimitMb = options.workerSoftMemoryMb ?? typescriptWorkerSoftMemoryMb(options.workerHeapMb);
   const initialStatus = (): TypeScriptIndexServiceStatus => ({
     protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
     state: 'idle',
@@ -334,25 +335,16 @@ function createTypeScriptMailboxLane<Envelope extends { id: string; deadlineAtMs
   }
 }
 
-/**
- * The incremental TypeScript index holds a whole-program type graph inside this
- * worker. Without an explicit limit the worker inherits V8's default old-space
- * cap (~4 GB), which large projects exhaust: the worker dies with "Worker
- * terminated due to reaching memory limit", `tryMaterializeTypeScriptIncrementalIndex`
- * reports it unavailable, and every watch trigger falls back to a whole-project
- * rebuild costing minutes instead of seconds. Match the full indexer's heap
- * budget (`maxHeapMb` in reindex/index.ts) so the incremental path survives the
- * projects it exists to serve.
- */
-const DEFAULT_TYPESCRIPT_WORKER_HEAP_MB = 8192;
+/** The bounded document worker may retain one compiler graph, but never receives the full indexer's 8+ GB budget. */
+const DEFAULT_TYPESCRIPT_WORKER_HEAP_MB = 4096;
 
 function typescriptWorkerHeapMb(): number {
   const configured = Number.parseInt(process.env['SCIP_TS_WORKER_HEAP_MB'] ?? '', 10);
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_TYPESCRIPT_WORKER_HEAP_MB;
 }
 
-function typescriptWorkerSoftMemoryMb(): number {
-  return Math.max(1, Math.floor(typescriptWorkerHeapMb() * 0.7));
+function typescriptWorkerSoftMemoryMb(configuredHeapMb?: number): number {
+  return Math.max(1, Math.floor((configuredHeapMb ?? typescriptWorkerHeapMb()) * 0.9));
 }
 
 function createWorker(options: TypeScriptMailboxLaneCommonOptions, workerData: unknown): RequestWorkerLike {
@@ -360,7 +352,7 @@ function createWorker(options: TypeScriptMailboxLaneCommonOptions, workerData: u
   const workerUrl = options.workerUrl ?? new URL('./typescript-mailbox-worker.js', import.meta.url);
   return new Worker(workerUrl, {
     workerData,
-    resourceLimits: { maxOldGenerationSizeMb: typescriptWorkerHeapMb() },
+    resourceLimits: { maxOldGenerationSizeMb: options.workerHeapMb ?? typescriptWorkerHeapMb() },
   }) as RequestWorkerLike;
 }
 

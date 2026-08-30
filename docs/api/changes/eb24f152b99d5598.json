@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-08-30T18:50:29.815Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "eb24f152b99d5598ef6301c82516fb8a8c58ea10ad339a5642994fdba2f8b319",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "W changed from interface WatchConfig { enabled?: boolean; autoStart?: boolean; debounceMs?: number; cooldownMs?: number; gitPollMs?: number; idleTimeoutMs?: number; autoRefresh?: boolean; igno... to interface WatchConfig { enabled?: boolean; autoStart?: boolean; allowExpensiveRebuild?: boolean; debounceMs?: number; cooldownMs?: number; gitPollMs?: number; idleTimeoutMs?: nu....",
+      "target": "config-types-<hash>.d.ts:W"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.21.0",
+  "previousDigest": "fe428f7bca72dc08b096315de48c15de70882eb0e2860356bc7d32179498ffd4",
+  "reason": "Expose the explicit opt-in policy for expensive watcher rebuild fallbacks.",
+  "schemaVersion": 1
+}

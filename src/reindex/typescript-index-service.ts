@@ -115,6 +115,7 @@ export class TypeScriptIndexServiceHost {
       const before = active.emitter.snapshotStats();
       const result = active.emitter.advance({
         modifiedFiles: request.modifiedFiles,
+        removedFiles: request.removedFiles,
         affectedFiles: request.affectedFiles,
       });
       const durationMs = this.monotonicNow() - startedAt;

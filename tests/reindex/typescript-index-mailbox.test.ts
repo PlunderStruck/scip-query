@@ -235,6 +235,7 @@ describe('TypeScript index service mailbox', () => {
     expect(warm.fragments).toEqual([
       expect.objectContaining({ relativePath: 'src/a.ts', bytes: expect.any(Uint8Array) }),
     ]);
+    expect(readdirSync(paths.responseDir)).toEqual(['cold.json']);
     expect(host.status()).toEqual(
       expect.objectContaining({ requests: 2, sessionsCreated: 1, initializations: 1, programUpdates: 1 }),
     );
@@ -260,6 +261,7 @@ describe('TypeScript index service mailbox', () => {
       projectIdentity: 'fixture-project-v1',
       producerIdentity: availability.producerIdentity,
       modifiedFiles: ['packages/shared/value.ts'],
+      removedFiles: [],
       affectedFiles: ['apps/web/src/b.ts'],
     });
     expect(crossProject).toEqual(
@@ -317,6 +319,7 @@ describe('TypeScript index service mailbox', () => {
         projectIdentity: 'fixture-project-v1',
         producerIdentity: availability.producerIdentity,
         modifiedFiles: [sourcePath],
+        removedFiles: [],
         affectedFiles: [sourcePath],
       };
     };
@@ -547,7 +550,7 @@ describe('TypeScript index service mailbox', () => {
 
   test('parses only complete versioned requests', () => {
     const request = indexRequest('producer');
-    const operationKey = boundedMailboxOperationKey('typescript-index-v4', {
+    const operationKey = boundedMailboxOperationKey('typescript-index-v5', {
       baseGeneration: 'generation',
       request,
     });
@@ -563,7 +566,7 @@ describe('TypeScript index service mailbox', () => {
       request,
     };
     expect(parseTypeScriptIndexEnvelope(JSON.stringify(valid))).toEqual(valid);
-    const previousOperationKey = boundedMailboxOperationKey('typescript-index-v3', {
+    const previousOperationKey = boundedMailboxOperationKey('typescript-index-v4', {
       baseGeneration: 'generation',
       request,
     });
@@ -586,7 +589,7 @@ describe('TypeScript index service mailbox', () => {
       parseTypeScriptIndexEnvelope(JSON.stringify({ ...valid, request: { ...valid.request, affectedFiles: [] } })),
     ).toThrow('invalid mailbox request');
     const dependencyRequest = { ...valid.request, affectedFiles: ['src/other.ts'] };
-    const dependencyOperationKey = boundedMailboxOperationKey('typescript-index-v4', {
+    const dependencyOperationKey = boundedMailboxOperationKey('typescript-index-v5', {
       baseGeneration: 'generation',
       request: dependencyRequest,
     });
@@ -806,6 +809,7 @@ function indexRequest(producerIdentity: string): TypeScriptIndexDocumentRequest 
     projectIdentity: 'fixture-project-v1',
     producerIdentity,
     modifiedFiles: ['src/a.ts'],
+    removedFiles: [],
     affectedFiles: ['src/a.ts'],
   };
 }

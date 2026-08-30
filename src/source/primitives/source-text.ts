@@ -18,16 +18,20 @@ const SOURCE_LINES_CACHE = createPerDbCache<string, readonly string[]>('source-l
 
 export function getSourceText(db: ScipDatabase, relativePath: string): string {
   const normalized = relativePath.replace(/\\/g, '/');
-  return SOURCE_TEXT_CACHE.get(db, normalized, () => {
-    try {
-      return readProjectFileText(db.config.projectRoot, normalized, {
-        inputKind: 'indexed source file',
-      });
-    } catch (error) {
-      if (isMissingProjectFileError(error)) return '';
-      throw error;
-    }
-  });
+  return SOURCE_TEXT_CACHE.get(db, normalized, () => readSourceTextUncached(db, normalized));
+}
+
+/** Reads one source file without retaining its bytes in the per-database analysis cache. */
+export function readSourceTextUncached(db: ScipDatabase, relativePath: string): string {
+  const normalized = relativePath.replace(/\\/g, '/');
+  try {
+    return readProjectFileText(db.config.projectRoot, normalized, {
+      inputKind: 'indexed source file',
+    });
+  } catch (error) {
+    if (isMissingProjectFileError(error)) return '';
+    throw error;
+  }
 }
 
 /** Split source text into lines without a trailing empty line from a final newline. */

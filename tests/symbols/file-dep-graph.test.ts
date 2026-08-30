@@ -7,7 +7,9 @@ import { ScipDatabase } from '../../src/storage/db.js';
 import {
   buildFileDepGraph,
   captureFileDependencyGraph,
+  captureTypeScriptPlanningDependencyGraph,
   carryFileDependencyGraph,
+  readPersistedFileDependencyGraph,
 } from '../../src/symbols/graph/file-dep-graph.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
@@ -115,12 +117,26 @@ describe('file dependency graph evidence', () => {
         db1.close();
       }
 
+      const persistedDb = openDb();
+      try {
+        expect(graphShape(readPersistedFileDependencyGraph(persistedDb)?.graph ?? new Map())).toEqual(firstShape!);
+      } finally {
+        persistedDb.close();
+      }
+
       const db2 = openDb();
       let secondShape: Array<[string, string[]]>;
       try {
         secondShape = graphShape(buildFileDepGraph(db2));
       } finally {
         db2.close();
+      }
+
+      const planningDb = openDb();
+      try {
+        expect(graphShape(captureTypeScriptPlanningDependencyGraph(planningDb).graph)).toEqual(firstShape!);
+      } finally {
+        planningDb.close();
       }
 
       expect(secondShape).toEqual(firstShape!);
@@ -135,11 +151,12 @@ describe('file dependency graph evidence', () => {
         .map((line) => JSON.parse(line) as Record<string, unknown>);
       const productEvents = events.filter((event) => event.name === 'file-dep-graph.product');
 
-      expect(productEvents).toHaveLength(2);
+      expect(productEvents).toHaveLength(3);
       expect(productEvents[0]).toMatchObject({ hit: false, available: true, graphFiles: 2 });
       expect(productEvents[1]).toMatchObject({ hit: true, available: true, graphFiles: 2 });
+      expect(productEvents[2]).toMatchObject({ hit: false, sourceEdgeMode: 'none', graphFiles: 2 });
       expect(events.filter((event) => event.name === 'file-dep-graph.source-imports')).toHaveLength(1);
-      expect(events.filter((event) => event.name === 'file-dep-graph.scip-edges')).toHaveLength(1);
+      expect(events.filter((event) => event.name === 'file-dep-graph.scip-edges')).toHaveLength(2);
     });
   });
 

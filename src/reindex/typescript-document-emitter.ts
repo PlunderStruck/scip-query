@@ -113,6 +113,8 @@ export interface TypeScriptDocumentEmitterOptions {
 
 export interface TypeScriptDocumentAdvanceInput {
   modifiedFiles: readonly string[];
+  /** Files removed since the previous compiler program. Omitted by older direct callers. */
+  removedFiles?: readonly string[];
   affectedFiles: readonly string[];
 }
 
@@ -288,14 +290,20 @@ export class TypeScriptDocumentEmitter {
     if (!this.program || !this.checker || !this.config) return this.initializeAndAdvance(input);
     const startedAt = performance.now();
     const modifiedFiles = normalizedUniqueRelativePaths(input.modifiedFiles);
+    const removedFiles = normalizedUniqueRelativePaths(input.removedFiles ?? []);
     const affectedFiles = normalizedUniqueRelativePaths(input.affectedFiles);
+    this.fragments.clear();
+    if (modifiedFiles.length === 0 && removedFiles.length === 0) {
+      this.validateAffectedPaths(affectedFiles);
+      return this.result(this.emitAffectedFiles(affectedFiles), startedAt);
+    }
     const config = readTypeScriptConfig(this.runtime.typescript, this.tsconfigPath);
     this.config = config;
     this.includedFiles = new Set(config.fileNames.map(normalizedAbsolutePath));
 
     const previousProgram = this.program;
     const previousNodes = new Map<string, TypeScript.SourceFile>();
-    for (const relativePath of modifiedFiles) {
+    for (const relativePath of [...modifiedFiles, ...removedFiles]) {
       const absolutePath = resolveWithin(this.workspaceRoot, relativePath);
       const sourceFile = previousProgram.getSourceFile(absolutePath);
       if (sourceFile) {
@@ -314,20 +322,15 @@ export class TypeScriptDocumentEmitter {
     );
     this.checker = this.program.getTypeChecker();
     this.stats.programUpdates += 1;
-    this.validateIncrementalPaths(modifiedFiles, affectedFiles);
+    this.validateIncrementalPaths(modifiedFiles, removedFiles, affectedFiles);
+    this.stats.documentsRemoved += removedFiles.length;
     for (const [relativePath, previousNode] of previousNodes) {
       const currentNode = this.program.getSourceFile(resolveWithin(this.workspaceRoot, relativePath));
       if (currentNode === previousNode) this.stats.sourceNodesReused += 1;
       else this.stats.sourceNodesReplaced += 1;
     }
 
-    const fragments = affectedFiles.map((relativePath) => {
-      const absolutePath = resolveWithin(this.workspaceRoot, relativePath);
-      const sourceFile = this.program!.getSourceFile(absolutePath);
-      if (!sourceFile) throw new Error(`affected TypeScript source is unavailable: ${relativePath}`);
-      return this.emitSourceFile(sourceFile);
-    });
-    return this.result(fragments, startedAt);
+    return this.result(this.emitAffectedFiles(affectedFiles), startedAt);
   }
 
   fragment(relativePath: string): Uint8Array | null {
@@ -343,14 +346,12 @@ export class TypeScriptDocumentEmitter {
     const startedAt = performance.now();
     this.initializeProgram();
     const modifiedFiles = normalizedUniqueRelativePaths(input.modifiedFiles);
+    const removedFiles = normalizedUniqueRelativePaths(input.removedFiles ?? []);
     const affectedFiles = normalizedUniqueRelativePaths(input.affectedFiles);
-    this.validateIncrementalPaths(modifiedFiles, affectedFiles);
-    const fragments = affectedFiles.map((relativePath) => {
-      const sourceFile = this.program!.getSourceFile(resolveWithin(this.workspaceRoot, relativePath));
-      if (!sourceFile) throw new Error(`affected TypeScript source is unavailable: ${relativePath}`);
-      return this.emitSourceFile(sourceFile);
-    });
-    return this.result(fragments, startedAt);
+    this.fragments.clear();
+    this.validateIncrementalPaths(modifiedFiles, removedFiles, affectedFiles, true);
+    this.stats.documentsRemoved += removedFiles.length;
+    return this.result(this.emitAffectedFiles(affectedFiles), startedAt);
   }
 
   private initializeProgram(): void {
@@ -361,21 +362,48 @@ export class TypeScriptDocumentEmitter {
     this.stats.initializations += 1;
   }
 
-  private validateIncrementalPaths(modifiedFiles: readonly string[], affectedFiles: readonly string[]): void {
-    if (modifiedFiles.length === 0) throw new Error('incremental TypeScript document update requires a modified file');
-    if (affectedFiles.length === 0) throw new Error('incremental TypeScript document update requires an affected file');
+  private validateIncrementalPaths(
+    modifiedFiles: readonly string[],
+    removedFiles: readonly string[],
+    affectedFiles: readonly string[],
+    cold = false,
+  ): void {
+    if (!cold && modifiedFiles.length === 0 && removedFiles.length === 0) {
+      throw new Error('incremental TypeScript document update requires a modified or removed file');
+    }
+    if (affectedFiles.length === 0 && removedFiles.length === 0) {
+      throw new Error('incremental TypeScript document update requires an affected or removed file');
+    }
     for (const relativePath of modifiedFiles) {
       const absolutePath = resolveWithin(this.workspaceRoot, relativePath);
       if (!this.program?.getSourceFile(absolutePath)) {
         throw new Error(`modified TypeScript dependency is unavailable to the configured project: ${relativePath}`);
       }
     }
+    for (const relativePath of removedFiles) {
+      const absolutePath = resolveWithin(this.workspaceRoot, relativePath);
+      if (this.program?.getSourceFile(absolutePath)) {
+        throw new Error(`removed TypeScript source is still present in the configured project: ${relativePath}`);
+      }
+    }
+    this.validateAffectedPaths(affectedFiles);
+  }
+
+  private validateAffectedPaths(affectedFiles: readonly string[]): void {
     for (const relativePath of affectedFiles) {
       const absolutePath = resolveWithin(this.workspaceRoot, relativePath);
       if (!this.includedFiles.has(normalizedAbsolutePath(absolutePath))) {
         throw new Error(`affected TypeScript file is outside the configured project: ${relativePath}`);
       }
     }
+  }
+
+  private emitAffectedFiles(affectedFiles: readonly string[]): TypeScriptDocumentFragment[] {
+    return affectedFiles.map((relativePath) => {
+      const sourceFile = this.program!.getSourceFile(resolveWithin(this.workspaceRoot, relativePath));
+      if (!sourceFile) throw new Error(`affected TypeScript source is unavailable: ${relativePath}`);
+      return this.emitSourceFile(sourceFile);
+    });
   }
 
   private emitSourceFile(sourceFile: TypeScript.SourceFile): TypeScriptDocumentFragment {

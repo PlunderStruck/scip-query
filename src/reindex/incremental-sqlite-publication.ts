@@ -16,6 +16,11 @@ export interface PatchIncrementalSqliteGenerationInput {
   miniDbPath: string;
   candidateDbPath: string;
   affectedFiles: readonly string[];
+  deletedFiles?: readonly string[];
+  /** Continue patching an already initialized candidate instead of cloning the accepted database again. */
+  reuseCandidate?: boolean;
+  /** Defer the full candidate integrity scan until the final batch. */
+  deferIntegrity?: boolean;
   writeTelemetry?: ReindexWriteTelemetry;
   onStage?: (stage: IncrementalSqlitePatchStage) => void;
 }
@@ -104,8 +109,13 @@ export function patchIncrementalSqliteGeneration(
 ): IncrementalSqlitePatchResult {
   const startedAt = monotonicNowMs();
   const affectedFiles = validateAffectedFiles(input.affectedFiles);
+  const deletedFiles = validateAffectedFiles(input.deletedFiles ?? [], true);
+  const affectedSet = new Set(affectedFiles);
+  if (deletedFiles.some((file) => !affectedSet.has(file))) {
+    throw new Error('deleted incremental documents must be included in the affected document set');
+  }
+  const replacementCount = affectedFiles.length - deletedFiles.length;
   assertDistinctPaths(input.previousDbPath, input.miniDbPath, input.candidateDbPath);
-  rmSync(input.candidateDbPath, { force: true });
   if (!existsSync(input.previousDbPath)) throw new Error('previous SQLite generation is unavailable');
   if (!existsSync(input.miniDbPath)) throw new Error('incremental SQLite mini database is unavailable');
 
@@ -114,8 +124,13 @@ export function patchIncrementalSqliteGeneration(
   validateStandaloneDatabase(input.previousDbPath, 'previous SQLite generation', false);
   validateStandaloneDatabase(input.miniDbPath, 'incremental SQLite mini database');
 
-  const clone = cloneFileWithFallback(input.previousDbPath, input.candidateDbPath);
-  if (input.writeTelemetry) recordFileClone(input.writeTelemetry, clone);
+  if (input.reuseCandidate) {
+    validateStandaloneDatabase(input.candidateDbPath, 'incremental SQLite candidate', false);
+  } else {
+    rmSync(input.candidateDbPath, { force: true });
+    const clone = cloneFileWithFallback(input.previousDbPath, input.candidateDbPath);
+    if (input.writeTelemetry) recordFileClone(input.writeTelemetry, clone);
+  }
 
   let db: Database.Database | null = null;
   try {
@@ -125,8 +140,8 @@ export function patchIncrementalSqliteGeneration(
     db.prepare('ATTACH DATABASE ? AS incremental').run(input.miniDbPath);
     validateSchema(db, 'main', 'candidate SQLite generation');
     validateSchema(db, 'incremental', 'incremental SQLite mini database');
-    prepareAffectedPaths(db, affectedFiles);
-    const { priorAffectedCount } = validateDocumentSets(db, affectedFiles.length);
+    prepareAffectedPaths(db, affectedFiles, deletedFiles);
+    const { priorAffectedCount } = validateDocumentSets(db, affectedFiles.length, deletedFiles.length);
     const previousFactDigests = readAffectedFactDigests(db, 'main', true);
 
     const originalDocumentCount = scalarNumber(db, 'SELECT COUNT(*) AS value FROM main.documents');
@@ -140,16 +155,15 @@ export function patchIncrementalSqliteGeneration(
       insertAffectedDocumentRows(db!);
       input.onStage?.('after-insert');
       pruneReconciledOrphanSymbols(db!);
-      validatePatchedTransaction(db!, affectedFiles.length, originalDocumentCount, priorAffectedCount);
+      validatePatchedTransaction(db!, replacementCount, originalDocumentCount, priorAffectedCount);
       input.onStage?.('before-commit');
     });
     transaction.immediate();
 
-    validateDatabaseIntegrity(db, 'main', 'candidate SQLite generation');
+    if (!input.deferIntegrity) validateDatabaseIntegrity(db, 'main', 'candidate SQLite generation');
     const candidateFactDigests = validateAffectedFacts(db);
-    const changedDocumentPaths = [...candidateFactDigests]
-      .filter(([relativePath, digest]) => previousFactDigests.get(relativePath) !== digest)
-      .map(([relativePath]) => relativePath)
+    const changedDocumentPaths = [...new Set([...previousFactDigests.keys(), ...candidateFactDigests.keys()])]
+      .filter((relativePath) => previousFactDigests.get(relativePath) !== candidateFactDigests.get(relativePath))
       .sort();
     db.exec('DETACH DATABASE incremental');
     db.close();
@@ -173,8 +187,8 @@ export function patchIncrementalSqliteGeneration(
   }
 }
 
-function validateAffectedFiles(files: readonly string[]): string[] {
-  if (files.length === 0) throw new Error('incremental SQLite publication requires affected documents');
+function validateAffectedFiles(files: readonly string[], allowEmpty = false): string[] {
+  if (!allowEmpty && files.length === 0) throw new Error('incremental SQLite publication requires affected documents');
   const normalized = [...files].sort();
   for (const file of normalized) {
     if (!file || file.startsWith('/') || file.includes('\\') || file.split('/').includes('..')) {
@@ -268,16 +282,27 @@ function validateDatabaseIntegrity(db: Database.Database, schema: DatabaseSchema
   if (foreignKeys.length > 0) throw new Error(`${label} failed foreign_key_check`);
 }
 
-function prepareAffectedPaths(db: Database.Database, affectedFiles: readonly string[]): void {
+function prepareAffectedPaths(
+  db: Database.Database,
+  affectedFiles: readonly string[],
+  deletedFiles: readonly string[],
+): void {
   db.exec('CREATE TEMP TABLE incremental_affected_paths (relative_path TEXT PRIMARY KEY) WITHOUT ROWID');
+  db.exec('CREATE TEMP TABLE incremental_deleted_paths (relative_path TEXT PRIMARY KEY) WITHOUT ROWID');
   const insert = db.prepare('INSERT INTO temp.incremental_affected_paths(relative_path) VALUES (?)');
+  const insertDeleted = db.prepare('INSERT INTO temp.incremental_deleted_paths(relative_path) VALUES (?)');
   const insertAll = db.transaction((files: readonly string[]) => {
     for (const file of files) insert.run(file);
+    for (const file of deletedFiles) insertDeleted.run(file);
   });
   insertAll(affectedFiles);
 }
 
-function validateDocumentSets(db: Database.Database, affectedCount: number): { priorAffectedCount: number } {
+function validateDocumentSets(
+  db: Database.Database,
+  affectedCount: number,
+  deletedCount: number,
+): { priorAffectedCount: number } {
   const miniCount = scalarNumber(db, 'SELECT COUNT(*) AS value FROM incremental.documents');
   const priorAffectedCount = scalarNumber(
     db,
@@ -288,10 +313,11 @@ function validateDocumentSets(db: Database.Database, affectedCount: number): { p
   const missing = db
     .prepare(
       `SELECT p.relative_path
-       FROM temp.incremental_affected_paths p
-       LEFT JOIN incremental.documents d ON d.relative_path = p.relative_path
-       WHERE d.id IS NULL
-       LIMIT 1`,
+         FROM temp.incremental_affected_paths p
+         LEFT JOIN incremental.documents d ON d.relative_path = p.relative_path
+         LEFT JOIN temp.incremental_deleted_paths deleted ON deleted.relative_path = p.relative_path
+         WHERE d.id IS NULL AND deleted.relative_path IS NULL
+         LIMIT 1`,
     )
     .pluck()
     .get();
@@ -305,7 +331,21 @@ function validateDocumentSets(db: Database.Database, affectedCount: number): { p
     )
     .pluck()
     .get();
-  if (miniCount !== affectedCount || missing !== undefined || unexpected !== undefined) {
+  const resurrectedDeletion = db
+    .prepare(
+      `SELECT d.relative_path
+       FROM incremental.documents d
+       JOIN temp.incremental_deleted_paths deleted ON deleted.relative_path = d.relative_path
+       LIMIT 1`,
+    )
+    .pluck()
+    .get();
+  if (
+    miniCount !== affectedCount - deletedCount ||
+    missing !== undefined ||
+    unexpected !== undefined ||
+    resurrectedDeletion !== undefined
+  ) {
     throw new Error('incremental SQLite mini database does not exactly match the affected document set');
   }
   return { priorAffectedCount };

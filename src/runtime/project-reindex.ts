@@ -8,6 +8,7 @@ export interface ConfiguredProjectReindexOptions {
   languages?: SupportedLanguage[];
   force?: boolean;
   allowPartial?: boolean;
+  allowExpensiveRebuild?: boolean;
   skipAutoInstall?: boolean;
   installMissing?: boolean;
   trustProjectTools?: boolean;
@@ -34,9 +35,11 @@ export function reindexConfiguredProject(
     pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
     typescriptProjectMode: config.indexer?.typescript?.projectMode,
     typescriptProjects: config.indexer?.typescript?.projects,
+    maxHeapMb: config.indexer?.typescript?.maxHeapMb,
     clojureConfigPath: config.indexer?.clojure?.configPath,
     skipIfUnchanged: options.force !== true,
     allowPartial: options.allowPartial === true,
+    allowExpensiveRebuild: options.allowExpensiveRebuild === true,
     skipAutoInstall: options.skipAutoInstall === true,
     installMissing: options.installMissing === true,
     trustProjectTools: options.trustProjectTools === true,

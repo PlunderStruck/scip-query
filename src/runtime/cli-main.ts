@@ -11,10 +11,10 @@ import { renderRootCommandHelp } from './commands/command-panels.js';
 import {
   activateCliProjectContext,
   existingIndexFallbackEligible,
+  openProjectDb,
   resolveCliProjectContext,
   resolveProjectRoot,
   sharedCachePreparationEligible,
-  withDb,
 } from './cli-context.js';
 import { observeGitWorktreeContextWithCache } from './git-worktree-context-cache.js';
 import { maybePrintUpdateNotice } from './update-notice.js';
@@ -154,10 +154,14 @@ function initializeProfileContext(): void {
   profileRunId();
   if (!profileEnabled() || profileWorkloadIdentity()) return;
   let projectFingerprint: string | null = null;
+  let db: ReturnType<typeof openProjectDb> | null = null;
   try {
-    projectFingerprint = withDb((db) => projectEvidenceFingerprint(db));
+    db = openProjectDb(resolveProjectRoot());
+    projectFingerprint = projectEvidenceFingerprint(db);
   } catch {
     // Setup, init, and first reindex can legitimately run before an index exists.
+  } finally {
+    db?.close();
   }
   initializeProfileWorkloadIdentity({
     command: profileCommand() ?? `scip-query ${process.argv.slice(2).join(' ')}`,

@@ -4,7 +4,7 @@ import type * as TypeScript from 'typescript';
 import { detectAstLanguage, isVueSfcPath } from '../../source/ast/ast-language.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getSourceFiles } from '../../source/primitives/source-fileset.js';
-import { getSourceText } from '../../source/primitives/source-text.js';
+import { readSourceTextUncached } from '../../source/primitives/source-text.js';
 import { BOUNDARY_EXTRACTORS, boundaryFileContext } from './extractors.js';
 import type { RuntimeBoundaryProfileSpan } from './extractors.js';
 import { deriveCarrierDiscriminators, serializedBodySummariesForFile } from './carrier-discriminators.js';
@@ -132,6 +132,8 @@ const DERIVED_BOUNDARY_ACTION_SET = new Set<string>(Object.values(DERIVED_BOUNDA
 export interface RuntimeBoundaryCollectionOptions {
   previousGraph?: RuntimeBoundaryGraph;
   affectedFiles?: readonly string[];
+  /** Recompute compiler-derived relationships while retaining unchanged per-file extraction facts. */
+  forceDerivedRebuild?: boolean;
   profileSpan?: RuntimeBoundaryProfileSpan;
 }
 
@@ -178,6 +180,7 @@ export function collectRuntimeBoundaryGraph(
   const primary = deduplicateObservations([...retainedObservations, ...extracted.observations]);
   if (
     incrementallyReusable &&
+    !opts.forceDerivedRebuild &&
     opts.previousGraph &&
     affectedDirectCoverageUnchanged(previousFileCoverage, extracted.fileCoverage, affectedFiles) &&
     (!affectedFilesMayChangeDerivedGraph(db, opts.previousGraph, affectedFiles) ||
@@ -639,7 +642,7 @@ function extractBoundaryFiles(
   const observations: BoundaryObservation[] = [];
   const fileCoverage: RuntimeBoundaryFileCoverage[] = [];
   for (const file of files) {
-    const source = getSourceText(db, file);
+    const source = readSourceTextUncached(db, file);
     const applicableExtractors = BOUNDARY_EXTRACTORS.filter((extractor) => extractor.supports(source));
     const hasBodySummaryCandidate = /\bJSON\.stringify\s*\(/u.test(source) && /\bbody\s*:/u.test(source);
     const context =

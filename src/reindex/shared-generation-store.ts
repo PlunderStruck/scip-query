@@ -315,6 +315,7 @@ export function readSharedGeneration(
   ) {
     return null;
   }
+  if (!sharedGenerationMetadataIsPortable(generationDir)) return null;
   if (!verifyArtifacts) return manifest;
   try {
     for (const artifact of manifest.artifacts) {
@@ -347,6 +348,7 @@ export function findSharedBaselineGeneration(
   context: GitWorktreeContext,
   languages: readonly ProjectInputFingerprint['languages'][number][],
   options: ProjectInputFingerprintOptions,
+  currentFingerprint?: ProjectInputFingerprint,
 ): SharedBaselineGeneration | null {
   if (!context.treeOid) return null;
   const requestedConfiguration = normalizeProjectInputFingerprintConfiguration(languages, options);
@@ -383,7 +385,6 @@ export function findSharedBaselineGeneration(
         if (
           manifest.generationId === generationId &&
           manifest.repositoryId === context.repositoryId &&
-          manifest.treeOid === context.treeOid &&
           manifest.producerIdentity === SHARED_GENERATION_PRODUCER_IDENTITY &&
           sameFingerprintConfiguration(manifest.fingerprint, requestedConfiguration)
         ) {
@@ -398,6 +399,15 @@ export function findSharedBaselineGeneration(
   }
 
   candidates.sort((left, right) => {
+    const leftExact = left.treeOid === context.treeOid ? 0 : 1;
+    const rightExact = right.treeOid === context.treeOid ? 0 : 1;
+    if (leftExact !== rightExact) return leftExact - rightExact;
+    if (currentFingerprint) {
+      const distance =
+        fingerprintDistance(left.fingerprint, currentFingerprint) -
+        fingerprintDistance(right.fingerprint, currentFingerprint);
+      if (distance !== 0) return distance;
+    }
     const created = Date.parse(right.createdAt) - Date.parse(left.createdAt);
     return created || left.generationId.localeCompare(right.generationId);
   });
@@ -406,7 +416,7 @@ export function findSharedBaselineGeneration(
       repositoryId: context.repositoryId,
       worktreeId: context.worktreeId,
       projectRoot: context.projectRoot,
-      treeOid: context.treeOid,
+      treeOid: candidate.treeOid,
       fingerprint: candidate.fingerprint,
       producerIdentity: candidate.producerIdentity,
       generationId: candidate.generationId,
@@ -646,7 +656,13 @@ export function prepareSharedGenerationForProject(
         return { kind: 'missed', reason: 'worktree has uncommitted changes' };
       }
       const languages = config.languages ?? detectLanguages(projectRoot);
-      const baseline = findSharedBaselineGeneration(context, languages, configFingerprintOptions(config));
+      const currentFingerprint = buildProjectInputFingerprint(projectRoot, languages, configFingerprintOptions(config));
+      const baseline = findSharedBaselineGeneration(
+        context,
+        languages,
+        configFingerprintOptions(config),
+        currentFingerprint,
+      );
       if (!baseline) {
         writeManagedWorktreeLease(context, paths.cacheDir, 'missed', undefined, 'worktree has uncommitted changes');
         return { kind: 'missed', reason: 'worktree has uncommitted changes' };
@@ -674,6 +690,26 @@ export function prepareSharedGenerationForProject(
 
     const peer = importPeerGeneration(snapshot, projectRoot);
     if (!peer) {
+      if (!existsSync(paths.dbPath)) {
+        const baseline = findSharedBaselineGeneration(
+          context,
+          languages,
+          configFingerprintOptions(config),
+          fingerprint,
+        );
+        if (baseline) {
+          hydrateSharedGeneration({
+            snapshot: baseline.snapshot,
+            manifest: baseline.manifest,
+            targetCacheDir: paths.cacheDir,
+            targetProjectRoot: projectRoot,
+            persistLease: false,
+            lockWaitMs: 0,
+          });
+          writeWorktreeOverlayLease(baseline.snapshot, paths.cacheDir);
+          return { kind: 'overlay' };
+        }
+      }
       writeManagedWorktreeLease(
         context,
         paths.cacheDir,
@@ -1171,6 +1207,10 @@ function readPublishableReindexMetadata(cacheDir: string): ReindexMetadata | und
   }
 }
 
+function sharedGenerationMetadataIsPortable(cacheDir: string): boolean {
+  return readPublishableReindexMetadata(cacheDir)?.scipCompanion !== 'deferred';
+}
+
 function configFingerprintOptions(config: ProjectConfig): ProjectInputFingerprintOptions {
   return {
     pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
@@ -1186,6 +1226,19 @@ function sameFingerprintConfiguration(
 ): boolean {
   const actual = normalizeProjectInputFingerprintConfiguration(fingerprint.languages, fingerprint);
   return JSON.stringify(actual) === JSON.stringify(expected);
+}
+
+function fingerprintDistance(left: ProjectInputFingerprint, right: ProjectInputFingerprint): number {
+  const leftFiles = new Map(left.files.map((file) => [file.path, `${file.size}\0${file.hash}`]));
+  const rightFiles = new Map(right.files.map((file) => [file.path, `${file.size}\0${file.hash}`]));
+  let distance = 0;
+  for (const [path, identity] of leftFiles) {
+    if (rightFiles.get(path) !== identity) distance += 1;
+  }
+  for (const path of rightFiles.keys()) {
+    if (!leftFiles.has(path)) distance += 1;
+  }
+  return distance;
 }
 
 function sharedGenerationDirectory(snapshot: SharedGenerationSnapshot): string {
@@ -1362,6 +1415,7 @@ function validateSourceGeneration(
     const metadata = readPublishableReindexMetadata(cacheDir);
     if (
       !metadata ||
+      metadata.scipCompanion === 'deferred' ||
       JSON.stringify(metadata.fingerprint) !== JSON.stringify(expectedFingerprint) ||
       JSON.stringify([...(metadata.indexedLanguages ?? [])].sort()) !==
         JSON.stringify([...expectedFingerprint.languages].sort())

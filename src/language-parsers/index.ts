@@ -10,6 +10,7 @@
  * AST. The cache makes repeat queries on the same file effectively free.
  */
 import type { ScipDatabase } from '../storage/db.js';
+import { isMissingProjectFileError, readProjectFileText } from '../platform/project-files.js';
 import { importResolutionFingerprint, normalizePath } from '../source/primitives/import-path-resolver.js';
 import { fileContentHash } from '../storage/evidence-cache.js';
 import { isRecord } from '../storage/evidence-payload.js';
@@ -75,16 +76,42 @@ export function getSourceImports(db: ScipDatabase, relativePath: string): Parsed
     if (!parser) return [];
     const source = getSourceText(db, normalized);
     if (!source) return [];
-    const contentHash = fileContentHash(db, normalized, source);
-    const resolutionFingerprint = importResolutionFingerprint(db);
-    const cached = SOURCE_IMPORTS_PRODUCT.read(db, normalized, contentHash);
-    if (cached?.resolutionFingerprint === resolutionFingerprint) {
-      return cached.imports;
-    }
-    const imports = parser.parseImports(db, normalized, source);
-    SOURCE_IMPORTS_PRODUCT.write(db, normalized, contentHash, { parserVersion: 2, resolutionFingerprint, imports });
-    return imports;
+    return loadSourceImports(db, normalized, source, parser);
   });
+}
+
+/**
+ * Reads one import list without retaining the file text or parsed result in the
+ * process-wide per-database caches. Whole-project graph construction uses this
+ * streaming form so its memory is proportional to the graph, not repository size.
+ */
+export function readSourceImportsUncached(db: ScipDatabase, relativePath: string): ParsedSourceImport[] {
+  const normalized = normalizePath(relativePath);
+  const parser = getParserForPath(normalized);
+  if (!parser) return [];
+  let source: string;
+  try {
+    source = readProjectFileText(db.config.projectRoot, normalized, { inputKind: 'indexed source file' });
+  } catch (error) {
+    if (isMissingProjectFileError(error)) return [];
+    throw error;
+  }
+  return loadSourceImports(db, normalized, source, parser);
+}
+
+function loadSourceImports(
+  db: ScipDatabase,
+  normalized: string,
+  source: string,
+  parser: NonNullable<ReturnType<typeof getParserForPath>>,
+): ParsedSourceImport[] {
+  const contentHash = fileContentHash(db, normalized, source);
+  const resolutionFingerprint = importResolutionFingerprint(db);
+  const cached = SOURCE_IMPORTS_PRODUCT.read(db, normalized, contentHash);
+  if (cached?.resolutionFingerprint === resolutionFingerprint) return cached.imports;
+  const imports = parser.parseImports(db, normalized, source);
+  SOURCE_IMPORTS_PRODUCT.write(db, normalized, contentHash, { parserVersion: 2, resolutionFingerprint, imports });
+  return imports;
 }
 
 /**

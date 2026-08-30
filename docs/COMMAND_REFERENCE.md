@@ -153,7 +153,7 @@ An unavailable frontier is a relationship class for which no registered analyzer
 
 | Command | Description | Cost | Closes disclosed gaps with | Options |
 |---|---|---|---|---|
-| `reindex` | Index the codebase and convert to SQLite | variable | - | `-l, --language <lang>`<br>`--pnpm-workspaces`<br>`--force`<br>`--allow-partial`<br>`--trust-project-tools`<br>`--install-missing`<br>`--indexer-concurrency <n>`<br>`--json`<br>`--result-only`<br>`--compact` |
+| `reindex` | Index the codebase and convert to SQLite | variable | - | `-l, --language <lang>`<br>`--pnpm-workspaces`<br>`--force`<br>`--allow-partial`<br>`--allow-expensive-rebuild`<br>`--trust-project-tools`<br>`--install-missing`<br>`--indexer-concurrency <n>`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `augment-sources` | Add source files skipped by upstream SCIP indexers to the SQLite documents table | variable | - | - |
 | `augment-vue` | Add compiler-resolved Vue SFC references to the SQLite index using Volar | variable | - | `--project <tsconfig>` |
 

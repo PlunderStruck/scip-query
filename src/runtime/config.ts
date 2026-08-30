@@ -40,6 +40,8 @@ export type ResolvedWatchConfig = Omit<Required<WatchConfig>, 'resourceBudget'> 
 
 const DEFAULT_WATCH: ResolvedWatchConfig = {
   enabled: false,
+  autoStart: false,
+  allowExpensiveRebuild: false,
   debounceMs: DEFAULT_WATCH_DEBOUNCE_MS,
   cooldownMs: DEFAULT_WATCH_COOLDOWN_MS,
   gitPollMs: 2_000,
@@ -78,6 +80,8 @@ const ROOT_CONFIG_KEYS = new Set([
 
 const WATCH_CONFIG_KEYS = new Set([
   'enabled',
+  'autoStart',
+  'allowExpensiveRebuild',
   'debounceMs',
   'cooldownMs',
   'gitPollMs',
@@ -100,6 +104,8 @@ const INDEXER_OVERRIDE_CONFIG_KEYS = new Set([
   'maxWarmSessions',
   'workerIdleMs',
   'workerSoftMemoryMb',
+  'workerHeapMb',
+  'maxHeapMb',
 ]);
 const LOCALITY_CONFIG_KEYS = new Set(['architecturalBoundarySegments']);
 const ARCHITECTURE_CONFIG_KEYS = new Set([
@@ -295,6 +301,12 @@ function validateWatchConfig(config: ProjectConfig, diagnostics: ConfigDiagnosti
       message: 'Must be a non-negative integer; 0 disables idle shutdown.',
     });
   }
+  if (config.watch?.autoStart !== undefined && typeof config.watch.autoStart !== 'boolean') {
+    diagnostics.push({ level: 'error', path: 'watch.autoStart', message: 'Must be a boolean.' });
+  }
+  if (config.watch?.allowExpensiveRebuild !== undefined && typeof config.watch.allowExpensiveRebuild !== 'boolean') {
+    diagnostics.push({ level: 'error', path: 'watch.allowExpensiveRebuild', message: 'Must be a boolean.' });
+  }
   if (config.watch?.autoRefresh !== undefined && typeof config.watch.autoRefresh !== 'boolean') {
     diagnostics.push({ level: 'error', path: 'watch.autoRefresh', message: 'Must be a boolean.' });
   }
@@ -361,6 +373,8 @@ function validateIndexerAndSemanticConfig(
   for (const [key, value] of [
     ['maxWarmSessions', typescriptIndexer?.maxWarmSessions],
     ['workerSoftMemoryMb', typescriptIndexer?.workerSoftMemoryMb],
+    ['workerHeapMb', typescriptIndexer?.workerHeapMb],
+    ['maxHeapMb', typescriptIndexer?.maxHeapMb],
   ] as const) {
     if (value !== undefined && (!Number.isInteger(value) || value <= 0)) {
       diagnostics.push({

@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-08-30T16:14:39.352Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "fe428f7bca72dc08b096315de48c15de70882eb0e2860356bc7d32179498ffd4",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "W changed from interface WatchConfig { enabled?: boolean; debounceMs?: number; cooldownMs?: number; gitPollMs?: number; idleTimeoutMs?: number; autoRefresh?: boolean; ignore?: string[]; resour... to interface WatchConfig { enabled?: boolean; autoStart?: boolean; debounceMs?: number; cooldownMs?: number; gitPollMs?: number; idleTimeoutMs?: number; autoRefresh?: boolean; igno....",
+      "target": "config-types-<hash>.d.ts:W"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.21.0",
+  "previousDigest": "194b024ee490bbb7378e4287ba91b33eb09ff19a90a7abf6c46ddc885cc0151f",
+  "reason": "Add an optional watch.autoStart policy so projects can permit explicit watchers without allowing ordinary commands to start them.",
+  "schemaVersion": 1
+}

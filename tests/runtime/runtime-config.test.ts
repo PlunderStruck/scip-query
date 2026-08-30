@@ -56,6 +56,7 @@ describe('loadProjectConfig', () => {
   it('uses the calibrated demand-service timing defaults', () => {
     expect(resolveWatchConfig({})).toMatchObject({
       enabled: false,
+      autoStart: false,
       debounceMs: 2_000,
       cooldownMs: 5_000,
       gitPollMs: 2_000,
@@ -900,6 +901,7 @@ describe('validateProjectConfig', () => {
         cooldownMs: -1,
         gitPollMs: 0,
         idleTimeoutMs: -1,
+        autoStart: 'yes' as unknown as boolean,
         autoRefresh: 'yes' as unknown as boolean,
         resourceBudget: {
           enabled: 'yes' as unknown as boolean,
@@ -915,6 +917,7 @@ describe('validateProjectConfig', () => {
       expect.objectContaining({ level: 'error', path: 'watch.cooldownMs' }),
       expect.objectContaining({ level: 'error', path: 'watch.gitPollMs' }),
       expect.objectContaining({ level: 'error', path: 'watch.idleTimeoutMs' }),
+      expect.objectContaining({ level: 'error', path: 'watch.autoStart' }),
       expect.objectContaining({ level: 'error', path: 'watch.autoRefresh' }),
       expect.objectContaining({ level: 'error', path: 'watch.resourceBudget.enabled' }),
       expect.objectContaining({ level: 'error', path: 'watch.resourceBudget.windowMs' }),

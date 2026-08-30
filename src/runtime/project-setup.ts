@@ -625,6 +625,7 @@ async function refreshSetupIndex(
         pnpmWorkspaces: input.config.indexer?.typescript?.pnpmWorkspaces,
         typescriptProjectMode: input.config.indexer?.typescript?.projectMode,
         typescriptProjects: input.config.indexer?.typescript?.projects,
+        maxHeapMb: input.config.indexer?.typescript?.maxHeapMb,
         clojureConfigPath: input.config.indexer?.clojure?.configPath,
         skipIfUnchanged: true,
         allowPartial: true,

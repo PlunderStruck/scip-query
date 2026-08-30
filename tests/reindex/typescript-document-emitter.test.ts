@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
@@ -87,6 +87,11 @@ describe('TypeScriptDocumentEmitter', () => {
     expect(added.fragments.map((fragment) => fragment.relativePath)).toEqual(['src/c.ts']);
     expectFragmentsEqual(added.fragments, addedOracle);
     expect(added.stats.programUpdates).toBe(3);
+
+    rmSync(join(root, 'src/c.ts'));
+    const removed = emitter.advance({ modifiedFiles: [], removedFiles: ['src/c.ts'], affectedFiles: [] });
+    expect(removed.fragments).toEqual([]);
+    expect(removed.stats).toMatchObject({ programUpdates: 4, documentsRemoved: 1 });
   });
 
   test('initializes a cold compiler without emitting unrelated documents', () => {

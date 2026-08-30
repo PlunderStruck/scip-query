@@ -82,6 +82,14 @@
       "additionalProperties": true,
       "properties": {
         "enabled": { "type": "boolean" },
+        "autoStart": {
+          "type": "boolean",
+          "description": "Whether ordinary commands may automatically start the background watch service. Explicit watch commands remain available when false."
+        },
+        "allowExpensiveRebuild": {
+          "type": "boolean",
+          "description": "Permit watcher-triggered whole-project indexers after an incremental miss. Defaults to false so a watcher cannot silently start an expensive fallback."
+        },
         "debounceMs": { "type": "integer", "exclusiveMinimum": 0 },
         "cooldownMs": {
           "type": "integer",
@@ -114,7 +122,9 @@
         "configPath": { "type": "string", "minLength": 1 },
         "maxWarmSessions": { "type": "integer", "exclusiveMinimum": 0 },
         "workerIdleMs": { "type": "integer", "minimum": 0 },
-        "workerSoftMemoryMb": { "type": "integer", "exclusiveMinimum": 0 }
+        "workerSoftMemoryMb": { "type": "integer", "exclusiveMinimum": 0 },
+        "workerHeapMb": { "type": "integer", "exclusiveMinimum": 0 },
+        "maxHeapMb": { "type": "integer", "exclusiveMinimum": 0 }
       }
     },
     "entryRoots": {

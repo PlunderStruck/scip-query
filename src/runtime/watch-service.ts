@@ -182,7 +182,7 @@ export type WatchServiceStopResult =
 
 // scip-query: ignore-stale — reviewed S1 owned contract; this union makes automatic-start outcomes explicit.
 export type WatchServiceAutoEnsureResult =
-  | { kind: 'skipped'; reason: 'disabled' | 'excluded-command' | 'environment' }
+  | { kind: 'skipped'; reason: 'disabled' | 'auto-start-disabled' | 'excluded-command' | 'environment' }
   | { kind: 'started' | 'reused'; state: WatchServiceState }
   | { kind: 'failed'; message: string };
 
@@ -211,6 +211,7 @@ export function ensureWatchServiceForCommand(opts: {
   if (env['SCIP_QUERY_SKIP_WATCH_SERVICE'] === '1') return { kind: 'skipped', reason: 'environment' };
   if (!watchServiceAutoStartEligible(opts.commandName, env)) return { kind: 'skipped', reason: 'excluded-command' };
   if (opts.config.watch?.enabled !== true) return { kind: 'skipped', reason: 'disabled' };
+  if (opts.config.watch.autoStart === false) return { kind: 'skipped', reason: 'auto-start-disabled' };
   try {
     const result = ensureWatchService({
       projectRoot: opts.projectRoot,

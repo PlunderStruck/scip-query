@@ -398,8 +398,8 @@ describe('reindex reliability', () => {
         patchDurationMs: 3,
       }),
     );
-    expect(statuses.join('\n')).toContain('Converting 1 affected TypeScript document(s) to SQLite');
-    expect(statuses.join('\n')).toContain('Patched 1 SQLite document(s)');
+    expect(statuses.join('\n')).toContain('Converting bounded TypeScript batch 1/1 (1 emitted, 0 removed) to SQLite');
+    expect(statuses.join('\n')).toContain('Patched 1 SQLite document path(s) across 1 bounded batch(es)');
     expect(fragmentPruneCalls.at(-1)).toEqual(['next-generation']);
   });
 
@@ -1580,11 +1580,13 @@ async function loadReindexFixture(opts: {
           scipPath: opts.deferredIncrementalTypeScript ? input.previousShardPath : input.candidateShardPath,
           candidateScipPath: input.candidateShardPath,
           affectedScipPath: input.candidateAffectedScipPath,
+          affectedBatches: [],
           completeScipUpdated: !opts.deferredIncrementalTypeScript,
           durationMs: 4,
           cold: false,
           changedFiles: ['src/main.ts'],
           affectedFiles: ['src/main.ts'],
+          deletedFiles: [],
           producerIdentity: 'test-producer',
           previousFragmentGeneration: 'previous-generation',
           nextFragmentGeneration: 'next-generation',
@@ -1598,6 +1600,7 @@ async function loadReindexFixture(opts: {
             mode: 'closure',
             changedFiles: ['src/main.ts'],
             affectedFiles: ['src/main.ts'],
+            deletedFiles: [],
             reasons: [],
           },
           projectFileCount: 1,

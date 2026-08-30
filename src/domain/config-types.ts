@@ -414,6 +414,10 @@ export interface EntryRootsConfig {
 export interface WatchConfig {
   /** Enable file watching (default: false, must opt in) */
   enabled?: boolean;
+  /** Let ordinary commands start the background watch service (default: false). */
+  autoStart?: boolean;
+  /** Permit watcher-triggered whole-project indexers after an incremental miss (default: false). */
+  allowExpensiveRebuild?: boolean;
   /** Ms to wait after the last file change before triggering reindex (default: 2000) */
   debounceMs?: number;
   /** Requested ms between reindex completions; values below 5000 use the 5000ms safety floor. */
@@ -456,4 +460,8 @@ export interface IndexerOverrides {
   workerIdleMs?: number;
   /** Retire the TypeScript index worker after a response reaches this heap usage, in MiB. */
   workerSoftMemoryMb?: number;
+  /** Hard heap limit for the bounded TypeScript document worker, in MiB (default: 4096). */
+  workerHeapMb?: number;
+  /** Heap limit for an explicitly authorized whole-project TypeScript indexer, in MiB. */
+  maxHeapMb?: number;
 }

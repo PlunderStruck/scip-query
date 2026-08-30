@@ -24,9 +24,8 @@ describe('TypeScript incremental index eligibility', () => {
         affectedFiles: ['src/a.ts', 'src/b.ts'],
       }),
     );
-    expect([...result.previousDocumentIdentities.keys()]).toEqual(['src/a.ts', 'src/b.ts']);
-    expect([...result.nextDocumentIdentities.keys()]).toEqual(['src/a.ts', 'src/b.ts']);
     expect(result.previousFragmentGeneration).not.toBe(result.nextFragmentGeneration);
+    expect(result.projectIdentity).toMatch(/^typescript-project-v2:/);
 
     const rootWorkspace = planTypeScriptIncrementalUpdate({
       ...fixture(),
@@ -34,19 +33,6 @@ describe('TypeScript incremental index eligibility', () => {
       workspaceProjects: ['.'],
     });
     expect(rootWorkspace.eligible).toBe(true);
-  });
-
-  test('assigns stable retained identities to indexed generated documents outside the project snapshot', () => {
-    const input = fixture();
-    const result = planTypeScriptIncrementalUpdate({
-      ...input,
-      projectFiles: [...input.projectFiles, 'packages/app/dist/generated.js'],
-    });
-
-    expect(result.eligible).toBe(true);
-    if (!result.eligible) return;
-    expect(result.previousDocumentIdentities.get('packages/app/dist/generated.js')).toEqual(expect.any(String));
-    expect(result.nextDocumentIdentities.has('packages/app/dist/generated.js')).toBe(false);
   });
 
   test('accepts an added TypeScript source without other compiler edits', () => {
@@ -92,29 +78,9 @@ describe('TypeScript incremental index eligibility', () => {
         affectedFiles: ['src/a.ts', 'src/added.ts', 'src/b.ts'],
       }),
     );
-    expect(result.nextDocumentIdentities.has('src/added.ts')).toBe(true);
   });
 
   test.each([
-    {
-      label: 'config edit',
-      mutate: (input: EligibilityFixture) => ({
-        ...input,
-        currentSnapshot: snapshot({ a: 'a1', b: 'b1', config: 'c2' }),
-      }),
-      reason: 'change is not a modified TypeScript source file',
-    },
-    {
-      label: 'deleted source',
-      mutate: (input: EligibilityFixture) => ({
-        ...input,
-        currentSnapshot: {
-          ...input.currentSnapshot,
-          files: input.currentSnapshot.files.filter((file) => file.path !== 'src/b.ts'),
-        },
-      }),
-      reason: 'TypeScript project membership changed',
-    },
     {
       label: 'missing graph',
       mutate: (input: EligibilityFixture) => ({ ...input, graph: null }),
@@ -154,7 +120,83 @@ describe('TypeScript incremental index eligibility', () => {
     expect(result.plan.changedFiles).toEqual(['src/a.ts']);
   });
 
-  test('falls back when tsconfig changes alongside modified TypeScript source', () => {
+  test('replaces the bounded TypeScript project for a configuration edit', () => {
+    const result = planTypeScriptIncrementalUpdate({
+      ...fixture(),
+      currentSnapshot: snapshot({ a: 'a1', b: 'b1', config: 'c2' }),
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        eligible: true,
+        replaceProject: true,
+        plan: expect.objectContaining({ mode: 'full-project', affectedFiles: ['src/a.ts', 'src/b.ts'] }),
+      }),
+    );
+  });
+
+  test('uses bounded project replacement when a large source delta exceeds the graph-closure limit', () => {
+    const projectFiles = Array.from({ length: 257 }, (_, index) => `src/file-${index}.ts`);
+    const base = snapshot({ a: 'unused', b: 'unused', config: 'c1' });
+    const previousSnapshot = {
+      ...base,
+      files: [
+        { path: 'tsconfig.json', size: 1, hash: 'c1' },
+        ...projectFiles.map((path) => ({ path, size: 1, hash: `old-${path}` })),
+      ],
+    };
+    const currentSnapshot = {
+      ...previousSnapshot,
+      files: [
+        { path: 'tsconfig.json', size: 1, hash: 'c1' },
+        ...projectFiles.map((path) => ({ path, size: 1, hash: `new-${path}` })),
+      ],
+    };
+
+    const result = planTypeScriptIncrementalUpdate({
+      projectMode: 'single',
+      previousSnapshot,
+      currentSnapshot,
+      projectFiles,
+      graph: new Map(),
+      producerIdentity: 'scip-typescript:0.4.0:test',
+      rootTsconfigExists: true,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        eligible: true,
+        replaceProject: true,
+        plan: expect.objectContaining({ mode: 'full-project', affectedFiles: [...projectFiles].sort() }),
+      }),
+    );
+  });
+
+  test('represents a deleted source as a tombstone without retaining its document identity', () => {
+    const input = fixture();
+    const sourceEdit = planTypeScriptIncrementalUpdate(input);
+    const previous = snapshot({ a: 'a1', b: 'b1', config: 'c1' });
+    const result = planTypeScriptIncrementalUpdate({
+      ...input,
+      previousSnapshot: previous,
+      currentSnapshot: {
+        ...previous,
+        files: previous.files.filter((file) => file.path !== 'src/b.ts'),
+      },
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        eligible: true,
+        replaceProject: false,
+        deletedFiles: ['src/b.ts'],
+        projects: [expect.objectContaining({ removedFiles: ['src/b.ts'], affectedFiles: [] })],
+      }),
+    );
+    expect(sourceEdit.eligible).toBe(true);
+    if (!result.eligible || !sourceEdit.eligible) return;
+    expect(result.projectIdentity).toBe(sourceEdit.projectIdentity);
+  });
+
+  test('uses bounded project replacement when tsconfig changes alongside modified TypeScript source', () => {
     const result = planTypeScriptIncrementalUpdate({
       projectMode: 'single',
       previousSnapshot: snapshot({ a: 'a1', b: 'b1', config: 'c1' }),
@@ -165,7 +207,13 @@ describe('TypeScript incremental index eligibility', () => {
       rootTsconfigExists: true,
     });
 
-    expect(result).toEqual({ eligible: false, reason: 'TypeScript fragment project identity changed' });
+    expect(result).toEqual(
+      expect.objectContaining({
+        eligible: true,
+        replaceProject: true,
+        plan: expect.objectContaining({ mode: 'full-project', affectedFiles: ['src/a.ts', 'src/b.ts'] }),
+      }),
+    );
   });
 
   test('partitions a cross-project closure and carries changed dependencies into each compiler request', () => {
@@ -201,12 +249,14 @@ describe('TypeScript incremental index eligibility', () => {
             tsconfigPath: 'apps/api/tsconfig.json',
             projectArgument: 'apps/api',
             modifiedFiles: ['apps/api/src/a.ts'],
+            removedFiles: [],
             affectedFiles: ['apps/api/src/a.ts'],
           },
           {
             tsconfigPath: 'apps/web/tsconfig.json',
             projectArgument: 'apps/web',
             modifiedFiles: ['apps/api/src/a.ts'],
+            removedFiles: [],
             affectedFiles: ['apps/web/src/b.ts'],
           },
         ],
