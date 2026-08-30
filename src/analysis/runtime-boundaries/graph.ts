@@ -356,12 +356,18 @@ function affectedDirectCoverageUnchanged(
   if (!previousFileCoverage) return false;
   const previousAffectedCoverage = previousFileCoverage
     .filter((entry) => affectedFiles.has(entry.file))
+    .filter(hasDirectBoundaryEffect)
     .map(directBoundaryCoverage)
     .sort((left, right) => left.file.localeCompare(right.file));
   const current = currentAffectedCoverage
+    .filter(hasDirectBoundaryEffect)
     .map(directBoundaryCoverage)
     .sort((left, right) => left.file.localeCompare(right.file));
   return JSON.stringify(previousAffectedCoverage) === JSON.stringify(current);
+}
+
+function hasDirectBoundaryEffect(entry: RuntimeBoundaryFileCoverage): boolean {
+  return entry.observationIds.length > 0 || entry.extractionErrors.length > 0;
 }
 
 function directBoundaryCoverage(

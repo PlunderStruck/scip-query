@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-08-30T20:26:18.779Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "bd6bfadc9f91f169ffe414a12abe055a0c0033540dc59f138d1b247bd08141ca",
+  "changes": [
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./reindex; review their variance and runtime meaning.",
+      "target": "./reindex"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.21.0",
+  "previousDigest": "eb24f152b99d5598ef6301c82516fb8a8c58ea10ad339a5642994fdba2f8b319",
+  "reason": "Optional incremental publication controls and telemetry extend the API without invalidating existing callers",
+  "schemaVersion": 1
+}

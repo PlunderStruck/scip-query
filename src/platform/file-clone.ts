@@ -84,13 +84,21 @@ export function reflinkUnavailable(error: unknown): boolean {
 export interface ReindexWriteTelemetry {
   reflinkedBytes: number;
   fallbackCopiedBytes: number;
+  /** Conservative physical bytes written by bounded incremental database work. */
+  incrementalWrittenBytes?: number;
 }
 
 export function createReindexWriteTelemetry(): ReindexWriteTelemetry {
-  return { reflinkedBytes: 0, fallbackCopiedBytes: 0 };
+  return { reflinkedBytes: 0, fallbackCopiedBytes: 0, incrementalWrittenBytes: 0 };
 }
 
 export function recordFileClone(telemetry: ReindexWriteTelemetry, result: FileCloneResult): void {
   if (result.method === 'reflink') telemetry.reflinkedBytes += result.bytes;
   else telemetry.fallbackCopiedBytes += result.bytes;
+}
+
+export function recordIncrementalWrite(telemetry: ReindexWriteTelemetry, bytes: number): void {
+  if (!Number.isSafeInteger(bytes) || bytes < 0)
+    throw new Error('incremental write bytes must be a non-negative integer');
+  telemetry.incrementalWrittenBytes = (telemetry.incrementalWrittenBytes ?? 0) + bytes;
 }

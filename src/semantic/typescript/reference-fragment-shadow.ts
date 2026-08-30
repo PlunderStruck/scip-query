@@ -53,6 +53,7 @@ export function seedTypeScriptReferenceFragments(
   evidenceDb: ScipDatabase = identityDb,
   dependencyGraph?: FileDependencyGraph,
 ): number {
+  if (fragmentsByFile.size === 0) return 0;
   const projectFiles = indexedTypeScriptFiles(identityDb);
   const builder = createTypeScriptSemanticIdentityBuilder({
     projectFiles,

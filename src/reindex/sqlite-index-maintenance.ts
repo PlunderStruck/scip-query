@@ -13,6 +13,11 @@ export interface SqliteQueryLayoutMaintenanceResult {
   skippedReason?: 'not-a-sqlite-database';
 }
 
+export interface SqliteQueryLayoutMaintenanceOptions {
+  /** Recompute whole-database planner statistics after a material change. */
+  analyze?: boolean;
+}
+
 /**
  * Establishes the post-conversion SQLite layout expected by query code.
  *
@@ -21,7 +26,10 @@ export interface SqliteQueryLayoutMaintenanceResult {
  * removed only when schema inspection proves a retained equivalent, then
  * ANALYZE records statistics for the final augmented database.
  */
-export function optimizeSqliteQueryLayout(databasePath: string): SqliteQueryLayoutMaintenanceResult {
+export function optimizeSqliteQueryLayout(
+  databasePath: string,
+  options: SqliteQueryLayoutMaintenanceOptions = {},
+): SqliteQueryLayoutMaintenanceResult {
   const db = new Database(databasePath);
   const added: string[] = [];
   const removed: string[] = [];
@@ -54,9 +62,9 @@ export function optimizeSqliteQueryLayout(databasePath: string): SqliteQueryLayo
         retained.push('idx_chunks_doc_id');
       }
 
-      db.exec('ANALYZE');
+      if (options.analyze !== false) db.exec('ANALYZE');
     })();
-    return { added, removed, retained, analyzed: true };
+    return { added, removed, retained, analyzed: options.analyze !== false };
   } catch (error) {
     if ((error as { code?: unknown }).code === 'SQLITE_NOTADB') {
       return {

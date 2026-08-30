@@ -143,10 +143,12 @@ export function promoteReindexArtifacts(input: PromoteReindexArtifactsInput): Pr
   input.onStage?.('after-recovery-retained');
 
   const candidateScip = input.preserveOutputScip ? input.outputScip : input.tempOutputScip;
+  const preservedIndexArtifact = verifiedPreservedIndexArtifact(input, previousGeneration);
   const candidate = materializeGeneration({
     generationRoot,
     databasePath: input.tempOutputDb,
     indexPath: existsSync(candidateScip) ? candidateScip : undefined,
+    verifiedIndexArtifact: preservedIndexArtifact,
     metadataPath: existsSync(input.tempMetaPath) ? input.tempMetaPath : undefined,
   });
 
@@ -617,6 +619,32 @@ function retainPublishedGeneration(input: PromoteReindexArtifactsInput): SqliteG
   return published ? recoveryForGeneration(input.outputDb, published.currentGeneration) : undefined;
 }
 
+function verifiedPreservedIndexArtifact(
+  input: PromoteReindexArtifactsInput,
+  previousGeneration: SqliteGenerationRecovery | undefined,
+): SqliteGenerationArtifact | undefined {
+  if (!input.preserveOutputScip) return undefined;
+  if (!previousGeneration) throw new Error('deferred SCIP publication requires an accepted immutable generation');
+  const inspected = inspectSqliteGeneration(input.outputDb, input.metaPath);
+  if (
+    inspected.state !== 'current' ||
+    inspected.generation.currentGeneration !== previousGeneration.generationIdentity
+  ) {
+    const reason =
+      inspected.state === 'current'
+        ? 'generation identity changed'
+        : 'reason' in inspected
+          ? inspected.reason
+          : `generation state is ${inspected.state}`;
+    throw new Error(`deferred SCIP publication requires a verified accepted companion: ${reason}`);
+  }
+  const manifest = readSqliteGenerationManifest(input.outputDb, previousGeneration.generationIdentity);
+  if (!manifest?.index || !artifactSizeMatches(input.outputScip, manifest.index)) {
+    throw new Error('deferred SCIP publication requires the verified accepted index artifact');
+  }
+  return manifest.index;
+}
+
 function stableMirrorIdentity(
   databasePath: string,
   indexPath: string,
@@ -665,11 +693,16 @@ function materializeGeneration(input: {
   generationRoot: string;
   databasePath: string;
   indexPath?: string;
+  verifiedIndexArtifact?: SqliteGenerationArtifact;
   metadataPath?: string;
   forcedIdentity?: string;
 }): { identity: string; directorySync: Exclude<DirectorySyncStatus, 'not-requested'> } {
   const database = describeArtifact(input.databasePath);
-  const index = input.indexPath ? describeArtifact(input.indexPath) : undefined;
+  const index = input.indexPath
+    ? input.verifiedIndexArtifact
+      ? validateVerifiedArtifact(input.indexPath, input.verifiedIndexArtifact)
+      : describeArtifact(input.indexPath)
+    : undefined;
   const metadata = input.metadataPath ? describeArtifact(input.metadataPath) : undefined;
   const identity = input.forcedIdentity ?? generationIdentityFromArtifacts(database, index, input.metadataPath);
   const generationDirectory = join(input.generationRoot, identity);
@@ -743,6 +776,13 @@ function describeArtifact(path: string): SqliteGenerationArtifact {
     size: statSync(path).size,
     sha256: hashFile(path),
   };
+}
+
+function validateVerifiedArtifact(path: string, artifact: SqliteGenerationArtifact): SqliteGenerationArtifact {
+  if (artifact.file !== basename(path) || statSync(path).size !== artifact.size) {
+    throw new Error(`verified SQLite generation artifact changed before publication: ${path}`);
+  }
+  return artifact;
 }
 
 function hashFile(path: string): string {

@@ -1,9 +1,15 @@
 import { createHash } from 'node:crypto';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, rmSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Database from 'better-sqlite3';
 import { monotonicNowMs } from '../domain/time.js';
-import { cloneFileWithFallback, recordFileClone, type ReindexWriteTelemetry } from '../platform/file-clone.js';
+import { profileSpan } from '../instrumentation/profile.js';
+import {
+  cloneFileWithFallback,
+  recordFileClone,
+  recordIncrementalWrite,
+  type ReindexWriteTelemetry,
+} from '../platform/file-clone.js';
 
 export type IncrementalSqlitePatchStage =
   | 'after-delete'
@@ -21,6 +27,8 @@ export interface PatchIncrementalSqliteGenerationInput {
   reuseCandidate?: boolean;
   /** Defer the full candidate integrity scan until the final batch. */
   deferIntegrity?: boolean;
+  /** The prior database is an accepted, fully validated generation produced by scip-query. */
+  trustedPriorGeneration?: boolean;
   writeTelemetry?: ReindexWriteTelemetry;
   onStage?: (stage: IncrementalSqlitePatchStage) => void;
 }
@@ -121,47 +129,76 @@ export function patchIncrementalSqliteGeneration(
 
   // The stable prior generation already passed publication integrity checks;
   // validate its schema here and run the full checks on the copied candidate.
-  validateStandaloneDatabase(input.previousDbPath, 'previous SQLite generation', false);
-  validateStandaloneDatabase(input.miniDbPath, 'incremental SQLite mini database');
+  profileSpan('reindex.publish.sqlite-patch.validate-inputs', () => {
+    validateStandaloneDatabase(input.previousDbPath, 'previous SQLite generation', false);
+    validateStandaloneDatabase(input.miniDbPath, 'incremental SQLite mini database');
+  });
 
   if (input.reuseCandidate) {
-    validateStandaloneDatabase(input.candidateDbPath, 'incremental SQLite candidate', false);
+    profileSpan('reindex.publish.sqlite-patch.reuse-candidate', () =>
+      validateStandaloneDatabase(input.candidateDbPath, 'incremental SQLite candidate', false),
+    );
   } else {
-    rmSync(input.candidateDbPath, { force: true });
-    const clone = cloneFileWithFallback(input.previousDbPath, input.candidateDbPath);
-    if (input.writeTelemetry) recordFileClone(input.writeTelemetry, clone);
+    profileSpan('reindex.publish.sqlite-patch.clone', () => {
+      rmSync(input.candidateDbPath, { force: true });
+      const clone = cloneFileWithFallback(input.previousDbPath, input.candidateDbPath);
+      if (input.writeTelemetry) recordFileClone(input.writeTelemetry, clone);
+    });
   }
 
   let db: Database.Database | null = null;
   try {
-    db = new Database(input.candidateDbPath, { fileMustExist: true });
-    db.pragma('busy_timeout = 5000');
-    db.pragma('foreign_keys = ON');
-    db.prepare('ATTACH DATABASE ? AS incremental').run(input.miniDbPath);
-    validateSchema(db, 'main', 'candidate SQLite generation');
-    validateSchema(db, 'incremental', 'incremental SQLite mini database');
-    prepareAffectedPaths(db, affectedFiles, deletedFiles);
-    const { priorAffectedCount } = validateDocumentSets(db, affectedFiles.length, deletedFiles.length);
-    const previousFactDigests = readAffectedFactDigests(db, 'main', true);
+    db = profileSpan('reindex.publish.sqlite-patch.open', () => {
+      const opened = new Database(input.candidateDbPath, { fileMustExist: true });
+      opened.pragma('busy_timeout = 5000');
+      opened.pragma('foreign_keys = ON');
+      opened.prepare('ATTACH DATABASE ? AS incremental').run(input.miniDbPath);
+      validateSchema(opened, 'main', 'candidate SQLite generation');
+      validateSchema(opened, 'incremental', 'incremental SQLite mini database');
+      return opened;
+    });
+    const { priorAffectedCount, previousFactDigests } = profileSpan('reindex.publish.sqlite-patch.prepare', () => {
+      prepareAffectedPaths(db!, affectedFiles, deletedFiles);
+      const validated = validateDocumentSets(db!, affectedFiles.length, deletedFiles.length);
+      return {
+        ...validated,
+        previousFactDigests: readAffectedFactDigests(db!, 'main', true),
+      };
+    });
 
     const originalDocumentCount = scalarNumber(db, 'SELECT COUNT(*) AS value FROM main.documents');
     const transaction = db.transaction(() => {
-      prepareSymbolOwnership(db!);
-      rejectSharedDefinitions(db!);
-      deleteAffectedDocumentRows(db!);
+      profileSpan('reindex.publish.sqlite-patch.transaction.symbol-ownership', () => prepareSymbolOwnership(db!));
+      profileSpan('reindex.publish.sqlite-patch.transaction.shared-definitions', () => rejectSharedDefinitions(db!));
+      profileSpan('reindex.publish.sqlite-patch.transaction.delete', () => deleteAffectedDocumentRows(db!));
       input.onStage?.('after-delete');
-      reconcileGlobalSymbols(db!);
+      profileSpan('reindex.publish.sqlite-patch.transaction.reconcile-symbols', () => reconcileGlobalSymbols(db!));
       input.onStage?.('after-symbol-reconciliation');
-      insertAffectedDocumentRows(db!);
+      profileSpan('reindex.publish.sqlite-patch.transaction.insert', () => insertAffectedDocumentRows(db!));
       input.onStage?.('after-insert');
-      pruneReconciledOrphanSymbols(db!);
-      validatePatchedTransaction(db!, replacementCount, originalDocumentCount, priorAffectedCount);
+      profileSpan('reindex.publish.sqlite-patch.transaction.prune-symbols', () =>
+        pruneReconciledOrphanSymbols(db!, input.trustedPriorGeneration === true),
+      );
+      profileSpan('reindex.publish.sqlite-patch.transaction.validate', () =>
+        validatePatchedTransaction(db!, replacementCount, originalDocumentCount, priorAffectedCount),
+      );
       input.onStage?.('before-commit');
     });
-    transaction.immediate();
+    profileSpan('reindex.publish.sqlite-patch.transaction', () => transaction.immediate());
+    if (input.writeTelemetry) {
+      recordIncrementalWrite(input.writeTelemetry, 2 * transientSqliteJournalBytes(input.candidateDbPath));
+    }
 
-    if (!input.deferIntegrity) validateDatabaseIntegrity(db, 'main', 'candidate SQLite generation');
-    const candidateFactDigests = validateAffectedFacts(db);
+    profileSpan('reindex.publish.sqlite-patch.integrity', () =>
+      validateIncrementalDatabaseIntegrity(
+        db!,
+        'candidate SQLite generation',
+        !input.deferIntegrity && input.trustedPriorGeneration !== true,
+      ),
+    );
+    const candidateFactDigests = profileSpan('reindex.publish.sqlite-patch.validate-facts', () =>
+      validateAffectedFacts(db!),
+    );
     const changedDocumentPaths = [...new Set([...previousFactDigests.keys(), ...candidateFactDigests.keys()])]
       .filter((relativePath) => previousFactDigests.get(relativePath) !== candidateFactDigests.get(relativePath))
       .sort();
@@ -185,6 +222,15 @@ export function patchIncrementalSqliteGeneration(
       { cause: error },
     );
   }
+}
+
+function transientSqliteJournalBytes(databasePath: string): number {
+  let bytes = 0;
+  for (const suffix of ['-wal', '-journal']) {
+    const path = `${databasePath}${suffix}`;
+    if (existsSync(path)) bytes += statSync(path).size;
+  }
+  return bytes;
 }
 
 function validateAffectedFiles(files: readonly string[], allowEmpty = false): string[] {
@@ -282,6 +328,27 @@ function validateDatabaseIntegrity(db: Database.Database, schema: DatabaseSchema
   if (foreignKeys.length > 0) throw new Error(`${label} failed foreign_key_check`);
 }
 
+/**
+ * The accepted database already passed complete publication checks, and the
+ * bounded mini database passes them above. The patch transaction keeps foreign
+ * keys enabled, so SQLite rejects any new dangling reference before commit.
+ * A full quick check remains the conservative default for standalone callers.
+ * Internal patches from an accepted generation use the bounded transaction and
+ * fact checks instead of rereading every unchanged database page.
+ */
+function validateIncrementalDatabaseIntegrity(
+  db: Database.Database,
+  label: string,
+  verifyWholeDatabase: boolean,
+): void {
+  if (db.pragma('foreign_keys', { simple: true }) !== 1) {
+    throw new Error(`${label} lost foreign-key enforcement`);
+  }
+  if (!verifyWholeDatabase) return;
+  const integrity = db.prepare('PRAGMA main.quick_check').pluck().get();
+  if (integrity !== 'ok') throw new Error(`${label} failed quick_check: ${String(integrity)}`);
+}
+
 function prepareAffectedPaths(
   db: Database.Database,
   affectedFiles: readonly string[],
@@ -354,32 +421,45 @@ function validateDocumentSets(
 function prepareSymbolOwnership(db: Database.Database): void {
   db.exec(`
     CREATE TEMP TABLE incremental_old_defined_symbols (symbol TEXT PRIMARY KEY) WITHOUT ROWID;
-    INSERT OR IGNORE INTO temp.incremental_old_defined_symbols(symbol)
-    SELECT g.symbol
-    FROM main.defn_enclosing_ranges r
-    JOIN main.documents d ON d.id = r.document_id
-    JOIN main.global_symbols g ON g.id = r.symbol_id
-    JOIN temp.incremental_affected_paths p ON p.relative_path = d.relative_path;
-    INSERT OR IGNORE INTO temp.incremental_old_defined_symbols(symbol)
-    SELECT g.symbol
-    FROM main.mentions m
-    JOIN main.chunks c ON c.id = m.chunk_id
-    JOIN main.documents d ON d.id = c.document_id
-    JOIN main.global_symbols g ON g.id = m.symbol_id
-    JOIN temp.incremental_affected_paths p ON p.relative_path = d.relative_path
-    WHERE m.role = 1;
+      INSERT OR IGNORE INTO temp.incremental_old_defined_symbols(symbol)
+      SELECT g.symbol
+      FROM temp.incremental_affected_paths p
+      CROSS JOIN main.documents d ON d.relative_path = p.relative_path
+      CROSS JOIN main.defn_enclosing_ranges r ON r.document_id = d.id
+      CROSS JOIN main.global_symbols g ON g.id = r.symbol_id;
+      INSERT OR IGNORE INTO temp.incremental_old_defined_symbols(symbol)
+      SELECT g.symbol
+      FROM temp.incremental_affected_paths p
+      CROSS JOIN main.documents d ON d.relative_path = p.relative_path
+      CROSS JOIN main.chunks c ON c.document_id = d.id
+      CROSS JOIN main.mentions m ON m.chunk_id = c.id
+      CROSS JOIN main.global_symbols g ON g.id = m.symbol_id
+      WHERE m.role = 1;
 
     CREATE TEMP TABLE incremental_new_defined_symbols (symbol TEXT PRIMARY KEY) WITHOUT ROWID;
-    INSERT OR IGNORE INTO temp.incremental_new_defined_symbols(symbol)
-    SELECT g.symbol
+      INSERT OR IGNORE INTO temp.incremental_new_defined_symbols(symbol)
+      SELECT g.symbol
     FROM incremental.defn_enclosing_ranges r
     JOIN incremental.global_symbols g ON g.id = r.symbol_id;
     INSERT OR IGNORE INTO temp.incremental_new_defined_symbols(symbol)
     SELECT g.symbol
     FROM incremental.mentions m
     JOIN incremental.global_symbols g ON g.id = m.symbol_id
-    WHERE m.role = 1;
-  `);
+      WHERE m.role = 1;
+
+      CREATE TEMP TABLE incremental_touched_symbols (symbol TEXT PRIMARY KEY) WITHOUT ROWID;
+      INSERT OR IGNORE INTO temp.incremental_touched_symbols(symbol)
+      SELECT symbol FROM temp.incremental_old_defined_symbols;
+      INSERT OR IGNORE INTO temp.incremental_touched_symbols(symbol)
+      SELECT g.symbol
+      FROM temp.incremental_affected_paths p
+      CROSS JOIN main.documents d ON d.relative_path = p.relative_path
+      CROSS JOIN main.chunks c ON c.document_id = d.id
+      CROSS JOIN main.mentions m ON m.chunk_id = c.id
+      CROSS JOIN main.global_symbols g ON g.id = m.symbol_id;
+      INSERT OR IGNORE INTO temp.incremental_touched_symbols(symbol)
+      SELECT symbol FROM incremental.global_symbols;
+    `);
 }
 
 function rejectSharedDefinitions(db: Database.Database): void {
@@ -389,25 +469,24 @@ function rejectSharedDefinitions(db: Database.Database): void {
          SELECT symbol FROM temp.incremental_old_defined_symbols
          UNION
          SELECT symbol FROM temp.incremental_new_defined_symbols
-       ), unaffected_definitions AS (
-         SELECT g.symbol
+       )
+       SELECT c.symbol
+       FROM changed_symbols c
+       CROSS JOIN main.global_symbols g ON g.symbol = c.symbol
+       WHERE EXISTS (
+         SELECT 1
          FROM main.defn_enclosing_ranges r
          JOIN main.documents d ON d.id = r.document_id
-         JOIN main.global_symbols g ON g.id = r.symbol_id
          LEFT JOIN temp.incremental_affected_paths p ON p.relative_path = d.relative_path
-         WHERE p.relative_path IS NULL
-         UNION
-         SELECT g.symbol
+         WHERE r.symbol_id = g.id AND p.relative_path IS NULL
+       ) OR EXISTS (
+         SELECT 1
          FROM main.mentions m
-         JOIN main.chunks c ON c.id = m.chunk_id
-         JOIN main.documents d ON d.id = c.document_id
-         JOIN main.global_symbols g ON g.id = m.symbol_id
+         JOIN main.chunks chunk ON chunk.id = m.chunk_id
+         JOIN main.documents d ON d.id = chunk.document_id
          LEFT JOIN temp.incremental_affected_paths p ON p.relative_path = d.relative_path
-         WHERE m.role = 1 AND p.relative_path IS NULL
+         WHERE m.symbol_id = g.id AND m.role = 1 AND p.relative_path IS NULL
        )
-       SELECT u.symbol
-       FROM unaffected_definitions u
-       JOIN changed_symbols c ON c.symbol = u.symbol
        LIMIT 1`,
     )
     .pluck()
@@ -506,27 +585,31 @@ function insertAffectedDocumentRows(db: Database.Database): void {
   ).run(chunkOffset, documentOffset);
   db.prepare(
     `INSERT INTO main.mentions(chunk_id, symbol_id, role)
-     SELECT m.chunk_id + ?, target.id, m.role
-     FROM incremental.mentions m
-     JOIN incremental.global_symbols source ON source.id = m.symbol_id
-     JOIN main.global_symbols target ON target.symbol = source.symbol`,
+       SELECT m.chunk_id + ?, target.id, m.role
+       FROM incremental.mentions m
+       CROSS JOIN incremental.global_symbols source ON source.id = m.symbol_id
+       CROSS JOIN main.global_symbols target ON target.symbol = source.symbol`,
   ).run(chunkOffset);
   db.prepare(
     `INSERT INTO main.defn_enclosing_ranges(
        id, document_id, symbol_id, start_line, start_char, end_line, end_char
      )
-     SELECT r.id + ?, r.document_id + ?, target.id,
-            r.start_line, r.start_char, r.end_line, r.end_char
-     FROM incremental.defn_enclosing_ranges r
-     JOIN incremental.global_symbols source ON source.id = r.symbol_id
-     JOIN main.global_symbols target ON target.symbol = source.symbol`,
+       SELECT r.id + ?, r.document_id + ?, target.id,
+              r.start_line, r.start_char, r.end_line, r.end_char
+       FROM incremental.defn_enclosing_ranges r
+       CROSS JOIN incremental.global_symbols source ON source.id = r.symbol_id
+       CROSS JOIN main.global_symbols target ON target.symbol = source.symbol`,
   ).run(rangeOffset, documentOffset);
 }
 
-function pruneReconciledOrphanSymbols(db: Database.Database): void {
+function pruneReconciledOrphanSymbols(db: Database.Database, priorGenerationOrphansPruned: boolean): void {
+  const scope = priorGenerationOrphansPruned
+    ? 'symbol IN (SELECT symbol FROM temp.incremental_touched_symbols) AND'
+    : '';
   db.exec(`
     DELETE FROM main.global_symbols
-    WHERE NOT EXISTS (SELECT 1 FROM main.mentions m WHERE m.symbol_id = main.global_symbols.id)
+    WHERE ${scope}
+      NOT EXISTS (SELECT 1 FROM main.mentions m WHERE m.symbol_id = main.global_symbols.id)
       AND NOT EXISTS (
         SELECT 1 FROM main.defn_enclosing_ranges r WHERE r.symbol_id = main.global_symbols.id
       );
@@ -550,17 +633,8 @@ function validatePatchedTransaction(
   if (documentCount !== expectedDocumentCount || affectedDocumentCount !== affectedCount) {
     throw new Error('candidate SQLite document counts changed unexpectedly');
   }
-  const duplicatePath = db
-    .prepare('SELECT relative_path FROM main.documents GROUP BY relative_path HAVING COUNT(*) > 1 LIMIT 1')
-    .pluck()
-    .get();
-  const duplicateSymbol = db
-    .prepare('SELECT symbol FROM main.global_symbols GROUP BY symbol HAVING COUNT(*) > 1 LIMIT 1')
-    .pluck()
-    .get();
-  if (duplicatePath !== undefined || duplicateSymbol !== undefined) {
-    throw new Error('candidate SQLite generation contains duplicate document paths or symbols');
-  }
+  // The validated UNIQUE constraints reject duplicate paths and symbols in
+  // the transaction. Do not rescan the unchanged rows for the same fact.
 }
 
 function validateAffectedFacts(db: Database.Database): Map<string, string> {

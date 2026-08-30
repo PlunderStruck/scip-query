@@ -155,7 +155,7 @@ interface GitStateSnapshot {
  * Design:
  *  - Debounce: waits for a configurable quiet period after the last file change
  *  - Single-flight: only one reindex runs at a time, never queued
- *  - Dirty flag: changes during reindex schedule ONE follow-up
+ *  - Dirty flag: changes during reindex cancel stale work and schedule ONE follow-up
  *  - Cooldown: minimum interval between reindex completions
  *  - Atomic publish: the reindexer writes temp artifacts, then promotes them
  */
@@ -416,12 +416,25 @@ export class Watcher {
     this.changedFiles++;
 
     if (this.reindexInFlight) {
-      // Reindex is running — just mark dirty, don't schedule anything
+      // The accepted snapshot can no longer match the working tree. Cancel
+      // the stale attempt once and retain every change for one follow-up.
       this.dirty = true;
       this.setStatus({
         state: 'indexing',
         startedAt: (this.status as { startedAt: number }).startedAt,
       });
+      const operation = this.activeOperation;
+      if (operation && watcherSupersededOperations.get(this) !== operation) {
+        watcherSupersededOperations.set(this, operation);
+        void operation.cancel().then(
+          (result) => {
+            if (result.state === 'degraded' && !this.stopped) this.onError(new Error(result.reason));
+          },
+          (error: unknown) => {
+            if (!this.stopped) this.onError(error instanceof Error ? error : new Error(String(error)));
+          },
+        );
+      }
       return;
     }
 
@@ -517,6 +530,24 @@ export class Watcher {
         this.reindexInFlight = false;
         this.lastReindexEnd = this.clock.now();
         if (this.stopped) return;
+        if (watcherSupersededOperations.get(this) === operation) {
+          this.restorePendingChangeJournal(changeJournal);
+          if (this.dirty) {
+            const until = this.wallNow() + this.watchConfig.cooldownMs;
+            this.setStatus({ state: 'cooldown', until, dirty: true });
+            this.clearCooldownTimer();
+            this.cooldownTimer = this.clock.setTimeout(() => {
+              this.cooldownTimer = null;
+              if (this.dirty && !this.stopped) {
+                this.dirty = false;
+                this.triggerReindex();
+              } else {
+                this.setStatus({ state: 'idle' });
+              }
+            }, this.watchConfig.cooldownMs);
+          } else this.setStatus({ state: 'idle' });
+          return;
+        }
         let completedIndexIsFresh = false;
         try {
           completedIndexIsFresh = this.onReindexComplete(durationMs, trigger, { pendingChanges: this.dirty }) === true;
@@ -538,7 +569,7 @@ export class Watcher {
           // Changes arrived during reindex — enter cooldown then reindex again
           const until = this.wallNow() + this.watchConfig.cooldownMs;
           this.setStatus({ state: 'cooldown', until, dirty: true });
-
+          this.clearCooldownTimer();
           this.cooldownTimer = this.clock.setTimeout(() => {
             this.cooldownTimer = null;
             if (this.dirty && !this.stopped) {
@@ -558,11 +589,14 @@ export class Watcher {
         if (this.stopped) return;
         const error = err instanceof Error ? err : new Error(String(err));
         this.restorePendingChangeJournal(changeJournal);
-        this.onReindexError(error, trigger);
-        this.onError(error);
+        if (watcherSupersededOperations.get(this) !== operation) {
+          this.onReindexError(error, trigger);
+          this.onError(error);
+        }
         if (this.dirty) {
           const until = this.wallNow() + this.watchConfig.cooldownMs;
           this.setStatus({ state: 'cooldown', until, dirty: true });
+          this.clearCooldownTimer();
           this.cooldownTimer = this.clock.setTimeout(() => {
             this.cooldownTimer = null;
             if (this.dirty && !this.stopped) {
@@ -578,6 +612,7 @@ export class Watcher {
       })
       .finally(() => {
         if (this.activeOperation === operation) this.activeOperation = null;
+        if (watcherSupersededOperations.get(this) === operation) watcherSupersededOperations.delete(this);
       });
   }
 
@@ -917,6 +952,7 @@ interface WatcherInputState {
 const watcherRetirementStates = new WeakMap<Watcher, WatcherRetirementState>();
 const watcherStopTimeouts = new WeakMap<Watcher, number>();
 const watcherInputStates = new WeakMap<Watcher, WatcherInputState>();
+const watcherSupersededOperations = new WeakMap<Watcher, ReindexOperation>();
 
 function watcherRetirementState(watcher: Watcher): WatcherRetirementState {
   const existing = watcherRetirementStates.get(watcher);

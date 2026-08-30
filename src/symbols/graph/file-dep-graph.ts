@@ -5,6 +5,7 @@ import { createProjectEvidenceProduct, evidenceProductInvalidation } from '../..
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { profileSpan } from '../../instrumentation/profile.js';
+import type { FileDependencyGraph } from '../../domain/project-input.js';
 
 interface FileDependencyGraphPayload {
   version: 2;
@@ -233,11 +234,12 @@ export function carryFileDependencyGraph(
   db: ScipDatabase,
   previous: FileDependencyGraphSnapshot,
   replacedPaths: readonly string[],
+  materializedGraph?: FileDependencyGraph,
 ): boolean {
   const sourceEdges = previous.sourceEdges ?? 'imports-only';
   const projectFingerprint = projectEvidenceFingerprint(db);
   if (!projectFingerprint) return false;
-  const graph = materializeCarriedFileDependencyGraph(db, previous, replacedPaths);
+  const graph = materializedGraph ?? materializeCarriedFileDependencyGraph(db, previous, replacedPaths);
   if (!graph) return false;
 
   const indexedFiles = new Set(indexedDocumentPaths(db, { includeIgnored: false }));
@@ -261,34 +263,51 @@ export function materializeCarriedFileDependencyGraph(
   db: ScipDatabase,
   previous: FileDependencyGraphSnapshot,
   replacedPaths: readonly string[],
+  removedPaths: readonly string[] = [],
 ): Map<string, Set<string>> | null {
   const sourceEdges = previous.sourceEdges ?? 'imports-only';
   const expectedCacheKey = fileDependencyGraphCacheKey(undefined, 'all-references', sourceEdges);
   if (previous.cacheKey !== expectedCacheKey) return null;
 
-  const indexedFiles = new Set(indexedDocumentPaths(db, { includeIgnored: false }));
+  const indexedFiles = profileSpan(
+    'file-dep-graph.carry.indexed-files',
+    () => new Set(indexedDocumentPaths(db, { includeIgnored: false })),
+  );
   const replaced = new Set(replacedPaths);
   const graph = new Map<string, Set<string>>();
-  for (const [fromFile, dependencies] of previous.graph) {
-    if (replaced.has(fromFile) || !indexedFiles.has(fromFile)) continue;
-    for (const toFile of dependencies) addFileDepEdge(db, graph, indexedFiles, fromFile, toFile);
-  }
-  for (const edge of scipFileDepEdgesForFiles(db, replaced, 'all-references')) {
+  profileSpan('file-dep-graph.carry.reuse', () => {
+    if (removedPaths.length === 0) {
+      for (const [fromFile, dependencies] of previous.graph) {
+        if (!replaced.has(fromFile)) graph.set(fromFile, dependencies);
+      }
+    } else {
+      for (const [fromFile, dependencies] of previous.graph) {
+        if (replaced.has(fromFile) || !indexedFiles.has(fromFile)) continue;
+        for (const toFile of dependencies) addFileDepEdge(db, graph, indexedFiles, fromFile, toFile);
+      }
+    }
+  });
+  const replacedScipEdges = profileSpan('file-dep-graph.carry.scip-edges', () =>
+    scipFileDepEdgesForFiles(db, replaced, 'all-references'),
+  );
+  for (const edge of replacedScipEdges) {
     addFileDepEdge(db, graph, indexedFiles, edge.from_file, edge.to_file);
   }
-  for (const fromFile of replaced) {
-    if (!indexedFiles.has(fromFile)) continue;
-    if (sourceEdges !== 'none') {
-      for (const entry of readSourceImportsUncached(db, fromFile)) {
-        if (entry.sourcePath) addFileDepEdge(db, graph, indexedFiles, fromFile, entry.sourcePath);
+  profileSpan('file-dep-graph.carry.source-edges', () => {
+    for (const fromFile of replaced) {
+      if (!indexedFiles.has(fromFile)) continue;
+      if (sourceEdges !== 'none') {
+        for (const entry of readSourceImportsUncached(db, fromFile)) {
+          if (entry.sourcePath) addFileDepEdge(db, graph, indexedFiles, fromFile, entry.sourcePath);
+        }
+      }
+      if (sourceEdges === 'imports-and-reexports') {
+        for (const entry of getReExports(db, fromFile)) {
+          if (entry.sourcePath) addFileDepEdge(db, graph, indexedFiles, fromFile, entry.sourcePath);
+        }
       }
     }
-    if (sourceEdges === 'imports-and-reexports') {
-      for (const entry of getReExports(db, fromFile)) {
-        if (entry.sourcePath) addFileDepEdge(db, graph, indexedFiles, fromFile, entry.sourcePath);
-      }
-    }
-  }
+  });
   return graph;
 }
 
@@ -337,7 +356,7 @@ function fileDependencyGraphCacheKey(
   return `edge-mode-v4:${scipEdges}:${sourceEdges}:${scope ?? '<all>'}`;
 }
 
-function graphPayloadFromGraph(graph: Map<string, Set<string>>): Array<[string, string[]]> {
+function graphPayloadFromGraph(graph: ReadonlyMap<string, ReadonlySet<string>>): Array<[string, string[]]> {
   return [...graph]
     .map(([file, deps]): [string, string[]] => [file, [...deps].sort()])
     .sort(([left], [right]) => left.localeCompare(right));
@@ -432,24 +451,29 @@ function scipFileDepEdgesForFiles(
     result.push(
       ...db.all<{ from_file: string; to_file: string }>(
         `SELECT DISTINCT
-          d1.relative_path AS from_file,
-          d2.relative_path AS to_file
-        FROM mentions m
-        JOIN chunks c ON m.chunk_id = c.id
-        JOIN documents d1 ON c.document_id = d1.id
-        JOIN global_symbols gs ON m.symbol_id = gs.id
-        JOIN (
-          SELECT m2.symbol_id, c2.document_id
-          FROM mentions m2
-          JOIN chunks c2 ON m2.chunk_id = c2.id
-          WHERE m2.role = 1
-          GROUP BY m2.symbol_id
-        ) sym_def ON sym_def.symbol_id = gs.id
-        JOIN documents d2 ON sym_def.document_id = d2.id
-        WHERE d1.id != d2.id
-          ${roleFilter}
-          ${db.pathExclusionsFor('d1', 'd2')}
-          AND d1.relative_path IN (${placeholders})`,
+            d1.relative_path AS from_file,
+            d2.relative_path AS to_file
+          FROM documents d1
+          CROSS JOIN chunks c
+          CROSS JOIN mentions m
+          CROSS JOIN global_symbols gs
+          CROSS JOIN chunks c2
+          CROSS JOIN documents d2
+          WHERE d1.relative_path IN (${placeholders})
+            AND c.document_id = d1.id
+            AND m.chunk_id = c.id
+            AND gs.id = m.symbol_id
+            AND c2.id = (
+              SELECT m2.chunk_id
+              FROM mentions m2
+              WHERE m2.symbol_id = gs.id AND m2.role = 1
+              ORDER BY m2.chunk_id
+              LIMIT 1
+            )
+            AND d2.id = c2.document_id
+            AND d1.id != d2.id
+            ${roleFilter}
+            ${db.pathExclusionsFor('d1', 'd2')}`,
         ...batch,
       ),
     );

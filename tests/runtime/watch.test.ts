@@ -240,7 +240,7 @@ describe('Watcher', () => {
     await watcher.stop();
   });
 
-  it('suppresses a dirty rerun when the completed index is proven fresh', async () => {
+  it('does not accept a superseded completion even when freshness validation would accept it', async () => {
     vi.useFakeTimers();
     const projectRoot = createProject();
     const suppressed: unknown[] = [];
@@ -261,13 +261,10 @@ describe('Watcher', () => {
     controlled.completions[0]?.(100);
     await vi.advanceTimersByTimeAsync(5_000);
 
-    expect(controlled.run).toHaveBeenCalledTimes(1);
-    expect(suppressed).toEqual([{ kind: 'watch-source', detail: 'src/a.ts' }]);
-    watcher.requestRefresh({ kind: 'watch-startup', detail: 'new request' }, { immediate: true });
-    expect(controlled.requests[1]?.trigger).toEqual({
-      kind: 'watch-startup',
-      detail: 'new request',
-    });
+    expect(controlled.run).toHaveBeenCalledTimes(2);
+    expect(suppressed).toEqual([]);
+    controlled.completions[1]?.(100);
+    await Promise.resolve();
     await watcher.stop();
   });
 
@@ -388,7 +385,7 @@ describe('Watcher', () => {
     await vi.advanceTimersByTimeAsync(5_000);
 
     expect(controlled.run).toHaveBeenCalledTimes(2);
-    expect(errors).toEqual(['freshness unavailable']);
+    expect(errors).toEqual([]);
     await watcher.stop();
   });
 
@@ -443,16 +440,30 @@ describe('Watcher', () => {
     await watcher.stop();
   });
 
-  it('retries after a source change makes an in-flight reindex fail', async () => {
+  it('cancels and retries after a source change supersedes an in-flight reindex', async () => {
     vi.useFakeTimers();
     const projectRoot = createProject();
     const firstCompletion = deferred<number>();
     const onReindexError = vi.fn();
-    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => ({
-      completion: firstCompletion.promise,
-      cancel: async () => ({ state: 'exited', diagnostics: emptyDiagnostics() }),
-      diagnostics: emptyDiagnostics,
-    }));
+    const cancel = vi.fn(async () => {
+      try {
+        await firstCompletion.promise;
+      } catch {
+        // A superseded operation is expected to reject when its process exits.
+      }
+      return { state: 'exited' as const, diagnostics: emptyDiagnostics() };
+    });
+    let starts = 0;
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => {
+      starts += 1;
+      return starts === 1
+        ? {
+            completion: firstCompletion.promise,
+            cancel,
+            diagnostics: emptyDiagnostics,
+          }
+        : completedOperation();
+    });
     const { Watcher } = await import('../../src/runtime/watch.js');
     const watcher = new Watcher({
       projectRoot,
@@ -465,12 +476,13 @@ describe('Watcher', () => {
 
     watcher.requestRefresh({ kind: 'watch-startup' }, { immediate: true });
     watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' });
+    expect(cancel).toHaveBeenCalledOnce();
     firstCompletion.reject(new Error('filesystem snapshot changed'));
-    await vi.waitFor(() => expect(onReindexError).toHaveBeenCalledOnce());
     await vi.advanceTimersByTimeAsync(5_000);
 
     expect(run).toHaveBeenCalledTimes(2);
     expect(run.mock.calls[1]?.[0].trigger).toEqual({ kind: 'watch-source', detail: 'src/a.ts' });
+    expect(onReindexError).not.toHaveBeenCalled();
     await watcher.stop();
   });
 

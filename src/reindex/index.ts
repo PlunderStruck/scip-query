@@ -7,6 +7,7 @@ import { runBoundedProcess } from '../platform/bounded-process.js';
 import {
   isLanguageRelevantProjectInputPath,
   projectInputSnapshotOrNull,
+  type FileDependencyGraph,
   type ProjectFileFingerprint,
   type ProjectInputSnapshot,
 } from '../domain/project-input.js';
@@ -63,6 +64,7 @@ import {
   cloneFileWithFallback,
   createReindexWriteTelemetry,
   recordFileClone,
+  recordIncrementalWrite,
   type ReindexWriteTelemetry,
 } from '../platform/file-clone.js';
 import { writeJsonDurable } from '../storage/atomic-json.js';
@@ -1588,7 +1590,9 @@ async function publishFreshReindexArtifacts(
     );
   });
   const indexMaintenance = profileSpan('reindex.publish.sqlite-layout', () =>
-    optimizeSqliteQueryLayout(opts.tempPaths.tempOutputDb),
+    optimizeSqliteQueryLayout(opts.tempPaths.tempOutputDb, {
+      analyze: needsFreshSqliteStatistics(incrementalTypeScript, sqliteMaterialization.mode),
+    }),
   );
   if (indexMaintenance.added.length > 0) {
     opts.onStatus(`Added SQLite query indexes: ${indexMaintenance.added.join(', ')}`);
@@ -1596,52 +1600,80 @@ async function publishFreshReindexArtifacts(
   if (indexMaintenance.removed.length > 0) {
     opts.onStatus(`Removed redundant SQLite indexes: ${indexMaintenance.removed.join(', ')}`);
   }
-  assertCandidateIndexCoverage(
-    opts,
-    opts.tempPaths.tempOutputDb,
-    indexedOutputs.map((output) => output.language),
+  profileSpan('reindex.publish.coverage', () =>
+    assertCandidateIndexCoverage(
+      opts,
+      opts.tempPaths.tempOutputDb,
+      indexedOutputs.map((output) => output.language),
+    ),
   );
 
+  let carriedDependencyGraph: FileDependencyGraph | undefined;
   if (sqliteMaterialization.mode === 'incremental' && incrementalTypeScript) {
-    let candidateDb: ScipDatabase | null = null;
-    let evidenceDb: ScipDatabase | null = null;
-    try {
-      candidateDb = new ScipDatabase({
-        projectRoot: opts.projectRoot,
-        dbPath: opts.tempPaths.tempOutputDb,
-        indexPath: opts.tempPaths.tempOutputScip,
-      });
-      evidenceDb = new ScipDatabase({
-        projectRoot: opts.projectRoot,
-        dbPath: opts.paths.outputDb,
-        indexPath: opts.paths.outputScip,
-      });
-      const written = seedTypeScriptReferenceFragments(
-        candidateDb,
-        opts.fingerprint,
-        incrementalTypeScript.referenceFragmentsByFile,
-        evidenceDb,
-        incrementalTypeScript.dependencyGraphSnapshot
-          ? (materializeCarriedFileDependencyGraph(
-              candidateDb,
-              incrementalTypeScript.dependencyGraphSnapshot,
-              incrementalTypeScript.affectedFiles,
+    profileSpan('reindex.publish.reference-fragments', () => {
+      let candidateDb: ScipDatabase | null = null;
+      let evidenceDb: ScipDatabase | null = null;
+      try {
+        candidateDb = profileSpan(
+          'reindex.publish.reference-fragments.open-candidate',
+          () =>
+            new ScipDatabase({
+              projectRoot: opts.projectRoot,
+              dbPath: opts.tempPaths.tempOutputDb,
+              indexPath: opts.tempPaths.tempOutputScip,
+            }),
+        );
+        evidenceDb = profileSpan(
+          'reindex.publish.reference-fragments.open-evidence',
+          () =>
+            new ScipDatabase({
+              projectRoot: opts.projectRoot,
+              dbPath: opts.paths.outputDb,
+              indexPath: opts.paths.outputScip,
+            }),
+        );
+        carriedDependencyGraph = incrementalTypeScript.dependencyGraphSnapshot
+          ? (profileSpan('reindex.publish.reference-fragments.dependency-graph', () =>
+              materializeCarriedFileDependencyGraph(
+                candidateDb!,
+                incrementalTypeScript.dependencyGraphSnapshot!,
+                incrementalTypeScript.affectedFiles,
+                incrementalTypeScript.deletedFiles,
+              ),
             ) ?? undefined)
-          : undefined,
-      );
-      opts.onStatus(`Cached exact TypeScript reference fragments for ${written} affected document(s).`);
-    } catch (error) {
-      opts.onStatus(
-        `Exact TypeScript reference fragment prefill unavailable: ${error instanceof Error ? error.message : String(error)}.`,
-      );
-    } finally {
-      candidateDb?.close();
-      evidenceDb?.close();
-    }
+          : undefined;
+        const deletedReferenceFiles = new Set(incrementalTypeScript.deletedFiles);
+        const currentReferenceFragments =
+          deletedReferenceFiles.size === 0
+            ? incrementalTypeScript.referenceFragmentsByFile
+            : new Map(
+                [...incrementalTypeScript.referenceFragmentsByFile].filter(
+                  ([relativePath]) => !deletedReferenceFiles.has(relativePath),
+                ),
+              );
+        const written = profileSpan('reindex.publish.reference-fragments.seed', () =>
+          seedTypeScriptReferenceFragments(
+            candidateDb!,
+            opts.fingerprint,
+            currentReferenceFragments,
+            evidenceDb!,
+            carriedDependencyGraph,
+          ),
+        );
+        opts.onStatus(`Cached exact TypeScript reference fragments for ${written} affected document(s).`);
+      } catch (error) {
+        opts.onStatus(
+          `Exact TypeScript reference fragment prefill unavailable: ${error instanceof Error ? error.message : String(error)}.`,
+        );
+      } finally {
+        candidateDb?.close();
+        evidenceDb?.close();
+      }
+    });
   }
 
   const previousSnapshot = previousProjectInputSnapshot(opts.paths.metaPath);
-  const shadowRecord =
+  const shadowRecord = profileSpan('reindex.publish.affected-shadow', () =>
     sqliteMaterialization.mode === 'incremental' && incrementalTypeScript
       ? buildIncrementalAffectedSetShadowRecord(incrementalTypeScript, sqliteMaterialization.changedDocumentPaths)
       : collectAffectedSetShadowRecord({
@@ -1653,7 +1685,8 @@ async function publishFreshReindexArtifacts(
           previousSnapshot,
           currentSnapshot: opts.fingerprint,
           refreshResult: 'rebuilt',
-        });
+        }),
+  );
 
   const lastRefresh = buildLastRefresh({
     trigger: opts.opts.trigger,
@@ -1675,42 +1708,46 @@ async function publishFreshReindexArtifacts(
     lastRefresh,
   });
   metadata.scipCompanion = deferredScipCompanion ? 'deferred' : 'current';
-  assertProjectInputsUnchanged(opts);
-  pruneTypeScriptProjectShardCache(opts.paths.outputDb, pruneProjects);
-  writeReindexMeta(opts.tempPaths.tempMetaPath, metadata);
-  const localGenerationPublication = promoteReindexArtifacts({
-    tempOutputScip: opts.tempPaths.tempOutputScip,
-    tempOutputDb: opts.tempPaths.tempOutputDb,
-    tempMetaPath: opts.tempPaths.tempMetaPath,
-    outputScip: opts.paths.outputScip,
-    outputDb: opts.paths.outputDb,
-    metaPath: opts.paths.metaPath,
-    preserveOutputScip:
-      sqliteMaterialization.mode === 'incremental' && sqliteMaterialization.scipCompanion === 'deferred',
-    publication:
-      sqliteMaterialization.mode === 'incremental'
-        ? {
-            mode: 'incremental',
-            validation: 'passed',
-            converterDurationMs: sqliteMaterialization.converterDurationMs,
-            affectedDocumentCount: incrementalTypeScript?.affectedFiles.length,
-            changedDocumentCount: sqliteMaterialization.changedDocumentPaths.length,
-            producerDurationMs: incrementalTypeScript?.timings.serviceMs,
-            materializationDurationMs: incrementalTypeScript?.durationMs,
-            patchDurationMs: sqliteMaterialization.patchDurationMs,
-            scipCompanion: sqliteMaterialization.scipCompanion,
-            ...(sqliteMaterialization.scipCompanion === 'deferred' && incrementalTypeScript
-              ? { typescriptOverlayGeneration: incrementalTypeScript.nextFragmentGeneration }
-              : {}),
-          }
-        : {
-            mode: 'full',
-            validation: 'passed',
-            converterDurationMs: sqliteMaterialization.converterDurationMs,
-            scipCompanion: 'current',
-            ...(sqliteMaterialization.fallbackReason ? { fallbackReason: sqliteMaterialization.fallbackReason } : {}),
-          },
+  profileSpan('reindex.publish.metadata', () => {
+    assertProjectInputsUnchanged(opts);
+    pruneTypeScriptProjectShardCache(opts.paths.outputDb, pruneProjects);
+    writeReindexMeta(opts.tempPaths.tempMetaPath, metadata);
   });
+  const localGenerationPublication = profileSpan('reindex.publish.generation-handoff', () =>
+    promoteReindexArtifacts({
+      tempOutputScip: opts.tempPaths.tempOutputScip,
+      tempOutputDb: opts.tempPaths.tempOutputDb,
+      tempMetaPath: opts.tempPaths.tempMetaPath,
+      outputScip: opts.paths.outputScip,
+      outputDb: opts.paths.outputDb,
+      metaPath: opts.paths.metaPath,
+      preserveOutputScip:
+        sqliteMaterialization.mode === 'incremental' && sqliteMaterialization.scipCompanion === 'deferred',
+      publication:
+        sqliteMaterialization.mode === 'incremental'
+          ? {
+              mode: 'incremental',
+              validation: 'passed',
+              converterDurationMs: sqliteMaterialization.converterDurationMs,
+              affectedDocumentCount: incrementalTypeScript?.affectedFiles.length,
+              changedDocumentCount: sqliteMaterialization.changedDocumentPaths.length,
+              producerDurationMs: incrementalTypeScript?.timings.serviceMs,
+              materializationDurationMs: incrementalTypeScript?.durationMs,
+              patchDurationMs: sqliteMaterialization.patchDurationMs,
+              scipCompanion: sqliteMaterialization.scipCompanion,
+              ...(sqliteMaterialization.scipCompanion === 'deferred' && incrementalTypeScript
+                ? { typescriptOverlayGeneration: incrementalTypeScript.nextFragmentGeneration }
+                : {}),
+            }
+          : {
+              mode: 'full',
+              validation: 'passed',
+              converterDurationMs: sqliteMaterialization.converterDurationMs,
+              scipCompanion: 'current',
+              ...(sqliteMaterialization.fallbackReason ? { fallbackReason: sqliteMaterialization.fallbackReason } : {}),
+            },
+    }),
+  );
   if (localGenerationPublication.achievedDurability === 'file-flushed') {
     opts.onStatus(
       `Published local generation ${localGenerationPublication.currentGeneration.slice(0, 12)} ` +
@@ -1718,49 +1755,69 @@ async function publishFreshReindexArtifacts(
     );
   }
   if (sqliteMaterialization.mode === 'incremental' && incrementalTypeScript) {
-    let acceptedDb: ScipDatabase | null = null;
-    try {
-      acceptedDb = new ScipDatabase({
-        projectRoot: opts.projectRoot,
-        dbPath: opts.paths.outputDb,
-        indexPath: opts.paths.outputScip,
-      });
-      const replacementFiles =
-        incrementalTypeScript.plan.mode === 'full-project' && incrementalTypeScript.plan.reasons.length === 0
-          ? incrementalTypeScript.changedFiles
-          : incrementalTypeScript.affectedFiles;
-      let carried = false;
-      if (incrementalTypeScript.dependencyGraphSnapshot) {
-        carried = carryFileDependencyGraph(acceptedDb, incrementalTypeScript.dependencyGraphSnapshot, replacementFiles);
-      } else {
-        captureTypeScriptPlanningDependencyGraph(acceptedDb);
+    profileSpan('reindex.publish.dependency-graph', () => {
+      let acceptedDb: ScipDatabase | null = null;
+      try {
+        acceptedDb = new ScipDatabase({
+          projectRoot: opts.projectRoot,
+          dbPath: opts.paths.outputDb,
+          indexPath: opts.paths.outputScip,
+        });
+        const replacementFiles =
+          incrementalTypeScript.plan.mode === 'full-project' && incrementalTypeScript.plan.reasons.length === 0
+            ? incrementalTypeScript.changedFiles
+            : incrementalTypeScript.affectedFiles;
+        let carried = false;
+        if (incrementalTypeScript.dependencyGraphSnapshot) {
+          carried = carryFileDependencyGraph(
+            acceptedDb,
+            incrementalTypeScript.dependencyGraphSnapshot,
+            replacementFiles,
+            carriedDependencyGraph,
+          );
+        } else {
+          captureTypeScriptPlanningDependencyGraph(acceptedDb);
+        }
+        opts.onStatus(
+          carried
+            ? `Carried the dependency graph forward by replacing ${replacementFiles.length} changed dependency owner(s).`
+            : 'Materialized a fresh dependency graph for the accepted generation because no compatible prior graph was available.',
+        );
+      } catch (error) {
+        opts.onStatus(
+          `Dependency graph carry-forward unavailable: ${error instanceof Error ? error.message : String(error)}. ` +
+            'The next graph consumer will rebuild it.',
+        );
+      } finally {
+        acceptedDb?.close();
       }
-      opts.onStatus(
-        carried
-          ? `Carried the dependency graph forward by replacing ${replacementFiles.length} changed dependency owner(s).`
-          : 'Materialized a fresh dependency graph for the accepted generation because no compatible prior graph was available.',
-      );
-    } catch (error) {
-      opts.onStatus(
-        `Dependency graph carry-forward unavailable: ${error instanceof Error ? error.message : String(error)}. ` +
-          'The next graph consumer will rebuild it.',
-      );
-    } finally {
-      acceptedDb?.close();
-    }
+    });
   }
-  pruneTypeScriptOverlays(
-    dirname(opts.paths.outputDb),
-    sqliteMaterialization.mode === 'incremental' && sqliteMaterialization.scipCompanion === 'deferred'
-      ? [incrementalTypeScript!.nextFragmentGeneration]
-      : [],
+  profileSpan('reindex.publish.cleanup', () => {
+    pruneTypeScriptOverlays(
+      dirname(opts.paths.outputDb),
+      sqliteMaterialization.mode === 'incremental' && sqliteMaterialization.scipCompanion === 'deferred'
+        ? [incrementalTypeScript!.nextFragmentGeneration]
+        : [],
+    );
+    pruneTypeScriptFragmentGenerations(
+      dirname(opts.paths.outputDb),
+      incrementalTypeScript?.completeScipUpdated ? [incrementalTypeScript.nextFragmentGeneration] : [],
+    );
+  });
+  profileSpan('reindex.publish.shadow-telemetry', () =>
+    persistAffectedSetShadowRecord(opts.paths.outputDb, shadowRecord, opts.onStatus),
   );
-  pruneTypeScriptFragmentGenerations(
-    dirname(opts.paths.outputDb),
-    incrementalTypeScript?.completeScipUpdated ? [incrementalTypeScript.nextFragmentGeneration] : [],
-  );
-  persistAffectedSetShadowRecord(opts.paths.outputDb, shadowRecord, opts.onStatus);
   return lastRefresh;
+}
+
+function needsFreshSqliteStatistics(
+  incrementalTypeScript: MaterializedTypeScriptIncrementalIndex | undefined,
+  publicationMode: SqliteMaterializationResult['mode'],
+): boolean {
+  if (publicationMode !== 'incremental' || !incrementalTypeScript) return true;
+  if (incrementalTypeScript.plan.mode === 'full-project') return true;
+  return incrementalTypeScript.affectedFiles.length * 20 >= incrementalTypeScript.projectFileCount;
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
@@ -2415,6 +2472,7 @@ async function materializeSqliteOutput(opts: {
         const convertStartedAt = performance.now();
         await convertScipToSqlite(batch.scipPath, miniDbPath, opts.env, opts.run.onStatus, true, opts.run.opts.signal);
         converterDurationMs += performance.now() - convertStartedAt;
+        recordIncrementalWrite(opts.run.writeTelemetry, fileSizeOrNull(miniDbPath) ?? 0);
         const patched = patchIncrementalSqliteGeneration({
           previousDbPath: opts.run.paths.outputDb,
           miniDbPath,
@@ -2423,7 +2481,8 @@ async function materializeSqliteOutput(opts: {
           deletedFiles: batch.deletedFiles,
           reuseCandidate: batchIndex > 0,
           deferIntegrity: batchIndex < batches.length - 1,
-          writeTelemetry: batchIndex === 0 ? opts.run.writeTelemetry : undefined,
+          trustedPriorGeneration: true,
+          writeTelemetry: opts.run.writeTelemetry,
         });
         patchDurationMs += patched.durationMs;
         for (const path of patched.changedDocumentPaths) changedDocumentPaths.add(path);

@@ -7,6 +7,7 @@ import {
   cloneFileWithFallback,
   createReindexWriteTelemetry,
   recordFileClone,
+  recordIncrementalWrite,
   reflinkUnavailable,
   type FileCloneRuntime,
 } from '../../src/platform/file-clone.js';
@@ -66,7 +67,8 @@ describe('cloneFileWithFallback', () => {
 
     recordFileClone(telemetry, { method: 'reflink', bytes: 100 });
     recordFileClone(telemetry, { method: 'copy', bytes: 40 });
+    recordIncrementalWrite(telemetry, 15);
 
-    expect(telemetry).toEqual({ reflinkedBytes: 100, fallbackCopiedBytes: 40 });
+    expect(telemetry).toEqual({ reflinkedBytes: 100, fallbackCopiedBytes: 40, incrementalWrittenBytes: 15 });
   });
 });

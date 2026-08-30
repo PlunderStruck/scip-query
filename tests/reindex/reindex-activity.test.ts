@@ -336,6 +336,26 @@ describe('reindex activity', () => {
     );
   });
 
+  it('normalizes old reflinked activity records instead of preserving inflated write-budget debt', () => {
+    const cacheDir = createCache();
+    const outputDb = join(cacheDir, 'index.db');
+    appendReindexActivity(reindexActivityPath(outputDb), {
+      ...runRecord('2026-07-24T12:00:00.000Z'),
+      estimatedLogicalOutputBytes: 340,
+      estimatedWriteBytes: 347,
+      reflinkedBytes: 330,
+      fallbackCopiedBytes: 7,
+    });
+
+    expect(readReindexActivitySummary(outputDb, new Date('2026-07-24T15:00:00.000Z'))).toEqual(
+      expect.objectContaining({
+        estimatedLogicalOutputBytes: 340,
+        estimatedWriteBytes: 17,
+        oldestWriteAt: '2026-07-24T12:00:00.000Z',
+      }),
+    );
+  });
+
   it('ignores malformed and out-of-window lines without losing valid records', () => {
     const cacheDir = createCache();
     const outputDb = join(cacheDir, 'index.db');
@@ -459,9 +479,9 @@ describe('reindex activity', () => {
     expect(
       estimateReindexWriteBytes({
         ...rebuilt,
-        writeTelemetry: { reflinkedBytes: 100, fallbackCopiedBytes: 7 },
+        writeTelemetry: { reflinkedBytes: 10, fallbackCopiedBytes: 7, incrementalWrittenBytes: 3 },
       }),
-    ).toBe(24);
+    ).toBe(17);
     expect(estimateReindexLogicalOutputBytes({ ...rebuilt, reused: true })).toBe(0);
   });
 

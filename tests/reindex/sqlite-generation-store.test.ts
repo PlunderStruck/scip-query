@@ -236,6 +236,25 @@ describe('SQLite generation handoff', () => {
     );
   });
 
+  test('rejects a changed stable SCIP file before a deferred publication can trust its prior hash', () => {
+    const fixture = createFixture();
+    promoteReindexArtifacts({ ...fixture.paths });
+    writeFileSync(fixture.paths.outputScip, 'bad!-scip');
+    const candidate = createCandidateArtifacts(fixture.root, 'deferred', 'unused-scip', 'deferred-meta');
+
+    expect(() =>
+      promoteReindexArtifacts({
+        tempOutputScip: candidate.scip,
+        tempOutputDb: candidate.db,
+        tempMetaPath: candidate.meta,
+        outputScip: fixture.paths.outputScip,
+        outputDb: fixture.paths.outputDb,
+        metaPath: fixture.paths.metaPath,
+        preserveOutputScip: true,
+      }),
+    ).toThrow('deferred SCIP publication requires a verified accepted companion');
+  });
+
   test('retains a legacy database even when it has no metadata companion', () => {
     const fixture = createFixture({ legacyWithoutMeta: true });
 

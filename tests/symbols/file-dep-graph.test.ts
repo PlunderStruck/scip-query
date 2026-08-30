@@ -9,6 +9,7 @@ import {
   captureFileDependencyGraph,
   captureTypeScriptPlanningDependencyGraph,
   carryFileDependencyGraph,
+  materializeCarriedFileDependencyGraph,
   readPersistedFileDependencyGraph,
 } from '../../src/symbols/graph/file-dep-graph.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
@@ -215,7 +216,10 @@ describe('file dependency graph evidence', () => {
 
       const db2 = openDb();
       try {
-        expect(carryFileDependencyGraph(db2, snapshot, ['src/c.ts'])).toBe(true);
+        const materialized = materializeCarriedFileDependencyGraph(db2, snapshot, ['src/c.ts']);
+        expect(materialized).not.toBeNull();
+        expect(materialized!.get('src/a.ts')).toBe(snapshot.graph.get('src/a.ts'));
+        expect(carryFileDependencyGraph(db2, snapshot, ['src/c.ts'], materialized!)).toBe(true);
       } finally {
         db2.close();
       }

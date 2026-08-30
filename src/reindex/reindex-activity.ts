@@ -41,6 +41,7 @@ export interface ReindexRunActivity {
   estimatedWriteBytes?: number;
   reflinkedBytes?: number;
   fallbackCopiedBytes?: number;
+  incrementalWrittenBytes?: number;
   byLanguage?: Partial<Record<SupportedLanguage, ReindexRunLanguageActivity>>;
 }
 
@@ -89,7 +90,14 @@ export function estimateReindexLogicalOutputBytes(result: ReindexResult): number
 }
 
 export function estimateReindexWriteBytes(result: ReindexResult): number {
-  return estimateReindexLogicalOutputBytes(result) + (result.writeTelemetry?.fallbackCopiedBytes ?? 0);
+  const logicalBytes = estimateReindexLogicalOutputBytes(result);
+  const telemetry = result.writeTelemetry;
+  if (!telemetry) return logicalBytes;
+  return (
+    Math.max(0, logicalBytes - telemetry.reflinkedBytes) +
+    telemetry.fallbackCopiedBytes +
+    (telemetry.incrementalWrittenBytes ?? 0)
+  );
 }
 
 export function recordReindexRunActivity(outputDb: string, result: ReindexResult): ReindexActivityWriteResult {
@@ -104,9 +112,10 @@ export function recordReindexRunActivity(outputDb: string, result: ReindexResult
     result: refresh.result,
     durationMs: refresh.durationMs,
     estimatedLogicalOutputBytes,
-    estimatedWriteBytes: estimatedLogicalOutputBytes + (result.writeTelemetry?.fallbackCopiedBytes ?? 0),
+    estimatedWriteBytes: estimateReindexWriteBytes(result),
     reflinkedBytes: result.writeTelemetry?.reflinkedBytes ?? 0,
     fallbackCopiedBytes: result.writeTelemetry?.fallbackCopiedBytes ?? 0,
+    incrementalWrittenBytes: result.writeTelemetry?.incrementalWrittenBytes ?? 0,
     byLanguage: summarizeLanguageActivity(result),
   });
 }
@@ -245,8 +254,8 @@ export function readReindexActivitySummary(
     summary.runs += 1;
     summary[record.result] += 1;
     summary.estimatedLogicalOutputBytes += record.estimatedLogicalOutputBytes;
-    summary.estimatedWriteBytes =
-      (summary.estimatedWriteBytes ?? 0) + (record.estimatedWriteBytes ?? record.estimatedLogicalOutputBytes);
+    const estimatedWriteBytes = effectiveRecordedWriteBytes(record);
+    summary.estimatedWriteBytes = (summary.estimatedWriteBytes ?? 0) + estimatedWriteBytes;
     summary.reflinkedBytes = (summary.reflinkedBytes ?? 0) + (record.reflinkedBytes ?? 0);
     summary.fallbackCopiedBytes = (summary.fallbackCopiedBytes ?? 0) + (record.fallbackCopiedBytes ?? 0);
     if (record.result !== 'failed') {
@@ -269,7 +278,7 @@ export function readReindexActivitySummary(
     if (isExpensiveRebuild(record)) {
       summary.fullRebuilds = (summary.fullRebuilds ?? 0) + 1;
     }
-    if ((record.estimatedWriteBytes ?? record.estimatedLogicalOutputBytes) > 0 && summary.oldestWriteAt === undefined) {
+    if (estimatedWriteBytes > 0 && summary.oldestWriteAt === undefined) {
       summary.oldestWriteAt = record.recordedAt;
     }
   }
@@ -324,7 +333,8 @@ function parseReindexActivityRecord(line: string): ParsedReindexActivityRecord |
       !isNonNegativeFiniteNumber(record.estimatedLogicalOutputBytes) ||
       (record.estimatedWriteBytes !== undefined && !isNonNegativeFiniteNumber(record.estimatedWriteBytes)) ||
       (record.reflinkedBytes !== undefined && !isNonNegativeFiniteNumber(record.reflinkedBytes)) ||
-      (record.fallbackCopiedBytes !== undefined && !isNonNegativeFiniteNumber(record.fallbackCopiedBytes))
+      (record.fallbackCopiedBytes !== undefined && !isNonNegativeFiniteNumber(record.fallbackCopiedBytes)) ||
+      (record.incrementalWrittenBytes !== undefined && !isNonNegativeFiniteNumber(record.incrementalWrittenBytes))
     ) {
       return null;
     }
@@ -343,6 +353,17 @@ function parseReindexActivityRecord(line: string): ParsedReindexActivityRecord |
   } catch {
     return null;
   }
+}
+
+function effectiveRecordedWriteBytes(record: ReindexRunActivity): number {
+  if (record.reflinkedBytes === undefined) {
+    return record.estimatedWriteBytes ?? record.estimatedLogicalOutputBytes;
+  }
+  return (
+    Math.max(0, record.estimatedLogicalOutputBytes - record.reflinkedBytes) +
+    (record.fallbackCopiedBytes ?? 0) +
+    (record.incrementalWrittenBytes ?? 0)
+  );
 }
 
 export type ReindexActivityBudgetDecision =

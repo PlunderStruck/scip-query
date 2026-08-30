@@ -88,6 +88,29 @@ describe('SQLite query-layout maintenance', () => {
     });
   });
 
+  it('keeps prior planner statistics for a bounded incremental update', () => {
+    const path = fixture(true);
+    optimizeSqliteQueryLayout(path);
+    const db = new Database(path);
+    db.prepare("UPDATE sqlite_stat1 SET stat = 'retained-stat' WHERE tbl = 'mentions'").run();
+    db.close();
+
+    expect(optimizeSqliteQueryLayout(path, { analyze: false })).toEqual({
+      added: [],
+      removed: [],
+      retained: [],
+      analyzed: false,
+    });
+    const inspected = new Database(path, { readonly: true });
+    try {
+      expect(inspected.prepare("SELECT stat FROM sqlite_stat1 WHERE tbl = 'mentions' LIMIT 1").pluck().get()).toBe(
+        'retained-stat',
+      );
+    } finally {
+      inspected.close();
+    }
+  });
+
   it('rejects a same-named definition index with an incompatible contract', () => {
     const path = fixture(true);
     const db = new Database(path);

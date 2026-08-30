@@ -111,6 +111,26 @@ describe('incremental SQLite publication', () => {
     expect(symbols).toEqual([{ symbol: 'symbol/B' }]);
   });
 
+  test('limits orphan cleanup to patch-owned symbols when the accepted generation was already normalized', () => {
+    const paths = fixturePaths();
+    createDatabase(paths.previous, populatePrevious);
+    createDatabase(paths.mini, () => undefined);
+
+    patchIncrementalSqliteGeneration({
+      previousDbPath: paths.previous,
+      miniDbPath: paths.mini,
+      candidateDbPath: paths.candidate,
+      affectedFiles: ['src/a.ts'],
+      deletedFiles: ['src/a.ts'],
+      trustedPriorGeneration: true,
+    });
+
+    const candidate = new Database(paths.candidate, { readonly: true });
+    const symbols = candidate.prepare('SELECT symbol FROM global_symbols ORDER BY symbol').all();
+    candidate.close();
+    expect(symbols).toEqual([{ symbol: 'symbol/B' }, { symbol: 'symbol/stale-orphan' }]);
+  });
+
   test('applies successive bounded batches to one candidate without recloning the accepted database', () => {
     const paths = fixturePaths();
     createDatabase(paths.previous, populatePrevious);

@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -577,6 +578,54 @@ describe('runtime-boundary evidence', () => {
       expect(forced.observations).toEqual(baseline.observations);
       expect(forced.coverage.filesReused).toBe(1);
       expect(forced.coverage.phases?.find((phase) => phase.id === 'http-summary')?.durationMs).toBeGreaterThan(0);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('reuses derived phases when deleting a file with no boundary facts or references into the prior graph', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-unrelated-deletion-'));
+    writeFixtureFiles(tempDir, {
+      'src/client.ts': ["fetch('/events', { method: 'POST' });"],
+      'src/unrelated.ts': ['export const unrelated = 1;'],
+    });
+    const dbPath = join(tempDir, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/client.ts')
+      .document(2, 'typescript', 'src/unrelated.ts')
+      .write();
+    const baselineDb = new ScipDatabase({
+      projectRoot: tempDir,
+      dbPath,
+      indexPath: join(tempDir, 'index.scip'),
+    });
+    const baseline = collectRuntimeBoundaryGraph(baselineDb);
+    baselineDb.close();
+
+    rmSync(join(tempDir, 'src/unrelated.ts'));
+    const sqlite = new Database(dbPath);
+    sqlite.prepare('DELETE FROM documents WHERE relative_path = ?').run('src/unrelated.ts');
+    sqlite.close();
+
+    const db = new ScipDatabase({ projectRoot: tempDir, dbPath, indexPath: join(tempDir, 'index.scip') });
+    try {
+      const refreshed = collectRuntimeBoundaryGraph(db, {
+        previousGraph: baseline,
+        affectedFiles: ['src/unrelated.ts'],
+      });
+      const clean = collectRuntimeBoundaryGraph(db);
+
+      expect(refreshed.observations).toEqual(clean.observations);
+      expect(refreshed.relationGroups).toEqual(clean.relationGroups);
+      expect(refreshed.links).toEqual(clean.links);
+      expect(refreshed.frontiers).toEqual(clean.frontiers);
+      expect(refreshed.fileCoverage).toEqual(clean.fileCoverage);
+      expect(refreshed.coverage.phases).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'http-summary', durationMs: 0, filesVisited: 0 }),
+          expect.objectContaining({ id: 'carrier', durationMs: 0, filesVisited: 0 }),
+        ]),
+      );
     } finally {
       db.close();
     }
