@@ -335,8 +335,12 @@ function createTypeScriptMailboxLane<Envelope extends { id: string; deadlineAtMs
   }
 }
 
-/** The bounded document worker may retain one compiler graph, but never receives the full indexer's 8+ GB budget. */
-const DEFAULT_TYPESCRIPT_WORKER_HEAP_MB = 4096;
+/**
+ * A large repository can need more than 4 GB just to retain one compiler
+ * graph. This is a ceiling, not a reservation; the 90% soft mark retires the
+ * worker before the 6 GB hard limit, still below the full indexer's 8+ GB path.
+ */
+const DEFAULT_TYPESCRIPT_WORKER_HEAP_MB = 6144;
 
 function typescriptWorkerHeapMb(): number {
   const configured = Number.parseInt(process.env['SCIP_TS_WORKER_HEAP_MB'] ?? '', 10);

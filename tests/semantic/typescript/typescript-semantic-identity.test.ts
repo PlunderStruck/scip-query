@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { FileDependencyGraph, ProjectInputSnapshot } from '../../../src/domain/project-input.js';
+import type {
+  FileDependencyGraph,
+  ProjectFileFingerprint,
+  ProjectInputSnapshot,
+} from '../../../src/domain/project-input.js';
 import {
   buildTypeScriptSemanticIdentity,
   createTypeScriptSemanticIdentityBuilder,
@@ -145,6 +149,22 @@ describe('TypeScript semantic identity', () => {
     expect(builder.identityFor('src/leaf.ts', 'schema-v2').key).not.toBe(
       builder.identityFor('src/leaf.ts', 'schema-v1').key,
     );
+  });
+
+  it('preserves relationship identities when only TypeScript trivia changes', () => {
+    const graph = dependencyGraph([
+      ['src/consumer.ts', ['src/leaf.ts']],
+      ['src/leaf.ts', []],
+    ]);
+    const before = snapshot();
+    const after = snapshot({ 'src/leaf.ts': 'leaf-v2-with-different-bytes' });
+    const beforeLeaf = before.files.find((file) => file.path === 'src/leaf.ts') as ProjectFileFingerprint;
+    const afterLeaf = after.files.find((file) => file.path === 'src/leaf.ts') as ProjectFileFingerprint;
+    beforeLeaf.semanticHash = 'same-tokens-and-lines';
+    afterLeaf.semanticHash = 'same-tokens-and-lines';
+
+    expect(identity('src/leaf.ts', before, graph).key).toBe(identity('src/leaf.ts', after, graph).key);
+    expect(identity('src/consumer.ts', before, graph).key).toBe(identity('src/consumer.ts', after, graph).key);
   });
 
   it('retains only the most recent dependency closure', () => {

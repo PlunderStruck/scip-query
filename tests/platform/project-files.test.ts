@@ -106,6 +106,22 @@ describe('platform project file fingerprints', () => {
     expect(fingerprint.files.every((file) => file.hash !== 'unreadable' && file.size >= 0)).toBe(true);
   });
 
+  it('excludes sibling tsconfig variants that the selected TypeScript project never loads', () => {
+    const projectRoot = temporaryDirectory('scip-query-active-typescript-config-');
+    writeFileSync(join(projectRoot, 'tsconfig.json'), '{"include":["src/**/*.ts"]}\n');
+    writeFileSync(join(projectRoot, 'tsconfig.scripts.json'), '{"include":["scripts/**/*.ts"]}\n');
+    mkdirSync(join(projectRoot, 'src'), { recursive: true });
+    mkdirSync(join(projectRoot, 'scripts'), { recursive: true });
+    writeFileSync(join(projectRoot, 'src/main.ts'), 'export const value = 1;\n');
+    writeFileSync(join(projectRoot, 'scripts/task.ts'), 'export const task = 1;\n');
+
+    const fingerprint = buildProjectInputFingerprint(projectRoot, ['typescript'], {
+      typescriptProjectMode: 'single',
+    });
+
+    expect(fingerprint.files.map((file) => file.path)).toEqual(['src/main.ts', 'tsconfig.json']);
+  });
+
   it('omits a tracked file deleted from the worktree instead of marking it unreadable', () => {
     const projectRoot = temporaryDirectory('scip-query-deleted-project-file-');
     writeFileSync(join(projectRoot, 'value.ts'), 'export const value = 1;\n');
@@ -116,7 +132,7 @@ describe('platform project file fingerprints', () => {
     expect(fingerprintProjectFiles(projectRoot)).toEqual([]);
   });
 
-  it('fingerprints repository inputs without letting scip-query record writes invalidate the index', () => {
+  it('fingerprints repository inputs without letting operational scip-query settings invalidate the index', () => {
     const projectRoot = temporaryDirectory('scip-query-project-input-boundary-');
     mkdirSync(join(projectRoot, 'docs'), { recursive: true });
     mkdirSync(join(projectRoot, '.scipquery', 'events'), { recursive: true });
@@ -127,7 +143,10 @@ describe('platform project file fingerprints', () => {
     writeFileSync(join(projectRoot, '.scipquery', 'events', 'event.json'), '{}\n');
 
     const first = buildProjectInputFingerprint(projectRoot, ['typescript'], {});
-    expect(first.files.map((file) => file.path)).toEqual(['.scipquery.json', 'src.ts', 'tsconfig.scip.json']);
+    expect(first.files.map((file) => file.path)).toEqual(['src.ts']);
+
+    writeFileSync(join(projectRoot, '.scipquery.json'), '{"watch":{"autoStart":true}}\n');
+    expect(buildProjectInputFingerprint(projectRoot, ['typescript'], {})).toEqual(first);
 
     writeFileSync(join(projectRoot, '.scipquery', 'events', 'event.json'), '{"changed":true}\n');
     expect(buildProjectInputFingerprint(projectRoot, ['typescript'], {})).toEqual(first);
@@ -215,6 +234,21 @@ describe('platform project file fingerprints', () => {
     expect(third.find((file) => file.path === 'value.ts')?.hash).not.toBe(
       first.find((file) => file.path === 'value.ts')?.hash,
     );
+  });
+
+  it('separates byte changes from TypeScript token changes', () => {
+    const projectRoot = temporaryDirectory('scip-query-semantic-fingerprint-');
+    writeFileSync(join(projectRoot, 'value.ts'), 'export const a = 1;\nexport const b = 2;\n');
+    const first = fingerprintProjectFiles(projectRoot).find((file) => file.path === 'value.ts')!;
+
+    writeFileSync(join(projectRoot, 'value.ts'), 'export const a = 1;\n\n\nexport const b = 2;\n');
+    const whitespace = fingerprintProjectFiles(projectRoot).find((file) => file.path === 'value.ts')!;
+    expect(whitespace.hash).not.toBe(first.hash);
+    expect(whitespace.semanticHash).toBe(first.semanticHash);
+
+    writeFileSync(join(projectRoot, 'value.ts'), 'export const a = 1;\nexport const b = 3;\n');
+    const changed = fingerprintProjectFiles(projectRoot).find((file) => file.path === 'value.ts')!;
+    expect(changed.semanticHash).not.toBe(first.semanticHash);
   });
 
   it('derives the exact full fingerprint by replacing only a changed existing source', () => {

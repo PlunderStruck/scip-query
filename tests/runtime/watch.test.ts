@@ -440,6 +440,64 @@ describe('Watcher', () => {
     await watcher.stop();
   });
 
+  it('retains exact source changes and retries a temporary cache ownership conflict', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const subscription = sourceSubscriptionHarness();
+    const firstCompletion = deferred<number>();
+    const requests: ReindexRunRequest[] = [];
+    const onReindexError = vi.fn();
+    const onError = vi.fn();
+    let starts = 0;
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>((request) => {
+      requests.push(request);
+      starts += 1;
+      if (starts === 1) {
+        return {
+          completion: firstCompletion.promise,
+          cancel: async () => ({ state: 'exited', diagnostics: emptyDiagnostics() }),
+          diagnostics: emptyDiagnostics,
+        };
+      }
+      return completedOperation();
+    });
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs: 250, cooldownMs: 5_000, gitPollMs: 60_000 } },
+      languages: ['typescript'],
+      reindexRunner: { start: run },
+      subscriptionFactory: subscription.factory,
+      onReindexError,
+      onError,
+    });
+
+    watcher.start();
+    for (const path of ['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts', 'src/e.ts', 'src/f.ts']) {
+      subscription.emitAll('change', path);
+    }
+    await vi.advanceTimersByTimeAsync(250);
+    expect(run).toHaveBeenCalledOnce();
+
+    firstCompletion.reject(Object.assign(new Error('manual refresh owns cache lock'), { retryable: true as const }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onReindexError).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(run).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(requests[1]?.changeJournal?.entries).toEqual(
+      ['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts', 'src/e.ts', 'src/f.ts'].map((path) => ({
+        path,
+        kind: 'change',
+      })),
+    );
+    expect(requests[1]?.trigger).toEqual({ kind: 'watch-source', detail: 'multiple changes' });
+    await watcher.stop();
+  });
+
   it('cancels and retries after a source change supersedes an in-flight reindex', async () => {
     vi.useFakeTimers();
     const projectRoot = createProject();

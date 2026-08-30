@@ -14,6 +14,8 @@ import {
   readCachedSemanticReferences,
   readCachedSemanticReferencesForFile,
   readCachedFileEvidence,
+  rekeyCachedFileEvidenceBatch,
+  rekeyCachedProjectEvidenceKind,
   sha256Hex,
   writeCachedProjectEvidence,
   writeCachedSemanticCalleesBatch,
@@ -165,6 +167,30 @@ describe('evidence cache', () => {
     }
   });
 
+  it('rekeys a derived file payload without materializing it', () => {
+    const db = openDb();
+    try {
+      writeCachedFileEvidence(db, 'typescript-reference-fragments', FILE, 'old-identity', '[{"large":true}]');
+
+      expect(
+        rekeyCachedFileEvidenceBatch(db, [
+          {
+            kind: 'typescript-reference-fragments',
+            relativePath: FILE,
+            previousContentHash: 'old-identity',
+            nextContentHash: 'new-identity',
+          },
+        ]),
+      ).toBe(1);
+      expect(readCachedFileEvidence(db, 'typescript-reference-fragments', FILE, 'old-identity')).toBeNull();
+      expect(readCachedFileEvidence(db, 'typescript-reference-fragments', FILE, 'new-identity')).toBe(
+        '[{"large":true}]',
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('uses an explicit evidence path for a temporary index generation', () => {
     const candidateDir = join(tempDir, 'candidate-generation');
     const stableEvidencePath = join(tempDir, 'stable-cache', EVIDENCE_DB_FILENAME);
@@ -178,6 +204,7 @@ describe('evidence cache', () => {
       indexPath: join(candidateDir, 'index.scip'),
       evidenceDbPath: stableEvidencePath,
     });
+
     try {
       writeCachedFileEvidence(db, 'runtime-boundary-http-roles', FILE, 'content-hash', 'roles');
     } finally {
@@ -483,6 +510,21 @@ describe('evidence cache', () => {
     }
   });
 
+  it('rekeys unchanged project evidence without parsing its payload', () => {
+    const db = openDb();
+    try {
+      writeCachedProjectEvidence(db, 'file-dependency-graph', 'scope:all', 'project-a', '{opaque payload');
+
+      expect(
+        rekeyCachedProjectEvidenceKind(db, 'file-dependency-graph', 'project-a', 'project-b'),
+      ).toBeGreaterThanOrEqual(1);
+      expect(readCachedProjectEvidence(db, 'file-dependency-graph', 'scope:all', 'project-a')).toBeNull();
+      expect(readCachedProjectEvidence(db, 'file-dependency-graph', 'scope:all', 'project-b')).toBe('{opaque payload');
+    } finally {
+      db.close();
+    }
+  });
+
   it('reads through the persisted payload instead of re-parsing', () => {
     // Plant a marker payload under the current content hash: if the read
     // path is live, a fresh connection returns the planted facts verbatim.
@@ -511,6 +553,7 @@ describe('evidence cache', () => {
       rustAttrReferencedNames: [],
       crossLanguageDispatchNames: [],
     });
+
     evidence
       .prepare("UPDATE file_evidence SET payload = ? WHERE kind = 'source-facts' AND relative_path = ?")
       .run(planted, FILE);

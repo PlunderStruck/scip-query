@@ -22,6 +22,7 @@ export interface FingerprintStatRecord extends FileStatIdentity {
   kind: FingerprintStatKind;
   hash: string;
   fingerprintSize: number;
+  semanticHash?: string;
 }
 
 interface FingerprintStatCacheFile {
@@ -49,12 +50,16 @@ export function lookupProjectFileFingerprint(
   relativePath: string,
   kind: FingerprintStatKind,
   stats: FileStatIdentity,
-): { hash: string; size: number } | undefined {
+): { hash: string; size: number; semanticHash?: string } | undefined {
   const cache = projectFingerprintStatCache(projectRoot);
   const record = cache.files.get(relativePath);
   if (!record || !sameFingerprintStatIdentity(record, kind, stats)) return undefined;
   cache.hits += 1;
-  return { hash: record.hash, size: record.fingerprintSize };
+  return {
+    hash: record.hash,
+    size: record.fingerprintSize,
+    ...(record.semanticHash === undefined ? {} : { semanticHash: record.semanticHash }),
+  };
 }
 
 export function rememberProjectFileFingerprint(
@@ -62,7 +67,7 @@ export function rememberProjectFileFingerprint(
   relativePath: string,
   kind: FingerprintStatKind,
   stats: FileStatIdentity,
-  fingerprint: { hash: string; size: number },
+  fingerprint: { hash: string; size: number; semanticHash?: string },
 ): void {
   if (fingerprint.hash === 'unreadable' || fingerprint.size < 0 || !Number.isFinite(fingerprint.size)) return;
   const cache = projectFingerprintStatCache(projectRoot);
@@ -75,6 +80,7 @@ export function rememberProjectFileFingerprint(
     size: stats.size,
     hash: fingerprint.hash,
     fingerprintSize: fingerprint.size,
+    ...(fingerprint.semanticHash === undefined ? {} : { semanticHash: fingerprint.semanticHash }),
   };
   const previous = cache.files.get(relativePath);
   if (previous && sameFingerprintStatRecord(previous, next)) return;
@@ -187,7 +193,8 @@ function isFingerprintStatRecord(value: unknown): value is FingerprintStatRecord
     Number.isFinite(record['size']) &&
     Number.isFinite(record['fingerprintSize']) &&
     typeof record['hash'] === 'string' &&
-    record['hash'] !== 'unreadable'
+    record['hash'] !== 'unreadable' &&
+    (record['semanticHash'] === undefined || typeof record['semanticHash'] === 'string')
   );
 }
 
@@ -210,7 +217,8 @@ function sameFingerprintStatRecord(left: FingerprintStatRecord, right: Fingerpri
   return (
     sameFingerprintStatIdentity(left, right.kind, right) &&
     left.hash === right.hash &&
-    left.fingerprintSize === right.fingerprintSize
+    left.fingerprintSize === right.fingerprintSize &&
+    left.semanticHash === right.semanticHash
   );
 }
 

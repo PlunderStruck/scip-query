@@ -12,6 +12,7 @@ import { typeScriptSemanticEngineIdentity } from './ts-morph-runtime.js';
 import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
 
 export const TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA = 'typescript-reference-fragment-v2';
+const TYPESCRIPT_REFERENCE_FRAGMENT_BATCH_SIZE = 128;
 
 /**
  * Resolves the semantic provider for a file. Injected so this module stays
@@ -39,6 +40,12 @@ export interface TypeScriptReferenceFragmentMaterialization {
   computedFiles: number;
 }
 
+export interface TypeScriptReferenceFragmentSeedResult {
+  affectedFiles: number;
+  carriedFiles: number;
+  skippedAffectedFiles: number;
+}
+
 const REFERENCE_FRAGMENT_PRODUCT = createFileEvidenceProduct<SemanticReferenceFragment[]>({
   kind: 'typescript-reference-fragments',
   invalidation: evidenceProductInvalidation('typescript-reference-fragments'),
@@ -52,8 +59,8 @@ export function seedTypeScriptReferenceFragments(
   fragmentsByFile: ReadonlyMap<string, readonly SemanticReferenceFragment[]>,
   evidenceDb: ScipDatabase = identityDb,
   dependencyGraph?: FileDependencyGraph,
-): number {
-  if (fragmentsByFile.size === 0) return 0;
+  invalidatedFiles: ReadonlySet<string> = new Set(fragmentsByFile.keys()),
+): TypeScriptReferenceFragmentSeedResult {
   const projectFiles = indexedTypeScriptFiles(identityDb);
   const builder = createTypeScriptSemanticIdentityBuilder({
     projectFiles,
@@ -61,19 +68,25 @@ export function seedTypeScriptReferenceFragments(
     graph: dependencyGraph ?? buildFileDepGraph(identityDb),
     engineIdentity: typeScriptSemanticEngineIdentity(),
   });
-  const writes = [...fragmentsByFile].map(([relativePath, fragments]) => ({
-    relativePath,
-    contentHash: builder.identityFor(relativePath, TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA).key,
-    value: [...fragments],
-  }));
-  if (writes.some((write) => write.contentHash === null)) {
-    throw new Error('TypeScript reference fragment identity is unavailable for an affected document.');
+  const writes: Array<{ relativePath: string; contentHash: string; value: SemanticReferenceFragment[] }> = [];
+  let skippedAffectedFiles = 0;
+  for (const [relativePath, fragments] of fragmentsByFile) {
+    const contentHash = builder.identityFor(relativePath, TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA).key;
+    if (!contentHash) {
+      skippedAffectedFiles += 1;
+      continue;
+    }
+    writes.push({ relativePath, contentHash, value: [...fragments] });
   }
-  REFERENCE_FRAGMENT_PRODUCT.writeBatch(
-    evidenceDb,
-    writes.map((write) => ({ ...write, contentHash: write.contentHash! })),
-  );
-  return writes.length;
+  // The affected-set closure contains every document whose semantic identity
+  // can change. Rows outside that closure keep the same identity and therefore
+  // remain valid in the shared evidence database without an O(project files)
+  // rekey scan.
+  const carriedFiles = projectFiles.filter(
+    (relativePath) => !invalidatedFiles.has(relativePath) && !fragmentsByFile.has(relativePath),
+  ).length;
+  REFERENCE_FRAGMENT_PRODUCT.writeBatch(evidenceDb, writes);
+  return { affectedFiles: writes.length, carriedFiles, skippedAffectedFiles };
 }
 
 // scip-query: ignore-similar — shadow recording compares results; materialization produces them.
@@ -98,7 +111,15 @@ export function recordTypeScriptReferenceFragmentShadow(
         }
         const files = indexedTypeScriptFiles(db);
         const indexedFiles = new Set(files);
-        const fragments = provider.referenceFragmentsForFiles(files);
+        const fragments = new Map<string, SemanticReferenceFragment[]>();
+        for (const batch of typeScriptReferenceFragmentBatches(files)) {
+          const computed = provider.referenceFragmentsForFiles(batch);
+          if (batch.some((file) => !computed.has(file))) {
+            result = unavailable('TypeScript reference fragment provider returned an incomplete batch');
+            return result;
+          }
+          for (const file of batch) fragments.set(file, computed.get(file) ?? []);
+        }
         const actual = assembleReferenceFragments(typeScriptDefinitions, fragments);
         const parity = compareReferenceFragmentMaps(
           typeScriptDefinitions,
@@ -214,18 +235,20 @@ export function materializeTypeScriptReferenceFragments(
 
         const provider = resolveProvider(definitions[0]!.relativePath);
         if (!provider.availability().available || !provider.referenceFragmentsForFiles) return null;
-        const computed = provider.referenceFragmentsForFiles(missingFiles);
-        if (missingFiles.some((file) => !computed.has(file))) return null;
-        computedFiles = computed.size;
-        REFERENCE_FRAGMENT_PRODUCT.writeBatch(
-          db,
-          missingFiles.map((file) => ({
-            relativePath: file,
-            contentHash: identities.get(file)!,
-            value: computed.get(file) ?? [],
-          })),
-        );
-        for (const [file, fragments] of computed) cachedFragments.set(file, fragments);
+        for (const batch of typeScriptReferenceFragmentBatches(missingFiles)) {
+          const computed = provider.referenceFragmentsForFiles(batch);
+          if (batch.some((file) => !computed.has(file))) return null;
+          REFERENCE_FRAGMENT_PRODUCT.writeBatch(
+            db,
+            batch.map((file) => ({
+              relativePath: file,
+              contentHash: identities.get(file)!,
+              value: computed.get(file) ?? [],
+            })),
+          );
+          for (const file of batch) cachedFragments.set(file, computed.get(file) ?? []);
+          computedFiles += batch.length;
+        }
         state = 'computed';
         return {
           references: assembleReferenceFragments(definitions, cachedFragments),
@@ -240,6 +263,14 @@ export function materializeTypeScriptReferenceFragments(
     },
     () => ({ state, files, cacheHits, cacheMisses, computedFiles }),
   );
+}
+
+export function typeScriptReferenceFragmentBatches(files: readonly string[]): string[][] {
+  const batches: string[][] = [];
+  for (let offset = 0; offset < files.length; offset += TYPESCRIPT_REFERENCE_FRAGMENT_BATCH_SIZE) {
+    batches.push(files.slice(offset, offset + TYPESCRIPT_REFERENCE_FRAGMENT_BATCH_SIZE));
+  }
+  return batches;
 }
 
 function unavailable(reason: string): TypeScriptReferenceFragmentShadowResult {

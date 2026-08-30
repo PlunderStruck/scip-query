@@ -122,22 +122,25 @@ export class TypeScriptIndexRequester {
 
     while ((this.runtime.monotonicNow ?? monotonicNowMs)() <= monotonicDeadlineAtMs) {
       if (existsSync(admitted.responsePath)) {
-        const response = parseResponse(
-          readTextFileWithinLimit(admitted.responsePath, {
-            maxBytes: this.mailboxLimits.maxItemBytes ?? 64 * 1024 * 1024,
-            inputKind: 'TypeScript index mailbox response',
-          }),
-          id,
-          operationKey,
-          this.baseGeneration,
-          request.producerIdentity,
-          request.affectedFiles,
-        );
-        // Index fragments can be tens of MiB. The synchronous requester is
-        // their sole consumer, so acknowledge a valid response immediately
-        // instead of retaining every batch until periodic mailbox expiry.
-        rmSync(admitted.responsePath, { force: true });
-        return response;
+        try {
+          return parseResponse(
+            readTextFileWithinLimit(admitted.responsePath, {
+              maxBytes: this.mailboxLimits.maxItemBytes ?? 64 * 1024 * 1024,
+              inputKind: 'TypeScript index mailbox response',
+            }),
+            id,
+            operationKey,
+            this.baseGeneration,
+            request.producerIdentity,
+            request.affectedFiles,
+          );
+        } finally {
+          // Index fragments can be tens of MiB. The synchronous requester is
+          // their sole consumer, so acknowledge both success and terminal
+          // failure. Otherwise a retry of the same deterministic operation
+          // can be pinned forever to an obsolete error response.
+          rmSync(admitted.responsePath, { force: true });
+        }
       }
       const liveState = readWatchServiceState(servicePaths.statePath);
       if (!usableServiceState(liveState, this.projectRoot, this.runtime)) {

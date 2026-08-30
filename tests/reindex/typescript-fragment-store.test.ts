@@ -316,7 +316,7 @@ describe('TypeScript fragment store', () => {
         previousGenerationIdentity: 'generation-2',
         nextGenerationIdentity: 'generation-3',
         producerIdentity: second.producerIdentity,
-        projectIdentity: 'typescript-project-v2:fixture',
+        projectIdentity: 'typescript-project-v3:fixture',
         baseShardCurrent: false,
         fragments: second.fragments,
       }),
@@ -326,12 +326,12 @@ describe('TypeScript fragment store', () => {
       previousGenerationIdentity: 'generation-2',
       nextGenerationIdentity: 'generation-3',
       producerIdentity: second.producerIdentity,
-      projectIdentity: 'typescript-project-v2:fixture',
+      projectIdentity: 'typescript-project-v3:fixture',
       baseShardCurrent: false,
       fragments: second.fragments,
       allowLegacyProjectIdentityMigration: true,
     });
-    expect(secondManifest.projectIdentity).toBe('typescript-project-v2:fixture');
+    expect(secondManifest.projectIdentity).toBe('typescript-project-v3:fixture');
     expect(secondManifest.overlays.map((overlay) => overlay.relativePath)).toEqual(['src/a.ts', 'src/b.ts']);
     expect(
       Buffer.from(
@@ -350,7 +350,7 @@ describe('TypeScript fragment store', () => {
         previousGenerationIdentity: 'generation-3',
         nextGenerationIdentity: 'generation-4',
         producerIdentity: second.producerIdentity,
-        projectIdentity: 'typescript-project-v2:different',
+        projectIdentity: 'typescript-project-v3:different',
         baseShardCurrent: false,
         fragments: second.fragments,
         allowLegacyProjectIdentityMigration: true,

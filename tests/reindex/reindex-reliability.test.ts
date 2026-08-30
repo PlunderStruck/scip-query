@@ -564,6 +564,34 @@ describe('reindex reliability', () => {
     expect(second.shards?.map((shard) => shard.language).sort()).toEqual(['python', 'typescript']);
   });
 
+  it('reuses the TypeScript shard when only package scripts change', async () => {
+    const projectRoot = createProject('scip-query-reindex-package-scripts-');
+    const cacheDir = join(projectRoot, '.scipquery-cache');
+    mkdirSync(cacheDir);
+    writeFileSync(
+      join(projectRoot, 'package.json'),
+      `${JSON.stringify({ type: 'module', scripts: { test: 'vitest' } }, null, 2)}\n`,
+    );
+    const { reindex, attempts } = await loadReindexFixture({ languages: ['typescript'] });
+    const options = {
+      projectRoot,
+      outputScip: join(cacheDir, 'index.scip'),
+      outputDb: join(cacheDir, 'index.db'),
+      onStatus: () => undefined,
+    };
+
+    await reindex(options);
+    const attemptsAfterBuild = new Map(attempts);
+    writeFileSync(
+      join(projectRoot, 'package.json'),
+      `${JSON.stringify({ type: 'module', scripts: { test: 'jest' } }, null, 2)}\n`,
+    );
+    const second = await reindex(options);
+
+    expect(attempts).toEqual(attemptsAfterBuild);
+    expect(second.shards).toEqual([expect.objectContaining({ language: 'typescript', reused: true })]);
+  });
+
   it('upgrades missing SQLite layout metadata from cached language shards exactly once', async () => {
     const projectRoot = createProject('scip-query-reindex-layout-upgrade-');
     const cacheDir = join(projectRoot, '.scipquery-cache');
@@ -701,6 +729,54 @@ describe('reindex reliability', () => {
     expect(history).toHaveLength(1);
     expect(history).toEqual([expect.objectContaining({ historyVersion: 1, sourceVersion: 1 })]);
     expect(history.every((record) => !('manifest' in record))).toBe(true);
+  });
+
+  it('migrates legacy operational config fingerprints without rerunning indexers', async () => {
+    const projectRoot = createProject('scip-query-reindex-operational-config-migration-');
+    const cacheDir = join(projectRoot, '.scipquery-cache');
+    mkdirSync(cacheDir);
+    writeFileSync(join(projectRoot, '.scipquery.json'), '{"watch":{"autoStart":false}}\n');
+    const outputScip = join(cacheDir, 'index.scip');
+    const outputDb = join(cacheDir, 'index.db');
+    const metaPath = join(cacheDir, 'meta.json');
+    const statuses: string[] = [];
+    const { reindex, attempts } = await loadReindexFixture({ languages: ['typescript', 'python'] });
+
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+    const attemptsAfterBuild = new Map(attempts);
+    const legacyMeta = JSON.parse(readFileSync(metaPath, 'utf8'));
+    const legacyConfigFingerprint = { path: '.scipquery.json', size: 37, hash: 'legacy-config-bytes' };
+    legacyMeta.fingerprint.files.unshift(legacyConfigFingerprint);
+    for (const languageFingerprint of Object.values(legacyMeta.languageFingerprints) as Array<{
+      files: unknown[];
+    }>) {
+      languageFingerprint.files.unshift(legacyConfigFingerprint);
+    }
+    rmSync(join(cacheDir, '.scipquery-generations'), { recursive: true, force: true });
+    writeFileSync(metaPath, `${JSON.stringify(legacyMeta, null, 2)}\n`);
+
+    const migrated = await reindex({
+      projectRoot,
+      outputScip,
+      outputDb,
+      onStatus: (message) => statuses.push(message),
+    });
+    const migratedMeta = JSON.parse(readFileSync(metaPath, 'utf8'));
+
+    expect(migrated.reused).toBe(true);
+    expect(attempts).toEqual(attemptsAfterBuild);
+    expect(migratedMeta.fingerprint.files).not.toContainEqual(expect.objectContaining({ path: '.scipquery.json' }));
+    expect(
+      Object.values(migratedMeta.languageFingerprints).every(
+        (languageFingerprint) =>
+          !(languageFingerprint as { files: Array<{ path: string }> }).files.some(
+            (file) => file.path === '.scipquery.json',
+          ),
+      ),
+    ).toBe(true);
+    expect(statuses.join('\n')).toContain(
+      'Migrated operational .scipquery.json metadata without rerunning language indexers.',
+    );
   });
 
   it('reruns cached language shards when the accepted SQLite generation omits a fingerprinted source file', async () => {

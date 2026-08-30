@@ -9,6 +9,7 @@ import { monitorParentProcess } from '../platform/parent-process-monitor.js';
 import { parseProcessIdentity } from '../platform/process-identity.js';
 import { sanitizeTerminalLine } from '../platform/terminal-output.js';
 import { parseProjectInputChangeJournal } from '../domain/project-input-change-journal.js';
+import { REINDEX_WORKER_RETRYABLE_EXIT_CODE, ReindexLockUnavailableError } from './reindex-worker-protocol.js';
 
 const projectRoot = process.env['SCIP_REINDEX_PROJECT_ROOT'];
 const outputScip = process.env['SCIP_REINDEX_OUTPUT_SCIP'];
@@ -62,7 +63,7 @@ async function run(): Promise<void> {
     });
   } catch (err) {
     console.error(`reindex-worker error: ${sanitizeTerminalLine(String(err))}`);
-    process.exitCode = 1;
+    process.exitCode = err instanceof ReindexLockUnavailableError ? REINDEX_WORKER_RETRYABLE_EXIT_CODE : 1;
   } finally {
     parentMonitor.stop();
   }

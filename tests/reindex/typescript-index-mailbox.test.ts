@@ -390,6 +390,7 @@ describe('TypeScript index service mailbox', () => {
     });
 
     expect(() => requester.request(indexRequest('producer-oom'))).toThrow(TypeScriptIndexMemoryPressureError);
+    expect(readdirSync(paths.responseDir).filter((entry) => entry.endsWith('.json'))).toHaveLength(0);
   });
 
   test('rejects malformed/expired work and bounds requester crash and timeout paths', () => {

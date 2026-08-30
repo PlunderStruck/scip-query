@@ -31,6 +31,7 @@ import {
   REINDEX_ACTIVITY_FILE,
   type ReindexActivityBudgetDecision,
 } from '../reindex/reindex-activity.js';
+import { REINDEX_WORKER_RETRYABLE_EXIT_CODE } from '../reindex/reindex-worker-protocol.js';
 import { BoundedProcessError, runBoundedProcess } from '../platform/bounded-process.js';
 import { readProcessIdentity } from '../platform/process-identity.js';
 import { publishedSqliteGenerationIdentity } from '../storage/sqlite-generation.js';
@@ -529,6 +530,7 @@ export class Watcher {
       .then((durationMs) => {
         this.reindexInFlight = false;
         this.lastReindexEnd = this.clock.now();
+        watcherRetryableReindexFailures.set(this, 0);
         if (this.stopped) return;
         if (watcherSupersededOperations.get(this) === operation) {
           this.restorePendingChangeJournal(changeJournal);
@@ -589,12 +591,25 @@ export class Watcher {
         if (this.stopped) return;
         const error = err instanceof Error ? err : new Error(String(err));
         this.restorePendingChangeJournal(changeJournal);
-        if (watcherSupersededOperations.get(this) !== operation) {
+        const retryable = isRetryableReindexFailure(error);
+        let retryableFailures = 0;
+        if (retryable) {
+          retryableFailures = (watcherRetryableReindexFailures.get(this) ?? 0) + 1;
+          watcherRetryableReindexFailures.set(this, retryableFailures);
+          this.dirty = true;
+          this.pendingTrigger = mergeRefreshTrigger(this.pendingTrigger, trigger);
+        } else {
+          watcherRetryableReindexFailures.set(this, 0);
+        }
+        if (!retryable && watcherSupersededOperations.get(this) !== operation) {
           this.onReindexError(error, trigger);
           this.onError(error);
         }
         if (this.dirty) {
-          const until = this.wallNow() + this.watchConfig.cooldownMs;
+          const retryDelayMs = retryable
+            ? retryableReindexDelayMs(this.watchConfig.cooldownMs, retryableFailures)
+            : this.watchConfig.cooldownMs;
+          const until = this.wallNow() + retryDelayMs;
           this.setStatus({ state: 'cooldown', until, dirty: true });
           this.clearCooldownTimer();
           this.cooldownTimer = this.clock.setTimeout(() => {
@@ -605,7 +620,7 @@ export class Watcher {
             } else {
               this.setStatus({ state: 'idle' });
             }
-          }, this.watchConfig.cooldownMs);
+          }, retryDelayMs);
           return;
         }
         this.setStatus({ state: 'idle' });
@@ -953,6 +968,7 @@ const watcherRetirementStates = new WeakMap<Watcher, WatcherRetirementState>();
 const watcherStopTimeouts = new WeakMap<Watcher, number>();
 const watcherInputStates = new WeakMap<Watcher, WatcherInputState>();
 const watcherSupersededOperations = new WeakMap<Watcher, ReindexOperation>();
+const watcherRetryableReindexFailures = new WeakMap<Watcher, number>();
 
 function watcherRetirementState(watcher: Watcher): WatcherRetirementState {
   const existing = watcherRetirementStates.get(watcher);
@@ -1121,6 +1137,19 @@ function reindexFailureMessage(error: unknown, diagnostics: ReindexDiagnostics):
   return detail ? `${base}\n${detail}` : base;
 }
 
+function retryableReindexFailure(message: string, cause?: unknown): Error {
+  return Object.assign(new Error(message, cause === undefined ? undefined : { cause }), { retryable: true as const });
+}
+
+function isRetryableReindexFailure(error: unknown): error is Error & { retryable: true } {
+  return error instanceof Error && 'retryable' in error && error.retryable === true;
+}
+
+function retryableReindexDelayMs(cooldownMs: number, failures: number): number {
+  const exponentialMs = cooldownMs * 2 ** Math.min(5, Math.max(0, failures - 1));
+  return Math.max(cooldownMs, Math.min(30_000, exponentialMs));
+}
+
 export function createReindexRunner(options: ReindexRunnerOptions = {}): ReindexRunner {
   const timeoutMs = options.timeoutMs ?? WATCH_REINDEX_TIMEOUT_MS;
   const terminationGraceMs = options.terminationGraceMs ?? WATCH_REINDEX_TERMINATION_GRACE_MS;
@@ -1153,18 +1182,19 @@ export function createReindexRunner(options: ReindexRunnerOptions = {}): Reindex
             stderrTruncated: result.stderrTruncated,
           };
           if (result.status !== 0) {
-            throw new Error(
-              reindexFailureMessage(
-                new Error(
-                  `Reindex worker exited with ${result.signal ? `signal ${result.signal}` : `code ${result.status}`}`,
-                ),
-                diagnostics,
+            const message = reindexFailureMessage(
+              new Error(
+                `Reindex worker exited with ${result.signal ? `signal ${result.signal}` : `code ${result.status}`}`,
               ),
+              diagnostics,
             );
+            if (result.status === REINDEX_WORKER_RETRYABLE_EXIT_CODE) throw retryableReindexFailure(message);
+            throw new Error(message);
           }
           return result.durationMs;
         })
         .catch((error: unknown) => {
+          if (isRetryableReindexFailure(error)) throw error;
           if (error instanceof BoundedProcessError) {
             diagnostics = {
               stdoutTail: error.stdout,

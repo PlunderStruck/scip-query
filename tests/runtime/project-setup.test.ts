@@ -189,15 +189,18 @@ async function loadProjectSetup(
     configureProjectAutomaticRefresh,
     ensureProjectCollaborationDomain,
     validateProjectConfig: vi.fn(() => overrides.configDiagnostics ?? []),
-    resolveWatchConfig: vi.fn((config: { watch?: { enabled?: boolean; autoRefresh?: boolean } }) => ({
-      enabled: config.watch?.enabled ?? false,
-      debounceMs: 30_000,
-      cooldownMs: 60_000,
-      gitPollMs: 2_000,
-      idleTimeoutMs: 180_000,
-      autoRefresh: config.watch?.autoRefresh ?? true,
-      ignore: [],
-    })),
+    resolveWatchConfig: vi.fn(
+      (config: { watch?: { enabled?: boolean; autoStart?: boolean; autoRefresh?: boolean } }) => ({
+        enabled: config.watch?.enabled ?? false,
+        autoStart: config.watch?.autoStart ?? false,
+        debounceMs: 30_000,
+        cooldownMs: 60_000,
+        gitPollMs: 2_000,
+        idleTimeoutMs: 180_000,
+        autoRefresh: config.watch?.autoRefresh ?? true,
+        ignore: [],
+      }),
+    ),
   }));
   vi.doMock('../../src/runtime/cli-context.js', () => ({
     resolveCliProjectContext: vi.fn(() => ({
@@ -466,7 +469,7 @@ describe('runProjectSetup', () => {
         expect.objectContaining({
           id: 'watch-refresh',
           command: 'scip-query status --json',
-          status: 'pass',
+          status: 'unavailable',
         }),
         expect.objectContaining({ command: 'scip-query setup-agent', status: 'pass' }),
       ]),
@@ -477,9 +480,7 @@ describe('runProjectSetup', () => {
       { collaborationDomainId: '5ea57d1a-936c-4c91-b58f-5d61e45173a5' },
       true,
     );
-    expect(ensureWatchService).toHaveBeenCalledWith(
-      expect.objectContaining({ projectRoot: '/repo', cacheDir: '/repo/.scip', cliVersion: '0.15.0' }),
-    );
+    expect(ensureWatchService).not.toHaveBeenCalled();
     expect(installProjectAgentHooks).not.toHaveBeenCalled();
     expect(setupAgent).toHaveBeenCalledWith('/repo');
 
@@ -625,6 +626,21 @@ describe('runProjectSetup', () => {
     });
   });
 
+  it('does not start the watch service until automatic startup is explicitly enabled', async () => {
+    const { module, ensureWatchService } = await loadProjectSetup({
+      config: { watch: { enabled: true, autoStart: false } },
+    });
+
+    const report = await module.runProjectSetup();
+
+    expect(ensureWatchService).not.toHaveBeenCalled();
+    expect(report.steps.find((step) => step.id === 'watch-refresh')).toMatchObject({
+      status: 'skipped',
+      message:
+        'Automatic startup is disabled by watch.autoStart=false; run scip-query watch --daemon when this worktree should be watched.',
+    });
+  });
+
   it('reports config persistence failure without hiding the rest of setup', async () => {
     const { module, ensureWatchService } = await loadProjectSetup({ automaticRefreshConfigThrows: true });
 
@@ -655,7 +671,7 @@ describe('runProjectSetup', () => {
 
   it('blocks setup when the enabled automatic-indexing service cannot start', async () => {
     const { module } = await loadProjectSetup({
-      config: { watch: { enabled: true } },
+      config: { watch: { enabled: true, autoStart: true } },
       watchServiceThrows: true,
     });
 
@@ -670,7 +686,10 @@ describe('runProjectSetup', () => {
   });
 
   it('blocks setup when the service omits its configured idle deadline', async () => {
-    const { module } = await loadProjectSetup({ watchServiceMissingIdleDeadline: true });
+    const { module } = await loadProjectSetup({
+      config: { watch: { enabled: true, autoStart: true } },
+      watchServiceMissingIdleDeadline: true,
+    });
 
     const report = await module.runProjectSetup();
 

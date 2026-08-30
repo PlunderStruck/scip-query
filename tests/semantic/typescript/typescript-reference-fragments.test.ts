@@ -5,6 +5,7 @@ import {
   compareReferenceFragmentMaps,
   referenceFragmentsFromDefinitionMap,
 } from '../../../src/semantic/typescript/reference-fragments.js';
+import { typeScriptReferenceFragmentBatches } from '../../../src/semantic/typescript/reference-fragment-shadow.js';
 
 describe('TypeScript reference fragments', () => {
   const alpha = definition(1, 'pkg alpha().', 'alpha', 'src/api.ts');
@@ -81,6 +82,13 @@ describe('TypeScript reference fragments', () => {
     expect(assembleReferenceFragments([alpha], fragments)).toEqual(
       new Map([[alpha.symbolId, [{ file: 'src/a.ts', line: 2, column: 3 }]]]),
     );
+  });
+
+  it('bounds compiler-backed reference fragment requests', () => {
+    const files = Array.from({ length: 257 }, (_, index) => `src/file-${index}.ts`);
+
+    expect(typeScriptReferenceFragmentBatches(files).map((batch) => batch.length)).toEqual([128, 128, 1]);
+    expect(typeScriptReferenceFragmentBatches([])).toEqual([]);
   });
 });
 

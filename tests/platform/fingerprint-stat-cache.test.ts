@@ -27,9 +27,14 @@ describe('fingerprint stat cache', () => {
     rememberProjectFileFingerprint(projectRoot, 'value.ts', 'file', stats, {
       hash: 'abc',
       size: 4,
+      semanticHash: 'tokens-abc',
     });
 
-    expect(lookupProjectFileFingerprint(projectRoot, 'value.ts', 'file', stats)).toEqual({ hash: 'abc', size: 4 });
+    expect(lookupProjectFileFingerprint(projectRoot, 'value.ts', 'file', stats)).toEqual({
+      hash: 'abc',
+      size: 4,
+      semanticHash: 'tokens-abc',
+    });
     expect(lookupProjectFileFingerprint(projectRoot, 'value.ts', 'file', { ...stats, mtimeMs: 99 })).toBeUndefined();
     expect(lookupProjectFileFingerprint(projectRoot, 'value.ts', 'symlink', stats)).toBeUndefined();
     expect(projectFileFingerprintCacheStats(projectRoot).hits).toBe(1);
@@ -46,6 +51,7 @@ describe('fingerprint stat cache', () => {
     rememberProjectFileFingerprint(projectRoot, 'src/keep.ts', 'file', stats, {
       hash: 'persisted-hash',
       size: 4,
+      semanticHash: 'persisted-tokens',
     });
     persistProjectFileFingerprintCache(projectRoot);
     resetProjectFileFingerprintCacheForTest(projectRoot);
@@ -53,6 +59,7 @@ describe('fingerprint stat cache', () => {
     expect(lookupProjectFileFingerprint(projectRoot, 'src/keep.ts', 'file', stats)).toEqual({
       hash: 'persisted-hash',
       size: 4,
+      semanticHash: 'persisted-tokens',
     });
   });
 });

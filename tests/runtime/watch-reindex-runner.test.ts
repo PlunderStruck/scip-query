@@ -88,4 +88,21 @@ describe('watch reindex runner', () => {
     await expect(operation.completion).rejects.toThrow(/worker diagnostic/);
     expect(operation.diagnostics().stderrTail).toBe('worker diagnostic');
   });
+
+  it('marks exit code 75 as a retryable ownership conflict', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-watch-runner-retry-'));
+    tempDirs.push(projectRoot);
+    const scriptPath = join(projectRoot, 'worker.cjs');
+    writeFileSync(scriptPath, "process.stderr.write('cache lifecycle lock is busy'); process.exitCode = 75;\n");
+
+    const operation = fixtureRunner(scriptPath).start(fixtureRequest(projectRoot));
+    const error = await operation.completion.catch((failure: unknown) => failure);
+
+    expect(error).toEqual(
+      expect.objectContaining({
+        message: expect.stringContaining('cache lifecycle lock is busy'),
+        retryable: true,
+      }),
+    );
+  });
 });

@@ -16,7 +16,7 @@ export const TYPESCRIPT_OVERLAY_STORE_VERSION = 1;
 /** Incremental TypeScript never rewrites the complete language shard; overlays patch changed documents. */
 export const TYPESCRIPT_DEFERRED_SCIP_THRESHOLD_BYTES = 0;
 export const TYPESCRIPT_OVERLAY_STORE_DIRECTORY = 'typescript-scip-overlays';
-const TYPESCRIPT_PROJECT_IDENTITY_V2_PREFIX = 'typescript-project-v2:';
+const CURRENT_TYPESCRIPT_PROJECT_IDENTITY_PREFIX = 'typescript-project-v3:';
 
 export interface TypeScriptOverlayRecord {
   relativePath: string;
@@ -67,8 +67,8 @@ export function commitTypeScriptOverlay(input: CommitTypeScriptOverlayInput): Ty
   const legacyIdentityMigration =
     input.allowLegacyProjectIdentityMigration === true &&
     previous !== null &&
-    !previous.projectIdentity.startsWith(TYPESCRIPT_PROJECT_IDENTITY_V2_PREFIX) &&
-    input.projectIdentity.startsWith(TYPESCRIPT_PROJECT_IDENTITY_V2_PREFIX);
+    !previous.projectIdentity.startsWith(CURRENT_TYPESCRIPT_PROJECT_IDENTITY_PREFIX) &&
+    input.projectIdentity.startsWith(CURRENT_TYPESCRIPT_PROJECT_IDENTITY_PREFIX);
   if (
     previous &&
     previous.projectIdentity !== input.projectIdentity &&

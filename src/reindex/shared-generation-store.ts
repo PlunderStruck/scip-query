@@ -16,6 +16,11 @@ import { pathToFileURL } from 'node:url';
 import { deserializeSCIP } from '@c4312/scip';
 import Database from 'better-sqlite3';
 import { decodeReindexMetadata, type ReindexMetadata } from '../domain/reindex-metadata.js';
+import {
+  projectInputSnapshotContentValue,
+  projectInputSnapshotOrNull,
+  sameProjectInputSnapshotContent,
+} from '../domain/project-input.js';
 import { monotonicNowMs } from '../domain/time.js';
 import type { ProjectConfig } from '../domain/types.js';
 import {
@@ -203,7 +208,7 @@ export function buildSharedGenerationSnapshot(
       version: SHARED_GENERATION_FORMAT_VERSION,
       repositoryId: context.repositoryId,
       treeOid: context.treeOid,
-      fingerprint,
+      fingerprint: projectInputSnapshotContentValue(fingerprint),
       producerIdentity: SHARED_GENERATION_PRODUCER_IDENTITY,
     }),
   );
@@ -311,7 +316,7 @@ export function readSharedGeneration(
     manifest.repositoryId !== snapshot.repositoryId ||
     manifest.treeOid !== snapshot.treeOid ||
     manifest.producerIdentity !== snapshot.producerIdentity ||
-    JSON.stringify(manifest.fingerprint) !== JSON.stringify(snapshot.fingerprint)
+    !sameProjectInputSnapshotContent(manifest.fingerprint, snapshot.fingerprint)
   ) {
     return null;
   }
@@ -786,7 +791,7 @@ export function publishFreshLocalGenerationForProject(
     const metadata = readPublishableReindexMetadata(paths.cacheDir);
     if (
       !metadata ||
-      JSON.stringify(metadata.fingerprint) !== JSON.stringify(fingerprint) ||
+      !sameProjectInputSnapshotContent(projectInputSnapshotOrNull(metadata.fingerprint), fingerprint) ||
       JSON.stringify([...(metadata.indexedLanguages ?? [])].sort()) !== JSON.stringify([...languages].sort())
     ) {
       return { kind: 'missed', reason: 'local metadata does not match the clean worktree snapshot' };
@@ -1397,7 +1402,7 @@ function assertManifestMatchesSnapshot(manifest: SharedGenerationManifest, snaps
     manifest.repositoryId !== snapshot.repositoryId ||
     manifest.treeOid !== snapshot.treeOid ||
     manifest.producerIdentity !== snapshot.producerIdentity ||
-    JSON.stringify(manifest.fingerprint) !== JSON.stringify(snapshot.fingerprint)
+    !sameProjectInputSnapshotContent(manifest.fingerprint, snapshot.fingerprint)
   ) {
     throw new Error('shared generation manifest does not match the requested snapshot');
   }
@@ -1416,7 +1421,7 @@ function validateSourceGeneration(
     if (
       !metadata ||
       metadata.scipCompanion === 'deferred' ||
-      JSON.stringify(metadata.fingerprint) !== JSON.stringify(expectedFingerprint) ||
+      !sameProjectInputSnapshotContent(projectInputSnapshotOrNull(metadata.fingerprint), expectedFingerprint) ||
       JSON.stringify([...(metadata.indexedLanguages ?? [])].sort()) !==
         JSON.stringify([...expectedFingerprint.languages].sort())
     ) {
@@ -1495,7 +1500,8 @@ function isProjectInputFingerprint(value: unknown): value is ProjectInputFingerp
         typeof file === 'object' &&
         typeof file.path === 'string' &&
         typeof file.size === 'number' &&
-        typeof file.hash === 'string',
+        typeof file.hash === 'string' &&
+        (file.semanticHash === undefined || typeof file.semanticHash === 'string'),
     )
   );
 }

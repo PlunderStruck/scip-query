@@ -1,6 +1,40 @@
 import { describe, expect, test } from 'vitest';
 import type { ProjectInputSnapshot } from '../../src/domain/project-input.js';
-import { planTypeScriptIncrementalUpdate } from '../../src/reindex/typescript-incremental-index.js';
+import {
+  planTypeScriptIncrementalUpdate,
+  typeScriptIntermediateOverlayGenerationIdentity,
+} from '../../src/reindex/typescript-incremental-index.js';
+
+describe('TypeScript intermediate overlay identity', () => {
+  const identity = (
+    fragments: Array<{ relativePath: string; bytes: Uint8Array | null }>,
+    previousGenerationIdentity = 'previous',
+  ) =>
+    typeScriptIntermediateOverlayGenerationIdentity({
+      previousGenerationIdentity,
+      targetGenerationIdentity: 'target',
+      fragments: fragments.map((fragment) => ({
+        ...fragment,
+        occurrences: 0,
+        symbols: 0,
+        referenceFragments: [],
+      })),
+    });
+
+  test('is retry-safe for the same transition regardless of fragment order', () => {
+    const first = { relativePath: 'src/a.ts', bytes: new Uint8Array([1, 2, 3]) };
+    const second = { relativePath: 'src/b.ts', bytes: null };
+
+    expect(identity([first, second])).toBe(identity([second, first]));
+  });
+
+  test('changes when the prior overlay or emitted fragment changes', () => {
+    const original = [{ relativePath: 'src/a.ts', bytes: new Uint8Array([1, 2, 3]) }];
+
+    expect(identity(original, 'previous-a')).not.toBe(identity(original, 'previous-b'));
+    expect(identity(original)).not.toBe(identity([{ relativePath: 'src/a.ts', bytes: new Uint8Array([1, 2, 4]) }]));
+  });
+});
 
 describe('TypeScript incremental index eligibility', () => {
   test('accepts one modified source and includes its reverse dependency closure', () => {
@@ -15,6 +49,7 @@ describe('TypeScript incremental index eligibility', () => {
       producerIdentity: 'scip-typescript:0.4.0:test',
       rootTsconfigExists: true,
     });
+
     expect(result.eligible).toBe(true);
     if (!result.eligible) return;
     expect(result.plan).toEqual(
@@ -24,8 +59,9 @@ describe('TypeScript incremental index eligibility', () => {
         affectedFiles: ['src/a.ts', 'src/b.ts'],
       }),
     );
+    expect(result.dependencyGraphUnchanged).toBe(false);
     expect(result.previousFragmentGeneration).not.toBe(result.nextFragmentGeneration);
-    expect(result.projectIdentity).toMatch(/^typescript-project-v2:/);
+    expect(result.projectIdentity).toMatch(/^typescript-project-v3:/);
 
     const rootWorkspace = planTypeScriptIncrementalUpdate({
       ...fixture(),
@@ -33,6 +69,85 @@ describe('TypeScript incremental index eligibility', () => {
       workspaceProjects: ['.'],
     });
     expect(rootWorkspace.eligible).toBe(true);
+  });
+
+  test('refreshes only the edited document when its tokens and line boundaries are unchanged', () => {
+    const previous = snapshot({ a: 'a1', b: 'b1', config: 'c1' });
+    const current = snapshot({ a: 'a2', b: 'b1', config: 'c1' });
+    previous.files[0]!.semanticHash = 'same-tokens';
+    current.files[0]!.semanticHash = 'same-tokens';
+
+    const result = planTypeScriptIncrementalUpdate({
+      projectMode: 'single',
+      previousSnapshot: previous,
+      currentSnapshot: current,
+      projectFiles: ['src/a.ts', 'src/b.ts'],
+      graph: new Map([['src/b.ts', new Set(['src/a.ts'])]]),
+      producerIdentity: 'scip-typescript:0.4.0:test',
+      rootTsconfigExists: true,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        eligible: true,
+        dependencyGraphUnchanged: true,
+        plan: expect.objectContaining({
+          mode: 'closure',
+          changedFiles: ['src/a.ts'],
+          affectedFiles: ['src/a.ts'],
+        }),
+      }),
+    );
+  });
+
+  test('keeps a source edit incremental when package scripts also changed', () => {
+    const previous = snapshot({ a: 'a1', b: 'b1', config: 'c1' });
+    const current = snapshot({ a: 'a2', b: 'b1', config: 'c1' });
+    previous.files.push({ path: 'package.json', size: 10, hash: 'package-a', semanticHash: 'same-package' });
+    current.files.push({ path: 'package.json', size: 20, hash: 'package-b', semanticHash: 'same-package' });
+
+    const result = planTypeScriptIncrementalUpdate({
+      projectMode: 'single',
+      previousSnapshot: previous,
+      currentSnapshot: current,
+      projectFiles: ['src/a.ts', 'src/b.ts'],
+      graph: new Map([['src/b.ts', new Set(['src/a.ts'])]]),
+      producerIdentity: 'scip-typescript:0.4.0:test',
+      rootTsconfigExists: true,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        eligible: true,
+        replaceProject: false,
+        plan: expect.objectContaining({ affectedFiles: ['src/a.ts', 'src/b.ts'] }),
+      }),
+    );
+  });
+
+  test('ignores a changed tsconfig variant that is not the selected project config', () => {
+    const previous = snapshot({ a: 'a1', b: 'b1', config: 'c1' });
+    const current = snapshot({ a: 'a2', b: 'b1', config: 'c1' });
+    previous.files.push({ path: 'tsconfig.scripts.json', size: 10, hash: 'scripts-a' });
+    current.files.push({ path: 'tsconfig.scripts.json', size: 20, hash: 'scripts-b' });
+
+    const result = planTypeScriptIncrementalUpdate({
+      projectMode: 'single',
+      previousSnapshot: previous,
+      currentSnapshot: current,
+      projectFiles: ['src/a.ts', 'src/b.ts'],
+      graph: new Map([['src/b.ts', new Set(['src/a.ts'])]]),
+      producerIdentity: 'scip-typescript:0.4.0:test',
+      rootTsconfigExists: true,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        eligible: true,
+        replaceProject: false,
+        plan: expect.objectContaining({ affectedFiles: ['src/a.ts', 'src/b.ts'] }),
+      }),
+    );
   });
 
   test('accepts an added TypeScript source without other compiler edits', () => {

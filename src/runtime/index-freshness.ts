@@ -1,7 +1,7 @@
 import { existsSync, lstatSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { decodeReindexMetadata } from '../domain/reindex-metadata.js';
-import { projectInputSnapshotOrNull } from '../domain/project-input.js';
+import { projectInputSnapshotOrNull, sameProjectInputSnapshotContent } from '../domain/project-input.js';
 import type { LastRefreshMetadata, ProjectConfig, SupportedLanguage } from '../domain/types.js';
 import { normalizeSafeProjectRelativePath } from '../domain/path-normalization.js';
 import {
@@ -127,7 +127,7 @@ export function getIndexFreshness(
     const metadataLanguages = [...(metadata.indexedLanguages ?? [])].sort();
     const fresh =
       decoded.capabilities.publishableGeneration &&
-      JSON.stringify(metadata.fingerprint) === JSON.stringify(current) &&
+      sameProjectInputSnapshotContent(projectInputSnapshotOrNull(metadata.fingerprint), current) &&
       JSON.stringify(metadataLanguages) === JSON.stringify(current.languages);
     const generation = inspectSqliteGeneration(paths.dbPath, paths.metaPath);
     const generationDrift = generation.state === 'invalid' || generation.state === 'drifted';

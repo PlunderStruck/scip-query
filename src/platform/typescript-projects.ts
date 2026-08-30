@@ -46,6 +46,17 @@ export function discoverTypeScriptProjectRoots(
   return sortRelativeProjectPaths(root, projects);
 }
 
+export function activeTypeScriptProjectConfigPaths(projectRoots: readonly string[]): ReadonlySet<string> {
+  return new Set(
+    projectRoots.map((project) => (project === '.' ? 'tsconfig.json' : `${project.replace(/\/$/u, '')}/tsconfig.json`)),
+  );
+}
+
+export function isTypeScriptProjectConfigPath(relativePath: string): boolean {
+  const name = relativePath.split('/').at(-1)?.toLowerCase();
+  return name?.startsWith('tsconfig') === true && name.endsWith('.json');
+}
+
 /**
  * Return source paths selected by the same TypeScript compiler config files
  * that define the index. `null` means compiler configuration could not be

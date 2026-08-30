@@ -4,6 +4,8 @@ export interface ProjectFileFingerprint {
   path: string;
   size: number;
   hash: string;
+  /** Token content plus meaningful line boundaries for supported source files. */
+  semanticHash?: string;
 }
 
 export interface ProjectInputSnapshot {
@@ -105,6 +107,28 @@ export function projectInputSnapshotOrNull(value: unknown): ProjectInputSnapshot
   return snapshot as unknown as ProjectInputSnapshot;
 }
 
+/**
+ * Returns the source-authoritative part of a project snapshot. A semantic hash
+ * is derived acceleration metadata; the byte hash remains the durable proof of
+ * source identity.
+ */
+export function projectInputSnapshotContentValue(snapshot: ProjectInputSnapshot): ProjectInputSnapshot {
+  return {
+    ...snapshot,
+    files: snapshot.files.map(({ semanticHash: _semanticHash, ...file }) => file),
+  };
+}
+
+export function sameProjectInputSnapshotContent(
+  left: ProjectInputSnapshot | null,
+  right: ProjectInputSnapshot | null,
+): boolean {
+  if (!left || !right) return left === right;
+  return (
+    JSON.stringify(projectInputSnapshotContentValue(left)) === JSON.stringify(projectInputSnapshotContentValue(right))
+  );
+}
+
 export function buildProjectChangeManifest(
   previous: ProjectInputSnapshot | null,
   current: ProjectInputSnapshot,
@@ -160,7 +184,8 @@ export function isProjectFileFingerprint(value: unknown): value is ProjectFileFi
     typeof fingerprint['path'] === 'string' &&
     typeof fingerprint['size'] === 'number' &&
     Number.isFinite(fingerprint['size']) &&
-    typeof fingerprint['hash'] === 'string'
+    typeof fingerprint['hash'] === 'string' &&
+    (fingerprint['semanticHash'] === undefined || typeof fingerprint['semanticHash'] === 'string')
   );
 }
 

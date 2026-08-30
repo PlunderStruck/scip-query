@@ -9,6 +9,7 @@ import {
   diffImpactBatchConcurrency,
   fullHealthPhaseConcurrency,
   fullHealthPhaseHeapMb,
+  healthIsolatedFailureReason,
   healthPhaseConcurrency,
   healthPhaseTasks,
   healthPhaseTimeoutMs,
@@ -519,6 +520,13 @@ describe('frontend health phase pruning', () => {
       phase: 'stale-abstractions',
       stale: { count: 0, loc: 0, files: [], unused: 0, singleUse: 0 },
     });
+  });
+
+  it('summarizes isolated health failures without copying unbounded child stderr', () => {
+    expect(healthIsolatedFailureReason(new Error('worker failed:\nFATAL ERROR: heap out of memory'))).toBe(
+      'exceeded its isolated memory limit',
+    );
+    expect(healthIsolatedFailureReason(new Error(`failure ${'x'.repeat(400)}`))).toHaveLength(240);
   });
 });
 

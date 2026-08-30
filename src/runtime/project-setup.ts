@@ -693,7 +693,9 @@ function startSetupWatchService(input: SetupWatchServiceInput): WatchServiceEnsu
               input.reindexResult.skipped.length > 0 ||
               input.postReindexFreshness?.state !== 'fresh'
             ? 'Skipped because the initial refresh did not produce a complete fresh generation.'
-            : null;
+            : !input.watchConfig.autoStart
+              ? 'Automatic startup is disabled by watch.autoStart=false; run scip-query watch --daemon when this worktree should be watched.'
+              : null;
   if (skippedReason !== null) {
     addStep(input.steps, {
       id: 'watch-refresh',

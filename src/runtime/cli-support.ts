@@ -529,7 +529,15 @@ export async function runIsolatedHealthReportWithEvidence(
   });
 
   const runnableTasks = healthPhaseTasks(runnablePhases);
-  const prewarmMessage = opts.full ? await runHealthSemanticPrewarmProcess(opts) : undefined;
+  const phaseWarnings: string[] = [];
+  let prewarmMessage: IsolatedAnalysisResult<HealthSemanticPrewarmResult> | undefined;
+  if (opts.full) {
+    try {
+      prewarmMessage = await runHealthSemanticPrewarmProcess(opts);
+    } catch (error) {
+      phaseWarnings.push(`Health semantic prewarm omitted: ${healthIsolatedFailureReason(error)}.`);
+    }
+  }
   const phaseConcurrency = opts.full
     ? fullHealthPhaseConcurrency(runnableTasks.length)
     : healthPhaseConcurrency(runnableTasks.length);
@@ -537,11 +545,12 @@ export async function runIsolatedHealthReportWithEvidence(
     runHealthPhaseTaskProcess(task, opts, phaseTimeoutMs),
   );
   const runnableResults = runnableMessages.flatMap((message) => message.result);
-  const phaseWarnings: string[] = [];
   runnableResults.forEach((result) => {
     if (result.healthPhaseMeta) {
       phaseWarnings.push(
-        `Health phase "${result.phase}" deferred: ${result.healthPhaseMeta.reason}. Run health --full for exhaustive analysis.`,
+        opts.full
+          ? `Health phase "${result.phase}" omitted after a bounded worker failure: ${result.healthPhaseMeta.reason}.`
+          : `Health phase "${result.phase}" deferred: ${result.healthPhaseMeta.reason}. Run health --full for exhaustive analysis.`,
       );
     }
     resultByPhase.set(result.phase, result);
@@ -661,10 +670,17 @@ function runHealthPhaseTaskProcess(
     label: `Health phases "${phaseArg}"`,
     timeoutMs,
   }).catch((error) => {
-    if (opts.full || !(error instanceof IsolatedProcessTimeoutError)) throw error;
+    if (!opts.full && !(error instanceof IsolatedProcessTimeoutError)) throw error;
+    const failureTimeoutMs = error instanceof IsolatedProcessTimeoutError ? error.timeoutMs : (timeoutMs ?? 0);
     return {
       result: phases.map((phase) =>
-        deferredHealthPhaseResult(phase, error.timeoutMs, `timed out after ${error.timeoutMs}ms`),
+        deferredHealthPhaseResult(
+          phase,
+          failureTimeoutMs,
+          error instanceof IsolatedProcessTimeoutError
+            ? `timed out after ${error.timeoutMs}ms`
+            : healthIsolatedFailureReason(error),
+        ),
       ),
     };
   });
@@ -688,11 +704,25 @@ function runHealthPhaseProcess(
     label: `Health phase "${phase}"`,
     timeoutMs,
   }).catch((error) => {
-    if (opts.full || !(error instanceof IsolatedProcessTimeoutError)) throw error;
+    if (!opts.full && !(error instanceof IsolatedProcessTimeoutError)) throw error;
+    const failureTimeoutMs = error instanceof IsolatedProcessTimeoutError ? error.timeoutMs : (timeoutMs ?? 0);
     return {
-      result: deferredHealthPhaseResult(phase, error.timeoutMs, `timed out after ${error.timeoutMs}ms`),
+      result: deferredHealthPhaseResult(
+        phase,
+        failureTimeoutMs,
+        error instanceof IsolatedProcessTimeoutError
+          ? `timed out after ${error.timeoutMs}ms`
+          : healthIsolatedFailureReason(error),
+      ),
     };
   });
+}
+
+export function healthIsolatedFailureReason(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/heap out of memory|reaching memory limit/i.test(message)) return 'exceeded its isolated memory limit';
+  const firstLine = message.split(/\r?\n/, 1)[0]?.trim() || 'isolated worker failed';
+  return firstLine.length <= 240 ? firstLine : `${firstLine.slice(0, 237)}...`;
 }
 
 function fullHealthPhaseProcessEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {

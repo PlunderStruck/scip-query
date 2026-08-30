@@ -34,7 +34,18 @@ import {
   projectSnapshotPaths,
   projectSnapshotPathState,
 } from './project-snapshot-context.js';
-import { typeScriptProjectInputPaths } from './typescript-projects.js';
+import {
+  activeTypeScriptProjectConfigPaths,
+  discoverTypeScriptProjectRoots,
+  isTypeScriptProjectConfigPath,
+  typeScriptProjectInputPaths,
+} from './typescript-projects.js';
+import {
+  supportsTypeScriptPackageSemanticHash,
+  supportsTypeScriptSemanticHash,
+  typeScriptPackageSemanticHash,
+  typeScriptSemanticHash,
+} from './typescript-semantic-hash.js';
 import {
   lookupProjectFileFingerprint,
   persistProjectFileFingerprintCache,
@@ -555,20 +566,41 @@ function fingerprintProjectFile(
       });
       return [{ path: relativePath, size, hash }];
     }
+    const requiresSemanticHash =
+      supportsTypeScriptSemanticHash(relativePath) || supportsTypeScriptPackageSemanticHash(relativePath);
     const cached = lookupProjectFileFingerprint(canonicalProjectRoot, relativePath, 'file', fileStatIdentity(stats));
-    if (cached) return [{ path: relativePath, size: cached.size, hash: cached.hash }];
+    if (cached && (!requiresSemanticHash || cached.semanticHash !== undefined)) {
+      return [
+        {
+          path: relativePath,
+          size: cached.size,
+          hash: cached.hash,
+          ...(cached.semanticHash === undefined ? {} : { semanticHash: cached.semanticHash }),
+        },
+      ];
+    }
     const hash = createHash('sha256');
+    const collectSemanticSource = requiresSemanticHash;
+    const sourceChunks: Buffer[] = [];
     const size = hashFileWithinLimit(
       absPath,
       { inputKind: 'project fingerprint input', maxBytes: DEFAULT_PROJECT_SOURCE_LIMIT_BYTES },
-      (chunk) => hash.update(chunk),
+      (chunk) => {
+        hash.update(chunk);
+        if (collectSemanticSource) sourceChunks.push(Buffer.from(chunk));
+      },
     );
     const digest = hash.digest('hex');
+    const source = collectSemanticSource ? Buffer.concat(sourceChunks, size) : undefined;
+    const semanticHash = source
+      ? (typeScriptSemanticHash(relativePath, source) ?? typeScriptPackageSemanticHash(relativePath, source))
+      : undefined;
     rememberProjectFileFingerprint(canonicalProjectRoot, relativePath, 'file', fileStatIdentity(stats), {
       hash: digest,
       size,
+      ...(semanticHash === undefined ? {} : { semanticHash }),
     });
-    return [{ path: relativePath, size, hash: digest }];
+    return [{ path: relativePath, size, hash: digest, ...(semanticHash === undefined ? {} : { semanticHash }) }];
   } catch (error) {
     // `git ls-files` includes tracked paths deleted in the working tree. Their
     // absence is a proved deletion; other I/O failures remain conservative.
@@ -606,12 +638,25 @@ export function buildProjectInputFingerprint(
   const typeScriptInputs = configuration.languages.includes('typescript')
     ? typeScriptProjectInputPaths(projectRoot, configuration.typescriptProjectMode, configuration.typescriptProjects)
     : null;
+  const typeScriptProjectRoots = configuration.languages.includes('typescript')
+    ? configuration.typescriptProjectMode === 'workspace'
+      ? discoverTypeScriptProjectRoots(projectRoot, configuration.typescriptProjects)
+      : ['.']
+    : [];
+  const activeTypeScriptConfigs = activeTypeScriptProjectConfigPaths(typeScriptProjectRoots);
   return {
     ...configuration,
     files: fingerprintProjectFiles(projectRoot, {
       includePath: (path) => {
+        // The effective index-affecting values from .scipquery.json are already
+        // normalized into `configuration`. Operational watch/query settings
+        // must not make an otherwise exact index stale.
+        if (path === '.scipquery.json') return false;
         const kind = classifyProjectInputPath(path, languages, configuredMarkerFiles);
         if (kind === 'other') return false;
+        if (kind === 'config' && isTypeScriptProjectConfigPath(path) && !activeTypeScriptConfigs.has(path)) {
+          return false;
+        }
         if (kind !== 'source' || !isTypeScriptSourcePath(path) || !typeScriptInputs) return true;
         return typeScriptInputs.has(path);
       },

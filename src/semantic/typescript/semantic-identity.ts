@@ -135,8 +135,12 @@ function dependencyClosure(targetFile: string, graph: FileDependencyGraph): stri
   return [...visited].sort();
 }
 
-function fingerprintValue(file: ProjectFileFingerprint): ProjectFileFingerprint {
-  return { path: file.path, size: file.size, hash: file.hash };
+function fingerprintValue(
+  file: ProjectFileFingerprint,
+): ProjectFileFingerprint | { path: string; semanticHash: string } {
+  return file.semanticHash === undefined
+    ? { path: file.path, size: file.size, hash: file.hash }
+    : { path: file.path, semanticHash: file.semanticHash };
 }
 
 function isUnreadable(file: ProjectFileFingerprint): boolean {

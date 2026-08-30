@@ -8,6 +8,7 @@ import {
   type ProjectChangeManifest,
   type ProjectFileChange,
   type ProjectInputSnapshot,
+  projectInputSnapshotContentValue,
 } from '../domain/project-input.js';
 import type { TypeScriptProjectMode } from '../domain/types.js';
 import { monotonicNowMs } from '../domain/time.js';
@@ -28,6 +29,8 @@ import { TypeScriptIndexMemoryPressureError, TypeScriptIndexRequester } from './
 import { discoverTypeScriptProjectRoots } from './typescript-projects.js';
 import type { SemanticReferenceFragment } from '../semantic/types.js';
 import { readFileWithinLimit, SCIP_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
+import { recoverTypeScriptPackageSemanticHash } from '../platform/typescript-semantic-hash.js';
+import { activeTypeScriptProjectConfigPaths, isTypeScriptProjectConfigPath } from '../platform/typescript-projects.js';
 
 const TYPESCRIPT_DOCUMENT_BATCH_SIZE = 128;
 const TYPESCRIPT_INCREMENTAL_CHANGE_LIMIT = 256;
@@ -66,6 +69,8 @@ export type TypeScriptIncrementalEligibility =
       projects: TypeScriptIncrementalProjectPlan[];
       deletedFiles: string[];
       replaceProject: boolean;
+      /** True when every TypeScript edit changed only trivia, so relationship products remain exact. */
+      dependencyGraphUnchanged: boolean;
       /** Compatibility projection for single-project callers. */
       tsconfigPath?: string;
       /** Compatibility projection for single-project callers. */
@@ -112,6 +117,8 @@ export interface MaterializedTypeScriptIncrementalIndex {
   projectFileCount: number;
   /** Exact dependency graph used to plan this update, retained for next-generation carry-forward when loaded. */
   dependencyGraphSnapshot?: FileDependencyGraphSnapshot;
+  /** True when semantic hashing proved that no TypeScript dependency relationship can have changed. */
+  dependencyGraphUnchanged: boolean;
   referenceFragmentsByFile: Map<string, SemanticReferenceFragment[]>;
   timings: {
     runtimeMs: number;
@@ -128,6 +135,7 @@ export function planTypeScriptIncrementalUpdate(
   input: TypeScriptIncrementalEligibilityInput,
 ): TypeScriptIncrementalEligibility {
   const workspaceProjects = input.projectMode === 'workspace' ? (input.workspaceProjects ?? []) : ['.'];
+  const activeTypeScriptConfigs = activeTypeScriptProjectConfigPaths(workspaceProjects);
   if (workspaceProjects.length === 0) return { eligible: false, reason: 'workspace project roots unavailable' };
   if (workspaceProjects.length === 1 && workspaceProjects[0] === '.' && !input.rootTsconfigExists) {
     return { eligible: false, reason: 'root tsconfig unavailable' };
@@ -141,21 +149,30 @@ export function planTypeScriptIncrementalUpdate(
   const typescriptSourceChanges = manifest.changes.filter(
     (change) => change.inputKind === 'source' && isTypeScriptLike(change.path),
   );
-  const compilerChanges = typeScriptCompilerChanges(manifest);
+  const compilerChanges = typeScriptCompilerChanges(manifest, activeTypeScriptConfigs);
   const compilerManifest = { ...manifest, changes: compilerChanges };
   const addedPaths = typescriptSourceChanges.filter((change) => change.kind === 'added').map((change) => change.path);
   const deletedPaths = typescriptSourceChanges
     .filter((change) => change.kind === 'deleted')
     .map((change) => change.path);
   const modifiedChanges = typescriptSourceChanges.filter((change) => change.kind === 'modified');
-  const projectIdentity = typeScriptFragmentProjectIdentity(input.currentSnapshot, input.producerIdentity);
-  const previousProjectIdentity = typeScriptFragmentProjectIdentity(input.previousSnapshot, input.producerIdentity);
+  const projectIdentity = typeScriptFragmentProjectIdentity(
+    input.currentSnapshot,
+    input.producerIdentity,
+    activeTypeScriptConfigs,
+  );
+  const previousProjectIdentity = typeScriptFragmentProjectIdentity(
+    input.previousSnapshot,
+    input.producerIdentity,
+    activeTypeScriptConfigs,
+  );
   const replaceProject = typeScriptProjectReplacementRequired(
     manifest,
     compilerChanges,
     projectIdentity,
     previousProjectIdentity,
   );
+  const dependencyGraphUnchanged = !replaceProject && typeScriptDependencyGraphUnchanged(manifest);
   if (typescriptSourceChanges.length === 0 && !replaceProject) {
     return { eligible: false, reason: 'change does not affect the configured TypeScript project' };
   }
@@ -207,18 +224,33 @@ export function planTypeScriptIncrementalUpdate(
     projects,
     deletedFiles: effectiveDeletedPaths,
     replaceProject,
+    dependencyGraphUnchanged,
     ...(singleProject
       ? { tsconfigPath: singleProject.tsconfigPath, projectArgument: singleProject.projectArgument }
       : {}),
   };
 }
 
-function typeScriptCompilerChanges(manifest: ProjectChangeManifest): ProjectFileChange[] {
+function typeScriptCompilerChanges(
+  manifest: ProjectChangeManifest,
+  activeTypeScriptConfigs: ReadonlySet<string>,
+): ProjectFileChange[] {
   return manifest.changes.filter(
     (change) =>
       (change.inputKind === 'source' && isTypeScriptLike(change.path)) ||
-      change.inputKind === 'config' ||
+      (change.inputKind === 'config' &&
+        (!isTypeScriptProjectConfigPath(change.path) || activeTypeScriptConfigs.has(change.path)) &&
+        typeScriptConfigurationContentChanged(change)) ||
       change.inputKind === 'ambient',
+  );
+}
+
+function typeScriptConfigurationContentChanged(change: ProjectFileChange): boolean {
+  return (
+    change.kind !== 'modified' ||
+    change.before.semanticHash === undefined ||
+    change.after.semanticHash === undefined ||
+    change.before.semanticHash !== change.after.semanticHash
   );
 }
 
@@ -261,14 +293,14 @@ function planTypeScriptIncrementalAffectedSet(
   const modifiedPlan = planAffectedFiles(
     {
       version: 1,
-      changes: [...modifiedChanges],
+      changes: modifiedChanges.filter(typeScriptSemanticContentChanged),
       projectIdentityChanged: false,
       uncertainty: [],
     },
     graph,
     projectFiles,
   );
-  if (modifiedPlan.mode !== 'closure' || modifiedPlan.affectedFiles.length === 0) {
+  if (modifiedPlan.mode === 'full-project') {
     return {
       eligible: false,
       reason:
@@ -281,10 +313,13 @@ function planTypeScriptIncrementalAffectedSet(
     eligible: true,
     plan: {
       mode: 'closure',
-      changedFiles: [...new Set([...modifiedPlan.changedFiles, ...addedPaths, ...deletedPaths])].sort(),
+      changedFiles: [
+        ...new Set([...modifiedChanges.map((change) => change.path), ...addedPaths, ...deletedPaths]),
+      ].sort(),
       affectedFiles: [
         ...new Set([
           ...modifiedPlan.affectedFiles,
+          ...modifiedChanges.map((change) => change.path),
           ...addedPaths,
           ...reverseDependencyClosure(deletedPaths, graph, projectFiles),
         ]),
@@ -292,6 +327,25 @@ function planTypeScriptIncrementalAffectedSet(
       reasons: [],
     },
   };
+}
+
+function typeScriptSemanticContentChanged(change: ProjectFileChange): boolean {
+  if (change.kind !== 'modified') return true;
+  return (
+    change.before.semanticHash === undefined ||
+    change.after.semanticHash === undefined ||
+    change.before.semanticHash !== change.after.semanticHash
+  );
+}
+
+function typeScriptDependencyGraphUnchanged(manifest: ProjectChangeManifest): boolean {
+  const sourceChanges = manifest.changes.filter(
+    (change) => change.inputKind === 'source' && isTypeScriptLike(change.path),
+  );
+  return (
+    sourceChanges.length > 0 &&
+    sourceChanges.every((change) => change.kind === 'modified' && !typeScriptSemanticContentChanged(change))
+  );
 }
 
 function partitionWorkspacePlan(
@@ -416,25 +470,41 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       dbPath: input.previousDbPath,
       indexPath: input.previousIndexPath,
     });
+    const previousSnapshot = hydrateLegacyTypeScriptPackageHashes(
+      input.projectRoot,
+      input.previousSnapshot,
+      input.currentSnapshot,
+    );
+    const workspaceProjects =
+      input.projectMode === 'workspace'
+        ? discoverTypeScriptProjectRoots(input.projectRoot, input.currentSnapshot.typescriptProjects)
+        : ['.'];
+    const activeTypeScriptConfigs = activeTypeScriptProjectConfigPaths(workspaceProjects);
     let projectFiles: string[];
     let graph: FileDependencyGraph;
     let dependencyGraphSnapshot: FileDependencyGraphSnapshot | undefined;
     try {
       projectFiles = indexedDocumentPaths(db, { includeIgnored: false }).filter(isTypeScriptLike).sort();
-      const manifest = input.previousSnapshot
-        ? buildProjectChangeManifest(input.previousSnapshot, input.currentSnapshot)
-        : null;
+      const manifest = previousSnapshot ? buildProjectChangeManifest(previousSnapshot, input.currentSnapshot) : null;
       const replaceWithoutGraph =
         manifest &&
-        input.previousSnapshot &&
+        previousSnapshot &&
         typeScriptProjectReplacementRequired(
           manifest,
-          typeScriptCompilerChanges(manifest),
-          typeScriptFragmentProjectIdentity(input.currentSnapshot, availability.producerIdentity),
-          typeScriptFragmentProjectIdentity(input.previousSnapshot, availability.producerIdentity),
+          typeScriptCompilerChanges(manifest, activeTypeScriptConfigs),
+          typeScriptFragmentProjectIdentity(
+            input.currentSnapshot,
+            availability.producerIdentity,
+            activeTypeScriptConfigs,
+          ),
+          typeScriptFragmentProjectIdentity(previousSnapshot, availability.producerIdentity, activeTypeScriptConfigs),
         );
+      const dependencyGraphUnchanged =
+        manifest !== null && !replaceWithoutGraph && typeScriptDependencyGraphUnchanged(manifest);
       if (replaceWithoutGraph) {
         dependencyGraphSnapshot = readPersistedFileDependencyGraph(db, 'none') ?? undefined;
+        graph = new Map();
+      } else if (dependencyGraphUnchanged) {
         graph = new Map();
       } else {
         dependencyGraphSnapshot = captureTypeScriptPlanningDependencyGraph(db);
@@ -446,11 +516,8 @@ export function tryMaterializeTypeScriptIncrementalIndex(
     const graphMs = performance.now() - phaseStartedAt;
     const eligibility = planTypeScriptIncrementalUpdate({
       projectMode: input.projectMode,
-      workspaceProjects:
-        input.projectMode === 'workspace'
-          ? discoverTypeScriptProjectRoots(input.projectRoot, input.currentSnapshot.typescriptProjects)
-          : undefined,
-      previousSnapshot: input.previousSnapshot,
+      workspaceProjects: input.projectMode === 'workspace' ? workspaceProjects : undefined,
+      previousSnapshot,
       currentSnapshot: input.currentSnapshot,
       projectFiles,
       graph,
@@ -528,7 +595,11 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       const nextOverlayGeneration =
         batchIndex === plannedBatches.length - 1
           ? eligibility.nextFragmentGeneration
-          : sha256(`${eligibility.nextFragmentGeneration}\0batch\0${batchIndex}`);
+          : typeScriptIntermediateOverlayGenerationIdentity({
+              previousGenerationIdentity: previousOverlayGeneration,
+              targetGenerationIdentity: eligibility.nextFragmentGeneration,
+              fragments,
+            });
       commitTypeScriptOverlay({
         cacheDir: input.cacheDir,
         previousGenerationIdentity: previousOverlayGeneration,
@@ -567,6 +638,7 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       plan: eligibility.plan,
       projectFileCount: projectFiles.length,
       dependencyGraphSnapshot,
+      dependencyGraphUnchanged: eligibility.dependencyGraphUnchanged,
       referenceFragmentsByFile,
       timings: {
         runtimeMs,
@@ -602,6 +674,50 @@ function chunked<T>(values: readonly T[], size: number): T[][] {
   return chunks;
 }
 
+function hydrateLegacyTypeScriptPackageHashes(
+  projectRoot: string,
+  previous: ProjectInputSnapshot | null,
+  current: ProjectInputSnapshot,
+): ProjectInputSnapshot | null {
+  if (!previous) return null;
+  const currentFiles = new Map(current.files.map((file) => [file.path, file]));
+  let changed = false;
+  const files = previous.files.map((file) => {
+    const currentFile = currentFiles.get(file.path);
+    if (file.semanticHash !== undefined || currentFile?.semanticHash === undefined) return file;
+    const semanticHash = recoverTypeScriptPackageSemanticHash(projectRoot, file.path, file.hash);
+    if (semanticHash === undefined) return file;
+    changed = true;
+    return { ...file, semanticHash };
+  });
+  return changed ? { ...previous, files } : previous;
+}
+
+export function typeScriptIntermediateOverlayGenerationIdentity(input: {
+  previousGenerationIdentity: string;
+  targetGenerationIdentity: string;
+  fragments: readonly TypeScriptDocumentFragment[];
+}): string {
+  const hash = createHash('sha256');
+  hash.update('typescript-overlay-batch-v1\0');
+  hash.update(input.previousGenerationIdentity);
+  hash.update('\0');
+  hash.update(input.targetGenerationIdentity);
+  for (const fragment of [...input.fragments].sort((left, right) =>
+    left.relativePath.localeCompare(right.relativePath),
+  )) {
+    hash.update('\0path\0');
+    hash.update(fragment.relativePath);
+    if (fragment.bytes === null) {
+      hash.update('\0deleted');
+    } else {
+      hash.update('\0bytes\0');
+      hash.update(createHash('sha256').update(fragment.bytes).digest());
+    }
+  }
+  return hash.digest('hex');
+}
+
 export function materializeDeferredTypeScriptIndex(input: {
   cacheDir: string;
   generationIdentity: string;
@@ -622,17 +738,32 @@ export function materializeDeferredTypeScriptIndex(input: {
   writeFileSync(input.candidateShardPath, bytes);
 }
 
-function typeScriptFragmentProjectIdentity(snapshot: ProjectInputSnapshot, producerIdentity: string): string {
+function typeScriptFragmentProjectIdentity(
+  snapshot: ProjectInputSnapshot,
+  producerIdentity: string,
+  activeTypeScriptConfigs: ReadonlySet<string>,
+): string {
   const nonSourceInputs = snapshot.files
     .filter((file) => {
       const kind = classifyProjectInputPath(file.path, snapshot.languages);
-      return kind === 'config' || kind === 'ambient';
+      return (
+        kind === 'ambient' ||
+        (kind === 'config' && (!isTypeScriptProjectConfigPath(file.path) || activeTypeScriptConfigs.has(file.path)))
+      );
     })
-    .map((file) => ({ path: file.path, size: file.size, hash: file.hash }))
+    .map((file) => {
+      const kind = classifyProjectInputPath(file.path, snapshot.languages);
+      const semanticHash = kind === 'config' ? file.semanticHash : undefined;
+      return {
+        path: file.path,
+        size: semanticHash === undefined ? file.size : 0,
+        hash: semanticHash ?? file.hash,
+      };
+    })
     .sort((left, right) => left.path.localeCompare(right.path));
-  return `typescript-project-v2:${sha256(
+  return `typescript-project-v3:${sha256(
     JSON.stringify({
-      version: 2,
+      version: 3,
       producerIdentity,
       pnpmWorkspaces: snapshot.pnpmWorkspaces,
       typescriptProjectMode: snapshot.typescriptProjectMode,
@@ -643,7 +774,7 @@ function typeScriptFragmentProjectIdentity(snapshot: ProjectInputSnapshot, produ
 }
 
 function typeScriptFragmentGenerationIdentity(snapshot: ProjectInputSnapshot, producerIdentity: string): string {
-  return sha256(JSON.stringify({ version: 1, producerIdentity, snapshot }));
+  return sha256(JSON.stringify({ version: 1, producerIdentity, snapshot: projectInputSnapshotContentValue(snapshot) }));
 }
 
 function sha256(value: string): string {

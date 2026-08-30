@@ -62,9 +62,11 @@ interface EvidenceConnection {
   readFileEvidence: Database.Statement;
   readLegacyFileEvidence: Database.Statement;
   writeFileEvidence: Database.Statement;
+  rekeyFileEvidence: Database.Statement;
   readProjectEvidence: Database.Statement;
   readLegacyProjectEvidence: Database.Statement;
   writeProjectEvidence: Database.Statement;
+  rekeyProjectEvidenceKind: Database.Statement;
   readCallees: Database.Statement;
   readLegacyCallees: Database.Statement;
   readCalleesForFile: Database.Statement;
@@ -120,6 +122,13 @@ export interface FileEvidenceCacheEntry {
   relativePath: string;
   contentHash: string;
   payload: string;
+}
+
+export interface FileEvidenceCacheRekeyEntry {
+  kind: FileEvidenceKind;
+  relativePath: string;
+  previousContentHash: string;
+  nextContentHash: string;
 }
 
 // Connection handle, not evidence: lives for the ScipDatabase's lifetime and
@@ -239,6 +248,9 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
       writeFileEvidence: evidence.prepare(
         'INSERT OR REPLACE INTO file_evidence (kind, relative_path, content_hash, version, payload) VALUES (?, ?, ?, ?, ?)',
       ),
+      rekeyFileEvidence: evidence.prepare(
+        'UPDATE file_evidence SET content_hash = ?, version = ? WHERE kind = ? AND relative_path = ? AND content_hash = ?',
+      ),
       readProjectEvidence: evidence.prepare(
         'SELECT payload FROM project_evidence WHERE kind = ? AND cache_key = ? AND project_fingerprint = ? AND version = ?',
       ),
@@ -250,6 +262,9 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
       ),
       writeProjectEvidence: evidence.prepare(
         'INSERT OR REPLACE INTO project_evidence (kind, cache_key, project_fingerprint, version, payload) VALUES (?, ?, ?, ?, ?)',
+      ),
+      rekeyProjectEvidenceKind: evidence.prepare(
+        'UPDATE project_evidence SET project_fingerprint = ?, version = ? WHERE kind = ? AND project_fingerprint = ?',
       ),
       readCallees: evidence.prepare(
         `SELECT payload FROM semantic_callees
@@ -535,6 +550,39 @@ export function writeCachedFileEvidenceBatch(db: ScipDatabase, entries: readonly
   }
 }
 
+/**
+ * Carries forward derived payloads whose producer has already proved that the
+ * underlying file is unaffected. The payload stays inside SQLite; only its
+ * validated identity changes, so large semantic products are not parsed and
+ * serialized again in JavaScript.
+ */
+export function rekeyCachedFileEvidenceBatch(
+  db: ScipDatabase,
+  entries: readonly FileEvidenceCacheRekeyEntry[],
+): number {
+  if (entries.length === 0) return 0;
+  const connection = connectionFor(db);
+  if (!connection) return 0;
+  try {
+    return connection.evidence.transaction(() => {
+      let changed = 0;
+      for (const entry of entries) {
+        changed += connection.rekeyFileEvidence.run(
+          entry.nextContentHash,
+          VERSION,
+          entry.kind,
+          entry.relativePath,
+          entry.previousContentHash,
+        ).changes;
+      }
+      return changed;
+    })();
+  } catch (error) {
+    disable(db, 'file_evidence batch rekey', error);
+    return 0;
+  }
+}
+
 // scip-query: ignore-wrapper — public project-storage boundary; callers get a
 // disable-on-error read, never a raw statement.
 export function readCachedProjectEvidence(
@@ -570,6 +618,29 @@ export function writeCachedProjectEvidence(
     connection.writeProjectEvidence.run(kind, cacheKey, projectFingerprint, VERSION, payload);
   } catch (error) {
     disable(db, 'project_evidence write', error);
+  }
+}
+
+/**
+ * Carries every project-scoped payload of one kind to a new project identity
+ * after its owner has proved that the underlying relationship product did not
+ * change. Payloads stay inside SQLite instead of being parsed and serialized.
+ */
+export function rekeyCachedProjectEvidenceKind(
+  db: ScipDatabase,
+  kind: ProjectEvidenceKind,
+  previousProjectFingerprint: string,
+  nextProjectFingerprint: string,
+): number {
+  if (previousProjectFingerprint === nextProjectFingerprint) return 0;
+  const connection = connectionFor(db);
+  if (!connection) return 0;
+  try {
+    return connection.rekeyProjectEvidenceKind.run(nextProjectFingerprint, VERSION, kind, previousProjectFingerprint)
+      .changes;
+  } catch (error) {
+    disable(db, 'project_evidence kind rekey', error);
+    return 0;
   }
 }
 

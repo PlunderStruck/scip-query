@@ -25,6 +25,7 @@ import { monotonicNowMs } from '../domain/time.js';
 import type { ProjectInputChangeJournal } from '../domain/project-input-change-journal.js';
 import { profileAsyncSpan, profileEnabled, profileSpan, writeProfileEvent } from '../instrumentation/profile.js';
 import { hardenOwnedCacheTreeIfOwned } from '../platform/cache-layout.js';
+import { recoverTypeScriptPackageSemanticHash } from '../platform/typescript-semantic-hash.js';
 import { resolveScipBinary, tryInstallScipCli } from '../platform/scip-cli.js';
 import {
   parseProcessIdentity,
@@ -51,6 +52,7 @@ import {
   trustProjectLocalIndexerBinary,
 } from '../platform/indexer-toolchain.js';
 import { throwIfSignalAborted } from '../platform/abort-signal.js';
+import { ReindexLockUnavailableError } from './reindex-worker-protocol.js';
 import {
   buildProjectInputFingerprint,
   buildProjectInputFingerprintFromJournal,
@@ -69,7 +71,11 @@ import {
 } from '../platform/file-clone.js';
 import { writeJsonDurable } from '../storage/atomic-json.js';
 import { ScipDatabase } from '../storage/db.js';
-import { EVIDENCE_DB_FILENAME } from '../storage/evidence-cache.js';
+import {
+  EVIDENCE_DB_FILENAME,
+  projectEvidenceFingerprint,
+  rekeyCachedProjectEvidenceKind,
+} from '../storage/evidence-cache.js';
 import { seedTypeScriptReferenceFragments } from '../semantic/typescript/reference-fragment-shadow.js';
 import {
   captureTypeScriptPlanningDependencyGraph,
@@ -122,7 +128,11 @@ import {
   refreshSqliteGenerationMetadata,
 } from './sqlite-generation-store.js';
 import { pruneTypeScriptOverlays } from './typescript-overlay-store.js';
-import { discoverTypeScriptProjectRoots } from './typescript-projects.js';
+import {
+  activeTypeScriptProjectConfigPaths,
+  discoverTypeScriptProjectRoots,
+  isTypeScriptProjectConfigPath,
+} from './typescript-projects.js';
 import {
   materializeDeferredTypeScriptIndex,
   tryMaterializeTypeScriptIncrementalIndex,
@@ -442,14 +452,19 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       }
     }
   }
+  const watcherRefresh = isWatcherRefreshTrigger(opts.trigger);
   const cacheLifecycleLock = acquireProcessFileLock(join(dirname(paths.outputDb), 'cache-lifecycle.lock'), {
-    waitMs: 30_000,
+    // A watcher must not sit on a spare Node process for 30 seconds while a
+    // manual refresh owns the cache. Report a retryable outcome and back off.
+    waitMs: watcherRefresh ? 1_000 : 30_000,
   });
   if (!cacheLifecycleLock) {
     releaseSharedBuildLock?.();
-    throw new Error(
-      `Could not acquire scip-query cache lifecycle lock for ${dirname(paths.outputDb)}. ` +
-        'A watch daemon or another reindex may hold it. Run "scip-query watch --stop", retry the reindex, then restart with "scip-query watch --daemon".',
+    throw new ReindexLockUnavailableError(
+      watcherRefresh
+        ? `Could not acquire scip-query cache lifecycle lock for ${dirname(paths.outputDb)}; another refresh is publishing, so the watcher will retry.`
+        : `Could not acquire scip-query cache lifecycle lock for ${dirname(paths.outputDb)}. ` +
+            'A watch daemon or another reindex may hold it. Run "scip-query watch --stop", retry the reindex, then restart with "scip-query watch --daemon".',
     );
   }
   let releaseLock: (() => void) | undefined;
@@ -628,7 +643,7 @@ function localArtifactsMatchFingerprint(paths: ReindexOutputPaths, fingerprint: 
   if (
     !existsSync(paths.outputScip) ||
     !existsSync(paths.outputDb) ||
-    !isUnchangedReindex(paths.metaPath, fingerprint)
+    reindexFingerprintMatch(paths.metaPath, fingerprint) === null
   ) {
     return false;
   }
@@ -732,11 +747,12 @@ function reuseExistingIndexIfPossible(opts: {
   onStatus: (message: string) => void;
 }): ReindexResult | null {
   const generation = inspectSqliteGeneration(opts.paths.outputDb, opts.paths.metaPath);
+  const fingerprintMatch = reindexFingerprintMatch(opts.paths.metaPath, opts.fingerprint);
   if (
     opts.opts.skipIfUnchanged === false ||
     !existsSync(opts.paths.outputScip) ||
     !existsSync(opts.paths.outputDb) ||
-    !isUnchangedReindex(opts.paths.metaPath, opts.fingerprint) ||
+    fingerprintMatch === null ||
     generation.state === 'invalid' ||
     generation.state === 'drifted'
   ) {
@@ -770,6 +786,11 @@ function reuseExistingIndexIfPossible(opts: {
   if (inspectSqliteGeneration(opts.paths.outputDb, opts.paths.metaPath).state === 'drifted') {
     refreshSqliteGenerationMetadata(opts.paths.outputDb, opts.paths.metaPath);
     opts.onStatus('Published refreshed SQLite generation after post-index augmentation');
+  }
+  if (fingerprintMatch === 'operational-config-compatible') {
+    updateReindexFingerprintMetadata(opts.paths.metaPath, opts.fingerprint, opts.languages, opts.opts);
+    refreshSqliteGenerationMetadata(opts.paths.outputDb, opts.paths.metaPath);
+    opts.onStatus('Migrated operational .scipquery.json metadata without rerunning language indexers.');
   }
   const durationMs = monotonicNowMs() - opts.monotonicStart;
   const lastRefresh = buildLastRefresh({
@@ -1385,7 +1406,9 @@ function classifyLanguageShardReuse(opts: {
       result.set(language, { reused: false, reason: 'cached shard file missing on disk', fingerprint, scipPath });
       continue;
     }
-    if (stableJson(cached) !== stableJson(fingerprint)) {
+    const comparableCached =
+      language === 'typescript' ? migrateLegacyTypeScriptLanguageFingerprint(opts.projectRoot, cached) : cached;
+    if (stableJson(comparableCached) !== stableJson(fingerprint)) {
       result.set(language, {
         reused: false,
         reason: 'language inputs changed since last index',
@@ -1573,18 +1596,25 @@ async function publishFreshReindexArtifacts(
   });
   profileSpan('reindex.publish.runtime-boundaries', () => {
     const replacingWholeTypeScriptProject = incrementalTypeScript?.plan.mode === 'full-project';
+    const relationshipsUnchanged = incrementalTypeScript?.dependencyGraphUnchanged === true;
     if (replacingWholeTypeScriptProject) {
       opts.onStatus(
         'Rebuilding compiler-derived runtime-boundary relationships while retaining unchanged per-file extraction facts.',
       );
+    } else if (relationshipsUnchanged) {
+      opts.onStatus('Reusing runtime-boundary relationships because TypeScript semantics are unchanged.');
     }
     runRuntimeBoundaryAugmentation(
       opts.projectRoot,
       opts.tempPaths.tempOutputDb,
       opts.tempPaths.tempOutputScip,
       opts.onStatus,
-      false,
-      replacingWholeTypeScriptProject ? incrementalTypeScript?.changedFiles : incrementalTypeScript?.affectedFiles,
+      relationshipsUnchanged,
+      relationshipsUnchanged
+        ? undefined
+        : replacingWholeTypeScriptProject
+          ? incrementalTypeScript?.changedFiles
+          : incrementalTypeScript?.affectedFiles,
       join(dirname(opts.paths.outputDb), EVIDENCE_DB_FILENAME),
       replacingWholeTypeScriptProject,
     );
@@ -1609,8 +1639,25 @@ async function publishFreshReindexArtifacts(
   );
 
   let carriedDependencyGraph: FileDependencyGraph | undefined;
+  let previousDependencyGraphEvidenceFingerprint: string | null = null;
   if (sqliteMaterialization.mode === 'incremental' && incrementalTypeScript) {
     profileSpan('reindex.publish.reference-fragments', () => {
+      if (incrementalTypeScript.dependencyGraphUnchanged) {
+        const acceptedDb = new ScipDatabase({
+          projectRoot: opts.projectRoot,
+          dbPath: opts.paths.outputDb,
+          indexPath: opts.paths.outputScip,
+        });
+        try {
+          previousDependencyGraphEvidenceFingerprint = projectEvidenceFingerprint(acceptedDb);
+          opts.onStatus(
+            'Preserved exact TypeScript reference fragments and dependency relationships because only trivia changed.',
+          );
+        } finally {
+          acceptedDb.close();
+        }
+        return;
+      }
       let candidateDb: ScipDatabase | null = null;
       let evidenceDb: ScipDatabase | null = null;
       try {
@@ -1651,16 +1698,24 @@ async function publishFreshReindexArtifacts(
                   ([relativePath]) => !deletedReferenceFiles.has(relativePath),
                 ),
               );
-        const written = profileSpan('reindex.publish.reference-fragments.seed', () =>
+        const seeded = profileSpan('reindex.publish.reference-fragments.seed', () =>
           seedTypeScriptReferenceFragments(
             candidateDb!,
             opts.fingerprint,
             currentReferenceFragments,
             evidenceDb!,
             carriedDependencyGraph,
+            new Set(incrementalTypeScript.affectedFiles),
           ),
         );
-        opts.onStatus(`Cached exact TypeScript reference fragments for ${written} affected document(s).`);
+        opts.onStatus(
+          `Cached exact TypeScript reference fragments for ${seeded.affectedFiles} affected document(s) and carried ${seeded.carriedFiles} unaffected document(s) forward.`,
+        );
+        if (seeded.skippedAffectedFiles > 0) {
+          opts.onStatus(
+            `Skipped exact TypeScript reference fragment prefill for ${seeded.skippedAffectedFiles} affected document(s) whose semantic identity was unavailable.`,
+          );
+        }
       } catch (error) {
         opts.onStatus(
           `Exact TypeScript reference fragment prefill unavailable: ${error instanceof Error ? error.message : String(error)}.`,
@@ -1768,7 +1823,24 @@ async function publishFreshReindexArtifacts(
             ? incrementalTypeScript.changedFiles
             : incrementalTypeScript.affectedFiles;
         let carried = false;
-        if (incrementalTypeScript.dependencyGraphSnapshot) {
+        if (incrementalTypeScript.dependencyGraphUnchanged) {
+          const nextFingerprint = projectEvidenceFingerprint(acceptedDb);
+          const carriedProducts =
+            previousDependencyGraphEvidenceFingerprint && nextFingerprint
+              ? rekeyCachedProjectEvidenceKind(
+                  acceptedDb,
+                  'file-dependency-graph',
+                  previousDependencyGraphEvidenceFingerprint,
+                  nextFingerprint,
+                )
+              : 0;
+          carried = carriedProducts > 0;
+          opts.onStatus(
+            carried
+              ? `Carried ${carriedProducts} unchanged dependency graph product(s) forward without rebuilding them.`
+              : 'No persisted dependency graph product required rekeying; the next graph consumer can materialize it.',
+          );
+        } else if (incrementalTypeScript.dependencyGraphSnapshot) {
           carried = carryFileDependencyGraph(
             acceptedDb,
             incrementalTypeScript.dependencyGraphSnapshot,
@@ -1778,11 +1850,13 @@ async function publishFreshReindexArtifacts(
         } else {
           captureTypeScriptPlanningDependencyGraph(acceptedDb);
         }
-        opts.onStatus(
-          carried
-            ? `Carried the dependency graph forward by replacing ${replacementFiles.length} changed dependency owner(s).`
-            : 'Materialized a fresh dependency graph for the accepted generation because no compatible prior graph was available.',
-        );
+        if (!incrementalTypeScript.dependencyGraphUnchanged) {
+          opts.onStatus(
+            carried
+              ? `Carried the dependency graph forward by replacing ${replacementFiles.length} changed dependency owner(s).`
+              : 'Materialized a fresh dependency graph for the accepted generation because no compatible prior graph was available.',
+          );
+        }
       } catch (error) {
         opts.onStatus(
           `Dependency graph carry-forward unavailable: ${error instanceof Error ? error.message : String(error)}. ` +
@@ -2677,10 +2751,10 @@ async function acquireReindexLock(
       continue;
     }
 
-    throw new Error(`Another scip-query reindex is already running for ${dirname(lockPath)}.`);
+    throw new ReindexLockUnavailableError(`Another scip-query reindex is already running for ${dirname(lockPath)}.`);
   }
 
-  throw new Error(`Could not acquire scip-query reindex lock for ${dirname(lockPath)}.`);
+  throw new ReindexLockUnavailableError(`Could not acquire scip-query reindex lock for ${dirname(lockPath)}.`);
 }
 
 function tryAcquireReindexLock(
@@ -2890,13 +2964,43 @@ function computeLanguageFingerprints(
           pnpmWorkspaces: language === 'typescript' && effectivePnpmWorkspaces(opts),
           ...typeScriptOptions,
           clojureConfigPath,
-          files: projectFingerprint.files.filter((file) =>
-            isLanguageRelevantProjectInputPath(file.path, language, markerFiles),
-          ),
+          files: projectFingerprint.files
+            .filter((file) => isLanguageRelevantProjectInputPath(file.path, language, markerFiles))
+            .map((file) => languageFingerprintFile(file, language)),
         },
       ];
     }),
   ) as Partial<Record<SupportedLanguage, ReindexFingerprint>>;
+}
+
+function languageFingerprintFile(file: ProjectFileFingerprint, language: SupportedLanguage): ProjectFileFingerprint {
+  const packageSemanticHash =
+    language === 'typescript' && /(?:^|\/)package\.json$/iu.test(file.path) ? file.semanticHash : undefined;
+  return {
+    path: file.path,
+    size: packageSemanticHash === undefined ? file.size : 0,
+    hash: packageSemanticHash ?? file.hash,
+  };
+}
+
+function migrateLegacyTypeScriptLanguageFingerprint(projectRoot: string, value: unknown): unknown {
+  const snapshot = projectInputSnapshotOrNull(value);
+  if (!snapshot) return value;
+  const projectRoots =
+    snapshot.typescriptProjectMode === 'workspace'
+      ? discoverTypeScriptProjectRoots(projectRoot, snapshot.typescriptProjects)
+      : ['.'];
+  const activeTypeScriptConfigs = activeTypeScriptProjectConfigPaths(projectRoots);
+  return {
+    ...snapshot,
+    files: snapshot.files
+      .filter((file) => !isTypeScriptProjectConfigPath(file.path) || activeTypeScriptConfigs.has(file.path))
+      .map((file) => {
+        const semanticHash =
+          file.semanticHash ?? recoverTypeScriptPackageSemanticHash(projectRoot, file.path, file.hash);
+        return languageFingerprintFile(semanticHash === undefined ? file : { ...file, semanticHash }, 'typescript');
+      }),
+  };
 }
 
 function normalizeOptionalPath(path: string | undefined): string | undefined {
@@ -2931,20 +3035,67 @@ function readReindexMetaOrNull(metaPath: string): DecodedReindexMetadata | null 
   }
 }
 
-function isUnchangedReindex(metaPath: string, fingerprint: ReindexFingerprint): boolean {
+function reindexFingerprintMatch(
+  metaPath: string,
+  fingerprint: ReindexFingerprint,
+): 'exact' | 'operational-config-compatible' | null {
   try {
     const decoded = decodeReindexMetadata(readSmallArtifactText(metaPath, 'reindex metadata'));
-    if (decoded.kind !== 'legacy' && decoded.kind !== 'supported') return false;
+    if (decoded.kind !== 'legacy' && decoded.kind !== 'supported') return null;
     const meta = decoded.metadata;
-    return (
-      decoded.capabilities.publishableGeneration &&
-      hasCurrentSqliteQueryLayout(meta) &&
-      stableJson(meta.fingerprint) === stableJson(fingerprint) &&
-      stableJson([...(meta.indexedLanguages ?? [])].sort()) === stableJson(fingerprint.languages)
-    );
+    if (
+      !decoded.capabilities.publishableGeneration ||
+      !hasCurrentSqliteQueryLayout(meta) ||
+      stableJson([...(meta.indexedLanguages ?? [])].sort()) !== stableJson(fingerprint.languages)
+    ) {
+      return null;
+    }
+    if (stableJson(meta.fingerprint) === stableJson(fingerprint)) return 'exact';
+    return stableJson(withoutOperationalProjectConfig(meta.fingerprint)) ===
+      stableJson(withoutOperationalProjectConfig(fingerprint))
+      ? 'operational-config-compatible'
+      : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+function withoutOperationalProjectConfig(value: unknown): unknown {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  if (!Array.isArray(record['files'])) return value;
+  return {
+    ...record,
+    files: record['files'].filter(
+      (file) =>
+        typeof file !== 'object' ||
+        file === null ||
+        Array.isArray(file) ||
+        (file as Record<string, unknown>)['path'] !== '.scipquery.json',
+    ),
+  };
+}
+
+function updateReindexFingerprintMetadata(
+  metaPath: string,
+  fingerprint: ReindexFingerprint,
+  languages: readonly SupportedLanguage[],
+  opts: {
+    pnpmWorkspaces?: boolean;
+    typescriptProjectMode?: TypeScriptProjectMode;
+    typescriptProjects?: readonly string[];
+    clojureConfigPath?: string;
+  },
+): void {
+  const metadata = acceptedReindexMetadata(decodeReindexMetadata(readSmallArtifactText(metaPath, 'reindex metadata')));
+  if (!metadata) return;
+  writeReindexMeta(metaPath, {
+    ...metadata,
+    fingerprint,
+    ...(metadata.version === CURRENT_REINDEX_METADATA_VERSION
+      ? { languageFingerprints: computeLanguageFingerprints(fingerprint, languages, opts) }
+      : {}),
+  });
 }
 
 function writeReindexMeta(metaPath: string, metadata: DecodedReindexMetadata): void {
