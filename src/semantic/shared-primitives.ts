@@ -264,30 +264,34 @@ export function exactSemanticCallerMap(
   definitions: ReadonlyArray<IndexedDefinition>,
 ): Map<number, Set<string>> {
   const result = new Map<number, Set<string>>();
-  const typescriptGroups = new Map<SemanticProvider, IndexedDefinition[]>();
+  const typescriptDefinitions: IndexedDefinition[] = [];
   for (const definition of definitions) {
     if (semanticProviderLanguageForPath(definition.relativePath) === 'typescript') {
-      const provider = availableSemanticProvider(db, definition.relativePath);
-      if (!provider) continue;
-      const bucket = typescriptGroups.get(provider) ?? [];
-      bucket.push(definition);
-      typescriptGroups.set(provider, bucket);
+      typescriptDefinitions.push(definition);
       continue;
     }
     recordCallerFilesFromReferences(db, result, definition, buildSemanticReferences(db, definition));
   }
-  for (const [provider, groupedDefinitions] of typescriptGroups) {
-    const fragments = materializeTypeScriptReferenceFragments(db, groupedDefinitions, (p) =>
+  if (typescriptDefinitions.length > 0) {
+    const fragments = materializeTypeScriptReferenceFragments(db, typescriptDefinitions, (p) =>
       getSemanticProvider(db, p),
     );
-    const references =
-      fragments?.references ??
-      (provider.referencesForDefinitions
-        ? provider.referencesForDefinitions(groupedDefinitions, { exact: true })
-        : new Map(groupedDefinitions.map((definition) => [definition.symbolId, provider.referencesFor(definition)])));
-    if (!fragments && profileEnabled())
-      recordTypeScriptReferenceFragmentShadow(db, groupedDefinitions, references, (p) => getSemanticProvider(db, p));
-    for (const definition of groupedDefinitions) {
+    let references = fragments?.references;
+    if (!references) {
+      const provider = availableSemanticProvider(db, typescriptDefinitions[0]!.relativePath);
+      references = provider
+        ? provider.referencesForDefinitions
+          ? provider.referencesForDefinitions(typescriptDefinitions, { exact: true })
+          : new Map(
+              typescriptDefinitions.map((definition) => [definition.symbolId, provider.referencesFor(definition)]),
+            )
+        : new Map();
+      if (provider && profileEnabled())
+        recordTypeScriptReferenceFragmentShadow(db, typescriptDefinitions, references, (p) =>
+          getSemanticProvider(db, p),
+        );
+    }
+    for (const definition of typescriptDefinitions) {
       recordCallerFilesFromReferences(db, result, definition, references.get(definition.symbolId) ?? []);
     }
   }

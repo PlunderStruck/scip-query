@@ -36,9 +36,14 @@ export { cliVersion } from '../platform/cli-version.js';
 export const HEALTH_PHASE_COMMAND = '__health-phase';
 export const HEALTH_SEMANTIC_PREWARM_COMMAND = '__health-semantic-prewarm';
 export const DIFF_IMPACT_BATCH_COMMAND = '__diff-impact-batch';
-const DIFF_IMPACT_BATCH_SIZE = 10;
-const DEFAULT_DIFF_IMPACT_BATCH_CONCURRENCY = 4;
-const MAX_DEFAULT_DIFF_IMPACT_BATCH_CONCURRENCY = 8;
+// A diff-impact batch materializes the project-wide TypeScript reference-fragment
+// view once. Keep enough changed files together to amortize that scan, and run
+// batches sequentially by default so they do not contend while reading the same
+// cache. The environment override remains available for workloads whose evidence
+// providers do not have this project-wide cost.
+const DIFF_IMPACT_BATCH_SIZE = 128;
+const DEFAULT_DIFF_IMPACT_BATCH_CONCURRENCY = 1;
+const MAX_DEFAULT_DIFF_IMPACT_BATCH_CONCURRENCY = 1;
 const LARGE_COMMAND_SYMBOL_THRESHOLD = 25_000;
 const LARGE_COMMAND_DOCUMENT_THRESHOLD = 2_500;
 const DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT = 2_500;
@@ -972,7 +977,7 @@ export async function runIsolatedDiffImpactReportWithEvidence(
     };
   }
 
-  const batches = chunked(plan.plan.changedFiles, DIFF_IMPACT_BATCH_SIZE);
+  const batches = diffImpactBatches(plan.plan.changedFiles);
   const partials = await runAnalysisTasks(batches, diffImpactBatchConcurrency(batches.length), (batch) =>
     runDiffImpactBatchProcess(batch, opts),
   );
@@ -996,6 +1001,10 @@ export const diffImpactBatchConcurrency = createAdaptiveConcurrencyResolver({
   defaultMinimum: DEFAULT_DIFF_IMPACT_BATCH_CONCURRENCY,
   defaultMaximum: MAX_DEFAULT_DIFF_IMPACT_BATCH_CONCURRENCY,
 });
+
+export function diffImpactBatches(files: readonly string[]): string[][] {
+  return chunked(files, DIFF_IMPACT_BATCH_SIZE);
+}
 
 function createAdaptiveConcurrencyResolver(opts: {
   envKey: string;

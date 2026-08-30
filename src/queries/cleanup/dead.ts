@@ -4,7 +4,7 @@ import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol } from '../../an
 import { definitionsGroupedByLeaf, getScopedDefinitionsMatchingSymbols } from '../../symbols/definition-catalog.js';
 import type { DeadOptions, IndexedDefinition } from '../../domain/types.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
-import { getCallerRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
+import { getCallerRowsForSymbol, getCallerRowsMapForSymbols } from '../../symbols/graph/call-graph-evidence.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { clearSourceFileEvidenceCaches } from '../internal/cache-invalidation.js';
 import { deadCandidateDecision, looksValueLikeDefinition } from '../internal/dead-candidate-gate.js';
@@ -89,7 +89,10 @@ interface DeadRow {
 
 type ReferenceCounts = ReturnType<typeof emptyReferenceCounts>;
 
-const BULK_SEMANTIC_CALLER_MIN_DEFINITIONS = 1000;
+// Scalar semantic caller lookup materializes the project-wide TypeScript
+// reference-fragment view once per definition. Switch medium candidate sets to
+// the exact bulk path before those repeated scans dominate time and memory.
+const BULK_SEMANTIC_CALLER_MIN_DEFINITIONS = 64;
 const BULK_SEMANTIC_CALLER_MIN_INDEXED_FILES = 300;
 
 /**
@@ -607,15 +610,16 @@ function supplementReferencesFromCallerMap(
     profileSpan(
       'dead.caller-map.per-symbol-non-semantic',
       () => {
+        const callersBySymbol = getCallerRowsMapForSymbols(db, definitions, {
+          semantic: false,
+          semanticEvidence: symbolSemanticEvidence,
+        });
         for (const definition of definitions) {
-          const callers = getCallerRowsForSymbol(db, definition, {
-            semantic: false,
-            semanticEvidence: symbolSemanticEvidence,
-          });
+          const callers = callersBySymbol.get(definition.symbolId) ?? [];
           for (const caller of callers) recordCallerFile(definition, caller.file);
         }
       },
-      () => ({ definitions: definitions.length, semantic: false }),
+      () => ({ definitions: definitions.length, semantic: false, batched: true }),
     );
   } else {
     profileSpan(

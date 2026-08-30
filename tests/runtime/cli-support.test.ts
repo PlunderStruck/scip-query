@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   commandAnalysisBudget,
   deferredHealthPhaseResult,
+  diffImpactBatches,
   diffImpactBatchConcurrency,
   fullHealthPhaseConcurrency,
   fullHealthPhaseHeapMb,
@@ -522,15 +523,21 @@ describe('frontend health phase pruning', () => {
 });
 
 describe('diffImpactBatchConcurrency', () => {
-  it('uses an adaptive default capped below the full batch count', () => {
-    expect(diffImpactBatchConcurrency(20, {}, () => 14)).toBe(8);
-    expect(diffImpactBatchConcurrency(20, {}, () => 6)).toBe(5);
-    expect(diffImpactBatchConcurrency(3, {}, () => 14)).toBe(3);
+  it('amortizes one project-wide reference scan across a large changed-file set', () => {
+    const files = Array.from({ length: 129 }, (_, index) => `src/file-${index}.ts`);
+    expect(diffImpactBatches(files.slice(0, 93))).toEqual([files.slice(0, 93)]);
+    expect(diffImpactBatches(files)).toEqual([files.slice(0, 128), files.slice(128)]);
+  });
+
+  it('runs cache-heavy batches sequentially by default', () => {
+    expect(diffImpactBatchConcurrency(20, {}, () => 14)).toBe(1);
+    expect(diffImpactBatchConcurrency(20, {}, () => 6)).toBe(1);
+    expect(diffImpactBatchConcurrency(3, {}, () => 14)).toBe(1);
   });
 
   it('honors explicit environment overrides', () => {
     expect(diffImpactBatchConcurrency(20, { SCIP_QUERY_DIFF_IMPACT_CONCURRENCY: '6' }, () => 14)).toBe(6);
     expect(diffImpactBatchConcurrency(20, { SCIP_QUERY_DIFF_IMPACT_CONCURRENCY: '100' }, () => 14)).toBe(20);
-    expect(diffImpactBatchConcurrency(20, { SCIP_QUERY_DIFF_IMPACT_CONCURRENCY: 'nope' }, () => 14)).toBe(8);
+    expect(diffImpactBatchConcurrency(20, { SCIP_QUERY_DIFF_IMPACT_CONCURRENCY: 'nope' }, () => 14)).toBe(1);
   });
 });
