@@ -9,6 +9,7 @@ import {
   isCheapIgnoredWatchPath,
   readWatchGitHeadOid,
   resolveWatchGitLayout,
+  shouldUseRecursiveSourceWatch,
   type ReindexDiagnostics,
   type ReindexOperation,
   type ReindexRunner,
@@ -439,6 +440,37 @@ describe('Watcher', () => {
 
     expect(onReindexError).toHaveBeenCalledWith(expect.objectContaining({ message: 'worker failed' }), trigger);
     expect(onError).toHaveBeenCalledOnce();
+    await watcher.stop();
+  });
+
+  it('retries after a source change makes an in-flight reindex fail', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const firstCompletion = deferred<number>();
+    const onReindexError = vi.fn();
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => ({
+      completion: firstCompletion.promise,
+      cancel: async () => ({ state: 'exited', diagnostics: emptyDiagnostics() }),
+      diagnostics: emptyDiagnostics,
+    }));
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs: 250, cooldownMs: 1_000, gitPollMs: 60_000 } },
+      languages: ['typescript'],
+      onReindexError,
+      onError: vi.fn(),
+      reindexRunner: { start: run },
+    });
+
+    watcher.requestRefresh({ kind: 'watch-startup' }, { immediate: true });
+    watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' });
+    firstCompletion.reject(new Error('filesystem snapshot changed'));
+    await vi.waitFor(() => expect(onReindexError).toHaveBeenCalledOnce());
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(run.mock.calls[1]?.[0].trigger).toEqual({ kind: 'watch-source', detail: 'src/a.ts' });
     await watcher.stop();
   });
 
@@ -977,6 +1009,7 @@ describe('Watcher', () => {
   });
 
   it('tracks and reports native watcher retirement when EMFILE starts polling fallback', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
     const projectRoot = createProject();
     const nativeEvents = new EventEmitter();
     const pollingEvents = new EventEmitter();
@@ -1025,6 +1058,12 @@ describe('Watcher', () => {
     });
     expect(errors).toEqual([expect.stringContaining('polling fallback: Error: native close failed')]);
     expect(subscriptions).toHaveLength(2);
+  });
+
+  it('uses one recursive source watch on macOS unless polling fallback was requested', () => {
+    expect(shouldUseRecursiveSourceWatch('darwin', false)).toBe(true);
+    expect(shouldUseRecursiveSourceWatch('darwin', true)).toBe(false);
+    expect(shouldUseRecursiveSourceWatch('linux', false)).toBe(false);
   });
 
   it('retains a degraded draining state when worker exit cannot be proven', async () => {

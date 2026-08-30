@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "id": "launchpoint-canvas-payout-maturation-v1",
+  "question": "In launchpoint-backend, what happens end to end when a dashboard caller POSTs selected social post IDs to /api/buy/creators/payouts/mature: which gates reject the request, how authorization and payout holds are decided, what state and money changes occur with what transaction boundaries, what result is returned, and how later caches, read models, failures, and retries are handled?",
+  "requiredFacts": [
+    {
+      "id": "entry-gates-and-request-bound",
+      "description": "The POST route is wrapped by withBuyClient, has maxDuration 60, rejects while Canvas payouts are disabled with 503, requires at least one payout-review actor client or returns 403, and requires 1-200 UUID socialPostIds. A parsed body that fails the schema returns 400, while malformed JSON throws before safeParse and reaches the generic 500 handler.",
+      "answerEvidenceAlternatives": [
+        ["withBuyClient", "60", "503", "200", "400", "malformed JSON", "500"],
+        ["maxDuration", "Canvas payouts", "Client admin", "UUID", "safeParse", "req.json", "500"]
+      ]
+    },
+    {
+      "id": "all-or-nothing-preflight",
+      "description": "Before stamping, the service joins each social post through its parent to an offer video, rejects any missing selection or a selection with no campaign videos as not_found, requires every offer to resolve as Canvas and at least one actor client to have canUpdate, and rejects any selected offer/creator pair with a rejected payout approval; these preflight failures prevent a partial stamp.",
+      "answerEvidenceAlternatives": [
+        ["social_post_parents", "missing", "canUpdate", "rejected", "before", "stamp"],
+        ["not_found", "Not your campaign", "payout_blocked", "no partial stamp"]
+      ]
+    },
+    {
+      "id": "early-maturity-stamp-boundary",
+      "description": "The service deduplicates video IDs and stamps canvas_matured_early_at plus updated_at only where the maturity stamp is null. This video-level update ends the tracked window for cross-posted siblings and occurs before, and outside, the later settlement and credit transactions, so a later failure does not roll it back and the payout cron is the repair path.",
+      "answerEvidenceAlternatives": [
+        ["canvas_matured_early_at", "isNull", "video", "before", "transaction", "cron"],
+        ["cross-posted", "stamp remains", "self-heal", "settlement", "credit"]
+      ]
+    },
+    {
+      "id": "relink-holds-and-settlement",
+      "description": "Pending relink-queue holds are read before pending manual-group Canvas audit holds so their handoff cannot be missed. Held video IDs are accumulated and passed into one locked settlement transaction per offer; held videos stop tracking but neither settle nor credit, and their video/count money totals are returned. A settlement error is recorded for the offer and makes every selected pair on that offer an error without attempting its credit step.",
+      "answerEvidenceAlternatives": [
+        ["post_match_review_queue", "manual_group", "read", "heldVideoIds", "per offer", "error"],
+        ["gapless", "heldForRelinkReview", "lockCanvasPostViewBonusPayoutScope", "skip", "credit"]
+      ]
+    },
+    {
+      "id": "pair-credit-transaction-and-failure-isolation",
+      "description": "For each offer/creator pair whose settlement succeeded, createInstantInternalPayouts runs in its own transaction after locking that creator payout stream and excludes held video IDs through heldVideosPayoutFilter. Pair credit errors are caught and returned independently, so an earlier pair's committed money is not rolled back; failed or still-pending money is retried by the payout cron.",
+      "answerEvidenceAlternatives": [
+        ["offer", "creator", "transaction", "lockCreatorPayoutStream", "heldVideosPayoutFilter", "cron"],
+        ["each credit", "independently", "earlier", "committed", "not rolled back", "retry"]
+      ]
+    },
+    {
+      "id": "pair-outcome-precedence",
+      "description": "Each pair returns one status using the precedence fraud_blocked, held_for_approval, charge_failed, paid, then nothing_due. Amount cents means credited money, held money, or partial money before a failed charge as appropriate; error is included for a failed charge or caught settlement/credit exception, and the response also reports heldForRelinkReview totals.",
+      "answerEvidenceAlternatives": [
+        ["fraud_blocked", "held_for_approval", "charge_failed", "paid", "nothing_due", "heldForRelinkReview"],
+        ["fraud", "held", "charge failure", "nothing due", "amountCents", "error"]
+      ]
+    },
+    {
+      "id": "post-commit-observation-and-errors",
+      "description": "After the money work, the route awaits campaign-detail snapshot invalidation for each affected offer, schedules roster read-model refresh after the response for the original post IDs and agency scope, and revalidates all-scope plus reviewer-client stats while swallowing individual tag failures. It removes reviewerClientIds from the success body; typed errors map to 404/403/409, unexpected errors are logged and return 500, while post-commit failures cannot undo already committed money.",
+      "answerEvidenceAlternatives": [
+        [
+          "invalidateCampaignDetailSnapshot",
+          "after",
+          "scheduleRosterReadModelRefreshForPosts",
+          "revalidateCustomerStats",
+          "reviewerClientIds",
+          "500"
+        ],
+        ["campaign detail", "roster", "customer-stats", "404", "403", "409", "committed"]
+      ]
+    }
+  ],
+  "forbiddenClaims": [
+    {
+      "id": "one-global-transaction",
+      "answerIncludesAny": ["the stamp and all payouts happen in one transaction", "the entire request is atomic"]
+    },
+    {
+      "id": "pair-failure-rolls-back-all",
+      "answerIncludesAny": ["one pair failure rolls back every payout", "any payout error reverses the maturity stamp"]
+    },
+    {
+      "id": "held-videos-paid-now",
+      "answerIncludesAny": ["held videos are paid immediately", "relink-held money is credited by this request"]
+    },
+    {
+      "id": "malformed-json-is-400",
+      "answerIncludesAny": ["malformed JSON returns 400", "bad JSON returns 400", "Bad JSON or a bad shape returns 400"]
+    }
+  ],
+  "budgets": {
+    "maxToolCalls": 60,
+    "maxSemanticQueries": 45,
+    "maxRenderedCharacters": 300000,
+    "maxNativeExplorationReads": 80
+  }
+}

@@ -7,14 +7,21 @@ import {
 } from '../../source/ast/ast-callables.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import type { ScipDatabase } from '../../storage/db.js';
+import { fileContentHash } from '../../storage/evidence-cache.js';
+import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import {
-  resolvedCallSitesForDefinition,
+  resolvedCallSitesForDefinitions,
   type ResolvedCallSite,
   type UnresolvedCallSite,
 } from '../../symbols/graph/resolved-call-sites.js';
 import { forwardedCallerParameterPositions, parameterValueFlowAtCall } from '../../symbols/graph/value-flow.js';
-import { boundaryFileContext, createBoundaryObservation, type BoundaryFileContext } from './extractors.js';
+import {
+  boundaryFileContext,
+  createBoundaryObservation,
+  type BoundaryFileContext,
+  type RuntimeBoundaryProfileSpan,
+} from './extractors.js';
 import { evaluateStaticValue as evaluateBoundaryValue } from '../../symbols/graph/static-value-flow.js';
 import { deduplicateFrontiers } from './frontiers.js';
 import { runtimeBoundarySourceScope } from './source-scope.js';
@@ -33,6 +40,29 @@ interface HttpCallableSummary {
   proofSpans: BoundarySourceLocation[];
 }
 
+interface HttpParameterRoles {
+  pathParameterIndexes: number[];
+  methodParameterIndexes: number[];
+  constantMethods: string[];
+}
+
+interface CachedHttpParameterRoles extends HttpParameterRoles {
+  symbol: string;
+}
+
+interface HttpRoleFileState {
+  contentHash: string;
+  roles: Map<string, CachedHttpParameterRoles>;
+  dirty: boolean;
+}
+
+const HTTP_PARAMETER_ROLES_PRODUCT = createFileEvidenceProduct<CachedHttpParameterRoles[]>({
+  kind: 'runtime-boundary-http-roles',
+  invalidation: evidenceProductInvalidation('runtime-boundary-http-roles'),
+  serialize: serializeHttpParameterRoles,
+  deserialize: deserializeHttpParameterRoles,
+});
+
 export interface HttpSummaryPropagationResult {
   observations: BoundaryObservation[];
   frontiers: BoundaryFrontier[];
@@ -48,83 +78,158 @@ export interface HttpSummaryPropagationResult {
 export function propagateCompilerResolvedHttpSummaries(
   db: ScipDatabase,
   observations: readonly BoundaryObservation[],
+  profileSpan?: RuntimeBoundaryProfileSpan,
 ): HttpSummaryPropagationResult {
+  const recordSpan: RuntimeBoundaryProfileSpan = profileSpan ?? ((_name, run) => run());
   const summaries = new Map<string, HttpCallableSummary>();
   const queue: HttpCallableSummary[] = [];
   const derived: BoundaryObservation[] = [];
   const filesInspected = new Set<string>();
   const errors: string[] = [];
   const frontiers: BoundaryFrontier[] = [];
-
-  for (const observation of observations) {
-    if (observation.action !== 'http.request' || !observation.owner.symbol) continue;
-    if (observation.evidence !== 'call-expression' && observation.evidence !== 'client-adapter') continue;
-    const definition = getDefinitionsForFile(db, observation.owner.file).find(
-      (candidate) => candidate.symbol === observation.owner.symbol,
-    );
-    if (!definition) continue;
-    const context = boundaryFileContext(db, definition.relativePath);
-    if (!context) continue;
+  const contexts = new Map<string, BoundaryFileContext | null>();
+  const definitions = new Map<string, readonly IndexedDefinition[]>();
+  const roleFiles = new Map<string, HttpRoleFileState>();
+  const contextForFile = (file: string): BoundaryFileContext | null => {
+    if (contexts.has(file)) return contexts.get(file) ?? null;
+    const context = boundaryFileContext(db, file);
+    contexts.set(file, context);
+    return context;
+  };
+  const definitionsForFile = (file: string): readonly IndexedDefinition[] => {
+    const existing = definitions.get(file);
+    if (existing) return existing;
+    const fileDefinitions = getDefinitionsForFile(db, file);
+    definitions.set(file, fileDefinitions);
+    return fileDefinitions;
+  };
+  const rolesForDefinition = (context: BoundaryFileContext, definition: IndexedDefinition): HttpParameterRoles => {
+    let state = roleFiles.get(context.file);
+    if (!state) {
+      const contentHash = fileContentHash(db, context.file, context.source);
+      const cached = HTTP_PARAMETER_ROLES_PRODUCT.read(db, context.file, contentHash) ?? [];
+      state = {
+        contentHash,
+        roles: new Map(cached.map((roles) => [roles.symbol, roles])),
+        dirty: false,
+      };
+      roleFiles.set(context.file, state);
+    }
+    const cached = state.roles.get(definition.symbol);
+    if (cached) return cached;
     const roles = deriveParameterRoles(context, definition);
-    const summary: HttpCallableSummary = {
-      definition,
-      ...roles,
-      constantMethods: observation.keyParts.flatMap((part) =>
-        part.name === 'method' && part.evidence !== 'expression' && HTTP_METHODS.has(part.value.toUpperCase())
-          ? [part.value.toUpperCase()]
-          : [],
-      ),
-      depth: 0,
-      proofObservationIds: [observation.id],
-      proofSpans: [observation.source],
-    };
-    if (mergeSummary(summaries, summary)) queue.push(summaries.get(definition.symbol)!);
-  }
+    state.roles.set(definition.symbol, { symbol: definition.symbol, ...roles });
+    state.dirty = true;
+    return roles;
+  };
+
+  recordSpan('runtime-boundaries.http-summary.seed', () => {
+    for (const observation of observations) {
+      if (observation.action !== 'http.request' || !observation.owner.symbol) continue;
+      if (observation.evidence !== 'call-expression' && observation.evidence !== 'client-adapter') continue;
+      const definition = definitionsForFile(observation.owner.file).find(
+        (candidate) => candidate.symbol === observation.owner.symbol,
+      );
+      if (!definition) continue;
+      const context = contextForFile(definition.relativePath);
+      if (!context) continue;
+      const roles = rolesForDefinition(context, definition);
+      const summary: HttpCallableSummary = {
+        definition,
+        ...roles,
+        constantMethods: observation.keyParts.flatMap((part) =>
+          part.name === 'method' && part.evidence !== 'expression' && HTTP_METHODS.has(part.value.toUpperCase())
+            ? [part.value.toUpperCase()]
+            : [],
+        ),
+        depth: 0,
+        proofObservationIds: [observation.id],
+        proofSpans: [observation.source],
+      };
+      if (mergeSummary(summaries, summary)) queue.push(summaries.get(definition.symbol)!);
+    }
+  });
 
   while (queue.length > 0) {
-    const summary = queue.shift()!;
-    if (summary.depth >= MAX_HTTP_SUMMARY_DEPTH) continue;
-    try {
-      const resolvedCalls = resolvedCallSitesForDefinition(db, summary.definition);
-      frontiers.push(...resolvedCalls.unresolved.map((site) => httpCallResolutionFrontier(summary, site)));
-      for (const site of resolvedCalls.sites) {
-        const context = boundaryFileContext(db, site.file);
-        if (!context) continue;
-        filesInspected.add(site.file);
-        const call = site.callNode;
-        const instantiated = instantiateSummaryAtCall(summary, call, context);
-        if (instantiated) derived.push(instantiated);
+    const batch = queue.splice(0, queue.length);
+    const resolvedCallsBySymbol = recordSpan(
+      'runtime-boundaries.http-summary.resolve-call-sites',
+      () =>
+        resolvedCallSitesForDefinitions(
+          db,
+          batch.map((summary) => summary.definition),
+        ),
+      { batchSize: batch.length },
+    );
+    recordSpan(
+      'runtime-boundaries.http-summary.process-call-sites',
+      () => {
+        for (const summary of batch) {
+          if (summary.depth >= MAX_HTTP_SUMMARY_DEPTH) continue;
+          try {
+            const resolvedCalls = resolvedCallsBySymbol.get(summary.definition.symbolId);
+            if (!resolvedCalls) continue;
+            frontiers.push(...resolvedCalls.unresolved.map((site) => httpCallResolutionFrontier(summary, site)));
+            for (const site of resolvedCalls.sites) {
+              const context = contextForFile(site.file);
+              if (!context) continue;
+              filesInspected.add(site.file);
+              const call = site.callNode;
+              const instantiated = instantiateSummaryAtCall(summary, call, context);
+              if (instantiated) derived.push(instantiated);
 
-        const callerDefinition = site.caller;
-        if (!callerDefinition) continue;
-        const localRoles = deriveParameterRoles(context, callerDefinition);
-        const forwardedRoles = forwardedParameterRoles(db, summary, site);
-        const callerSummary: HttpCallableSummary = {
-          definition: callerDefinition,
-          pathParameterIndexes: uniqueSortedNumbers([
-            ...localRoles.pathParameterIndexes,
-            ...forwardedRoles.pathParameterIndexes,
-          ]),
-          methodParameterIndexes: uniqueSortedNumbers([
-            ...localRoles.methodParameterIndexes,
-            ...forwardedRoles.methodParameterIndexes,
-          ]),
-          constantMethods: uniqueSortedStrings([...summary.constantMethods, ...localRoles.constantMethods]),
-          depth: summary.depth + 1,
-          proofObservationIds: uniqueSortedStrings([
-            ...summary.proofObservationIds,
-            ...(instantiated ? [instantiated.id] : []),
-          ]),
-          proofSpans: [...summary.proofSpans, { file: site.file, startLine: site.startLine, endLine: site.endLine }],
-        };
-        if (mergeSummary(summaries, callerSummary)) queue.push(summaries.get(callerDefinition.symbol)!);
-      }
-    } catch (error) {
-      errors.push(
-        `builtin.http-summary failed for ${summary.definition.relativePath}:${summary.definition.startLine + 1}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
+              const callerDefinition = site.caller;
+              if (!callerDefinition) continue;
+              const localRoles = rolesForDefinition(context, callerDefinition);
+              const forwardedRoles = forwardedParameterRoles(db, summary, site);
+              const callerSummary: HttpCallableSummary = {
+                definition: callerDefinition,
+                pathParameterIndexes: uniqueSortedNumbers([
+                  ...localRoles.pathParameterIndexes,
+                  ...forwardedRoles.pathParameterIndexes,
+                ]),
+                methodParameterIndexes: uniqueSortedNumbers([
+                  ...localRoles.methodParameterIndexes,
+                  ...forwardedRoles.methodParameterIndexes,
+                ]),
+                constantMethods: uniqueSortedStrings([...summary.constantMethods, ...localRoles.constantMethods]),
+                depth: summary.depth + 1,
+                proofObservationIds: uniqueSortedStrings([
+                  ...summary.proofObservationIds,
+                  ...(instantiated ? [instantiated.id] : []),
+                ]),
+                proofSpans: [
+                  ...summary.proofSpans,
+                  { file: site.file, startLine: site.startLine, endLine: site.endLine },
+                ],
+              };
+              if (mergeSummary(summaries, callerSummary)) queue.push(summaries.get(callerDefinition.symbol)!);
+            }
+          } catch (error) {
+            errors.push(
+              `builtin.http-summary failed for ${summary.definition.relativePath}:${summary.definition.startLine + 1}: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        }
+      },
+      { batchSize: batch.length },
+    );
   }
+
+  HTTP_PARAMETER_ROLES_PRODUCT.writeBatch(
+    db,
+    [...roleFiles.entries()].flatMap(([relativePath, state]) =>
+      state.dirty
+        ? [
+            {
+              relativePath,
+              contentHash: state.contentHash,
+              value: [...state.roles.values()].sort((left, right) => left.symbol.localeCompare(right.symbol)),
+            },
+          ]
+        : [],
+    ),
+  );
 
   return {
     observations: derived,
@@ -214,10 +319,7 @@ function instantiateSummaryAtCall(
   return observation;
 }
 
-function deriveParameterRoles(
-  context: BoundaryFileContext,
-  definition: IndexedDefinition,
-): Pick<HttpCallableSummary, 'pathParameterIndexes' | 'methodParameterIndexes' | 'constantMethods'> {
+function deriveParameterRoles(context: BoundaryFileContext, definition: IndexedDefinition): HttpParameterRoles {
   const callable = smallestCoveringCallable(context.root, definition.startLine, definition.endLine);
   if (!callable) return { pathParameterIndexes: [], methodParameterIndexes: [], constantMethods: [] };
   const parameters = callableParameterNames(callable);
@@ -262,6 +364,51 @@ function deriveParameterRoles(
     methodParameterIndexes: parameters.flatMap((name, index) => (name && methodNames.has(name) ? [index] : [])),
     constantMethods: [...constantMethods].sort(),
   };
+}
+
+function serializeHttpParameterRoles(roles: readonly CachedHttpParameterRoles[]): string {
+  return roles
+    .map((role) =>
+      [
+        encodeURIComponent(role.symbol),
+        role.pathParameterIndexes.join(','),
+        role.methodParameterIndexes.join(','),
+        role.constantMethods.join(','),
+      ].join('\t'),
+    )
+    .join('\n');
+}
+
+function deserializeHttpParameterRoles(payload: string): CachedHttpParameterRoles[] | null {
+  if (!payload) return [];
+  const roles: CachedHttpParameterRoles[] = [];
+  for (const line of payload.split('\n')) {
+    const fields = line.split('\t');
+    if (fields.length !== 4) return null;
+    const pathParameterIndexes = parseNumberList(fields[1]!);
+    const methodParameterIndexes = parseNumberList(fields[2]!);
+    const constantMethods = fields[3] ? fields[3].split(',') : [];
+    if (
+      pathParameterIndexes === null ||
+      methodParameterIndexes === null ||
+      constantMethods.some((method) => !HTTP_METHODS.has(method))
+    ) {
+      return null;
+    }
+    roles.push({
+      symbol: decodeURIComponent(fields[0]!),
+      pathParameterIndexes,
+      methodParameterIndexes,
+      constantMethods,
+    });
+  }
+  return roles;
+}
+
+function parseNumberList(value: string): number[] | null {
+  if (!value) return [];
+  const numbers = value.split(',').map(Number);
+  return numbers.every((number) => Number.isSafeInteger(number) && number >= 0) ? numbers : null;
 }
 
 function forwardedParameterRoles(

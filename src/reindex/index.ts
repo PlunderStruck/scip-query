@@ -53,6 +53,7 @@ import { throwIfSignalAborted } from '../platform/abort-signal.js';
 import {
   buildProjectInputFingerprint,
   buildProjectInputFingerprintFromJournal,
+  revalidateKnownProjectInputFingerprint,
   normalizeTypeScriptProjects,
   type ProjectInputFingerprint,
 } from '../platform/project-files.js';
@@ -66,8 +67,9 @@ import {
 } from '../platform/file-clone.js';
 import { writeJsonDurable } from '../storage/atomic-json.js';
 import { ScipDatabase } from '../storage/db.js';
+import { EVIDENCE_DB_FILENAME } from '../storage/evidence-cache.js';
 import { seedTypeScriptReferenceFragments } from '../semantic/typescript/reference-fragment-shadow.js';
-import { carryFileDependencyGraph } from '../symbols/graph/file-dep-graph.js';
+import { carryFileDependencyGraph, materializeCarriedFileDependencyGraph } from '../symbols/graph/file-dep-graph.js';
 import { auxiliaryDocumentsAugmentationStage } from './augmentation/augment.js';
 import { runtimeBoundaryAugmentationStage } from './runtime-boundaries.js';
 import {
@@ -620,13 +622,17 @@ function runRuntimeBoundaryAugmentation(
   onStatus: (message: string) => void,
   reuseExisting: boolean,
   affectedFiles?: readonly string[],
+  evidenceDbPath?: string,
 ): void {
   try {
-    runPostIndexAugmentation(runtimeBoundaryAugmentationStage({ indexPath, reuseExisting, affectedFiles }), {
-      projectRoot,
-      dbPath,
-      onStatus,
-    });
+    runPostIndexAugmentation(
+      runtimeBoundaryAugmentationStage({ indexPath, evidenceDbPath, reuseExisting, affectedFiles }),
+      {
+        projectRoot,
+        dbPath,
+        onStatus,
+      },
+    );
   } catch (error) {
     onStatus(`Runtime-boundary extraction unavailable: ${error instanceof Error ? error.message : String(error)}.`);
   }
@@ -1510,6 +1516,7 @@ async function publishFreshReindexArtifacts(
       opts.onStatus,
       false,
       incrementalTypeScript?.affectedFiles,
+      join(dirname(opts.paths.outputDb), EVIDENCE_DB_FILENAME),
     ),
   );
   const indexMaintenance = profileSpan('reindex.publish.sqlite-layout', () =>
@@ -1546,6 +1553,11 @@ async function publishFreshReindexArtifacts(
         opts.fingerprint,
         incrementalTypeScript.referenceFragmentsByFile,
         evidenceDb,
+        materializeCarriedFileDependencyGraph(
+          candidateDb,
+          incrementalTypeScript.dependencyGraphSnapshot,
+          incrementalTypeScript.affectedFiles,
+        ) ?? undefined,
       );
       opts.onStatus(`Cached exact TypeScript reference fragments for ${written} affected document(s).`);
     } catch (error) {
@@ -1813,16 +1825,18 @@ function buildPublishedReindexMetadata(opts: {
 
 function assertProjectInputsUnchanged(opts: Parameters<typeof runFreshReindex>[0]): void {
   throwIfSignalAborted(opts.opts.signal, 'Reindex cancelled by its owner.');
-  const currentFingerprint = buildProjectInputFingerprint(opts.projectRoot, opts.languages, {
-    pnpmWorkspaces: opts.opts.pnpmWorkspaces,
-    typescriptProjectMode: opts.opts.typescriptProjectMode,
-    typescriptProjects: opts.opts.typescriptProjects,
-    clojureConfigPath: opts.opts.clojureConfigPath,
-  });
+  const currentFingerprint = revalidateKnownProjectInputFingerprint(opts.projectRoot, opts.fingerprint);
   if (stableJson(currentFingerprint) === stableJson(opts.fingerprint)) return;
 
+  const acceptedFiles = new Map(opts.fingerprint.files.map((file) => [file.path, file]));
+  const currentFiles = new Map(currentFingerprint.files.map((file) => [file.path, file]));
+  const changedPaths = [...new Set([...acceptedFiles.keys(), ...currentFiles.keys()])]
+    .filter((path) => stableJson(acceptedFiles.get(path)) !== stableJson(currentFiles.get(path)))
+    .slice(0, 5);
+
   throw new Error(
-    'Project inputs changed during reindex; refusing to publish artifacts built from a different filesystem snapshot.',
+    `Project inputs changed during reindex (${changedPaths.join(', ') || 'unknown path'}); ` +
+      'refusing to publish artifacts built from a different filesystem snapshot.',
   );
 }
 

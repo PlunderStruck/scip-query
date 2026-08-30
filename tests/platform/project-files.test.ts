@@ -12,6 +12,7 @@ import {
   probeProjectFileBytes,
   probeProjectFileBytesForLiterals,
   readProjectFileText,
+  revalidateKnownProjectInputFingerprint,
   resolveProjectFile,
   UnsafeProjectPathError,
 } from '../../src/platform/project-files.js';
@@ -294,6 +295,20 @@ describe('platform project file fingerprints', () => {
       ),
     ).toEqual({ mode: 'delta', fingerprint: previous, changedPaths: [] });
   });
+
+  it.each(['canonical', 'legacy'] as const)(
+    'keeps %s fingerprint ordering when it revalidates known paths',
+    (order) => {
+      const projectRoot = temporaryDirectory('scip-query-known-project-fingerprint-');
+      mkdirSync(join(projectRoot, 'src'));
+      writeFileSync(join(projectRoot, 'src/A.ts'), 'export const upper = 1;\n');
+      writeFileSync(join(projectRoot, 'src/a.ts'), 'export const lower = 1;\n');
+      const accepted = buildProjectInputFingerprint(projectRoot, ['typescript'], {});
+      if (order === 'legacy') accepted.files.sort((left, right) => (left.path < right.path ? -1 : 1));
+
+      expect(revalidateKnownProjectInputFingerprint(projectRoot, accepted)).toEqual(accepted);
+    },
+  );
 
   it.each([
     ['incomplete journal', false, 'generation-a', 'src/a.ts', 'change', 'change-journal-incomplete:test-gap'],

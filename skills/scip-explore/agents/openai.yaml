@@ -1,4 +1,4 @@
 interface:
-  display_name: 'SCIP Explore (compatibility)'
-  short_description: 'Forward old exploration prompts to SCIP Query'
-  default_prompt: 'Use $scip-query for this repository exploration. $scip-explore is only a compatibility alias.'
+  display_name: 'SCIP Explore'
+  short_description: 'Understand repository systems end to end'
+  default_prompt: 'Use $scip-explore to understand this repository system end to end before explaining or changing it.'

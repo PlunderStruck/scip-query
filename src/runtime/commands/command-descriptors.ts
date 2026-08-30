@@ -14,7 +14,7 @@ import {
   parsePositiveInteger,
   withJsonOption,
 } from '../command-kit/command-spec-builders.js';
-import { DIFF_IMPACT_BATCH_COMMAND, HEALTH_PHASE_COMMAND } from '../cli-support.js';
+import { DIFF_IMPACT_BATCH_COMMAND, HEALTH_PHASE_COMMAND, HEALTH_SEMANTIC_PREWARM_COMMAND } from '../cli-support.js';
 import { BUILTIN_SKILLS } from '../setup.js';
 import * as handlers from './command-handlers.js';
 import { outputContinuationCommandDescriptor } from './output-continuation-command.js';
@@ -146,6 +146,19 @@ export const commandDescriptors: CommandDescriptor[] = [
     ],
     renderShape: 'custom',
     handler: handlers.handleHealthPhase,
+  },
+  {
+    id: HEALTH_SEMANTIC_PREWARM_COMMAND,
+    command: HEALTH_SEMANTIC_PREWARM_COMMAND,
+    description: 'Internal health semantic prewarm worker',
+    hidden: true,
+    options: [
+      option('--json', 'Emit the private worker envelope without transport pagination'),
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--full', 'Materialize complete semantic evidence'),
+    ],
+    renderShape: 'custom',
+    handler: handlers.handleHealthSemanticPrewarm,
   },
   {
     id: 'health',

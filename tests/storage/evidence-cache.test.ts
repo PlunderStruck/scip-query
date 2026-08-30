@@ -165,6 +165,39 @@ describe('evidence cache', () => {
     }
   });
 
+  it('uses an explicit evidence path for a temporary index generation', () => {
+    const candidateDir = join(tempDir, 'candidate-generation');
+    const stableEvidencePath = join(tempDir, 'stable-cache', EVIDENCE_DB_FILENAME);
+    mkdirSync(candidateDir, { recursive: true });
+    mkdirSync(join(tempDir, 'stable-cache'), { recursive: true });
+    const candidateDbPath = join(candidateDir, 'index.db');
+    copyFileSync(dbPath, candidateDbPath);
+    const db = new ScipDatabase({
+      projectRoot,
+      dbPath: candidateDbPath,
+      indexPath: join(candidateDir, 'index.scip'),
+      evidenceDbPath: stableEvidencePath,
+    });
+    try {
+      writeCachedFileEvidence(db, 'runtime-boundary-http-roles', FILE, 'content-hash', 'roles');
+    } finally {
+      db.close();
+    }
+
+    expect(existsSync(stableEvidencePath)).toBe(true);
+    expect(existsSync(join(candidateDir, EVIDENCE_DB_FILENAME))).toBe(false);
+    const evidence = new Database(stableEvidencePath, { readonly: true });
+    try {
+      expect(
+        evidence
+          .prepare('SELECT payload FROM file_evidence WHERE kind = ? AND relative_path = ?')
+          .get('runtime-boundary-http-roles', FILE),
+      ).toEqual({ payload: 'roles' });
+    } finally {
+      evidence.close();
+    }
+  });
+
   it('reads proven content-addressed products across worktrees while keeping other evidence local', () => {
     const sharedEvidenceDbPath = join(tempDir, 'repository-cache', 'evidence.db');
     const firstDir = join(tempDir, 'worktree-cache-1');

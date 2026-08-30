@@ -278,7 +278,7 @@ An unavailable frontier is a relationship class for which no registered analyzer
 
 | Command | Description | Cost | Closes disclosed gaps with | Options |
 |---|---|---|---|---|
-| `install-skills` | Install skills (scip-query, scip-plan, scip-setup, scip-integrity-audit) into Claude Code, Codex, and shared agent roots | variable | - | - |
+| `install-skills` | Install skills (scip-query, scip-explore, scip-plan, scip-setup, scip-integrity-audit) into Claude Code, Codex, and shared agent roots | variable | - | - |
 | `check-deps` | Check whether scip-query and the detected language indexers are runnable | bounded | `inspect`, `code` | - |
 | `capabilities` | Report which mapping and analysis capabilities are available in this project | bounded | `inspect`, `code` | `--matrix`<br>`--json`<br>`--result-only`<br>`--compact` |
 | `init` | Create a .scipquery.json configuration file for this project | variable | - | - |

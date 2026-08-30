@@ -207,8 +207,33 @@ export function carryFileDependencyGraph(
 ): boolean {
   const projectFingerprint = projectEvidenceFingerprint(db);
   if (!projectFingerprint) return false;
+  const graph = materializeCarriedFileDependencyGraph(db, previous, replacedPaths);
+  if (!graph) return false;
+
+  const indexedFiles = new Set(indexedDocumentPaths(db, { includeIgnored: false }));
   const expectedCacheKey = fileDependencyGraphCacheKey(undefined, 'all-references', 'imports-only');
-  if (previous.cacheKey !== expectedCacheKey) return false;
+
+  FILE_DEPENDENCY_GRAPH_PRODUCT.write(db, expectedCacheKey, projectFingerprint, {
+    version: 2,
+    construction: 'carried',
+    sourceDependencyFingerprint: null,
+    sourceFileCount: indexedFiles.size,
+    sourceEdgeCount: null,
+    scipEdgeCount: null,
+    edgeCount: graphEdgeCount(graph),
+    graph: graphPayloadFromGraph(graph),
+  });
+  return true;
+}
+
+/** Builds the next exact graph in memory before candidate metadata is available. */
+export function materializeCarriedFileDependencyGraph(
+  db: ScipDatabase,
+  previous: FileDependencyGraphSnapshot,
+  replacedPaths: readonly string[],
+): Map<string, Set<string>> | null {
+  const expectedCacheKey = fileDependencyGraphCacheKey(undefined, 'all-references', 'imports-only');
+  if (previous.cacheKey !== expectedCacheKey) return null;
 
   const indexedFiles = new Set(indexedDocumentPaths(db, { includeIgnored: false }));
   const replaced = new Set(replacedPaths);
@@ -226,18 +251,7 @@ export function carryFileDependencyGraph(
       if (entry.sourcePath) addFileDepEdge(db, graph, indexedFiles, fromFile, entry.sourcePath);
     }
   }
-
-  FILE_DEPENDENCY_GRAPH_PRODUCT.write(db, expectedCacheKey, projectFingerprint, {
-    version: 2,
-    construction: 'carried',
-    sourceDependencyFingerprint: null,
-    sourceFileCount: indexedFiles.size,
-    sourceEdgeCount: null,
-    scipEdgeCount: null,
-    edgeCount: graphEdgeCount(graph),
-    graph: graphPayloadFromGraph(graph),
-  });
-  return true;
+  return graph;
 }
 
 function collectSourceDependencyEdges(

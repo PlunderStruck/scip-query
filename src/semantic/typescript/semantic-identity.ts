@@ -75,7 +75,8 @@ export function createTypeScriptSemanticIdentityBuilder(
       membership: projectFiles,
     }),
   );
-  const closureCache = new Map<string, string[]>();
+  let cachedTargetFile: string | undefined;
+  let cachedClosure: string[] | undefined;
 
   return {
     identityFor(targetFile, schemaVersion) {
@@ -92,7 +93,10 @@ export function createTypeScriptSemanticIdentityBuilder(
         mode = 'whole-project';
         semanticFiles = requiredProjectFiles;
       } else {
-        const closure = cachedDependencyClosure(targetFile, input.graph, closureCache);
+        const closure =
+          targetFile === cachedTargetFile && cachedClosure ? cachedClosure : dependencyClosure(targetFile, input.graph);
+        cachedTargetFile = targetFile;
+        cachedClosure = closure;
         const missingDependency = closure.find((path) => !filesByPath.has(path));
         if (missingDependency) return unkeyed('missing-input-fingerprint');
         semanticFiles = sortedUnique([...closure, ...globalInputs]);
@@ -129,18 +133,6 @@ function dependencyClosure(targetFile: string, graph: FileDependencyGraph): stri
     }
   }
   return [...visited].sort();
-}
-
-function cachedDependencyClosure(
-  targetFile: string,
-  graph: FileDependencyGraph,
-  cache: Map<string, string[]>,
-): string[] {
-  const existing = cache.get(targetFile);
-  if (existing) return existing;
-  const closure = dependencyClosure(targetFile, graph);
-  cache.set(targetFile, closure);
-  return closure;
 }
 
 function fingerprintValue(file: ProjectFileFingerprint): ProjectFileFingerprint {

@@ -1,6 +1,6 @@
 ---
 name: scip-query
-description: Use FIRST for codebase work when compiler-resolved identity, runtime boundaries, callers, dependencies, consumers, architecture, change impact, or cleanup relationships can affect the answer. It exposes exact referents, explicit typed-graph projections, and source evidence; it does not infer task relevance.
+description: Use FIRST for codebase work when compiler-resolved identity, runtime boundaries, callers, dependencies, consumers, architecture, change impact, or cleanup relationships can affect the answer. It exposes exact referents, explicit typed-graph projections, and source evidence; it does not infer task relevance. Pair it with scip-explore when the task is to understand a repository system end to end.
 metadata:
   commands:
     - template: 'scip-query search <text>'
@@ -66,6 +66,8 @@ The controls above are complete for ordinary exploration. Run `scip-query capabi
 <!-- END GENERATED EXPLORATION MANUAL -->
 
 scip-query is a repository exploration surface: an indexed code reader that joins exact current text to compiler-owned identities and typed relationships. Native text and file tools expose matches and slices; scip-query additionally exposes how code units call, carry data, cross runtime boundaries, observe or change state, occur in order, satisfy contracts, share identity, contain one another, and depend on one another. It performs the control you select; it does not infer task relevance or decide what the user meant.
+
+For end-to-end system understanding, load `$scip-explore` alongside this skill. `scip-explore` owns the material-fact model, evidence integration, answer audit, and stopping judgment; this skill remains the calibrated sensing and source-reading surface.
 
 Use scip-query as the primary exploration surface for tracked repository text. Treat its commands as controls, not a checklist. Use every capability needed by the task, but make each query answer a distinct repository question. There is no mandatory sequence, required anchor phase, or query-count limit. Thoroughness means understanding the relevant system end to end, not exhausting the repository.
 

@@ -246,7 +246,7 @@ describe('graph-risk output classification', () => {
       const actual = getResolvedReferenceSitesMap(db, [central, depOne]);
 
       expect(actual).toEqual(expected);
-      expect(all.mock.calls.filter(([sql]) => String(sql).includes('SELECT DISTINCT m.symbol_id'))).toHaveLength(1);
+      expect(all.mock.calls.filter(([sql]) => String(sql).includes('SELECT m.symbol_id'))).toHaveLength(1);
     });
   });
 

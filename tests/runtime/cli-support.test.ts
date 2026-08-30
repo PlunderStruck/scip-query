@@ -6,9 +6,12 @@ import {
   commandAnalysisBudget,
   deferredHealthPhaseResult,
   diffImpactBatchConcurrency,
+  fullHealthPhaseConcurrency,
+  fullHealthPhaseHeapMb,
   healthPhaseConcurrency,
   healthPhaseTasks,
   healthPhaseTimeoutMs,
+  healthSemanticPrewarmHeapMb,
   operationObservationReceipt,
   prewarmHealthSemanticEvidence,
   shouldRunHealthPhase,
@@ -121,6 +124,7 @@ function fakePrewarmRuntime(overrides: Partial<HealthSemanticPrewarmRuntime> = {
       cacheWrites: definitions.length,
     })),
     materializeCallees: vi.fn(() => new Map([[1, []]])),
+    releaseSemanticMemory: vi.fn(),
     ...overrides,
   };
 }
@@ -185,16 +189,42 @@ describe('healthPhaseConcurrency', () => {
   });
 });
 
+describe('fullHealthPhaseConcurrency', () => {
+  it('runs one memory-heavy phase task at a time unless explicitly overridden', () => {
+    expect(fullHealthPhaseConcurrency(20, {}, () => 14)).toBe(1);
+    expect(fullHealthPhaseConcurrency(20, { SCIP_QUERY_HEALTH_FULL_CONCURRENCY: '2' }, () => 14)).toBe(2);
+    expect(fullHealthPhaseConcurrency(1, {}, () => 14)).toBe(1);
+  });
+});
+
 describe('healthPhaseTimeoutMs', () => {
-  it('applies a default phase timeout only outside full mode', () => {
+  it('gives exhaustive full phases enough time while bounding stuck workers', () => {
     expect(healthPhaseTimeoutMs({}, {})).toBe(30000);
-    expect(healthPhaseTimeoutMs({ full: true }, {})).toBeUndefined();
+    expect(healthPhaseTimeoutMs({ full: true }, {})).toBe(600000);
   });
 
   it('allows the health phase timeout to be overridden or disabled', () => {
     expect(healthPhaseTimeoutMs({}, { SCIP_QUERY_HEALTH_PHASE_TIMEOUT_MS: '12000' })).toBe(12000);
+    expect(healthPhaseTimeoutMs({ full: true }, { SCIP_QUERY_HEALTH_PHASE_TIMEOUT_MS: '12000' })).toBe(12000);
     expect(healthPhaseTimeoutMs({}, { SCIP_QUERY_HEALTH_PHASE_TIMEOUT_MS: '0' })).toBeUndefined();
     expect(healthPhaseTimeoutMs({}, { SCIP_QUERY_HEALTH_PHASE_TIMEOUT_MS: 'nope' })).toBe(30000);
+    expect(healthPhaseTimeoutMs({ full: true }, { SCIP_QUERY_HEALTH_PHASE_TIMEOUT_MS: 'nope' })).toBe(600000);
+  });
+});
+
+describe('healthSemanticPrewarmHeapMb', () => {
+  it('uses a bounded isolated heap with an explicit override', () => {
+    expect(healthSemanticPrewarmHeapMb({})).toBe(8192);
+    expect(healthSemanticPrewarmHeapMb({ SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_HEAP_MB: '6144' })).toBe(6144);
+    expect(healthSemanticPrewarmHeapMb({ SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_HEAP_MB: 'invalid' })).toBe(8192);
+  });
+});
+
+describe('fullHealthPhaseHeapMb', () => {
+  it('uses a bounded isolated heap with an explicit override', () => {
+    expect(fullHealthPhaseHeapMb({})).toBe(6144);
+    expect(fullHealthPhaseHeapMb({ SCIP_QUERY_HEALTH_FULL_PHASE_HEAP_MB: '8192' })).toBe(8192);
+    expect(fullHealthPhaseHeapMb({ SCIP_QUERY_HEALTH_FULL_PHASE_HEAP_MB: 'invalid' })).toBe(6144);
   });
 });
 
@@ -270,7 +300,10 @@ describe('prewarmHealthSemanticEvidence', () => {
       referenceCacheWrites: 2,
       calleeRows: 1,
     });
-    expect(runtime.materializeReferences).toHaveBeenCalledTimes(1);
+    expect(runtime.materializeReferences).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
+      prefetchCallees: false,
+    });
+    expect(runtime.releaseSemanticMemory).toHaveBeenCalledTimes(1);
     expect(runtime.materializeCallees).toHaveBeenCalledTimes(1);
     expect(runtime.writeMarker).toHaveBeenCalledWith(
       expect.anything(),
@@ -319,6 +352,7 @@ describe('prewarmHealthSemanticEvidence', () => {
       ).toEqual([
         { name: 'health.semantic-prewarm.candidate-definitions', definitions: 2 },
         { name: 'health.semantic-prewarm.references', definitions: 2, rows: 2 },
+        { name: 'health.semantic-prewarm.release-reference-memory' },
         { name: 'health.semantic-prewarm.callees', definitions: 2, rows: 1 },
         { name: 'health.semantic-prewarm.marker-write' },
         { name: 'health.semantic-prewarm', definitions: 2 },

@@ -353,11 +353,14 @@ export function tryMaterializeTypeScriptIncrementalIndex(
     if (!baseGeneration) throw new Error('published TypeScript base generation unavailable');
 
     phaseStartedAt = performance.now();
-    const requester = new TypeScriptIndexRequester({
-      projectRoot: input.projectRoot,
-      cacheDir: input.cacheDir,
-      baseGeneration,
-    });
+    const requester = new TypeScriptIndexRequester(
+      {
+        projectRoot: input.projectRoot,
+        cacheDir: input.cacheDir,
+        baseGeneration,
+      },
+      { requireService: true },
+    );
     const responses = eligibility.projects.map((project) =>
       requester.request({
         kind: 'emit-documents',

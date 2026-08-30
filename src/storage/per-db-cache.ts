@@ -17,6 +17,8 @@ export interface PerDbCacheOptions {
 export interface PerDbCache<K, V> {
   /** Get-or-compute. Computes once per (db, key). */
   get(db: ScipDatabase, key: K, compute: () => V): V;
+  /** Report whether one key already has a computed value for this DB. */
+  has(db: ScipDatabase, key: K): boolean;
   /** Drop one key for one DB. */
   invalidate(db: ScipDatabase, key: K): void;
   /** Drop all keys for one DB. */
@@ -62,6 +64,9 @@ export function createPerDbCache<K, V>(name: string, opts: PerDbCacheOptions): P
       const value = compute();
       m.set(key, value);
       return value;
+    },
+    has(db, key) {
+      return cache.get(db)?.has(key) ?? false;
     },
     invalidate(db, key) {
       cache.get(db)?.delete(key);

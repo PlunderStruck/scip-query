@@ -51,6 +51,8 @@ export interface TypeScriptIndexRequesterOptions {
   runtime?: TypeScriptIndexRequesterRuntime;
   mailboxLimits?: Partial<BoundedMailboxLimits>;
   emitLocally?: (request: TypeScriptIndexDocumentRequest) => RequestedTypeScriptDocuments;
+  /** Require the compiler to run in the watch service instead of this process. */
+  requireService?: boolean;
 }
 
 export interface RequestedTypeScriptDocuments {
@@ -68,6 +70,7 @@ export class TypeScriptIndexRequester {
   private readonly runtime: TypeScriptIndexRequesterRuntime;
   private readonly mailboxLimits: Partial<BoundedMailboxLimits>;
   private readonly emitLocally?: (request: TypeScriptIndexDocumentRequest) => RequestedTypeScriptDocuments;
+  private readonly requireService: boolean;
   private localHost: TypeScriptIndexServiceHost | null = null;
 
   constructor(
@@ -81,6 +84,7 @@ export class TypeScriptIndexRequester {
     this.runtime = opts.runtime ?? DEFAULT_RUNTIME;
     this.mailboxLimits = opts.mailboxLimits ?? {};
     this.emitLocally = opts.emitLocally;
+    this.requireService = opts.requireService === true;
   }
 
   // scip-query: ignore-twin — request clients target unrelated index, LSP, and semantic protocols.
@@ -140,6 +144,11 @@ export class TypeScriptIndexRequester {
   }
 
   private requestLocally(request: TypeScriptIndexDocumentRequest): RequestedTypeScriptDocuments {
+    if (this.requireService) {
+      throw new Error(
+        'TypeScript incremental index service unavailable; refusing to load the whole compiler graph inside the reindex process',
+      );
+    }
     if (this.emitLocally) {
       return documentsFromResponse(this.emitLocally(request), request.producerIdentity, request.affectedFiles);
     }

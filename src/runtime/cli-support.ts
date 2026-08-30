@@ -16,6 +16,7 @@ import {
 import { materializeSemanticCalleeCache } from '../semantic/symbol-evidence.js';
 import { sourceFrameworkApplicability } from '../source/primitives/source-fileset.js';
 import { projectEvidenceFingerprint, sha256Hex } from '../storage/evidence-cache.js';
+import { clearRegisteredCaches } from '../storage/cache-registry.js';
 import { createProjectEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 import { formatBytes, withDb } from './cli-context.js';
 import {
@@ -33,6 +34,7 @@ import { cliVersion } from '../platform/cli-version.js';
 
 export { cliVersion } from '../platform/cli-version.js';
 export const HEALTH_PHASE_COMMAND = '__health-phase';
+export const HEALTH_SEMANTIC_PREWARM_COMMAND = '__health-semantic-prewarm';
 export const DIFF_IMPACT_BATCH_COMMAND = '__diff-impact-batch';
 const DIFF_IMPACT_BATCH_SIZE = 10;
 const DEFAULT_DIFF_IMPACT_BATCH_CONCURRENCY = 4;
@@ -42,7 +44,12 @@ const LARGE_COMMAND_DOCUMENT_THRESHOLD = 2_500;
 const DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT = 2_500;
 const DEFAULT_HEALTH_PHASE_CONCURRENCY = 4;
 const MAX_DEFAULT_HEALTH_PHASE_CONCURRENCY = 12;
+const DEFAULT_FULL_HEALTH_PHASE_CONCURRENCY = 1;
+const DEFAULT_FULL_HEALTH_PHASE_HEAP_MB = 6144;
+const DEFAULT_FULL_HEALTH_PHASE_TIMEOUT_MS = 10 * 60_000;
 const DEFAULT_HEALTH_PHASE_TIMEOUT_MS = 30_000;
+const DEFAULT_HEALTH_SEMANTIC_PREWARM_HEAP_MB = 8192;
+const HEALTH_SEMANTIC_PREWARM_TIMEOUT_MS = 10 * 60_000;
 const REACT_HEALTH_PHASES = new Set<HealthPhaseName>([
   'react-component-duplicates',
   'react-hook-candidates',
@@ -169,6 +176,7 @@ export interface HealthSemanticPrewarmRuntime {
     opts?: SemanticReferenceMaterializationOptions,
   ): SemanticReferenceMaterializationResult;
   materializeCallees(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<number, unknown>;
+  releaseSemanticMemory?(db: ScipDatabase): void;
 }
 
 export interface DiffImpactCliOptions {
@@ -265,6 +273,7 @@ const DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME: HealthSemanticPrewarmRuntime = {
   materializeReferences: (db, definitions, opts) =>
     semanticEvidenceProduct(db).materializeReferences(definitions, opts),
   materializeCallees: materializeSemanticCalleeCache,
+  releaseSemanticMemory: (db) => clearRegisteredCaches(db, { groups: ['semantic-provider'] }),
 };
 
 export function prewarmHealthSemanticEvidence(
@@ -322,7 +331,7 @@ function runHealthSemanticPrewarm(
   const references = profileSpan(
     'health.semantic-prewarm.references',
     () => {
-      const result = runtime.materializeReferences(db, definitions, { prefetchCallees: true });
+      const result = runtime.materializeReferences(db, definitions, { prefetchCallees: false });
       referenceRows = result.cacheHits + result.cacheWrites + result.inMemoryHits;
       return result;
     },
@@ -335,6 +344,8 @@ function runHealthSemanticPrewarm(
       referenceMisses: references.misses,
     });
   }
+
+  profileSpan('health.semantic-prewarm.release-reference-memory', () => runtime.releaseSemanticMemory?.(db));
 
   let calleeRows = 0;
   const calleeMap = profileSpan(
@@ -513,11 +524,11 @@ export async function runIsolatedHealthReportWithEvidence(
   });
 
   const runnableTasks = healthPhaseTasks(runnablePhases);
-  if (opts.full) {
-    const prewarmObservation = withIndexObservation((db) => prewarmHealthSemanticEvidence(db, opts));
-    anchors.push(prewarmObservation.anchor);
-  }
-  const runnableMessages = await runAnalysisTasks(runnableTasks, healthPhaseConcurrency(runnableTasks.length), (task) =>
+  const prewarmMessage = opts.full ? await runHealthSemanticPrewarmProcess(opts) : undefined;
+  const phaseConcurrency = opts.full
+    ? fullHealthPhaseConcurrency(runnableTasks.length)
+    : healthPhaseConcurrency(runnableTasks.length);
+  const runnableMessages = await runAnalysisTasks(runnableTasks, phaseConcurrency, (task) =>
     runHealthPhaseTaskProcess(task, opts, phaseTimeoutMs),
   );
   const runnableResults = runnableMessages.flatMap((message) => message.result);
@@ -548,10 +559,39 @@ export async function runIsolatedHealthReportWithEvidence(
     result: report,
     observationReceipt: operationObservationReceipt(
       anchors,
-      runnableMessages.map((message) => message.observationReceipt),
+      [prewarmMessage?.observationReceipt, ...runnableMessages.map((message) => message.observationReceipt)],
       ['index-generation', 'live-workspace'],
     ),
   };
+}
+
+function runHealthSemanticPrewarmProcess(
+  opts: HealthCliOptions,
+): Promise<IsolatedAnalysisResult<HealthSemanticPrewarmResult>> {
+  const cliPath = process.argv[1] ?? fileURLToPath(import.meta.url);
+  const args: string[] = ['--full'];
+  if (opts.scope) args.push('--scope', opts.scope);
+  return runIsolatedJsonProcessWithEvidenceAsync<HealthSemanticPrewarmResult>({
+    cliPath,
+    command: HEALTH_SEMANTIC_PREWARM_COMMAND,
+    args,
+    env: {
+      ...process.env,
+      NODE_OPTIONS: `--max-old-space-size=${healthSemanticPrewarmHeapMb()}`,
+    },
+    label: 'Health semantic prewarm',
+    timeoutMs: HEALTH_SEMANTIC_PREWARM_TIMEOUT_MS,
+  });
+}
+
+export function healthSemanticPrewarmHeapMb(env: NodeJS.ProcessEnv = process.env): number {
+  const parsed = Number.parseInt(env['SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_HEAP_MB'] ?? '', 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : DEFAULT_HEALTH_SEMANTIC_PREWARM_HEAP_MB;
+}
+
+export function fullHealthPhaseHeapMb(env: NodeJS.ProcessEnv = process.env): number {
+  const parsed = Number.parseInt(env['SCIP_QUERY_HEALTH_FULL_PHASE_HEAP_MB'] ?? '', 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : DEFAULT_FULL_HEALTH_PHASE_HEAP_MB;
 }
 
 function healthPhaseApplicability(db: ScipDatabase, opts: HealthCliOptions) {
@@ -612,6 +652,7 @@ function runHealthPhaseTaskProcess(
     cliPath,
     command: HEALTH_PHASE_COMMAND,
     args,
+    ...(opts.full ? { env: fullHealthPhaseProcessEnv() } : {}),
     label: `Health phases "${phaseArg}"`,
     timeoutMs,
   }).catch((error) => {
@@ -638,6 +679,7 @@ function runHealthPhaseProcess(
     cliPath,
     command: HEALTH_PHASE_COMMAND,
     args,
+    ...(opts.full ? { env: fullHealthPhaseProcessEnv() } : {}),
     label: `Health phase "${phase}"`,
     timeoutMs,
   }).catch((error) => {
@@ -648,12 +690,19 @@ function runHealthPhaseProcess(
   });
 }
 
+function fullHealthPhaseProcessEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    NODE_OPTIONS: `--max-old-space-size=${fullHealthPhaseHeapMb(env)}`,
+  };
+}
+
 export function healthPhaseTimeoutMs(opts: HealthCliOptions, env: NodeJS.ProcessEnv = process.env): number | undefined {
-  if (opts.full) return undefined;
+  const defaultTimeoutMs = opts.full ? DEFAULT_FULL_HEALTH_PHASE_TIMEOUT_MS : DEFAULT_HEALTH_PHASE_TIMEOUT_MS;
   const raw = env['SCIP_QUERY_HEALTH_PHASE_TIMEOUT_MS'];
-  if (!raw) return DEFAULT_HEALTH_PHASE_TIMEOUT_MS;
+  if (!raw) return defaultTimeoutMs;
   const parsed = parseInt(raw, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) return DEFAULT_HEALTH_PHASE_TIMEOUT_MS;
+  if (!Number.isFinite(parsed) || parsed < 0) return defaultTimeoutMs;
   return parsed === 0 ? undefined : parsed;
 }
 
@@ -728,6 +777,12 @@ export const healthPhaseConcurrency = createAdaptiveConcurrencyResolver({
   envKey: 'SCIP_QUERY_HEALTH_CONCURRENCY',
   defaultMinimum: DEFAULT_HEALTH_PHASE_CONCURRENCY,
   defaultMaximum: MAX_DEFAULT_HEALTH_PHASE_CONCURRENCY,
+});
+
+export const fullHealthPhaseConcurrency = createAdaptiveConcurrencyResolver({
+  envKey: 'SCIP_QUERY_HEALTH_FULL_CONCURRENCY',
+  defaultMinimum: DEFAULT_FULL_HEALTH_PHASE_CONCURRENCY,
+  defaultMaximum: DEFAULT_FULL_HEALTH_PHASE_CONCURRENCY,
 });
 
 export function renderHealthReport(report: HealthReport): void {

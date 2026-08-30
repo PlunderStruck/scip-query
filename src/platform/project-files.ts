@@ -494,7 +494,7 @@ export function fingerprintProjectFiles(
     .filter((path) => !isProjectArtifactPath(path))
     .filter((path) => !opts.language || isLanguageRelevantProjectInputPath(path, opts.language, opts.markerFiles))
     .filter((path) => !opts.includePath || opts.includePath(path))
-    .sort();
+    .sort((left, right) => left.localeCompare(right));
   const canonicalProjectRoot = realpathSync(projectRoot);
   const fingerprints = files.flatMap((relativePath) =>
     fingerprintProjectFile(projectRoot, canonicalProjectRoot, relativePath),
@@ -617,6 +617,26 @@ export function buildProjectInputFingerprint(
       },
       includePaths: configuredMarkerFiles,
     }),
+  };
+}
+
+/** Revalidate one accepted fingerprint while preserving its historical path order. */
+export function revalidateKnownProjectInputFingerprint(
+  projectRoot: string,
+  accepted: ProjectInputFingerprint,
+): ProjectInputFingerprint {
+  const acceptedPaths = new Set(accepted.files.map((file) => file.path));
+  const current = buildProjectInputFingerprint(projectRoot, accepted.languages, accepted);
+  const filesByPath = new Map(current.files.map((file) => [file.path, file]));
+  return {
+    ...normalizeProjectInputFingerprintConfiguration(accepted.languages, accepted),
+    files: [
+      ...accepted.files.flatMap((acceptedFile) => {
+        const currentFile = filesByPath.get(acceptedFile.path);
+        return currentFile ? [currentFile] : [];
+      }),
+      ...current.files.filter((file) => !acceptedPaths.has(file.path)),
+    ],
   };
 }
 

@@ -162,6 +162,26 @@ describe('TypeScript index service mailbox', () => {
     expect(localCalls).toBe(1);
   });
 
+  test('does not load the compiler into a caller that requires the isolated service', () => {
+    const fixture = serviceFixture();
+    let localCalls = 0;
+    const requester = new TypeScriptIndexRequester(
+      { projectRoot: fixture.projectRoot, cacheDir: fixture.cacheDir, baseGeneration: 'base' },
+      {
+        requireService: true,
+        emitLocally: (request) => {
+          localCalls += 1;
+          return localEmit(request);
+        },
+      },
+    );
+
+    expect(() => requester.request(indexRequest('producer'))).toThrow(
+      'refusing to load the whole compiler graph inside the reindex process',
+    );
+    expect(localCalls).toBe(0);
+  });
+
   test('processes a cold request and a warm requester update with exact identities', () => {
     const availability = loadTypeScriptDocumentRuntime();
     expect(availability.available).toBe(true);
@@ -641,6 +661,62 @@ describe('TypeScript index service mailbox', () => {
       }),
     );
     expect(readdirSync(paths.responseDir).filter((entry) => entry === 'isolated.json')).toHaveLength(1);
+    await lane.close();
+  });
+
+  test('rejects an oversized Worker result without closing the mailbox lane', async () => {
+    const fixture = serviceFixture();
+    const paths = typeScriptIndexMailboxPaths(fixture.cacheDir);
+    initializeTypeScriptIndexMailbox(paths);
+    writeRequest(paths.requestDir, 'oversized', 'base', indexRequest('producer'));
+    const worker = new FakeIndexWorker();
+    const fatal: string[] = [];
+    const lane = createTypeScriptIndexMailboxLane({
+      paths,
+      projectRoot: fixture.projectRoot,
+      dbPath: join(fixture.cacheDir, 'index.db'),
+      limits: { maxItemBytes: 2_048 },
+      now: () => NOW,
+      createWorker: () => worker,
+      onFatal: (error) => fatal.push(error.message),
+    });
+
+    expect(lane.poll()).toBe(1);
+    const status = new TypeScriptIndexServiceHost({
+      projectRoot: fixture.projectRoot,
+      currentGeneration: () => 'base',
+    }).status();
+    worker.emitMessage({
+      kind: 'response',
+      requestId: 'oversized',
+      ok: true,
+      result: {
+        producerIdentity: 'producer',
+        cold: true,
+        durationMs: 1,
+        fragments: [
+          {
+            relativePath: 'src/a.ts',
+            bytesBase64: 'A'.repeat(4_096),
+            occurrences: 0,
+            symbols: 0,
+            referenceFragments: [],
+          },
+        ],
+      },
+      status,
+    });
+
+    expect(fatal).toEqual([]);
+    expect(readResponse(paths.responseDir, 'oversized')).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: expect.stringContaining('per-item limit'),
+      }),
+    );
+    expect(lane.status().mailbox).toEqual(expect.objectContaining({ inflight: 0, responses: 1 }));
+    writeRequest(paths.requestDir, 'replacement', 'base', indexRequest('replacement-producer'));
+    expect(lane.poll()).toBe(1);
     await lane.close();
   });
 

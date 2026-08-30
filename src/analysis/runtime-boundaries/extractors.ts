@@ -28,7 +28,7 @@ export interface BoundaryExtractor {
 }
 
 export interface RuntimeBoundaryProfileSpan {
-  <T>(name: string, run: () => T, metadata?: { readonly file: string }): T;
+  <T>(name: string, run: () => T, metadata?: Readonly<Record<string, string | number | boolean>>): T;
 }
 
 const HTTP_METHODS = new Set(['delete', 'get', 'head', 'options', 'patch', 'post', 'put']);

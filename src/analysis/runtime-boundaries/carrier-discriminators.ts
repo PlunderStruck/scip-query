@@ -7,8 +7,6 @@ import {
 } from '../../source/ast/ast-callables.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import { escapeRegex } from '../../source/primitives/regex-utils.js';
-import { getSourceFiles } from '../../source/primitives/source-fileset.js';
-import { getSourceText } from '../../source/primitives/source-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { resolvedCallSitesForDefinition } from '../../symbols/graph/resolved-call-sites.js';
@@ -16,7 +14,12 @@ import { evaluateStaticValue as evaluateBoundaryValue } from '../../symbols/grap
 import { forwardedCallerParameterPositions, parameterValueFlowAtCall } from '../../symbols/graph/value-flow.js';
 import { boundaryFileContext, createBoundaryObservation, type BoundaryFileContext } from './extractors.js';
 import { resolveCallableExpression, resolveObjectBinding } from './object-members.js';
-import type { BoundaryKeyPart, BoundaryObservation, BoundarySourceLocation } from './types.js';
+import type {
+  BoundaryKeyPart,
+  BoundaryObservation,
+  BoundarySourceLocation,
+  RuntimeBoundaryBodySummary,
+} from './types.js';
 
 const MAX_BODY_SUMMARY_DEPTH = 8;
 const MAX_DISCRIMINATOR_SUMMARY_DEPTH = 8;
@@ -59,9 +62,10 @@ interface BodySummaryCollectionResult {
 export function deriveCarrierDiscriminators(
   db: ScipDatabase,
   observations: readonly BoundaryObservation[],
+  bodySummarySeeds: readonly RuntimeBoundaryBodySummary[] = [],
 ): CarrierDiscriminatorResult {
   const errors: string[] = [];
-  const bodySummaryCollection = collectBodySummaryResult(db, errors);
+  const bodySummaryCollection = collectBodySummaryResult(db, bodySummarySeeds, errors);
   const bodySummaries = bodySummaryCollection.summaries;
   const producer = deriveProducerDiscriminators(db, observations, bodySummaries, errors);
   const consumers = deriveConsumerDiscriminators(db, observations, errors);
@@ -74,25 +78,34 @@ export function deriveCarrierDiscriminators(
   };
 }
 
-function collectBodySummaryResult(db: ScipDatabase, errors: string[]): BodySummaryCollectionResult {
+function collectBodySummaryResult(
+  db: ScipDatabase,
+  seeds: readonly RuntimeBoundaryBodySummary[],
+  errors: string[],
+): BodySummaryCollectionResult {
   const summaries = new Map<string, BodyCallableSummary>();
   const queue: BodyCallableSummary[] = [];
-  const files = getSourceFiles(db);
-  for (const file of files) {
-    const source = getSourceText(db, file);
-    if (!/\bJSON\.stringify\s*\(/u.test(source) || !/\bbody\s*:/u.test(source)) continue;
+  const contexts = new Map<string, BoundaryFileContext | null>();
+  const contextForFile = (file: string): BoundaryFileContext | null => {
+    if (contexts.has(file)) return contexts.get(file) ?? null;
     const context = boundaryFileContext(db, file);
-    if (!context) continue;
-    for (const [definition, parameterIndexes] of serializedBodySummariesForFile(context)) {
-      const summary: BodyCallableSummary = {
-        definition,
-        parameterIndexes,
-        depth: 0,
-        proofSpans: [{ file, startLine: definition.startLine, endLine: definition.endLine }],
-      };
-      summaries.set(definition.symbol, summary);
-      queue.push(summary);
-    }
+    contexts.set(file, context);
+    return context;
+  };
+  for (const seed of seeds) {
+    const summary: BodyCallableSummary = {
+      ...seed,
+      depth: 0,
+      proofSpans: [
+        {
+          file: seed.definition.relativePath,
+          startLine: seed.definition.startLine,
+          endLine: seed.definition.endLine,
+        },
+      ],
+    };
+    summaries.set(seed.definition.symbol, summary);
+    queue.push(summary);
   }
 
   while (queue.length > 0) {
@@ -100,7 +113,7 @@ function collectBodySummaryResult(db: ScipDatabase, errors: string[]): BodySumma
     if (summary.depth >= MAX_BODY_SUMMARY_DEPTH) continue;
     try {
       for (const site of resolvedCallSitesForDefinition(db, summary.definition).sites) {
-        const context = boundaryFileContext(db, site.file);
+        const context = contextForFile(site.file);
         if (!context) continue;
         const caller = site.caller;
         if (!caller) continue;
@@ -121,7 +134,7 @@ function collectBodySummaryResult(db: ScipDatabase, errors: string[]): BodySumma
       errors.push(`builtin.carrier body summary failed for ${summary.definition.relativePath}: ${errorMessage(error)}`);
     }
   }
-  return { summaries, filesInspected: files.length };
+  return { summaries, filesInspected: new Set(seeds.map((seed) => seed.definition.relativePath)).size };
 }
 
 function deriveProducerDiscriminators(
@@ -325,9 +338,7 @@ export function deriveConsumerDiscriminators(
   return consumers;
 }
 
-function serializedBodySummariesForFile(
-  context: BoundaryFileContext,
-): Array<[definition: IndexedDefinition, parameterIndexes: number[]]> {
+export function serializedBodySummariesForFile(context: BoundaryFileContext): RuntimeBoundaryBodySummary[] {
   const definitions = getDefinitionsForFile(context.db, context.file);
   const parameterIndexesBySymbol = new Map<string, Set<number>>();
   walk(context.root, (node) => {
@@ -346,9 +357,9 @@ function serializedBodySummariesForFile(
     });
     if (indexes.size > 0) parameterIndexesBySymbol.set(definition.symbol, indexes);
   });
-  return definitions.flatMap((definition) => {
+  return definitions.flatMap((definition): RuntimeBoundaryBodySummary[] => {
     const indexes = parameterIndexesBySymbol.get(definition.symbol);
-    return indexes ? [[definition, [...indexes].sort((left, right) => left - right)]] : [];
+    return indexes ? [{ definition, parameterIndexes: [...indexes].sort((left, right) => left - right) }] : [];
   });
 }
 

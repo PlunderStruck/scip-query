@@ -21,7 +21,12 @@ export interface RuntimeBoundaryAugmentationResult {
 }
 
 export function runtimeBoundaryAugmentationStage(
-  opts: { indexPath?: string; reuseExisting?: boolean; affectedFiles?: readonly string[] } = {},
+  opts: {
+    indexPath?: string;
+    evidenceDbPath?: string;
+    reuseExisting?: boolean;
+    affectedFiles?: readonly string[];
+  } = {},
 ): PostIndexAugmentationStage<RuntimeBoundaryAugmentationResult> {
   return {
     id: 'runtime-boundaries',
@@ -31,6 +36,7 @@ export function runtimeBoundaryAugmentationStage(
         projectRoot,
         dbPath,
         indexPath: opts.indexPath ?? join(dirname(dbPath), 'index.scip'),
+        ...(opts.evidenceDbPath ? { evidenceDbPath: opts.evidenceDbPath } : {}),
       });
       let graph;
       let reused = false;

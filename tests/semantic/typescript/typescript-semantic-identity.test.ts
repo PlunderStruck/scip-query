@@ -146,6 +146,27 @@ describe('TypeScript semantic identity', () => {
       builder.identityFor('src/leaf.ts', 'schema-v1').key,
     );
   });
+
+  it('retains only the most recent dependency closure', () => {
+    const inputSnapshot = snapshot();
+    const graph = dependencyGraph([
+      ['src/consumer.ts', ['src/leaf.ts']],
+      ['src/leaf.ts', []],
+      ['src/isolated.ts', []],
+    ]);
+    const builder = createTypeScriptSemanticIdentityBuilder({
+      projectFiles: PROJECT_FILES,
+      snapshot: inputSnapshot,
+      graph,
+      engineIdentity: 'engine-v1',
+    });
+
+    const original = builder.identityFor('src/consumer.ts', 'schema-v1');
+    builder.identityFor('src/isolated.ts', 'schema-v1');
+    graph.set('src/consumer.ts', new Set());
+
+    expect(builder.identityFor('src/consumer.ts', 'schema-v1').key).not.toBe(original.key);
+  });
 });
 
 function identity(

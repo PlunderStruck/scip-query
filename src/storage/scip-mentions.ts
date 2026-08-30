@@ -81,21 +81,34 @@ export function mentionedReferenceSymbolIdRows(
 }
 
 export function mentionReferenceChunkRows(db: ScipDatabase, symbolIds?: readonly number[]): MentionReferenceChunkRow[] {
-  return batchedMentionRows(db, symbolIds, (ids) => {
+  const rows = batchedMentionRows(db, symbolIds, (ids) => {
     const symbolFilter = ids ? `AND m.symbol_id IN (${ids.map(() => '?').join(',')})` : '';
     return db.all<MentionReferenceChunkRow>(
-      `SELECT DISTINCT m.symbol_id, d.relative_path, c.document_id,
+      `SELECT m.symbol_id, d.relative_path, c.document_id,
               c.start_line AS chunk_start, c.end_line AS chunk_end
        FROM mentions m
        JOIN chunks c ON m.chunk_id = c.id
        JOIN documents d ON c.document_id = d.id
        WHERE m.role != 1
          ${symbolFilter}
-         ${db.pathExclusionsFor('d')}
-       ORDER BY d.relative_path, c.start_line`,
+         ${db.pathExclusionsFor('d')}`,
       ...(ids ?? []),
     );
   });
+  const uniqueRows = new Map<string, MentionReferenceChunkRow>();
+  for (const row of rows) {
+    const key = `${row.symbol_id}\0${row.document_id}\0${row.chunk_start}\0${row.chunk_end}`;
+    uniqueRows.set(key, row);
+  }
+  const symbolOrder = symbolIds ? new Map(symbolIds.map((symbolId, index) => [symbolId, index] as const)) : null;
+  return [...uniqueRows.values()].sort(
+    (left, right) =>
+      (symbolOrder ? (symbolOrder.get(left.symbol_id) ?? 0) - (symbolOrder.get(right.symbol_id) ?? 0) : 0) ||
+      left.relative_path.localeCompare(right.relative_path) ||
+      left.chunk_start - right.chunk_start ||
+      left.chunk_end - right.chunk_end ||
+      left.symbol_id - right.symbol_id,
+  );
 }
 
 function batchedMentionRows<Row>(

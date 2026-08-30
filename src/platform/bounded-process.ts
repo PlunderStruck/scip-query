@@ -139,8 +139,9 @@ export function runBoundedProcess(opts: BoundedProcessOptions): Promise<BoundedP
         stdio: ['pipe', 'pipe', 'pipe'],
       });
     } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : String(cause);
       reject(
-        new BoundedProcessError('spawn', opts.label, `${opts.label} could not start.`, {
+        new BoundedProcessError('spawn', opts.label, `${opts.label} could not start: ${detail}`, {
           cause,
           reaped: true,
         }),

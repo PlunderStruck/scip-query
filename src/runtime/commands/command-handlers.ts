@@ -3,7 +3,6 @@ import { dirname, join } from 'node:path';
 import type { SupportedLanguage } from '../../domain/types.js';
 import { GRAPH_RELATION_UNAVAILABLE_FRONTIERS } from '../../domain/graph-relation-providers.js';
 import { resolveIndexStoragePaths } from '../../platform/cache-layout.js';
-import { WATCH_LOCK_FILE } from '../../platform/watch-service-state.js';
 import * as queries from '../../queries/index.js';
 import { augmentAuxiliaryDocuments, augmentVueResolvedReferencesAsync, detectLanguages } from '../../reindex/index.js';
 import {
@@ -11,7 +10,6 @@ import {
   readAffectedSetShadowStatus,
   type AffectedSetShadowStatus,
 } from '../../reindex/affected-shadow.js';
-import { recordSuppressedReindexActivity } from '../../reindex/reindex-activity.js';
 import {
   inspectLocalSqliteGenerationRetention,
   inspectSqliteGeneration,
@@ -25,16 +23,15 @@ import {
   validateProjectConfig,
   SUPPORTED_LANGUAGES,
 } from '../config.js';
-import { getIndexFreshness, getPublishedIndexFreshness, type IndexFreshness } from '../index-freshness.js';
+import { getIndexFreshness, type IndexFreshness } from '../index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from '../project-readiness.js';
-import { Watcher } from '../watch.js';
 import {
-  acquireWatchProcessLock,
   ensureWatchService,
   inspectWatchService,
   stopWatchService,
   type WatchServiceInspection,
 } from '../watch-service.js';
+import { runWatchServiceServer } from '../watch-server.js';
 import { evaluateSetupAgentResult, setupAgent } from '../agent-setup.js';
 import {
   planGuidedProjectSetup,
@@ -74,7 +71,9 @@ import {
 import {
   DIFF_IMPACT_BATCH_COMMAND,
   HEALTH_PHASE_COMMAND,
+  HEALTH_SEMANTIC_PREWARM_COMMAND,
   cliVersion,
+  prewarmHealthSemanticEvidence,
   renderDiffImpactReport,
   renderHealthReport,
   runIsolatedDiffImpactReportWithEvidence,
@@ -93,7 +92,6 @@ import { printIsolatedAnalysisResult } from '../isolated-analysis-runner.js';
 import { GENERATED_EXPLORATION_CONTROLS } from '../generated-agent-command-catalog.js';
 import { explorationRelationshipManualRows } from '../command-kit/exploration-manual.js';
 import { GRAPH_EVIDENCE_STRENGTH_DEFINITIONS } from '../../domain/graph-relation-providers.js';
-import { sanitizeTerminalLine } from '../../platform/terminal-output.js';
 import { reindexConfiguredProject } from '../project-reindex.js';
 import { evaluateArchitectureStop, renderArchitectureStopOutput } from './architecture-stop-hook.js';
 
@@ -252,6 +250,17 @@ export function handleHealthPhase(phase: unknown, rawOpts: unknown): void {
         ? queries.healthPhase(db, validPhases[0]!, phaseOpts)
         : healthPhases(db, validPhases, phaseOpts);
     printIsolatedAnalysisResult(HEALTH_PHASE_COMMAND, result);
+  });
+}
+
+export function handleHealthSemanticPrewarm(rawOpts: unknown): void {
+  const opts = commandOptions(rawOpts);
+  withDb((db) => {
+    const result = prewarmHealthSemanticEvidence(db, {
+      scope: stringOptionValue(opts, 'scope'),
+      full: booleanOptionValue(opts, 'full'),
+    });
+    printIsolatedAnalysisResult(HEALTH_SEMANTIC_PREWARM_COMMAND, result);
   });
 }
 
@@ -761,7 +770,7 @@ export function handleUninstall(rawOpts: unknown): void {
 // scip-query: ignore-extract — long-running watch command lifecycle: option
 // overrides, watcher callbacks, start/stop behavior, and SIGINT handling are
 // one process action.
-export function handleWatch(rawOpts: unknown): void {
+export async function handleWatch(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
   const debounce = numberOptionValue(opts, 'debounce');
   const cooldown = numberOptionValue(opts, 'cooldown');
@@ -891,66 +900,18 @@ export function handleWatch(rawOpts: unknown): void {
     return;
   }
 
-  const watchLock = acquireWatchProcessLock(join(dirname(paths.dbPath), WATCH_LOCK_FILE), projectRoot);
-  if (!watchLock.acquired) {
-    console.error(watchLock.message);
-    process.exitCode = 1;
-    return;
-  }
-
-  const watcher = new Watcher({
-    projectRoot,
-    config,
-    outputDb: paths.dbPath,
-    languages: config.languages,
-    onStatus: (status) => {
-      process.stdout.write(`\r\x1b[K${sanitizeTerminalLine(formatStatus(status))}`);
-    },
-    onReindexComplete: (durationMs, _trigger, context) => {
-      console.log(`\nReindex complete in ${(durationMs / 1000).toFixed(1)}s`);
-      return (
-        (context?.pendingChanges !== false
-          ? getIndexFreshness(projectRoot, config, paths)
-          : getPublishedIndexFreshness(paths)
-        ).state === 'fresh'
-      );
-    },
-    onRefreshSuppressed: (trigger) => {
-      const activityWrite = recordSuppressedReindexActivity(paths.dbPath, trigger);
-      if (activityWrite.state === 'failed') {
-        console.error(`\nWatch warning: suppressed-refresh telemetry was not recorded: ${activityWrite.reason}`);
-      }
-      console.log('\nSkipped redundant refresh; the completed index already includes the queued changes.');
-    },
-    onError: (err) => {
-      console.error(`\nWatch error: ${err.message}`);
-    },
-  });
-
   console.log(`Watching ${projectRoot}`);
   console.log(
     `Debounce: ${watchConfig.debounceMs}ms | Cooldown: ${watchConfig.cooldownMs}ms | Git poll: ${watchConfig.gitPollMs}ms`,
   );
   console.log('Press Ctrl+C to stop.\n');
-  watcher.start();
-
-  let foregroundStopStarted = false;
-  const stopForegroundWatcher = () => {
-    if (foregroundStopStarted) return;
-    foregroundStopStarted = true;
-    void watcher.stop().then((result) => {
-      if (result.state === 'degraded') {
-        foregroundStopStarted = false;
-        console.error(`\nUnable to stop safely: ${result.reasons.join('; ')}`);
-        return;
-      }
-      watchLock.release();
-      console.log('\nStopped.');
-      process.exit(0);
-    });
-  };
-  process.on('SIGINT', stopForegroundWatcher);
-  process.on('SIGTERM', stopForegroundWatcher);
+  try {
+    await runWatchServiceServer(projectRoot, cliVersion, watchOverrides);
+    console.log('\nStopped.');
+  } catch (error) {
+    console.error(`\nWatch error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+  }
 }
 
 function handleWatchPrune(opts: ReturnType<typeof commandOptions>, json: boolean): void {

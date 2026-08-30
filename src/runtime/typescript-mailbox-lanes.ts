@@ -20,6 +20,7 @@ import {
 import {
   completeBoundedMailboxClaim,
   inspectBoundedMailbox,
+  MailboxBackpressureError,
   pollBoundedMailboxRequests,
   readBoundedMailboxClaim,
   rejectBoundedMailboxClaim,
@@ -247,7 +248,13 @@ function createTypeScriptMailboxLane<Envelope extends { id: string; deadlineAtMs
     onComplete(request, result, status) {
       const claimed = requireCurrent(request.requestId);
       serviceStatus = status;
-      options.complete(claimed.claim, claimed.envelope, result, now());
+      const completedAtMs = now();
+      try {
+        options.complete(claimed.claim, claimed.envelope, result, completedAtMs);
+      } catch (error) {
+        if (!(error instanceof MailboxBackpressureError) || error.code !== 'item-too-large') throw error;
+        options.reject(claimed.claim, claimed.envelope.id, error.message, completedAtMs);
+      }
       releaseCurrent(claimed);
     },
     onReject(request, reason, status) {

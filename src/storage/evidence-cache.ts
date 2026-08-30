@@ -42,6 +42,7 @@ export const FILE_EVIDENCE_KINDS = [
   'typescript-reference-fragments',
   'typescript-import-usage',
   'typescript-signatures',
+  'runtime-boundary-http-roles',
 ] as const;
 
 export type FileEvidenceKind = (typeof FILE_EVIDENCE_KINDS)[number];
@@ -182,7 +183,7 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
   if (CONNECTIONS.has(db)) return CONNECTIONS.get(db) ?? null;
   let connection: EvidenceConnection | null = null;
   try {
-    const evidence = new Database(join(dirname(db.config.dbPath), EVIDENCE_DB_FILENAME));
+    const evidence = new Database(db.config.evidenceDbPath ?? join(dirname(db.config.dbPath), EVIDENCE_DB_FILENAME));
     evidence.pragma('journal_mode = WAL');
     evidence.pragma('busy_timeout = 5000');
     // Rebuildable cache: skip the per-commit WAL fsync. A power-loss losing

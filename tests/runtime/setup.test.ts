@@ -41,6 +41,7 @@ describe('skill installation', () => {
   it('keeps the builtin skill list in lockstep with the shipped directories', async () => {
     const { module } = await loadSetup();
     expect([...module.BUILTIN_SKILLS].sort()).toEqual([
+      'scip-explore',
       'scip-integrity-audit',
       'scip-plan',
       'scip-query',
@@ -54,7 +55,13 @@ describe('skill installation', () => {
 
   it('ships the primary router, workflow skills, and integrity audit', async () => {
     const { module } = await loadSetup();
-    expect(module.BUILTIN_SKILLS).toEqual(['scip-query', 'scip-plan', 'scip-setup', 'scip-integrity-audit']);
+    expect(module.BUILTIN_SKILLS).toEqual([
+      'scip-query',
+      'scip-explore',
+      'scip-plan',
+      'scip-setup',
+      'scip-integrity-audit',
+    ]);
   });
 
   it('installs every bundled skill into Claude, Codex, and shared agent roots', async () => {

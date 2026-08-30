@@ -206,7 +206,7 @@ describe('CLI contract', () => {
   });
 
   it('marks private JSON workers so transport pagination cannot wrap their envelopes', () => {
-    for (const name of ['__diff-impact-batch', '__health-phase']) {
+    for (const name of ['__diff-impact-batch', '__health-phase', '__health-semantic-prewarm']) {
       expect(optionFlags(name), name).toContain('--json');
     }
   });
@@ -499,9 +499,10 @@ describe('CLI contract', () => {
     ).toEqual([]);
   });
 
-  it('keeps the exploration, workflow, and integrity skills without work-state ceremony', () => {
+  it('keeps sensing separate from end-to-end exploration, workflow, and integrity guidance', () => {
     const readSkill = (name: string) => readFileSync(join(process.cwd(), 'skills', name, 'SKILL.md'), 'utf8');
     const exploration = readSkill('scip-query');
+    const systemExploration = readSkill('scip-explore');
     const planning = readSkill('scip-plan');
 
     expect(exploration).toContain('scip-query search');
@@ -516,6 +517,7 @@ describe('CLI contract', () => {
     expect(exploration).toContain('Thoroughness means understanding the relevant system end to end');
     expect(exploration).toContain('do not select one by path, naming, apparent recency, or result order');
     expect(exploration).toContain('Native text and file tools expose matches and slices');
+    expect(exploration).toContain('load `$scip-explore` alongside this skill');
     expect(exploration).not.toMatch(/evidence ledger|final-audit|proof obligation/i);
     expect(planning).toContain('scip-query evidence');
     expect(planning).toContain('Treat its commands as controls, not a checklist');
@@ -529,7 +531,17 @@ describe('CLI contract', () => {
     expect(readSkill('scip-integrity-audit')).toContain('decorative-checkers');
     expect(readSkill('scip-integrity-audit')).toContain('not-implemented');
     expect(readSkill('scip-integrity-audit')).toContain('test-quality');
-    expect(readSkill('scip-explore')).toContain('compatibility alias');
+    expect(systemExploration).toContain('private evidence ledger');
+    expect(systemExploration).toContain('causal spine');
+    expect(systemExploration).toContain('origin and ownership');
+    expect(systemExploration).toContain('failure and recovery');
+    expect(systemExploration).toContain('`established`, `unsupported`, or `excluded`');
+    expect(systemExploration).toContain('make authoritative scope the first ledger row');
+    expect(systemExploration).toContain('If two consecutive packets');
+    expect(systemExploration).toContain('Do not load it for routine end-to-end exploration');
+    expect(systemExploration).toContain('references/information-model.md');
+    expect(systemExploration).toContain('references/delegated-exploration.md');
+    expect(systemExploration).not.toContain('compatibility alias');
     expect(readSkill('concrete-plan')).toContain('compatibility alias');
     expect(`${exploration}\n${planning}\n${readSkill('scip-setup')}\n${readSkill('scip-integrity-audit')}`).not.toMatch(
       /diff-gate|Gherkin/i,

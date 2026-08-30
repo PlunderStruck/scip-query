@@ -1,5 +1,5 @@
 import type { IndexedDefinition } from '../../domain/types.js';
-import type { ProjectInputSnapshot } from '../../domain/project-input.js';
+import type { FileDependencyGraph, ProjectInputSnapshot } from '../../domain/project-input.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import type { ScipDatabase } from '../../storage/db.js';
@@ -51,12 +51,13 @@ export function seedTypeScriptReferenceFragments(
   snapshot: ProjectInputSnapshot,
   fragmentsByFile: ReadonlyMap<string, readonly SemanticReferenceFragment[]>,
   evidenceDb: ScipDatabase = identityDb,
+  dependencyGraph?: FileDependencyGraph,
 ): number {
   const projectFiles = indexedTypeScriptFiles(identityDb);
   const builder = createTypeScriptSemanticIdentityBuilder({
     projectFiles,
     snapshot,
-    graph: buildFileDepGraph(identityDb),
+    graph: dependencyGraph ?? buildFileDepGraph(identityDb),
     engineIdentity: typeScriptSemanticEngineIdentity(),
   });
   const writes = [...fragmentsByFile].map(([relativePath, fragments]) => ({

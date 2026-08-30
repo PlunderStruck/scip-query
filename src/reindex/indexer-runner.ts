@@ -20,6 +20,8 @@ import { BoundedProcessError, PROCESS_TIMEOUT_MS, runBoundedProcess } from '../p
 import { revalidateTrustedProjectTool, type TrustedProjectToolIdentity } from '../platform/indexer-toolchain.js';
 import { runWithConcurrency } from '../platform/structured-concurrency.js';
 
+const INDEXER_FAILURE_DETAIL_LIMIT = 8 * 1024;
+
 // scip-query: ignore-stale — exported handoff record between reindex planning
 // and the runner; inlining would smear indexer execution state across modules.
 export interface PreparedIndexerRun {
@@ -255,7 +257,11 @@ async function runPreparedIndexer(
   } catch (err) {
     if (signal?.aborted) throw abortSignalReason(signal, 'Reindex cancelled by its owner.');
     const msg = err instanceof Error ? err.message : String(err);
-    const reason = `${run.resolvedBinary} indexer failed: ${msg.split('\n')[0]}`;
+    const boundedMessage =
+      msg.length <= INDEXER_FAILURE_DETAIL_LIMIT
+        ? msg
+        : `${msg.slice(0, INDEXER_FAILURE_DETAIL_LIMIT)}\n[indexer failure detail truncated]`;
+    const reason = `${run.resolvedBinary} indexer failed: ${boundedMessage}`;
     const skippedReason = run.label === run.language ? reason : `${run.label}: ${reason}`;
     onStatus(`Skipping ${run.label}: ${reason}`);
     return {

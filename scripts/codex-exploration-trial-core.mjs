@@ -15,6 +15,7 @@ const NATIVE_READ = new RegExp(
 );
 const SCRIPTED_READ = /(?:readFile(?:Sync)?|read_text|\.read\(|open\s*\()/u;
 const SCIP_QUERY = new RegExp(`${COMMAND_BOUNDARY}(?:[^\\s'"]*/)?scip-query${COMMAND_END}`, 'iu');
+const SCIP_EXPLORE_CAPTURE = new RegExp(`${COMMAND_BOUNDARY}(?:[^\\s'"]*/)?capture-evidence\\.mjs${COMMAND_END}`, 'iu');
 const MIXED_NATIVE_SEARCH = new RegExp(
   `${SHELL_COMMAND_POSITION}(?:rg|grep|find|fd|ls|tree|ps|pgrep|git\\s+(?:grep|ls-files))${COMMAND_END}`,
   'iu',
@@ -26,6 +27,41 @@ const MIXED_NATIVE_READ = new RegExp(
 
 export function treatmentPrompt(question) {
   return treatmentBenchmarkPrompt(question);
+}
+
+export function externalLedgerExplorationPrompt(question, ledgerPath) {
+  return `You are running the evidence-acquisition phase of a read-only codebase-exploration benchmark. Establish the repository facts needed to answer this question accurately, but do not answer it yet:\n\n${question}\n\nUse the installed scip-query and scip-explore skills and generated repository guidance. External evidence mode is active: read the skill's external-evidence reference, run every scip-query exploration command through its capture-evidence script, and do not use native repository search or source-reading tools. Do not edit repository files or inspect benchmark definitions, evaluation fixtures, rubrics, or recorded answers.\n\nWrite one claim-complete Markdown evidence ledger to this exact path outside the repository: ${ledgerPath}\n\nThe ledger is the only repository understanding passed to a fresh synthesis context. Preserve atomic claims, every material clause, exact file/line or symbol evidence, evidence strength, coverage, unresolved facts, and scope ambiguity. Return only LEDGER_READY when the ledger is complete. If a trustworthy terminal ledger cannot be produced, write the blocked ledger and return only LEDGER_BLOCKED.`;
+}
+
+export function externalLedgerSynthesisPrompt(question, ledger) {
+  return `You are running the fresh synthesis phase of a codebase-exploration benchmark. Answer this question accurately:\n\n${question}\n\nDo not call tools or inspect the repository. The evidence ledger below is the only repository evidence available. Preserve every material predicate, bound, default, field operation, ordering rule, sibling outcome, cleanup, and failure behavior it establishes; do not strengthen unresolved or unsupported claims. Treat every Must transfer bullet as independently nonoptional: audit the draft clause by clause before returning it, and do not collapse distinct operations into one generic phrase. Preserve every scope-manifest row: for an unqualified question, do not omit a plausibly live production scope or convert it into a generic coverage limitation. Return a concise explanation with its concrete symbol and file/line evidence and state any material coverage limitation.\n\n<evidence-ledger>\n${ledger}\n</evidence-ledger>`;
+}
+
+export function parseExternalLedgerSignal(answer) {
+  const signal = answer.trim();
+  if (signal === 'LEDGER_READY') return 'ready';
+  if (signal === 'LEDGER_BLOCKED') return 'blocked';
+  throw new Error('External evidence phase must return exactly LEDGER_READY or LEDGER_BLOCKED.');
+}
+
+export function combineCodexPhases(exploration, synthesis, metadata = {}) {
+  return {
+    ...metadata,
+    answer: synthesis.answer,
+    calls: [...exploration.calls, ...synthesis.calls],
+    usage: {
+      inputTokens: exploration.usage.inputTokens + synthesis.usage.inputTokens,
+      cachedInputTokens: exploration.usage.cachedInputTokens + synthesis.usage.cachedInputTokens,
+      outputTokens: exploration.usage.outputTokens + synthesis.usage.outputTokens,
+      reasoningOutputTokens: exploration.usage.reasoningOutputTokens + synthesis.usage.reasoningOutputTokens,
+    },
+    codexThreadId: synthesis.codexThreadId,
+    rawEventCount: exploration.rawEventCount + synthesis.rawEventCount,
+    phases: {
+      exploration: phaseSummary(exploration),
+      synthesis: phaseSummary(synthesis),
+    },
+  };
 }
 
 export function minimalTreatmentPrompt(question) {
@@ -138,6 +174,8 @@ export function parseCodexJsonl(jsonl, metadata = {}) {
 
 export function classifyExplorationCommand(command) {
   if (isSkillInstructionRead(command)) return { surface: 'other', kind: 'other' };
+  if (isExternalEvidenceEnvironmentRead(command)) return { surface: 'other', kind: 'other' };
+  if (SCIP_EXPLORE_CAPTURE.test(command)) return { surface: 'scip-query', kind: 'query' };
   const scipQuery = SCIP_QUERY.test(command);
   // Classify the primary exploration surface before scanning its quoted
   // arguments. Natural-language anchor questions can contain words such as
@@ -156,8 +194,24 @@ export function classifyExplorationCommand(command) {
   return { surface: 'other', kind: 'other' };
 }
 
+function isExternalEvidenceEnvironmentRead(command) {
+  return /(?:^|\s)env(?:\s|$)/u.test(command) && /SCIP_EXPLORE_/u.test(command);
+}
+
+function phaseSummary(phase) {
+  return {
+    durationMs: phase.durationMs,
+    stderrCharacters: phase.stderrCharacters,
+    toolCalls: phase.calls.length,
+    usage: phase.usage,
+    codexThreadId: phase.codexThreadId,
+    rawEventCount: phase.rawEventCount,
+  };
+}
+
 function isSkillInstructionRead(command) {
-  const fileOperands = command.match(/skills\/[A-Za-z0-9_.:-]+\/SKILL\.md/giu) ?? [];
+  const fileOperands =
+    command.match(/skills\/[A-Za-z0-9_.:-]+\/(?:SKILL\.md|references\/[A-Za-z0-9_./:-]+\.md)/giu) ?? [];
   if (fileOperands.length === 0) return false;
   const withoutSkillPaths = fileOperands.reduce((remaining, operand) => remaining.replace(operand, ' '), command);
   return !/(?:^|\s)(?:src|tests|scripts|docs|benchmarks)\//u.test(withoutSkillPaths);

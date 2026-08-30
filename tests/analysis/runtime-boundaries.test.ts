@@ -16,7 +16,10 @@ import { runtimeBoundaryAugmentationStage } from '../../src/reindex/runtime-boun
 import { runPostIndexAugmentation } from '../../src/reindex/augmentation/post-index-augmentation.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { getDefinitionsForFile } from '../../src/symbols/definition-catalog.js';
-import { resolvedCallSitesForDefinition } from '../../src/symbols/graph/resolved-call-sites.js';
+import {
+  resolvedCallSitesForDefinition,
+  resolvedCallSitesForDefinitions,
+} from '../../src/symbols/graph/resolved-call-sites.js';
 import { parameterValueFlowAtCall } from '../../src/symbols/graph/value-flow.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
@@ -39,7 +42,7 @@ describe('runtime-boundary evidence', () => {
     const db = createBoundaryDb();
     try {
       const graph = collectRuntimeBoundaryGraph(db);
-      expect(graph.extractorVersion).toBe('runtime-boundaries-v15');
+      expect(graph.extractorVersion).toBe('runtime-boundaries-v19');
 
       expect(graph.observations).toEqual(
         expect.arrayContaining([
@@ -193,7 +196,7 @@ describe('runtime-boundary evidence', () => {
             filesVisited: 26,
           }),
           expect.objectContaining({ id: 'http-mount', filesVisited: 26 }),
-          expect.objectContaining({ id: 'carrier', filesVisited: 26 }),
+          expect.objectContaining({ id: 'carrier', filesVisited: 2 }),
         ]),
       );
       expect(graph.observations.some((observation) => observation.source.file === 'src/non-boundaries.ts')).toBe(false);
@@ -441,6 +444,46 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
+  it('uses SCIP reference rows for compiler-resolved call sites', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-compiler-references-'));
+    writeFixtureFiles(tempDir, {
+      'src/request.ts': ['export function sendRequest(path: string) { return fetch(path); }'],
+      'src/caller.ts': ["import { sendRequest } from './request.js';", "sendRequest('/events');"],
+    });
+    const builder = evidenceFixtureDb(join(tempDir, 'index.db'));
+    builder
+      .document(1, 'typescript', 'src/request.ts')
+      .document(2, 'typescript', 'src/caller.ts')
+      .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`request.ts`/sendRequest().', 'sendRequest', 12)
+      .definition(1, 1, 1, 0, 0, 0, 75)
+      .chunk(1, 2, 1, 1)
+      .mention(1, 1, 2)
+      .write();
+    const db = new ScipDatabase({
+      projectRoot: tempDir,
+      dbPath: join(tempDir, 'index.db'),
+      indexPath: join(tempDir, 'index.scip'),
+    });
+
+    try {
+      const sendRequest = getDefinitionsForFile(db, 'src/request.ts').find(
+        (definition) => definition.leaf === 'sendRequest',
+      );
+      expect(sendRequest).toBeDefined();
+      const calls = resolvedCallSitesForDefinition(db, sendRequest!);
+      expect(calls.sites).toEqual([
+        expect.objectContaining({
+          file: 'src/caller.ts',
+          targetText: 'sendRequest',
+          referenceProvenance: 'scip-reference-chunk',
+        }),
+      ]);
+      expect(resolvedCallSitesForDefinitions(db, [sendRequest!]).get(sendRequest!.symbolId)).toBe(calls);
+    } finally {
+      db.close();
+    }
+  });
+
   it('replaces affected-file facts while retaining exact coverage for unchanged files', () => {
     const baselineDb = createBoundaryDb();
     const projectRoot = baselineDb.config.projectRoot;
@@ -482,6 +525,198 @@ describe('runtime-boundary evidence', () => {
           observation.keyParts.some((part) => part.value === '/api/renamed-events'),
         ),
       ).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('reuses derived phases when an affected file has no boundary facts or references into the prior graph', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-unrelated-change-'));
+    writeFixtureFiles(tempDir, {
+      'src/client.ts': ["fetch('/events', { method: 'POST' });"],
+      'src/unrelated.ts': ['export const unrelated = 1;'],
+    });
+    const dbPath = join(tempDir, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/client.ts')
+      .document(2, 'typescript', 'src/unrelated.ts')
+      .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`unrelated.ts`/unrelated.', 'unrelated', 13)
+      .definition(1, 2, 1, 0, 0, 0, 35)
+      .chunk(1, 2, 0, 0)
+      .mention(1, 1, 2)
+      .write();
+    const baselineDb = new ScipDatabase({
+      projectRoot: tempDir,
+      dbPath,
+      indexPath: join(tempDir, 'index.scip'),
+    });
+    const baseline = collectRuntimeBoundaryGraph(baselineDb);
+    baselineDb.close();
+
+    writeFixtureFiles(tempDir, { 'src/unrelated.ts': ['', 'export const unrelated = 1;'] });
+    const db = new ScipDatabase({ projectRoot: tempDir, dbPath, indexPath: join(tempDir, 'index.scip') });
+    try {
+      const refreshed = collectRuntimeBoundaryGraph(db, {
+        previousGraph: baseline,
+        affectedFiles: ['src/unrelated.ts'],
+      });
+
+      expect(refreshed.observations).toEqual(baseline.observations);
+      expect(refreshed.relationGroups).toEqual(baseline.relationGroups);
+      expect(refreshed.coverage.phases).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'http-summary', durationMs: 0, filesVisited: 0 }),
+          expect.objectContaining({ id: 'carrier', durationMs: 0, filesVisited: 0 }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('reuses derived phases when an affected file references only a persistence boundary', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-persistence-only-change-'));
+    writeFixtureFiles(tempDir, {
+      'src/repository.ts': [
+        'export function saveEvent(value: unknown) {',
+        '  return db.insert(events).values(value);',
+        '}',
+      ],
+      'src/caller.ts': ["import { saveEvent } from './repository.js';", "saveEvent('first');"],
+    });
+    const dbPath = join(tempDir, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/repository.ts')
+      .document(2, 'typescript', 'src/caller.ts')
+      .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`repository.ts`/saveEvent().', 'saveEvent', 12)
+      .definition(1, 1, 1, 0, 0, 2, 1)
+      .chunk(1, 2, 1, 1)
+      .mention(1, 1, 2)
+      .write();
+    const baselineDb = new ScipDatabase({
+      projectRoot: tempDir,
+      dbPath,
+      indexPath: join(tempDir, 'index.scip'),
+    });
+    const baseline = collectRuntimeBoundaryGraph(baselineDb);
+    baselineDb.close();
+
+    writeFixtureFiles(tempDir, {
+      'src/caller.ts': ["import { saveEvent } from './repository.js';", "saveEvent('second');"],
+    });
+    const db = new ScipDatabase({ projectRoot: tempDir, dbPath, indexPath: join(tempDir, 'index.scip') });
+    try {
+      const refreshed = collectRuntimeBoundaryGraph(db, {
+        previousGraph: baseline,
+        affectedFiles: ['src/caller.ts'],
+      });
+
+      expect(refreshed.observations).toEqual(baseline.observations);
+      expect(refreshed.relationGroups).toEqual(baseline.relationGroups);
+      expect(refreshed.coverage.phases).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'http-summary', durationMs: 0, filesVisited: 0 }),
+          expect.objectContaining({ id: 'carrier', durationMs: 0, filesVisited: 0 }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('reuses derived phases when an affected file references a non-boundary symbol beside an HTTP boundary', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-adjacent-http-change-'));
+    writeFixtureFiles(tempDir, {
+      'src/client.ts': [
+        'export function getAccountId() {',
+        "  return 'account';",
+        '}',
+        'export function sendRequest(path: string) {',
+        '  return fetch(path);',
+        '}',
+      ],
+      'src/caller.ts': ["import { getAccountId } from './client.js';", 'getAccountId();'],
+    });
+    const dbPath = join(tempDir, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/client.ts')
+      .document(2, 'typescript', 'src/caller.ts')
+      .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`client.ts`/getAccountId().', 'getAccountId', 12)
+      .definition(1, 1, 1, 0, 0, 2, 1)
+      .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`client.ts`/sendRequest().', 'sendRequest', 12)
+      .definition(2, 1, 2, 3, 0, 5, 1)
+      .chunk(1, 2, 1, 1)
+      .mention(1, 1, 2)
+      .write();
+    const baselineDb = new ScipDatabase({
+      projectRoot: tempDir,
+      dbPath,
+      indexPath: join(tempDir, 'index.scip'),
+    });
+    const baseline = collectRuntimeBoundaryGraph(baselineDb);
+    baselineDb.close();
+
+    writeFixtureFiles(tempDir, {
+      'src/caller.ts': [
+        "import { getAccountId } from './client.js';",
+        'getAccountId();',
+        "export const label = 'new';",
+      ],
+    });
+    const db = new ScipDatabase({ projectRoot: tempDir, dbPath, indexPath: join(tempDir, 'index.scip') });
+    try {
+      const refreshed = collectRuntimeBoundaryGraph(db, {
+        previousGraph: baseline,
+        affectedFiles: ['src/caller.ts'],
+      });
+
+      expect(refreshed.observations).toEqual(baseline.observations);
+      expect(refreshed.coverage.phases).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'http-summary', durationMs: 0, filesVisited: 0 }),
+          expect.objectContaining({ id: 'carrier', durationMs: 0, filesVisited: 0 }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('reuses HTTP call topology when only a template endpoint literal changes', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-template-endpoint-'));
+    const file = 'src/client.ts';
+    const source = [
+      'export function sendMessage(accountId: string) {',
+      "  return fetch(`https://api.test/accounts/${accountId}/messages`, { method: 'POST' });",
+      '}',
+    ];
+    writeFixtureFiles(tempDir, { [file]: source });
+    const dbPath = join(tempDir, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', file)
+      .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`client.ts`/sendMessage().', 'sendMessage', 12)
+      .definition(1, 1, 1, 0, 0, 2, 1)
+      .write();
+    const baselineDb = new ScipDatabase({ projectRoot: tempDir, dbPath, indexPath: join(tempDir, 'index.scip') });
+    const baseline = collectRuntimeBoundaryGraph(baselineDb);
+    baselineDb.close();
+
+    writeFixtureFiles(tempDir, {
+      [file]: source.map((line) => line.replace('/messages`', '/messages-v2`')),
+    });
+    const db = new ScipDatabase({ projectRoot: tempDir, dbPath, indexPath: join(tempDir, 'index.scip') });
+    try {
+      const refreshed = collectRuntimeBoundaryGraph(db, { previousGraph: baseline, affectedFiles: [file] });
+      const clean = collectRuntimeBoundaryGraph(db);
+
+      expect(refreshed.observations).toEqual(clean.observations);
+      expect(refreshed.frontiers).toEqual(clean.frontiers);
+      expect(refreshed.coverage.phases).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'http-summary', filesVisited: 0, factsReused: expect.any(Number) }),
+          expect.objectContaining({ id: 'carrier', filesVisited: 0, factsReused: expect.any(Number) }),
+        ]),
+      );
     } finally {
       db.close();
     }
@@ -543,8 +778,20 @@ describe('runtime-boundary evidence', () => {
         "postEnvelope('/carrier', { command: 'second' });",
       ],
     },
+    {
+      label: 'terminal endpoint literal',
+      file: 'src/client.ts',
+      source: [
+        "const EVENTS_PATH = '/api/events-v2';",
+        'export async function sendEvents(events: unknown[]) {',
+        "  return fetch(EVENTS_PATH, { method: 'POST', body: JSON.stringify({ events }) });",
+        '}',
+        "function returnedPath() { return '/api/returned'; }",
+        "fetch(returnedPath(), { method: 'GET' });",
+      ],
+    },
     { label: 'terminal deletion', file: 'src/client.ts', source: [] },
-  ])('matches a clean graph after incremental $label change', ({ file, source }) => {
+  ])('matches a clean graph after incremental $label change', ({ label, file, source }) => {
     const baselineDb = createBoundaryDb();
     const projectRoot = baselineDb.config.projectRoot;
     const dbPath = baselineDb.config.dbPath;
@@ -563,6 +810,14 @@ describe('runtime-boundary evidence', () => {
       expect(refreshed.coverage.extractors).toEqual(clean.coverage.extractors);
       expect(refreshed.coverage.extractionErrors).toEqual(clean.coverage.extractionErrors);
       expect(refreshed.fileCoverage).toEqual(clean.fileCoverage);
+      if (label === 'terminal endpoint literal') {
+        expect(refreshed.coverage.phases).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ id: 'http-summary', filesVisited: 0, factsReused: expect.any(Number) }),
+            expect.objectContaining({ id: 'carrier', filesVisited: 0, factsReused: expect.any(Number) }),
+          ]),
+        );
+      }
     } finally {
       db.close();
     }

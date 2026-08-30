@@ -108,6 +108,8 @@ export interface ScipQueryConfig {
   projectRoot: string;
   /** Committed identity shared by branches, clones, and forks intended to merge into one project history. */
   collaborationDomainId?: string;
+  /** Persistent cache path used when the indexed database is a temporary publish candidate. */
+  evidenceDbPath?: string;
   /** Internal repository-level read-through cache for proven content-addressed evidence products. */
   sharedEvidenceDbPath?: string;
   /** Project-specific externally-live roots for dead-code filtering */

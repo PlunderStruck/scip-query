@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+import type * as TypeScript from 'typescript';
 import { detectAstLanguage, isVueSfcPath } from '../../source/ast/ast-language.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getSourceFiles } from '../../source/primitives/source-fileset.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
 import { BOUNDARY_EXTRACTORS, boundaryFileContext } from './extractors.js';
 import type { RuntimeBoundaryProfileSpan } from './extractors.js';
-import { deriveCarrierDiscriminators } from './carrier-discriminators.js';
+import { deriveCarrierDiscriminators, serializedBodySummariesForFile } from './carrier-discriminators.js';
 import { composeHttpMountsWithCoverage } from './http-mounts.js';
 import { propagateCompilerResolvedHttpSummaries } from './http-summaries.js';
 import { deriveDatabaseWorkQueueObservations } from './database-work-queues.js';
@@ -25,7 +27,22 @@ import type {
 
 // Increment whenever direct facts or any derived propagation rule changes so an
 // older persisted graph can never be incrementally mixed with newer semantics.
-export const RUNTIME_BOUNDARY_EXTRACTOR_VERSION = 'runtime-boundaries-v15';
+export const RUNTIME_BOUNDARY_EXTRACTOR_VERSION = 'runtime-boundaries-v19';
+
+const require = createRequire(import.meta.url);
+const typescript = require('typescript') as typeof TypeScript;
+const TYPESCRIPT_TRIVIA = new Set<TypeScript.SyntaxKind>([
+  typescript.SyntaxKind.WhitespaceTrivia,
+  typescript.SyntaxKind.NewLineTrivia,
+  typescript.SyntaxKind.SingleLineCommentTrivia,
+  typescript.SyntaxKind.MultiLineCommentTrivia,
+]);
+const TYPESCRIPT_LITERAL_VALUES = new Set<TypeScript.SyntaxKind>([
+  typescript.SyntaxKind.NoSubstitutionTemplateLiteral,
+  typescript.SyntaxKind.TemplateHead,
+  typescript.SyntaxKind.TemplateMiddle,
+  typescript.SyntaxKind.TemplateTail,
+]);
 
 interface GroupRule {
   id: string;
@@ -104,6 +121,13 @@ const GROUP_RULES: readonly GroupRule[] = [
 ];
 
 const MAX_MATERIALIZED_PAIRS_PER_GROUP = 64;
+const HTTP_SUMMARY_EXTRACTOR = 'builtin.http-summary';
+const DERIVED_BOUNDARY_ACTIONS = {
+  HTTP_HANDLE: 'http.handle',
+  HTTP_REQUEST: 'http.request',
+  REGISTRY_HANDLE: 'registry.handle',
+} as const;
+const DERIVED_BOUNDARY_ACTION_SET = new Set<string>(Object.values(DERIVED_BOUNDARY_ACTIONS));
 
 export interface RuntimeBoundaryCollectionOptions {
   previousGraph?: RuntimeBoundaryGraph;
@@ -152,18 +176,89 @@ export function collectRuntimeBoundaryGraph(
   const coverage = aggregateFileCoverage(fileCoverage);
   const extractionErrors = fileCoverage.flatMap((entry) => entry.extractionErrors);
   const primary = deduplicateObservations([...retainedObservations, ...extracted.observations]);
+  if (
+    incrementallyReusable &&
+    opts.previousGraph &&
+    affectedDirectCoverageUnchanged(previousFileCoverage, extracted.fileCoverage, affectedFiles) &&
+    (!affectedFilesMayChangeDerivedGraph(db, opts.previousGraph, affectedFiles) ||
+      (affectedSyntaxUnchanged(previousFileCoverage, extracted.fileCoverage, affectedFiles) &&
+        !affectedFilesAppearInGraph(opts.previousGraph, affectedFiles)))
+  ) {
+    for (const extractor of opts.previousGraph.coverage.extractors) {
+      if (!coverage.has(extractor.id)) coverage.set(extractor.id, extractor);
+    }
+    const reusedPhases = reuseDerivedPhaseCoverage(opts.previousGraph.coverage.phases);
+    phases.push(...reusedPhases);
+    return {
+      ...opts.previousGraph,
+      observations: opts.previousGraph.observations,
+      relationGroups: opts.previousGraph.relationGroups,
+      links: opts.previousGraph.links,
+      frontiers: opts.previousGraph.frontiers,
+      coverage: {
+        filesScanned: files.length,
+        filesWithAst: fileCoverage.filter((entry) => entry.hasAst).length,
+        filesWithoutAst: fileCoverage.filter((entry) => !entry.hasAst).length,
+        filesReused: retainedFileCoverage.length,
+        extractors: [...coverage.values()],
+        extractionErrors: opts.previousGraph.coverage.extractionErrors,
+        phases,
+      },
+      fileCoverage,
+    };
+  }
   const withDatabaseQueues = deduplicateObservations([...primary, ...deriveDatabaseWorkQueueObservations(primary)]);
+  const httpSummaryReuse =
+    incrementallyReusable && opts.previousGraph !== undefined
+      ? httpSummaryReuseDecision(
+          opts.previousGraph,
+          previousFileCoverage,
+          extracted.fileCoverage,
+          affectedFiles,
+          primary,
+        )
+      : { reuse: false, shapeUnchanged: false, proofFilesUnchanged: false, seedUnchanged: false };
+  const reuseHttpSummary = httpSummaryReuse.reuse;
+  opts.profileSpan?.('runtime-boundaries.http-summary.reuse-decision', () => undefined, httpSummaryReuse);
   phaseStartedAt = performance.now();
-  const propagated = propagateCompilerResolvedHttpSummaries(db, withDatabaseQueues);
-  recordPhase(phases, 'http-summary', phaseStartedAt, withDatabaseQueues.length, propagated.observations.length, {
-    filesVisited: propagated.filesInspected,
-  });
-  coverage.set('builtin.wrapper', {
-    id: 'builtin.wrapper',
-    applicableFiles: propagated.filesInspected,
-    observations: propagated.observations.length,
-    errors: propagated.errors.length,
-  });
+  let propagated: ReturnType<typeof propagateCompilerResolvedHttpSummaries>;
+  if (reuseHttpSummary) {
+    const previousHttpPhase = opts.previousGraph!.coverage.phases?.find((phase) => phase.id === 'http-summary');
+    const previousWrapperCoverage = opts.previousGraph!.coverage.extractors.find(
+      (extractor) => extractor.id === 'builtin.wrapper',
+    );
+    propagated = {
+      observations: opts.previousGraph!.observations.filter(
+        (observation) => observation.extractor === HTTP_SUMMARY_EXTRACTOR,
+      ),
+      frontiers: opts.previousGraph!.frontiers.filter(
+        (frontier) => frontier.kind === 'call-resolution' && frontier.action === DERIVED_BOUNDARY_ACTIONS.HTTP_REQUEST,
+      ),
+      summaries: 0,
+      filesInspected: previousHttpPhase?.filesVisited ?? previousWrapperCoverage?.applicableFiles ?? 0,
+      errors: opts.previousGraph!.coverage.extractionErrors.filter((error) =>
+        error.startsWith('builtin.http-summary failed'),
+      ),
+    };
+    recordPhase(phases, 'http-summary', phaseStartedAt, withDatabaseQueues.length, propagated.observations.length, {
+      filesVisited: 0,
+      filesReused: propagated.filesInspected,
+      factsReused: propagated.observations.length + propagated.frontiers.length,
+      factsInvalidated: 0,
+    });
+    if (previousWrapperCoverage) coverage.set(previousWrapperCoverage.id, previousWrapperCoverage);
+  } else {
+    propagated = propagateCompilerResolvedHttpSummaries(db, withDatabaseQueues, opts.profileSpan);
+    recordPhase(phases, 'http-summary', phaseStartedAt, withDatabaseQueues.length, propagated.observations.length, {
+      filesVisited: propagated.filesInspected,
+    });
+    coverage.set('builtin.wrapper', {
+      id: 'builtin.wrapper',
+      applicableFiles: propagated.filesInspected,
+      observations: propagated.observations.length,
+      errors: propagated.errors.length,
+    });
+  }
   extractionErrors.push(...propagated.errors);
   const withHttpDerivations = deduplicateObservations([...withDatabaseQueues, ...propagated.observations]);
   phaseStartedAt = performance.now();
@@ -173,16 +268,48 @@ export function collectRuntimeBoundaryGraph(
   });
   const withMounts = deduplicateObservations([...withHttpDerivations, ...mountComposition.observations]);
   phaseStartedAt = performance.now();
-  const carriers = deriveCarrierDiscriminators(db, withMounts);
-  recordPhase(phases, 'carrier', phaseStartedAt, withMounts.length, carriers.observations.length, {
-    filesVisited: carriers.filesInspected,
-  });
-  coverage.set('builtin.carrier', {
-    id: 'builtin.carrier',
-    applicableFiles: carriers.bodySummaries,
-    observations: carriers.observations.length,
-    errors: carriers.errors.length,
-  });
+  const reuseCarrier =
+    reuseHttpSummary &&
+    opts.previousGraph !== undefined &&
+    canReuseCarrier(opts.previousGraph, previousFileCoverage, extracted.fileCoverage, affectedFiles);
+  let carriers: ReturnType<typeof deriveCarrierDiscriminators>;
+  if (reuseCarrier) {
+    const previousCarrierPhase = opts.previousGraph!.coverage.phases?.find((phase) => phase.id === 'carrier');
+    const previousCarrierCoverage = opts.previousGraph!.coverage.extractors.find(
+      (extractor) => extractor.id === 'builtin.carrier',
+    );
+    carriers = {
+      observations: opts.previousGraph!.observations.filter(
+        (observation) => observation.extractor === 'builtin.carrier',
+      ),
+      bodySummaries: previousCarrierCoverage?.applicableFiles ?? 0,
+      discriminatorSummaries: 0,
+      filesInspected: previousCarrierPhase?.filesVisited ?? 0,
+      errors: opts.previousGraph!.coverage.extractionErrors.filter((error) => error.startsWith('builtin.carrier')),
+    };
+    recordPhase(phases, 'carrier', phaseStartedAt, withMounts.length, carriers.observations.length, {
+      filesVisited: 0,
+      filesReused: carriers.filesInspected,
+      factsReused: carriers.observations.length,
+      factsInvalidated: 0,
+    });
+    if (previousCarrierCoverage) coverage.set(previousCarrierCoverage.id, previousCarrierCoverage);
+  } else {
+    carriers = deriveCarrierDiscriminators(
+      db,
+      withMounts,
+      fileCoverage.flatMap((entry) => entry.bodySummaries ?? []),
+    );
+    recordPhase(phases, 'carrier', phaseStartedAt, withMounts.length, carriers.observations.length, {
+      filesVisited: carriers.filesInspected,
+    });
+    coverage.set('builtin.carrier', {
+      id: 'builtin.carrier',
+      applicableFiles: carriers.bodySummaries,
+      observations: carriers.observations.length,
+      errors: carriers.errors.length,
+    });
+  }
   extractionErrors.push(...carriers.errors);
   const deduplicated = deduplicateObservations([...withMounts, ...carriers.observations]);
   phaseStartedAt = performance.now();
@@ -218,6 +345,275 @@ export function collectRuntimeBoundaryGraph(
   };
 }
 
+function affectedDirectCoverageUnchanged(
+  previousFileCoverage: readonly RuntimeBoundaryFileCoverage[] | undefined,
+  currentAffectedCoverage: readonly RuntimeBoundaryFileCoverage[],
+  affectedFiles: ReadonlySet<string>,
+): boolean {
+  if (!previousFileCoverage) return false;
+  const previousAffectedCoverage = previousFileCoverage
+    .filter((entry) => affectedFiles.has(entry.file))
+    .map(directBoundaryCoverage)
+    .sort((left, right) => left.file.localeCompare(right.file));
+  const current = currentAffectedCoverage
+    .map(directBoundaryCoverage)
+    .sort((left, right) => left.file.localeCompare(right.file));
+  return JSON.stringify(previousAffectedCoverage) === JSON.stringify(current);
+}
+
+function directBoundaryCoverage(
+  entry: RuntimeBoundaryFileCoverage,
+): Omit<RuntimeBoundaryFileCoverage, 'syntaxHash' | 'shapeHash' | 'bodySummaries'> {
+  const { syntaxHash: _syntaxHash, shapeHash: _shapeHash, bodySummaries: _bodySummaries, ...coverage } = entry;
+  return coverage;
+}
+
+function httpSummaryReuseDecision(
+  previousGraph: RuntimeBoundaryGraph,
+  previousFileCoverage: readonly RuntimeBoundaryFileCoverage[] | undefined,
+  currentAffectedCoverage: readonly RuntimeBoundaryFileCoverage[],
+  affectedFiles: ReadonlySet<string>,
+  currentDirectObservations: readonly BoundaryObservation[],
+): { reuse: boolean; shapeUnchanged: boolean; proofFilesUnchanged: boolean; seedUnchanged: boolean } {
+  const shapeUnchanged = affectedShapeUnchanged(previousFileCoverage, currentAffectedCoverage, affectedFiles);
+  const proofFiles = runtimeBoundaryHttpSummaryProofFiles(previousGraph);
+  const changedFiles = syntaxChangedFiles(previousFileCoverage, currentAffectedCoverage);
+  const proofFilesUnchanged = ![...changedFiles].some((file) => proofFiles.has(file));
+
+  const previousDirectIds = new Set(
+    (previousFileCoverage ?? [])
+      .filter((entry) => affectedFiles.has(entry.file))
+      .flatMap((entry) => entry.observationIds),
+  );
+  const currentDirectIds = new Set(currentAffectedCoverage.flatMap((entry) => entry.observationIds));
+  const seedUnchanged =
+    httpPropagationSeedSignature(previousGraph.observations, previousDirectIds) ===
+    httpPropagationSeedSignature(currentDirectObservations, currentDirectIds);
+  return {
+    reuse: shapeUnchanged && proofFilesUnchanged && seedUnchanged,
+    shapeUnchanged,
+    proofFilesUnchanged,
+    seedUnchanged,
+  };
+}
+
+function syntaxChangedFiles(
+  previousFileCoverage: readonly RuntimeBoundaryFileCoverage[] | undefined,
+  currentAffectedCoverage: readonly RuntimeBoundaryFileCoverage[],
+): Set<string> {
+  const previousHashes = new Map(previousFileCoverage?.map((entry) => [entry.file, entry.syntaxHash] as const) ?? []);
+  return new Set(
+    currentAffectedCoverage
+      .filter((entry) => entry.syntaxHash === undefined || previousHashes.get(entry.file) !== entry.syntaxHash)
+      .map((entry) => entry.file),
+  );
+}
+
+function canReuseCarrier(
+  previousGraph: RuntimeBoundaryGraph,
+  previousFileCoverage: readonly RuntimeBoundaryFileCoverage[] | undefined,
+  currentAffectedCoverage: readonly RuntimeBoundaryFileCoverage[],
+  affectedFiles: ReadonlySet<string>,
+): boolean {
+  if (!previousFileCoverage) return false;
+  const previousBodySummaries = previousFileCoverage
+    .filter((entry) => affectedFiles.has(entry.file))
+    .map(({ file, bodySummaries }) => ({ file, bodySummaries: bodySummaries ?? [] }))
+    .sort((left, right) => left.file.localeCompare(right.file));
+  const currentBodySummaries = currentAffectedCoverage
+    .map(({ file, bodySummaries }) => ({ file, bodySummaries: bodySummaries ?? [] }))
+    .sort((left, right) => left.file.localeCompare(right.file));
+  if (JSON.stringify(previousBodySummaries) !== JSON.stringify(currentBodySummaries)) return false;
+
+  const changedFiles = syntaxChangedFiles(previousFileCoverage, currentAffectedCoverage);
+  const proofFiles = runtimeBoundaryExtractorProofFiles(previousGraph, 'builtin.carrier');
+  return ![...changedFiles].some((file) => proofFiles.has(file));
+}
+
+function runtimeBoundaryExtractorProofFiles(graph: RuntimeBoundaryGraph, extractor: string): Set<string> {
+  const files = new Set<string>();
+  for (const observation of graph.observations) {
+    if (observation.extractor !== extractor) continue;
+    files.add(observation.source.file);
+    for (const span of observation.derivation.sourceSpans) files.add(span.file);
+  }
+  return files;
+}
+
+function affectedShapeUnchanged(
+  previousFileCoverage: readonly RuntimeBoundaryFileCoverage[] | undefined,
+  currentAffectedCoverage: readonly RuntimeBoundaryFileCoverage[],
+  affectedFiles: ReadonlySet<string>,
+): boolean {
+  if (!previousFileCoverage) return false;
+  const previousHashes = new Map(
+    previousFileCoverage
+      .filter((entry) => affectedFiles.has(entry.file))
+      .map((entry) => [entry.file, entry.shapeHash] as const),
+  );
+  return (
+    currentAffectedCoverage.length === affectedFiles.size &&
+    currentAffectedCoverage.every(
+      (entry) => entry.shapeHash !== undefined && previousHashes.get(entry.file) === entry.shapeHash,
+    )
+  );
+}
+
+function runtimeBoundaryHttpSummaryProofFiles(graph: RuntimeBoundaryGraph): Set<string> {
+  const files = new Set<string>();
+  for (const observation of graph.observations) {
+    if (observation.extractor !== HTTP_SUMMARY_EXTRACTOR) continue;
+    files.add(observation.source.file);
+    for (const span of observation.derivation.sourceSpans) files.add(span.file);
+  }
+  for (const frontier of graph.frontiers) {
+    if (
+      frontier.kind === 'call-resolution' &&
+      frontier.action === DERIVED_BOUNDARY_ACTIONS.HTTP_REQUEST &&
+      frontier.source
+    ) {
+      files.add(frontier.source.file);
+    }
+  }
+  return files;
+}
+
+function httpPropagationSeedSignature(
+  observations: readonly BoundaryObservation[],
+  directObservationIds: ReadonlySet<string>,
+): string {
+  return JSON.stringify(
+    observations
+      .filter(
+        (observation) =>
+          directObservationIds.has(observation.id) &&
+          observation.action === DERIVED_BOUNDARY_ACTIONS.HTTP_REQUEST &&
+          observation.owner.symbol !== null &&
+          (observation.evidence === 'call-expression' || observation.evidence === 'client-adapter'),
+      )
+      .map((observation) => ({
+        ownerSymbol: observation.owner.symbol,
+        evidence: observation.evidence,
+        methods: observation.keyParts
+          .filter((part) => part.name === 'method' && part.evidence !== 'expression')
+          .map((part) => part.value.toUpperCase())
+          .sort(),
+      }))
+      .sort((left, right) =>
+        `${left.ownerSymbol}\0${left.evidence}\0${left.methods.join(',')}`.localeCompare(
+          `${right.ownerSymbol}\0${right.evidence}\0${right.methods.join(',')}`,
+        ),
+      ),
+  );
+}
+
+function affectedFilesMayChangeDerivedGraph(
+  db: ScipDatabase,
+  previousGraph: RuntimeBoundaryGraph,
+  affectedFiles: ReadonlySet<string>,
+): boolean {
+  const proofFiles = runtimeBoundaryDerivedProofFiles(previousGraph);
+  const proofSymbols = runtimeBoundaryDerivedProofSymbols(previousGraph);
+  if ([...affectedFiles].some((file) => proofFiles.has(file))) return true;
+  if (proofSymbols.size === 0 || affectedFiles.size === 0) return false;
+
+  const hasScipReferences = Boolean(
+    db.get<{ present: number }>('SELECT 1 AS present FROM mentions WHERE role != 1 LIMIT 1'),
+  );
+  if (!hasScipReferences) return true;
+
+  const files = [...affectedFiles];
+  for (let offset = 0; offset < files.length; offset += 750) {
+    const batch = files.slice(offset, offset + 750);
+    const placeholders = batch.map(() => '?').join(',');
+    const rows = db.all<{ symbol: string }>(
+      `SELECT DISTINCT global_symbol.symbol
+       FROM mentions mention
+       JOIN chunks reference_chunk ON reference_chunk.id = mention.chunk_id
+       JOIN documents reference_document ON reference_document.id = reference_chunk.document_id
+       JOIN global_symbols global_symbol ON global_symbol.id = mention.symbol_id
+       WHERE mention.role != 1
+         AND reference_document.relative_path IN (${placeholders})`,
+      ...batch,
+    );
+    if (rows.some((row) => proofSymbols.has(row.symbol))) return true;
+  }
+  return false;
+}
+
+function runtimeBoundaryDerivedProofFiles(graph: RuntimeBoundaryGraph): Set<string> {
+  const files = new Set<string>();
+  for (const observation of graph.observations) {
+    if (!DERIVED_BOUNDARY_ACTION_SET.has(observation.action)) continue;
+    files.add(observation.source.file);
+    for (const span of observation.derivation?.sourceSpans ?? []) files.add(span.file);
+  }
+  for (const frontier of graph.frontiers) {
+    if (!frontier.action || !DERIVED_BOUNDARY_ACTION_SET.has(frontier.action) || !frontier.source) continue;
+    files.add(frontier.source.file);
+  }
+  return files;
+}
+
+function runtimeBoundaryDerivedProofSymbols(graph: RuntimeBoundaryGraph): Set<string> {
+  return new Set(
+    graph.observations.flatMap((observation) =>
+      DERIVED_BOUNDARY_ACTION_SET.has(observation.action) && observation.owner.symbol ? [observation.owner.symbol] : [],
+    ),
+  );
+}
+
+function affectedSyntaxUnchanged(
+  previousFileCoverage: readonly RuntimeBoundaryFileCoverage[] | undefined,
+  currentAffectedCoverage: readonly RuntimeBoundaryFileCoverage[],
+  affectedFiles: ReadonlySet<string>,
+): boolean {
+  if (!previousFileCoverage) return false;
+  const previousHashes = new Map(
+    previousFileCoverage
+      .filter((entry) => affectedFiles.has(entry.file))
+      .map((entry) => [entry.file, entry.syntaxHash] as const),
+  );
+  return (
+    currentAffectedCoverage.length === affectedFiles.size &&
+    currentAffectedCoverage.every(
+      (entry) => entry.syntaxHash !== undefined && previousHashes.get(entry.file) === entry.syntaxHash,
+    )
+  );
+}
+
+function affectedFilesAppearInGraph(previousGraph: RuntimeBoundaryGraph, affectedFiles: ReadonlySet<string>): boolean {
+  const proofFiles = runtimeBoundaryProofFiles(previousGraph);
+  return [...affectedFiles].some((file) => proofFiles.has(file));
+}
+
+function runtimeBoundaryProofFiles(graph: RuntimeBoundaryGraph): Set<string> {
+  const files = new Set<string>();
+  for (const observation of graph.observations) {
+    files.add(observation.source.file);
+    for (const span of observation.derivation?.sourceSpans ?? []) files.add(span.file);
+  }
+  for (const frontier of graph.frontiers) {
+    if (frontier.source) files.add(frontier.source.file);
+  }
+  return files;
+}
+
+function reuseDerivedPhaseCoverage(
+  previousPhases: readonly RuntimeBoundaryPhaseCoverage[] | undefined,
+): RuntimeBoundaryPhaseCoverage[] {
+  return (previousPhases ?? [])
+    .filter((phase) => phase.id !== 'direct-extraction')
+    .map((phase) => ({
+      ...phase,
+      durationMs: 0,
+      filesVisited: 0,
+      filesReused: phase.filesVisited ?? 0,
+      factsReused: phase.outputFacts,
+      factsInvalidated: 0,
+    }));
+}
+
 function recordPhase(
   phases: RuntimeBoundaryPhaseCoverage[],
   id: RuntimeBoundaryPhaseId,
@@ -245,10 +641,18 @@ function extractBoundaryFiles(
   for (const file of files) {
     const source = getSourceText(db, file);
     const applicableExtractors = BOUNDARY_EXTRACTORS.filter((extractor) => extractor.supports(source));
-    const context = applicableExtractors.length > 0 ? boundaryFileContext(db, file, source, profileSpan) : null;
+    const hasBodySummaryCandidate = /\bJSON\.stringify\s*\(/u.test(source) && /\bbody\s*:/u.test(source);
+    const context =
+      applicableExtractors.length > 0 || hasBodySummaryCandidate
+        ? boundaryFileContext(db, file, source, profileSpan)
+        : null;
+    const sourceHashes = boundarySourceHashes(file, source);
     const coverage: RuntimeBoundaryFileCoverage = {
       file,
       hasAst: context !== null || boundaryAstEligible(file, source),
+      syntaxHash: sourceHashes.syntaxHash,
+      shapeHash: sourceHashes.shapeHash,
+      bodySummaries: context && hasBodySummaryCandidate ? serializedBodySummariesForFile(context) : [],
       observationIds: [],
       extractors: [],
       extractionErrors: [],
@@ -275,6 +679,74 @@ function extractBoundaryFiles(
     fileCoverage.push(coverage);
   }
   return { observations, fileCoverage };
+}
+
+function boundarySourceHashes(file: string, source: string): { syntaxHash: string; shapeHash: string } {
+  if (!/\.(?:[cm]?[jt]sx?)$/iu.test(file)) {
+    const hash = createHash('sha256').update(source).digest('hex');
+    return { syntaxHash: hash, shapeHash: hash };
+  }
+  const languageVariant = /\.[jt]sx$/iu.test(file)
+    ? typescript.LanguageVariant.JSX
+    : typescript.LanguageVariant.Standard;
+  const scanner = typescript.createScanner(typescript.ScriptTarget.Latest, false, languageVariant, source);
+  const syntaxHash = createHash('sha256');
+  const shapeHash = createHash('sha256');
+  const templateBraceDepths: number[] = [];
+  const lineStarts = [0];
+  for (let index = 0; index < source.length; index += 1) {
+    if (source.charCodeAt(index) === 10) lineStarts.push(index + 1);
+  }
+  let tokenLine = 0;
+  for (let token = scanner.scan(); token !== typescript.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
+    if (
+      token === typescript.SyntaxKind.CloseBraceToken &&
+      templateBraceDepths.length > 0 &&
+      templateBraceDepths.at(-1) === 0
+    ) {
+      token = scanner.reScanTemplateToken(false);
+    }
+    if (TYPESCRIPT_TRIVIA.has(token)) continue;
+    const tokenText = scanner.getTokenText();
+    while (lineStarts[tokenLine + 1] !== undefined && lineStarts[tokenLine + 1]! <= scanner.getTokenPos()) {
+      tokenLine += 1;
+    }
+    syntaxHash.update(String(token));
+    syntaxHash.update('\0');
+    syntaxHash.update(tokenText);
+    syntaxHash.update('\0');
+    syntaxHash.update(String(tokenLine));
+    syntaxHash.update('\0');
+    shapeHash.update(String(token));
+    shapeHash.update('\0');
+    if (!TYPESCRIPT_LITERAL_VALUES.has(token) && !isBoundaryAddressString(token, tokenText)) {
+      shapeHash.update(tokenText);
+    }
+    shapeHash.update('\0');
+    shapeHash.update(String(tokenLine));
+    shapeHash.update('\0');
+
+    if (token === typescript.SyntaxKind.TemplateHead) {
+      templateBraceDepths.push(0);
+    } else if (token === typescript.SyntaxKind.TemplateTail) {
+      templateBraceDepths.pop();
+    } else if (token === typescript.SyntaxKind.OpenBraceToken && templateBraceDepths.length > 0) {
+      templateBraceDepths[templateBraceDepths.length - 1]! += 1;
+    } else if (
+      token === typescript.SyntaxKind.CloseBraceToken &&
+      templateBraceDepths.length > 0 &&
+      templateBraceDepths.at(-1)! > 0
+    ) {
+      templateBraceDepths[templateBraceDepths.length - 1]! -= 1;
+    }
+  }
+  return { syntaxHash: syntaxHash.digest('hex'), shapeHash: shapeHash.digest('hex') };
+}
+
+function isBoundaryAddressString(token: TypeScript.SyntaxKind, tokenText: string): boolean {
+  if (token !== typescript.SyntaxKind.StringLiteral || tokenText.length < 2) return false;
+  const value = tokenText.slice(1, -1);
+  return value.startsWith('/') || value.includes('://');
 }
 
 function profileBoundaryWork<T>(

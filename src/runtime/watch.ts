@@ -1,6 +1,7 @@
-import { existsSync, lstatSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, statSync, watch as watchNative, type FSWatcher } from 'node:fs';
+import { EventEmitter } from 'node:events';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import { watch } from 'chokidar';
+import { watch as watchWithChokidar } from 'chokidar';
 import ignore from 'ignore';
 import type {
   RefreshTrigger,
@@ -125,7 +126,7 @@ export interface WatchSubscription {
   close(): void | Promise<void>;
 }
 
-export type WatchSubscriptionOptions = NonNullable<Parameters<typeof watch>[1]>;
+export type WatchSubscriptionOptions = NonNullable<Parameters<typeof watchWithChokidar>[1]>;
 export type WatchSubscriptionFactory = (projectRoot: string, options: WatchSubscriptionOptions) => WatchSubscription;
 
 type WatchTimer = ReturnType<typeof setTimeout>;
@@ -346,7 +347,7 @@ export class Watcher {
 
   private handleSourceWatcherError(watcher: WatchSubscription, error: unknown, usePolling: boolean): void {
     this.markPendingChangesIncomplete('source-watcher-error');
-    if (usePolling || this.sourcePollingFallbackStarted || !isFileDescriptorLimitError(error) || this.stopped) {
+    if (usePolling || this.sourcePollingFallbackStarted || !isSourceWatcherFallbackError(error) || this.stopped) {
       this.onError(new Error(`Failed to watch ${this.projectRoot}: ${String(error)}`));
       return;
     }
@@ -559,6 +560,20 @@ export class Watcher {
         this.restorePendingChangeJournal(changeJournal);
         this.onReindexError(error, trigger);
         this.onError(error);
+        if (this.dirty) {
+          const until = this.wallNow() + this.watchConfig.cooldownMs;
+          this.setStatus({ state: 'cooldown', until, dirty: true });
+          this.cooldownTimer = this.clock.setTimeout(() => {
+            this.cooldownTimer = null;
+            if (this.dirty && !this.stopped) {
+              this.dirty = false;
+              this.triggerReindex();
+            } else {
+              this.setStatus({ state: 'idle' });
+            }
+          }, this.watchConfig.cooldownMs);
+          return;
+        }
         this.setStatus({ state: 'idle' });
       })
       .finally(() => {
@@ -997,7 +1012,58 @@ const SYSTEM_WATCH_CLOCK: WatchClock = {
   clearInterval: (timer) => clearInterval(timer),
 };
 
-const defaultWatchSubscriptionFactory: WatchSubscriptionFactory = (projectRoot, options) => watch(projectRoot, options);
+const defaultWatchSubscriptionFactory: WatchSubscriptionFactory = (projectRoot, options) =>
+  shouldUseRecursiveSourceWatch(process.platform, options.usePolling)
+    ? new RecursiveSourceWatchSubscription(projectRoot)
+    : watchWithChokidar(projectRoot, options);
+
+export function shouldUseRecursiveSourceWatch(platform: NodeJS.Platform, usePolling: boolean | undefined): boolean {
+  return platform === 'darwin' && usePolling !== true;
+}
+
+export class RecursiveSourceWatchError extends Error {
+  constructor(message: string, cause?: unknown) {
+    super(message, cause === undefined ? undefined : { cause });
+    this.name = 'RecursiveSourceWatchError';
+  }
+}
+
+class RecursiveSourceWatchSubscription implements WatchSubscription {
+  private readonly events = new EventEmitter();
+  private readonly watcher: FSWatcher;
+
+  constructor(projectRoot: string) {
+    this.watcher = watchNative(projectRoot, { recursive: true }, (eventName, filename) => {
+      if (filename === null) {
+        this.events.emit('error', new RecursiveSourceWatchError('Recursive source watcher omitted the changed path.'));
+        return;
+      }
+      const path = join(projectRoot, filename.toString());
+      this.events.emit('all', nativeSourceWatchEvent(eventName, path), path);
+    });
+    this.watcher.on('error', (error) => {
+      this.events.emit(
+        'error',
+        new RecursiveSourceWatchError(`Recursive source watcher failed: ${error.message}`, error),
+      );
+    });
+  }
+
+  on: WatchSubscription['on'] = (event, listener) => {
+    this.events.on(event, listener);
+    return this;
+  };
+
+  close(): void {
+    this.watcher.close();
+  }
+}
+
+function nativeSourceWatchEvent(eventName: string, path: string): 'change' | 'addDir' | 'unlink' {
+  if (eventName === 'change') return 'change';
+  if (!existsSync(path)) return 'unlink';
+  return statSync(path).isDirectory() ? 'addDir' : 'change';
+}
 
 const WATCH_REINDEX_TIMEOUT_MS = 15 * 60_000;
 const WATCH_REINDEX_TERMINATION_GRACE_MS = 1_000;
@@ -1123,6 +1189,10 @@ function isFileDescriptorLimitError(error: unknown): boolean {
     (error instanceof Error && 'code' in error && error.code === 'EMFILE') ||
     String(error).includes('EMFILE: too many open files')
   );
+}
+
+function isSourceWatcherFallbackError(error: unknown): boolean {
+  return error instanceof RecursiveSourceWatchError || isFileDescriptorLimitError(error);
 }
 
 interface WatchGitLayout {

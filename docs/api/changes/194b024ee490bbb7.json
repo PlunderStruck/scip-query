@@ -1,0 +1,25 @@
+{
+  "acceptedAt": "2026-08-30T16:01:20.069Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "194b024ee490bbb7378e4287ba91b33eb09ff19a90a7abf6c46ddc885cc0151f",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ScipQueryConfig changed from interface ScipQueryConfig { dbPath: string; indexPath: string; projectRoot: string; collaborationDomainId?: string; sharedEvidenceDbPath?: string; entryRoots?: EntryRootsConfig;... to interface ScipQueryConfig { dbPath: string; indexPath: string; projectRoot: string; collaborationDomainId?: string; evidenceDbPath?: string; sharedEvidenceDbPath?: string; entry....",
+      "target": ".:ScipQueryConfig"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "S changed from interface ScipQueryConfig { dbPath: string; indexPath: string; projectRoot: string; collaborationDomainId?: string; sharedEvidenceDbPath?: string; entryRoots?: EntryRootsConfig;... to interface ScipQueryConfig { dbPath: string; indexPath: string; projectRoot: string; collaborationDomainId?: string; evidenceDbPath?: string; sharedEvidenceDbPath?: string; entry....",
+      "target": "config-types-<hash>.d.ts:S"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.21.0",
+  "previousDigest": "92aeb3801723ad6b42f765be48b72b1d853e608a889b3b22abc97b82e5b0f9c4",
+  "reason": "Allow temporary publish candidates to reuse the persistent evidence cache.",
+  "schemaVersion": 1
+}

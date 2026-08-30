@@ -6,11 +6,15 @@ import { describe, expect, it } from 'vitest';
 // @ts-expect-error native script modules do not ship TypeScript declarations
 import {
   classifyExplorationCommand,
+  combineCodexPhases,
   codexExplorationExecArgs,
   directGraphTreatmentPrompt,
   disciplinedControlPrompt,
+  externalLedgerExplorationPrompt,
+  externalLedgerSynthesisPrompt,
   minimalTreatmentPrompt,
   parseCodexJsonl,
+  parseExternalLedgerSignal,
   pathWithoutExecutable,
   treatmentPrompt,
 } from '../../scripts/codex-exploration-trial-core.mjs';
@@ -139,6 +143,13 @@ describe('Codex exploration trial core', () => {
         '/bin/zsh -lc "ruby -e \'STDOUT.write(File.read("/repo/skills/scip-query/SKILL.md"))\'"',
       ),
     ).toEqual({ surface: 'other', kind: 'other' });
+    expect(classifyExplorationCommand("sed -n '1,120p' skills/scip-explore/references/external-evidence.md")).toEqual({
+      surface: 'other',
+      kind: 'other',
+    });
+    expect(
+      classifyExplorationCommand("sed -n '1,120p' skills/scip-explore/references/external-evidence.md src/index.ts"),
+    ).toEqual({ surface: 'native-read', kind: 'query' });
     expect(classifyExplorationCommand('rg -n handler src')).toEqual({ surface: 'native-search', kind: 'query' });
     expect(classifyExplorationCommand('ps -ax -o pid=,command=')).toEqual({
       surface: 'native-search',
@@ -149,6 +160,15 @@ describe('Codex exploration trial core', () => {
       kind: 'query',
     });
     expect(classifyExplorationCommand('pwd')).toEqual({ surface: 'other', kind: 'other' });
+    expect(classifyExplorationCommand("env | rg '^SCIP_EXPLORE_(EVIDENCE_DIR|LEDGER)='")).toEqual({
+      surface: 'other',
+      kind: 'other',
+    });
+    expect(
+      classifyExplorationCommand(
+        'node .agents/skills/scip-explore/scripts/capture-evidence.mjs --id ingress -- evidence --at src/a.ts:1',
+      ),
+    ).toEqual({ surface: 'scip-query', kind: 'query' });
   });
 
   it('delegates exploration semantics to installed repository guidance', () => {
@@ -188,6 +208,60 @@ describe('Codex exploration trial core', () => {
     expect(prompt).not.toContain('The normal exploration budget is');
     expect(prompt).not.toContain("scip-query evidence --symbol '<first>'");
     expect(prompt).not.toContain("Run the chosen set's printed system-map command unchanged");
+  });
+
+  it('separates external evidence acquisition from fresh synthesis', () => {
+    const acquisition = externalLedgerExplorationPrompt('How does the path work?', '/tmp/ledger.md');
+    expect(acquisition).toContain('do not answer it yet');
+    expect(acquisition).toContain('capture-evidence script');
+    expect(acquisition).toContain('/tmp/ledger.md');
+
+    const synthesis = externalLedgerSynthesisPrompt('How does the path work?', '# Evidence\n- established');
+    expect(synthesis).toContain('Do not call tools or inspect the repository');
+    expect(synthesis).toContain('every Must transfer bullet');
+    expect(synthesis).toContain('Preserve every scope-manifest row');
+    expect(synthesis).toContain('<evidence-ledger>');
+    expect(synthesis).toContain('- established');
+  });
+
+  it('accepts only exact external-ledger phase signals', () => {
+    expect(parseExternalLedgerSignal('LEDGER_READY\n')).toBe('ready');
+    expect(parseExternalLedgerSignal('LEDGER_BLOCKED')).toBe('blocked');
+    expect(() => parseExternalLedgerSignal('Done: LEDGER_READY')).toThrow(/must return exactly/u);
+  });
+
+  it('combines two isolated Codex phases without discarding either usage record', () => {
+    const base = {
+      calls: [{ command: 'one' }],
+      usage: { inputTokens: 10, cachedInputTokens: 4, outputTokens: 3, reasoningOutputTokens: 2 },
+      durationMs: 20,
+      stderrCharacters: 1,
+      codexThreadId: 'explore',
+      rawEventCount: 5,
+    };
+    const combined = combineCodexPhases(
+      { ...base, answer: 'LEDGER_READY' },
+      {
+        ...base,
+        answer: 'final',
+        calls: [{ command: 'two' }],
+        codexThreadId: 'synthesis',
+      },
+      { benchmarkId: 'fixture' },
+    );
+
+    expect(combined).toMatchObject({
+      benchmarkId: 'fixture',
+      answer: 'final',
+      codexThreadId: 'synthesis',
+      rawEventCount: 10,
+      usage: { inputTokens: 20, cachedInputTokens: 8, outputTokens: 6, reasoningOutputTokens: 4 },
+      phases: {
+        exploration: { toolCalls: 1, codexThreadId: 'explore' },
+        synthesis: { toolCalls: 1, codexThreadId: 'synthesis' },
+      },
+    });
+    expect(combined.calls).toHaveLength(2);
   });
 
   it('removes every PATH directory that could expose the treatment executable to a control', () => {

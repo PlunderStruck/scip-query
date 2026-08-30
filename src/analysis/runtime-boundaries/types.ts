@@ -1,3 +1,4 @@
+import type { IndexedDefinition } from '../../domain/types.js';
 import type {
   StaticValueDerivation,
   StaticValueDerivationKind,
@@ -101,9 +102,20 @@ export interface BoundaryExtractorCoverage {
   errors: number;
 }
 
+export interface RuntimeBoundaryBodySummary {
+  definition: IndexedDefinition;
+  parameterIndexes: number[];
+}
+
 export interface RuntimeBoundaryFileCoverage {
   file: string;
   hasAst: boolean;
+  /** Token hash that ignores TypeScript and JavaScript trivia such as whitespace and comments. */
+  syntaxHash?: string;
+  /** Token-kind hash that also ignores literal values while retaining identifiers and control flow. */
+  shapeHash?: string;
+  /** Static request-body serializers found while this file was already parsed. */
+  bodySummaries?: RuntimeBoundaryBodySummary[];
   observationIds: string[];
   extractors: BoundaryExtractorCoverage[];
   extractionErrors: string[];

@@ -47,6 +47,18 @@ describe('temporary indexer root configuration', () => {
     expect(existsSync(join(root, 'tsconfig.json'))).toBe(false);
   });
 
+  it('preserves actionable multiline indexer stderr in the skipped reason', async () => {
+    const root = createProject();
+    const output = join(root, 'index.scip');
+    const run = nodeRun(root, output);
+    run.args = ['-e', "process.stderr.write('missing compile_commands.json\\n'); process.exitCode = 2"];
+
+    const [result] = await runPreparedIndexers([run], root, () => {});
+
+    expect(result?.skipped?.reason).toContain('exited with status 2');
+    expect(result?.skipped?.reason).toContain('missing compile_commands.json');
+  });
+
   it('retains an owned config if another actor edits it during indexing', async () => {
     const root = createProject();
     const output = join(root, 'index.scip');

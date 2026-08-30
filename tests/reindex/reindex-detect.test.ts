@@ -40,6 +40,17 @@ describe('detectLanguages', () => {
 
     const languages = detectLanguages(projectRoot);
     expect(languages).toContain('c');
+    expect(languages).not.toContain('cpp');
+  });
+
+  it('retains both languages when C and C++ source files are present', () => {
+    const projectRoot = createProject('scip-query-detect-mixed-c-');
+    writeFileSync(join(projectRoot, 'CMakeLists.txt'), 'project(mixed LANGUAGES C CXX)\n');
+    mkdirSync(join(projectRoot, 'src'), { recursive: true });
+    writeFileSync(join(projectRoot, 'src', 'legacy.c'), 'int legacy(void) { return 1; }\n');
+    writeFileSync(join(projectRoot, 'src', 'modern.cpp'), 'int modern() { return 2; }\n');
+
+    expect(detectLanguages(projectRoot)).toEqual(['cpp', 'c']);
   });
 
   it('detects both C# and Visual Basic from project files instead of skipping wildcard markers', () => {
