@@ -1,5 +1,6 @@
 import type { IndexedDefinition } from '../../domain/types.js';
 import { getAst } from '../../source/ast/ast-core.js';
+import { nodesOfTypes } from '../../source/ast/ast-node-index.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import { extractCallLeaf } from '../../source/facts/source-calls.js';
 import type { ScipDatabase } from '../../storage/db.js';
@@ -207,12 +208,11 @@ function buildFileCallSyntaxIndex(db: ScipDatabase, file: string): FileCallSynta
   const root = getAst(db, file)?.rootNode;
   if (!root) return null;
   const byLeaf = new Map<string, IndexedCallSyntax[]>();
-  walk(root, (node) => {
-    if (node.type !== 'call_expression' && node.type !== 'call') return;
+  for (const node of nodesOfTypes(root, ['call_expression', 'call'])) {
     const targetNode = node.childForFieldName('function') ?? node.namedChild(0);
-    if (!targetNode) return;
+    if (!targetNode) continue;
     const leaf = extractCallLeaf(targetNode);
-    if (!leaf) return;
+    if (!leaf) continue;
     const argsNode =
       node.childForFieldName('arguments') ?? node.namedChildren.find((child) => child.type === 'arguments');
     const call: IndexedCallSyntax = {
@@ -223,11 +223,6 @@ function buildFileCallSyntaxIndex(db: ScipDatabase, file: string): FileCallSynta
     const existing = byLeaf.get(leaf);
     if (existing) existing.push(call);
     else byLeaf.set(leaf, [call]);
-  });
+  }
   return { byLeaf };
-}
-
-function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
-  visit(node);
-  for (const child of node.namedChildren) walk(child, visit);
 }

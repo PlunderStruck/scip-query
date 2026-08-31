@@ -12,6 +12,7 @@ export interface Tree {
 export interface TreeCursor {
   nodeType: string;
   nodeText: string;
+  nodeIsNamed: boolean;
   /** Materializes a node object for the cursor position; costs native cache memory, so read `nodeType` first. */
   readonly currentNode: SyntaxNode;
   gotoFirstChild(): boolean;

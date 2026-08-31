@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-08-31T18:01:51.285Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "79d99c69e72fe7f72ad7c552489610569f99fd85b9dd8087378484e906aaae44",
+  "changes": [
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/complexity; review their variance and runtime meaning.",
+      "target": "./queries/complexity"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.21.1",
+  "previousDigest": "624da1ffefb0c2204c9e8914372e01fd8d765d7352713812421b436e4261b3ef",
+  "reason": "TreeCursor gains nodeIsNamed/currentNode and SyntaxNode gains walk(), all pre-existing tree-sitter runtime capabilities now needed by cursor-based whole-file analyzers",
+  "schemaVersion": 1
+}

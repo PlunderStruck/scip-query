@@ -58,6 +58,15 @@ Confirming on the real repository (not the clone) exposed four more defects, eac
 
 Measured end state on the real repository, forced full reindex at the **default heap**: **91.3 s, published**, coordinator JS heap within the 4 GB default (peak RSS 6.6 GB is dominated by extraction's native trees), max shard child 5.6 GB. The session started with this exact command crashing at 112 s with nothing published. Runtime-boundary extraction: 54 s → 36 s.
 
+## Third round: HTTP summary propagation and shard planning (same day)
+
+- **Covering-callable lookups were quadratic.** `smallestCoveringCallable` walked the caller's whole tree per resolved call site, and HTTP summary propagation asks once per site; a memoized per-root callable index (cursor pass, named nodes only — anonymous `function` keyword tokens share the type names) answers from a short list. Forwarded-role derivation went 5.5 s → 1.9 s, and the carrier phase halved for the same reason.
+- **Call-syntax indexes now come from the shared per-root type index** instead of a private node-object recursion.
+- **Shard planning is makespan-aware.** Shard count now minimizes waves × per-shard size against the machine's parallelism (a count below the target is allowed while per-shard inputs stay under 1.25× target), and shards are balanced by source bytes rather than file counts. Byte weighting did **not** tame the densest shard on the measured repository (~43 s vs ~32 s peers — its cost is type-check density, not bytes); measured-cost feedback would be the next lever there.
+- Ruled out cheaply: scip-typescript's O(files × program) membership scan costs only ~24 ms per shard — not worth patching.
+
+Measured: http-summary 10.5 s → 6.4 s on both the clone and the real repository; whole extraction 34.3 s → 27.7 s standalone; clone forced reindex 124.6 s → 93.2 s; real-repository forced reindex published at 99.8 s on a tree that had just grown by a large merged refactor.
+
 ## Named follow-ups
 
 - The dev watch-server's RSS grows over hours (observed 3.9 → 5.4 GB on one repository); its semantic/index service heap is the next bounded-memory candidate.

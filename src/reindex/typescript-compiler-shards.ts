@@ -51,23 +51,98 @@ export function shouldShardTypeScriptCompilerInputs(inputCount: number, targetFi
 }
 
 /**
- * Deterministic, balanced partition of the sorted unique input list. Sorting
- * by path keeps each shard directory-coherent, which keeps its parsed
- * dependency closure (and therefore its memory floor) well below the whole
- * program's.
+ * A shard may exceed the target by this factor when doing so saves a whole
+ * execution wave; the measured per-file memory slope leaves that much
+ * headroom inside the default child heap.
  */
+const SHARD_HARD_MAX_FACTOR = 1.25;
+
+/**
+ * Wave-optimal shard count: shard wall time is the slowest wave, so a count
+ * that divides evenly into the machine's parallelism beats one that leaves a
+ * ragged final wave. A count below the target-derived base is allowed only
+ * while per-shard inputs stay under the hard cap.
+ */
+export function typescriptCompilerShardCount(inputCount: number, targetFiles: number, parallelism: number): number {
+  if (!Number.isSafeInteger(targetFiles) || targetFiles < 1) {
+    throw new Error(`TypeScript compiler shard targetFiles must be a positive safe integer; received ${targetFiles}.`);
+  }
+  const base = Math.max(1, Math.ceil(inputCount / targetFiles));
+  if (base <= 1 || parallelism <= 1) return base;
+  const hardMax = Math.floor(targetFiles * SHARD_HARD_MAX_FACTOR);
+  const candidates = new Set([
+    base,
+    parallelism * Math.floor(base / parallelism),
+    parallelism * Math.ceil(base / parallelism),
+  ]);
+  // Wall time ≈ waves × per-shard duration, and per-shard duration grows with
+  // per-shard inputs, so rank by waves × per-shard size; fewer shards win
+  // ties because every extra shard re-parses the shared dependency closure.
+  const makespan = (count: number): number => Math.ceil(count / parallelism) * Math.ceil(inputCount / count);
+  let best = base;
+  for (const candidate of candidates) {
+    if (candidate < 1 || Math.ceil(inputCount / candidate) > hardMax) continue;
+    if (makespan(candidate) < makespan(best) || (makespan(candidate) === makespan(best) && candidate < best)) {
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+/**
+ * Deterministic partition of the sorted unique input list into `shardCount`
+ * contiguous shards of near-equal cumulative weight. Sorting by path keeps
+ * each shard directory-coherent, which keeps its parsed dependency closure
+ * (and therefore its memory floor) well below the whole program's; weighting
+ * by source bytes keeps shard durations balanced, since wall time is the
+ * slowest shard of a wave.
+ */
+export function partitionTypeScriptCompilerInputsIntoShards(
+  inputPaths: readonly string[],
+  shardCount: number,
+  weightOf: (path: string) => number = () => 1,
+): string[][] {
+  if (!Number.isSafeInteger(shardCount) || shardCount < 1) {
+    throw new Error(`TypeScript compiler shard count must be a positive safe integer; received ${shardCount}.`);
+  }
+  const sorted = [...new Set(inputPaths)].sort((left, right) => left.localeCompare(right));
+  if (shardCount === 1 || sorted.length <= shardCount) {
+    return sorted.length <= shardCount && shardCount > 1
+      ? sorted.map((path) => [path])
+      : sorted.length > 0
+        ? [sorted]
+        : [];
+  }
+  const weights = sorted.map((path) => Math.max(1, weightOf(path)));
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  const shards: string[][] = [];
+  let current: string[] = [];
+  let cumulative = 0;
+  for (let index = 0; index < sorted.length; index += 1) {
+    current.push(sorted[index]!);
+    cumulative += weights[index]!;
+    const remainingShards = shardCount - shards.length - 1;
+    const remainingFiles = sorted.length - index - 1;
+    if (
+      remainingShards > 0 &&
+      remainingFiles >= remainingShards &&
+      (cumulative >= (totalWeight * (shards.length + 1)) / shardCount || remainingFiles === remainingShards)
+    ) {
+      shards.push(current);
+      current = [];
+    }
+  }
+  if (current.length > 0) shards.push(current);
+  return shards;
+}
+
+/** Target-derived partition used when no weights or parallelism are known. */
 export function partitionTypeScriptCompilerInputs(inputPaths: readonly string[], targetFiles: number): string[][] {
   if (!Number.isSafeInteger(targetFiles) || targetFiles < 1) {
     throw new Error(`TypeScript compiler shard targetFiles must be a positive safe integer; received ${targetFiles}.`);
   }
-  const sorted = [...new Set(inputPaths)].sort((left, right) => left.localeCompare(right));
-  const shardCount = Math.max(1, Math.ceil(sorted.length / targetFiles));
-  const shardSize = Math.ceil(sorted.length / shardCount);
-  const shards: string[][] = [];
-  for (let offset = 0; offset < sorted.length; offset += shardSize) {
-    shards.push(sorted.slice(offset, offset + shardSize));
-  }
-  return shards;
+  const uniqueCount = new Set(inputPaths).size;
+  return partitionTypeScriptCompilerInputsIntoShards(inputPaths, Math.max(1, Math.ceil(uniqueCount / targetFiles)));
 }
 
 export function createTypeScriptCompilerShards(opts: {
@@ -75,45 +150,59 @@ export function createTypeScriptCompilerShards(opts: {
   rootConfigPath: string;
   inputPaths: readonly string[];
   targetFiles?: number;
+  shardCount?: number;
+  weightOf?: (path: string) => number;
 }): TypeScriptCompilerShard[] {
   const targetFiles = opts.targetFiles ?? typescriptCompilerShardTargetFiles();
-  return partitionTypeScriptCompilerInputs(opts.inputPaths, targetFiles).map((inputPaths, index) => {
-    const configPath = join(opts.projectRoot, typescriptCompilerShardConfigFileName(index));
-    // `files` alone does not bound the program: `include` inherited through
-    // `extends` is unioned with `files`, so both `include` and `exclude` must
-    // be overridden explicitly or every shard silently compiles (and emits)
-    // the whole repository again.
-    const content = `${JSON.stringify(
-      {
-        extends: `./${opts.rootConfigPath}`,
-        compilerOptions: { incremental: false },
-        files: inputPaths.map((relativePath) => `./${relativePath}`),
-        include: [],
-        exclude: [],
-      },
-      null,
-      2,
-    )}\n`;
-    return { configPath, content, inputPaths };
-  });
+  const shardCount =
+    opts.shardCount ?? Math.max(1, Math.ceil(new Set(opts.inputPaths).size / Math.max(1, targetFiles)));
+  return partitionTypeScriptCompilerInputsIntoShards(opts.inputPaths, shardCount, opts.weightOf).map(
+    (inputPaths, index) => {
+      const configPath = join(opts.projectRoot, typescriptCompilerShardConfigFileName(index));
+      // `files` alone does not bound the program: `include` inherited through
+      // `extends` is unioned with `files`, so both `include` and `exclude` must
+      // be overridden explicitly or every shard silently compiles (and emits)
+      // the whole repository again.
+      const content = `${JSON.stringify(
+        {
+          extends: `./${opts.rootConfigPath}`,
+          compilerOptions: { incremental: false },
+          files: inputPaths.map((relativePath) => `./${relativePath}`),
+          include: [],
+          exclude: [],
+        },
+        null,
+        2,
+      )}\n`;
+      return { configPath, content, inputPaths };
+    },
+  );
 }
 
 /**
- * How many shard children may run at once on this machine. Each child holds
- * an independent compiler program, so parallelism is gated by physical
- * memory, not just CPUs.
+ * How many shard children may run at once on this machine, independent of how
+ * many shards exist. Each child holds an independent compiler program, so
+ * parallelism is gated by physical memory, not just CPUs.
  */
+export function typescriptCompilerShardParallelism(
+  env: NodeJS.ProcessEnv = process.env,
+  machine: { totalmemBytes: number; cpuCount: number } = { totalmemBytes: totalmem(), cpuCount: cpus().length },
+): number {
+  const configured = Number.parseInt(env['SCIP_QUERY_TS_COMPILER_SHARD_CONCURRENCY'] ?? '', 10);
+  if (Number.isSafeInteger(configured) && configured > 0) return configured;
+  const byMemory = Math.floor(machine.totalmemBytes / 2 / SHARD_ESTIMATED_PEAK_BYTES);
+  const byCpu = Math.floor(machine.cpuCount / 2);
+  return Math.max(1, Math.min(SHARD_MAX_PARALLELISM, byMemory, byCpu));
+}
+
+/** Concurrency for an already-planned shard set. */
 export function typescriptCompilerShardConcurrency(
   shardCount: number,
   env: NodeJS.ProcessEnv = process.env,
   machine: { totalmemBytes: number; cpuCount: number } = { totalmemBytes: totalmem(), cpuCount: cpus().length },
 ): number {
   if (shardCount <= 1) return 1;
-  const configured = Number.parseInt(env['SCIP_QUERY_TS_COMPILER_SHARD_CONCURRENCY'] ?? '', 10);
-  if (Number.isSafeInteger(configured) && configured > 0) return Math.min(shardCount, configured);
-  const byMemory = Math.floor(machine.totalmemBytes / 2 / SHARD_ESTIMATED_PEAK_BYTES);
-  const byCpu = Math.floor(machine.cpuCount / 2);
-  return Math.max(1, Math.min(shardCount, SHARD_MAX_PARALLELISM, byMemory, byCpu));
+  return Math.min(shardCount, typescriptCompilerShardParallelism(env, machine));
 }
 
 /**

@@ -138,7 +138,8 @@ import {
   createTypeScriptCompilerShards,
   removeStaleTypeScriptCompilerShardConfigs,
   shouldShardTypeScriptCompilerInputs,
-  typescriptCompilerShardConcurrency,
+  typescriptCompilerShardCount,
+  typescriptCompilerShardParallelism,
   typescriptCompilerShardTargetFiles,
 } from './typescript-compiler-shards.js';
 import {
@@ -2405,15 +2406,27 @@ function prepareBoundedTypeScriptCompilerShardRuns(
   if (!inputPaths || !shouldShardTypeScriptCompilerInputs(inputPaths.size, targetFiles)) return null;
 
   removeStaleTypeScriptCompilerShardConfigs(opts.projectRoot);
+  const parallelism = typescriptCompilerShardParallelism();
+  const shardCount = typescriptCompilerShardCount(inputPaths.size, targetFiles, parallelism);
   const compilerShards = createTypeScriptCompilerShards({
     projectRoot: opts.projectRoot,
     rootConfigPath: 'tsconfig.json',
     inputPaths: [...inputPaths],
     targetFiles,
+    shardCount,
+    // Balance shards by source bytes: shard wall time is the slowest shard
+    // of a wave, and file counts alone left waves ~40% ragged.
+    weightOf: (relativePath) => {
+      try {
+        return statSync(join(opts.projectRoot, relativePath)).size;
+      } catch {
+        return 1;
+      }
+    },
   });
-  const boundedConcurrency = typescriptCompilerShardConcurrency(compilerShards.length);
+  const boundedConcurrency = Math.min(parallelism, compilerShards.length);
   opts.onStatus(
-    `Indexing ${inputPaths.size} TypeScript inputs as ${compilerShards.length} bounded compiler shard(s), ` +
+    `Indexing ${inputPaths.size} TypeScript inputs as ${compilerShards.length} byte-balanced compiler shard(s), ` +
       `${boundedConcurrency} at a time.`,
   );
   return compilerShards.map((shard, shardIndex) =>

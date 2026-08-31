@@ -1,4 +1,4 @@
-import type { SyntaxNode } from './ast-types.js';
+import type { SyntaxNode, TreeCursor } from './ast-types.js';
 
 /**
  * Per-root index of the node types whole-file analyzers scan for.
@@ -39,23 +39,18 @@ export function nodesOfTypes(root: SyntaxNode, type: string | string[]): readonl
   return combined.sort((left, right) => left.startIndex - right.startIndex);
 }
 
-function indexedNodesByType(root: SyntaxNode): ReadonlyMap<string, readonly SyntaxNode[]> {
-  const cached = NODE_TYPE_INDEX.get(root);
-  if (cached) return cached;
-  const index = new Map<string, SyntaxNode[]>();
+/**
+ * Depth-guarded pre-order cursor visit of `root` and every descendant
+ * (anonymous nodes included). `root` may be any node: the depth counter is
+ * what confines the scan to the subtree, because a cursor will walk past a
+ * subtree root through gotoParent/gotoNextSibling.
+ */
+export function forEachTreeCursorNode(root: SyntaxNode, visit: (cursor: TreeCursor) => void): void {
   const cursor = root.walk();
-  // Depth-tracked traversal: `root` may be any node, and a cursor will walk
-  // past a subtree root through gotoParent/gotoNextSibling, so the depth
-  // counter is what confines the scan to the subtree.
   let depth = 0;
   let done = false;
   while (!done) {
-    const nodeType = cursor.nodeType;
-    if (INDEXED_NODE_TYPES.has(nodeType)) {
-      const bucket = index.get(nodeType);
-      if (bucket) bucket.push(cursor.currentNode);
-      else index.set(nodeType, [cursor.currentNode]);
-    }
+    visit(cursor);
     if (cursor.gotoFirstChild()) {
       depth += 1;
       continue;
@@ -70,6 +65,19 @@ function indexedNodesByType(root: SyntaxNode): ReadonlyMap<string, readonly Synt
       depth -= 1;
     }
   }
+}
+
+function indexedNodesByType(root: SyntaxNode): ReadonlyMap<string, readonly SyntaxNode[]> {
+  const cached = NODE_TYPE_INDEX.get(root);
+  if (cached) return cached;
+  const index = new Map<string, SyntaxNode[]>();
+  forEachTreeCursorNode(root, (cursor) => {
+    const nodeType = cursor.nodeType;
+    if (!INDEXED_NODE_TYPES.has(nodeType)) return;
+    const bucket = index.get(nodeType);
+    if (bucket) bucket.push(cursor.currentNode);
+    else index.set(nodeType, [cursor.currentNode]);
+  });
   NODE_TYPE_INDEX.set(root, index);
   return index;
 }

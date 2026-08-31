@@ -5,9 +5,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   createTypeScriptCompilerShards,
   partitionTypeScriptCompilerInputs,
+  partitionTypeScriptCompilerInputsIntoShards,
   removeStaleTypeScriptCompilerShardConfigs,
   shouldShardTypeScriptCompilerInputs,
   typescriptCompilerShardConcurrency,
+  typescriptCompilerShardCount,
   typescriptCompilerShardTargetFiles,
   TYPESCRIPT_COMPILER_SHARD_TARGET_FILES,
 } from '../../src/reindex/typescript-compiler-shards.js';
@@ -61,6 +63,50 @@ describe('bounded TypeScript compiler shards', () => {
       include: [],
       exclude: [],
     });
+  });
+
+  it('balances shards by weight while keeping them contiguous and complete', () => {
+    const inputs = ['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts', 'src/e.ts', 'src/f.ts'];
+    const weights = new Map([
+      ['src/a.ts', 100],
+      ['src/b.ts', 100],
+      ['src/c.ts', 100],
+      ['src/d.ts', 100],
+      ['src/e.ts', 100],
+      ['src/f.ts', 500],
+    ]);
+
+    const shards = partitionTypeScriptCompilerInputsIntoShards(inputs, 2, (path) => weights.get(path)!);
+
+    // One heavy trailing file pulls the boundary late so cumulative weights
+    // stay near-equal (500 vs 500+... the first shard absorbs the five light
+    // files before the heavy one fills the second).
+    expect(shards).toEqual([['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts', 'src/e.ts'], ['src/f.ts']]);
+    expect(shards.flat()).toEqual(inputs);
+  });
+
+  it('never produces an empty shard even when weights are extreme', () => {
+    const inputs = ['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts'];
+    const shards = partitionTypeScriptCompilerInputsIntoShards(inputs, 3, (path) =>
+      path === 'src/a.ts' ? 1_000_000 : 1,
+    );
+
+    expect(shards.map((shard) => shard.length)).toEqual([1, 1, 2]);
+    expect(shards.flat()).toEqual(inputs);
+  });
+
+  it('prefers a shard count that fills whole execution waves', () => {
+    const target = 2048;
+    // 9,000 inputs: five target-sized shards would leave a ragged second
+    // wave; four shards of 2,250 stay under the hard cap and finish in one.
+    expect(typescriptCompilerShardCount(9_000, target, 4)).toBe(4);
+    // 12,000 inputs cannot shrink to four shards (3,000 exceeds the cap), so
+    // the count rounds up to fill both waves evenly.
+    expect(typescriptCompilerShardCount(12_000, target, 4)).toBe(8);
+    // Serial machines keep the target-derived count.
+    expect(typescriptCompilerShardCount(9_000, target, 1)).toBe(5);
+    // Launchpoint-shaped input keeps its exact one-wave fit.
+    expect(typescriptCompilerShardCount(7_694, target, 4)).toBe(4);
   });
 
   it('shards only above the threshold where a monolithic program stops being cheaper', () => {
