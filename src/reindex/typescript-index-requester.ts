@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { monotonicNowMs } from '../domain/time.js';
 import {
   WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
@@ -144,11 +145,46 @@ export class TypeScriptIndexRequester {
       }
       const liveState = readWatchServiceState(servicePaths.statePath);
       if (!usableServiceState(liveState, this.projectRoot, this.runtime)) {
+        this.abandonPendingRequest(mailboxPaths, id);
         return this.requestLocally(request);
       }
       this.runtime.sleep(REQUEST_POLL_INTERVAL_MS);
     }
+    // One final check closes the race where the response landed after the
+    // last poll; a consumed response beats a local fallback.
+    if (existsSync(admitted.responsePath)) {
+      try {
+        return parseResponse(
+          readTextFileWithinLimit(admitted.responsePath, {
+            maxBytes: this.mailboxLimits.maxItemBytes ?? 64 * 1024 * 1024,
+            inputKind: 'TypeScript index mailbox response',
+          }),
+          id,
+          operationKey,
+          this.baseGeneration,
+          request.producerIdentity,
+          request.affectedFiles,
+        );
+      } finally {
+        rmSync(admitted.responsePath, { force: true });
+      }
+    }
+    this.abandonPendingRequest(mailboxPaths, id);
     return this.requestLocally(request);
+  }
+
+  /**
+   * A request this client will never wait on again is doomed work for the
+   * service and an abandoned response afterwards. Removing it helps only
+   * while it is still unclaimed; a claimed request has moved out of the
+   * pending directory and this removal is a no-op.
+   */
+  private abandonPendingRequest(mailboxPaths: { pendingDir: string }, id: string): void {
+    try {
+      rmSync(join(mailboxPaths.pendingDir, `${id}.json`), { force: true });
+    } catch {
+      // Losing the cleanup race to the service is fine.
+    }
   }
 
   private requestLocally(request: TypeScriptIndexDocumentRequest): RequestedTypeScriptDocuments {

@@ -485,7 +485,10 @@ describe('TypeScript index service mailbox', () => {
     expect(crashed.request(indexRequest('producer-crash'))).toEqual(
       expect.objectContaining({ producerIdentity: 'producer-crash', cold: true }),
     );
-    expect(readdirSync(paths.pendingDir).filter((entry) => entry.endsWith('.json'))).toHaveLength(1);
+    // A requester that stops waiting removes its own still-pending request:
+    // the service would otherwise complete doomed work into a response no one
+    // can consume.
+    expect(readdirSync(paths.pendingDir).filter((entry) => entry.endsWith('.json'))).toHaveLength(0);
 
     writeLiveState(fixture.cacheDir, fixture.projectRoot, host.status());
     let monotonicNowMs = 0;
@@ -509,7 +512,7 @@ describe('TypeScript index service mailbox', () => {
       expect.objectContaining({ producerIdentity: 'producer-timeout', cold: true }),
     );
     expect(monotonicNowMs).toBeGreaterThanOrEqual(20);
-    expect(readdirSync(paths.pendingDir).filter((entry) => entry.endsWith('.json'))).toHaveLength(2);
+    expect(readdirSync(paths.pendingDir).filter((entry) => entry.endsWith('.json'))).toHaveLength(0);
   });
 
   test('rechecks each deadline so later batch work cannot execute after earlier work advances time', () => {

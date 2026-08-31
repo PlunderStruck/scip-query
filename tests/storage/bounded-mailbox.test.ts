@@ -27,6 +27,8 @@ import {
   pollBoundedMailboxRequests,
   readBoundedMailboxClaim,
   rejectBoundedMailboxClaim,
+  RESPONSE_ABANDONMENT_GRACE_MS,
+  sweepAbandonedMailboxResponses,
   type BoundedMailboxPaths,
   type BoundedMailboxClaimStage,
   type BoundedMailboxRequestIdentity,
@@ -481,6 +483,71 @@ describe('bounded filesystem mailbox', () => {
       }),
     );
     expect(inspectBoundedMailbox(paths).totalItems).toBe(0);
+  });
+
+  it('caps response retention shortly past the requester deadline', () => {
+    const paths = fixture();
+    const deadlineAtMs = NOW + 10_000;
+    enqueueBoundedMailboxRequest(paths, operation('alpha', NOW, deadlineAtMs), { nowMs: NOW });
+    const [claim] = claimBoundedMailboxRequests(paths, { ownerId: 'owner', nowMs: NOW });
+    completeBoundedMailboxClaim(paths, claim!, { ok: true, payload: 'value' }, { nowMs: NOW + 1_000 });
+
+    const responseFile = join(paths.responseDir, `${claim!.requestId}.json`);
+    const persisted = JSON.parse(readFileSync(responseFile, 'utf8')) as {
+      expiresAtMs: number;
+      deadlineAtMs: number;
+      payload: string;
+    };
+    expect(persisted.payload).toBe('value');
+    expect(persisted.deadlineAtMs).toBe(deadlineAtMs);
+    expect(persisted.expiresAtMs).toBe(deadlineAtMs + RESPONSE_ABANDONMENT_GRACE_MS);
+    // Metadata precedes the payload so a bounded head read can see expiry.
+    const head = readFileSync(responseFile, 'utf8').slice(0, 200);
+    expect(head).toContain('"expiresAtMs"');
+  });
+
+  it('sweeps only responses no requester can still consume', () => {
+    const paths = fixture();
+    const abandonedDeadline = NOW + 10_000;
+    const abandoned = operation('abandoned', NOW, abandonedDeadline);
+    const waiting = operation('waiting', NOW, NOW + 500_000);
+    enqueueBoundedMailboxRequest(paths, abandoned, { nowMs: NOW });
+    enqueueBoundedMailboxRequest(paths, waiting, { nowMs: NOW });
+    for (const claim of claimBoundedMailboxRequests(paths, { ownerId: 'owner', nowMs: NOW, maxBatch: 2 })) {
+      completeBoundedMailboxClaim(paths, claim, { ok: true }, { nowMs: NOW + 1_000 });
+    }
+    expect(readdirSync(paths.responseDir)).toHaveLength(2);
+
+    const sweptAtMs = abandonedDeadline + RESPONSE_ABANDONMENT_GRACE_MS;
+    const swept = sweepAbandonedMailboxResponses(paths, sweptAtMs);
+    expect(swept.removed).toBe(1);
+    expect(swept.bytesFreed).toBeGreaterThan(0);
+    expect(readdirSync(paths.responseDir)).toEqual([`${waiting.id}.json`]);
+  });
+
+  it('reclaims abandoned responses instead of refusing a completion at byte capacity', () => {
+    const paths = fixture();
+    const limits = { maxBytes: 4_608 };
+    const bigPayload = 'x'.repeat(3_072);
+
+    enqueueBoundedMailboxRequest(paths, operation('abandoned', NOW, NOW + 1_000), { nowMs: NOW, limits });
+    const [first] = claimBoundedMailboxRequests(paths, { ownerId: 'owner', nowMs: NOW });
+    completeBoundedMailboxClaim(paths, first!, { ok: true, payload: bigPayload }, { nowMs: NOW + 500, limits });
+
+    // The abandoned response now dominates capacity; a later completion must
+    // reclaim it rather than fail the service.
+    const laterNowMs = NOW + 1_000 + RESPONSE_ABANDONMENT_GRACE_MS + 1;
+    enqueueBoundedMailboxRequest(paths, operation('second', laterNowMs, laterNowMs + 60_000), {
+      nowMs: laterNowMs,
+      limits,
+    });
+    const [second] = claimBoundedMailboxRequests(paths, { ownerId: 'owner', nowMs: laterNowMs });
+    expect(() =>
+      completeBoundedMailboxClaim(paths, second!, { ok: true, payload: bigPayload }, { nowMs: laterNowMs, limits }),
+    ).not.toThrow();
+    const remaining = readdirSync(paths.responseDir);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]).toBe(`${second!.requestId}.json`);
   });
 });
 

@@ -1,5 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  fstatSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readSync,
+  renameSync,
+  rmSync,
+} from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
 import { stableJson } from '../domain/stable-json.js';
@@ -515,23 +526,45 @@ export function completeBoundedMailboxClaim(
 ): void {
   const nowMs = options.nowMs ?? Date.now();
   const limits = resolveBoundedMailboxLimits(options.limits);
-  const value = {
-    ...response,
+  // A requester's poll loop provably stops at its deadline, so a response can
+  // only be consumed after that by a deduplicated retry of the same
+  // operation; cap retention shortly past the deadline so responses abandoned
+  // by cancelled requesters stop counting against mailbox capacity.
+  const expiresAtMs =
+    claim.deadlineAtMs === undefined
+      ? nowMs + limits.responseRetentionMs
+      : Math.min(
+          nowMs + limits.responseRetentionMs,
+          Math.max(claim.deadlineAtMs, nowMs) + RESPONSE_ABANDONMENT_GRACE_MS,
+        );
+  // Metadata precedes the payload so an abandonment sweep can read expiry and
+  // deadline from a bounded head of the file without parsing a large payload.
+  const metadata = {
     mailboxVersion: BOUNDED_MAILBOX_VERSION,
     operationKey: claim.operationKey ?? `legacy-${claim.requestId}`,
     clientId: claim.clientId ?? 'legacy',
     ...(claim.deadlineAtMs === undefined ? {} : { deadlineAtMs: claim.deadlineAtMs }),
     completedAtMs: nowMs,
-    expiresAtMs: nowMs + limits.responseRetentionMs,
+    expiresAtMs,
   };
+  const value = { ...metadata, ...response, ...metadata };
   const responseBytes = Buffer.byteLength(`${JSON.stringify(value)}\n`);
-  const status = inspectBoundedMailbox(paths);
+  let status = inspectBoundedMailbox(paths);
   if (responseBytes > limits.maxItemBytes) {
     throw new MailboxBackpressureError('item-too-large', status, limits, responseBytes);
   }
-  const nextTotalBytes = Math.max(0, status.totalBytes - claim.byteLength) + responseBytes;
+  let nextTotalBytes = Math.max(0, status.totalBytes - claim.byteLength) + responseBytes;
   if (nextTotalBytes > limits.maxBytes && nextTotalBytes > status.totalBytes) {
-    throw new MailboxBackpressureError('byte-capacity', status, limits, responseBytes);
+    // Reclaim abandoned responses before refusing: under refresh churn the
+    // mailbox fills with completions whose requesters were cancelled, and
+    // refusing here previously escalated to a fatal service stop.
+    if (sweepAbandonedMailboxResponses(paths, nowMs).removed > 0) {
+      status = inspectBoundedMailbox(paths);
+      nextTotalBytes = Math.max(0, status.totalBytes - claim.byteLength) + responseBytes;
+    }
+    if (nextTotalBytes > limits.maxBytes && nextTotalBytes > status.totalBytes) {
+      throw new MailboxBackpressureError('byte-capacity', status, limits, responseBytes);
+    }
   }
   const durability = options.durability ?? 'durable';
   publishCompletion(paths, claim, value, durability);
@@ -541,6 +574,76 @@ export function completeBoundedMailboxClaim(
     const claimDirectory = dirname(claim.path);
     syncDirectoryDurable(existsSync(claimDirectory) ? claimDirectory : paths.inflightDir);
   }
+}
+
+/**
+ * How long a completed response outlives its requester's deadline. Long
+ * enough for a deduplicated retry started just before the deadline to consume
+ * it; short enough that responses abandoned by cancelled requesters stop
+ * occupying mailbox capacity under refresh churn.
+ */
+export const RESPONSE_ABANDONMENT_GRACE_MS = 30_000;
+
+const RESPONSE_METADATA_HEAD_BYTES = 4_096;
+
+/**
+ * Removes completed responses that no requester can consume any more: their
+ * own expiry passed, or their requester's deadline plus the abandonment grace
+ * passed. Reads only a bounded head of each file — completion writes the
+ * metadata before the payload for exactly this reason. Files without readable
+ * metadata are left for mtime-based retention in ordinary maintenance.
+ */
+export function sweepAbandonedMailboxResponses(
+  paths: BoundedMailboxPaths,
+  nowMs: number,
+): { removed: number; bytesFreed: number } {
+  const result = { removed: 0, bytesFreed: 0 };
+  let entries: string[];
+  try {
+    entries = readdirSync(paths.responseDir);
+  } catch {
+    return result;
+  }
+  for (const name of entries) {
+    if (!name.endsWith('.json')) continue;
+    const path = join(paths.responseDir, name);
+    let head: string;
+    let size: number;
+    try {
+      const descriptor = openSync(path, 'r');
+      try {
+        size = fstatSync(descriptor).size;
+        const buffer = Buffer.alloc(Math.min(RESPONSE_METADATA_HEAD_BYTES, size));
+        readSync(descriptor, buffer, 0, buffer.length, 0);
+        head = buffer.toString('utf8');
+      } finally {
+        closeSync(descriptor);
+      }
+    } catch {
+      continue;
+    }
+    const expiresAtMs = headMetadataNumber(head, 'expiresAtMs');
+    const deadlineAtMs = headMetadataNumber(head, 'deadlineAtMs');
+    const abandoned =
+      (expiresAtMs !== null && expiresAtMs <= nowMs) ||
+      (deadlineAtMs !== null && deadlineAtMs + RESPONSE_ABANDONMENT_GRACE_MS <= nowMs);
+    if (!abandoned) continue;
+    try {
+      rmSync(path, { force: true });
+      result.removed += 1;
+      result.bytesFreed += size;
+    } catch {
+      // A concurrently consumed response is the good outcome; keep sweeping.
+    }
+  }
+  return result;
+}
+
+function headMetadataNumber(head: string, key: string): number | null {
+  const match = new RegExp(`"${key}":(\\d+)`).exec(head);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isSafeInteger(value) ? value : null;
 }
 
 /** Records an explicit rejection response and retains the rejected input. */

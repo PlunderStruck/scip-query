@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { rmSync } from 'node:fs';
 import { Worker } from 'node:worker_threads';
 import { readProcessIdentity } from '../platform/process-identity.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
@@ -254,8 +255,17 @@ function createTypeScriptMailboxLane<Envelope extends { id: string; deadlineAtMs
       try {
         options.complete(claimed.claim, claimed.envelope, result, completedAtMs);
       } catch (error) {
-        if (!(error instanceof MailboxBackpressureError) || error.code !== 'item-too-large') throw error;
-        options.reject(claimed.claim, claimed.envelope.id, error.message, completedAtMs);
+        if (!(error instanceof MailboxBackpressureError)) throw error;
+        // Backpressure on one completion sheds that response, never the
+        // service: publish a small terminal rejection so a live requester
+        // fails fast, and when even that cannot be written, drop the claim —
+        // the requester times out at its own deadline and retries.
+        try {
+          options.reject(claimed.claim, claimed.envelope.id, error.message, completedAtMs);
+        } catch (rejectError) {
+          if (!(rejectError instanceof MailboxBackpressureError)) throw rejectError;
+          rmSync(claimed.claim.path, { force: true });
+        }
       }
       releaseCurrent(claimed);
     },

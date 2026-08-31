@@ -112,6 +112,18 @@ Parity is proven, not assumed: on the full 355 MB / 7,694-document / 2.85 M-occu
 
 Measured: conversion 11.2 s → **8.1 s** in the pipeline span (6.8 s for the conversion itself), and the watcher's incremental mini-database conversions shed a Go process spawn each. Publish overall: 46.6 s at round four → **21.7 s**. Two detours worth recording: a multi-row VALUES batch into `global_symbols` measured pathologically slow (whole seconds of b-tree scans per batch, root cause unestablished) while plain prepared single-row inserts finish the whole index in seconds — the shipped converter stays single-row with JS-assigned ids; and the first "39 s" measurement was background-load pollution that briefly sent the optimization hunt in the wrong direction.
 
+## Ninth round: the watch service survives refresh churn (same day)
+
+A soak harness (the validation clone, one benign edit every 10 seconds, RSS and mailbox bytes sampled per edit) reproduced the dev watch-server's memory complaint in three minutes and found something worse than drift: under edit churn the service **kills itself**. Each edit's incremental refresh posts document requests to the in-process TypeScript index service; the next edit cancels that refresh after the request is posted; the service completes anyway and writes a ~32 MB response (128 base64 SCIP fragments — one affected-set batch) that its requester will never read. Abandoned responses lived for the full 10-minute retention, crossed the 512 MB mailbox cap in ~2.5 minutes, and the *service's own next response write* threw `MailboxBackpressureError` — which the lane escalated to a fatal stop. The observed multi-gigabyte RSS is meanwhile structural, not a leak: the index service is a worker *thread*, so the warm compiler program (~4–5 GB on this repository) lives inside the watch-server process and is reclaimed by the existing idle/pressure retirement.
+
+Three changes, each honest about the consumption contract (a requester provably stops polling at its deadline):
+
+- **Response retention is capped shortly past the requester deadline** (30 s grace), and completion writes its metadata before the payload so an abandonment sweep can read expiry and deadline from a 4 KB head without parsing a 32 MB body.
+- **Byte-capacity backpressure at completion reclaims abandoned responses and retries; the lane degrades the remainder** — a small terminal rejection when possible, a dropped claim when even that cannot be written. Nothing on this path reaches the fatal handler any more.
+- **A requester that stops waiting removes its own still-pending request** (and consumes a response that landed just after its last poll), so a cancelled refresh no longer leaves doomed work queued for the service.
+
+Re-run of the identical soak: the service survived all 70 edits (previously dead at ~21), mailbox bytes stayed between 0 and 63 MB (previously 511 MB at death), and RSS oscillated between 55 MB and ~5.2 GB as the worker thread retired and reloaded — the bounded design working as intended.
+
 ## Named follow-ups
 
 - The dev watch-server's RSS grows over hours (observed 3.9 → 5.4 GB on one repository); its semantic/index service heap is the next bounded-memory candidate.
