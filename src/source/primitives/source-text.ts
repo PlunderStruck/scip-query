@@ -5,6 +5,7 @@
  * through here so we pay the disk cost once per file per process.
  */
 import type { ScipDatabase } from '../../storage/db.js';
+import { recordFileAccess } from '../../platform/file-access-recorder.js';
 import { isMissingProjectFileError, readProjectFileText } from '../../platform/project-files.js';
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 
@@ -18,12 +19,16 @@ const SOURCE_LINES_CACHE = createPerDbCache<string, readonly string[]>('source-l
 
 export function getSourceText(db: ScipDatabase, relativePath: string): string {
   const normalized = relativePath.replace(/\\/g, '/');
+  // Cache hits are still dependencies: a recorder armed around a derived
+  // computation must learn about every consulted file, not just cold reads.
+  recordFileAccess(normalized);
   return SOURCE_TEXT_CACHE.get(db, normalized, () => readSourceTextUncached(db, normalized));
 }
 
 /** Reads one source file without retaining its bytes in the per-database analysis cache. */
 export function readSourceTextUncached(db: ScipDatabase, relativePath: string): string {
   const normalized = relativePath.replace(/\\/g, '/');
+  recordFileAccess(normalized);
   try {
     return readProjectFileText(db.config.projectRoot, normalized, {
       inputKind: 'indexed source file',

@@ -44,6 +44,7 @@ export const FILE_EVIDENCE_KINDS = [
   'typescript-signatures',
   'runtime-boundary-http-roles',
   'runtime-boundary-source-hashes',
+  'runtime-boundary-direct-extraction',
 ] as const;
 
 export type FileEvidenceKind = (typeof FILE_EVIDENCE_KINDS)[number];

@@ -177,6 +177,15 @@ export const EVIDENCE_PRODUCT_MANIFEST: readonly EvidenceProductManifestEntry[] 
     stalenessTest: 'tests/analysis/runtime-boundaries.test.ts',
     owner: 'src/analysis/runtime-boundaries/graph.ts',
   }),
+  fileManifest('runtime-boundary-direct-extraction', {
+    // direct-deps-digest: the payload names every consulted file with its
+    // content hash (recorded at the shared read chokepoints), and the read
+    // path revalidates each one before serving the cached extraction.
+    dependsOn: ['content-hash', 'direct-deps-digest', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'contentHash', 'payloadVersion'],
+    stalenessTest: 'tests/analysis/runtime-boundaries.test.ts',
+    owner: 'src/analysis/runtime-boundaries/graph.ts',
+  }),
   projectManifest('file-dependency-graph', {
     dependsOn: ['project-fingerprint', 'indexed-language-set', 'import-resolution-fingerprint', 'tool-version'],
     keyParts: ['kind', 'scope', 'projectFingerprint', 'payloadVersion'],

@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import type * as TypeScript from 'typescript';
 import { detectAstLanguage, isVueSfcPath } from '../../source/ast/ast-language.js';
 import type { ScipDatabase } from '../../storage/db.js';
+import { withFileAccessRecording } from '../../platform/file-access-recorder.js';
 import { getSourceFiles } from '../../source/primitives/source-fileset.js';
 import { readSourceTextUncached } from '../../source/primitives/source-text.js';
 import { fileContentHash } from '../../storage/evidence-cache.js';
@@ -660,6 +661,15 @@ async function extractBoundaryFiles(
   const fileCoverage: RuntimeBoundaryFileCoverage[] = [];
   const recordSpan: RuntimeBoundaryProfileSpan = profileSpan ?? ((_name, run) => run());
   const freshHashes: Array<{ relativePath: string; contentHash: string; value: BoundarySourceHashes }> = [];
+  const freshDirect: Array<{ relativePath: string; contentHash: string; value: DirectExtractionPayload }> = [];
+  const depHashes = new Map<string, string>();
+  const currentDepHash = (path: string): string => {
+    const known = depHashes.get(path);
+    if (known !== undefined) return known;
+    const computed = fileContentHash(db, path, readSourceTextUncached(db, path));
+    depHashes.set(path, computed);
+    return computed;
+  };
   let filesSinceYield = 0;
   for (const file of files) {
     filesSinceYield += 1;
@@ -670,57 +680,103 @@ async function extractBoundaryFiles(
       await yieldToEventLoop();
     }
     const source = recordSpan('runtime-boundaries.file.read', () => readSourceTextUncached(db, file));
+    const contentHash = fileContentHash(db, file, source);
+    depHashes.set(file, contentHash);
+    // Direct extraction is a function of this file's bytes plus the bytes of
+    // every file its resolvers consulted (imported constants, resolved call
+    // targets, definition owners). The persisted payload names that consulted
+    // set, and a hit requires every named dependency to still match.
+    const cachedDirect = recordSpan('runtime-boundaries.file.direct-product', () => {
+      const cached = DIRECT_EXTRACTION_PRODUCT.read(db, file, contentHash);
+      if (!cached || cached.extractorVersion !== RUNTIME_BOUNDARY_EXTRACTOR_VERSION) return null;
+      for (const dep of cached.deps) {
+        if (currentDepHash(dep.path) !== dep.contentHash) return null;
+      }
+      return cached;
+    });
+    if (cachedDirect) {
+      observations.push(...cachedDirect.observations);
+      fileCoverage.push(cachedDirect.coverage);
+      continue;
+    }
     const applicableExtractors = recordSpan('runtime-boundaries.file.supports', () =>
       BOUNDARY_EXTRACTORS.filter((extractor) => extractor.supports(source)),
     );
     const hasBodySummaryCandidate = /\bJSON\.stringify\s*\(/u.test(source) && /\bbody\s*:/u.test(source);
-    const context =
-      applicableExtractors.length > 0 || hasBodySummaryCandidate
-        ? boundaryFileContext(db, file, source, profileSpan)
-        : null;
     // Tokenized syntax/shape hashes are pure functions of the bytes, and
     // tokenizing every file dominated whole-repository extraction overhead;
     // one cheap content hash serves them from the persisted product instead.
     const sourceHashes = recordSpan('runtime-boundaries.file.hashes', () => {
-      const contentHash = fileContentHash(db, file, source);
       const cached = BOUNDARY_SOURCE_HASHES_PRODUCT.read(db, file, contentHash);
       if (cached) return cached;
       const computed = boundarySourceHashes(file, source);
       freshHashes.push({ relativePath: file, contentHash, value: computed });
       return computed;
     });
-    const coverage: RuntimeBoundaryFileCoverage = {
-      file,
-      hasAst: context !== null || boundaryAstEligible(file, source),
-      syntaxHash: sourceHashes.syntaxHash,
-      shapeHash: sourceHashes.shapeHash,
-      bodySummaries: context && hasBodySummaryCandidate ? serializedBodySummariesForFile(context) : [],
-      observationIds: [],
-      extractors: [],
-      extractionErrors: [],
-    };
-    if (context) {
-      for (const extractor of applicableExtractors) {
-        const extractorCoverage = { id: extractor.id, applicableFiles: 1, observations: 0, errors: 0 };
-        try {
-          const extracted = profileBoundaryWork(profileSpan, `runtime-boundaries.extractor.${extractor.id}`, file, () =>
-            extractor.extract(context),
-          );
-          extractorCoverage.observations = extracted.length;
-          observations.push(...extracted);
-          coverage.observationIds.push(...extracted.map((observation) => observation.id));
-        } catch (error) {
-          extractorCoverage.errors = 1;
-          coverage.extractionErrors.push(
-            `${extractor.id} failed for ${file}: ${error instanceof Error ? error.message : String(error)}`,
-          );
+    const consultedFiles = new Set<string>();
+    const fileObservations: BoundaryObservation[] = [];
+    const coverage = withFileAccessRecording(
+      (accessed) => consultedFiles.add(accessed),
+      (): RuntimeBoundaryFileCoverage => {
+        const context =
+          applicableExtractors.length > 0 || hasBodySummaryCandidate
+            ? boundaryFileContext(db, file, source, profileSpan)
+            : null;
+        const entry: RuntimeBoundaryFileCoverage = {
+          file,
+          hasAst: context !== null || boundaryAstEligible(file, source),
+          syntaxHash: sourceHashes.syntaxHash,
+          shapeHash: sourceHashes.shapeHash,
+          bodySummaries: context && hasBodySummaryCandidate ? serializedBodySummariesForFile(context) : [],
+          observationIds: [],
+          extractors: [],
+          extractionErrors: [],
+        };
+        if (context) {
+          for (const extractor of applicableExtractors) {
+            const extractorCoverage = { id: extractor.id, applicableFiles: 1, observations: 0, errors: 0 };
+            try {
+              const extracted = profileBoundaryWork(
+                profileSpan,
+                `runtime-boundaries.extractor.${extractor.id}`,
+                file,
+                () => extractor.extract(context),
+              );
+              extractorCoverage.observations = extracted.length;
+              fileObservations.push(...extracted);
+              entry.observationIds.push(...extracted.map((observation) => observation.id));
+            } catch (error) {
+              extractorCoverage.errors = 1;
+              entry.extractionErrors.push(
+                `${extractor.id} failed for ${file}: ${error instanceof Error ? error.message : String(error)}`,
+              );
+            }
+            entry.extractors.push(extractorCoverage);
+          }
         }
-        coverage.extractors.push(extractorCoverage);
-      }
-    }
+        return entry;
+      },
+    );
+    observations.push(...fileObservations);
     fileCoverage.push(coverage);
+    // A file whose extraction errored is not cached: the error may be
+    // environmental, and a retry should re-attempt extraction, not replay it.
+    if (coverage.extractionErrors.length === 0) {
+      consultedFiles.delete(file);
+      freshDirect.push({
+        relativePath: file,
+        contentHash,
+        value: {
+          extractorVersion: RUNTIME_BOUNDARY_EXTRACTOR_VERSION,
+          deps: [...consultedFiles].sort().map((path) => ({ path, contentHash: currentDepHash(path) })),
+          observations: fileObservations,
+          coverage,
+        },
+      });
+    }
   }
   if (freshHashes.length > 0) BOUNDARY_SOURCE_HASHES_PRODUCT.writeBatch(db, freshHashes);
+  if (freshDirect.length > 0) DIRECT_EXTRACTION_PRODUCT.writeBatch(db, freshDirect);
   return { observations, fileCoverage };
 }
 
@@ -739,6 +795,49 @@ const BOUNDARY_SOURCE_HASHES_PRODUCT = createFileEvidenceProduct<BoundarySourceH
       return typeof parsed.syntaxHash === 'string' && typeof parsed.shapeHash === 'string'
         ? { syntaxHash: parsed.syntaxHash, shapeHash: parsed.shapeHash }
         : null;
+    } catch {
+      return null;
+    }
+  },
+});
+
+/**
+ * One file's complete direct-extraction result: its observations, its
+ * coverage entry, and the consulted files whose bytes the result depends on.
+ * The extractor version rides in the payload so a bumped extractor semantics
+ * version can never serve rows written by an older one.
+ */
+interface DirectExtractionPayload {
+  extractorVersion: string;
+  deps: { path: string; contentHash: string }[];
+  observations: BoundaryObservation[];
+  coverage: RuntimeBoundaryFileCoverage;
+}
+
+const DIRECT_EXTRACTION_PRODUCT = createFileEvidenceProduct<DirectExtractionPayload>({
+  kind: 'runtime-boundary-direct-extraction',
+  invalidation: evidenceProductInvalidation('runtime-boundary-direct-extraction'),
+  serialize: (value) => JSON.stringify(value),
+  deserialize: (payload) => {
+    try {
+      const parsed = JSON.parse(payload) as Partial<DirectExtractionPayload>;
+      if (
+        typeof parsed.extractorVersion !== 'string' ||
+        !Array.isArray(parsed.deps) ||
+        !Array.isArray(parsed.observations) ||
+        typeof parsed.coverage !== 'object' ||
+        parsed.coverage === null ||
+        !parsed.deps.every(
+          (dep): dep is { path: string; contentHash: string } =>
+            typeof dep === 'object' &&
+            dep !== null &&
+            typeof dep.path === 'string' &&
+            typeof dep.contentHash === 'string',
+        )
+      ) {
+        return null;
+      }
+      return parsed as DirectExtractionPayload;
     } catch {
       return null;
     }

@@ -26,6 +26,7 @@
  * symbol evidence modules and many query commands.
  */
 import type { ScipDatabase } from '../storage/db.js';
+import { recordFileAccess } from '../platform/file-access-recorder.js';
 import { getCallableSites, type CallableSite } from '../source/ast.js';
 import { sourceEvidence } from '../language-parsers/source-evidence.js';
 import {
@@ -141,6 +142,9 @@ export function getDefinitionsForFile(
   opts: GetDefinitionsForFileOptions = {},
   profileSpan?: DefinitionCatalogProfileSpan,
 ): IndexedDefinition[] {
+  // A file's definition set is derived from that file's content; recording
+  // the file lets content-hash-keyed consumers depend on it soundly.
+  recordFileAccess(relativePath);
   if (opts.includeClassMemberFallbacks) {
     return computeDefinitionsForFile(db, relativePath, undefined, { includeClassMemberFallbacks: true }, profileSpan);
   }

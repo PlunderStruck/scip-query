@@ -1,13 +1,17 @@
 import Database from 'better-sqlite3';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { withFileAccessRecording } from '../../src/platform/file-access-recorder.js';
+import { getSourceText } from '../../src/source/primitives/source-text.js';
+import { fileContentHash, writeCachedFileEvidence } from '../../src/storage/evidence-cache.js';
 import {
   collectRuntimeBoundaryGraph,
   readRuntimeBoundaryGraph,
   readRuntimeBoundaryObservations,
   readRuntimeBoundaryRelationGroups,
+  RUNTIME_BOUNDARY_EXTRACTOR_VERSION,
   writeRuntimeBoundaryGraph,
 } from '../../src/analysis/runtime-boundaries/index.js';
 import { buildRelationGroups, materializeBoundedLinks } from '../../src/analysis/runtime-boundaries/graph.js';
@@ -1234,6 +1238,193 @@ describe('runtime-boundary evidence', () => {
       indexPath: join(tempDir, 'index.scip'),
     });
   }
+});
+
+describe('runtime-boundary direct-extraction product', () => {
+  let tempDir: string | null = null;
+
+  afterEach(() => {
+    if (tempDir) rmSync(tempDir, { recursive: true, force: true });
+    tempDir = null;
+  });
+
+  const PROCESS_SOURCE = [
+    "import { spawn } from 'node:child_process';",
+    'export function run(command: string) {',
+    "  return spawn('sh', ['-c', command], { stdio: ['ignore', 'pipe', 'pipe'] });",
+    '}',
+  ];
+
+  function boundaryFixture(): { dir: string; openDb: () => ScipDatabase } {
+    const dir = mkdtempSync(join(tmpdir(), 'scip-runtime-direct-product-'));
+    tempDir = dir;
+    const files = { 'src/process.ts': PROCESS_SOURCE, 'src/other.ts': ['export const OTHER = 1;'] };
+    writeFixtureFiles(dir, files);
+    const builder = evidenceFixtureDb(join(dir, 'index.db'));
+    Object.keys(files).forEach((file, index) => builder.document(index + 1, 'typescript', file));
+    builder.write();
+    return {
+      dir,
+      openDb: () =>
+        new ScipDatabase({ projectRoot: dir, dbPath: join(dir, 'index.db'), indexPath: join(dir, 'index.scip') }),
+    };
+  }
+
+  function plantDirectRow(
+    db: ScipDatabase,
+    dir: string,
+    payload: { extractorVersion: string; deps: { path: string; contentHash: string }[] },
+  ): void {
+    const source = readFileSync(join(dir, 'src/process.ts'), 'utf8');
+    const marker = {
+      id: 'boundary:planted-marker',
+      extractor: 'builtin.node-child-process',
+      action: 'process.planted-marker',
+      owner: { file: 'src/process.ts', symbol: null, name: null, startLine: 0, endLine: 0 },
+      source: { file: 'src/process.ts', startLine: 0, endLine: 0 },
+      keyParts: [],
+      evidence: 'planted',
+      strength: 'exact',
+      protocol: 'process',
+      role: 'producer',
+      executionDomain: 'server',
+      derivation: { kind: 'direct', rule: 'planted', ruleVersion: '1', inputFactIds: [], sourceSpans: [] },
+      valuePrecision: 'literal',
+      modality: 'may',
+      resolution: 'unresolved',
+      sourceScope: 'production',
+    };
+    writeCachedFileEvidence(
+      db,
+      'runtime-boundary-direct-extraction',
+      'src/process.ts',
+      fileContentHash(db, 'src/process.ts', source),
+      JSON.stringify({
+        ...payload,
+        observations: [marker],
+        coverage: {
+          file: 'src/process.ts',
+          hasAst: true,
+          observationIds: [marker.id],
+          extractors: [{ id: 'builtin.node-child-process', applicableFiles: 1, observations: 1, errors: 0 }],
+          extractionErrors: [],
+        },
+      }),
+    );
+  }
+
+  it('serves a planted product row whose dependencies still match', async () => {
+    const { dir, openDb } = boundaryFixture();
+    const seed = openDb();
+    try {
+      plantDirectRow(seed, dir, {
+        extractorVersion: RUNTIME_BOUNDARY_EXTRACTOR_VERSION,
+        deps: [
+          {
+            path: 'src/other.ts',
+            contentHash: fileContentHash(seed, 'src/other.ts', readFileSync(join(dir, 'src/other.ts'), 'utf8')),
+          },
+        ],
+      });
+    } finally {
+      seed.close();
+    }
+    const db = openDb();
+    try {
+      const graph = await collectRuntimeBoundaryGraph(db);
+      expect(graph.observations.some((observation) => observation.action === 'process.planted-marker')).toBe(true);
+      expect(graph.observations.some((observation) => observation.action === 'process.spawn')).toBe(false);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('re-extracts when a consulted dependency file changes', async () => {
+    const { dir, openDb } = boundaryFixture();
+    const seed = openDb();
+    try {
+      plantDirectRow(seed, dir, {
+        extractorVersion: RUNTIME_BOUNDARY_EXTRACTOR_VERSION,
+        deps: [
+          {
+            path: 'src/other.ts',
+            contentHash: fileContentHash(seed, 'src/other.ts', readFileSync(join(dir, 'src/other.ts'), 'utf8')),
+          },
+        ],
+      });
+    } finally {
+      seed.close();
+    }
+    writeFileSync(join(dir, 'src/other.ts'), 'export const OTHER = 2;\n');
+    const db = openDb();
+    try {
+      const graph = await collectRuntimeBoundaryGraph(db);
+      expect(graph.observations.some((observation) => observation.action === 'process.planted-marker')).toBe(false);
+      expect(graph.observations.some((observation) => observation.action === 'process.spawn')).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('never serves a row written by a different extractor version', async () => {
+    const { dir, openDb } = boundaryFixture();
+    const seed = openDb();
+    try {
+      plantDirectRow(seed, dir, { extractorVersion: 'runtime-boundaries-v0', deps: [] });
+    } finally {
+      seed.close();
+    }
+    const db = openDb();
+    try {
+      const graph = await collectRuntimeBoundaryGraph(db);
+      expect(graph.observations.some((observation) => observation.action === 'process.planted-marker')).toBe(false);
+      expect(graph.observations.some((observation) => observation.action === 'process.spawn')).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('reproduces fresh extraction exactly from its own persisted rows', async () => {
+    const { openDb } = boundaryFixture();
+    const first = openDb();
+    let fresh: Awaited<ReturnType<typeof collectRuntimeBoundaryGraph>>;
+    try {
+      fresh = await collectRuntimeBoundaryGraph(first);
+    } finally {
+      first.close();
+    }
+    expect(fresh.observations.some((observation) => observation.action === 'process.spawn')).toBe(true);
+    const second = openDb();
+    try {
+      const replayed = await collectRuntimeBoundaryGraph(second);
+      expect(replayed.observations).toEqual(fresh.observations);
+      expect(replayed.fileCoverage).toEqual(fresh.fileCoverage);
+    } finally {
+      second.close();
+    }
+  });
+
+  it('records consulted files at the shared read chokepoints', () => {
+    const { openDb } = boundaryFixture();
+    const db = openDb();
+    try {
+      const consulted = new Set<string>();
+      withFileAccessRecording(
+        (path) => consulted.add(path),
+        () => getSourceText(db, 'src/other.ts'),
+      );
+      expect(consulted.has('src/other.ts')).toBe(true);
+      // A second read served from the per-database cache is still recorded.
+      const again = new Set<string>();
+      withFileAccessRecording(
+        (path) => again.add(path),
+        () => getSourceText(db, 'src/other.ts'),
+      );
+      expect(again.has('src/other.ts')).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
 });
 
 function syntheticHttpObservation(role: 'producer' | 'consumer', index: number): BoundaryObservation {
