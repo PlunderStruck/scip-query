@@ -4,6 +4,66 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.22.0]
+
+### Bounded indexing for large TypeScript repositories
+
+- Single-project TypeScript repositories above ~3,000 compiler inputs are now
+  indexed as balanced compiler shards: path-sorted, byte-weighted partitions,
+  each running as its own scip-typescript process in a memory-gated pool and
+  streamed together byte-for-byte. A repository whose monolithic program
+  exceeded the default child heap now indexes with every child bounded near
+  5 GB. Shard planning also learns from measured shard durations
+  (`typescript-shard-costs.json` in the cache directory), so partitions
+  converge toward equal wall time rather than equal bytes.
+- `reindex --force` now rebuilds everything by design: cached language shards,
+  per-project shards, and incremental materialization are all bypassed, and
+  the force flag implies the whole-project rebuild permission.
+- The reindex coordinator no longer deserializes the whole SCIP index to
+  sanitize, read metadata, or rebase project roots — those paths stream over
+  the protobuf wire format, so forced full reindexes complete within the
+  default Node.js heap.
+
+### SCIP to SQLite conversion in-process
+
+- The external `scip expt-convert` binary is no longer required: a streaming
+  converter ports the Go tool's exact relational output (canonical occurrence
+  ordering, chunking, mentions, enclosing ranges, byte-identical schema) and
+  runs in-process, faster than the spawned CLI. Set
+  `SCIP_QUERY_SQLITE_CONVERTER=scip-cli` to restore the previous behavior.
+
+### Bounded and faster health analysis
+
+- `health --full` semantic prewarm computes callee evidence in persisted file
+  batches and releases its compiler session only under measured heap
+  pressure, so the prewarm converges across runs instead of losing all work
+  to one out-of-memory crash. Consumer classification reads its persisted
+  usage product before parsing, and whole-repository sweeps use cursor
+  traversal, keeping every health phase worker bounded.
+
+### Runtime-boundary extraction reuse
+
+- Direct per-file extraction results persist as a content-addressed evidence
+  product that names every consulted file (imported constants, resolved call
+  targets, definition owners) with its content hash and revalidates them on
+  every read. Warm full rebuilds skip the extraction sweep entirely, and the
+  cross-file staleness hole in incremental per-file reuse is closed.
+- Extraction yields the event loop during whole-repository sweeps so
+  tree-sitter's native memory is released mid-sweep instead of at phase exit.
+- A forced rebuild with an unchanged input snapshot no longer runs the
+  affected-set shadow's whole-index digest oracle, which could misreport tool
+  drift as predictor failure; reused indexes keep their drift oracle.
+
+### Watch service resilience under edit churn
+
+- Rapid consecutive edits could fill the TypeScript index-service mailbox
+  with responses whose cancelled requesters would never read them, and the
+  resulting backpressure fatally stopped the watch service. Responses now
+  expire shortly after their requester's deadline, capacity pressure reclaims
+  abandoned responses and sheds individual completions instead of stopping
+  the service, and a requester that stops waiting removes its own pending
+  request.
+
 ## [0.21.1]
 
 ### Query service resource efficiency
