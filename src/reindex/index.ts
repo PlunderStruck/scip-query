@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { platform } from 'node:os';
-import { readSmallArtifactText } from '../platform/bounded-file.js';
+import { readFileWithinLimit, readSmallArtifactText, SCIP_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
 import { runBoundedProcess } from '../platform/bounded-process.js';
 import {
   isLanguageRelevantProjectInputPath,
@@ -109,6 +109,7 @@ import {
   readProjectManifestInputs,
 } from './project-shards.js';
 import { sanitizeScipFile } from './sanitize.js';
+import { convertScipBufferToSqlite } from './scip-sqlite-converter.js';
 import {
   acquireSharedGenerationBuildLock,
   buildSharedGenerationSnapshot,
@@ -2890,25 +2891,34 @@ async function convertScipToSqlite(
 
   try {
     if (!alreadySanitized) sanitizeScipForSqlite(tempOutputScip, onStatus);
-    const scipBinary = resolveScipBinary();
-    if (!scipBinary) {
-      throw new Error('scip CLI is not available');
-    }
-    const completed = await runBoundedProcess({
-      command: scipBinary,
-      args: ['expt-convert', '--output', tempOutputDb, tempOutputScip],
-      label: 'SCIP SQLite conversion',
-      env,
-      maxStdoutBytes: 50 * 1024 * 1024,
-      maxStderrBytes: 50 * 1024 * 1024,
-      timeoutMs: 300_000,
-      signal,
-    });
-    if (completed.status !== 0) {
-      throw new Error(
-        `scip expt-convert exited with ${completed.status}${
-          completed.stderr.trim() ? `: ${completed.stderr.trim()}` : ''
-        }`,
+    if (env['SCIP_QUERY_SQLITE_CONVERTER'] === 'scip-cli') {
+      const scipBinary = resolveScipBinary();
+      if (!scipBinary) {
+        throw new Error('scip CLI is not available');
+      }
+      const completed = await runBoundedProcess({
+        command: scipBinary,
+        args: ['expt-convert', '--output', tempOutputDb, tempOutputScip],
+        label: 'SCIP SQLite conversion',
+        env,
+        maxStdoutBytes: 50 * 1024 * 1024,
+        maxStderrBytes: 50 * 1024 * 1024,
+        timeoutMs: 300_000,
+        signal,
+      });
+      if (completed.status !== 0) {
+        throw new Error(
+          `scip expt-convert exited with ${completed.status}${
+            completed.stderr.trim() ? `: ${completed.stderr.trim()}` : ''
+          }`,
+        );
+      }
+    } else {
+      rmSync(tempOutputDb, { force: true });
+      await convertScipBufferToSqlite(
+        readFileWithinLimit(tempOutputScip, { maxBytes: SCIP_ARTIFACT_MAX_BYTES, inputKind: 'SCIP index' }),
+        tempOutputDb,
+        { signal },
       );
     }
   } catch (err) {

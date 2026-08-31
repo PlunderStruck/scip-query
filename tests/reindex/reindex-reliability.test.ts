@@ -1771,6 +1771,33 @@ async function loadReindexFixture(opts: {
     });
   }
 
+  // The in-process converter replaces the scip CLI conversion by default;
+  // this harness fakes both boundaries the same way: the output database is
+  // the literal bytes 'new-db', and opts.failConvert fails the conversion.
+  vi.doMock('../../src/reindex/scip-sqlite-converter.js', async () => {
+    const fs = await import('node:fs');
+    const actual = await vi.importActual<object>('../../src/reindex/scip-sqlite-converter.js');
+    return {
+      ...actual,
+      convertScipBufferToSqlite: async (_buffer: Uint8Array, outputDbPath: string) => {
+        if (opts.failConvert) throw new Error('convert failed');
+        fs.mkdirSync(dirname(outputDbPath), { recursive: true });
+        fs.writeFileSync(outputDbPath, 'new-db');
+        return {
+          documents: 0,
+          duplicateDocumentsSkipped: 0,
+          occurrences: 0,
+          illegalOccurrencesDropped: 0,
+          mergedOccurrences: 0,
+          chunks: 0,
+          mentions: 0,
+          globalSymbols: 0,
+          enclosingRanges: 0,
+        };
+      },
+    };
+  });
+
   vi.doMock('../../src/platform/bounded-process.js', async () => {
     const fs = await import('node:fs');
     const actual = await vi.importActual<typeof BoundedProcessModule>('../../src/platform/bounded-process.js');
