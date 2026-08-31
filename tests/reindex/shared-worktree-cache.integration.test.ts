@@ -436,6 +436,10 @@ function directorySize(path: string): number {
   if (!existsSync(path)) return 0;
   return readdirSync(path, { withFileTypes: true }).reduce((total, entry) => {
     const entryPath = join(path, entry.name);
+    // SQLite -shm/-wal files exist only while a connection is open and
+    // vanish on close, so counting them makes the plateau depend on
+    // connection lifetime rather than on retained cache content.
+    if (!entry.isDirectory() && (entry.name.endsWith('-shm') || entry.name.endsWith('-wal'))) return total;
     return total + (entry.isDirectory() ? directorySize(entryPath) : statSync(entryPath).size);
   }, 0);
 }

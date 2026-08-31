@@ -43,6 +43,7 @@ export const FILE_EVIDENCE_KINDS = [
   'typescript-import-usage',
   'typescript-signatures',
   'runtime-boundary-http-roles',
+  'runtime-boundary-source-hashes',
 ] as const;
 
 export type FileEvidenceKind = (typeof FILE_EVIDENCE_KINDS)[number];
@@ -526,6 +527,15 @@ export function writeCachedFileEvidenceBatch(db: ScipDatabase, entries: readonly
         connection.writeFileEvidence.run(entry.kind, entry.relativePath, entry.contentHash, VERSION, entry.payload);
       }
     })();
+    // A batch is the natural durability point for a bulk producer, and
+    // leaving its frames in the WAL makes on-disk cache size depend on when
+    // the next connection happens to checkpoint; truncating here keeps the
+    // evidence footprint deterministic for the cache-lifecycle accounting.
+    try {
+      connection.evidence.pragma('wal_checkpoint(TRUNCATE)');
+    } catch {
+      // Checkpointing is best-effort; a busy reader just defers truncation.
+    }
     const shareable = entries.filter((entry) => SHARED_FILE_EVIDENCE_KIND_SET.has(entry.kind));
     if (shareable.length > 0 && connection.shared) {
       try {

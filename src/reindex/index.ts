@@ -1612,6 +1612,7 @@ async function publishFreshReindexArtifacts(
         run: opts,
         indexedOutputs,
         incrementalTypeScript,
+        typescriptReused: reusedLanguages.includes('typescript'),
       });
       cacheLanguageShards(opts.paths.outputDb, publishOutputs, opts.writeTelemetry);
       return materializeScipOutput(publishOutputs, opts.tempPaths.tempOutputScip, opts.onStatus);
@@ -2210,10 +2211,17 @@ function materializeDeferredTypeScriptLanguageOutput(opts: {
   run: Parameters<typeof runFreshReindex>[0];
   indexedOutputs: readonly IndexedOutput[];
   incrementalTypeScript: MaterializedTypeScriptIncrementalIndex | undefined;
+  typescriptReused: boolean;
 }): IndexedOutput[] {
   if (opts.incrementalTypeScript?.completeScipUpdated) return [...opts.indexedOutputs];
   const typescriptOutput = opts.indexedOutputs.find((output) => output.language === 'typescript');
   if (!typescriptOutput) return [...opts.indexedOutputs];
+  // A typescript output built fresh this run already covers every current
+  // input; only a reused cached shard can still carry the previous
+  // generation's deferred companion and need its overlay applied. Applying a
+  // stale overlay onto a fresh complete index is wasted whole-index work
+  // (and, on large repositories, a coordinator heap spike).
+  if (!opts.typescriptReused) return [...opts.indexedOutputs];
   const generation = inspectSqliteGeneration(opts.run.paths.outputDb, opts.run.paths.metaPath);
   const overlayGeneration =
     generation.state === 'current' ? generation.generation.publication?.typescriptOverlayGeneration : undefined;

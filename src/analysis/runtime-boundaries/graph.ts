@@ -5,6 +5,8 @@ import { detectAstLanguage, isVueSfcPath } from '../../source/ast/ast-language.j
 import type { ScipDatabase } from '../../storage/db.js';
 import { getSourceFiles } from '../../source/primitives/source-fileset.js';
 import { readSourceTextUncached } from '../../source/primitives/source-text.js';
+import { fileContentHash } from '../../storage/evidence-cache.js';
+import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import { BOUNDARY_EXTRACTORS, boundaryFileContext } from './extractors.js';
 import type { RuntimeBoundaryProfileSpan } from './extractors.js';
 import { deriveCarrierDiscriminators, serializedBodySummariesForFile } from './carrier-discriminators.js';
@@ -647,15 +649,29 @@ function extractBoundaryFiles(
 ): { observations: BoundaryObservation[]; fileCoverage: RuntimeBoundaryFileCoverage[] } {
   const observations: BoundaryObservation[] = [];
   const fileCoverage: RuntimeBoundaryFileCoverage[] = [];
+  const recordSpan: RuntimeBoundaryProfileSpan = profileSpan ?? ((_name, run) => run());
+  const freshHashes: Array<{ relativePath: string; contentHash: string; value: BoundarySourceHashes }> = [];
   for (const file of files) {
-    const source = readSourceTextUncached(db, file);
-    const applicableExtractors = BOUNDARY_EXTRACTORS.filter((extractor) => extractor.supports(source));
+    const source = recordSpan('runtime-boundaries.file.read', () => readSourceTextUncached(db, file));
+    const applicableExtractors = recordSpan('runtime-boundaries.file.supports', () =>
+      BOUNDARY_EXTRACTORS.filter((extractor) => extractor.supports(source)),
+    );
     const hasBodySummaryCandidate = /\bJSON\.stringify\s*\(/u.test(source) && /\bbody\s*:/u.test(source);
     const context =
       applicableExtractors.length > 0 || hasBodySummaryCandidate
         ? boundaryFileContext(db, file, source, profileSpan)
         : null;
-    const sourceHashes = boundarySourceHashes(file, source);
+    // Tokenized syntax/shape hashes are pure functions of the bytes, and
+    // tokenizing every file dominated whole-repository extraction overhead;
+    // one cheap content hash serves them from the persisted product instead.
+    const sourceHashes = recordSpan('runtime-boundaries.file.hashes', () => {
+      const contentHash = fileContentHash(db, file, source);
+      const cached = BOUNDARY_SOURCE_HASHES_PRODUCT.read(db, file, contentHash);
+      if (cached) return cached;
+      const computed = boundarySourceHashes(file, source);
+      freshHashes.push({ relativePath: file, contentHash, value: computed });
+      return computed;
+    });
     const coverage: RuntimeBoundaryFileCoverage = {
       file,
       hasAst: context !== null || boundaryAstEligible(file, source),
@@ -687,8 +703,30 @@ function extractBoundaryFiles(
     }
     fileCoverage.push(coverage);
   }
+  if (freshHashes.length > 0) BOUNDARY_SOURCE_HASHES_PRODUCT.writeBatch(db, freshHashes);
   return { observations, fileCoverage };
 }
+
+interface BoundarySourceHashes {
+  syntaxHash: string;
+  shapeHash: string;
+}
+
+const BOUNDARY_SOURCE_HASHES_PRODUCT = createFileEvidenceProduct<BoundarySourceHashes>({
+  kind: 'runtime-boundary-source-hashes',
+  invalidation: evidenceProductInvalidation('runtime-boundary-source-hashes'),
+  serialize: (value) => JSON.stringify(value),
+  deserialize: (payload) => {
+    try {
+      const parsed = JSON.parse(payload) as Partial<BoundarySourceHashes>;
+      return typeof parsed.syntaxHash === 'string' && typeof parsed.shapeHash === 'string'
+        ? { syntaxHash: parsed.syntaxHash, shapeHash: parsed.shapeHash }
+        : null;
+    } catch {
+      return null;
+    }
+  },
+});
 
 function boundarySourceHashes(file: string, source: string): { syntaxHash: string; shapeHash: string } {
   if (!/\.(?:[cm]?[jt]sx?)$/iu.test(file)) {

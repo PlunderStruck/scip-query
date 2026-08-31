@@ -67,6 +67,19 @@ Measured end state on the real repository, forced full reindex at the **default 
 
 Measured: http-summary 10.5 s → 6.4 s on both the clone and the real repository; whole extraction 34.3 s → 27.7 s standalone; clone forced reindex 124.6 s → 93.2 s; real-repository forced reindex published at 99.8 s on a tree that had just grown by a large merged refactor.
 
+## Fourth round: extraction fingerprints and the dense-shard verdict (same day)
+
+- **Boundary source hashes are now a persisted evidence product.** Every full extraction tokenized every file with a TypeScript scanner (plus two running SHA-256s) to compute the syntax/shape hashes that power incremental reuse — 6.3 s of the per-file overhead. They are pure functions of the bytes, so `runtime-boundary-source-hashes` now serves them by content hash like the other evidence products; a warm run pays ~185 ms. Direct extraction: 21.8 s → 15.1 s.
+- **The dense-shard question is closed with data.** Byte-balanced shards have near-equal bytes (±1%) _and_ near-equal previous-index mention density (±7%), yet a ~40% duration spread remains. Parse-only closure measurement explains it: the shard holding `e2e/` parses an 11,094-file / 95 MB closure versus ~8.2–9.7 k / 69–79 MB for its peers, because end-to-end tests import the whole application — wherever they land, that shard pays a near-whole-repo closure. Contiguous path partitioning has hit its ceiling; per-shard measured-cost feedback or a warm compile server are the remaining levers.
+- Deferred deliberately: yielding the event loop inside the extraction sweep (so tree-sitter second-pass finalizers can run mid-sweep) requires async-ifying the post-index augmentation stage chain; the coordinator's JS heap is already safe, so the transient native RSS stays a follow-up.
+
+Validating the fingerprint product on the real repository exposed one latent regression and one measurement contract:
+
+- **Publish applied a stale deferred companion onto fresh builds.** When the accepted generation's publication recorded `scipCompanion: 'deferred'` (the watcher's incremental publishes leave it that way), publish spent ~17 s and a ~4 GB coordinator heap spike materializing the previous generation's overlay onto a typescript output that had just been rebuilt from scratch — reintroducing the default-heap OOM on watcher-managed caches. A freshly built output already covers every current input, so materialization now runs only when the typescript shard was reused.
+- Evidence batch writes now truncate the WAL at their durability point, and the cache-lifecycle plateau accounting ignores SQLite `-shm`/`-wal` files, whose presence tracks connection lifetime rather than retained content.
+
+Measured steady state, forced full reindex at the default heap: clone **85.6 s**, real repository **87.8 s** (session start: an OOM crash; first fix round: 135 s).
+
 ## Named follow-ups
 
 - The dev watch-server's RSS grows over hours (observed 3.9 → 5.4 GB on one repository); its semantic/index service heap is the next bounded-memory candidate.

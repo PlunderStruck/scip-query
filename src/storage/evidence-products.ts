@@ -171,6 +171,12 @@ export const EVIDENCE_PRODUCT_MANIFEST: readonly EvidenceProductManifestEntry[] 
     stalenessTest: 'tests/analysis/runtime-boundaries.test.ts',
     owner: 'src/analysis/runtime-boundaries/http-summaries.ts',
   }),
+  fileManifest('runtime-boundary-source-hashes', {
+    dependsOn: ['content-hash', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'contentHash', 'payloadVersion'],
+    stalenessTest: 'tests/analysis/runtime-boundaries.test.ts',
+    owner: 'src/analysis/runtime-boundaries/graph.ts',
+  }),
   projectManifest('file-dependency-graph', {
     dependsOn: ['project-fingerprint', 'indexed-language-set', 'import-resolution-fingerprint', 'tool-version'],
     keyParts: ['kind', 'scope', 'projectFingerprint', 'payloadVersion'],
