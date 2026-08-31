@@ -80,6 +80,14 @@ Validating the fingerprint product on the real repository exposed one latent reg
 
 Measured steady state, forced full reindex at the default heap: clone **85.6 s**, real repository **87.8 s** (session start: an OOM crash; first fix round: 135 s).
 
+## Fifth round: yielding extraction and the async augmentation chain (same day)
+
+The fourth round deferred the one structural fix tree-sitter's memory model demands: native trees and node-wrapper cache entries are freed by V8 second-pass weak callbacks that only run on event-loop turns, so a fully synchronous whole-repository extraction sweep retains every tree it ever parsed until the phase exits. The post-index augmentation chain is now async end to end (`AsyncPostIndexAugmentationStage`, `runPostIndexAugmentationAsync`): `collectRuntimeBoundaryGraph` awaits a `setImmediate` yield every 256 files, giving finalizers ~30 windows per sweep, and the reuse-check/publish spans moved to `profileAsyncSpan`. The parse funnel's 512 MB finalizer-owned-allocation threshold (`native-gc.ts`) now actually bounds accumulation, because the loop turns it needs exist mid-sweep.
+
+Measured on the clone, forced full reindex at the default heap: peak coordinator RSS **6.6 GB → 4.7 GB** on an idle machine (and 2.6 GB under CPU contention, where the sweep gets more loop turns per unit work — direct evidence the finalizer windows are what frees the trees). Wall time 96.4 s with profiling enabled, inside the 85.6–102.2 s spread of identical pre-refactor runs — the yields cost nothing measurable.
+
+The sweep's async-ness surfaced one test-conversion trap worth writing down: `await f(x).y.z` binds the await *after* the property chain, so a mechanical sync→async conversion that inserts `await` without parenthesizing silently reads properties off the Promise.
+
 ## Named follow-ups
 
 - The dev watch-server's RSS grows over hours (observed 3.9 → 5.4 GB on one repository); its semantic/index service heap is the next bounded-memory candidate.

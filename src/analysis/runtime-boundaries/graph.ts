@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
 import { createRequire } from 'node:module';
 import type * as TypeScript from 'typescript';
 import { detectAstLanguage, isVueSfcPath } from '../../source/ast/ast-language.js';
@@ -139,11 +140,17 @@ export interface RuntimeBoundaryCollectionOptions {
   profileSpan?: RuntimeBoundaryProfileSpan;
 }
 
-/** Extract changed-file facts, retain covered unchanged-file facts, and globally refactor their relationships. */
-export function collectRuntimeBoundaryGraph(
+/**
+ * Extract changed-file facts, retain covered unchanged-file facts, and
+ * globally refactor their relationships. Asynchronous so the extraction sweep
+ * can yield the event loop: tree-sitter's native memory is released by V8
+ * second-pass callbacks that only run on loop turns, and a synchronous
+ * whole-repository sweep would retain every parsed tree until it finished.
+ */
+export async function collectRuntimeBoundaryGraph(
   db: ScipDatabase,
   opts: RuntimeBoundaryCollectionOptions = {},
-): RuntimeBoundaryGraph {
+): Promise<RuntimeBoundaryGraph> {
   const files = getSourceFiles(db);
   const fileSet = new Set(files);
   const affectedFiles = new Set((opts.affectedFiles ?? []).map(normalizeBoundaryFile));
@@ -167,7 +174,7 @@ export function collectRuntimeBoundaryGraph(
   const previousDirectObservationCount =
     previousFileCoverage?.reduce((total, entry) => total + entry.observationIds.length, 0) ?? 0;
   let phaseStartedAt = performance.now();
-  const extracted = extractBoundaryFiles(db, filesToExtract, opts.profileSpan);
+  const extracted = await extractBoundaryFiles(db, filesToExtract, opts.profileSpan);
   recordPhase(phases, 'direct-extraction', phaseStartedAt, filesToExtract.length, extracted.observations.length, {
     filesVisited: filesToExtract.length,
     filesReused: retainedFileCoverage.length,
@@ -642,16 +649,26 @@ function recordPhase(
   });
 }
 
-function extractBoundaryFiles(
+const EXTRACTION_YIELD_INTERVAL_FILES = 256;
+
+async function extractBoundaryFiles(
   db: ScipDatabase,
   files: readonly string[],
   profileSpan?: RuntimeBoundaryProfileSpan,
-): { observations: BoundaryObservation[]; fileCoverage: RuntimeBoundaryFileCoverage[] } {
+): Promise<{ observations: BoundaryObservation[]; fileCoverage: RuntimeBoundaryFileCoverage[] }> {
   const observations: BoundaryObservation[] = [];
   const fileCoverage: RuntimeBoundaryFileCoverage[] = [];
   const recordSpan: RuntimeBoundaryProfileSpan = profileSpan ?? ((_name, run) => run());
   const freshHashes: Array<{ relativePath: string; contentHash: string; value: BoundarySourceHashes }> = [];
+  let filesSinceYield = 0;
   for (const file of files) {
+    filesSinceYield += 1;
+    if (filesSinceYield >= EXTRACTION_YIELD_INTERVAL_FILES) {
+      filesSinceYield = 0;
+      // Let queued second-pass finalizers free the native trees parsed by
+      // earlier iterations before this sweep parses more.
+      await yieldToEventLoop();
+    }
     const source = recordSpan('runtime-boundaries.file.read', () => readSourceTextUncached(db, file));
     const applicableExtractors = recordSpan('runtime-boundaries.file.supports', () =>
       BOUNDARY_EXTRACTORS.filter((extractor) => extractor.supports(source)),

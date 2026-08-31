@@ -14,7 +14,7 @@ import { buildRelationGroups, materializeBoundedLinks } from '../../src/analysis
 import { runtimeBoundarySourceScope } from '../../src/analysis/runtime-boundaries/source-scope.js';
 import type { BoundaryObservation } from '../../src/analysis/runtime-boundaries/types.js';
 import { runtimeBoundaryAugmentationStage } from '../../src/reindex/runtime-boundaries.js';
-import { runPostIndexAugmentation } from '../../src/reindex/augmentation/post-index-augmentation.js';
+import { runPostIndexAugmentationAsync } from '../../src/reindex/augmentation/post-index-augmentation.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { getDefinitionsForFile } from '../../src/symbols/definition-catalog.js';
 import {
@@ -27,7 +27,7 @@ import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixtu
 describe('runtime-boundary evidence', () => {
   let tempDir: string | null = null;
 
-  it('distinguishes repository scripts from application modules named tools', () => {
+  it('distinguishes repository scripts from application modules named tools', async () => {
     expect(runtimeBoundarySourceScope('tools/release.ts')).toBe('script');
     expect(runtimeBoundarySourceScope('scripts/reindex.ts')).toBe('script');
     expect(runtimeBoundarySourceScope('src/agent/tools/bash.ts')).toBe('production');
@@ -39,10 +39,10 @@ describe('runtime-boundary evidence', () => {
     tempDir = null;
   });
 
-  it('extracts open observations and joins only evidence-backed runtime peers', () => {
+  it('extracts open observations and joins only evidence-backed runtime peers', async () => {
     const db = createBoundaryDb();
     try {
-      const graph = collectRuntimeBoundaryGraph(db);
+      const graph = await collectRuntimeBoundaryGraph(db);
       expect(graph.extractorVersion).toBe('runtime-boundaries-v19');
 
       expect(graph.observations).toEqual(
@@ -234,7 +234,7 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('extracts exact Node child-process crossings from imported bindings only', () => {
+  it('extracts exact Node child-process crossings from imported bindings only', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-process-boundaries-'));
     const files = {
       'src/process.ts': [
@@ -259,7 +259,7 @@ describe('runtime-boundary evidence', () => {
     });
 
     try {
-      const processObservations = collectRuntimeBoundaryGraph(db).observations.filter(
+      const processObservations = (await collectRuntimeBoundaryGraph(db)).observations.filter(
         (observation) => observation.protocol === 'process',
       );
       expect(processObservations).toEqual([
@@ -290,7 +290,7 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('links exact capability instructions to unique descriptor handlers', () => {
+  it('links exact capability instructions to unique descriptor handlers', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-capability-boundaries-'));
     const files = {
       'src/bash.ts': [
@@ -320,7 +320,7 @@ describe('runtime-boundary evidence', () => {
     });
 
     try {
-      const graph = collectRuntimeBoundaryGraph(db);
+      const graph = await collectRuntimeBoundaryGraph(db);
       expect(graph.observations).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -360,7 +360,7 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('does not resolve a capability reference when multiple handlers claim the same key', () => {
+  it('does not resolve a capability reference when multiple handlers claim the same key', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-ambiguous-capability-'));
     const files = {
       'src/instructions.ts': ['export const instructions = "Use kill_process() to stop.";'],
@@ -388,14 +388,14 @@ describe('runtime-boundary evidence', () => {
     });
 
     try {
-      const graph = collectRuntimeBoundaryGraph(db);
+      const graph = await collectRuntimeBoundaryGraph(db);
       expect(graph.links.filter((link) => link.joinRule === 'registry.capability-key')).toHaveLength(0);
     } finally {
       db.close();
     }
   });
 
-  it('recovers call syntax from compiler identity and preserves same-line ambiguity', () => {
+  it('recovers call syntax from compiler identity and preserves same-line ambiguity', async () => {
     const db = createBoundaryDb();
     try {
       const postJson = getDefinitionsForFile(db, 'src/http-wrapper.ts').find(
@@ -445,7 +445,7 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('uses SCIP reference rows for compiler-resolved call sites', () => {
+  it('uses SCIP reference rows for compiler-resolved call sites', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-compiler-references-'));
     writeFixtureFiles(tempDir, {
       'src/request.ts': ['export function sendRequest(path: string) { return fetch(path); }'],
@@ -485,11 +485,11 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('replaces affected-file facts while retaining exact coverage for unchanged files', () => {
+  it('replaces affected-file facts while retaining exact coverage for unchanged files', async () => {
     const baselineDb = createBoundaryDb();
     const projectRoot = baselineDb.config.projectRoot;
     const dbPath = baselineDb.config.dbPath;
-    const baseline = collectRuntimeBoundaryGraph(baselineDb);
+    const baseline = await collectRuntimeBoundaryGraph(baselineDb);
     baselineDb.close();
     writeFixtureFiles(projectRoot, {
       'src/client.ts': [
@@ -501,11 +501,11 @@ describe('runtime-boundary evidence', () => {
     });
     const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(projectRoot, 'index.scip') });
     try {
-      const refreshed = collectRuntimeBoundaryGraph(db, {
+      const refreshed = await collectRuntimeBoundaryGraph(db, {
         previousGraph: baseline,
         affectedFiles: ['src/client.ts'],
       });
-      const clean = collectRuntimeBoundaryGraph(db);
+      const clean = await collectRuntimeBoundaryGraph(db);
 
       expect(refreshed.observations).toEqual(clean.observations);
       expect(refreshed.relationGroups).toEqual(clean.relationGroups);
@@ -531,7 +531,7 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('reuses derived phases when an affected file has no boundary facts or references into the prior graph', () => {
+  it('reuses derived phases when an affected file has no boundary facts or references into the prior graph', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-unrelated-change-'));
     writeFixtureFiles(tempDir, {
       'src/client.ts': ["fetch('/events', { method: 'POST' });"],
@@ -551,17 +551,17 @@ describe('runtime-boundary evidence', () => {
       dbPath,
       indexPath: join(tempDir, 'index.scip'),
     });
-    const baseline = collectRuntimeBoundaryGraph(baselineDb);
+    const baseline = await collectRuntimeBoundaryGraph(baselineDb);
     baselineDb.close();
 
     writeFixtureFiles(tempDir, { 'src/unrelated.ts': ['', 'export const unrelated = 1;'] });
     const db = new ScipDatabase({ projectRoot: tempDir, dbPath, indexPath: join(tempDir, 'index.scip') });
     try {
-      const refreshed = collectRuntimeBoundaryGraph(db, {
+      const refreshed = await collectRuntimeBoundaryGraph(db, {
         previousGraph: baseline,
         affectedFiles: ['src/unrelated.ts'],
       });
-      const forced = collectRuntimeBoundaryGraph(db, {
+      const forced = await collectRuntimeBoundaryGraph(db, {
         previousGraph: baseline,
         affectedFiles: ['src/unrelated.ts'],
         forceDerivedRebuild: true,
@@ -583,7 +583,7 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('reuses derived phases when deleting a file with no boundary facts or references into the prior graph', () => {
+  it('reuses derived phases when deleting a file with no boundary facts or references into the prior graph', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-unrelated-deletion-'));
     writeFixtureFiles(tempDir, {
       'src/client.ts': ["fetch('/events', { method: 'POST' });"],
@@ -599,7 +599,7 @@ describe('runtime-boundary evidence', () => {
       dbPath,
       indexPath: join(tempDir, 'index.scip'),
     });
-    const baseline = collectRuntimeBoundaryGraph(baselineDb);
+    const baseline = await collectRuntimeBoundaryGraph(baselineDb);
     baselineDb.close();
 
     rmSync(join(tempDir, 'src/unrelated.ts'));
@@ -609,11 +609,11 @@ describe('runtime-boundary evidence', () => {
 
     const db = new ScipDatabase({ projectRoot: tempDir, dbPath, indexPath: join(tempDir, 'index.scip') });
     try {
-      const refreshed = collectRuntimeBoundaryGraph(db, {
+      const refreshed = await collectRuntimeBoundaryGraph(db, {
         previousGraph: baseline,
         affectedFiles: ['src/unrelated.ts'],
       });
-      const clean = collectRuntimeBoundaryGraph(db);
+      const clean = await collectRuntimeBoundaryGraph(db);
 
       expect(refreshed.observations).toEqual(clean.observations);
       expect(refreshed.relationGroups).toEqual(clean.relationGroups);
@@ -631,7 +631,7 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('reuses derived phases when an affected file references only a persistence boundary', () => {
+  it('reuses derived phases when an affected file references only a persistence boundary', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-persistence-only-change-'));
     writeFixtureFiles(tempDir, {
       'src/repository.ts': [
@@ -655,7 +655,7 @@ describe('runtime-boundary evidence', () => {
       dbPath,
       indexPath: join(tempDir, 'index.scip'),
     });
-    const baseline = collectRuntimeBoundaryGraph(baselineDb);
+    const baseline = await collectRuntimeBoundaryGraph(baselineDb);
     baselineDb.close();
 
     writeFixtureFiles(tempDir, {
@@ -663,7 +663,7 @@ describe('runtime-boundary evidence', () => {
     });
     const db = new ScipDatabase({ projectRoot: tempDir, dbPath, indexPath: join(tempDir, 'index.scip') });
     try {
-      const refreshed = collectRuntimeBoundaryGraph(db, {
+      const refreshed = await collectRuntimeBoundaryGraph(db, {
         previousGraph: baseline,
         affectedFiles: ['src/caller.ts'],
       });
@@ -681,7 +681,7 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('reuses derived phases when an affected file references a non-boundary symbol beside an HTTP boundary', () => {
+  it('reuses derived phases when an affected file references a non-boundary symbol beside an HTTP boundary', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-adjacent-http-change-'));
     writeFixtureFiles(tempDir, {
       'src/client.ts': [
@@ -710,7 +710,7 @@ describe('runtime-boundary evidence', () => {
       dbPath,
       indexPath: join(tempDir, 'index.scip'),
     });
-    const baseline = collectRuntimeBoundaryGraph(baselineDb);
+    const baseline = await collectRuntimeBoundaryGraph(baselineDb);
     baselineDb.close();
 
     writeFixtureFiles(tempDir, {
@@ -722,7 +722,7 @@ describe('runtime-boundary evidence', () => {
     });
     const db = new ScipDatabase({ projectRoot: tempDir, dbPath, indexPath: join(tempDir, 'index.scip') });
     try {
-      const refreshed = collectRuntimeBoundaryGraph(db, {
+      const refreshed = await collectRuntimeBoundaryGraph(db, {
         previousGraph: baseline,
         affectedFiles: ['src/caller.ts'],
       });
@@ -739,7 +739,7 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('reuses HTTP call topology when only a template endpoint literal changes', () => {
+  it('reuses HTTP call topology when only a template endpoint literal changes', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-template-endpoint-'));
     const file = 'src/client.ts';
     const source = [
@@ -755,7 +755,7 @@ describe('runtime-boundary evidence', () => {
       .definition(1, 1, 1, 0, 0, 2, 1)
       .write();
     const baselineDb = new ScipDatabase({ projectRoot: tempDir, dbPath, indexPath: join(tempDir, 'index.scip') });
-    const baseline = collectRuntimeBoundaryGraph(baselineDb);
+    const baseline = await collectRuntimeBoundaryGraph(baselineDb);
     baselineDb.close();
 
     writeFixtureFiles(tempDir, {
@@ -763,8 +763,8 @@ describe('runtime-boundary evidence', () => {
     });
     const db = new ScipDatabase({ projectRoot: tempDir, dbPath, indexPath: join(tempDir, 'index.scip') });
     try {
-      const refreshed = collectRuntimeBoundaryGraph(db, { previousGraph: baseline, affectedFiles: [file] });
-      const clean = collectRuntimeBoundaryGraph(db);
+      const refreshed = await collectRuntimeBoundaryGraph(db, { previousGraph: baseline, affectedFiles: [file] });
+      const clean = await collectRuntimeBoundaryGraph(db);
 
       expect(refreshed.observations).toEqual(clean.observations);
       expect(refreshed.frontiers).toEqual(clean.frontiers);
@@ -848,17 +848,17 @@ describe('runtime-boundary evidence', () => {
       ],
     },
     { label: 'terminal deletion', file: 'src/client.ts', source: [] },
-  ])('matches a clean graph after incremental $label change', ({ label, file, source }) => {
+  ])('matches a clean graph after incremental $label change', async ({ label, file, source }) => {
     const baselineDb = createBoundaryDb();
     const projectRoot = baselineDb.config.projectRoot;
     const dbPath = baselineDb.config.dbPath;
-    const baseline = collectRuntimeBoundaryGraph(baselineDb);
+    const baseline = await collectRuntimeBoundaryGraph(baselineDb);
     baselineDb.close();
     writeFixtureFiles(projectRoot, { [file]: source });
     const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(projectRoot, 'index.scip') });
     try {
-      const refreshed = collectRuntimeBoundaryGraph(db, { previousGraph: baseline, affectedFiles: [file] });
-      const clean = collectRuntimeBoundaryGraph(db);
+      const refreshed = await collectRuntimeBoundaryGraph(db, { previousGraph: baseline, affectedFiles: [file] });
+      const clean = await collectRuntimeBoundaryGraph(db);
 
       expect(refreshed.observations).toEqual(clean.observations);
       expect(refreshed.relationGroups).toEqual(clean.relationGroups);
@@ -880,13 +880,13 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('persists extraction as part of post-index augmentation and reads it without repository configuration', () => {
+  it('persists extraction as part of post-index augmentation and reads it without repository configuration', async () => {
     const db = createBoundaryDb();
     const dbPath = db.config.dbPath;
     const projectRoot = db.config.projectRoot;
     db.close();
 
-    const result = runPostIndexAugmentation(runtimeBoundaryAugmentationStage(), { projectRoot, dbPath });
+    const result = await runPostIndexAugmentationAsync(runtimeBoundaryAugmentationStage(), { projectRoot, dbPath });
     expect(result.result).toMatchObject({
       reused: false,
       observations: expect.any(Number),
@@ -895,7 +895,7 @@ describe('runtime-boundary evidence', () => {
     });
 
     const incrementalStatuses: string[] = [];
-    const incremental = runPostIndexAugmentation(
+    const incremental = await runPostIndexAugmentationAsync(
       runtimeBoundaryAugmentationStage({ affectedFiles: ['src/client.ts'] }),
       {
         projectRoot,
@@ -910,7 +910,7 @@ describe('runtime-boundary evidence', () => {
     ]);
 
     const statuses: string[] = [];
-    const reused = runPostIndexAugmentation(runtimeBoundaryAugmentationStage({ reuseExisting: true }), {
+    const reused = await runPostIndexAugmentationAsync(runtimeBoundaryAugmentationStage({ reuseExisting: true }), {
       projectRoot,
       dbPath,
       onStatus: (message) => statuses.push(message),
@@ -937,11 +937,11 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('returns no stored graph for an older index instead of failing exploration', () => {
+  it('returns no stored graph for an older index instead of failing exploration', async () => {
     const db = createBoundaryDb();
     try {
       expect(readRuntimeBoundaryGraph(db)).toBeNull();
-      const graph = collectRuntimeBoundaryGraph(db);
+      const graph = await collectRuntimeBoundaryGraph(db);
       db.close();
       writeRuntimeBoundaryGraph(db.config.dbPath, graph);
     } finally {
@@ -949,7 +949,7 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('joins Effect HttpApi endpoint declarations to their uniquely registered handlers', () => {
+  it('joins Effect HttpApi endpoint declarations to their uniquely registered handlers', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-effect-httpapi-boundaries-'));
     const files = {
       'src/groups.ts': [
@@ -983,7 +983,7 @@ describe('runtime-boundary evidence', () => {
       indexPath: join(tempDir, 'index.scip'),
     });
     try {
-      const graph = collectRuntimeBoundaryGraph(db);
+      const graph = await collectRuntimeBoundaryGraph(db);
       expect(graph.observations).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -1025,7 +1025,7 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('does not guess an Effect HttpApi handler when an operation registration is ambiguous', () => {
+  it('does not guess an Effect HttpApi handler when an operation registration is ambiguous', async () => {
     const declaration = syntheticFrameworkObservation('declaration', 'declaration');
     const first = syntheticFrameworkObservation('consumer', 'handler-a');
     const second = syntheticFrameworkObservation('consumer', 'handler-b');
@@ -1040,7 +1040,7 @@ describe('runtime-boundary evidence', () => {
     expect(materializeBoundedLinks(observations, groups)).toEqual([]);
   });
 
-  it('factorizes a 1,000 by 1,000 partial join without materializing a pairwise product', () => {
+  it('factorizes a 1,000 by 1,000 partial join without materializing a pairwise product', async () => {
     const observations: BoundaryObservation[] = [
       ...Array.from({ length: 1_000 }, (_, index) => syntheticHttpObservation('producer', index)),
       ...Array.from({ length: 1_000 }, (_, index) => syntheticHttpObservation('consumer', index)),

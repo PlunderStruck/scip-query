@@ -46,8 +46,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     root = null;
   });
 
-  it('projects several exact roots into one compact typed evidence packet', () => {
-    const db = createSystemMapDb();
+  it('projects several exact roots into one compact typed evidence packet', async () => {
+    const db = await createSystemMapDb();
     try {
       const result = graphEvidence(
         db,
@@ -94,8 +94,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('keeps explicit edge selection and edge-budget omissions visible', () => {
-    const db = createSystemMapDb();
+  it('keeps explicit edge selection and edge-budget omissions visible', async () => {
+    const db = await createSystemMapDb();
     try {
       const result = graphEvidence(
         db,
@@ -147,8 +147,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('resolves a single-line location selector to its containing source construct', () => {
-    const db = createSystemMapDb();
+  it('resolves a single-line location selector to its containing source construct', async () => {
+    const db = await createSystemMapDb();
     try {
       const result = graphEvidence(
         db,
@@ -176,8 +176,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('confirms incoming calls made through a named import alias', () => {
-    const db = createSystemMapDb({ indexedAliasedCaller: true });
+  it('confirms incoming calls made through a named import alias', async () => {
+    const db = await createSystemMapDb({ indexedAliasedCaller: true });
     try {
       const result = graphEvidence(
         db,
@@ -201,8 +201,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('projects explicit directions and reports exact inventory without materializing edges', () => {
-    const db = createSystemMapDb();
+  it('projects explicit directions and reports exact inventory without materializing edges', async () => {
+    const db = await createSystemMapDb();
     try {
       const selectors = { symbols: [symbols.apiAppend] };
       const shared = { families: ['execution'] as const, maxDepth: 2, maxEdges: 1_000 };
@@ -233,8 +233,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('filters exact subtypes and returns deterministic connecting paths for several roots', () => {
-    const db = createSystemMapDb();
+  it('filters exact subtypes and returns deterministic connecting paths for several roots', async () => {
+    const db = await createSystemMapDb();
     try {
       const selectors = { symbols: [symbols.companionCommand, symbols.apiAppend] };
       const complete = graphEvidence(db, selectors, { view: 'complete', maxDepth: 8, maxEdges: 1_000 });
@@ -273,8 +273,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('rejects connecting projections that do not resolve at least two roots', () => {
-    const db = createSystemMapDb();
+  it('rejects connecting projections that do not resolve at least two roots', async () => {
+    const db = await createSystemMapDb();
     try {
       expect(() => graphEvidence(db, { symbols: [symbols.apiAppend] }, { connecting: true })).toThrow(
         'Connecting evidence requires at least two resolved root nodes.',
@@ -284,8 +284,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('preserves every literal hit and every ambiguous symbol candidate', () => {
-    const db = createSystemMapDb();
+  it('preserves every literal hit and every ambiguous symbol candidate', async () => {
+    const db = await createSystemMapDb();
     try {
       const result = systemMap(db, {
         searches: ['work_session_stream_events'],
@@ -321,8 +321,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('keeps compatibility selection terms from changing graph or recovery membership', () => {
-    const db = createSystemMapDb();
+  it('keeps compatibility selection terms from changing graph or recovery membership', async () => {
+    const db = await createSystemMapDb();
     try {
       const selectors = {
         symbols: [symbols.companionCommand, symbols.apiAppend],
@@ -341,7 +341,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('uses an exact wrapped-callable range as a source construct when SCIP has no local definition', () => {
+  it('uses an exact wrapped-callable range as a source construct when SCIP has no local definition', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-source-construct-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -383,7 +383,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('protects an exact process crossing inside a large anchored construct', () => {
+  it('protects an exact process crossing inside a large anchored construct', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-process-crossing-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -404,7 +404,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/runner.ts').write();
     const config = { projectRoot, dbPath, indexPath: join(root, 'index.scip') };
     const initial = new ScipDatabase(config);
-    const graph = collectRuntimeBoundaryGraph(initial);
+    const graph = await collectRuntimeBoundaryGraph(initial);
     initial.close();
     writeRuntimeBoundaryGraph(dbPath, graph);
     const db = new ScipDatabase(config);
@@ -431,7 +431,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('materializes one source construct when several callsites share the same enclosing callable', () => {
+  it('materializes one source construct when several callsites share the same enclosing callable', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-source-construct-deduplication-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -472,8 +472,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('joins compiler-resolved argument and return flow to call edges in the first system map', () => {
-    const db = createSystemMapDb();
+  it('joins compiler-resolved argument and return flow to call edges in the first system map', async () => {
+    const db = await createSystemMapDb();
     try {
       const result = systemMap(db, {
         symbols: [symbols.companionCommand, symbols.companionAppend, symbols.dispatch],
@@ -540,8 +540,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('keeps proved value flow distinct from reference and call neighborhoods', () => {
-    const db = createSystemMapDb();
+  it('keeps proved value flow distinct from reference and call neighborhoods', async () => {
+    const db = await createSystemMapDb();
     try {
       const flow = valueFlow(db, { symbols: [symbols.companionCommand, symbols.companionAppend] }, { maxDepth: 1 });
 
@@ -576,8 +576,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('computes a directional dependence slice and labels call connectors as support', () => {
-    const db = createSystemMapDb();
+  it('computes a directional dependence slice and labels call connectors as support', async () => {
+    const db = await createSystemMapDb();
     try {
       const result = dependenceSlice(db, symbols.companionAppend, {
         direction: 'backward',
@@ -601,7 +601,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('reverse-connects an imported service member call to its source-only implementation', () => {
+  it('reverse-connects an imported service member call to its source-only implementation', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-source-service-member-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -685,7 +685,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('reverse-connects service callers through a separate declaration and provider file', () => {
+  it('reverse-connects service callers through a separate declaration and provider file', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-split-service-provider-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -745,7 +745,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('attributes a reverse call inside an anonymous layer factory to its enclosing binding', () => {
+  it('attributes a reverse call inside an anonymous layer factory to its enclosing binding', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-source-layer-owner-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -787,8 +787,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('retains embedded and test-only literal matches without letting them seed default traversal', () => {
-    const db = createSystemMapDb();
+  it('retains embedded and test-only literal matches without letting them seed default traversal', async () => {
+    const db = await createSystemMapDb();
     try {
       const collapsed = systemMap(db, { searches: ['issue.created'], maxDepth: 0 });
       const anchor = collapsed.anchors.find((candidate) => candidate.kind === 'literal');
@@ -826,8 +826,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('connects command, API, persistence, shared contract, and web regions through typed evidence', () => {
-    const db = createSystemMapDb();
+  it('connects command, API, persistence, shared contract, and web regions through typed evidence', async () => {
+    const db = await createSystemMapDb();
     try {
       const result = systemMap(db, {
         searches: ['work_session_stream_events'],
@@ -891,8 +891,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('crosses an automatically extracted HTTP boundary from one symbol anchor', () => {
-    const db = createSystemMapDb();
+  it('crosses an automatically extracted HTTP boundary from one symbol anchor', async () => {
+    const db = await createSystemMapDb();
     try {
       const result = systemMap(db, { symbols: [symbols.dispatch], maxDepth: 1 });
 
@@ -918,8 +918,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('retains an exact database state effect when its runtime peer is unresolved', () => {
-    const seededDb = createSystemMapDb();
+  it('retains an exact database state effect when its runtime peer is unresolved', async () => {
+    const seededDb = await createSystemMapDb();
     const config = seededDb.config;
     const graph = readRuntimeBoundaryGraph(seededDb)!;
     const basis = graph.observations[0]!;
@@ -1000,8 +1000,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('materializes a source-backed runtime participant when the consumer has no compiler symbol', () => {
-    const db = createSystemMapDb({ unindexedRuntimeParticipant: true });
+  it('materializes a source-backed runtime participant when the consumer has no compiler symbol', async () => {
+    const db = await createSystemMapDb({ unindexedRuntimeParticipant: true });
     try {
       const result = systemMap(db, {
         symbols: [symbols.dispatch],
@@ -1044,7 +1044,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('catalogues a framework registration through its resolved source-callable owner', () => {
+  it('catalogues a framework registration through its resolved source-callable owner', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-framework-owner-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -1069,7 +1069,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       .write();
     const config = { projectRoot, dbPath, indexPath: join(root, 'index.scip') };
     const initial = new ScipDatabase(config);
-    const graph = collectRuntimeBoundaryGraph(initial);
+    const graph = await collectRuntimeBoundaryGraph(initial);
     initial.close();
     writeRuntimeBoundaryGraph(dbPath, graph);
     const db = new ScipDatabase(config);
@@ -1112,7 +1112,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('preserves distinct runtime operations that share one declaration file and implementation', () => {
+  it('preserves distinct runtime operations that share one declaration file and implementation', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-framework-operation-identity-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -1141,7 +1141,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       .write();
     const config = { projectRoot, dbPath, indexPath: join(root, 'index.scip') };
     const initial = new ScipDatabase(config);
-    const graph = collectRuntimeBoundaryGraph(initial);
+    const graph = await collectRuntimeBoundaryGraph(initial);
     initial.close();
     writeRuntimeBoundaryGraph(dbPath, graph);
     const db = new ScipDatabase(config);
@@ -1166,8 +1166,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('does not traverse an unrelated runtime observation merely because its file was reached', () => {
-    const seeded = createSystemMapDb();
+  it('does not traverse an unrelated runtime observation merely because its file was reached', async () => {
+    const seeded = await createSystemMapDb();
     const config = seeded.config;
     const graph = readRuntimeBoundaryGraph(seeded)!;
     const templateLink = graph.links[0]!;
@@ -1223,8 +1223,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('anchors a registry literal to its anonymous handler instead of the containing module', () => {
-    const db = createSystemMapDb({ unindexedRuntimeParticipant: true });
+  it('anchors a registry literal to its anonymous handler instead of the containing module', async () => {
+    const db = await createSystemMapDb({ unindexedRuntimeParticipant: true });
     try {
       const result = systemMap(db, {
         searches: ['work_session_stream_events'],
@@ -1248,8 +1248,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('uses an unindexed source callable as a literal anchor and preserves its exact imported call as graph evidence', () => {
-    const db = createSystemMapDb({ unindexedSourceAnchor: true });
+  it('uses an unindexed source callable as a literal anchor and preserves its exact imported call as graph evidence', async () => {
+    const db = await createSystemMapDb({ unindexedSourceAnchor: true });
     try {
       const result = systemMap(db, {
         searches: ['sourceOnlySessionStream'],
@@ -1287,8 +1287,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('attributes a reverse reference to its source callable when SCIP only identifies the module', () => {
-    const db = createSystemMapDb({ moduleOwnedReference: true });
+  it('attributes a reverse reference to its source callable when SCIP only identifies the module', async () => {
+    const db = await createSystemMapDb({ moduleOwnedReference: true });
     try {
       const result = systemMap(db, {
         symbols: [symbols.companionAppend],
@@ -1326,8 +1326,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('recursively reverse-expands proven callers without propagating ordinary references', () => {
-    const db = createSystemMapDb();
+  it('recursively reverse-expands proven callers without propagating ordinary references', async () => {
+    const db = await createSystemMapDb();
     try {
       const result = systemMap(db, {
         symbols: [symbols.companionAppend],
@@ -1356,7 +1356,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('catalogues a nested callback under its enclosing exported package doorway', () => {
+  it('catalogues a nested callback under its enclosing exported package doorway', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-public-owner-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -1428,8 +1428,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('populates the universal topology with typed compiler and runtime evidence', () => {
-    const db = createSystemMapDb();
+  it('populates the universal topology with typed compiler and runtime evidence', async () => {
+    const db = await createSystemMapDb();
     try {
       const result = systemMap(db, {
         searches: ['work_session_stream_events'],
@@ -1477,8 +1477,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('returns connector-ordered behavior with evidence for every transition', () => {
-    const db = createSystemMapDb();
+  it('returns connector-ordered behavior with evidence for every transition', async () => {
+    const db = await createSystemMapDb();
     try {
       const result = systemMap(db, {
         symbols: [symbols.dispatch, symbols.apiRoute],
@@ -1561,8 +1561,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('keeps a decisive branch predicate in the connected behavior representation', () => {
-    const db = createSystemMapDb();
+  it('keeps a decisive branch predicate in the connected behavior representation', async () => {
+    const db = await createSystemMapDb();
     try {
       const result = systemMap(db, {
         symbols: [symbols.webRealtime, symbols.render],
@@ -1587,7 +1587,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('connects a predicate to both sibling outcomes and their distinct terminal behavior', () => {
+  it('connects a predicate to both sibling outcomes and their distinct terminal behavior', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-control-dependence-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -1681,7 +1681,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('projects exact state mutations, assigned values, and await ordering from source constructs', () => {
+  it('projects exact state mutations, assigned values, and await ordering from source constructs', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-state-temporal-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -1740,7 +1740,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('distinguishes an exactly captured lexical value from a local assignment value', () => {
+  it('distinguishes an exactly captured lexical value from a local assignment value', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-captured-state-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -1777,7 +1777,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('projects syntax-proved lock membership without inferring a lock from a call name', () => {
+  it('projects syntax-proved lock membership without inferring a lock from a call name', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-lock-scope-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -1818,7 +1818,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('does not infer lock or transaction membership from call names', () => {
+  it('does not infer lock or transaction membership from call names', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-unproved-scopes-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -1861,7 +1861,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('compresses a multiline governing predicate as one complete connector line', () => {
+  it('compresses a multiline governing predicate as one complete connector line', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-multiline-connector-predicate-'));
     const projectRoot = join(root, 'project');
     const dbPath = join(root, 'index.db');
@@ -1963,7 +1963,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('keeps every answer-determinative sibling branch while compacting a source-large explicit anchor', () => {
+  it('keeps every answer-determinative sibling branch while compacting a source-large explicit anchor', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-complete-explicit-anchor-'));
     const padding = Array.from(
       { length: 80 },
@@ -2051,7 +2051,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('falls back to complete source when an explicit anchor cannot be compressed losslessly', () => {
+  it('falls back to complete source when an explicit anchor cannot be compressed losslessly', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-complete-explicit-source-'));
     const body = [`  performMaterialEffect('${'material-unknown-'.repeat(260)}');`];
     const source = [
@@ -2107,7 +2107,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('materializes every exact callee selected by explicit question focus', () => {
+  it('materializes every exact callee selected by explicit question focus', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-focused-callees-'));
     const source = [
       'export function execute() {',
@@ -2203,7 +2203,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('includes a bounded recursive caller spine above a selected construct', () => {
+  it('includes a bounded recursive caller spine above a selected construct', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-caller-spine-'));
     const source = [
       'export function externalEntry() { return sessionOwner(); }',
@@ -2273,7 +2273,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('does not materialize owner source merely because the causal corridor protects an internal fact', () => {
+  it('does not materialize owner source merely because the causal corridor protects an internal fact', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-corridor-source-budget-'));
     writeFixtureFiles(root, {
       'src/flow.ts': [
@@ -2361,8 +2361,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('traverses only the requested relation families', () => {
-    const db = createSystemMapDb();
+  it('traverses only the requested relation families', async () => {
+    const db = await createSystemMapDb();
     try {
       const result = systemMap(db, {
         symbols: [symbols.dispatch],
@@ -2381,8 +2381,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('traverses exact named-capability references to their unique handlers', () => {
-    const db = createSystemMapDb({ capabilityRegistry: true });
+  it('traverses exact named-capability references to their unique handlers', async () => {
+    const db = await createSystemMapDb({ capabilityRegistry: true });
     try {
       const result = systemMap(db, {
         symbols: [symbols.capabilityInstruction, symbols.capabilityHandler],
@@ -2421,8 +2421,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('uses the evidence floor to exclude derived runtime crossings', () => {
-    const seededDb = createSystemMapDb();
+  it('uses the evidence floor to exclude derived runtime crossings', async () => {
+    const seededDb = await createSystemMapDb();
     const config = seededDb.config;
     const graph = readRuntimeBoundaryGraph(seededDb)!;
     seededDb.close();
@@ -2455,8 +2455,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('makes source-scope inclusion explicit without losing excluded literal matches', () => {
-    const db = createSystemMapDb();
+  it('makes source-scope inclusion explicit without losing excluded literal matches', async () => {
+    const db = await createSystemMapDb();
     try {
       const production = systemMap(db, { searches: ['issue.created'], maxDepth: 0 });
       const withTests = systemMap(db, {
@@ -2474,8 +2474,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('keeps collapsed regions compact and expands several selected regions together', () => {
-    const db = createSystemMapDb();
+  it('keeps collapsed regions compact and expands several selected regions together', async () => {
+    const db = await createSystemMapDb();
     try {
       const collapsed = systemMap(db, {
         searches: ['work_session_stream_events'],
@@ -2559,8 +2559,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('reports missing anchors and an untraversed frontier instead of implying completeness', () => {
-    const db = createSystemMapDb();
+  it('reports missing anchors and an untraversed frontier instead of implying completeness', async () => {
+    const db = await createSystemMapDb();
     try {
       const result = systemMap(db, {
         symbols: ['doesNotExist'],
@@ -2578,8 +2578,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('never emits more drill anchors than one inspect command accepts', () => {
-    const db = createSystemMapDb();
+  it('never emits more drill anchors than one inspect command accepts', async () => {
+    const db = await createSystemMapDb();
     try {
       const collapsed = systemMap(db, {
         searches: ['bulk_drill_anchor'],
@@ -2610,8 +2610,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('bounds the first topology view while retaining a recoverable withheld manifest', () => {
-    const db = createSystemMapDb();
+  it('bounds the first topology view while retaining a recoverable withheld manifest', async () => {
+    const db = await createSystemMapDb();
     try {
       const result = systemMap(db, {
         searches: ['bulk_drill_anchor'],
@@ -2638,8 +2638,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('gives each expanded region a drill anchor before spending a second selector in one region', () => {
-    const db = createSystemMapDb();
+  it('gives each expanded region a drill anchor before spending a second selector in one region', async () => {
+    const db = await createSystemMapDb();
     try {
       const collapsed = systemMap(db, {
         searches: ['diverse_drill_anchor'],
@@ -2667,8 +2667,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('keeps an explicit symbol anchor in a saturated behavior drill-down', () => {
-    const db = createSystemMapDb();
+  it('keeps an explicit symbol anchor in a saturated behavior drill-down', async () => {
+    const db = await createSystemMapDb();
     try {
       const collapsed = systemMap(db, {
         searches: ['bulk_drill_anchor'],
@@ -2699,8 +2699,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('crosses to a directly imported object-member controller when the member has no indexed symbol', () => {
-    const db = createSystemMapDb();
+  it('crosses to a directly imported object-member controller when the member has no indexed symbol', async () => {
+    const db = await createSystemMapDb();
     try {
       const collapsed = systemMap(db, { symbols: [symbols.memberRegistry], maxDepth: 2 });
       const result = systemMap(db, {
@@ -2756,8 +2756,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('requires an explicit anchor', () => {
-    const db = createSystemMapDb();
+  it('requires an explicit anchor', async () => {
+    const db = await createSystemMapDb();
     try {
       expect(() => systemMap(db, {})).toThrow(/requires at least one --search or --symbol anchor/u);
     } finally {
@@ -2765,8 +2765,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('withholds a broad literal before graph traversal while preserving exact recovery', () => {
-    const db = createSystemMapDb({ broadLiteral: 'common-runtime-term' });
+  it('withholds a broad literal before graph traversal while preserving exact recovery', async () => {
+    const db = await createSystemMapDb({ broadLiteral: 'common-runtime-term' });
     try {
       const result = systemMap(db, {
         searches: ['common-runtime-term'],
@@ -2813,8 +2813,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('limits active literal graph seeds while retaining every exact match and exhaustive recovery', () => {
-    const db = createSystemMapDb({ boundedLiteral: 'bounded-runtime-term' });
+  it('limits active literal graph seeds while retaining every exact match and exhaustive recovery', async () => {
+    const db = await createSystemMapDb({ boundedLiteral: 'bounded-runtime-term' });
     try {
       const result = systemMap(db, { searches: ['bounded-runtime-term'], maxDepth: 0 });
       const anchor = result.anchors[0];
@@ -2841,7 +2841,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  function createSystemMapDb(
+  async function createSystemMapDb(
     options: {
       broadLiteral?: string;
       boundedLiteral?: string;
@@ -2851,7 +2851,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       unindexedSourceAnchor?: boolean;
       indexedAliasedCaller?: boolean;
     } = {},
-  ): ScipDatabase {
+  ): Promise<ScipDatabase> {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-'));
     const source = fixtureSource();
     if (options.indexedAliasedCaller) {
@@ -3032,7 +3032,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       projectRoot: root,
     };
     const extractionDb = new ScipDatabase(config);
-    const runtimeBoundaries = collectRuntimeBoundaryGraph(extractionDb);
+    const runtimeBoundaries = await collectRuntimeBoundaryGraph(extractionDb);
     extractionDb.close();
     if (options.unindexedRuntimeParticipant) {
       const linked = runtimeBoundaries.links[0];

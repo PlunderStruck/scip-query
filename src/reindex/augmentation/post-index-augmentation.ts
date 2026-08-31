@@ -37,6 +37,32 @@ export function runPostIndexAugmentation<Result>(
   };
 }
 
+/**
+ * A stage whose sweep must yield the event loop: native resources owned by
+ * GC finalizers (tree-sitter trees and node cache entries) are freed by V8
+ * second-pass callbacks that only run on loop turns, so a fully synchronous
+ * whole-repository stage retains every tree it ever parsed until it exits.
+ */
+export interface AsyncPostIndexAugmentationStage<Result> {
+  id: string;
+  facts: readonly PostIndexAugmentationFact[];
+  run(context: PostIndexAugmentationContext): Promise<Result>;
+}
+
+export async function runPostIndexAugmentationAsync<Result>(
+  stage: AsyncPostIndexAugmentationStage<Result>,
+  context: PostIndexAugmentationContext,
+): Promise<{ stageId: string; facts: readonly PostIndexAugmentationFact[]; durationMs: number; result: Result }> {
+  const start = performance.now();
+  const result = await stage.run(context);
+  return {
+    stageId: stage.id,
+    facts: stage.facts,
+    durationMs: performance.now() - start,
+    result,
+  };
+}
+
 export function runFingerprintCachedPostIndexAugmentation<Result, Fingerprint>(opts: {
   cachePath: string;
   readFingerprint: () => Fingerprint;

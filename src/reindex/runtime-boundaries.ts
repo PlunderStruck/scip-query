@@ -7,7 +7,7 @@ import {
 } from '../analysis/runtime-boundaries/index.js';
 import { profileSpan } from '../instrumentation/profile.js';
 import { ScipDatabase } from '../storage/db.js';
-import type { PostIndexAugmentationStage } from './augmentation/post-index-augmentation.js';
+import type { AsyncPostIndexAugmentationStage } from './augmentation/post-index-augmentation.js';
 
 export interface RuntimeBoundaryAugmentationResult {
   reused: boolean;
@@ -28,11 +28,11 @@ export function runtimeBoundaryAugmentationStage(
     affectedFiles?: readonly string[];
     forceDerivedRebuild?: boolean;
   } = {},
-): PostIndexAugmentationStage<RuntimeBoundaryAugmentationResult> {
+): AsyncPostIndexAugmentationStage<RuntimeBoundaryAugmentationResult> {
   return {
     id: 'runtime-boundaries',
     facts: ['runtime-boundary-observation', 'runtime-boundary-link'],
-    run: ({ projectRoot, dbPath, onStatus }) => {
+    run: async ({ projectRoot, dbPath, onStatus }) => {
       const index = new ScipDatabase({
         projectRoot,
         dbPath,
@@ -48,7 +48,7 @@ export function runtimeBoundaryAugmentationStage(
           graph = stored;
           reused = true;
         } else {
-          graph = collectRuntimeBoundaryGraph(index, {
+          graph = await collectRuntimeBoundaryGraph(index, {
             ...(stored ? { previousGraph: stored } : {}),
             ...(opts.affectedFiles ? { affectedFiles: opts.affectedFiles } : {}),
             ...(opts.forceDerivedRebuild ? { forceDerivedRebuild: true } : {}),

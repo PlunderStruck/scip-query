@@ -96,7 +96,7 @@ import { getIndexerConfig, temporaryRootConfigContent } from './indexers.js';
 import { concatenateScipFiles, mergeAndSanitizeScipFiles, mergeScipFiles } from './merge.js';
 import { patchIncrementalSqliteGeneration } from './incremental-sqlite-publication.js';
 import { optimizeSqliteQueryLayout } from './sqlite-index-maintenance.js';
-import { runPostIndexAugmentation } from './augmentation/post-index-augmentation.js';
+import { runPostIndexAugmentation, runPostIndexAugmentationAsync } from './augmentation/post-index-augmentation.js';
 import { recordFailedReindexActivity, recordReindexRunActivity } from './reindex-activity.js';
 import { inspectIndexDocumentCoverage, type IndexDocumentCoverage } from './index-coverage.js';
 import type { ReindexResult, ReindexShardDiagnostic } from './reindex-result.js';
@@ -418,10 +418,10 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     }
 
     let reuseObservation: ReindexResult | null = null;
-    const reused = profileSpan(
+    const reused = await profileAsyncSpan(
       'reindex.reuse-check',
-      () => {
-        reuseObservation = reuseExistingIndexIfPossible({
+      async () => {
+        reuseObservation = await reuseExistingIndexIfPossible({
           opts,
           paths,
           languages,
@@ -718,7 +718,7 @@ export {
   vueResolvedReferencesAugmentationStage,
 } from './vue/augment-vue.js';
 
-function runRuntimeBoundaryAugmentation(
+async function runRuntimeBoundaryAugmentation(
   projectRoot: string,
   dbPath: string,
   indexPath: string,
@@ -727,9 +727,9 @@ function runRuntimeBoundaryAugmentation(
   affectedFiles?: readonly string[],
   evidenceDbPath?: string,
   forceDerivedRebuild = false,
-): void {
+): Promise<void> {
   try {
-    runPostIndexAugmentation(
+    await runPostIndexAugmentationAsync(
       runtimeBoundaryAugmentationStage({
         indexPath,
         evidenceDbPath,
@@ -771,7 +771,7 @@ function resolveReindexOutputPaths(opts: ReindexOptions): ReindexOutputPaths {
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
-function reuseExistingIndexIfPossible(opts: {
+async function reuseExistingIndexIfPossible(opts: {
   opts: ReindexOptions;
   paths: ReindexOutputPaths;
   languages: SupportedLanguage[];
@@ -779,7 +779,7 @@ function reuseExistingIndexIfPossible(opts: {
   start: number;
   monotonicStart: number;
   onStatus: (message: string) => void;
-}): ReindexResult | null {
+}): Promise<ReindexResult | null> {
   const generation = inspectSqliteGeneration(opts.paths.outputDb, opts.paths.metaPath);
   const fingerprintMatch = reindexFingerprintMatch(opts.paths.metaPath, opts.fingerprint);
   if (
@@ -804,7 +804,7 @@ function reuseExistingIndexIfPossible(opts: {
     dbPath: opts.paths.outputDb,
     onStatus: opts.onStatus,
   });
-  runRuntimeBoundaryAugmentation(
+  await runRuntimeBoundaryAugmentation(
     opts.opts.projectRoot,
     opts.paths.outputDb,
     opts.paths.outputScip,
@@ -962,7 +962,7 @@ async function runFreshReindex(opts: {
       reusedLanguages,
     })
   ) {
-    const lastRefresh = profileSpan(
+    const lastRefresh = await profileAsyncSpan(
       'reindex.publish',
       () =>
         publishFullyReusedLanguageShardArtifacts(
@@ -1660,7 +1660,7 @@ async function publishFreshReindexArtifacts(
       onStatus: opts.onStatus,
     });
   });
-  profileSpan('reindex.publish.runtime-boundaries', () => {
+  await profileAsyncSpan('reindex.publish.runtime-boundaries', async () => {
     const replacingWholeTypeScriptProject = incrementalTypeScript?.plan.mode === 'full-project';
     const relationshipsUnchanged = incrementalTypeScript?.dependencyGraphUnchanged === true;
     if (replacingWholeTypeScriptProject) {
@@ -1670,7 +1670,7 @@ async function publishFreshReindexArtifacts(
     } else if (relationshipsUnchanged) {
       opts.onStatus('Reusing runtime-boundary relationships because TypeScript semantics are unchanged.');
     }
-    runRuntimeBoundaryAugmentation(
+    await runRuntimeBoundaryAugmentation(
       opts.projectRoot,
       opts.tempPaths.tempOutputDb,
       opts.tempPaths.tempOutputScip,
@@ -1961,14 +1961,14 @@ function needsFreshSqliteStatistics(
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
-function publishFullyReusedLanguageShardArtifacts(
+async function publishFullyReusedLanguageShardArtifacts(
   opts: Parameters<typeof runFreshReindex>[0],
   indexedOutputs: readonly IndexedOutput[],
   skippedLanguages: readonly { language: SupportedLanguage; reason: string }[],
   reusedLanguages: readonly SupportedLanguage[],
   languageFingerprints: Partial<Record<SupportedLanguage, ReindexFingerprint>>,
   typescriptProjectShardContext: TypeScriptProjectShardContext | undefined,
-): LastRefreshMetadata {
+): Promise<LastRefreshMetadata> {
   const previousSnapshot = previousProjectInputSnapshot(opts.paths.metaPath);
   let shadowRecord: AffectedSetShadowRecord | null = null;
   try {
@@ -1986,7 +1986,13 @@ function publishFullyReusedLanguageShardArtifacts(
     dbPath: opts.paths.outputDb,
     onStatus: opts.onStatus,
   });
-  runRuntimeBoundaryAugmentation(opts.projectRoot, opts.paths.outputDb, opts.paths.outputScip, opts.onStatus, true);
+  await runRuntimeBoundaryAugmentation(
+    opts.projectRoot,
+    opts.paths.outputDb,
+    opts.paths.outputScip,
+    opts.onStatus,
+    true,
+  );
   const indexMaintenance = optimizeSqliteQueryLayout(opts.paths.outputDb);
   if (indexMaintenance.added.length > 0) {
     opts.onStatus(`Added SQLite query indexes: ${indexMaintenance.added.join(', ')}`);
