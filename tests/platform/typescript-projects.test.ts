@@ -2,7 +2,10 @@ import { mkdtempSync, mkdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { typeScriptProjectSelectionIsTreeOwned } from '../../src/platform/typescript-projects.js';
+import {
+  typeScriptProjectInputPaths,
+  typeScriptProjectSelectionIsTreeOwned,
+} from '../../src/platform/typescript-projects.js';
 
 const tempDirs: string[] = [];
 
@@ -46,6 +49,16 @@ describe('TypeScript project selection tree ownership', () => {
     symlinkSync('actual.json', tsconfigPath);
 
     expect(typeScriptProjectSelectionIsTreeOwned(root, 'single', [], ['tsconfig.json'])).toBe(false);
+  });
+});
+
+describe('TypeScript project input paths', () => {
+  it('treats a valid project with no matching files as an exact empty scope', () => {
+    const root = temporaryDirectory('scip-query-typescript-empty-inputs-');
+    mkdirSync(join(root, 'packages', 'app'), { recursive: true });
+    writeFileSync(join(root, 'packages', 'app', 'tsconfig.json'), '{"include":["src/**/*.ts"]}\n');
+
+    expect(typeScriptProjectInputPaths(root, 'workspace', ['packages/app'])).toEqual(new Set());
   });
 });
 

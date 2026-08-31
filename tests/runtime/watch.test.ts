@@ -715,6 +715,126 @@ describe('Watcher', () => {
     await watcher.stop();
   });
 
+  it('only schedules ordinary TypeScript edits selected by the configured compiler project', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    writeFileSync(join(projectRoot, '.gitignore'), '');
+    mkdirSync(join(projectRoot, 'packages/app/src'), { recursive: true });
+    mkdirSync(join(projectRoot, 'packages/app/scripts'), { recursive: true });
+    mkdirSync(join(projectRoot, 'packages/other/src'), { recursive: true });
+    writeFileSync(
+      join(projectRoot, 'packages/app/tsconfig.json'),
+      JSON.stringify({ compilerOptions: {}, include: ['src/**/*.ts'] }),
+    );
+    writeFileSync(join(projectRoot, 'packages/app/src/in-scope.ts'), 'export const inScope = true;\n');
+    writeFileSync(join(projectRoot, 'packages/app/scripts/out-of-scope.ts'), 'export const script = true;\n');
+    writeFileSync(join(projectRoot, 'packages/other/src/out-of-scope.ts'), 'export const other = true;\n');
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const subscription = sourceSubscriptionHarness();
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const watcher = new Watcher({
+      projectRoot,
+      config: {
+        watch: { debounceMs: 250, gitPollMs: 60_000 },
+        indexer: { typescript: { projectMode: 'workspace', projects: ['packages/app'] } },
+      },
+      languages: ['typescript'],
+      reindexRunner: { start: run },
+      subscriptionFactory: subscription.factory,
+    });
+
+    watcher.start();
+    subscription.emitAll('change', 'src/a.ts');
+    subscription.emitAll('change', 'packages/app/scripts/out-of-scope.ts');
+    subscription.emitAll('change', 'packages/other/src/out-of-scope.ts');
+    await vi.advanceTimersByTimeAsync(500);
+    expect(run).not.toHaveBeenCalled();
+
+    subscription.emitAll('change', 'packages/app/src/in-scope.ts');
+    await vi.advanceTimersByTimeAsync(250);
+    expect(run).toHaveBeenCalledOnce();
+    expect(run.mock.calls[0]?.[0].changeJournal?.entries).toEqual([
+      { path: 'packages/app/src/in-scope.ts', kind: 'change' },
+    ]);
+    await watcher.stop();
+  });
+
+  it('recomputes compiler membership for additions without admitting out-of-scope TypeScript files', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    writeFileSync(join(projectRoot, '.gitignore'), '');
+    mkdirSync(join(projectRoot, 'packages/app/src'), { recursive: true });
+    mkdirSync(join(projectRoot, 'packages/other/src'), { recursive: true });
+    writeFileSync(
+      join(projectRoot, 'packages/app/tsconfig.json'),
+      JSON.stringify({ compilerOptions: {}, include: ['src/**/*.ts'] }),
+    );
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const subscription = sourceSubscriptionHarness();
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const watcher = new Watcher({
+      projectRoot,
+      config: {
+        watch: { debounceMs: 250, gitPollMs: 60_000 },
+        indexer: { typescript: { projectMode: 'workspace', projects: ['packages/app'] } },
+      },
+      languages: ['typescript'],
+      reindexRunner: { start: run },
+      subscriptionFactory: subscription.factory,
+    });
+
+    watcher.start();
+    writeFileSync(join(projectRoot, 'packages/other/src/new.ts'), 'export const other = true;\n');
+    subscription.emitAll('add', 'packages/other/src/new.ts');
+    await vi.advanceTimersByTimeAsync(500);
+    expect(run).not.toHaveBeenCalled();
+
+    writeFileSync(join(projectRoot, 'packages/app/src/new.ts'), 'export const added = true;\n');
+    subscription.emitAll('add', 'packages/app/src/new.ts');
+    await vi.advanceTimersByTimeAsync(250);
+    expect(run).toHaveBeenCalledOnce();
+    expect(run.mock.calls[0]?.[0].changeJournal?.entries).toEqual([{ path: 'packages/app/src/new.ts', kind: 'add' }]);
+    await watcher.stop();
+  });
+
+  it('keeps deletions and compiler configuration changes inside the correctness boundary', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    writeFileSync(join(projectRoot, '.gitignore'), '');
+    mkdirSync(join(projectRoot, 'packages/app/src'), { recursive: true });
+    writeFileSync(
+      join(projectRoot, 'packages/app/tsconfig.json'),
+      JSON.stringify({ compilerOptions: {}, include: ['src/**/*.ts'] }),
+    );
+    const sourcePath = join(projectRoot, 'packages/app/src/deleted.ts');
+    writeFileSync(sourcePath, 'export const deleted = true;\n');
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const subscription = sourceSubscriptionHarness();
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const watcher = new Watcher({
+      projectRoot,
+      config: {
+        watch: { debounceMs: 250, gitPollMs: 60_000 },
+        indexer: { typescript: { projectMode: 'workspace', projects: ['packages/app'] } },
+      },
+      languages: ['typescript'],
+      reindexRunner: { start: run },
+      subscriptionFactory: subscription.factory,
+    });
+
+    watcher.start();
+    rmSync(sourcePath);
+    subscription.emitAll('unlink', 'packages/app/src/deleted.ts');
+    subscription.emitAll('change', 'packages/app/tsconfig.json');
+    await vi.advanceTimersByTimeAsync(250);
+    expect(run).toHaveBeenCalledOnce();
+    expect(run.mock.calls[0]?.[0].changeJournal?.entries).toEqual([
+      { path: 'packages/app/src/deleted.ts', kind: 'delete' },
+      { path: 'packages/app/tsconfig.json', kind: 'change' },
+    ]);
+    await watcher.stop();
+  });
+
   it('preserves coalesced source changes in a complete generation-based journal', async () => {
     vi.useFakeTimers();
     const projectRoot = createProject();

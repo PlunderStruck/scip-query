@@ -10,7 +10,8 @@ import type {
   SupportedLanguage,
   TypeScriptProjectMode,
 } from '../domain/types.js';
-import { classifyProjectInputPath } from '../domain/project-input.js';
+import { classifyProjectInputPath, projectInputSnapshotOrNull } from '../domain/project-input.js';
+import { decodeReindexMetadata } from '../domain/reindex-metadata.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import type { ProcessIdentity } from '../domain/process-identity.js';
 import { monotonicNowMs } from '../domain/time.js';
@@ -23,6 +24,8 @@ import {
   type ProjectInputChangeKind,
 } from '../domain/project-input-change-journal.js';
 import { resolveCacheDirPath, resolveIndexStoragePaths } from '../platform/cache-layout.js';
+import { normalizeProjectInputFingerprintConfiguration } from '../platform/project-files.js';
+import { isTypeScriptProjectConfigPath, typeScriptProjectInputPaths } from '../platform/typescript-projects.js';
 import { loadProjectConfig, resolveWatchConfig, SUPPORTED_LANGUAGES, type ResolvedWatchConfig } from './config.js';
 import { createGitignoreFilter } from '../source/primitives/gitignore-filter.js';
 import { DEFAULT_GIT_READER, gitOutput, resolveGitPath, type GitReader } from '../platform/git-worktree.js';
@@ -245,8 +248,11 @@ export class Watcher {
     this.subscriptionFactory = opts.subscriptionFactory ?? defaultWatchSubscriptionFactory;
     this.budgetInspector = opts.budgetInspector ?? inspectReindexActivityBudget;
     watcherInputStates.set(this, {
+      projectRoot: opts.projectRoot,
+      config: opts.config,
       gitReader: opts.gitReader ?? DEFAULT_GIT_READER,
       languages: resolveWatchInputLanguages(opts.languages ?? opts.config.languages),
+      typeScriptInputPaths: null,
       stagedIndexEntries: null,
     });
 
@@ -255,6 +261,7 @@ export class Watcher {
     if (this.watchConfig.ignore.length > 0) {
       this.extraIgnore.add(this.watchConfig.ignore);
     }
+    refreshPublishedTypeScriptInputScope(this);
   }
 
   /** Start watching for file changes */
@@ -390,9 +397,8 @@ export class Watcher {
     }
 
     if (rel === '.scipquery.json') refreshWatchInputLanguages(this, this.projectRoot);
-    if (!isWatcherIndexInput(this, rel)) return;
-
-    const changeKind = sourceWatchChangeKind(event);
+    const changeKind = scopedProjectInputChangeKind(this, event, rel);
+    if (changeKind === null) return;
     if (!changeKind) this.markPendingChangesIncomplete(`unsupported-source-event:${event}`);
     this.scheduleReindex(
       { kind: 'watch-source', detail: rel },
@@ -550,6 +556,7 @@ export class Watcher {
           } else this.setStatus({ state: 'idle' });
           return;
         }
+        refreshPublishedTypeScriptInputScope(this);
         let completedIndexIsFresh = false;
         try {
           completedIndexIsFresh = this.onReindexComplete(durationMs, trigger, { pendingChanges: this.dirty }) === true;
@@ -868,7 +875,10 @@ export class Watcher {
     let relevantPaths: string[] | null = null;
     if (changedPaths !== null) {
       if (changedPaths.includes('.scipquery.json')) refreshWatchInputLanguages(this, this.projectRoot);
-      relevantPaths = changedPaths.filter((path) => isWatcherIndexInput(this, path));
+      // Git transitions do not retain per-path add/change/delete status here.
+      // Treat each candidate as a possible addition so newly selected compiler
+      // inputs refresh membership before the transition is discarded.
+      relevantPaths = changedPaths.filter((path) => scopedProjectInputChangeKind(this, 'add', path) !== null);
       if (relevantPaths.length === 0) return;
     }
     const changes = relevantPaths?.map<ProjectInputChangeEntry>((path) => ({
@@ -959,8 +969,12 @@ interface WatcherRetirementState {
 }
 
 interface WatcherInputState {
+  projectRoot: string;
+  config: ProjectConfig;
   gitReader: GitReader;
   languages: readonly SupportedLanguage[];
+  /** Exact TypeScript-family source membership from the accepted generation. Null keeps correctness conservative. */
+  typeScriptInputPaths: ReadonlySet<string> | null;
   stagedIndexEntries: ReadonlyMap<string, string> | null;
 }
 
@@ -1112,10 +1126,10 @@ class RecursiveSourceWatchSubscription implements WatchSubscription {
   }
 }
 
-function nativeSourceWatchEvent(eventName: string, path: string): 'change' | 'addDir' | 'unlink' {
+function nativeSourceWatchEvent(eventName: string, path: string): 'change' | 'add' | 'addDir' | 'unlink' {
   if (eventName === 'change') return 'change';
   if (!existsSync(path)) return 'unlink';
-  return statSync(path).isDirectory() ? 'addDir' : 'change';
+  return statSync(path).isDirectory() ? 'addDir' : 'add';
 }
 
 const WATCH_REINDEX_TIMEOUT_MS = 15 * 60_000;
@@ -1385,16 +1399,117 @@ function resolveWatchInputLanguages(languages: readonly SupportedLanguage[] | un
 
 function refreshWatchInputLanguages(watcher: Watcher, projectRoot: string): void {
   try {
-    watcherInputState(watcher).languages = resolveWatchInputLanguages(loadProjectConfig(projectRoot).languages);
+    const state = watcherInputState(watcher);
+    state.config = loadProjectConfig(projectRoot);
+    state.languages = resolveWatchInputLanguages(state.config.languages);
   } catch {
     watcherInputState(watcher).languages = SUPPORTED_LANGUAGES;
   }
 }
 
-function isWatcherIndexInput(watcher: Watcher, path: string): boolean {
-  // The canonical classifier scopes manifests and dependency locks to the
-  // configured indexers, so an unrelated ecosystem cannot wake this watcher.
-  return classifyProjectInputPath(path, watcherInputState(watcher).languages) !== 'other';
+function scopedProjectInputChangeKind(
+  watcher: Watcher,
+  event: string,
+  path: string,
+): ProjectInputChangeKind | null | undefined {
+  const state = watcherInputState(watcher);
+  const inputKind = classifyProjectInputPath(path, state.languages);
+  if (inputKind === 'other') return null;
+
+  const changeKind = sourceWatchChangeKind(event);
+  if (path === '.scipquery.json' || isTypeScriptProjectConfigPath(path)) {
+    // Scope-changing inputs stay conservative until the accepted generation
+    // publishes its new exact input set.
+    state.typeScriptInputPaths = null;
+    return changeKind;
+  }
+  if (!isTypeScriptFamilyWatchSource(path, state.languages)) return changeKind;
+
+  const scopedPaths = state.typeScriptInputPaths;
+  if (!scopedPaths) return changeKind;
+  const previouslyInScope = scopedPaths.has(path);
+  if (changeKind !== 'add') return previouslyInScope ? changeKind : null;
+  if (previouslyInScope) {
+    // Native recursive watching reports an atomic replacement as a rename.
+    // Preserve it as a modification when the accepted input already exists.
+    return 'change';
+  }
+
+  const refreshedPaths = refreshLiveTypeScriptInputScope(watcher);
+  if (!refreshedPaths) return changeKind;
+  return refreshedPaths.has(path) ? 'add' : null;
+}
+
+function refreshPublishedTypeScriptInputScope(watcher: Watcher): void {
+  const state = watcherInputState(watcher);
+  if (!state.languages.includes('typescript')) {
+    state.typeScriptInputPaths = null;
+    return;
+  }
+  const published = readPublishedTypeScriptInputPaths(state.projectRoot, state.config, state.languages);
+  state.typeScriptInputPaths = published ?? refreshLiveTypeScriptInputScope(watcher);
+}
+
+function refreshLiveTypeScriptInputScope(watcher: Watcher): ReadonlySet<string> | null {
+  const state = watcherInputState(watcher);
+  if (!state.languages.includes('typescript')) {
+    state.typeScriptInputPaths = null;
+    return null;
+  }
+  try {
+    const typeScript = state.config.indexer?.typescript;
+    const paths = typeScriptProjectInputPaths(state.projectRoot, typeScript?.projectMode, typeScript?.projects);
+    state.typeScriptInputPaths = paths;
+    return paths;
+  } catch {
+    state.typeScriptInputPaths = null;
+    return null;
+  }
+}
+
+function isTypeScriptFamilyWatchSource(path: string, languages: readonly SupportedLanguage[]): boolean {
+  if (!languages.includes('typescript')) return false;
+  const kind = classifyProjectInputPath(path, ['typescript', 'javascript']);
+  return kind === 'source' || kind === 'ambient';
+}
+
+function readPublishedTypeScriptInputPaths(
+  projectRoot: string,
+  config: ProjectConfig,
+  languages: readonly SupportedLanguage[],
+): ReadonlySet<string> | null {
+  try {
+    const decoded = decodeReindexMetadata(
+      readSmallArtifactText(resolveIndexStoragePaths(projectRoot, config).metaPath, 'reindex metadata'),
+    );
+    if (decoded.kind !== 'supported' && decoded.kind !== 'legacy') return null;
+    const snapshot = projectInputSnapshotOrNull(decoded.metadata.fingerprint);
+    if (!snapshot || !watchScopeConfigurationMatches(snapshot, languages, config)) return null;
+    return new Set(snapshot.files.map((file) => file.path));
+  } catch {
+    return null;
+  }
+}
+
+function watchScopeConfigurationMatches(
+  snapshot: NonNullable<ReturnType<typeof projectInputSnapshotOrNull>>,
+  languages: readonly SupportedLanguage[],
+  config: ProjectConfig,
+): boolean {
+  const expected = normalizeProjectInputFingerprintConfiguration(languages, {
+    pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
+    typescriptProjectMode: config.indexer?.typescript?.projectMode,
+    typescriptProjects: config.indexer?.typescript?.projects,
+    clojureConfigPath: config.indexer?.clojure?.configPath,
+  });
+  return (
+    snapshot.version === expected.version &&
+    JSON.stringify([...snapshot.languages].sort()) === JSON.stringify(expected.languages) &&
+    snapshot.pnpmWorkspaces === expected.pnpmWorkspaces &&
+    snapshot.typescriptProjectMode === expected.typescriptProjectMode &&
+    JSON.stringify([...snapshot.typescriptProjects].sort()) === JSON.stringify(expected.typescriptProjects) &&
+    snapshot.clojureConfigPath === expected.clojureConfigPath
+  );
 }
 
 function readChangedGitPaths(

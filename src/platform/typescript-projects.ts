@@ -21,6 +21,7 @@ const SKIP_DIR_NAMES = new Set([
   'tmp',
   'vendor',
 ]);
+const TYPESCRIPT_NO_INPUTS_DIAGNOSTIC_CODE = 18003;
 
 /**
  * Discover the compiler project roots that scip-typescript indexes. Explicit
@@ -85,7 +86,9 @@ export function typeScriptProjectInputPaths(
     const read = ts.readConfigFile(tsconfigPath, host.readFile);
     if (read.error) return null;
     const parsed = ts.parseJsonConfigFileContent(read.config as object, host, projectDirectory);
-    if (parsed.errors.length > 0) return null;
+    // TS18003 proves that the configured project currently selects no files;
+    // it is an exact empty scope, not a failure to understand the config.
+    if (parsed.errors.some((error) => error.code !== TYPESCRIPT_NO_INPUTS_DIAGNOSTIC_CODE)) return null;
     for (const fileName of parsed.fileNames) {
       const absolute = path.resolve(fileName);
       if (!isInsideProject(root, absolute)) continue;
