@@ -11,6 +11,7 @@ import { decodeObservationReceipt, type ObservationReceiptV2 } from '../domain/o
 import { readTextFileWithinLimit } from '../platform/bounded-file.js';
 import { cliVersion } from '../platform/cli-version.js';
 import { resolveGitWorktreeContext } from '../platform/git-worktree.js';
+import { tryAcquireProcessFileLock } from '../platform/process-file-lock.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
 import {
   parseProcessIdentity,
@@ -45,7 +46,7 @@ export const QUERY_SERVICE_PROTOCOL_VERSION = 18;
 export const QUERY_SERVICE_HEARTBEAT_INTERVAL_MS = 1_000;
 const QUERY_SERVICE_FRESH_HEARTBEAT_MAX_AGE_MS = 2 * QUERY_SERVICE_HEARTBEAT_INTERVAL_MS;
 
-const QUERY_SERVICE_POOL_SIZE = 6;
+const QUERY_SERVICE_POOL_SIZE = 4;
 const QUERY_SERVICE_CATALOG_POOL_SIZE = 4;
 const QUERY_SERVICE_SEMANTIC_NAVIGATION_POOL_SIZE = 5;
 const QUERY_SERVICE_CALL_GRAPH_POOL_SIZE = 3;
@@ -965,21 +966,35 @@ function ensureQueryServiceServer(
   const current = readQueryServiceServerState(sessionDir);
   if (current && isQueryServiceServerStateUsable(current)) return;
 
-  const debug = queryServiceDebugEnabled();
-  // scip-query: process-lifetime-reviewed -- the detached service is owned by
-  // its process identity, heartbeat, file lock, idle timeout, and request deadlines.
-  spawn(process.execPath, [serverPath, sessionDir, projectRoot], {
-    cwd: projectRoot,
-    detached: !debug,
-    stdio: debug ? ['ignore', 'ignore', 'inherit'] : 'ignore',
-    env: { ...process.env, SCIP_QUERY_QUERY_SERVICE_SERVER: '1' },
-  }).unref();
-
   const startupDeadlineAtMs = Math.min(requestDeadlineAtMs, monotonicNowMs() + QUERY_SERVICE_STARTUP_TIMEOUT_MS);
-  while (monotonicNowMs() <= startupDeadlineAtMs) {
-    const state = readQueryServiceServerState(sessionDir);
-    if (state && isQueryServiceServerStateUsable(state)) return;
-    sleepSync(QUERY_SERVICE_POLL_INTERVAL_MS);
+  const startupLock = tryAcquireProcessFileLock(join(sessionDir, 'startup.lock'), {
+    kind: 'query-service-startup',
+    detail: { projectRoot: resolve(projectRoot) },
+    directoryDurability: 'recoverable',
+  });
+  try {
+    if (startupLock.kind === 'acquired') {
+      const stateAfterLock = readQueryServiceServerState(sessionDir);
+      if (!stateAfterLock || !isQueryServiceServerStateUsable(stateAfterLock)) {
+        const debug = queryServiceDebugEnabled();
+        // scip-query: process-lifetime-reviewed -- the detached service is owned by
+        // its process identity, heartbeat, file lock, idle timeout, and request deadlines.
+        spawn(process.execPath, [serverPath, sessionDir, projectRoot], {
+          cwd: projectRoot,
+          detached: !debug,
+          stdio: debug ? ['ignore', 'ignore', 'inherit'] : 'ignore',
+          env: { ...process.env, SCIP_QUERY_QUERY_SERVICE_SERVER: '1' },
+        }).unref();
+      }
+    }
+
+    while (monotonicNowMs() <= startupDeadlineAtMs) {
+      const state = readQueryServiceServerState(sessionDir);
+      if (state && isQueryServiceServerStateUsable(state)) return;
+      sleepSync(QUERY_SERVICE_POLL_INTERVAL_MS);
+    }
+  } finally {
+    if (startupLock.kind === 'acquired') startupLock.lock.release();
   }
   throw new Error('Persistent query service did not become ready within 5s.');
 }

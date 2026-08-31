@@ -48,21 +48,27 @@ async function runScenario(service: boolean, concurrency: number) {
   const clientPeakRssKiB = new Map<number, number>();
   let alignedPeakRssKiB = 0;
   let serverPeakRssKiB = 0;
+  let serverProcessCountAtPeak = 0;
   let samples = 0;
   const startedAt = performance.now();
   const sample = (): void => {
     const snapshot = processSnapshot();
     let clientRssKiB = 0;
     let serverRssKiB = 0;
+    let serverProcessCount = 0;
     for (const process of snapshot) {
       if (clientPids.has(process.pid)) {
         clientRssKiB += process.rssKiB;
         clientPeakRssKiB.set(process.pid, Math.max(clientPeakRssKiB.get(process.pid) ?? 0, process.rssKiB));
       }
-      if (service && isQueryServiceProcess(process.command)) serverRssKiB += process.rssKiB;
+      if (service && isQueryServiceProcess(process.command)) {
+        serverRssKiB += process.rssKiB;
+        serverProcessCount += 1;
+      }
     }
     alignedPeakRssKiB = Math.max(alignedPeakRssKiB, clientRssKiB + serverRssKiB);
     serverPeakRssKiB = Math.max(serverPeakRssKiB, serverRssKiB);
+    serverProcessCountAtPeak = Math.max(serverProcessCountAtPeak, serverProcessCount);
     samples += 1;
   };
   const sampler = setInterval(sample, 20);
@@ -89,6 +95,7 @@ async function runScenario(service: boolean, concurrency: number) {
       clientMs: summarize(runs.map((run) => run.elapsedMs)),
       alignedPeakRssBytes: alignedPeakRssKiB * 1024,
       serverPeakRssBytes: serverPeakRssKiB * 1024,
+      serverProcessCountAtPeak,
       clientPeakRssBytes: [...clientPeakRssKiB.values()].reduce((sum, rssKiB) => sum + rssKiB * 1024, 0),
       samples,
       queryServiceFallbacks: fallbackDiagnostics.length,

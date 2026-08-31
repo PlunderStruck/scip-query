@@ -4,6 +4,18 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.21.1]
+
+### Query service resource efficiency
+
+- Concurrent cold clients now elect one startup owner per query-service lane
+  before spawning Node.js. This prevents duplicate contenders from loading the
+  full query runtime while the lane's durable server state is still being
+  published.
+- The default query-service pool is capped at four lanes instead of six. The
+  `SCIP_QUERY_QUERY_SERVICE_POOL_SIZE` override remains available for workloads
+  that deliberately trade additional memory for higher parallel throughput.
+
 ## [0.21.0]
 
 ### Faster indexing and warm queries
