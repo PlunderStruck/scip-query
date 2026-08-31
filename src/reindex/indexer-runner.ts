@@ -45,6 +45,12 @@ export interface PreparedIndexerRun {
    */
   boundedConcurrency?: number;
   outputComposition?: 'protobuf-concatenate';
+  /**
+   * The sorted input paths a bounded compiler shard declared, kept so the
+   * orchestrator can record measured per-shard costs against their path
+   * ranges after the run.
+   */
+  shardInputPaths?: readonly string[];
   trustedProjectTool?: TrustedProjectToolIdentity;
 }
 

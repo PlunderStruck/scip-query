@@ -3,15 +3,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  buildTypeScriptShardCostModel,
   createTypeScriptCompilerShards,
   partitionTypeScriptCompilerInputs,
   partitionTypeScriptCompilerInputsIntoShards,
+  readTypeScriptShardCostModel,
   removeStaleTypeScriptCompilerShardConfigs,
   shouldShardTypeScriptCompilerInputs,
   typescriptCompilerShardConcurrency,
   typescriptCompilerShardCount,
   typescriptCompilerShardTargetFiles,
+  typescriptShardCostWeightAdjuster,
+  writeTypeScriptShardCostModel,
   TYPESCRIPT_COMPILER_SHARD_TARGET_FILES,
+  TYPESCRIPT_SHARD_COST_MODEL_FILE,
 } from '../../src/reindex/typescript-compiler-shards.js';
 import {
   isTypeScriptCompilerShardConfigPath,
@@ -171,5 +176,96 @@ describe('bounded TypeScript compiler shards', () => {
     removeStaleTypeScriptCompilerShardConfigs(root);
 
     expect(readdirSync(root).sort()).toEqual(['.scipquery.json', 'tsconfig.json']);
+  });
+});
+
+describe('typescriptShardCostWeightAdjuster', () => {
+  const model = {
+    version: 1 as const,
+    samples: [
+      { firstPath: 'app/a.ts', lastPath: 'app/z.ts', totalBytes: 1_000, durationMs: 1_000 },
+      { firstPath: 'e2e/a.ts', lastPath: 'e2e/z.ts', totalBytes: 1_000, durationMs: 2_000 },
+    ],
+  };
+
+  it('scales byte weights by the measured range rate relative to the median', () => {
+    const adjust = typescriptShardCostWeightAdjuster(model);
+    // Median rate is the e2e sample's 2 ms/byte, so app files weigh half and
+    // e2e files keep their bytes.
+    expect(adjust('app/m.ts', 100)).toBeCloseTo(50);
+    expect(adjust('e2e/m.ts', 100)).toBeCloseTo(100);
+  });
+
+  it('keeps plain byte weight for paths outside every measured range', () => {
+    const adjust = typescriptShardCostWeightAdjuster(model);
+    expect(adjust('zzz/new.ts', 100)).toBe(100);
+    expect(adjust('aaa/new.ts', 100)).toBe(100);
+  });
+
+  it('clamps an outlier rate so one bad sample cannot capsize the partition', () => {
+    const adjust = typescriptShardCostWeightAdjuster({
+      version: 1,
+      samples: [
+        { firstPath: 'a/a.ts', lastPath: 'a/z.ts', totalBytes: 1_000, durationMs: 1_000 },
+        { firstPath: 'b/a.ts', lastPath: 'b/z.ts', totalBytes: 1_000, durationMs: 1_100 },
+        { firstPath: 'c/a.ts', lastPath: 'c/z.ts', totalBytes: 1_000, durationMs: 1_000_000 },
+      ],
+    });
+    expect(adjust('c/m.ts', 100)).toBeCloseTo(400);
+  });
+
+  it('is the identity without at least two measured samples', () => {
+    expect(typescriptShardCostWeightAdjuster(null)('app/m.ts', 100)).toBe(100);
+    expect(typescriptShardCostWeightAdjuster({ version: 1, samples: [model.samples[0]!] })('app/m.ts', 100)).toBe(100);
+  });
+
+  it('moves the partition boundary toward the measured slow range', () => {
+    const inputs = ['app/a.ts', 'app/b.ts', 'app/c.ts', 'e2e/a.ts', 'e2e/b.ts', 'e2e/c.ts'];
+    const byBytes = partitionTypeScriptCompilerInputsIntoShards(inputs, 2, () => 100);
+    expect(byBytes.map((shard) => shard.length)).toEqual([3, 3]);
+    const adjust = typescriptShardCostWeightAdjuster(model);
+    const byCost = partitionTypeScriptCompilerInputsIntoShards(inputs, 2, (path) => adjust(path, 100));
+    // e2e files weigh double the app files, so the slow range gets fewer
+    // files per shard.
+    expect(byCost.map((shard) => shard.length)).toEqual([4, 2]);
+  });
+});
+
+describe('typescript shard cost model persistence', () => {
+  let dir: string | null = null;
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+    dir = null;
+  });
+
+  it('round-trips a written model and rejects malformed content', () => {
+    dir = mkdtempSync(join(tmpdir(), 'shard-costs-'));
+    expect(readTypeScriptShardCostModel(dir)).toBeNull();
+
+    const model = buildTypeScriptShardCostModel(
+      [
+        { inputPaths: ['app/a.ts', 'app/z.ts'], durationMs: 1_500 },
+        { inputPaths: ['e2e/a.ts', 'e2e/z.ts'], durationMs: 3_000 },
+      ],
+      () => 500,
+    );
+    expect(model).toEqual({
+      version: 1,
+      samples: [
+        { firstPath: 'app/a.ts', lastPath: 'app/z.ts', totalBytes: 1_000, durationMs: 1_500 },
+        { firstPath: 'e2e/a.ts', lastPath: 'e2e/z.ts', totalBytes: 1_000, durationMs: 3_000 },
+      ],
+    });
+
+    writeTypeScriptShardCostModel(dir, model!);
+    expect(readTypeScriptShardCostModel(dir)).toEqual(model);
+
+    writeFileSync(join(dir, TYPESCRIPT_SHARD_COST_MODEL_FILE), '{"version":2,"samples":"nope"}');
+    expect(readTypeScriptShardCostModel(dir)).toBeNull();
+  });
+
+  it('refuses to build a model from an empty or unmeasured shard', () => {
+    expect(buildTypeScriptShardCostModel([{ inputPaths: [], durationMs: 1_000 }], () => 1)).toBeNull();
+    expect(buildTypeScriptShardCostModel([{ inputPaths: ['a.ts'], durationMs: 0 }], () => 1)).toBeNull();
   });
 });

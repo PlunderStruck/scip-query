@@ -372,6 +372,7 @@ function isRecognizedCacheEntry(name: string): boolean {
       'typescript-scip-fragments',
       'typescript-scip-overlays',
       'typescript-semantic',
+      'typescript-shard-costs.json',
       'watch-activity.json',
       'watch-refresh-requests',
       'watch-state.json',

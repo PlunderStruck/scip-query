@@ -88,6 +88,12 @@ Measured on the clone, forced full reindex at the default heap: peak coordinator
 
 The sweep's async-ness surfaced one test-conversion trap worth writing down: `await f(x).y.z` binds the await *after* the property chain, so a mechanical sync→async conversion that inserts `await` without parenthesizing silently reads properties off the Promise.
 
+## Sixth round: forced-run shadow skip and measured-cost shard feedback (same day)
+
+- **The affected-set shadow no longer runs its oracle on a rebuild with unchanged inputs.** A forced rebuild whose input snapshot didn't change gives the predictor nothing to predict, so the paired whole-index fact digests (5.3 s and a large share of the coordinator's residual RSS peak) could only measure tool drift — and misreported it as 0% predictor recall whenever the tool version changed between runs. The record now says `unavailable (no-input-changes)`; a reused index keeps its drift oracle, because there the digests genuinely validate that reuse changed nothing. With the digest pass gone, forced-run peak coordinator RSS measured 2.1–2.6 GB (from 4.7 GB with it).
+- **Shard partitioning now learns from measured shard durations.** Each completed shard run records its contiguous path range, raw byte weight, and wall time to `typescript-shard-costs.json` in the cache directory; the next partition scales every file's byte weight by its previous range's measured ms-per-byte (median-normalized, clamped to 4× either way so one contended run cannot capsize the partition). Files outside every recorded range keep plain byte weight, and fewer than two samples leave the partition byte-balanced. Uniform machine contention scales all rates equally, so the relative signal survives a noisy training run.
+- First cost-balanced run on the validation clone: per-shard durations 79/85/85/84 s — a 7.6% spread versus 39% byte-balanced — measured under heavy external load (a concurrent `tsgo` build and the watch-server), so the spread is the meaningful number and the absolute times are not. A quiet-machine before/after pair is still owed.
+
 ## Named follow-ups
 
 - The dev watch-server's RSS grows over hours (observed 3.9 → 5.4 GB on one repository); its semantic/index service heap is the next bounded-memory candidate.

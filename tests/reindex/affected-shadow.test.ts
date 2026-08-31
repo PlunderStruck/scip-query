@@ -322,6 +322,74 @@ describe('affected-set document fact oracle', () => {
     expect(closed.sort()).toEqual(['after', 'before']);
   });
 
+  it('skips the digest oracle for a rebuild whose input snapshot is unchanged', () => {
+    const openDatabase = vi.fn();
+    const factDigests = vi.fn(() => new Map());
+    const runtime: AffectedSetShadowRuntime = {
+      now: () => 1_000,
+      databaseExists: () => true,
+      openDatabase,
+      indexedPaths: () => [],
+      dependencyGraph: () => new Map(),
+      factDigests,
+    };
+    expect(
+      collectAffectedSetShadowRecord(
+        {
+          projectRoot: '/project',
+          previousDbPath: 'before.db',
+          previousIndexPath: 'before.scip',
+          candidateDbPath: 'after.db',
+          candidateIndexPath: 'after.scip',
+          previousSnapshot: snapshot('same'),
+          currentSnapshot: snapshot('same'),
+          refreshResult: 'rebuilt',
+        },
+        runtime,
+      ),
+    ).toMatchObject({ status: 'unavailable', reason: 'no-input-changes', refreshResult: 'rebuilt' });
+    expect(openDatabase).not.toHaveBeenCalled();
+    expect(factDigests).not.toHaveBeenCalled();
+  });
+
+  it('still runs the drift oracle for a reused index with an unchanged snapshot', () => {
+    const closed: string[] = [];
+    const before = fakeDatabase('before', closed);
+    const after = fakeDatabase('after', closed);
+    const runtime: AffectedSetShadowRuntime = {
+      now: () => 1_000,
+      databaseExists: () => true,
+      openDatabase: (_projectRoot, dbPath) => (dbPath === 'before.db' ? before : after),
+      indexedPaths: () => ['src/a.ts', 'src/b.ts'],
+      dependencyGraph: () => new Map(),
+      factDigests: () =>
+        new Map([
+          ['src/a.ts', 'stable'],
+          ['src/b.ts', 'stable'],
+        ]),
+    };
+    expect(
+      collectAffectedSetShadowRecord(
+        {
+          projectRoot: '/project',
+          previousDbPath: 'before.db',
+          previousIndexPath: 'before.scip',
+          candidateDbPath: 'after.db',
+          candidateIndexPath: 'after.scip',
+          previousSnapshot: snapshot('same'),
+          currentSnapshot: snapshot('same'),
+          refreshResult: 'reused',
+        },
+        runtime,
+      ),
+    ).toMatchObject({
+      status: 'evaluated',
+      refreshResult: 'reused',
+      evaluation: { passed: true, recall: 1 },
+    });
+    expect(closed.sort()).toEqual(['after', 'before']);
+  });
+
   it('records unavailable evidence without trying to open a missing prior database', () => {
     const openDatabase = vi.fn();
     const runtime: AffectedSetShadowRuntime = {

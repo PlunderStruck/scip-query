@@ -49,6 +49,7 @@ export interface AffectedSetShadowEvaluation {
 export type AffectedSetShadowUnavailableReason =
   | 'prior-index-unavailable'
   | 'candidate-index-unavailable'
+  | 'no-input-changes'
   | 'oracle-error';
 
 interface AffectedSetShadowRecordBase {
@@ -428,6 +429,16 @@ export function collectAffectedSetShadowRecord(
   if (!runtime.databaseExists(options.candidateDbPath)) {
     return finishUnavailable('candidate-index-unavailable');
   }
+  if (options.refreshResult === 'rebuilt') {
+    const manifest = buildProjectChangeManifest(options.previousSnapshot, options.currentSnapshot);
+    if (manifest.changes.length === 0) {
+      // A rebuild with no input changes leaves the affected-set predictor with
+      // nothing to predict, so the digest oracle can only measure tool drift
+      // and would misreport it as predictor recall. Skip the paired
+      // whole-index fact digests instead of evaluating an empty prediction.
+      return finishUnavailable('no-input-changes');
+    }
+  }
 
   let previousDb: AffectedShadowDatabase | null = null;
   let candidateDb: AffectedShadowDatabase | null = null;
@@ -722,7 +733,12 @@ function hasValidShadowRecordBase(value: unknown): value is Record<string, unkno
 }
 
 function isShadowUnavailableReason(value: unknown): value is AffectedSetShadowUnavailableReason {
-  return value === 'prior-index-unavailable' || value === 'candidate-index-unavailable' || value === 'oracle-error';
+  return (
+    value === 'prior-index-unavailable' ||
+    value === 'candidate-index-unavailable' ||
+    value === 'no-input-changes' ||
+    value === 'oracle-error'
+  );
 }
 
 function isUnitRatio(value: unknown): value is number {

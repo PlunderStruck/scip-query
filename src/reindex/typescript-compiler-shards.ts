@@ -1,10 +1,12 @@
 import { readdirSync, rmSync } from 'node:fs';
 import { cpus, totalmem } from 'node:os';
 import { join } from 'node:path';
+import { readSourceArtifactText } from '../filesystem/bounded-file.js';
 import {
   isTypeScriptCompilerShardConfigPath,
   typescriptCompilerShardConfigFileName,
 } from '../platform/typescript-projects.js';
+import { writeJsonAtomic } from '../storage/atomic-json.js';
 
 /**
  * A compiler shard is one ordinary TypeScript project config whose explicit
@@ -177,6 +179,108 @@ export function createTypeScriptCompilerShards(opts: {
       return { configPath, content, inputPaths };
     },
   );
+}
+
+/**
+ * One measured shard from a previous run: the contiguous path range it
+ * covered, its raw source-byte weight at partition time, and its wall time.
+ * Ranges follow the same locale sort the partitioner uses, so a later run can
+ * map any input path to the range that contained it.
+ */
+export interface TypeScriptShardCostSample {
+  firstPath: string;
+  lastPath: string;
+  totalBytes: number;
+  durationMs: number;
+}
+
+export interface TypeScriptShardCostModel {
+  version: 1;
+  samples: TypeScriptShardCostSample[];
+}
+
+export const TYPESCRIPT_SHARD_COST_MODEL_FILE = 'typescript-shard-costs.json';
+
+/**
+ * A measured rate may only move a file's weight this far from the median
+ * rate, so one contended or mismeasured run cannot capsize the partition.
+ */
+const SHARD_COST_RATE_CLAMP = 4;
+
+export function readTypeScriptShardCostModel(cacheDir: string): TypeScriptShardCostModel | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readSourceArtifactText(join(cacheDir, TYPESCRIPT_SHARD_COST_MODEL_FILE), 'shard cost model'));
+  } catch {
+    return null;
+  }
+  if (typeof raw !== 'object' || raw === null || (raw as { version?: unknown }).version !== 1) return null;
+  const samples = (raw as { samples?: unknown }).samples;
+  if (!Array.isArray(samples)) return null;
+  const valid = samples.every(
+    (sample: unknown) =>
+      typeof sample === 'object' &&
+      sample !== null &&
+      typeof (sample as TypeScriptShardCostSample).firstPath === 'string' &&
+      typeof (sample as TypeScriptShardCostSample).lastPath === 'string' &&
+      Number.isFinite((sample as TypeScriptShardCostSample).totalBytes) &&
+      (sample as TypeScriptShardCostSample).totalBytes > 0 &&
+      Number.isFinite((sample as TypeScriptShardCostSample).durationMs) &&
+      (sample as TypeScriptShardCostSample).durationMs > 0,
+  );
+  return valid ? { version: 1, samples: samples as TypeScriptShardCostSample[] } : null;
+}
+
+export function writeTypeScriptShardCostModel(cacheDir: string, model: TypeScriptShardCostModel): void {
+  writeJsonAtomic(join(cacheDir, TYPESCRIPT_SHARD_COST_MODEL_FILE), model);
+}
+
+/**
+ * Turns measured shard costs into a byte-weight adjuster for the next
+ * partition. Byte-balanced shards still finish up to ~40% apart because
+ * compile cost tracks type-check density, not bytes; scaling each file's byte
+ * weight by its previous range's measured ms/byte moves the boundaries toward
+ * equal duration instead of equal bytes. Files outside every measured range
+ * (new files, or a reshaped repository) keep their plain byte weight.
+ */
+export function typescriptShardCostWeightAdjuster(
+  model: TypeScriptShardCostModel | null,
+): (path: string, byteWeight: number) => number {
+  const measured = (model?.samples ?? []).filter((sample) => sample.totalBytes > 0 && sample.durationMs > 0);
+  if (measured.length < 2) return (_path, byteWeight) => byteWeight;
+  const rates = measured.map((sample) => sample.durationMs / sample.totalBytes).sort((left, right) => left - right);
+  const median = rates[Math.floor(rates.length / 2)]!;
+  if (!(median > 0)) return (_path, byteWeight) => byteWeight;
+  const samples = [...measured].sort((left, right) => left.firstPath.localeCompare(right.firstPath));
+  return (path, byteWeight) => {
+    for (const sample of samples) {
+      if (path.localeCompare(sample.firstPath) < 0) break;
+      if (path.localeCompare(sample.lastPath) > 0) continue;
+      const relative = sample.durationMs / sample.totalBytes / median;
+      return byteWeight * Math.min(SHARD_COST_RATE_CLAMP, Math.max(1 / SHARD_COST_RATE_CLAMP, relative));
+    }
+    return byteWeight;
+  };
+}
+
+/**
+ * Builds the cost model for the shards that just ran. Weights are the shards'
+ * raw byte weights (not the cost-adjusted partition weights), so recorded
+ * rates stay in ms per source byte across runs.
+ */
+export function buildTypeScriptShardCostModel(
+  shards: readonly { inputPaths: readonly string[]; durationMs: number }[],
+  byteWeightOf: (path: string) => number,
+): TypeScriptShardCostModel | null {
+  const samples: TypeScriptShardCostSample[] = [];
+  for (const shard of shards) {
+    const firstPath = shard.inputPaths[0];
+    const lastPath = shard.inputPaths[shard.inputPaths.length - 1];
+    if (firstPath === undefined || lastPath === undefined || !(shard.durationMs > 0)) return null;
+    const totalBytes = shard.inputPaths.reduce((sum, path) => sum + Math.max(1, byteWeightOf(path)), 0);
+    samples.push({ firstPath, lastPath, totalBytes, durationMs: shard.durationMs });
+  }
+  return samples.length > 0 ? { version: 1, samples } : null;
 }
 
 /**
