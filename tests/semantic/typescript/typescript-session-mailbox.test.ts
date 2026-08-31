@@ -12,7 +12,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { captureProfileEnvironment } from '../../../src/instrumentation/profile.js';
 import type { ProjectInputSnapshot } from '../../../src/domain/project-input.js';
 import { WATCH_SERVICE_PROTOCOL_VERSION } from '../../../src/platform/watch-service-state.js';
@@ -50,8 +50,15 @@ const SERVICE_PROCESS_IDENTITY: ProcessIdentity = {
   startToken: 'service-owner',
 };
 const tempDirs: string[] = [];
+const inheritedSkipWatchService = process.env['SCIP_QUERY_SKIP_WATCH_SERVICE'];
+
+beforeEach(() => {
+  delete process.env['SCIP_QUERY_SKIP_WATCH_SERVICE'];
+});
 
 afterEach(() => {
+  if (inheritedSkipWatchService === undefined) delete process.env['SCIP_QUERY_SKIP_WATCH_SERVICE'];
+  else process.env['SCIP_QUERY_SKIP_WATCH_SERVICE'] = inheritedSkipWatchService;
   for (const path of tempDirs.splice(0)) rmSync(path, { recursive: true, force: true });
 });
 
