@@ -3,6 +3,12 @@ name: scip-query
 description: Use FIRST for codebase work when compiler-resolved identity, runtime boundaries, callers, dependencies, consumers, architecture, change impact, or cleanup relationships can affect the answer. It exposes exact referents, explicit typed-graph projections, and source evidence; it does not infer task relevance. Pair it with scip-explore when the task is to understand a repository system end to end.
 metadata:
   commands:
+    - template: 'scip-query watch --daemon'
+      when: 'When the user explicitly asks to use scip-query, make sure the background watcher for the exact target worktree is running before the first exploration command.'
+    - template: 'scip-query watch --status'
+      when: 'Check whether the watcher for the current worktree is running, refreshing, idle, or failed.'
+    - template: 'scip-query watch --stop'
+      when: 'Stop the watcher owned by the current worktree when the user asks to turn it off.'
     - template: 'scip-query search <text>'
       when: 'Locate exact repository text, a runtime key, or a compiler symbol; use `scip-query search -- <text>` when the literal starts with a dash.'
     - template: 'scip-query outline <file>'
@@ -30,6 +36,9 @@ metadata:
 
 | Command syntax | Question it answers |
 | --- | --- |
+| `scip-query watch --daemon` | When the user explicitly asks to use scip-query, make sure the background watcher for the exact target worktree is running before the first exploration command. |
+| `scip-query watch --status` | Check whether the watcher for the current worktree is running, refreshing, idle, or failed. |
+| `scip-query watch --stop` | Stop the watcher owned by the current worktree when the user asks to turn it off. |
 | `scip-query search <text>` | Locate exact repository text, a runtime key, or a compiler symbol; use \`scip-query search -- <text>\` when the literal starts with a dash. |
 | `scip-query outline <file>` | Locate compiler-owned constructs in a known file. |
 | `scip-query entrypoints <text>` | Locate an external callable root when its entry surface is known. |
@@ -42,6 +51,16 @@ metadata:
 
 These commands are controls, not a checklist. Use every capability needed by the task, but make each query answer a distinct question. There is no required sequence or query limit. Run a command's `--help` when you need a flag not shown in its template.
 <!-- END GENERATED SKILL COMMANDS -->
+
+## Watcher lifecycle
+
+The scip-query watcher is a project-scoped background refresh service: one process owned by one worktree that observes that worktree's configured compiler inputs and keeps its index current after relevant changes. It is not a global service, and starting it in one worktree must not start watchers for sibling worktrees.
+
+When the user explicitly names scip-query, invokes `$scip-query`, or asks the agent to use it, run `scip-query watch --daemon` from the exact target project root before the first exploration command. Treat both a newly started watcher and an already-running watcher as success; reuse the existing process instead of starting another. This automatic start applies only to an explicit request to use scip-query. Merely opening a repository or shell must not start it.
+
+Use the normal command without `CHOKIDAR_USEPOLLING` or another forced polling override. If startup fails, report the exact failure; do not silently start a watcher in another worktree, force polling, or substitute an unbounded full rebuild.
+
+Run `scip-query watch --status` from the same project root to inspect the watcher. Run `scip-query watch --stop` from that root when the user asks to stop it. The stop command targets only that worktree's watcher; do not stop watchers owned by other worktrees unless the user names them.
 
 <!-- BEGIN GENERATED EXPLORATION MANUAL -->
 ### Choose a relationship deliberately
