@@ -48,7 +48,7 @@ describe('Windows SCIP sidecar documentation', () => {
     const guard = readFileSync('scripts/release-npm-guard.ts', 'utf8');
     const releaseGuide = readFileSync('docs/WINDOWS_SIDECAR_RELEASE.md', 'utf8');
 
-    expect(packageJson.version).toBe('0.21.1');
+    expect(packageJson.version).toBe('0.22.0');
     expect(packageJson.optionalDependencies?.['scip-query-scip-windows']).toBe('0.13.1');
     expect(ignored).toContain('/.scipquery/releases/');
     expect(guard).toContain('Direct npm publish is disabled');
