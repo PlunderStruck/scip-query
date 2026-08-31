@@ -21,6 +21,7 @@ const NO_CALLABLE_FACT_NODE_TYPES: readonly string[] = [];
 
 const JAVASCRIPT_FUNCTION_VALUE_TYPES = new Set(['arrow_function', 'function_expression', 'generator_function']);
 
+// scip-query: ignore-wrapper — this is the authoritative language-to-callable-node compatibility mapping.
 export function callableFactNodeTypes(language: AstLanguage): readonly string[] {
   if (language === 'rust') return RUST_CALLABLE_FACT_NODE_TYPES;
   if (language === 'python') return PYTHON_CALLABLE_FACT_NODE_TYPES;

@@ -894,6 +894,7 @@ function importedBindings(source: string, packages: readonly string[]): Set<stri
   return bindings;
 }
 
+// scip-query: ignore-passthrough — exported construction boundary keeps extractors off the private observation primitive.
 export function createBoundaryObservation(
   context: BoundaryFileContext,
   node: SyntaxNode,

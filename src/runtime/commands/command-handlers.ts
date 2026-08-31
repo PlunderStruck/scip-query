@@ -380,6 +380,7 @@ export function handleCheckDeps(): void {
   process.exitCode = hasProblems ? 1 : 0;
 }
 
+// scip-query: ignore-passthrough — command handler is the CLI routing boundary for capability rendering.
 export function handleCapabilities(rawOpts: unknown): void {
   renderCapabilities(rawOpts);
 }

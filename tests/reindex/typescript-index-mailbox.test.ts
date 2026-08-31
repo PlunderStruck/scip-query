@@ -24,9 +24,9 @@ import {
 } from '../../src/reindex/typescript-index-requester.js';
 import {
   TypeScriptIndexServiceHost,
-  initializeTypeScriptIndexMailbox,
   processTypeScriptIndexMailbox,
 } from '../../src/reindex/typescript-index-service.js';
+import { initializeBoundedMailbox } from '../../src/storage/bounded-mailbox.js';
 import {
   TYPESCRIPT_INDEX_PROTOCOL_VERSION,
   TYPESCRIPT_INDEX_LEGACY_PROTOCOL_VERSION,
@@ -195,7 +195,7 @@ describe('TypeScript index service mailbox', () => {
       now: () => NOW,
     });
     const paths = typeScriptIndexMailboxPaths(fixture.cacheDir);
-    initializeTypeScriptIndexMailbox(paths);
+    initializeBoundedMailbox(paths);
 
     writeRequest(paths.requestDir, 'cold', generation, indexRequest(availability.producerIdentity));
     expect(processTypeScriptIndexMailbox(paths, host, { nowMs: NOW })).toBe(1);
@@ -366,7 +366,7 @@ describe('TypeScript index service mailbox', () => {
   test('classifies terminal Worker OOM responses as memory pressure', () => {
     const fixture = serviceFixture();
     const paths = typeScriptIndexMailboxPaths(fixture.cacheDir);
-    initializeTypeScriptIndexMailbox(paths);
+    initializeBoundedMailbox(paths);
     const host = new TypeScriptIndexServiceHost({
       projectRoot: fixture.projectRoot,
       currentGeneration: () => 'base',
@@ -401,7 +401,7 @@ describe('TypeScript index service mailbox', () => {
       currentGeneration: () => 'base',
       now: () => NOW,
     });
-    initializeTypeScriptIndexMailbox(paths);
+    initializeBoundedMailbox(paths);
     writeFileSync(join(paths.requestDir, 'malformed.json'), '{');
     writeJsonAtomic(join(paths.requestDir, 'expired.json'), {
       protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
@@ -523,7 +523,7 @@ describe('TypeScript index service mailbox', () => {
       currentGeneration: () => 'base',
       now: () => NOW,
     });
-    initializeTypeScriptIndexMailbox(paths);
+    initializeBoundedMailbox(paths);
     writeRequest(paths.requestDir, 'first', 'base', indexRequest(availability.producerIdentity));
     writeRequest(paths.requestDir, 'second', 'base', indexRequest(availability.producerIdentity));
     let currentTime = NOW;
@@ -613,7 +613,7 @@ describe('TypeScript index service mailbox', () => {
   test('lets the parent claim and commit an isolated Worker result exactly once', async () => {
     const fixture = serviceFixture();
     const paths = typeScriptIndexMailboxPaths(fixture.cacheDir);
-    initializeTypeScriptIndexMailbox(paths);
+    initializeBoundedMailbox(paths);
     writeRequest(paths.requestDir, 'isolated', 'base', indexRequest('producer'));
     const worker = new FakeIndexWorker();
     let workerData: unknown;
@@ -671,7 +671,7 @@ describe('TypeScript index service mailbox', () => {
   test('rejects an oversized Worker result without closing the mailbox lane', async () => {
     const fixture = serviceFixture();
     const paths = typeScriptIndexMailboxPaths(fixture.cacheDir);
-    initializeTypeScriptIndexMailbox(paths);
+    initializeBoundedMailbox(paths);
     writeRequest(paths.requestDir, 'oversized', 'base', indexRequest('producer'));
     const worker = new FakeIndexWorker();
     const fatal: string[] = [];
@@ -727,7 +727,7 @@ describe('TypeScript index service mailbox', () => {
   test('retains an inflight claim and closes admission when durable completion fails', async () => {
     const fixture = serviceFixture();
     const paths = typeScriptIndexMailboxPaths(fixture.cacheDir);
-    initializeTypeScriptIndexMailbox(paths);
+    initializeBoundedMailbox(paths);
     writeRequest(paths.requestDir, 'settlement-failure', 'base', indexRequest('producer'));
     const worker = new FakeIndexWorker();
     const fatal: string[] = [];

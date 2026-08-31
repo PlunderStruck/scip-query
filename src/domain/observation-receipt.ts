@@ -713,6 +713,7 @@ function isLegacyAuthorityKind(value: unknown): value is ObservationAuthorityKin
   return value === 'index-worktree' || value === 'index-only' || value === 'worktree-only' || value === 'process-local';
 }
 
+// scip-query: ignore-similar — observation-source and Rust-mailbox enums are unrelated closed protocol domains.
 function isObservationSourceKind(value: unknown): value is ObservationSourceKind {
   return (
     value === 'index-generation' || value === 'repository-snapshot' || value === 'live-workspace' || value === 'process'

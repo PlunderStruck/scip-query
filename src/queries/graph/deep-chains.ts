@@ -113,6 +113,7 @@ export function dependencyDepth(
 }
 
 /** @deprecated Prefer `dependencyDepth`, which names the computed graph property. */
+// scip-query: ignore-passthrough — deprecated public alias remains for callers while dependencyDepth owns the calculation.
 export function deepChains(
   db: ScipDatabase,
   opts: { limit?: number; scope?: string; minDepth?: number } = {},

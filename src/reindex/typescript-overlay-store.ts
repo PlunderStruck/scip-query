@@ -13,8 +13,6 @@ import type { TypeScriptDocumentFragment } from './typescript-document-emitter.j
 import { assembleTypeScriptIndex } from './typescript-fragment-store.js';
 
 export const TYPESCRIPT_OVERLAY_STORE_VERSION = 1;
-/** Incremental TypeScript never rewrites the complete language shard; overlays patch changed documents. */
-export const TYPESCRIPT_DEFERRED_SCIP_THRESHOLD_BYTES = 0;
 export const TYPESCRIPT_OVERLAY_STORE_DIRECTORY = 'typescript-scip-overlays';
 const CURRENT_TYPESCRIPT_PROJECT_IDENTITY_PREFIX = 'typescript-project-v3:';
 

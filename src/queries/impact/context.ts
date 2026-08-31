@@ -165,137 +165,18 @@ export function repositoryContext(
   const semantic = opts.semantic;
   const pathResolution = looksLikePathTarget(target) ? resolveRepositoryContextPrimaryCallable(db, target) : null;
   const graphTarget = pathResolution ? (pathResolution.primary?.symbol ?? null) : target;
-  const symbolTarget = graphTarget !== null;
-
-  const traceResult = symbolTarget
-    ? profileRepositoryContextComponent(
-        'trace',
-        graphTarget,
-        () => traceEvidence(db, graphTarget, { semantic, referenceContext: SOURCE_PACKET_CONSUMER_CONTEXT_LINES }),
-        (result) => ({
-          definitions: result.definitions.length,
-          references: result.referencedBy.length,
-        }),
-      )
-    : { definitions: [], referencedBy: [], claimSupport: null };
-  const callGraphResult = symbolTarget
-    ? profileRepositoryContextComponent(
-        'call-graph',
-        graphTarget,
-        () => callGraph(db, graphTarget, { semantic }),
-        (result) => ({
-          callers: result?.callers.length ?? 0,
-          callees: result?.callees.length ?? 0,
-        }),
-      )
-    : null;
-  const complexityResult = symbolTarget
-    ? profileRepositoryContextComponent(
-        'complexity',
-        graphTarget,
-        () => complexity(db, graphTarget, { semantic }),
-        (result) => ({
-          callees: result?.calleeCount ?? 0,
-        }),
-      )
-    : null;
-  const dataflowResult = symbolTarget
-    ? profileRepositoryContextComponent(
-        'dataflow',
-        graphTarget,
-        () => dataflow(db, graphTarget, { semantic }),
-        (result) => ({
-          references: result?.usageSites.length ?? 0,
-          producers: result?.producers.length ?? 0,
-          consumers: result?.consumers.length ?? 0,
-        }),
-      )
-    : null;
-  const backwardSliceResult = symbolTarget
-    ? profileRepositoryContextComponent(
-        'backward-slice',
-        graphTarget,
-        () =>
-          slice(db, graphTarget, {
-            direction: 'backward',
-            maxDepth: sliceDepth,
-            semantic,
-          }),
-        (result) => ({ maxDepth: sliceDepth, connectedSymbols: result?.connectedSymbols.length ?? 0 }),
-      )
-    : null;
-  const forwardSliceResult = symbolTarget
-    ? profileRepositoryContextComponent(
-        'forward-slice',
-        graphTarget,
-        () =>
-          slice(db, graphTarget, {
-            direction: 'forward',
-            maxDepth: sliceDepth,
-            semantic,
-          }),
-        (result) => ({ maxDepth: sliceDepth, connectedSymbols: result?.connectedSymbols.length ?? 0 }),
-      )
-    : null;
-  const affectedResults = symbolTarget
-    ? profileRepositoryContextComponent(
-        'affected',
-        graphTarget,
-        () =>
-          affected(db, graphTarget, {
-            maxDepth: impactDepth,
-            scope: opts.scope,
-          }),
-        (result) => ({ maxDepth: impactDepth, affectedSymbols: result.length }),
-      )
-    : [];
-  const reuseCandidates = symbolTarget
-    ? profileRepositoryContextComponent(
-        'reuse-candidates',
-        graphTarget,
-        () =>
-          similar(db, graphTarget, {
-            minSimilarity: 0.4,
-            limit: 5,
-            semantic,
-            sourceCandidateMode: 'target-pruned',
-          }),
-        (result) => ({
-          candidates: result.length,
-          direct: result.filter((item) => item.actionTier === 'direct').length,
-        }),
-      )
-    : [];
-  const targetSymbol = symbolTarget ? (findFirstSymbolMatch(db, graphTarget)?.symbol ?? null) : null;
-  const affectedConsumerReuse = symbolTarget
-    ? profileRepositoryContextComponent(
-        'affected-consumer-reuse',
-        graphTarget,
-        () =>
-          discoverAffectedConsumerReuse(
-            traceResult,
-            targetSymbol,
-            (consumerSymbol) =>
-              similar(db, consumerSymbol, {
-                minSimilarity: 0.4,
-                limit: PER_CONSUMER_SEARCH_LIMIT,
-                semantic,
-                sourceCandidateMode: 'target-pruned',
-              }),
-            {
-              consumerLimit: AFFECTED_CONSUMER_LIMIT,
-              perConsumerSearchLimit: PER_CONSUMER_SEARCH_LIMIT,
-              perConsumerCandidateLimit: PER_CONSUMER_REUSE_LIMIT,
-              candidateLimit: AFFECTED_CONSUMER_REUSE_LIMIT,
-            },
-          ),
-        (result) => ({
-          totalConsumers: result.coverage.totalConsumers,
-          analyzedConsumers: result.coverage.analyzedConsumers,
-          candidates: result.candidates.length,
-        }),
-      )
-    : emptyAffectedConsumerReuse();
+  const {
+    traceResult,
+    callGraphResult,
+    complexityResult,
+    dataflowResult,
+    backwardSliceResult,
+    forwardSliceResult,
+    affectedResults,
+    reuseCandidates,
+    targetSymbol,
+    affectedConsumerReuse,
+  } = buildRepositoryContextSymbolComponents(db, graphTarget, opts, impactDepth, sliceDepth);
 
   const changeSurfaceResult = profileRepositoryContextComponent(
     'change-surface',
@@ -423,6 +304,135 @@ export function repositoryContext(
       reuseCandidates,
     ),
     warnings,
+  };
+}
+
+function buildRepositoryContextSymbolComponents(
+  db: ScipDatabase,
+  graphTarget: string | null,
+  opts: RepositoryContextOptions,
+  impactDepth: number,
+  sliceDepth: number,
+) {
+  const semantic = opts.semantic;
+  const traceResult = graphTarget
+    ? profileRepositoryContextComponent(
+        'trace',
+        graphTarget,
+        () => traceEvidence(db, graphTarget, { semantic, referenceContext: SOURCE_PACKET_CONSUMER_CONTEXT_LINES }),
+        (result) => ({ definitions: result.definitions.length, references: result.referencedBy.length }),
+      )
+    : { definitions: [], referencedBy: [], claimSupport: null };
+  const callGraphResult = graphTarget
+    ? profileRepositoryContextComponent(
+        'call-graph',
+        graphTarget,
+        () => callGraph(db, graphTarget, { semantic }),
+        (result) => ({ callers: result?.callers.length ?? 0, callees: result?.callees.length ?? 0 }),
+      )
+    : null;
+  const complexityResult = graphTarget
+    ? profileRepositoryContextComponent(
+        'complexity',
+        graphTarget,
+        () => complexity(db, graphTarget, { semantic }),
+        (result) => ({ callees: result?.calleeCount ?? 0 }),
+      )
+    : null;
+  const dataflowResult = graphTarget
+    ? profileRepositoryContextComponent(
+        'dataflow',
+        graphTarget,
+        () => dataflow(db, graphTarget, { semantic }),
+        (result) => ({
+          references: result?.usageSites.length ?? 0,
+          producers: result?.producers.length ?? 0,
+          consumers: result?.consumers.length ?? 0,
+        }),
+      )
+    : null;
+  const backwardSliceResult = graphTarget
+    ? profileRepositoryContextComponent(
+        'backward-slice',
+        graphTarget,
+        () => slice(db, graphTarget, { direction: 'backward', maxDepth: sliceDepth, semantic }),
+        (result) => ({ maxDepth: sliceDepth, connectedSymbols: result?.connectedSymbols.length ?? 0 }),
+      )
+    : null;
+  const forwardSliceResult = graphTarget
+    ? profileRepositoryContextComponent(
+        'forward-slice',
+        graphTarget,
+        () => slice(db, graphTarget, { direction: 'forward', maxDepth: sliceDepth, semantic }),
+        (result) => ({ maxDepth: sliceDepth, connectedSymbols: result?.connectedSymbols.length ?? 0 }),
+      )
+    : null;
+  const affectedResults = graphTarget
+    ? profileRepositoryContextComponent(
+        'affected',
+        graphTarget,
+        () => affected(db, graphTarget, { maxDepth: impactDepth, scope: opts.scope }),
+        (result) => ({ maxDepth: impactDepth, affectedSymbols: result.length }),
+      )
+    : [];
+  const reuseCandidates = graphTarget
+    ? profileRepositoryContextComponent(
+        'reuse-candidates',
+        graphTarget,
+        () =>
+          similar(db, graphTarget, {
+            minSimilarity: 0.4,
+            limit: 5,
+            semantic,
+            sourceCandidateMode: 'target-pruned',
+          }),
+        (result) => ({
+          candidates: result.length,
+          direct: result.filter((item) => item.actionTier === 'direct').length,
+        }),
+      )
+    : [];
+  const targetSymbol = graphTarget ? (findFirstSymbolMatch(db, graphTarget)?.symbol ?? null) : null;
+  const affectedConsumerReuse = graphTarget
+    ? profileRepositoryContextComponent(
+        'affected-consumer-reuse',
+        graphTarget,
+        () =>
+          discoverAffectedConsumerReuse(
+            traceResult,
+            targetSymbol,
+            (consumerSymbol) =>
+              similar(db, consumerSymbol, {
+                minSimilarity: 0.4,
+                limit: PER_CONSUMER_SEARCH_LIMIT,
+                semantic,
+                sourceCandidateMode: 'target-pruned',
+              }),
+            {
+              consumerLimit: AFFECTED_CONSUMER_LIMIT,
+              perConsumerSearchLimit: PER_CONSUMER_SEARCH_LIMIT,
+              perConsumerCandidateLimit: PER_CONSUMER_REUSE_LIMIT,
+              candidateLimit: AFFECTED_CONSUMER_REUSE_LIMIT,
+            },
+          ),
+        (result) => ({
+          totalConsumers: result.coverage.totalConsumers,
+          analyzedConsumers: result.coverage.analyzedConsumers,
+          candidates: result.candidates.length,
+        }),
+      )
+    : emptyAffectedConsumerReuse();
+  return {
+    traceResult,
+    callGraphResult,
+    complexityResult,
+    dataflowResult,
+    backwardSliceResult,
+    forwardSliceResult,
+    affectedResults,
+    reuseCandidates,
+    targetSymbol,
+    affectedConsumerReuse,
   };
 }
 

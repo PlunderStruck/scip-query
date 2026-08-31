@@ -135,6 +135,7 @@ export function readStreamPathWithinLimit(path: PathLike, options: BoundedFileRe
   }
 }
 
+// scip-query: ignore-wrapper — the text boundary owns bounded stream decoding and its default encoding.
 export function readTextStreamPathWithinLimit(
   path: PathLike,
   options: BoundedFileReadOptions,
@@ -201,6 +202,7 @@ function assertReadableIdentity(
   }
 }
 
+// scip-query: ignore-wrapper — every bounded reader shares this one byte-limit safety invariant and error contract.
 export function assertNonNegativeByteLimit(maxBytes: number): void {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
     throw new RangeError(`maxBytes must be a non-negative safe integer; received ${maxBytes}`);

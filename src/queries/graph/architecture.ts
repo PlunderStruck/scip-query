@@ -1,7 +1,7 @@
 import { classifyFile } from '../../analysis/file-classifier.js';
-import { matchesGlob } from '../../analysis/glob-match.js';
 import { stronglyConnectedComponents } from '../../analysis/strongly-connected-components.js';
 import type { ArchitectureConfig } from '../../domain/config-types.js';
+import { matchesPathGlob } from '../../domain/path-glob.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
@@ -197,7 +197,7 @@ export function analyzeArchitectureGraph(
 
   for (const file of allFiles) {
     const matches = config.boundaries
-      .filter((boundary) => boundary.paths.some((pattern) => matchesGlob(pattern, file)))
+      .filter((boundary) => boundary.paths.some((pattern) => matchesPathGlob(pattern, file)))
       .map((boundary) => boundary.name)
       .sort();
     if (matches.length === 0) {

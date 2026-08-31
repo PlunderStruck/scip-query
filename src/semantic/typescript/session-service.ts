@@ -16,7 +16,6 @@ import {
 import type { ScipDatabase } from '../../storage/db.js';
 import {
   completeBoundedMailboxClaim,
-  initializeBoundedMailbox,
   pollBoundedMailboxRequests,
   readBoundedMailboxClaim,
   rejectBoundedMailboxClaim,
@@ -149,10 +148,6 @@ export class TypeScriptSemanticServiceHost {
     this.snapshot = nextSnapshot;
     this.available = null;
   }
-}
-
-export function initializeTypeScriptSemanticMailbox(paths: TypeScriptSemanticMailboxPaths): void {
-  initializeBoundedMailbox(paths);
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.

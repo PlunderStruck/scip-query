@@ -124,6 +124,7 @@ export function captureProjectObservationSnapshot(
   };
 }
 
+// scip-query: ignore-wrapper — receipt identity depends on this stable projection and path ordering.
 export function canonicalRepositoryContentSnapshot(snapshot: RepositoryContentSnapshot): string {
   return stableJson({
     version: snapshot.version,

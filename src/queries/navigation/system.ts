@@ -43,6 +43,7 @@ export function system(db: ScipDatabase, modulePattern: string): SystemResult {
 }
 
 /** One-hop module summary; this does not infer a repository subsystem boundary. */
+// scip-query: ignore-passthrough — public name preserves the one-hop module-map contract over the legacy system query.
 export function moduleMap(db: ScipDatabase, modulePattern: string): SystemResult {
   return system(db, modulePattern);
 }

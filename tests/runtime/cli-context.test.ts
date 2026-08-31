@@ -13,7 +13,7 @@ import {
 import type { GitWorktreeContext } from '../../src/platform/git-worktree.js';
 import { resolveIndexStoragePaths } from '../../src/platform/cache-layout.js';
 import { fingerprintProjectFiles } from '../../src/platform/project-files.js';
-import { publishedGenerationIdentity } from '../../src/semantic/typescript/session-protocol.js';
+import { publishedSqliteGenerationIdentity } from '../../src/storage/sqlite-generation.js';
 import type { ProjectConfig } from '../../src/domain/types.js';
 
 const tempDirs: string[] = [];
@@ -104,7 +104,7 @@ describe('cli context', () => {
           indexedLanguages: [],
         })}\n`,
       );
-      const watcherGeneration = publishedGenerationIdentity(paths.dbPath)!;
+      const watcherGeneration = publishedSqliteGenerationIdentity(paths.dbPath)!;
       const gitContext: GitWorktreeContext = {
         projectRoot: root,
         gitDir: join(root, '.git'),

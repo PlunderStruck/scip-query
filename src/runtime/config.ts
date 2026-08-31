@@ -891,12 +891,12 @@ export function initProjectConfigDetailed(projectRoot: string, languages: string
     },
   };
   const mutation = mutateTextFileRevisionAware(configPath, (snapshot) => {
-    if (!snapshot.revision.exists) return { kind: 'write', text: serializeProjectConfig(config) };
+    if (!snapshot.revision.exists) return { kind: 'write', text: serializeCurrentProjectConfig(config) };
     const latest = parseProjectConfigSnapshot(snapshot, config);
     if (latest.config.collaborationDomainId) return { kind: 'unchanged' };
     return {
       kind: 'write',
-      text: serializeProjectConfig({
+      text: serializeCurrentProjectConfig({
         ...latest.config,
         collaborationDomainId,
       }),
@@ -928,7 +928,7 @@ export function ensureProjectCollaborationDomain(
       collaborationDomainId,
     };
     finalConfig = next;
-    return { kind: 'write', text: serializeProjectConfig(next) };
+    return { kind: 'write', text: serializeCurrentProjectConfig(next) };
   });
   return { configPath, config: finalConfig, changed: mutation.changed };
 }
@@ -957,7 +957,7 @@ export function configureProjectLanguages(
     finalConfig = next;
     return snapshot.revision.exists && !latest.needsMigration && sameJson(next, latest.config)
       ? { kind: 'unchanged' }
-      : { kind: 'write', text: serializeProjectConfig(next) };
+      : { kind: 'write', text: serializeCurrentProjectConfig(next) };
   });
   return { configPath, config: finalConfig, changed: mutation.changed };
 }
@@ -990,7 +990,7 @@ export function configureProjectAutomaticRefresh(
     finalConfig = next;
     return snapshot.revision.exists && !latest.needsMigration && sameJson(next, latest.config)
       ? { kind: 'unchanged' }
-      : { kind: 'write', text: serializeProjectConfig(next) };
+      : { kind: 'write', text: serializeCurrentProjectConfig(next) };
   });
   return { configPath, config: finalConfig, changed: mutation.changed };
 }
@@ -1009,10 +1009,6 @@ function parseProjectConfigSnapshot(
   }
   const accepted = requireSupportedProjectConfig(decodeProjectConfig(snapshot.text), snapshot.path, 'update');
   return { config: accepted.config, needsMigration: accepted.needsMigration };
-}
-
-function serializeProjectConfig(config: ProjectConfig): string {
-  return serializeCurrentProjectConfig(config);
 }
 
 function sameJson(left: unknown, right: unknown): boolean {

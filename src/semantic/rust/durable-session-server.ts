@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { monotonicNowMs } from '../../domain/time.js';
+import { boundedExponentialLoopDelayMs, monotonicNowMs } from '../../domain/time.js';
 import {
   DURABLE_RUST_SESSION_PROTOCOL_VERSION,
   DurableRustSessionHost,
@@ -236,10 +236,16 @@ async function runDurableRustSessionServer(sessionDir: string, semanticWorkerPat
   }
 }
 
+// scip-query: ignore-similar — Rust and query services share backoff mechanics but own different loop contracts.
 export function durableSessionLoopDelayMs(processedRequests: number, consecutiveIdlePolls = 1): number {
-  if (processedRequests > 0) return POLL_INTERVAL_MS;
-  const exponent = Math.max(0, Math.min(5, consecutiveIdlePolls - 1));
-  return Math.min(MAX_IDLE_POLL_INTERVAL_MS, POLL_INTERVAL_MS * 2 ** exponent);
+  return boundedExponentialLoopDelayMs(
+    processedRequests,
+    consecutiveIdlePolls,
+    POLL_INTERVAL_MS,
+    POLL_INTERVAL_MS,
+    MAX_IDLE_POLL_INTERVAL_MS,
+    5,
+  );
 }
 
 const decodeLegacyRustServerLock: LegacyProcessLockDecoder = (value) => {

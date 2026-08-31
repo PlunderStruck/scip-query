@@ -5,7 +5,7 @@ import { matchingDocTerms } from './doc-terms.js';
 import type { ChangedLineRange } from '../internal/change-analysis-types.js';
 import { rangesByFile } from '../internal/diff-ranges.js';
 import type { ChangeActionTier, DocCitationKind } from '../internal/change-analysis-types.js';
-import { matchesGlob } from '../../analysis/glob-match.js';
+import { matchesPathGlob } from '../../domain/path-glob.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
 
 const SNAPSHOT_MARKER_PATTERN = /<!--\s*scip-query:\s*snapshot\s*-->/i;
@@ -19,7 +19,7 @@ const SNAPSHOT_MARKER_PATTERN = /<!--\s*scip-query:\s*snapshot\s*-->/i;
  */
 export function isSnapshotDoc(db: ScipDatabase, docFile: string): boolean {
   const globs = db.config.docs?.snapshotPaths ?? [];
-  if (globs.some((pattern) => matchesGlob(pattern, docFile))) return true;
+  if (globs.some((pattern) => matchesPathGlob(pattern, docFile))) return true;
   const source = getSourceText(db, docFile);
   return source.length > 0 && SNAPSHOT_MARKER_PATTERN.test(source);
 }

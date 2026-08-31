@@ -53,6 +53,7 @@ export function typeScriptSemanticHash(relativePath: string, source: Buffer | st
   }
 }
 
+// scip-query: ignore-wrapper — shared eligibility rule keeps direct hashing and project fingerprinting in agreement.
 export function supportsTypeScriptSemanticHash(relativePath: string): boolean {
   return TYPESCRIPT_SOURCE_PATTERN.test(relativePath);
 }
@@ -62,6 +63,7 @@ export function supportsTypeScriptSemanticHash(relativePath: string): boolean {
  * module resolution. Script commands are runtime tooling, so changing only a
  * script must not invalidate the compiler shard.
  */
+// scip-query: ignore-wrapper — package semantic identity is a named cache contract, not incidental hashing indirection.
 export function typeScriptPackageSemanticHash(relativePath: string, source: Buffer | string): string | undefined {
   if (!PACKAGE_JSON_PATTERN.test(relativePath)) return undefined;
   try {
@@ -77,6 +79,7 @@ export function typeScriptPackageSemanticHash(relativePath: string, source: Buff
   }
 }
 
+// scip-query: ignore-wrapper — shared eligibility rule keeps live hashing and historical recovery in agreement.
 export function supportsTypeScriptPackageSemanticHash(relativePath: string): boolean {
   return PACKAGE_JSON_PATTERN.test(relativePath);
 }

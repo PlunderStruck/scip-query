@@ -53,6 +53,7 @@ export function referenceReachability(
  * owners, not a program-dependence graph. Use `referenceReachability` for that
  * legacy projection and `dependenceSlice` for data/control slicing.
  */
+// scip-query: ignore-passthrough — deprecated public query name preserves its documented reference-reachability meaning.
 export function slice(
   db: ScipDatabase,
   symbolPattern: string,

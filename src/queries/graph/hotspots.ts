@@ -81,6 +81,7 @@ export function hotspots(db: ScipDatabase, opts: { limit?: number; scope?: strin
   return hotspotsByDefinitionFallback(db, scope, limit);
 }
 
+// scip-query: ignore-passthrough — stable public query name delegates to the reference-hotspot implementation.
 export function referenceHotspots(db: ScipDatabase, opts: { limit?: number; scope?: string } = {}): HotspotResult[] {
   return hotspots(db, opts);
 }

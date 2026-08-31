@@ -3,7 +3,7 @@ import { rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { monotonicNowMs } from '../domain/time.js';
+import { boundedExponentialLoopDelayMs, monotonicNowMs } from '../domain/time.js';
 import { createPathChangeWake } from '../platform/path-change-wake.js';
 import { readProcessIdentity } from '../platform/process-identity.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
@@ -788,9 +788,14 @@ function configuredIdleTimeoutMs(): number {
 }
 
 function loopDelayMs(processedRequests: number, consecutiveIdlePolls: number): number {
-  if (processedRequests > 0) return POLL_INTERVAL_MS;
-  const exponent = Math.max(0, Math.min(5, consecutiveIdlePolls - 1));
-  return Math.min(MAX_IDLE_POLL_INTERVAL_MS, POLL_INTERVAL_MS * 2 ** exponent);
+  return boundedExponentialLoopDelayMs(
+    processedRequests,
+    consecutiveIdlePolls,
+    POLL_INTERVAL_MS,
+    POLL_INTERVAL_MS,
+    MAX_IDLE_POLL_INTERVAL_MS,
+    5,
+  );
 }
 
 const QUERY_SERVICE_MAILBOX_OWNER = `query-service-${process.pid}-${randomUUID()}`;

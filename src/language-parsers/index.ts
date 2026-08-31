@@ -85,6 +85,7 @@ export function getSourceImports(db: ScipDatabase, relativePath: string): Parsed
  * process-wide per-database caches. Whole-project graph construction uses this
  * streaming form so its memory is proportional to the graph, not repository size.
  */
+// scip-query: ignore-wrapper — whole-project graph construction requires this explicit cache-bypass contract.
 export function readSourceImportsUncached(db: ScipDatabase, relativePath: string): ParsedSourceImport[] {
   const normalized = normalizePath(relativePath);
   const parser = getParserForPath(normalized);

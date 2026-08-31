@@ -11,7 +11,8 @@ import { detectAstLanguage, getAst } from '../../source/ast.js';
 import type { AstLanguage, SyntaxNode, Tree } from '../../source/ast.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
 import { escapeRegex } from '../../source/primitives/regex-utils.js';
-import { listGlobMatches, matchesGlob } from '../../analysis/glob-match.js';
+import { listGlobMatches } from '../../analysis/glob-match.js';
+import { matchesPathGlob } from '../../domain/path-glob.js';
 
 /**
  * Coverage contracts close the "enumeration rot" defect class: a
@@ -89,7 +90,7 @@ export function coverageContractTouchedByDiff(
     case 'top-level-dirs':
       return [...changedFiles].some((file) => file === source.path || file.startsWith(`${source.path}/`));
     case 'file-glob':
-      return [...changedFiles].some((file) => matchesGlob(source.pattern, file));
+      return [...changedFiles].some((file) => matchesPathGlob(source.pattern, file));
     case 'registered-commands':
       return changedFiles.has('docs/COMMAND_REFERENCE.md');
     case 'builtin-skills':

@@ -119,6 +119,7 @@ export async function waitForRustAnalyzerDiagnosticsWithinDeadline(
   assertRustAnalyzerReadinessBudget(deadlineMs, now, 'during diagnostics');
 }
 
+// scip-query: ignore-wrapper — the delay must enforce the shared monotonic deadline before and after waiting.
 export async function waitForRustAnalyzerDelayWithinDeadline(
   delayMs: number,
   deadlineMs: number,

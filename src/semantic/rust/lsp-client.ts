@@ -171,6 +171,7 @@ export class RustAnalyzerLspClient {
     return result;
   }
 
+  // scip-query: ignore-wrapper — this typed LSP operation normalizes rust-analyzer's nullable response contract.
   async references(params: LspReferenceParams, opts: RustAnalyzerRequestOptions = {}): Promise<LspLocation[]> {
     const result = await this.request<LspLocation[] | null>('textDocument/references', params, opts);
     return Array.isArray(result) ? result : [];
@@ -188,6 +189,7 @@ export class RustAnalyzerLspClient {
     return normalizeDefinitionResult(result);
   }
 
+  // scip-query: ignore-wrapper — this typed LSP operation owns its method name and nullable-list normalization.
   async prepareCallHierarchy(
     params: LspTextDocumentPositionParams,
     opts: RustAnalyzerRequestOptions = {},
@@ -196,6 +198,7 @@ export class RustAnalyzerLspClient {
     return Array.isArray(result) ? result : [];
   }
 
+  // scip-query: ignore-wrapper — this typed LSP operation owns parameter shaping and nullable-list normalization.
   async outgoingCalls(
     item: LspCallHierarchyItem,
     opts: RustAnalyzerRequestOptions = {},

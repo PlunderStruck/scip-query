@@ -146,6 +146,7 @@ export function createTypeScriptIndexMailboxLane(
   });
 }
 
+// scip-query: ignore-similar — semantic and index lanes share the generic executor but own distinct protocols and status state.
 export function createTypeScriptSemanticMailboxLane(
   options: TypeScriptSemanticMailboxLaneOptions,
 ): TypeScriptMailboxWorkerLane<TypeScriptSemanticServiceStatus> {

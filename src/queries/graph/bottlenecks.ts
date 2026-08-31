@@ -88,6 +88,7 @@ export function bottlenecks(
     .slice(0, limit);
 }
 
+// scip-query: ignore-passthrough — public query name describes the coordination interpretation of bottleneck rows.
 export function coordinationHubs(
   db: ScipDatabase,
   opts: {

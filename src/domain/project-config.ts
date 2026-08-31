@@ -68,6 +68,7 @@ export function decodeProjectConfig(input: unknown): DecodedProjectConfig {
     : { kind: 'supported', sourceVersion: CURRENT_PROJECT_CONFIG_SCHEMA_VERSION, config, needsMigration };
 }
 
+// scip-query: ignore-wrapper — this is the schema migration boundary that preserves fields while replacing version metadata.
 export function currentProjectConfig(config: ProjectConfig | Record<string, unknown>): CurrentProjectConfig {
   const source = config as Record<string, unknown>;
   const { $schema, schemaVersion: _schemaVersion, ...fields } = source;
@@ -78,6 +79,7 @@ export function currentProjectConfig(config: ProjectConfig | Record<string, unkn
   } as CurrentProjectConfig;
 }
 
+// scip-query: ignore-wrapper — persisted config bytes require canonical schema metadata, indentation, and terminal newline.
 export function serializeCurrentProjectConfig(config: ProjectConfig | Record<string, unknown>): string {
   return `${JSON.stringify(currentProjectConfig(config), null, 2)}\n`;
 }

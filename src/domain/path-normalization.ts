@@ -12,6 +12,7 @@ export type ProjectFileFailure =
 export class UnsafeProjectPathError extends Error {
   readonly code = 'SCIP_QUERY_UNSAFE_PROJECT_PATH';
 
+  // scip-query: ignore-wrapper — the constructor owns the stable unsafe-path error identity and diagnostic contract.
   constructor(
     readonly relativePath: string,
     readonly reason: ProjectFileFailure,

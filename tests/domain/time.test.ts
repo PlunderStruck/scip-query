@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { monotonicDeadlineMs, monotonicRemainingMs } from '../../src/domain/time.js';
+import { boundedExponentialLoopDelayMs, monotonicDeadlineMs, monotonicRemainingMs } from '../../src/domain/time.js';
 
 describe('monotonic elapsed-time helpers', () => {
   it('derives deadlines and remaining duration only from the supplied monotonic source', () => {
@@ -17,5 +17,12 @@ describe('monotonic elapsed-time helpers', () => {
   it('clamps negative durations and expired deadlines', () => {
     expect(monotonicDeadlineMs(-10, () => 5)).toBe(5);
     expect(monotonicRemainingMs(4, () => 5)).toBe(0);
+  });
+
+  it('keeps busy polling responsive and bounds exponential idle backoff', () => {
+    expect(boundedExponentialLoopDelayMs(1, 20, 5, 50, 10_000, 8)).toBe(5);
+    expect(boundedExponentialLoopDelayMs(0, 1, 5, 50, 10_000, 8)).toBe(50);
+    expect(boundedExponentialLoopDelayMs(0, 4, 5, 50, 10_000, 8)).toBe(400);
+    expect(boundedExponentialLoopDelayMs(0, 100, 5, 50, 10_000, 8)).toBe(10_000);
   });
 });

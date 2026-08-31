@@ -43,6 +43,7 @@ export function affected(
 }
 
 /** Conservative reverse reference/caller closure; rows are possible impacts, not predicted failures. */
+// scip-query: ignore-passthrough — public compatibility name preserves the conservative possible-impact contract.
 export function possibleImpactClosure(
   db: ScipDatabase,
   symbolPattern: string,

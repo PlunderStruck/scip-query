@@ -8,7 +8,7 @@ import type { ProjectConfig, ScipQueryConfig, WatcherStatus } from '../domain/ty
 import { getIndexFreshness, type IndexFreshness } from './index-freshness.js';
 import type { GitWorktreeContext, GitWorktreeContextObservation } from '../platform/git-worktree.js';
 import { withProjectFileListingCache } from '../platform/project-file-inventory-context.js';
-import { publishedGenerationIdentity } from '../semantic/typescript/session-protocol.js';
+import { publishedSqliteGenerationIdentity } from '../storage/sqlite-generation.js';
 import { readSuppressionDir } from '../storage/suppression-store.js';
 import {
   prepareSharedGenerationForProject,
@@ -91,7 +91,7 @@ export function prepareWorktreeIndex(
     existsSync(paths.dbPath) &&
     opts.gitContext?.clean === false &&
     opts.watcherGeneration !== undefined &&
-    publishedGenerationIdentity(paths.dbPath) === opts.watcherGeneration
+    publishedSqliteGenerationIdentity(paths.dbPath) === opts.watcherGeneration
   ) {
     return publishFreshLocalGenerationForProject(projectRoot, config, paths, opts.gitContext);
   }

@@ -71,6 +71,7 @@ export function resultOnlyOption(): NonNullable<CommandDescriptor['options']>[nu
   return option('--result-only', 'Emit only the command-owned result (use with --json)');
 }
 
+// scip-query: ignore-passthrough — command-spec vocabulary preserves a stable compact-JSON option bundle.
 export function withCompactJsonOptions(
   options: NonNullable<CommandDescriptor['options']> = [],
 ): NonNullable<CommandDescriptor['options']> {

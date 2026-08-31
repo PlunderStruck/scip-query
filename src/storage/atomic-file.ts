@@ -120,6 +120,7 @@ export function replaceFileAtomic(
  * competing creators cannot replace one another and readers never observe a
  * partially written first version.
  */
+// scip-query: ignore-similar — hard-link publication guarantees exclusivity; replacement uses rename and different durability order.
 export function createFileAtomicExclusive(
   targetPath: string,
   bytes: string | Buffer,

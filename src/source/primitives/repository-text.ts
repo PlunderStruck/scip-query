@@ -67,6 +67,7 @@ export function repositoryProjectPaths(db: ScipDatabase): string[] {
 }
 
 /** Read one exact, safe in-project UTF-8 text file without compiler lookup. */
+// scip-query: ignore-wrapper — this boundary combines safe path resolution, bounded bytes, UTF-8 validation, and freshness.
 export function readRepositoryTextFile(db: ScipDatabase, candidatePath: string): RepositoryTextFile | null {
   const relativePath = normalizeSafeProjectRelativePath(candidatePath);
   let bytes: Buffer;

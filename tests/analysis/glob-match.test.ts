@@ -2,25 +2,26 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { globLiteralPrefix, listGlobMatches, matchesGlob } from '../../src/analysis/glob-match.js';
+import { globLiteralPrefix, listGlobMatches } from '../../src/analysis/glob-match.js';
+import { matchesPathGlob } from '../../src/domain/path-glob.js';
 
-describe('matchesGlob', () => {
+describe('matchesPathGlob', () => {
   it('matches immediate children with a trailing /*', () => {
-    expect(matchesGlob('skills/*', 'skills/scip-query')).toBe(true);
-    expect(matchesGlob('skills/*', 'skills/scip-query/SKILL.md')).toBe(false);
-    expect(matchesGlob('skills/*', 'other/scip-query')).toBe(false);
+    expect(matchesPathGlob('skills/*', 'skills/scip-query')).toBe(true);
+    expect(matchesPathGlob('skills/*', 'skills/scip-query/SKILL.md')).toBe(false);
+    expect(matchesPathGlob('skills/*', 'other/scip-query')).toBe(false);
   });
 
   it('matches any depth with a trailing /**', () => {
-    expect(matchesGlob('docs/plans/**', 'docs/plans')).toBe(true);
-    expect(matchesGlob('docs/plans/**', 'docs/plans/2026-07-01-plan.md')).toBe(true);
-    expect(matchesGlob('docs/plans/**', 'docs/plans/nested/deep/file.md')).toBe(true);
-    expect(matchesGlob('docs/plans/**', 'docs/other/file.md')).toBe(false);
+    expect(matchesPathGlob('docs/plans/**', 'docs/plans')).toBe(true);
+    expect(matchesPathGlob('docs/plans/**', 'docs/plans/2026-07-01-plan.md')).toBe(true);
+    expect(matchesPathGlob('docs/plans/**', 'docs/plans/nested/deep/file.md')).toBe(true);
+    expect(matchesPathGlob('docs/plans/**', 'docs/other/file.md')).toBe(false);
   });
 
   it('treats a plain pattern as an exact match', () => {
-    expect(matchesGlob('README.md', 'README.md')).toBe(true);
-    expect(matchesGlob('README.md', 'docs/README.md')).toBe(false);
+    expect(matchesPathGlob('README.md', 'README.md')).toBe(true);
+    expect(matchesPathGlob('README.md', 'docs/README.md')).toBe(false);
   });
 });
 

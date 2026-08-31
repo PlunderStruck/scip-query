@@ -6,7 +6,6 @@ import { isProcessAlive } from '../platform/process-liveness.js';
 import { resolve } from 'node:path';
 import {
   completeBoundedMailboxClaim,
-  initializeBoundedMailbox,
   pollBoundedMailboxRequests,
   readBoundedMailboxClaim,
   rejectBoundedMailboxClaim,
@@ -213,10 +212,6 @@ export class TypeScriptIndexServiceHost {
     this.sessionsCreated += 1;
     return active;
   }
-}
-
-export function initializeTypeScriptIndexMailbox(paths: TypeScriptIndexMailboxPaths): void {
-  initializeBoundedMailbox(paths);
 }
 
 export function processTypeScriptIndexMailbox(

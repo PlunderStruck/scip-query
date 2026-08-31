@@ -1089,6 +1089,7 @@ export function shouldUseRecursiveSourceWatch(platform: NodeJS.Platform, usePoll
 }
 
 export class RecursiveSourceWatchError extends Error {
+  // scip-query: ignore-passthrough — named error preserves recursive-watch failure identity and its original cause.
   constructor(message: string, cause?: unknown) {
     super(message, cause === undefined ? undefined : { cause });
     this.name = 'RecursiveSourceWatchError';

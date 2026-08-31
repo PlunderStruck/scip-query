@@ -1,5 +1,4 @@
 import type {
-  CausalCorridorObligation,
   CausalCorridorStatus,
   ExplorationFrontierGroup,
   ExplorationCausalCorridor,
@@ -10,6 +9,12 @@ import type {
   ProgramEdgeFamily,
   ProgramEdgeSemantic,
 } from './exploration-topology.js';
+
+interface CausalCorridorObligation {
+  kind: 'start' | 'outcome' | 'node' | 'edge' | 'frontier';
+  id: string;
+  reason: string;
+}
 
 export interface CausalCorridorAudit {
   status: CausalCorridorStatus;

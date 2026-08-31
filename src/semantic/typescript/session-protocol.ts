@@ -3,7 +3,6 @@ import { isStringOrNullRecord } from '../../domain/record-validation.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type { ProfileEnvironment } from '../../instrumentation/profile.js';
 import { stringArray } from '../../storage/evidence-payload.js';
-import { publishedSqliteGenerationIdentity } from '../../storage/sqlite-generation.js';
 import {
   BOUNDED_MAILBOX_VERSION,
   boundedMailboxOperationKey,
@@ -62,10 +61,6 @@ export function typeScriptSemanticMailboxPaths(cacheDir: string): TypeScriptSema
     ...paths,
     requestDir: paths.legacyRequestDir,
   };
-}
-
-export function publishedGenerationIdentity(dbPath: string): string | null {
-  return publishedSqliteGenerationIdentity(dbPath);
 }
 
 export function parseTypeScriptSemanticEnvelope(raw: string): TypeScriptSemanticMailboxEnvelope {

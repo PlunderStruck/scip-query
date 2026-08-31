@@ -610,6 +610,7 @@ export function fileContentsAtBase(
   return out;
 }
 
+// scip-query: ignore-passthrough — validation boundary intentionally hides normalization's returned representation.
 function validateProjectRelativePath(relativePath: string): void {
   normalizeSafeProjectRelativePath(relativePath);
 }

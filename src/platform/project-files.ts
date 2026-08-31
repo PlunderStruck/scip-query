@@ -250,6 +250,7 @@ export function readProjectFile(projectRoot: string, candidatePath: string, opts
  * fixed-size read buffer. Full bytes are materialized only when the file is
  * UTF-8 text containing the requested literal.
  */
+// scip-query: ignore-wrapper — the single-literal API preserves the optimized batch probe while returning a simpler contract.
 export function probeProjectFileBytes(
   projectRoot: string,
   candidatePath: string,

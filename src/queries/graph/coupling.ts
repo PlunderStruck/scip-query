@@ -33,6 +33,7 @@ export function coupling(db: ScipDatabase, file1: string, file2: string): Coupli
   };
 }
 
+// scip-query: ignore-passthrough — public compatibility name preserves the package API while coupling owns the implementation.
 export function sharedSymbolCoupling(db: ScipDatabase, file1: string, file2: string): CouplingResult {
   return coupling(db, file1, file2);
 }
@@ -84,6 +85,7 @@ export function topCoupling(db: ScipDatabase, opts: { limit?: number; scope?: st
     .map((r) => couplingResult(r.file1, r.file2, r.shared));
 }
 
+// scip-query: ignore-passthrough — public compatibility name preserves the package API while topCoupling owns the implementation.
 export function topSharedSymbolCoupling(
   db: ScipDatabase,
   opts: { limit?: number; scope?: string } = {},

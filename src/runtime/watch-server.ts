@@ -3,7 +3,7 @@ import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { sanitizeTerminalLine } from '../platform/terminal-output.js';
-import { monotonicNowMs } from '../domain/time.js';
+import { boundedExponentialLoopDelayMs, monotonicNowMs } from '../domain/time.js';
 import type { RefreshTrigger, WatcherStatus } from '../domain/types.js';
 import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
 import { resolveGitWorktreeIdentity } from '../platform/git-worktree.js';
@@ -18,12 +18,7 @@ import {
 import { loadProjectConfig, resolveWatchConfig } from './config.js';
 import { getIndexFreshness, getPublishedIndexFreshness, type IndexFreshnessState } from './index-freshness.js';
 import { Watcher, type WatcherStopResult } from './watch.js';
-import { initializeTypeScriptSemanticMailbox } from '../semantic/typescript/session-service.js';
-import {
-  publishedGenerationIdentity,
-  typeScriptSemanticMailboxPaths,
-} from '../semantic/typescript/session-protocol.js';
-import { initializeTypeScriptIndexMailbox } from '../reindex/typescript-index-service.js';
+import { typeScriptSemanticMailboxPaths } from '../semantic/typescript/session-protocol.js';
 import { typeScriptIndexMailboxPaths } from '../reindex/typescript-index-protocol.js';
 import { readReindexActivitySummary, recordSuppressedReindexActivity } from '../reindex/reindex-activity.js';
 import {
@@ -36,7 +31,8 @@ import {
 } from './watch-service.js';
 import { maybeSweepRepositoryCache, DEFAULT_REPOSITORY_SWEEP_INTERVAL_MS } from './repository-cache-lifecycle.js';
 import { WatchRefreshCoordinator } from './watch-refresh-coordinator.js';
-import { maintainBoundedMailbox } from '../storage/bounded-mailbox.js';
+import { initializeBoundedMailbox, maintainBoundedMailbox } from '../storage/bounded-mailbox.js';
+import { publishedSqliteGenerationIdentity } from '../storage/sqlite-generation.js';
 import { createTypeScriptIndexMailboxLane, createTypeScriptSemanticMailboxLane } from './typescript-mailbox-lanes.js';
 
 const HEARTBEAT_INTERVAL_MS = 2_000;
@@ -48,9 +44,14 @@ const IDLE_SERVICE_LOOP_INTERVAL_MS = 50;
 const MAX_IDLE_SERVICE_LOOP_INTERVAL_MS = 10_000;
 
 export function watchServiceLoopDelayMs(processedRequests: number, consecutiveIdlePolls = 1): number {
-  if (processedRequests > 0) return BUSY_SERVICE_LOOP_INTERVAL_MS;
-  const exponent = Math.max(0, Math.min(8, consecutiveIdlePolls - 1));
-  return Math.min(MAX_IDLE_SERVICE_LOOP_INTERVAL_MS, IDLE_SERVICE_LOOP_INTERVAL_MS * 2 ** exponent);
+  return boundedExponentialLoopDelayMs(
+    processedRequests,
+    consecutiveIdlePolls,
+    BUSY_SERVICE_LOOP_INTERVAL_MS,
+    IDLE_SERVICE_LOOP_INTERVAL_MS,
+    MAX_IDLE_SERVICE_LOOP_INTERVAL_MS,
+    8,
+  );
 }
 
 export { createPathChangeWake } from '../platform/path-change-wake.js';
@@ -144,6 +145,234 @@ export function startupRefreshTrigger(state: IndexFreshnessState): RefreshTrigge
   return state === 'fresh' ? null : { kind: 'watch-startup', detail: `index ${state} when watch service started` };
 }
 
+function writeCurrentWatchServiceState(input: {
+  statePath: string;
+  durability: 'durable' | 'visibility';
+  processIdentity: ReturnType<typeof readProcessIdentity>;
+  projectRoot: string;
+  worktreeId: string | undefined;
+  cliVersion: string;
+  startedAtMs: number;
+  nowMs: number;
+  lastActivityAtMs: number;
+  idleTimeoutMs: number;
+  watcherStatus: WatcherStatus;
+  indexGeneration: string | undefined;
+  lastRefresh: WatchServiceState['lastRefresh'];
+  lastError: WatchServiceState['lastError'];
+  reindexActivity: WatchServiceState['reindexActivity'];
+  refreshCoordinator: WatchRefreshCoordinator;
+  semanticLane: Pick<ReturnType<typeof createTypeScriptSemanticMailboxLane>, 'status'>;
+  indexLane: Pick<ReturnType<typeof createTypeScriptIndexMailboxLane>, 'status'>;
+  semanticBusyUntilMs: number | undefined;
+  indexBusyUntilMs: number | undefined;
+}): void {
+  writeWatchServiceState(
+    input.statePath,
+    {
+      version: 1,
+      protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION,
+      pid: process.pid,
+      ...(input.processIdentity ? { processIdentity: input.processIdentity } : {}),
+      projectRoot: input.projectRoot,
+      ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
+      cliVersion: input.cliVersion,
+      startedAt: new Date(input.startedAtMs).toISOString(),
+      heartbeatAt: new Date(input.nowMs).toISOString(),
+      lastActivityAt: new Date(input.lastActivityAtMs).toISOString(),
+      ...(input.idleTimeoutMs === 0
+        ? {}
+        : { idleDeadlineAt: new Date(input.lastActivityAtMs + input.idleTimeoutMs).toISOString() }),
+      watcher: input.watcherStatus,
+      ...(input.watcherStatus.state === 'idle' && input.indexGeneration
+        ? { indexGeneration: input.indexGeneration }
+        : {}),
+      ...(input.lastRefresh ? { lastRefresh: input.lastRefresh } : {}),
+      ...(input.lastError ? { lastError: input.lastError } : {}),
+      reindexActivity: input.reindexActivity,
+      refreshRequests: input.refreshCoordinator.status(),
+      typescriptSemantic: {
+        ...input.semanticLane.status(),
+        ...(input.semanticBusyUntilMs === undefined
+          ? {}
+          : { busyUntil: new Date(input.semanticBusyUntilMs).toISOString() }),
+      },
+      typescriptIndex: {
+        ...input.indexLane.status(),
+        ...(input.indexBusyUntilMs === undefined ? {} : { busyUntil: new Date(input.indexBusyUntilMs).toISOString() }),
+      },
+    },
+    { durability: input.durability },
+  );
+}
+
+function createWatchServiceMaintenance(input: {
+  worktreeLiveness: ReturnType<typeof captureWorktreeLivenessIdentity>;
+  indexMailboxPaths: ReturnType<typeof typeScriptIndexMailboxPaths>;
+  semanticMailboxPaths: ReturnType<typeof typeScriptSemanticMailboxPaths>;
+  projectRoot: string;
+  cliVersion: string;
+  activityPath: string;
+  refreshCoordinator: WatchRefreshCoordinator;
+  watcherStatus(): WatcherStatus;
+  requestRefresh(detail: string): void;
+  requestStop(): void;
+  recordActivity(): void;
+  updateObservedActivity(atMs: number, monotonicMs: number): void;
+  persistState(force?: boolean, durability?: 'durable' | 'visibility'): void;
+}): WatchServiceLoopIterationRuntime['afterMailboxPoll'] {
+  let lastRefreshRequestAtMs = 0;
+  let lastActivityPollAtMonotonicMs = Number.NEGATIVE_INFINITY;
+  let lastWorktreeLivenessPollAtMonotonicMs = Number.NEGATIVE_INFINITY;
+  let lastCacheSweepAtMonotonicMs = Number.NEGATIVE_INFINITY;
+  let lastMailboxMaintenanceAtMonotonicMs = Number.NEGATIVE_INFINITY;
+
+  return ({ processedRequests }): void => {
+    const nowMonotonicMs = monotonicNowMs();
+    if (nowMonotonicMs - lastWorktreeLivenessPollAtMonotonicMs >= WORKTREE_LIVENESS_POLL_INTERVAL_MS) {
+      lastWorktreeLivenessPollAtMonotonicMs = nowMonotonicMs;
+      if (!worktreeLivenessIdentityIsCurrent(input.worktreeLiveness)) {
+        input.requestStop();
+        return;
+      }
+    }
+    if (nowMonotonicMs - lastMailboxMaintenanceAtMonotonicMs >= MAILBOX_MAINTENANCE_INTERVAL_MS) {
+      lastMailboxMaintenanceAtMonotonicMs = nowMonotonicMs;
+      maintainBoundedMailbox(input.indexMailboxPaths);
+      maintainBoundedMailbox(input.semanticMailboxPaths);
+    }
+    if (nowMonotonicMs - lastCacheSweepAtMonotonicMs >= DEFAULT_REPOSITORY_SWEEP_INTERVAL_MS) {
+      lastCacheSweepAtMonotonicMs = nowMonotonicMs;
+      maybeSweepRepositoryCache(input.projectRoot, input.cliVersion);
+    }
+    if (nowMonotonicMs - lastActivityPollAtMonotonicMs >= ACTIVITY_POLL_INTERVAL_MS) {
+      lastActivityPollAtMonotonicMs = nowMonotonicMs;
+      const activity = readWatchServiceActivity(input.activityPath);
+      if (activity) input.updateObservedActivity(activity.atMs, nowMonotonicMs);
+      if (activity?.refreshRequestedAtMs !== undefined && activity.refreshRequestedAtMs > lastRefreshRequestAtMs) {
+        lastRefreshRequestAtMs = activity.refreshRequestedAtMs;
+        input.refreshCoordinator.observeLegacyRequest(
+          activity.refreshRequestedAtMs,
+          activity.refreshDetail ?? 'stale index observed by a legacy command',
+        );
+      }
+    }
+    input.refreshCoordinator.poll(input.watcherStatus(), (detail) => {
+      input.recordActivity();
+      input.requestRefresh(detail);
+    });
+    if (processedRequests > 0) {
+      input.recordActivity();
+      input.persistState(true, 'visibility');
+    }
+    input.persistState();
+  };
+}
+
+async function runWatchServiceLifecycle(input: {
+  watcher: Watcher;
+  shutdown: WatchServiceShutdown;
+  stopSignal(): void;
+  initializeFreshness(): RefreshTrigger | null;
+  markReady(): void;
+  recordActivity(): void;
+  persistState(force?: boolean, durability?: 'durable' | 'visibility'): void;
+  requestRefresh(trigger: RefreshTrigger): void;
+  stopRequested(): boolean;
+  processIndexRequests(): number;
+  processSemanticRequests(): number;
+  afterMailboxPoll: WatchServiceLoopIterationRuntime['afterMailboxPoll'];
+  shouldStop(): boolean;
+  wait(durationMs: number): Promise<void>;
+  closeLanes(): Promise<void>;
+  mailboxFatalError(): Error | undefined;
+  finalizeStopped(): void;
+  finalizeDegraded(reasons: readonly string[]): Error;
+}): Promise<void> {
+  let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+  let consecutiveIdleMailboxPolls = 0;
+  let executionFailed = false;
+  let executionError: unknown;
+  let shutdownError: Error | undefined;
+  process.once('SIGINT', input.stopSignal);
+  process.once('SIGTERM', input.stopSignal);
+  try {
+    input.watcher.start();
+    const startupTrigger = input.initializeFreshness();
+    input.recordActivity();
+    input.markReady();
+    input.persistState(true);
+    heartbeatTimer = setInterval(() => input.persistState(), HEARTBEAT_INTERVAL_MS);
+    heartbeatTimer.unref?.();
+    if (startupTrigger) input.requestRefresh(startupTrigger);
+
+    while (!input.stopRequested()) {
+      const iteration = await runWatchServiceLoopIteration(consecutiveIdleMailboxPolls, {
+        processIndexRequests: input.processIndexRequests,
+        processSemanticRequests: input.processSemanticRequests,
+        afterMailboxPoll: input.afterMailboxPoll,
+        shouldStop: input.shouldStop,
+        wait: input.wait,
+      });
+      consecutiveIdleMailboxPolls = iteration.consecutiveIdlePolls;
+      if (iteration.stopped) break;
+    }
+  } catch (error) {
+    executionFailed = true;
+    executionError = error;
+  } finally {
+    process.off('SIGINT', input.stopSignal);
+    process.off('SIGTERM', input.stopSignal);
+    if (heartbeatTimer !== undefined) clearInterval(heartbeatTimer);
+    const watcherStop = input.shutdown.begin();
+    await input.closeLanes();
+    const stopResult = await watcherStop;
+    if (stopResult.state === 'stopped') input.finalizeStopped();
+    else shutdownError = input.finalizeDegraded(stopResult.reasons);
+  }
+  const mailboxFatalError = input.mailboxFatalError();
+  if (!executionFailed && mailboxFatalError) {
+    executionFailed = true;
+    executionError = mailboxFatalError;
+  }
+  if (executionFailed && shutdownError) {
+    throw new AggregateError([executionError, shutdownError], 'Watch service execution and shutdown both failed.');
+  }
+  if (executionFailed) throw executionError;
+  if (shutdownError) throw shutdownError;
+}
+
+function createWatchServiceMailboxLanes(input: {
+  semanticPaths: ReturnType<typeof typeScriptSemanticMailboxPaths>;
+  indexPaths: ReturnType<typeof typeScriptIndexMailboxPaths>;
+  projectRoot: string;
+  dbPath: string;
+  config: ReturnType<typeof loadProjectConfig>;
+  onSemanticBusy(deadlineAtMs: number | undefined): void;
+  onIndexBusy(deadlineAtMs: number | undefined): void;
+  onFatal(error: Error): void;
+}) {
+  const semanticLane = createTypeScriptSemanticMailboxLane({
+    paths: input.semanticPaths,
+    projectRoot: input.projectRoot,
+    onBusy: input.onSemanticBusy,
+    onFatal: input.onFatal,
+  });
+  const typescript = input.config.indexer?.typescript;
+  const indexLane = createTypeScriptIndexMailboxLane({
+    paths: input.indexPaths,
+    projectRoot: input.projectRoot,
+    dbPath: input.dbPath,
+    ...(typescript?.maxWarmSessions === undefined ? {} : { maxActiveSessions: typescript.maxWarmSessions }),
+    ...(typescript?.workerIdleMs === undefined ? {} : { workerIdleMs: typescript.workerIdleMs }),
+    ...(typescript?.workerSoftMemoryMb === undefined ? {} : { workerSoftMemoryMb: typescript.workerSoftMemoryMb }),
+    ...(typescript?.workerHeapMb === undefined ? {} : { workerHeapMb: typescript.workerHeapMb }),
+    onBusy: input.onIndexBusy,
+    onFatal: input.onFatal,
+  });
+  return { semanticLane, indexLane };
+}
+
 // scip-query: ignore-extract — reviewed E1 workflow owner; watcher lifecycle, refresh ordering, and failure recovery stay together.
 export async function runWatchServiceServer(
   projectRootInput: string,
@@ -187,19 +416,13 @@ export async function runWatchServiceServer(
   let reindexActivity = readReindexActivitySummary(indexPaths.dbPath);
   let stopping = false;
   let ready = false;
-  let lastRefreshRequestAtMs = 0;
   let lastHeartbeatAtMonotonicMs = Number.NEGATIVE_INFINITY;
-  let lastActivityPollAtMonotonicMs = Number.NEGATIVE_INFINITY;
-  let lastWorktreeLivenessPollAtMonotonicMs = Number.NEGATIVE_INFINITY;
-  let lastCacheSweepAtMonotonicMs = Number.NEGATIVE_INFINITY;
-  let lastMailboxMaintenanceAtMonotonicMs = Number.NEGATIVE_INFINITY;
   let semanticBusyUntilMs: number | undefined;
   let indexBusyUntilMs: number | undefined;
-  let consecutiveIdleMailboxPolls = 0;
   const semanticMailboxPaths = typeScriptSemanticMailboxPaths(indexPaths.cacheDir);
   const indexMailboxPaths = typeScriptIndexMailboxPaths(indexPaths.cacheDir);
-  initializeTypeScriptSemanticMailbox(semanticMailboxPaths);
-  initializeTypeScriptIndexMailbox(indexMailboxPaths);
+  initializeBoundedMailbox(semanticMailboxPaths);
+  initializeBoundedMailbox(indexMailboxPaths);
   const mailboxWake = createPathChangeWake([
     indexMailboxPaths.pendingDir,
     indexMailboxPaths.legacyRequestDir,
@@ -207,7 +430,6 @@ export async function runWatchServiceServer(
     semanticMailboxPaths.legacyRequestDir,
     servicePaths.refreshRequestsPath,
   ]);
-  let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
   const persistState = (
     force = false,
@@ -218,39 +440,28 @@ export async function runWatchServiceServer(
     const nowMonotonicMs = monotonicNowMs();
     if (!force && nowMonotonicMs - lastHeartbeatAtMonotonicMs < HEARTBEAT_INTERVAL_MS) return;
     lastHeartbeatAtMonotonicMs = nowMonotonicMs;
-    writeWatchServiceState(
-      servicePaths.statePath,
-      {
-        version: 1,
-        protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION,
-        pid: process.pid,
-        ...(processIdentity ? { processIdentity } : {}),
-        projectRoot,
-        ...(serviceIdentity.worktreeId ? { worktreeId: serviceIdentity.worktreeId } : {}),
-        cliVersion,
-        startedAt: new Date(startedAtMs).toISOString(),
-        heartbeatAt: new Date(nowMs).toISOString(),
-        lastActivityAt: new Date(lastActivityAtMs).toISOString(),
-        ...(watchConfig.idleTimeoutMs === 0
-          ? {}
-          : { idleDeadlineAt: new Date(lastActivityAtMs + watchConfig.idleTimeoutMs).toISOString() }),
-        watcher: watcherStatus,
-        ...(watcherStatus.state === 'idle' && indexGeneration ? { indexGeneration } : {}),
-        ...(lastRefresh ? { lastRefresh } : {}),
-        ...(lastError ? { lastError } : {}),
-        reindexActivity,
-        refreshRequests: refreshCoordinator.status(),
-        typescriptSemantic: {
-          ...semanticLane.status(),
-          ...(semanticBusyUntilMs === undefined ? {} : { busyUntil: new Date(semanticBusyUntilMs).toISOString() }),
-        },
-        typescriptIndex: {
-          ...indexLane.status(),
-          ...(indexBusyUntilMs === undefined ? {} : { busyUntil: new Date(indexBusyUntilMs).toISOString() }),
-        },
-      },
-      { durability },
-    );
+    writeCurrentWatchServiceState({
+      statePath: servicePaths.statePath,
+      durability,
+      processIdentity,
+      projectRoot,
+      worktreeId: serviceIdentity.worktreeId,
+      cliVersion,
+      startedAtMs,
+      nowMs,
+      lastActivityAtMs,
+      idleTimeoutMs: watchConfig.idleTimeoutMs,
+      watcherStatus,
+      indexGeneration,
+      lastRefresh,
+      lastError,
+      reindexActivity,
+      refreshCoordinator,
+      semanticLane,
+      indexLane,
+      semanticBusyUntilMs,
+      indexBusyUntilMs,
+    });
   };
 
   const recordActivity = (): void => {
@@ -264,32 +475,17 @@ export async function runWatchServiceServer(
     lastError = { at: new Date().toISOString(), message: error.message };
     persistState(true, 'visibility');
   };
-  const semanticLane = createTypeScriptSemanticMailboxLane({
-    paths: semanticMailboxPaths,
+  const { semanticLane, indexLane } = createWatchServiceMailboxLanes({
+    semanticPaths: semanticMailboxPaths,
+    indexPaths: indexMailboxPaths,
     projectRoot,
-    onBusy(deadlineAtMs) {
+    dbPath: indexPaths.dbPath,
+    config,
+    onSemanticBusy(deadlineAtMs) {
       semanticBusyUntilMs = deadlineAtMs === undefined ? undefined : deadlineAtMs + 5_000;
       persistState(true, 'visibility');
     },
-    onFatal: recordMailboxFatal,
-  });
-  const indexLane = createTypeScriptIndexMailboxLane({
-    paths: indexMailboxPaths,
-    projectRoot,
-    dbPath: indexPaths.dbPath,
-    ...(config.indexer?.typescript?.maxWarmSessions === undefined
-      ? {}
-      : { maxActiveSessions: config.indexer.typescript.maxWarmSessions }),
-    ...(config.indexer?.typescript?.workerIdleMs === undefined
-      ? {}
-      : { workerIdleMs: config.indexer.typescript.workerIdleMs }),
-    ...(config.indexer?.typescript?.workerSoftMemoryMb === undefined
-      ? {}
-      : { workerSoftMemoryMb: config.indexer.typescript.workerSoftMemoryMb }),
-    ...(config.indexer?.typescript?.workerHeapMb === undefined
-      ? {}
-      : { workerHeapMb: config.indexer.typescript.workerHeapMb }),
-    onBusy(deadlineAtMs) {
+    onIndexBusy(deadlineAtMs) {
       indexBusyUntilMs = deadlineAtMs === undefined ? undefined : deadlineAtMs + 5_000;
       persistState(true, 'visibility');
     },
@@ -315,7 +511,7 @@ export async function runWatchServiceServer(
           : getPublishedIndexFreshness(indexPaths);
       lastRefresh = freshness.lastRefresh;
       indexGeneration =
-        freshness.state === 'fresh' ? (publishedGenerationIdentity(indexPaths.dbPath) ?? undefined) : undefined;
+        freshness.state === 'fresh' ? (publishedSqliteGenerationIdentity(indexPaths.dbPath) ?? undefined) : undefined;
       reindexActivity = readReindexActivitySummary(indexPaths.dbPath);
       refreshCoordinator.completeActive();
       lastError = undefined;
@@ -355,128 +551,78 @@ export async function runWatchServiceServer(
   const stop = (): void => {
     void shutdown.begin();
   };
-  process.once('SIGINT', stop);
-  process.once('SIGTERM', stop);
-
-  let executionFailed = false;
-  let executionError: unknown;
-  let shutdownError: Error | undefined;
-  try {
-    watcher.start();
-    const freshness = getIndexFreshness(projectRoot, config, indexPaths);
-    lastRefresh = freshness.lastRefresh;
-    indexGeneration =
-      freshness.state === 'fresh' ? (publishedGenerationIdentity(indexPaths.dbPath) ?? undefined) : undefined;
-    const startupTrigger = startupRefreshTrigger(freshness.state);
-    recordActivity();
-    ready = true;
-    persistState(true);
-    heartbeatTimer = setInterval(() => persistState(), HEARTBEAT_INTERVAL_MS);
-    heartbeatTimer.unref?.();
-    // Advertise a live TypeScript index mailbox before the first refresh so
-    // the reindex worker can emit incrementally instead of falling back to
-    // scip-typescript because the watch state file does not exist yet.
-    if (startupTrigger) watcher.requestRefresh(startupTrigger, { immediate: true });
-
-    while (!stopping) {
-      const iteration = await runWatchServiceLoopIteration(consecutiveIdleMailboxPolls, {
-        processIndexRequests: () => indexLane.poll(),
-        processSemanticRequests: () => semanticLane.poll(),
-        afterMailboxPoll: ({ processedRequests }) => {
-          const nowMonotonicMs = monotonicNowMs();
-          if (nowMonotonicMs - lastWorktreeLivenessPollAtMonotonicMs >= WORKTREE_LIVENESS_POLL_INTERVAL_MS) {
-            lastWorktreeLivenessPollAtMonotonicMs = nowMonotonicMs;
-            if (!worktreeLivenessIdentityIsCurrent(worktreeLiveness)) {
-              stopping = true;
-              return;
-            }
-          }
-          if (nowMonotonicMs - lastMailboxMaintenanceAtMonotonicMs >= MAILBOX_MAINTENANCE_INTERVAL_MS) {
-            lastMailboxMaintenanceAtMonotonicMs = nowMonotonicMs;
-            maintainBoundedMailbox(indexMailboxPaths);
-            maintainBoundedMailbox(semanticMailboxPaths);
-          }
-          if (nowMonotonicMs - lastCacheSweepAtMonotonicMs >= DEFAULT_REPOSITORY_SWEEP_INTERVAL_MS) {
-            lastCacheSweepAtMonotonicMs = nowMonotonicMs;
-            maybeSweepRepositoryCache(projectRoot, cliVersion);
-          }
-          if (nowMonotonicMs - lastActivityPollAtMonotonicMs >= ACTIVITY_POLL_INTERVAL_MS) {
-            lastActivityPollAtMonotonicMs = nowMonotonicMs;
-            const activity = readWatchServiceActivity(servicePaths.activityPath);
-            if (activity && activity.atMs > lastActivityAtMs) {
-              lastActivityAtMs = activity.atMs;
-              lastActivityAtMonotonicMs = nowMonotonicMs;
-            }
-            if (
-              activity?.refreshRequestedAtMs !== undefined &&
-              activity.refreshRequestedAtMs > lastRefreshRequestAtMs
-            ) {
-              lastRefreshRequestAtMs = activity.refreshRequestedAtMs;
-              refreshCoordinator.observeLegacyRequest(
-                activity.refreshRequestedAtMs,
-                activity.refreshDetail ?? 'stale index observed by a legacy command',
-              );
-            }
-          }
-          refreshCoordinator.poll(watcherStatus, (detail) => {
-            recordActivity();
-            watcher.requestRefresh({ kind: 'watch-demand', detail }, { immediate: true });
-          });
-          if (processedRequests > 0) {
-            recordActivity();
-            persistState(true, 'visibility');
-          }
-          persistState();
-        },
-        shouldStop: () =>
-          stopping ||
-          mailboxFatalError !== undefined ||
-          shouldStopWatchServiceForIdle({
-            watcher: watcherStatus,
-            lastActivityAtMs: lastActivityAtMonotonicMs,
-            nowMs: monotonicNowMs(),
-            idleTimeoutMs: watchConfig.idleTimeoutMs,
-          }),
-        wait: (durationMs) => mailboxWake.wait(durationMs),
-      });
-      consecutiveIdleMailboxPolls = iteration.consecutiveIdlePolls;
-      if (iteration.stopped) break;
-    }
-  } catch (error) {
-    executionFailed = true;
-    executionError = error;
-  } finally {
-    process.off('SIGINT', stop);
-    process.off('SIGTERM', stop);
-    if (heartbeatTimer !== undefined) clearInterval(heartbeatTimer);
-    const watcherStop = shutdown.begin();
-    await Promise.all([
-      semanticLane.close('TypeScript semantic service stopped before completing the request.'),
-      indexLane.close('TypeScript index service stopped before completing the request.'),
-    ]);
-    const stopResult = await watcherStop;
-    if (stopResult.state === 'stopped') {
+  const afterMailboxPoll = createWatchServiceMaintenance({
+    worktreeLiveness,
+    indexMailboxPaths,
+    semanticMailboxPaths,
+    projectRoot,
+    cliVersion,
+    activityPath: servicePaths.activityPath,
+    refreshCoordinator,
+    watcherStatus: () => watcherStatus,
+    requestRefresh: (detail) => watcher.requestRefresh({ kind: 'watch-demand', detail }, { immediate: true }),
+    requestStop: () => {
+      stopping = true;
+    },
+    recordActivity,
+    updateObservedActivity(atMs, monotonicMs) {
+      if (atMs <= lastActivityAtMs) return;
+      lastActivityAtMs = atMs;
+      lastActivityAtMonotonicMs = monotonicMs;
+    },
+    persistState,
+  });
+  await runWatchServiceLifecycle({
+    watcher,
+    shutdown,
+    stopSignal: stop,
+    initializeFreshness() {
+      const freshness = getIndexFreshness(projectRoot, config, indexPaths);
+      lastRefresh = freshness.lastRefresh;
+      indexGeneration =
+        freshness.state === 'fresh' ? (publishedSqliteGenerationIdentity(indexPaths.dbPath) ?? undefined) : undefined;
+      return startupRefreshTrigger(freshness.state);
+    },
+    markReady: () => {
+      ready = true;
+    },
+    recordActivity,
+    persistState,
+    requestRefresh: (trigger) => watcher.requestRefresh(trigger, { immediate: true }),
+    stopRequested: () => stopping,
+    processIndexRequests: () => indexLane.poll(),
+    processSemanticRequests: () => semanticLane.poll(),
+    afterMailboxPoll,
+    shouldStop: () =>
+      stopping ||
+      mailboxFatalError !== undefined ||
+      shouldStopWatchServiceForIdle({
+        watcher: watcherStatus,
+        lastActivityAtMs: lastActivityAtMonotonicMs,
+        nowMs: monotonicNowMs(),
+        idleTimeoutMs: watchConfig.idleTimeoutMs,
+      }),
+    wait: (durationMs) => mailboxWake.wait(durationMs),
+    closeLanes: () =>
+      Promise.all([
+        semanticLane.close('TypeScript semantic service stopped before completing the request.'),
+        indexLane.close('TypeScript index service stopped before completing the request.'),
+      ]).then(() => undefined),
+    mailboxFatalError: () => mailboxFatalError,
+    finalizeStopped() {
       rmSync(servicePaths.statePath, { force: true });
       rmSync(servicePaths.activityPath, { force: true });
       lock.release();
-    } else {
+    },
+    finalizeDegraded(reasons) {
       lastError = {
         at: new Date().toISOString(),
-        message: `Watch service shutdown is degraded: ${stopResult.reasons.join('; ')}`,
+        message: `Watch service shutdown is degraded: ${reasons.join('; ')}`,
       };
       persistState(true);
-      shutdownError = new Error(lastError.message);
-    }
-  }
-  if (!executionFailed && mailboxFatalError) {
-    executionFailed = true;
-    executionError = mailboxFatalError;
-  }
-  if (executionFailed && shutdownError) {
-    throw new AggregateError([executionError, shutdownError], 'Watch service execution and shutdown both failed.');
-  }
-  if (executionFailed) throw executionError;
-  if (shutdownError) throw shutdownError;
+      return new Error(lastError.message);
+    },
+  });
 }
 
 function resolveCurrentGitControlDirectory(projectRoot: string, expectedWorktreeId: string): string {

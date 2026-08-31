@@ -88,6 +88,7 @@ export function hierarchy(db: ScipDatabase, symbolPattern: string): HierarchyNod
 }
 
 /** Name-preserving projection of lexical/compiler ownership, not type inheritance. */
+// scip-query: ignore-passthrough — public name states that this projection is ownership rather than inheritance.
 export function ownershipChain(db: ScipDatabase, symbolPattern: string): HierarchyNode[] {
   return hierarchy(db, symbolPattern);
 }

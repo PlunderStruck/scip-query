@@ -78,6 +78,7 @@ export class FileRevisionConflictError extends Error {
 
 /** A three-way domain merge found two different edits to the same owned field. */
 export class FileContentConflictError extends Error {
+  // scip-query: ignore-wrapper — the constructor owns the stable concurrent-field conflict identity and diagnostic.
   constructor(
     readonly path: string,
     readonly field: string,

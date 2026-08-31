@@ -2,20 +2,6 @@ import { readdirSync, type Dirent } from 'node:fs';
 import { join } from 'node:path';
 import { matchesPathGlob } from '../domain/path-glob.js';
 
-/**
- * Minimal glob matcher for project-relative paths.
- *
- * Deliberately narrow: only supports a literal path prefix followed by
- * exactly one trailing `*` (immediate children) or `**` (any depth,
- * including the prefix directory itself). That covers every config surface
- * that needs a glob today — coverage-contract `file-glob` sources
- * (`skills/*`) and `docs.snapshotPaths` (`docs/plans/**`) — without pulling
- * in a general-purpose glob dependency for patterns nothing uses.
- */
-export function matchesGlob(pattern: string, relativePath: string): boolean {
-  return matchesPathGlob(pattern, relativePath);
-}
-
 /** The literal (non-glob) directory prefix — the safe root for an fs walk. */
 export function globLiteralPrefix(pattern: string): string {
   return normalize(pattern).replace(/\/\*\*?$/, '');
@@ -42,7 +28,7 @@ export function listGlobMatches(projectRoot: string, pattern: string): string[] 
     for (const entry of entries) {
       if (entry.name.startsWith('.')) continue;
       const rel = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-      if (matchesGlob(normalizedPattern, rel)) results.push(rel);
+      if (matchesPathGlob(normalizedPattern, rel)) results.push(rel);
       if (recursive && entry.isDirectory()) walk(join(absoluteDir, entry.name), rel);
     }
   };

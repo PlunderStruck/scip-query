@@ -253,12 +253,6 @@ export interface CausalCorridorCoverage {
   unresolvedEdges: number;
 }
 
-export interface CausalCorridorObligation {
-  kind: 'start' | 'outcome' | 'node' | 'edge' | 'frontier';
-  id: string;
-  reason: string;
-}
-
 /**
  * A causal corridor is the proved subgraph from explicit anchors to mechanical
  * outcomes, closed over the facts required to interpret that path without

@@ -19,18 +19,18 @@ import { WATCH_SERVICE_PROTOCOL_VERSION } from '../../../src/platform/watch-serv
 import { writeWatchServiceState } from '../../../src/runtime/watch-service.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { writeJsonAtomic } from '../../../src/storage/atomic-json.js';
+import { initializeBoundedMailbox } from '../../../src/storage/bounded-mailbox.js';
+import { publishedSqliteGenerationIdentity } from '../../../src/storage/sqlite-generation.js';
 import type { SemanticProvider } from '../../../src/semantic/types.js';
 import type { IndexedDefinition } from '../../../src/domain/types.js';
 import { TypeScriptSemanticHost } from '../../../src/semantic/typescript/session-host.js';
 import {
-  initializeTypeScriptSemanticMailbox,
   processTypeScriptSemanticMailbox,
   TypeScriptSemanticServiceHost,
 } from '../../../src/semantic/typescript/session-service.js';
 import {
   TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
   TYPESCRIPT_SEMANTIC_LEGACY_PROTOCOL_VERSION,
-  publishedGenerationIdentity,
   typeScriptSemanticMailboxPaths,
 } from '../../../src/semantic/typescript/session-protocol.js';
 import {
@@ -90,7 +90,7 @@ describe('TypeScript semantic service mailbox', () => {
       now: () => NOW,
     });
     const paths = typeScriptSemanticMailboxPaths(fixture.projectRoot);
-    initializeTypeScriptSemanticMailbox(paths);
+    initializeBoundedMailbox(paths);
 
     writeRequest(paths.requestDir, 'first', generation, { kind: 'availability' });
     expect(processTypeScriptSemanticMailbox(paths, service, { nowMs: NOW })).toBe(1);
@@ -130,7 +130,7 @@ describe('TypeScript semantic service mailbox', () => {
       now: () => NOW,
     });
     const paths = typeScriptSemanticMailboxPaths(fixture.projectRoot);
-    initializeTypeScriptSemanticMailbox(paths);
+    initializeBoundedMailbox(paths);
     writeRequest(paths.requestDir, 'expired', 'current', { kind: 'availability' }, NOW - 1);
     writeFileSync(join(paths.requestDir, 'malformed.json'), '{');
     writeRequest(paths.requestDir, 'wrong', 'old', { kind: 'availability' });
@@ -163,7 +163,7 @@ describe('TypeScript semantic service mailbox', () => {
       now: () => NOW,
     });
     const paths = typeScriptSemanticMailboxPaths(fixture.projectRoot);
-    initializeTypeScriptSemanticMailbox(paths);
+    initializeBoundedMailbox(paths);
     writeRequest(paths.requestDir, 'first', 'current', { kind: 'availability' }, NOW + 1_000);
     writeRequest(paths.requestDir, 'second', 'current', { kind: 'availability' }, NOW + 1_000);
     let currentTime = NOW;
@@ -196,7 +196,7 @@ describe('TypeScript semantic service mailbox', () => {
     const db = fixture.openDb(projectAlias);
     const paths = typeScriptSemanticMailboxPaths(fixture.projectRoot);
     const statePath = join(fixture.projectRoot, 'watch-state.json');
-    const generation = publishedGenerationIdentity(db.config.dbPath)!;
+    const generation = publishedSqliteGenerationIdentity(db.config.dbPath)!;
     const service = new TypeScriptSemanticServiceHost({
       openDb: fixture.openDb,
       createHost: fakeSemanticHost,

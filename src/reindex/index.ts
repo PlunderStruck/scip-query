@@ -344,114 +344,9 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
           `reused ${reusedFingerprintCount} accepted file fingerprint(s), and accepted ${fingerprint.files.length} input(s)`
       : `Project fingerprint used full scan: ${fingerprintBuild.reason}`,
   );
-  let sharedSnapshot: SharedGenerationSnapshot | undefined;
-  let releaseSharedBuildLock: (() => void) | undefined;
-  const sharedCacheEligible =
-    opts.skipIfUnchanged !== false &&
-    !sharedCacheBypassReason(projectRoot, paths.outputDb) &&
-    resolve(paths.outputScip) === resolve(join(dirname(paths.outputDb), 'index.scip'));
-  if (sharedCacheEligible) {
-    const context = resolveGitWorktreeContext(projectRoot);
-    sharedSnapshot = context?.clean ? buildSharedGenerationSnapshot(context, fingerprint) : undefined;
-    if (context && !context.clean && !localArtifactsCanSeedIncrementalReindex(paths)) {
-      const baseline = findSharedBaselineGeneration(
-        context,
-        languages,
-        {
-          pnpmWorkspaces: opts.pnpmWorkspaces,
-          typescriptProjectMode: opts.typescriptProjectMode,
-          typescriptProjects: opts.typescriptProjects,
-          clojureConfigPath: opts.clojureConfigPath,
-        },
-        fingerprint,
-      );
-      if (baseline) {
-        try {
-          hydrateSharedGeneration({
-            snapshot: baseline.snapshot,
-            manifest: baseline.manifest,
-            targetCacheDir: dirname(paths.outputDb),
-            targetProjectRoot: projectRoot,
-            persistLease: false,
-          });
-          writeWorktreeOverlayLease(baseline.snapshot, dirname(paths.outputDb));
-          onStatus(`Forked shared baseline ${baseline.snapshot.generationId.slice(0, 12)} for dirty worktree reindex`);
-        } catch (error) {
-          onStatus(`Shared baseline fork failed; continuing locally: ${errorMessage(error)}`);
-        }
-      }
-    } else if (sharedSnapshot) {
-      const shared = readSharedGeneration(sharedSnapshot);
-      if (shared) {
-        if (!localArtifactsMatchFingerprint(paths, fingerprint)) {
-          try {
-            hydrateSharedGeneration({
-              snapshot: sharedSnapshot,
-              manifest: shared,
-              targetCacheDir: dirname(paths.outputDb),
-              targetProjectRoot: projectRoot,
-            });
-            onStatus(`Attached shared generation ${sharedSnapshot.generationId.slice(0, 12)}`);
-          } catch (error) {
-            onStatus(`Shared generation attach failed; continuing locally: ${errorMessage(error)}`);
-          }
-        }
-      } else {
-        if (context && !localArtifactsCanSeedIncrementalReindex(paths)) {
-          const baseline = findSharedBaselineGeneration(
-            context,
-            languages,
-            {
-              pnpmWorkspaces: opts.pnpmWorkspaces,
-              typescriptProjectMode: opts.typescriptProjectMode,
-              typescriptProjects: opts.typescriptProjects,
-              clojureConfigPath: opts.clojureConfigPath,
-            },
-            fingerprint,
-          );
-          if (baseline) {
-            try {
-              hydrateSharedGeneration({
-                snapshot: baseline.snapshot,
-                manifest: baseline.manifest,
-                targetCacheDir: dirname(paths.outputDb),
-                targetProjectRoot: projectRoot,
-                persistLease: false,
-              });
-              writeWorktreeOverlayLease(baseline.snapshot, dirname(paths.outputDb));
-              onStatus(
-                `Forked compatible shared baseline ${baseline.snapshot.generationId.slice(0, 12)} for cold worktree reindex`,
-              );
-            } catch (error) {
-              onStatus(`Compatible shared baseline fork failed; continuing locally: ${errorMessage(error)}`);
-            }
-          }
-        }
-        const sharedLock = await acquireSharedGenerationBuildLock(sharedSnapshot);
-        if (sharedLock.kind === 'owner') {
-          releaseSharedBuildLock = sharedLock.release;
-        } else if (sharedLock.kind === 'generation-ready') {
-          const published = readSharedGeneration(sharedSnapshot);
-          if (published) {
-            try {
-              hydrateSharedGeneration({
-                snapshot: sharedSnapshot,
-                manifest: published,
-                targetCacheDir: dirname(paths.outputDb),
-                targetProjectRoot: projectRoot,
-                action: 'waited',
-              });
-              onStatus(`Attached shared generation ${sharedSnapshot.generationId.slice(0, 12)} after waiting`);
-            } catch (error) {
-              onStatus(`Shared generation attach failed after waiting; continuing locally: ${errorMessage(error)}`);
-            }
-          }
-        } else {
-          onStatus('Shared generation build lock timed out; continuing with an isolated local reindex');
-        }
-      }
-    }
-  }
+  const sharedGeneration = await prepareSharedGenerationCache({ opts, paths, languages, fingerprint, onStatus });
+  let sharedSnapshot = sharedGeneration.snapshot;
+  let releaseSharedBuildLock = sharedGeneration.releaseBuildLock;
   const watcherRefresh = isWatcherRefreshTrigger(opts.trigger);
   const cacheLifecycleLock = acquireProcessFileLock(join(dirname(paths.outputDb), 'cache-lifecycle.lock'), {
     // A watcher must not sit on a spare Node process for 30 seconds while a
@@ -598,6 +493,136 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     releaseLock();
     cacheLifecycleLock.release();
     releaseSharedBuildLock?.();
+  }
+}
+
+async function prepareSharedGenerationCache(input: {
+  opts: ReindexOptions;
+  paths: ReindexOutputPaths;
+  languages: SupportedLanguage[];
+  fingerprint: ReindexFingerprint;
+  onStatus: (message: string) => void;
+}): Promise<{ snapshot: SharedGenerationSnapshot | undefined; releaseBuildLock: (() => void) | undefined }> {
+  const { opts, paths, languages, fingerprint, onStatus } = input;
+  const projectRoot = opts.projectRoot;
+  const sharedCacheEligible =
+    opts.skipIfUnchanged !== false &&
+    !sharedCacheBypassReason(projectRoot, paths.outputDb) &&
+    resolve(paths.outputScip) === resolve(join(dirname(paths.outputDb), 'index.scip'));
+  if (!sharedCacheEligible) return { snapshot: undefined, releaseBuildLock: undefined };
+
+  const context = resolveGitWorktreeContext(projectRoot);
+  const snapshot = context?.clean ? buildSharedGenerationSnapshot(context, fingerprint) : undefined;
+  if (context && !context.clean && !localArtifactsCanSeedIncrementalReindex(paths)) {
+    hydrateCompatibleSharedBaseline({
+      context,
+      languages,
+      opts,
+      paths,
+      fingerprint,
+      projectRoot,
+      onStatus,
+      successMessage: 'dirty worktree reindex',
+      failurePrefix: 'Shared baseline fork failed',
+    });
+    return { snapshot, releaseBuildLock: undefined };
+  }
+  if (!snapshot) return { snapshot: undefined, releaseBuildLock: undefined };
+
+  const shared = readSharedGeneration(snapshot);
+  if (shared) {
+    if (!localArtifactsMatchFingerprint(paths, fingerprint)) {
+      try {
+        hydrateSharedGeneration({
+          snapshot,
+          manifest: shared,
+          targetCacheDir: dirname(paths.outputDb),
+          targetProjectRoot: projectRoot,
+        });
+        onStatus(`Attached shared generation ${snapshot.generationId.slice(0, 12)}`);
+      } catch (error) {
+        onStatus(`Shared generation attach failed; continuing locally: ${errorMessage(error)}`);
+      }
+    }
+    return { snapshot, releaseBuildLock: undefined };
+  }
+
+  if (context && !localArtifactsCanSeedIncrementalReindex(paths)) {
+    hydrateCompatibleSharedBaseline({
+      context,
+      languages,
+      opts,
+      paths,
+      fingerprint,
+      projectRoot,
+      onStatus,
+      successMessage: 'cold worktree reindex',
+      failurePrefix: 'Compatible shared baseline fork failed',
+      compatible: true,
+    });
+  }
+  const sharedLock = await acquireSharedGenerationBuildLock(snapshot);
+  if (sharedLock.kind === 'owner') return { snapshot, releaseBuildLock: sharedLock.release };
+  if (sharedLock.kind === 'generation-ready') {
+    const published = readSharedGeneration(snapshot);
+    if (published) {
+      try {
+        hydrateSharedGeneration({
+          snapshot,
+          manifest: published,
+          targetCacheDir: dirname(paths.outputDb),
+          targetProjectRoot: projectRoot,
+          action: 'waited',
+        });
+        onStatus(`Attached shared generation ${snapshot.generationId.slice(0, 12)} after waiting`);
+      } catch (error) {
+        onStatus(`Shared generation attach failed after waiting; continuing locally: ${errorMessage(error)}`);
+      }
+    }
+  } else {
+    onStatus('Shared generation build lock timed out; continuing with an isolated local reindex');
+  }
+  return { snapshot, releaseBuildLock: undefined };
+}
+
+function hydrateCompatibleSharedBaseline(input: {
+  context: NonNullable<ReturnType<typeof resolveGitWorktreeContext>>;
+  languages: SupportedLanguage[];
+  opts: ReindexOptions;
+  paths: ReindexOutputPaths;
+  fingerprint: ReindexFingerprint;
+  projectRoot: string;
+  onStatus: (message: string) => void;
+  successMessage: string;
+  failurePrefix: string;
+  compatible?: boolean;
+}): void {
+  const baseline = findSharedBaselineGeneration(
+    input.context,
+    input.languages,
+    {
+      pnpmWorkspaces: input.opts.pnpmWorkspaces,
+      typescriptProjectMode: input.opts.typescriptProjectMode,
+      typescriptProjects: input.opts.typescriptProjects,
+      clojureConfigPath: input.opts.clojureConfigPath,
+    },
+    input.fingerprint,
+  );
+  if (!baseline) return;
+  try {
+    hydrateSharedGeneration({
+      snapshot: baseline.snapshot,
+      manifest: baseline.manifest,
+      targetCacheDir: dirname(input.paths.outputDb),
+      targetProjectRoot: input.projectRoot,
+      persistLease: false,
+    });
+    writeWorktreeOverlayLease(baseline.snapshot, dirname(input.paths.outputDb));
+    input.onStatus(
+      `Forked ${input.compatible ? 'compatible ' : ''}shared baseline ${baseline.snapshot.generationId.slice(0, 12)} for ${input.successMessage}`,
+    );
+  } catch (error) {
+    input.onStatus(`${input.failurePrefix}; continuing locally: ${errorMessage(error)}`);
   }
 }
 

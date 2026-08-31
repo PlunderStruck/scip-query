@@ -56,6 +56,7 @@ export function cycles(db: ScipDatabase, opts: { scope?: string; maxDepth?: numb
   return cycleSummary(db, opts).cycles;
 }
 
+// scip-query: ignore-passthrough — stable public query name delegates to the explicitly named dependency-cycle calculation.
 export function cycleSummary(db: ScipDatabase, opts: { scope?: string; maxDepth?: number } = {}): CycleSummary {
   return dependencyCycleSummary(db, opts);
 }
