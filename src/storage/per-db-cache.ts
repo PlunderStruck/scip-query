@@ -12,6 +12,38 @@ import { registerCacheClear, type CacheClearGroup } from './cache-registry.js';
  */
 export interface PerDbCacheOptions {
   clearGroups: readonly CacheClearGroup[];
+  /**
+   * Retain at most this many entries per database. Reads refresh recency, so
+   * evicted values are recomputed without changing query results.
+   */
+  maxEntries?: number;
+}
+
+const DEFAULT_SOURCE_FILE_CACHE_ENTRIES = 256;
+
+function maxEntriesFor(opts: PerDbCacheOptions): number | undefined {
+  const configured = opts.maxEntries;
+  if (configured !== undefined) {
+    if (!Number.isSafeInteger(configured) || configured < 1) {
+      throw new Error(`Per-database cache maxEntries must be a positive safe integer; received ${configured}.`);
+    }
+    return configured;
+  }
+  return opts.clearGroups.includes('source-file') ? DEFAULT_SOURCE_FILE_CACHE_ENTRIES : undefined;
+}
+
+function refreshEntry<K, V>(entries: Map<K, V>, key: K, value: V): void {
+  entries.delete(key);
+  entries.set(key, value);
+}
+
+function evictOldestEntries<K, V>(entries: Map<K, V>, maxEntries: number | undefined): void {
+  if (maxEntries === undefined) return;
+  while (entries.size > maxEntries) {
+    const oldest = entries.keys().next().value as K | undefined;
+    if (oldest === undefined) return;
+    entries.delete(oldest);
+  }
 }
 
 export interface PerDbCache<K, V> {
@@ -57,12 +89,18 @@ function createPerDbMapStore<K, V>(): {
 
 export function createPerDbCache<K, V>(name: string, opts: PerDbCacheOptions): PerDbCache<K, V> {
   const { cache, ensure } = createPerDbMapStore<K, V>();
+  const maxEntries = maxEntriesFor(opts);
   const api: PerDbCache<K, V> = {
     get(db, key, compute) {
       const m = ensure(db);
-      if (m.has(key)) return m.get(key) as V;
+      if (m.has(key)) {
+        const value = m.get(key) as V;
+        refreshEntry(m, key, value);
+        return value;
+      }
       const value = compute();
       m.set(key, value);
+      evictOldestEntries(m, maxEntries);
       return value;
     },
     has(db, key) {
@@ -128,6 +166,7 @@ export interface PerDbSourceCache<V> {
 
 const SOURCE_FILE_CACHE_OPTIONS = {
   clearGroups: ['whole-project', 'source-file'],
+  maxEntries: DEFAULT_SOURCE_FILE_CACHE_ENTRIES,
 } as const;
 
 export function createSourceFileCache<V>(name: string): PerDbSourceCache<V> {
@@ -139,13 +178,18 @@ export function createSourceFileCache<V>(name: string): PerDbSourceCache<V> {
 // two factories into one strategy-parameterized function would hide it.
 export function createPerDbSourceCache<V>(name: string, opts: PerDbCacheOptions): PerDbSourceCache<V> {
   const { cache, ensure } = createPerDbMapStore<string, { source: string; value: V }>();
+  const maxEntries = maxEntriesFor(opts);
   const api: PerDbSourceCache<V> = {
     get(db, file, source, compute) {
       const m = ensure(db);
       const cached = m.get(file);
-      if (cached && cached.source === source) return cached.value;
+      if (cached && cached.source === source) {
+        refreshEntry(m, file, cached);
+        return cached.value;
+      }
       const value = compute();
       m.set(file, { source, value });
+      evictOldestEntries(m, maxEntries);
       return value;
     },
     invalidate(db, file) {

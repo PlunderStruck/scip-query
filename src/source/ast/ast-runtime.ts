@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { noteFinalizerOwnedNativeAllocation } from '../../platform/native-gc.js';
 import type { AstLanguage } from './ast-language.js';
 import type { QueryInstance, Tree } from './ast-types.js';
 
@@ -164,7 +165,12 @@ export function parseAstSource(lang: AstLanguage, source: string): Tree | null {
   const parser = getParser(lang);
   if (!parser) return null;
   try {
-    return parseSource(parser, source);
+    const tree = parseSource(parser, source);
+    // A parsed tree's memory is native and freed only by its GC finalizer;
+    // V8 never sees it, so whole-project sweeps must create collection
+    // pressure themselves or dead trees accumulate to gigabytes of RSS.
+    noteFinalizerOwnedNativeAllocation(source.length * 10);
+    return tree;
   } catch {
     return null;
   }

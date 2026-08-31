@@ -3,6 +3,7 @@ import type { IndexedDefinition } from '../../../src/domain/types.js';
 import {
   assembleReferenceFragments,
   compareReferenceFragmentMaps,
+  createReferenceFragmentAccumulator,
   referenceFragmentsFromDefinitionMap,
 } from '../../../src/semantic/typescript/reference-fragments.js';
 import { typeScriptReferenceFragmentBatches } from '../../../src/semantic/typescript/reference-fragment-shadow.js';
@@ -89,6 +90,16 @@ describe('TypeScript reference fragments', () => {
 
     expect(typeScriptReferenceFragmentBatches(files).map((batch) => batch.length)).toEqual([128, 128, 1]);
     expect(typeScriptReferenceFragmentBatches([])).toEqual([]);
+  });
+
+  it('assembles batches without retaining a file-to-fragments map', () => {
+    const fragments = referenceFragmentsFromDefinitionMap(definitions, expected, ['src/a.ts', 'src/b.ts']);
+    const accumulator = createReferenceFragmentAccumulator(definitions);
+
+    accumulator.add(fragments.get('src/a.ts') ?? []);
+    accumulator.add(fragments.get('src/b.ts') ?? []);
+
+    expect(accumulator.finish()).toEqual(expected);
   });
 });
 

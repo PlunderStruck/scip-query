@@ -1,5 +1,20 @@
 export interface Tree {
   rootNode: SyntaxNode;
+  /**
+   * Cursor traversal reads node types and text without materializing a
+   * wrapper object per node. Prefer it for whole-file sweeps: every node
+   * object pins native cache memory that a synchronous sweep cannot release
+   * before it finishes.
+   */
+  walk(): TreeCursor;
+}
+
+export interface TreeCursor {
+  nodeType: string;
+  nodeText: string;
+  gotoFirstChild(): boolean;
+  gotoNextSibling(): boolean;
+  gotoParent(): boolean;
 }
 
 export interface SyntaxNode {

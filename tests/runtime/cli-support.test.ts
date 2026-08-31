@@ -13,7 +13,9 @@ import {
   healthPhaseConcurrency,
   healthPhaseTasks,
   healthPhaseTimeoutMs,
+  healthSemanticPrewarmCalleeBatches,
   healthSemanticPrewarmHeapMb,
+  healthSemanticPrewarmTimeoutMs,
   operationObservationReceipt,
   prewarmHealthSemanticEvidence,
   shouldRunHealthPhase,
@@ -222,6 +224,34 @@ describe('healthSemanticPrewarmHeapMb', () => {
   });
 });
 
+describe('healthSemanticPrewarmTimeoutMs', () => {
+  it('bounds the isolated prewarm with an explicit override', () => {
+    expect(healthSemanticPrewarmTimeoutMs({})).toBe(600000);
+    expect(healthSemanticPrewarmTimeoutMs({ SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_TIMEOUT_MS: '1200000' })).toBe(1200000);
+    expect(healthSemanticPrewarmTimeoutMs({ SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_TIMEOUT_MS: 'invalid' })).toBe(600000);
+  });
+});
+
+describe('healthSemanticPrewarmCalleeBatches', () => {
+  it('keeps every definition, grouped by file, within the batch file bound', () => {
+    const definitions = [
+      fakeDefinition(1, 'src/a.ts'),
+      fakeDefinition(2, 'src/b.ts'),
+      fakeDefinition(3, 'src/a.ts'),
+      fakeDefinition(4, 'src/c.ts'),
+    ];
+
+    const batches = healthSemanticPrewarmCalleeBatches(definitions, 2);
+
+    expect(batches.map((batch) => batch.map((definition) => definition.symbolId))).toEqual([[1, 3, 2], [4]]);
+    expect(batches.flat()).toHaveLength(definitions.length);
+  });
+
+  it('rejects an invalid batch bound', () => {
+    expect(() => healthSemanticPrewarmCalleeBatches([], 0)).toThrow('positive safe integer');
+  });
+});
+
 describe('fullHealthPhaseHeapMb', () => {
   it('uses a bounded isolated heap with an explicit override', () => {
     expect(fullHealthPhaseHeapMb({})).toBe(6144);
@@ -291,6 +321,36 @@ describe('prewarmHealthSemanticEvidence', () => {
     });
     expect(runtime.candidateDefinitions).toHaveBeenCalledTimes(1);
     expect(runtime.materializeReferences).toHaveBeenCalledTimes(1);
+  });
+
+  it('batches the callee prewarm by file and releases the provider only under heap pressure', () => {
+    const definitions = Array.from({ length: 300 }, (_, index) => fakeDefinition(index + 1, `src/file-${index}.ts`));
+    const heapFractions = [0.7, 0.2];
+    const materializeCallees = vi.fn((_db: unknown, batch: readonly IndexedDefinition[]) => {
+      return new Map(batch.map((definition) => [definition.symbolId, []]));
+    });
+    const releaseSemanticMemory = vi.fn();
+    const runtime = fakePrewarmRuntime({
+      candidateDefinitions: vi.fn(() => definitions),
+      materializeCallees,
+      releaseSemanticMemory,
+      heapUsedFraction: vi.fn(() => heapFractions.shift() ?? 0.2),
+    });
+
+    const result = prewarmHealthSemanticEvidence(fakeLargeDb(), { full: true }, runtime);
+
+    expect(result).toMatchObject({ status: 'warmed', calleeRows: 300 });
+    // 300 single-definition files at 256 files per batch → two callee batches.
+    expect(materializeCallees).toHaveBeenCalledTimes(2);
+    // One unconditional release after the reference pass, one pressure-driven
+    // release after the first callee batch, none after the second (0.2 < 0.6).
+    expect(releaseSemanticMemory).toHaveBeenCalledTimes(2);
+    expect(runtime.writeMarker).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      'project-a',
+      expect.objectContaining({ calleeRows: 300 }),
+    );
   });
 
   it('materializes reference and callee caches before writing the project marker', () => {

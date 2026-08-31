@@ -22,17 +22,38 @@ export function assembleReferenceFragments(
   definitions: readonly IndexedDefinition[],
   fragmentsByFile: ReadonlyMap<string, readonly SemanticReferenceFragment[]>,
 ): Map<number, SemanticReference[]> {
+  const accumulator = createReferenceFragmentAccumulator(definitions);
+  for (const fragments of fragmentsByFile.values()) accumulator.add(fragments);
+  return accumulator.finish();
+}
+
+export interface ReferenceFragmentAccumulator {
+  add(fragments: readonly SemanticReferenceFragment[]): void;
+  finish(): Map<number, SemanticReference[]>;
+}
+
+/**
+ * Reduces file-scoped fragments into definition-scoped references without
+ * retaining every file's parsed fragment payload at once.
+ */
+export function createReferenceFragmentAccumulator(
+  definitions: readonly IndexedDefinition[],
+): ReferenceFragmentAccumulator {
   const definitionsBySymbol = new Map(definitions.map((definition) => [definition.symbol, definition]));
   const result = new Map(definitions.map((definition) => [definition.symbolId, [] as SemanticReference[]]));
-  for (const fragments of fragmentsByFile.values()) {
-    for (const fragment of fragments) {
-      const definition = definitionsBySymbol.get(fragment.targetSymbol);
-      if (!definition) continue;
-      result.get(definition.symbolId)!.push(fragment.location);
-    }
-  }
-  for (const [symbolId, references] of result) result.set(symbolId, dedupeSortedReferences(references));
-  return result;
+  return {
+    add(fragments) {
+      for (const fragment of fragments) {
+        const definition = definitionsBySymbol.get(fragment.targetSymbol);
+        if (!definition) continue;
+        result.get(definition.symbolId)!.push(fragment.location);
+      }
+    },
+    finish() {
+      for (const [symbolId, references] of result) result.set(symbolId, dedupeSortedReferences(references));
+      return result;
+    },
+  };
 }
 
 export function compareReferenceFragmentMaps(

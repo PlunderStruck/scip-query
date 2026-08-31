@@ -6,7 +6,11 @@ import type { ScipDatabase } from '../../storage/db.js';
 import type { SemanticProvider, SemanticReference, SemanticReferenceFragment } from '../types.js';
 import { indexedTypeScriptFiles, typeScriptSemanticIdentityForFile } from './semantic-identity-context.js';
 import { isTypeScriptLike } from './source-kinds.js';
-import { assembleReferenceFragments, compareReferenceFragmentMaps } from './reference-fragments.js';
+import {
+  assembleReferenceFragments,
+  compareReferenceFragmentMaps,
+  createReferenceFragmentAccumulator,
+} from './reference-fragments.js';
 import { createTypeScriptSemanticIdentityBuilder } from './semantic-identity.js';
 import { typeScriptSemanticEngineIdentity } from './ts-morph-runtime.js';
 import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
@@ -206,26 +210,24 @@ export function materializeTypeScriptReferenceFragments(
       try {
         const projectFiles = indexedTypeScriptFiles(db);
         files = projectFiles.length;
-        const identities = new Map<string, string>();
-        const cachedFragments = new Map<string, SemanticReferenceFragment[]>();
-        const missingFiles: string[] = [];
+        const accumulator = createReferenceFragmentAccumulator(definitions);
+        const missingFiles: Array<{ file: string; contentHash: string }> = [];
         for (const file of projectFiles) {
           const identity = typeScriptSemanticIdentityForFile(db, file, TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA);
           if (!identity?.key) return null;
-          identities.set(file, identity.key);
           const cached = REFERENCE_FRAGMENT_PRODUCT.read(db, file, identity.key);
           if (cached === null) {
             cacheMisses += 1;
-            missingFiles.push(file);
+            missingFiles.push({ file, contentHash: identity.key });
           } else {
             cacheHits += 1;
-            cachedFragments.set(file, cached);
+            accumulator.add(cached);
           }
         }
         if (cacheMisses === 0) {
           state = 'hit';
           return {
-            references: assembleReferenceFragments(definitions, cachedFragments),
+            references: accumulator.finish(),
             files,
             cacheHits,
             cacheMisses,
@@ -236,22 +238,23 @@ export function materializeTypeScriptReferenceFragments(
         const provider = resolveProvider(definitions[0]!.relativePath);
         if (!provider.availability().available || !provider.referenceFragmentsForFiles) return null;
         for (const batch of typeScriptReferenceFragmentBatches(missingFiles)) {
-          const computed = provider.referenceFragmentsForFiles(batch);
-          if (batch.some((file) => !computed.has(file))) return null;
+          const filesInBatch = batch.map(({ file }) => file);
+          const computed = provider.referenceFragmentsForFiles(filesInBatch);
+          if (filesInBatch.some((file) => !computed.has(file))) return null;
           REFERENCE_FRAGMENT_PRODUCT.writeBatch(
             db,
-            batch.map((file) => ({
+            batch.map(({ file, contentHash }) => ({
               relativePath: file,
-              contentHash: identities.get(file)!,
+              contentHash,
               value: computed.get(file) ?? [],
             })),
           );
-          for (const file of batch) cachedFragments.set(file, computed.get(file) ?? []);
+          for (const file of filesInBatch) accumulator.add(computed.get(file) ?? []);
           computedFiles += batch.length;
         }
         state = 'computed';
         return {
-          references: assembleReferenceFragments(definitions, cachedFragments),
+          references: accumulator.finish(),
           files,
           cacheHits,
           cacheMisses,
@@ -265,8 +268,8 @@ export function materializeTypeScriptReferenceFragments(
   );
 }
 
-export function typeScriptReferenceFragmentBatches(files: readonly string[]): string[][] {
-  const batches: string[][] = [];
+export function typeScriptReferenceFragmentBatches<T>(files: readonly T[]): T[][] {
+  const batches: T[][] = [];
   for (let offset = 0; offset < files.length; offset += TYPESCRIPT_REFERENCE_FRAGMENT_BATCH_SIZE) {
     batches.push(files.slice(offset, offset + TYPESCRIPT_REFERENCE_FRAGMENT_BATCH_SIZE));
   }

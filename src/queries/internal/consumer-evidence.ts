@@ -7,7 +7,7 @@ import type { ProjectIndex } from './project-index.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
 import { semanticCallerMap } from '../../semantic/shared-primitives.js';
-import { detectAstLanguage, type SyntaxNode, type Tree } from '../../source/ast.js';
+import { detectAstLanguage, type Tree } from '../../source/ast.js';
 import { sourceEvidence } from '../../language-parsers/source-evidence.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { fileContentHash, projectEvidenceFingerprint } from '../../storage/evidence-cache.js';
@@ -355,17 +355,27 @@ export function isImportOnlyConsumer(db: ScipDatabase, consumerFile: string, lea
 // scip-query: ignore-passthrough — cache lifecycle hook for consumer
 // classification; callers should not know the FILE_USAGE_CACHE key or shape.
 function computeFileLeafUsage(db: ScipDatabase, file: string, lang: string): FileLeafUsage {
-  const evidence = sourceEvidence(db).forFile(file, { text: true, ast: true });
-  const source = evidence.text;
+  // Check the persisted product before touching the AST: requesting the tree
+  // first re-parses every warm consumer file, and whole-repository consumer
+  // classification turns that into a parse storm (tree-sitter parses
+  // dominated the wrapper-candidates phase profile).
+  const source = sourceEvidence(db).forFile(file, { text: true }).text;
   if (!source) return emptyFileLeafUsage();
   const contentHash = fileContentHash(db, file, source);
   const cached = FILE_USAGE_PRODUCT.read(db, file, contentHash);
   if (cached) return cached;
 
-  const usage = computeFileLeafUsageFromAst(evidence.ast, lang);
+  const usage = computeFileLeafUsageFromAst(sourceEvidence(db).forFile(file, { ast: true }).ast, lang);
   FILE_USAGE_PRODUCT.write(db, file, contentHash, usage);
   return usage;
 }
+
+const LEAF_IDENTIFIER_NODE_TYPES = new Set([
+  'identifier',
+  'type_identifier',
+  'property_identifier',
+  'field_identifier',
+]);
 
 function computeFileLeafUsageFromAst(tree: Tree | null | undefined, lang: string): FileLeafUsage {
   const importedLeaves = new Set<string>();
@@ -379,20 +389,30 @@ function computeFileLeafUsageFromAst(tree: Tree | null | undefined, lang: string
         ? new Set(['import_statement', 'import_from_statement'])
         : new Set(['import_statement']);
 
-  const walk = (node: SyntaxNode, insideImport: boolean): void => {
-    const nowInside = insideImport || importTypes.has(node.type);
-    if (
-      node.type === 'identifier' ||
-      node.type === 'type_identifier' ||
-      node.type === 'property_identifier' ||
-      node.type === 'field_identifier'
-    ) {
-      if (nowInside) importedLeaves.add(node.text);
-      else usedLeaves.add(node.text);
+  // Cursor traversal reads types and text without materializing a node object
+  // per syntax node; node objects each pin native cache memory that a
+  // synchronous whole-repository sweep can never release.
+  const cursor = tree.walk();
+  let importDepth = 0;
+  let done = false;
+  while (!done) {
+    const type = cursor.nodeType;
+    const entersImport = importTypes.has(type);
+    if (entersImport) importDepth += 1;
+    if (LEAF_IDENTIFIER_NODE_TYPES.has(type)) {
+      (importDepth > 0 ? importedLeaves : usedLeaves).add(cursor.nodeText);
     }
-    for (const child of node.children) walk(child, nowInside);
-  };
-  walk(tree.rootNode, false);
+    if (cursor.gotoFirstChild()) continue;
+    if (entersImport) importDepth -= 1;
+    for (;;) {
+      if (cursor.gotoNextSibling()) break;
+      if (!cursor.gotoParent()) {
+        done = true;
+        break;
+      }
+      if (importTypes.has(cursor.nodeType)) importDepth -= 1;
+    }
+  }
   return { importedLeaves, usedLeaves };
 }
 

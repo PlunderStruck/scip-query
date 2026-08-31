@@ -1,5 +1,6 @@
 import { availableParallelism } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { getHeapStatistics } from 'node:v8';
 import type { ObservationReceiptV2, ObservationSourceKind } from '../domain/observation-receipt.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { ProjectIndex } from '../queries/internal/project-index.js';
@@ -54,7 +55,7 @@ const DEFAULT_FULL_HEALTH_PHASE_HEAP_MB = 6144;
 const DEFAULT_FULL_HEALTH_PHASE_TIMEOUT_MS = 10 * 60_000;
 const DEFAULT_HEALTH_PHASE_TIMEOUT_MS = 30_000;
 const DEFAULT_HEALTH_SEMANTIC_PREWARM_HEAP_MB = 8192;
-const HEALTH_SEMANTIC_PREWARM_TIMEOUT_MS = 10 * 60_000;
+const DEFAULT_HEALTH_SEMANTIC_PREWARM_TIMEOUT_MS = 10 * 60_000;
 const REACT_HEALTH_PHASES = new Set<HealthPhaseName>([
   'react-component-duplicates',
   'react-hook-candidates',
@@ -182,6 +183,8 @@ export interface HealthSemanticPrewarmRuntime {
   ): SemanticReferenceMaterializationResult;
   materializeCallees(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<number, unknown>;
   releaseSemanticMemory?(db: ScipDatabase): void;
+  /** Fraction of the V8 old-space limit currently used; drives adaptive provider releases. */
+  heapUsedFraction?(): number;
 }
 
 export interface DiffImpactCliOptions {
@@ -279,7 +282,56 @@ const DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME: HealthSemanticPrewarmRuntime = {
     semanticEvidenceProduct(db).materializeReferences(definitions, opts),
   materializeCallees: materializeSemanticCalleeCache,
   releaseSemanticMemory: (db) => clearRegisteredCaches(db, { groups: ['semantic-provider'] }),
+  heapUsedFraction: () => {
+    const stats = getHeapStatistics();
+    return stats.heap_size_limit > 0 ? stats.used_heap_size / stats.heap_size_limit : 0;
+  },
 };
+
+/**
+ * Callee prewarm computes with a live compiler session whose checker state
+ * grows with every resolved file. Batching by file keeps each computation's
+ * working set small, and every batch's rows are persisted before the next
+ * batch starts, so a mid-pass release, crash, or timeout never loses
+ * completed work — the next run resumes from the cache.
+ */
+const HEALTH_SEMANTIC_PREWARM_CALLEE_BATCH_FILES = 256;
+
+/**
+ * Release the semantic provider only when the isolated heap is actually
+ * under pressure: a release discards the compiler session, and rebuilding it
+ * for the next batch is expensive, so it is paid only instead of an OOM.
+ */
+const HEALTH_SEMANTIC_PREWARM_RELEASE_HEAP_FRACTION = 0.6;
+
+export function healthSemanticPrewarmCalleeBatches(
+  definitions: readonly IndexedDefinition[],
+  maxFilesPerBatch: number = HEALTH_SEMANTIC_PREWARM_CALLEE_BATCH_FILES,
+): IndexedDefinition[][] {
+  if (!Number.isSafeInteger(maxFilesPerBatch) || maxFilesPerBatch < 1) {
+    throw new Error(`Callee prewarm batch size must be a positive safe integer; received ${maxFilesPerBatch}.`);
+  }
+  const byFile = new Map<string, IndexedDefinition[]>();
+  for (const definition of definitions) {
+    const bucket = byFile.get(definition.relativePath);
+    if (bucket) bucket.push(definition);
+    else byFile.set(definition.relativePath, [definition]);
+  }
+  const batches: IndexedDefinition[][] = [];
+  let current: IndexedDefinition[] = [];
+  let currentFiles = 0;
+  for (const fileDefinitions of byFile.values()) {
+    if (currentFiles >= maxFilesPerBatch) {
+      batches.push(current);
+      current = [];
+      currentFiles = 0;
+    }
+    current.push(...fileDefinitions);
+    currentFiles += 1;
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
 
 export function prewarmHealthSemanticEvidence(
   db: ScipDatabase,
@@ -353,14 +405,19 @@ function runHealthSemanticPrewarm(
   profileSpan('health.semantic-prewarm.release-reference-memory', () => runtime.releaseSemanticMemory?.(db));
 
   let calleeRows = 0;
-  const calleeMap = profileSpan(
+  let calleeReleases = 0;
+  profileSpan(
     'health.semantic-prewarm.callees',
     () => {
-      const result = runtime.materializeCallees(db, definitions);
-      calleeRows = result.size;
-      return result;
+      for (const batch of healthSemanticPrewarmCalleeBatches(definitions)) {
+        calleeRows += runtime.materializeCallees(db, batch).size;
+        if ((runtime.heapUsedFraction?.() ?? 0) >= HEALTH_SEMANTIC_PREWARM_RELEASE_HEAP_FRACTION) {
+          runtime.releaseSemanticMemory?.(db);
+          calleeReleases += 1;
+        }
+      }
     },
-    () => ({ definitions: definitions.length, rows: calleeRows }),
+    () => ({ definitions: definitions.length, rows: calleeRows, releases: calleeReleases }),
   );
   if (references.incomplete > 0) {
     return {
@@ -371,7 +428,7 @@ function runHealthSemanticPrewarm(
       referenceCacheWrites: references.cacheWrites,
       referenceMisses: references.misses,
       referenceIncomplete: references.incomplete,
-      calleeRows: calleeMap.size,
+      calleeRows,
     };
   }
 
@@ -381,7 +438,7 @@ function runHealthSemanticPrewarm(
       definitions: definitions.length,
       referenceCacheWrites: references.cacheWrites,
       referenceIncomplete: references.incomplete,
-      calleeRows: calleeMap.size,
+      calleeRows,
       warmedAt: Date.now(),
     }),
   );
@@ -394,7 +451,7 @@ function runHealthSemanticPrewarm(
     referenceCacheWrites: references.cacheWrites,
     referenceMisses: references.misses,
     referenceIncomplete: references.incomplete,
-    calleeRows: calleeMap.size,
+    calleeRows,
   };
 }
 
@@ -594,13 +651,18 @@ function runHealthSemanticPrewarmProcess(
       NODE_OPTIONS: `--max-old-space-size=${healthSemanticPrewarmHeapMb()}`,
     },
     label: 'Health semantic prewarm',
-    timeoutMs: HEALTH_SEMANTIC_PREWARM_TIMEOUT_MS,
+    timeoutMs: healthSemanticPrewarmTimeoutMs(),
   });
 }
 
 export function healthSemanticPrewarmHeapMb(env: NodeJS.ProcessEnv = process.env): number {
   const parsed = Number.parseInt(env['SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_HEAP_MB'] ?? '', 10);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : DEFAULT_HEALTH_SEMANTIC_PREWARM_HEAP_MB;
+}
+
+export function healthSemanticPrewarmTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const parsed = Number.parseInt(env['SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_TIMEOUT_MS'] ?? '', 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : DEFAULT_HEALTH_SEMANTIC_PREWARM_TIMEOUT_MS;
 }
 
 export function fullHealthPhaseHeapMb(env: NodeJS.ProcessEnv = process.env): number {
