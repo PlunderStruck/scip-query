@@ -13,7 +13,6 @@ import {
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
-import { deserializeSCIP } from '@c4312/scip';
 import Database from 'better-sqlite3';
 import { decodeReindexMetadata, type ReindexMetadata } from '../domain/reindex-metadata.js';
 import {
@@ -67,6 +66,7 @@ import {
   LANGUAGE_INDEX_DIRECTORY,
 } from './index-artifacts.js';
 import { rebaseScipFileProjectRoot } from './merge.js';
+import { readScipIndexProjectRoot } from './scip-wire.js';
 import {
   inspectSqliteGeneration,
   promoteReindexArtifacts,
@@ -478,12 +478,12 @@ function publishSharedGenerationOwned(input: SharedGenerationPublicationInput): 
         }),
       });
     }
-    const scipProjectRoot = deserializeSCIP(
+    const scipProjectRoot = readScipIndexProjectRoot(
       readFileWithinLimit(join(stagingDir, 'index.scip'), {
         inputKind: 'staged shared SCIP index',
         maxBytes: SCIP_ARTIFACT_MAX_BYTES,
       }),
-    ).metadata?.projectRoot;
+    );
     if (!scipProjectRoot) throw new Error('shared SCIP generation has no project root metadata');
     const expectedSourceRoot = canonicalProjectRootUrl(input.sourceProjectRoot);
     if (scipProjectRoot !== expectedSourceRoot) {
@@ -1454,12 +1454,12 @@ function validateSourceGeneration(
       ? artifacts.files.filter((file) => file.endsWith('.scip'))
       : ['index.scip'];
     const rootsMatch = scipArtifacts.every((file) => {
-      const actualRoot = deserializeSCIP(
+      const actualRoot = readScipIndexProjectRoot(
         readFileWithinLimit(indexArtifactPath(cacheDir, file), {
           inputKind: 'shared SCIP validation artifact',
           maxBytes: SCIP_ARTIFACT_MAX_BYTES,
         }),
-      ).metadata?.projectRoot;
+      );
       if (actualRoot !== expectedRoot)
         debugSharedCache(`source validation rejected SCIP root for ${file}: ${String(actualRoot)}`);
       return actualRoot === expectedRoot;

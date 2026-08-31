@@ -1,5 +1,5 @@
-import { closeSync, openSync, readSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
-import { create } from '@bufbuild/protobuf';
+import { closeSync, openSync, readSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
+import { create, fromBinary, toBinary } from '@bufbuild/protobuf';
 import {
   deserializeSCIP,
   serializeSCIP,
@@ -10,6 +10,13 @@ import {
 } from '@c4312/scip';
 import type { Document, Index, Occurrence, Relationship, SymbolInformation } from '@c4312/scip';
 import { profileSpan } from '../instrumentation/profile.js';
+import {
+  eachWireField,
+  encodeLengthDelimitedTag,
+  encodeVarint,
+  readScipIndexProjectRoot,
+  type WireField,
+} from './scip-wire.js';
 import { readFileWithinLimit, SCIP_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
 import { sanitizeScipIndex } from './sanitize.js';
 
@@ -148,12 +155,57 @@ export function rebaseScipProjectRoot(index: Index, expectedProjectRoot: string,
   });
 }
 
+const INDEX_METADATA_FIELD = 1;
+
+/**
+ * Rewrites only the metadata occurrences of the artifact: deserializing a
+ * whole few-hundred-megabyte index into objects to change one string costs
+ * gigabytes of transient heap, and every non-metadata byte can be copied
+ * verbatim. Each metadata message (concatenated shard artifacts carry one per
+ * shard) gets the target root so the merged view resolves to it.
+ */
 export function rebaseScipFileProjectRoot(path: string, expectedProjectRoot: string, targetProjectRoot: string): void {
-  const index = deserializeSCIP(
-    readFileWithinLimit(path, { inputKind: 'SCIP normalization input', maxBytes: SCIP_ARTIFACT_MAX_BYTES }),
-  );
-  const rebased = rebaseScipProjectRoot(index, expectedProjectRoot, targetProjectRoot);
-  writeFileSync(path, serializeSCIP(rebased));
+  const buffer = readFileWithinLimit(path, {
+    inputKind: 'SCIP normalization input',
+    maxBytes: SCIP_ARTIFACT_MAX_BYTES,
+  });
+  const effectiveRoot = readScipIndexProjectRoot(buffer);
+  const metadataFields: WireField[] = [];
+  for (const field of eachWireField(buffer)) {
+    if (field.fieldNumber === INDEX_METADATA_FIELD && field.wireType === 2) metadataFields.push(field);
+  }
+  if (metadataFields.length === 0) throw new Error('Cannot rebase a SCIP index without metadata');
+  if ((effectiveRoot ?? '') !== expectedProjectRoot) {
+    throw new Error(`Cannot rebase SCIP project root: expected ${expectedProjectRoot}, got ${effectiveRoot ?? ''}`);
+  }
+
+  const temporaryPath = `${path}.rebase-tmp`;
+  const descriptor = openSync(temporaryPath, 'w', 0o600);
+  try {
+    let segmentStart = 0;
+    for (const field of metadataFields) {
+      writeChunk(descriptor, buffer.subarray(segmentStart, field.fieldStart));
+      const metadata = fromBinary(MetadataSchema, buffer.subarray(field.valueStart, field.valueEnd));
+      metadata.projectRoot = targetProjectRoot;
+      const encoded = toBinary(MetadataSchema, metadata);
+      writeChunk(descriptor, encodeLengthDelimitedTag(INDEX_METADATA_FIELD));
+      writeChunk(descriptor, encodeVarint(encoded.byteLength));
+      writeChunk(descriptor, encoded);
+      segmentStart = field.fieldEnd;
+    }
+    writeChunk(descriptor, buffer.subarray(segmentStart));
+  } catch (error) {
+    closeSync(descriptor);
+    rmSync(temporaryPath, { force: true });
+    throw error;
+  }
+  closeSync(descriptor);
+  renameSync(temporaryPath, path);
+}
+
+function writeChunk(descriptor: number, bytes: Uint8Array): void {
+  let offset = 0;
+  while (offset < bytes.byteLength) offset += writeSync(descriptor, bytes, offset, bytes.byteLength - offset);
 }
 
 function mergeMetadata(indexes: readonly Index[]): Index['metadata'] {

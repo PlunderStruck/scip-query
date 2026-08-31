@@ -18,8 +18,10 @@ import {
   mergeAndSanitizeScipFiles,
   mergeScipFiles,
   mergeScipIndexes,
+  rebaseScipFileProjectRoot,
   rebaseScipProjectRoot,
 } from '../../src/reindex/merge.js';
+import { readScipIndexProjectRoot } from '../../src/reindex/scip-wire.js';
 
 const tempDirs: string[] = [];
 
@@ -37,6 +39,28 @@ describe('SCIP merge support', () => {
     expect(rebased.metadata?.projectRoot).toBe('file:///tmp/scip-query-linked');
     expect(original.metadata?.projectRoot).toBe('file:///tmp/scip-query-fixture');
     expect(() => rebaseScipProjectRoot(original, 'file:///wrong', 'file:///target')).toThrow('expected file:///wrong');
+  });
+
+  it('rebases an artifact in place without deserializing its documents', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'scip-query-rebase-'));
+    tempDirs.push(dir);
+    const path = join(dir, 'index.scip');
+    const original = createFixtureIndex({});
+    // Concatenated shard artifacts repeat the index message; the effective
+    // metadata is their protobuf merge and every occurrence must be rebased.
+    writeFileSync(path, Buffer.concat([serializeSCIP(original), serializeSCIP(original)]));
+
+    expect(readScipIndexProjectRoot(readFileSync(path))).toBe('file:///tmp/scip-query-fixture');
+    expect(() => rebaseScipFileProjectRoot(path, 'file:///wrong', 'file:///target')).toThrow('expected file:///wrong');
+
+    rebaseScipFileProjectRoot(path, 'file:///tmp/scip-query-fixture', 'file:///tmp/scip-query-linked');
+
+    const rebased = deserializeSCIP(readFileSync(path));
+    expect(rebased.metadata?.projectRoot).toBe('file:///tmp/scip-query-linked');
+    expect(rebased.documents).toEqual(
+      deserializeSCIP(Buffer.concat([serializeSCIP(original), serializeSCIP(original)])).documents,
+    );
+    expect(readScipIndexProjectRoot(readFileSync(path))).toBe('file:///tmp/scip-query-linked');
   });
 
   it('merges overlapping documents and deduplicates external symbols', () => {

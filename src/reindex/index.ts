@@ -1050,6 +1050,11 @@ async function runLanguageIndexersForFreshReindex(
   opts: Parameters<typeof runFreshReindex>[0],
   env: NodeJS.ProcessEnv,
 ): Promise<FreshIndexRun> {
+  // A forced reindex is a request to rebuild from the compilers: cached
+  // language shards, per-project shards, and the accepted incremental graph
+  // would each carry distrusted state forward, which is exactly what --force
+  // exists to escape.
+  const forcedRebuild = opts.opts.skipIfUnchanged === false;
   const classification = classifyLanguageShardReuse({
     paths: opts.paths,
     projectRoot: opts.projectRoot,
@@ -1060,6 +1065,13 @@ async function runLanguageIndexersForFreshReindex(
     clojureConfigPath: opts.opts.clojureConfigPath,
     projectFingerprint: opts.fingerprint,
   });
+  if (forcedRebuild) {
+    for (const [language, info] of classification) {
+      if (info.reused) {
+        classification.set(language, { ...info, reused: false, reason: 'forced reindex requested' });
+      }
+    }
+  }
   const reusableOutputs: IndexedOutput[] = [];
   const reused = new Set<SupportedLanguage>();
   for (const [language, info] of classification) {
@@ -1080,8 +1092,11 @@ async function runLanguageIndexersForFreshReindex(
     acceptedMetadata?.scipCompanion !== 'deferred' &&
     (acceptedGeneration.state !== 'current' || acceptedGeneration.generation.publication?.scipCompanion !== 'deferred');
   let typescriptIncrementalUnavailableReason: string | undefined;
+  if (forcedRebuild && typescriptClassification && !typescriptClassification.reused) {
+    typescriptIncrementalUnavailableReason = 'forced reindex rebuilds from the compilers';
+  }
   const incrementalTypeScript =
-    typescriptClassification && !typescriptClassification.reused && incrementalGenerationUsable
+    !forcedRebuild && typescriptClassification && !typescriptClassification.reused && incrementalGenerationUsable
       ? tryMaterializeTypeScriptIncrementalIndex({
           projectRoot: opts.projectRoot,
           cacheDir: dirname(opts.paths.outputDb),
@@ -1124,10 +1139,26 @@ async function runLanguageIndexersForFreshReindex(
   // (invariant: the language fingerprint covers the same files every
   // project's fingerprint is built from), so the classification below is
   // skipped entirely on that path (today's behavior, untouched).
-  const tsProjectShards =
+  const plannedProjectShards =
     incrementalTypeScript || reused.has('typescript')
       ? undefined
       : planTypeScriptProjectShardReuse(opts, classification);
+  // Forced runs still plan (so freshly built project shards are fingerprinted
+  // and cached for later reuse) but never serve a cached shard.
+  const tsProjectShards =
+    plannedProjectShards && forcedRebuild
+      ? {
+          ...plannedProjectShards,
+          classification: new Map(
+            [...plannedProjectShards.classification].map(([project, info]) => [
+              project,
+              info.reused ? { ...info, reused: false, reason: 'forced reindex requested' } : info,
+            ]),
+          ),
+          reusedProjects: [],
+          missedProjectIds: new Set(plannedProjectShards.allProjects.map((project) => `typescript:${project}`)),
+        }
+      : plannedProjectShards;
 
   const {
     preparedRuns: preparedRunsAll,

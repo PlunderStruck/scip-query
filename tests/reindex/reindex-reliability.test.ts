@@ -291,6 +291,34 @@ describe('reindex reliability', () => {
     expect(statuses.join('\n')).toContain('Reusing cached python SCIP shard');
   });
 
+  it('rebuilds every language on a forced reindex instead of serving cached shards', async () => {
+    const projectRoot = createProject('scip-query-reindex-forced-');
+    const cacheDir = join(projectRoot, '.cache');
+    mkdirSync(cacheDir);
+    const statuses: string[] = [];
+
+    const { reindex, attempts } = await loadReindexFixture({
+      languages: ['typescript', 'python'],
+    });
+
+    const common = {
+      projectRoot,
+      outputScip: join(cacheDir, 'index.scip'),
+      outputDb: join(cacheDir, 'index.db'),
+      onStatus: (message: string) => statuses.push(message),
+      indexerConcurrency: 1,
+    };
+    await reindex(common);
+    // Nothing changed, but a forced run must rebuild from the compilers: a
+    // cached shard served under --force would carry distrusted state forward.
+    const forced = await reindex({ ...common, skipIfUnchanged: false });
+
+    expect(forced.languages.sort()).toEqual(['python', 'typescript']);
+    expect(attempts.get('typescript')).toBe(2);
+    expect(attempts.get('python')).toBe(2);
+    expect(statuses.join('\n')).not.toContain('Reusing cached');
+  });
+
   it('does not reuse a future metadata version as current reindex state', async () => {
     const projectRoot = createProject('scip-query-reindex-future-metadata-');
     const cacheDir = join(projectRoot, '.cache');
