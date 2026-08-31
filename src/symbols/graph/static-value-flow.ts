@@ -392,12 +392,25 @@ function memberParts(node: SyntaxNode): { base: string; properties: string[] } |
   return base ? { base, properties } : null;
 }
 
-function findVariableInitializer(root: SyntaxNode, name: string): SyntaxNode | null {
-  let match: SyntaxNode | null = null;
+/**
+ * One evaluation can resolve many identifiers, and imported-constant
+ * resolution re-enters with other files' roots, so per-lookup tree walks made
+ * whole-repository boundary extraction quadratic (single files cost over a
+ * second). Index every const initializer in one walk per root and answer
+ * lookups from the map; the first declarator that satisfies the const
+ * predicate wins, matching the original first-match scan.
+ */
+const CONST_INITIALIZERS_BY_ROOT = new WeakMap<SyntaxNode, ReadonlyMap<string, SyntaxNode>>();
+
+function constInitializers(root: SyntaxNode): ReadonlyMap<string, SyntaxNode> {
+  const cached = CONST_INITIALIZERS_BY_ROOT.get(root);
+  if (cached) return cached;
+  const initializers = new Map<string, SyntaxNode>();
   walk(root, (node) => {
-    if (match || node.type !== 'variable_declarator') return;
+    if (node.type !== 'variable_declarator') return;
     const declared = node.childForFieldName('name') ?? node.namedChild(0);
-    if (declared?.text.trim() !== name) return;
+    const name = declared?.text.trim();
+    if (!name || initializers.has(name)) return;
     const declaration = node.parent;
     if (
       !declaration ||
@@ -406,9 +419,15 @@ function findVariableInitializer(root: SyntaxNode, name: string): SyntaxNode | n
     ) {
       return;
     }
-    match = node.childForFieldName('value') ?? node.namedChild(1);
+    const value = node.childForFieldName('value') ?? node.namedChild(1);
+    if (value) initializers.set(name, value);
   });
-  return match;
+  CONST_INITIALIZERS_BY_ROOT.set(root, initializers);
+  return initializers;
+}
+
+function findVariableInitializer(root: SyntaxNode, name: string): SyntaxNode | null {
+  return constInitializers(root).get(name) ?? null;
 }
 
 function objectMemberValue(object: SyntaxNode, property: string): SyntaxNode | null {

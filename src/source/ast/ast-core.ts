@@ -43,6 +43,26 @@ export function getAst(db: ScipDatabase, relativePath: string): Tree | null {
 }
 
 /**
+ * Cached parse for caller-supplied bytes. The cache entry is keyed by the
+ * exact source string, so this keeps `parseAstSourceText`'s exact-bytes
+ * guarantee while letting whole-repository passes that read current file
+ * content share one tree per content with `getAst` consumers instead of
+ * re-parsing the same bytes.
+ */
+export function getAstForSource(db: ScipDatabase, relativePath: string, source: string): Tree | null {
+  if (isVueSfcPath(relativePath)) {
+    return TREE_CACHE.get(db, relativePath, source, () => {
+      const block = extractVueScriptBlock(db, relativePath, source);
+      if (!block) return null;
+      return parseAstSource(block.language, '\n'.repeat(block.startLine) + block.body);
+    });
+  }
+  const lang = detectAstLanguage(relativePath);
+  if (!lang) return null;
+  return TREE_CACHE.get(db, relativePath, source, () => parseAstSource(lang, source));
+}
+
+/**
  * Parse caller-supplied bytes under the same language and Vue policy as the
  * live-file AST path. Change-relative analyzers use this boundary so a parser
  * cannot silently substitute the current worktree for a fixed Git-base blob.

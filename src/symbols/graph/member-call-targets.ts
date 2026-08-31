@@ -1,7 +1,14 @@
 import { pathsResolveSame } from '../../domain/path-normalization.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
 import { getSourceImports } from '../../language-parsers/index.js';
-import { getAst, getCallableSites, getCallSites, smallestCoveringCallable, type SyntaxNode } from '../../source/ast.js';
+import {
+  getAst,
+  getCallableSites,
+  getCallSites,
+  nodesOfTypes,
+  smallestCoveringCallable,
+  type SyntaxNode,
+} from '../../source/ast.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../definition-catalog.js';
@@ -347,7 +354,7 @@ function factoryCallbackMemberTargets(
     for (const reference of getResolvedReferenceSites(db, factory)) {
       const callerRoot = getAst(db, reference.file)?.rootNode;
       if (!callerRoot) continue;
-      const calls = callerRoot.descendantsOfType('call_expression').filter((node) => {
+      const calls = nodesOfTypes(callerRoot, 'call_expression').filter((node) => {
         if (node.startPosition.row > reference.line || node.endPosition.row < reference.line) return false;
         const callee = node.childForFieldName('function') ?? node.namedChild(0);
         const leaf = callee?.text
@@ -413,7 +420,7 @@ function callExpressionForSite(
   let calls = byFile.get(sourceFile);
   if (!calls) {
     calls = new Map();
-    for (const node of root.descendantsOfType('call_expression')) {
+    for (const node of nodesOfTypes(root, 'call_expression')) {
       const callee = node.childForFieldName('function') ?? node.namedChild(0);
       const match = /^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/u.exec(callee?.text.replace(/\s+/gu, '') ?? '');
       if (!match) continue;
@@ -790,7 +797,7 @@ function factoryReturnedMemberCallbackImplementations(
 }
 
 function findVariableInitializer(root: SyntaxNode, name: string): SyntaxNode | null {
-  for (const node of root.descendantsOfType('variable_declarator')) {
+  for (const node of nodesOfTypes(root, 'variable_declarator')) {
     const declared = node.childForFieldName('name') ?? node.namedChild(0);
     if (declared?.text === name) return node.childForFieldName('value') ?? node.namedChild(1);
   }

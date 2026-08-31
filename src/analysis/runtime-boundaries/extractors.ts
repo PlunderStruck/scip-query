@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
-import { getAst, parseAstSourceText } from '../../source/ast/ast-core.js';
+import { getAst, getAstForSource } from '../../source/ast/ast-core.js';
+import { nodesOfTypes } from '../../source/ast/ast-node-index.js';
 import { parameterName } from '../../source/ast/ast-callables.js';
 import { detectAstLanguage } from '../../source/ast/ast-language.js';
 import type { SyntaxNode, Tree } from '../../source/ast/ast-types.js';
@@ -160,7 +161,7 @@ export function boundaryFileContext(
   profileSpan?: RuntimeBoundaryProfileSpan,
 ): BoundaryFileContext | null {
   const tree = profileBoundaryWork(profileSpan, 'runtime-boundaries.context.ast', file, () =>
-    knownSource === undefined ? getAst(db, file) : parseAstSourceText(db, file, knownSource)?.tree,
+    knownSource === undefined ? getAst(db, file) : getAstForSource(db, file, knownSource),
   );
   if (!tree) return null;
   const root = tree.rootNode;
@@ -1131,5 +1132,5 @@ function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
 }
 
 function visitDescendantsOfType(root: SyntaxNode, type: string | string[], visit: (node: SyntaxNode) => void): void {
-  for (const node of root.descendantsOfType(type)) visit(node);
+  for (const node of nodesOfTypes(root, type)) visit(node);
 }

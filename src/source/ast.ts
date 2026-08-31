@@ -16,6 +16,7 @@ export {
   walkNamedSyntax,
 } from './ast/ast-callables.js';
 export { getAst, parseAstSourceText } from './ast/ast-core.js';
+export { nodesOfTypes } from './ast/ast-node-index.js';
 export {
   callableSitesFromRoot,
   extractCallLeaf,

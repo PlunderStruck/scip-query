@@ -12,6 +12,8 @@ export interface Tree {
 export interface TreeCursor {
   nodeType: string;
   nodeText: string;
+  /** Materializes a node object for the cursor position; costs native cache memory, so read `nodeType` first. */
+  readonly currentNode: SyntaxNode;
   gotoFirstChild(): boolean;
   gotoNextSibling(): boolean;
   gotoParent(): boolean;
@@ -33,6 +35,7 @@ export interface SyntaxNode {
   namedChild(index: number): SyntaxNode | null;
   childForFieldName(name: string): SyntaxNode | null;
   descendantsOfType(type: string | string[]): SyntaxNode[];
+  walk(): TreeCursor;
 }
 
 export interface QueryInstance {

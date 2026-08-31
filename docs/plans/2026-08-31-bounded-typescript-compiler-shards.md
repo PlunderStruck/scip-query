@@ -47,6 +47,17 @@ A **convergent callee prewarm** is the batched form of `health --full` semantic 
 7. Whole-file syntax sweeps traverse with a tree cursor (`Tree.walk()`), not per-node objects; a node object pins native cache memory that a synchronous sweep cannot release, because tree-sitter's native frees run in V8 second-pass callbacks that need event-loop turns.
 8. `src/platform/native-gc.ts` can trigger collection without `--expose-gc` (runtime flag route) and accumulates finalizer-owned allocation estimates from the AST parse funnel; it bounds dead-tree accumulation wherever the event loop does turn, and is a no-op guard, never a correctness dependency.
 
+## Second round: forced-run semantics and coordinator bounds (same day)
+
+Confirming on the real repository (not the clone) exposed four more defects, each invisible on a cold cache:
+
+- **`--force` didn't force.** With an unchanged accepted generation, a forced run served the cached language shard or the incremental materialization — carrying forward exactly the state `--force` exists to escape. Forced runs now classify every language and project shard as missed and skip incremental materialization; freshly built shards are still fingerprinted and cached.
+- **The coordinator deserialized the whole index three ways.** `sanitizeScipFile` materialized a ~355 MB artifact into gigabytes of objects on every full conversion; shared-generation publication and validation each did the same just to read `metadata.projectRoot`; baseline hydration did it again to rewrite that one string. All four now use protobuf wire framing (`src/reindex/scip-wire.ts`): sanitize is a two-pass framing scan that copies untouched documents verbatim, the metadata reads decode nothing but the field they need, and rebase rewrites only metadata occurrences. The coordinator's earlier default-heap OOM (4 GB) on the real cache came from these, stacked on incremental-path state.
+- **Static value evaluation was quadratic.** `findVariableInitializer` walked the whole tree per identifier lookup — including other files' trees for imported constants — making single files cost over a second in the capability-registry extractor. A memoized per-root const-initializer index (first passing declarator wins, preserving the scan's semantics) answers lookups O(1): 1,755 ms → 2 ms warm on the worst file; the extractor went 17.5 s → 3.8 s repo-wide.
+- **Extraction re-scanned and re-parsed.** Up to eight full-tree `descendantsOfType` scans per file (native cursor traversal dominated the phase) collapse into one per-root type-indexed pass (`src/source/ast/ast-node-index.ts`); extraction's per-file parse now enters the source-keyed tree cache (`getAstForSource`) so cross-file constant resolution shares trees instead of re-parsing.
+
+Measured end state on the real repository, forced full reindex at the **default heap**: **91.3 s, published**, coordinator JS heap within the 4 GB default (peak RSS 6.6 GB is dominated by extraction's native trees), max shard child 5.6 GB. The session started with this exact command crashing at 112 s with nothing published. Runtime-boundary extraction: 54 s → 36 s.
+
 ## Named follow-ups
 
 - The dev watch-server's RSS grows over hours (observed 3.9 → 5.4 GB on one repository); its semantic/index service heap is the next bounded-memory candidate.
