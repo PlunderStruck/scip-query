@@ -93,7 +93,7 @@ import {
 } from './affected-shadow.js';
 import { detectLanguages } from './detect.js';
 import { getIndexerConfig, temporaryRootConfigContent } from './indexers.js';
-import { mergeAndSanitizeScipFiles, mergeScipFiles } from './merge.js';
+import { concatenateScipFiles, mergeAndSanitizeScipFiles, mergeScipFiles } from './merge.js';
 import { patchIncrementalSqliteGeneration } from './incremental-sqlite-publication.js';
 import { optimizeSqliteQueryLayout } from './sqlite-index-maintenance.js';
 import { runPostIndexAugmentation } from './augmentation/post-index-augmentation.js';
@@ -132,7 +132,15 @@ import {
   activeTypeScriptProjectConfigPaths,
   discoverTypeScriptProjectRoots,
   isTypeScriptProjectConfigPath,
+  typeScriptProjectInputPaths,
 } from './typescript-projects.js';
+import {
+  createTypeScriptCompilerShards,
+  removeStaleTypeScriptCompilerShardConfigs,
+  shouldShardTypeScriptCompilerInputs,
+  typescriptCompilerShardConcurrency,
+  typescriptCompilerShardTargetFiles,
+} from './typescript-compiler-shards.js';
 import {
   materializeDeferredTypeScriptIndex,
   tryMaterializeTypeScriptIncrementalIndex,
@@ -2295,7 +2303,7 @@ function prepareIndexerRunsForLanguage(opts: {
   clojureConfigPath?: string;
   onStatus: (message: string) => void;
 }): ({ prepared: PreparedIndexerRun } | { skipped: { language: SupportedLanguage; reason: string } })[] {
-  if (opts.language !== 'typescript' || opts.typescriptProjectMode !== 'workspace') {
+  if (opts.language !== 'typescript') {
     return [
       prepareIndexerRun({
         ...opts,
@@ -2306,8 +2314,11 @@ function prepareIndexerRunsForLanguage(opts: {
     ];
   }
 
-  const projects =
-    opts.preDiscoveredTypeScriptProjects ?? discoverTypeScriptProjectRoots(opts.projectRoot, opts.typescriptProjects);
+  const workspaceMode = opts.typescriptProjectMode === 'workspace';
+  const projects = workspaceMode
+    ? (opts.preDiscoveredTypeScriptProjects ??
+      discoverTypeScriptProjectRoots(opts.projectRoot, opts.typescriptProjects))
+    : ['.'];
   if (projects.length === 0) {
     return [
       prepareIndexerRun({
@@ -2319,16 +2330,71 @@ function prepareIndexerRunsForLanguage(opts: {
     ];
   }
 
-  opts.onStatus(`Indexing TypeScript workspace as ${projects.length} project shard(s).`);
-  return projects.map((projectPath, index) =>
-    prepareIndexerRun({
+  if (workspaceMode) opts.onStatus(`Indexing TypeScript workspace as ${projects.length} project shard(s).`);
+  return projects.flatMap((projectPath, index) => {
+    const id = workspaceMode ? `typescript:${projectPath}` : 'typescript';
+    const label = workspaceMode ? `typescript (${projectPath})` : 'typescript';
+    const runScipPath = workspaceMode ? tempScipPath(opts.tempOutputScip, 'typescript-project', index) : opts.scipPath;
+    const common = {
       ...opts,
-      id: `typescript:${projectPath}`,
-      label: `typescript (${projectPath})`,
-      scipPath: tempScipPath(opts.tempOutputScip, 'typescript-project', index),
+      id,
+      label,
+      scipPath: runScipPath,
       outputScipPath: opts.scipPath,
       pnpmWorkspaces: false,
-      projectPath,
+    };
+
+    if (!workspaceMode && projectPath === '.' && !opts.pnpmWorkspaces) {
+      const compilerShardRuns = prepareBoundedTypeScriptCompilerShardRuns(opts, common);
+      if (compilerShardRuns) return compilerShardRuns;
+    }
+
+    return [
+      prepareIndexerRun({
+        ...common,
+        ...(workspaceMode ? { projectPath } : {}),
+      }),
+    ];
+  });
+}
+
+/**
+ * A single-project TypeScript repository above the shard threshold is indexed
+ * as several bounded compiler programs instead of one monolithic program
+ * whose checker state can exceed the child heap. Shards are disjoint by
+ * construction (each shard config overrides the inherited include contract),
+ * so their streamed outputs concatenate into one complete index.
+ */
+function prepareBoundedTypeScriptCompilerShardRuns(
+  opts: Parameters<typeof prepareIndexerRunsForLanguage>[0],
+  common: Omit<Parameters<typeof prepareIndexerRun>[0], 'projectPath'>,
+): ({ prepared: PreparedIndexerRun } | { skipped: { language: SupportedLanguage; reason: string } })[] | null {
+  const targetFiles = typescriptCompilerShardTargetFiles();
+  const inputPaths = typeScriptProjectInputPaths(opts.projectRoot, 'single');
+  if (!inputPaths || !shouldShardTypeScriptCompilerInputs(inputPaths.size, targetFiles)) return null;
+
+  removeStaleTypeScriptCompilerShardConfigs(opts.projectRoot);
+  const compilerShards = createTypeScriptCompilerShards({
+    projectRoot: opts.projectRoot,
+    rootConfigPath: 'tsconfig.json',
+    inputPaths: [...inputPaths],
+    targetFiles,
+  });
+  const boundedConcurrency = typescriptCompilerShardConcurrency(compilerShards.length);
+  opts.onStatus(
+    `Indexing ${inputPaths.size} TypeScript inputs as ${compilerShards.length} bounded compiler shard(s), ` +
+      `${boundedConcurrency} at a time.`,
+  );
+  return compilerShards.map((shard, shardIndex) =>
+    prepareIndexerRun({
+      ...common,
+      id: `typescript-compiler-shard:${shardIndex}`,
+      label: `typescript compiler shard ${shardIndex + 1}/${compilerShards.length}`,
+      scipPath: tempScipPath(opts.tempOutputScip, 'typescript-compiler-shard', shardIndex),
+      projectPath: shard.configPath,
+      temporaryProjectConfigs: [{ path: shard.configPath, content: shard.content }],
+      boundedConcurrency,
+      outputComposition: 'protobuf-concatenate',
     }),
   );
 }
@@ -2345,6 +2411,9 @@ function prepareIndexerRun(opts: {
   trustProjectTools: boolean;
   pnpmWorkspaces?: boolean;
   projectPath?: string;
+  temporaryProjectConfigs?: readonly { path: string; content: string }[];
+  boundedConcurrency?: number;
+  outputComposition?: 'protobuf-concatenate';
   clojureConfigPath?: string;
   onStatus: (message: string) => void;
 }): { prepared: PreparedIndexerRun } | { skipped: { language: SupportedLanguage; reason: string } } {
@@ -2426,6 +2495,9 @@ function prepareIndexerRun(opts: {
       args,
       env: getIndexerExecutionEnv(config, opts.env, resolvedBinary),
       ...(rootConfigContent === undefined ? {} : { temporaryRootConfigContent: rootConfigContent }),
+      ...(opts.temporaryProjectConfigs === undefined ? {} : { temporaryProjectConfigs: opts.temporaryProjectConfigs }),
+      ...(opts.boundedConcurrency === undefined ? {} : { boundedConcurrency: opts.boundedConcurrency }),
+      ...(opts.outputComposition ? { outputComposition: opts.outputComposition } : {}),
       ...(trustedProjectTool ? { trustedProjectTool } : {}),
     },
   };
@@ -2435,18 +2507,32 @@ function collectIndexerOutputs(
   runResults: readonly IndexerRunResult[],
   skippedLanguages: { language: SupportedLanguage; reason: string }[],
 ): { indexedOutputs: { language: SupportedLanguage; scipPath: string }[] } {
-  const groups = new Map<string, { language: SupportedLanguage; outputScipPath: string; scipPaths: string[] }>();
+  // A concatenated composition is complete only when every shard succeeded;
+  // one failed shard blocks the whole language output rather than publishing
+  // a silently incomplete index.
+  const blockedCompositions = new Set(
+    runResults
+      .filter((result) => result.skipped && result.outputComposition)
+      .map((result) => `${result.language}\0${result.outputScipPath}`),
+  );
+  const groups = new Map<
+    string,
+    { language: SupportedLanguage; outputScipPath: string; scipPaths: string[]; concatenate: boolean }
+  >();
   for (const result of runResults) {
     if (result.skipped) {
       appendSkippedLanguage(skippedLanguages, result.skipped);
     } else {
       const key = `${result.language}\0${result.outputScipPath}`;
+      if (blockedCompositions.has(key)) continue;
       const group = groups.get(key) ?? {
         language: result.language,
         outputScipPath: result.outputScipPath,
         scipPaths: [],
+        concatenate: true,
       };
       group.scipPaths.push(result.scipPath);
+      if (result.outputComposition !== 'protobuf-concatenate') group.concatenate = false;
       groups.set(key, group);
     }
   }
@@ -2454,7 +2540,8 @@ function collectIndexerOutputs(
   const indexedOutputs: { language: SupportedLanguage; scipPath: string }[] = [];
   for (const group of groups.values()) {
     if (group.scipPaths.length > 1) {
-      mergeScipFiles(group.scipPaths, group.outputScipPath);
+      if (group.concatenate) concatenateScipFiles(group.scipPaths, group.outputScipPath);
+      else mergeScipFiles(group.scipPaths, group.outputScipPath);
       indexedOutputs.push({ language: group.language, scipPath: group.outputScipPath });
     } else {
       const scipPath = group.scipPaths[0]!;

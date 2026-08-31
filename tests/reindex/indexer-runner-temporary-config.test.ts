@@ -69,6 +69,46 @@ describe('temporary indexer root configuration', () => {
 
     expect(readFileSync(configPath, 'utf8')).toBe(replacement);
   });
+
+  it('creates every bounded project config for the child and removes them afterward', async () => {
+    const root = createProject();
+    const output = join(root, 'index.scip');
+    const first = join(root, 'shard-0.json');
+    const second = join(root, 'shard-1.json');
+    const run = nodeRun(root, output);
+    run.temporaryProjectConfigs = [
+      { path: first, content: '{"files":["a.ts"]}' },
+      { path: second, content: '{"files":["b.ts"]}' },
+    ];
+    run.args = [
+      '-e',
+      `const fs = require('node:fs'); const ok = fs.readFileSync(${JSON.stringify(first)}, 'utf8').includes('a.ts') && fs.readFileSync(${JSON.stringify(second)}, 'utf8').includes('b.ts'); if (!ok) process.exitCode = 2; else fs.writeFileSync(${JSON.stringify(output)}, 'index')`,
+    ];
+
+    const [result] = await runPreparedIndexers([run], root, () => {});
+
+    expect(result?.skipped).toBeUndefined();
+    expect(existsSync(first)).toBe(false);
+    expect(existsSync(second)).toBe(false);
+  });
+
+  it('replaces a stale owned project config left behind by an interrupted run', async () => {
+    const root = createProject();
+    const output = join(root, 'index.scip');
+    const configPath = join(root, 'shard-0.json');
+    writeFileSync(configPath, '{"files":["stale.ts"]}');
+    const run = nodeRun(root, output);
+    run.temporaryProjectConfigs = [{ path: configPath, content: '{"files":["fresh.ts"]}' }];
+    run.args = [
+      '-e',
+      `const fs = require('node:fs'); if (!fs.readFileSync(${JSON.stringify(configPath)}, 'utf8').includes('fresh.ts')) process.exitCode = 2; else fs.writeFileSync(${JSON.stringify(output)}, 'index')`,
+    ];
+
+    const [result] = await runPreparedIndexers([run], root, () => {});
+
+    expect(result?.skipped).toBeUndefined();
+    expect(existsSync(configPath)).toBe(false);
+  });
 });
 
 function createProject(): string {

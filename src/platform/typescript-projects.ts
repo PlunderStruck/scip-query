@@ -58,6 +58,23 @@ export function isTypeScriptProjectConfigPath(relativePath: string): boolean {
   return name?.startsWith('tsconfig') === true && name.endsWith('.json');
 }
 
+const TYPESCRIPT_COMPILER_SHARD_CONFIG_PATTERN = /^\.scipquery-compiler-shard-\d+\.tsconfig\.json$/;
+
+/** Project-root file name of one transient bounded compiler shard config. */
+export function typescriptCompilerShardConfigFileName(shardIndex: number): string {
+  return `.scipquery-compiler-shard-${shardIndex}.tsconfig.json`;
+}
+
+/**
+ * True for a transient scip-query-owned compiler shard config written into
+ * the project root during bounded single-project TypeScript indexing. These
+ * exist only while their indexer child runs and are excluded from project
+ * fingerprints so a concurrent enumeration cannot observe them as inputs.
+ */
+export function isTypeScriptCompilerShardConfigPath(relativePath: string): boolean {
+  return TYPESCRIPT_COMPILER_SHARD_CONFIG_PATTERN.test(relativePath);
+}
+
 /**
  * Return source paths selected by the same TypeScript compiler config files
  * that define the index. `null` means compiler configuration could not be

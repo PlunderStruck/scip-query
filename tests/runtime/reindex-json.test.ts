@@ -175,4 +175,43 @@ describe('handleReindex --json', () => {
       log.mockRestore();
     }
   });
+
+  it('carries the whole-project rebuild permission with an explicit --force', async () => {
+    const projectRoot = createProject();
+    const fakeResult: ReindexResult = {
+      languages: ['typescript'],
+      indexPath: join(projectRoot, 'index.scip'),
+      dbPath: join(projectRoot, 'index.db'),
+      durationMs: 300,
+      reused: false,
+      skipped: [],
+      shards: [],
+    };
+    const reindex = vi.fn().mockResolvedValue(fakeResult);
+
+    vi.doMock('../../src/reindex/index.js', () => ({
+      reindex,
+      detectLanguages: () => ['typescript'],
+      augmentAuxiliaryDocuments: vi.fn(),
+      augmentVueResolvedReferences: vi.fn(),
+    }));
+
+    const { handleReindex } = await import('../../src/runtime/commands/command-handlers.js');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    try {
+      await withProjectRoot(projectRoot, () => handleReindex({ force: true }));
+      expect(reindex.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({ skipIfUnchanged: false, allowExpensiveRebuild: true }),
+      );
+
+      reindex.mockClear();
+      await withProjectRoot(projectRoot, () => handleReindex({}));
+      expect(reindex.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({ skipIfUnchanged: true, allowExpensiveRebuild: false }),
+      );
+    } finally {
+      log.mockRestore();
+    }
+  });
 });

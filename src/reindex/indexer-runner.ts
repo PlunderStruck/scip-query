@@ -36,6 +36,15 @@ export interface PreparedIndexerRun {
   args: string[];
   env: NodeJS.ProcessEnv;
   temporaryRootConfigContent?: string;
+  temporaryProjectConfigs?: readonly { path: string; content: string }[];
+  /**
+   * Runs carrying this limit execute in their own memory-bounded pool: at
+   * most this many of them run at once, regardless of the general indexer
+   * concurrency. Used by bounded TypeScript compiler shards, where each child
+   * holds an independent compiler program.
+   */
+  boundedConcurrency?: number;
+  outputComposition?: 'protobuf-concatenate';
   trustedProjectTool?: TrustedProjectToolIdentity;
 }
 
@@ -55,6 +64,7 @@ export interface IndexerRunResult {
   outputBytes?: number;
   /** Bytes newly emitted by this run when outputBytes names a larger accepted base shard. */
   producedOutputBytes?: number;
+  outputComposition?: 'protobuf-concatenate';
   skipped?: { language: SupportedLanguage; reason: string };
 }
 
@@ -75,16 +85,23 @@ interface OwnedTemporaryRootConfig {
   inode: number;
 }
 
-function takeTemporaryRootConfig(run: PreparedIndexerRun, projectRoot: string): OwnedTemporaryRootConfig | null {
-  if (run.temporaryRootConfigContent === undefined) return null;
-  const path = join(projectRoot, 'tsconfig.json');
-  const content = Buffer.from(run.temporaryRootConfigContent, 'utf8');
+function takeTemporaryConfig(
+  path: string,
+  source: string,
+  onExisting: 'skip' | 'replace',
+): OwnedTemporaryRootConfig | null {
+  const content = Buffer.from(source, 'utf8');
+  const openOwned = (): number => openSync(path, 'wx', 0o600);
   let descriptor: number;
   try {
-    descriptor = openSync(path, 'wx', 0o600);
+    descriptor = openOwned();
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return null;
-    throw error;
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    if (onExisting === 'skip') return null;
+    // An existing file at an owned temporary-config path is a leftover from
+    // an interrupted earlier run; replace it rather than failing forever.
+    rmSync(path, { force: true });
+    descriptor = openOwned();
   }
   try {
     writeSync(descriptor, content);
@@ -92,6 +109,30 @@ function takeTemporaryRootConfig(run: PreparedIndexerRun, projectRoot: string): 
     return { path, content, device: stats.dev, inode: stats.ino };
   } finally {
     closeSync(descriptor);
+  }
+}
+
+function takeTemporaryConfigs(run: PreparedIndexerRun, projectRoot: string): OwnedTemporaryRootConfig[] {
+  const owned: OwnedTemporaryRootConfig[] = [];
+  try {
+    if (run.temporaryRootConfigContent !== undefined) {
+      // The project's real tsconfig.json is never replaced — an existing file
+      // there belongs to the user, so the synthesized root config steps aside.
+      const rootConfig = takeTemporaryConfig(
+        join(projectRoot, 'tsconfig.json'),
+        run.temporaryRootConfigContent,
+        'skip',
+      );
+      if (rootConfig) owned.push(rootConfig);
+    }
+    for (const config of run.temporaryProjectConfigs ?? []) {
+      const temporary = takeTemporaryConfig(config.path, config.content, 'replace');
+      if (temporary) owned.push(temporary);
+    }
+    return owned;
+  } catch (error) {
+    for (const config of owned.reverse()) releaseTemporaryRootConfig(config);
+    throw error;
   }
 }
 
@@ -186,26 +227,23 @@ export async function runPreparedIndexers(
 ): Promise<IndexerRunResult[]> {
   throwIfSignalAborted(signal, 'Reindex cancelled by its owner.');
   const defaultOutputRuns = runs.filter((run) => run.config.defaultOutputPath);
-  const directOutputRuns = runs.filter((run) => !run.config.defaultOutputPath);
+  const boundedRuns = runs.filter((run) => !run.config.defaultOutputPath && run.boundedConcurrency !== undefined);
+  const directOutputRuns = runs.filter((run) => !run.config.defaultOutputPath && run.boundedConcurrency === undefined);
   const results: IndexerRunResult[] = [];
-  const concurrency = resolveIndexerConcurrency(directOutputRuns.length, configuredConcurrency);
 
-  const directAttempts = await runWithConcurrency(directOutputRuns, concurrency, (run) =>
-    runPreparedIndexer(run, projectRoot, onStatus, signal),
+  results.push(
+    ...(await runIndexerPool(
+      directOutputRuns,
+      resolveIndexerConcurrency(directOutputRuns.length, configuredConcurrency),
+      projectRoot,
+      onStatus,
+      signal,
+    )),
   );
 
-  if (concurrency > 1) {
-    const retryResults = new Map<string, IndexerRunResult>();
-    for (const failed of directAttempts.filter((attempt) => attempt.result.skipped && attempt.retryable)) {
-      const run = directOutputRuns.find((candidate) => candidate.id === failed.result.id);
-      if (!run) continue;
-      onStatus(`Retrying ${run.label} indexer serially after parallel failure...`);
-      throwIfSignalAborted(signal, 'Reindex cancelled by its owner.');
-      retryResults.set(run.id, (await runPreparedIndexer(run, projectRoot, onStatus, signal)).result);
-    }
-    results.push(...directAttempts.map(({ result }) => retryResults.get(result.id) ?? result));
-  } else {
-    results.push(...directAttempts.map(({ result }) => result));
+  if (boundedRuns.length > 0) {
+    const boundedLimit = Math.max(1, Math.min(...boundedRuns.map((run) => run.boundedConcurrency!)));
+    results.push(...(await runIndexerPool(boundedRuns, boundedLimit, projectRoot, onStatus, signal)));
   }
 
   for (const run of defaultOutputRuns) {
@@ -214,6 +252,29 @@ export async function runPreparedIndexers(
   }
 
   return results.sort((a, b) => runs.findIndex((run) => run.id === a.id) - runs.findIndex((run) => run.id === b.id));
+}
+
+async function runIndexerPool(
+  pool: readonly PreparedIndexerRun[],
+  concurrency: number,
+  projectRoot: string,
+  onStatus: (message: string) => void,
+  signal?: AbortSignal,
+): Promise<IndexerRunResult[]> {
+  const attempts = await runWithConcurrency(pool, Math.max(1, concurrency), (run) =>
+    runPreparedIndexer(run, projectRoot, onStatus, signal),
+  );
+  if (concurrency <= 1) return attempts.map(({ result }) => result);
+
+  const retryResults = new Map<string, IndexerRunResult>();
+  for (const failed of attempts.filter((attempt) => attempt.result.skipped && attempt.retryable)) {
+    const run = pool.find((candidate) => candidate.id === failed.result.id);
+    if (!run) continue;
+    onStatus(`Retrying ${run.label} indexer serially after parallel failure...`);
+    throwIfSignalAborted(signal, 'Reindex cancelled by its owner.');
+    retryResults.set(run.id, (await runPreparedIndexer(run, projectRoot, onStatus, signal)).result);
+  }
+  return attempts.map(({ result }) => retryResults.get(result.id) ?? result);
 }
 
 // scip-query: ignore-extract — this is the per-indexer backup/run/restore
@@ -229,11 +290,12 @@ async function runPreparedIndexer(
   onStatus(`Indexing ${run.label} with ${run.resolvedBinary}...`);
   rmSync(run.scipPath, { force: true });
   const defaultOutputBackup = takeDefaultOutputBackup(run.config, projectRoot, run.scipPath);
-  const temporaryRootConfig = takeTemporaryRootConfig(run, projectRoot);
+  let temporaryConfigs: OwnedTemporaryRootConfig[] = [];
   const command = [run.binary, ...run.args].join(' ');
   const startedAt = monotonicNowMs();
 
   try {
+    temporaryConfigs = takeTemporaryConfigs(run, projectRoot);
     if (run.trustedProjectTool) {
       revalidateTrustedProjectTool(projectRoot, run.trustedProjectTool);
     }
@@ -273,13 +335,14 @@ async function runPreparedIndexer(
         outputScipPath: run.outputScipPath,
         durationMs: monotonicNowMs() - startedAt,
         command,
+        ...(run.outputComposition ? { outputComposition: run.outputComposition } : {}),
         skipped: { language: run.language, reason: skippedReason },
       },
       retryable: isTransientIndexerFailure(err),
     };
   } finally {
     restoreDefaultOutputBackup(defaultOutputBackup);
-    releaseTemporaryRootConfig(temporaryRootConfig);
+    for (const config of temporaryConfigs.reverse()) releaseTemporaryRootConfig(config);
   }
 
   if (!existsSync(run.scipPath)) {
@@ -295,6 +358,7 @@ async function runPreparedIndexer(
         outputScipPath: run.outputScipPath,
         durationMs: monotonicNowMs() - startedAt,
         command,
+        ...(run.outputComposition ? { outputComposition: run.outputComposition } : {}),
         skipped: { language: run.language, reason: skippedReason },
       },
       retryable: false,
@@ -315,6 +379,7 @@ async function runPreparedIndexer(
       outputScipPath: run.outputScipPath,
       durationMs: monotonicNowMs() - startedAt,
       command,
+      ...(run.outputComposition ? { outputComposition: run.outputComposition } : {}),
       outputBytes,
     },
     retryable: false,

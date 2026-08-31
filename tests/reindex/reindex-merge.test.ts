@@ -14,6 +14,7 @@ import {
   SymbolRole,
 } from '@c4312/scip';
 import {
+  concatenateScipFiles,
   mergeAndSanitizeScipFiles,
   mergeScipFiles,
   mergeScipIndexes,
@@ -102,6 +103,7 @@ describe('SCIP merge support', () => {
     const firstPath = join(dir, 'first.scip');
     const secondPath = join(dir, 'second.scip');
     const mergedPath = join(dir, 'merged.scip');
+    const concatenatedPath = join(dir, 'concatenated.scip');
 
     writeFileSync(
       firstPath,
@@ -147,6 +149,10 @@ describe('SCIP merge support', () => {
       documentCount: 2,
     });
     expect(merged.documents.map((document) => document.relativePath)).toEqual(['src/a.ts', 'src/b.py']);
+
+    concatenateScipFiles([firstPath, secondPath], concatenatedPath);
+    const concatenated = deserializeSCIP(readFileSync(concatenatedPath));
+    expect(concatenated.documents.map((document) => document.relativePath)).toEqual(['src/a.ts', 'src/b.py']);
   });
 
   it('deduplicates exact duplicate occurrences in overlapping documents', () => {

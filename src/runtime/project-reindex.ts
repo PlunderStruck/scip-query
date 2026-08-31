@@ -39,7 +39,10 @@ export function reindexConfiguredProject(
     clojureConfigPath: config.indexer?.clojure?.configPath,
     skipIfUnchanged: options.force !== true,
     allowPartial: options.allowPartial === true,
-    allowExpensiveRebuild: options.allowExpensiveRebuild === true,
+    // A forced reindex is an explicit request to rebuild everything, so it
+    // carries the whole-project rebuild permission with it; rebuild cost is
+    // bounded by compiler sharding rather than gated behind a second flag.
+    allowExpensiveRebuild: options.allowExpensiveRebuild === true || options.force === true,
     skipAutoInstall: options.skipAutoInstall === true,
     installMissing: options.installMissing === true,
     trustProjectTools: options.trustProjectTools === true,

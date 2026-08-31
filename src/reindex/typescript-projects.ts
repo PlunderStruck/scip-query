@@ -4,4 +4,5 @@ export {
   activeTypeScriptProjectConfigPaths,
   discoverTypeScriptProjectRoots,
   isTypeScriptProjectConfigPath,
+  typeScriptProjectInputPaths,
 } from '../platform/typescript-projects.js';

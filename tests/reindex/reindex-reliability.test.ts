@@ -1897,6 +1897,9 @@ async function loadReindexFixture(opts: {
       return { documentCount: 0, externalSymbolCount: 0, inputCount: _inputPaths.length };
     };
     return {
+      concatenateScipFiles: (inputPaths: readonly string[], outputPath: string) => {
+        mergeScipFiles(inputPaths, outputPath);
+      },
       mergeScipFiles,
       mergeAndSanitizeScipFiles: (inputPaths: readonly string[], outputPath: string) => ({
         ...mergeScipFiles(inputPaths, outputPath),

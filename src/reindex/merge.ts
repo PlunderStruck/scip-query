@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { closeSync, openSync, readSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { create } from '@bufbuild/protobuf';
 import {
   deserializeSCIP,
@@ -68,6 +68,49 @@ export function mergeScipFiles(inputPaths: readonly string[], outputPath: string
     externalSymbolCount: merged.externalSymbols.length,
     inputCount: inputPaths.length,
   };
+}
+
+/**
+ * Protobuf permits repeated encodings of one message to be concatenated: a
+ * reader merges singular fields and appends repeated fields. scip-typescript
+ * uses this same representation when it indexes several projects. Copying the
+ * bytes therefore combines disjoint compiler shards without deserializing the
+ * whole repository graph into the coordinator heap.
+ */
+export function concatenateScipFiles(inputPaths: readonly string[], outputPath: string): void {
+  if (inputPaths.length === 0) throw new Error('Cannot concatenate zero SCIP files');
+  let totalBytes = 0;
+  for (const path of inputPaths) {
+    totalBytes += statSync(path).size;
+    if (totalBytes > SCIP_ARTIFACT_MAX_BYTES) {
+      throw new Error(
+        `Concatenated SCIP output exceeds the ${SCIP_ARTIFACT_MAX_BYTES}-byte artifact limit. ` +
+          'Reduce the indexed project scope or use compatible cached generations.',
+      );
+    }
+  }
+
+  const buffer = Buffer.allocUnsafe(1024 * 1024);
+  const output = openSync(outputPath, 'w', 0o600);
+  try {
+    for (const path of inputPaths) {
+      const input = openSync(path, 'r');
+      try {
+        let bytesRead = 0;
+        while ((bytesRead = readSync(input, buffer, 0, buffer.byteLength, null)) > 0) {
+          let offset = 0;
+          while (offset < bytesRead) offset += writeSync(output, buffer, offset, bytesRead - offset);
+        }
+      } finally {
+        closeSync(input);
+      }
+    }
+  } catch (error) {
+    closeSync(output);
+    rmSync(outputPath, { force: true });
+    throw error;
+  }
+  closeSync(output);
 }
 
 export function mergeAndSanitizeScipFiles(
