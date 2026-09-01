@@ -49,6 +49,7 @@ export function callableFactForNode(node: SyntaxNode, language: AstLanguage) {
       params: parameterFacts(named.functionNode),
       paramsEndLine: parametersEndLine(named.functionNode),
       isLiteralPassthrough: isPassthroughBody(named.functionNode, language),
+      branches: 0,
     };
   }
 
@@ -66,6 +67,7 @@ export function callableFactForNode(node: SyntaxNode, language: AstLanguage) {
     params: parameterFacts(node),
     paramsEndLine: parametersEndLine(node),
     isLiteralPassthrough: isPassthroughBody(node, language),
+    branches: 0,
   };
 }
 

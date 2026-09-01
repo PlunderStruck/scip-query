@@ -457,7 +457,30 @@ class TsMorphSemanticProvider implements SemanticProvider {
   }
 
   // scip-query: ignore-similar — hierarchy discovery and reference emission are separate compiler passes.
+  /**
+   * The fragment warm pass asks for the same whole-project definition set
+   * once per file batch; the hierarchy targets depend only on that set and
+   * this provider's program, so they are computed once per set and reused
+   * until the provider is discarded.
+   */
+  private hierarchyTargetsMemo: { key: string; targets: Map<string, Map<number, IndexedDefinition>> } | null =
+    null;
+
   private hierarchyTargetsForDefinitions(
+    definitions: readonly IndexedDefinition[],
+  ): Map<string, Map<number, IndexedDefinition>> {
+    const key = hierarchyDefinitionSetKey(definitions);
+    if (this.hierarchyTargetsMemo?.key === key) return this.hierarchyTargetsMemo.targets;
+    const targets = profileSpan(
+      'typescript.references-map.hierarchy-targets',
+      () => this.computeHierarchyTargets(definitions),
+      () => ({ definitions: definitions.length }),
+    );
+    this.hierarchyTargetsMemo = { key, targets };
+    return targets;
+  }
+
+  private computeHierarchyTargets(
     definitions: readonly IndexedDefinition[],
   ): Map<string, Map<number, IndexedDefinition>> {
     const targets = new Map<string, Map<number, IndexedDefinition>>();
@@ -1426,6 +1449,16 @@ function createReferenceMapProfileStats(): ReferenceMapProfileStats {
     hierarchyReferences: 0,
     hierarchyMs: 0,
   };
+}
+
+/** Identity of a definition set for memoization: every symbol id, in order. */
+function hierarchyDefinitionSetKey(definitions: readonly IndexedDefinition[]): string {
+  let hash = 0x811c9dc5;
+  for (const definition of definitions) {
+    hash ^= definition.symbolId;
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `${definitions.length}:${hash.toString(16)}`;
 }
 
 function roundReferenceMapProfileStats(stats: ReferenceMapProfileStats): ReferenceMapProfileStats {

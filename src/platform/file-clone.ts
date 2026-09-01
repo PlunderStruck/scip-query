@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process';
-import { constants, copyFileSync, statSync } from 'node:fs';
+import { constants, copyFileSync, linkSync, rmSync, statSync } from 'node:fs';
 import { platform } from 'node:os';
 
-export type FileCloneMethod = 'reflink' | 'copy';
+/** `link` shares the source inode: no bytes are rewritten, like a reflink. */
+export type FileCloneMethod = 'reflink' | 'link' | 'copy';
 
 export interface FileCloneResult {
   method: FileCloneMethod;
@@ -13,13 +14,32 @@ export interface FileCloneRuntime {
   size(path: string): number;
   clone(source: string, target: string): void;
   copy(source: string, target: string): void;
+  /** Hard-link `source` at `target`; absent runtimes never share inodes. */
+  link?(source: string, target: string): void;
+  /** Remove `target` if present so no method writes through an existing inode. */
+  remove?(target: string): void;
+}
+
+export interface FileCloneOptions {
+  /**
+   * The source is an immutable artifact (a cached SCIP shard, a published
+   * generation file) that nothing opens for writing in place, so sharing its
+   * inode with a hard link is as safe as a reflink and costs no bytes on
+   * filesystems without copy-on-write. Never set this for a file that is
+   * patched in place afterwards, such as a SQLite candidate.
+   */
+  shareImmutable?: boolean;
 }
 
 const NODE_FILE_CLONE_RUNTIME = Object.freeze<FileCloneRuntime>({
   size: (path) => statSync(path).size,
   clone: cloneFileOnHost,
   copy: (source, target) => copyFileSync(source, target),
+  link: (source, target) => linkSync(source, target),
+  remove: (target) => rmSync(target, { force: true }),
 });
+
+const LINK_UNAVAILABLE_CODES = new Set(['EXDEV', 'EPERM', 'EMLINK', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 'EINVAL']);
 
 const REFLINK_UNAVAILABLE_CODES = new Set(['ENOSYS', 'ENOTSUP', 'EOPNOTSUPP', 'EINVAL', 'EXDEV', 'ENOTTY']);
 
@@ -32,16 +52,34 @@ export function cloneFileWithFallback(
   source: string,
   target: string,
   runtime: FileCloneRuntime = NODE_FILE_CLONE_RUNTIME,
+  options: FileCloneOptions = {},
 ): FileCloneResult {
   const bytes = runtime.size(source);
+  // An existing target may be a hard link of an artifact another generation
+  // still reads; every method below must create a new inode, never write
+  // through the old one.
+  runtime.remove?.(target);
   try {
     runtime.clone(source, target);
     return { method: 'reflink', bytes };
   } catch (error) {
     if (!reflinkUnavailable(error)) throw error;
   }
+  if (options.shareImmutable && runtime.link) {
+    try {
+      runtime.link(source, target);
+      return { method: 'link', bytes };
+    } catch (error) {
+      if (!linkUnavailable(error)) throw error;
+    }
+  }
   runtime.copy(source, target);
   return { method: 'copy', bytes };
+}
+
+function linkUnavailable(error: unknown): boolean {
+  const code = (error as { code?: unknown } | undefined)?.code;
+  return typeof code === 'string' && LINK_UNAVAILABLE_CODES.has(code);
 }
 
 function cloneFileOnHost(source: string, target: string): void {
@@ -93,7 +131,8 @@ export function createReindexWriteTelemetry(): ReindexWriteTelemetry {
 }
 
 export function recordFileClone(telemetry: ReindexWriteTelemetry, result: FileCloneResult): void {
-  if (result.method === 'reflink') telemetry.reflinkedBytes += result.bytes;
+  // A hard link rewrites no bytes either; both count as shared, not copied.
+  if (result.method === 'reflink' || result.method === 'link') telemetry.reflinkedBytes += result.bytes;
   else telemetry.fallbackCopiedBytes += result.bytes;
 }
 

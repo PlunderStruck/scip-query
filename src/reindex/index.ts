@@ -1377,7 +1377,7 @@ function cacheFreshTypeScriptProjectShards(
     const project = run.id.slice('typescript:'.length);
     const shardPath = typescriptProjectShardPath(outputDb, project);
     mkdirSync(dirname(shardPath), { recursive: true });
-    recordFileClone(writeTelemetry, cloneFileWithFallback(run.scipPath, shardPath));
+    recordFileClone(writeTelemetry, cloneFileWithFallback(run.scipPath, shardPath, undefined, { shareImmutable: true }));
   }
 }
 
@@ -1398,7 +1398,10 @@ function buildCachedTypeScriptProjectRunResults(opts: {
   return opts.reusedProjects.map((project, index) => {
     const cachedPath = typescriptProjectShardPath(opts.outputDb, project);
     const tempCopyPath = tempScipPath(opts.tempOutputScip, 'typescript-project-cached', index);
-    recordFileClone(opts.writeTelemetry, cloneFileWithFallback(cachedPath, tempCopyPath));
+    recordFileClone(
+      opts.writeTelemetry,
+      cloneFileWithFallback(cachedPath, tempCopyPath, undefined, { shareImmutable: true }),
+    );
     return {
       id: `typescript:${project}`,
       language: 'typescript' as const,
@@ -2333,7 +2336,10 @@ function cacheLanguageShards(
     const shardPath = languageShardPath(outputDb, output.language);
     mkdirSync(dirname(shardPath), { recursive: true });
     if (output.scipPath !== shardPath) {
-      recordFileClone(writeTelemetry, cloneFileWithFallback(output.scipPath, shardPath));
+      recordFileClone(
+        writeTelemetry,
+        cloneFileWithFallback(output.scipPath, shardPath, undefined, { shareImmutable: true }),
+      );
     }
   }
 }
