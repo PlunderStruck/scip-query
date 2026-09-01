@@ -15,7 +15,7 @@ export {
   unwrapExpression,
   walkNamedSyntax,
 } from './ast/ast-callables.js';
-export { getAst, parseAstSourceText } from './ast/ast-core.js';
+export { getAst, getAstForSource, parseAstSourceText } from './ast/ast-core.js';
 export { nodesOfTypes } from './ast/ast-node-index.js';
 export {
   callableSitesFromRoot,

@@ -5,6 +5,7 @@ import { createProjectEvidenceProduct, evidenceProductInvalidation } from '../..
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { profileSpan } from '../../instrumentation/profile.js';
+import { collectNativeGarbage } from '../../platform/native-gc.js';
 import type { FileDependencyGraph } from '../../domain/project-input.js';
 
 interface FileDependencyGraphPayload {
@@ -309,6 +310,57 @@ export function materializeCarriedFileDependencyGraph(
     }
   });
   return graph;
+}
+
+export interface SourceDependencyWarmProgress {
+  /** Indexed files whose import and re-export products are persisted so far. */
+  files: number;
+  total: number;
+}
+
+export interface SourceDependencyWarmOptions {
+  /** Files parsed between event-loop turns; default 64. */
+  batchSize?: number;
+  /**
+   * Forces a full collection before each yield. Parsed trees are native
+   * memory behind tiny wrappers, so V8 sees no pressure and would leave the
+   * wrappers, and their trees, alive; a minor collection does not reclaim
+   * them either. Default: the process collector.
+   */
+  collectGarbage?: () => boolean;
+  yieldToEventLoop?: () => Promise<void>;
+  onBatch?: (progress: SourceDependencyWarmProgress) => void;
+}
+
+/**
+ * Persists every indexed file's import and re-export products in batches,
+ * yielding one event-loop turn between batches. Tree-sitter frees a parsed
+ * tree only in a finalizer that Node-API defers to the event loop, so a
+ * synchronous whole-project parse keeps every tree resident until the loop
+ * next turns, and the finalizer is queued only once a collection has found
+ * the wrapper dead. Each batch therefore ends with a full collection and one
+ * event-loop turn. After this pass the synchronous graph build reads the
+ * persisted products and parses nothing.
+ */
+export async function warmSourceDependencyProducts(
+  db: ScipDatabase,
+  options: SourceDependencyWarmOptions = {},
+): Promise<{ files: number }> {
+  const files = indexedDocumentPaths(db, { includeIgnored: false });
+  const batchSize = Math.max(1, Math.floor(options.batchSize ?? 64));
+  const collectGarbage = options.collectGarbage ?? collectNativeGarbage;
+  let warmed = 0;
+  for (let start = 0; start < files.length; start += batchSize) {
+    for (const relativePath of files.slice(start, start + batchSize)) {
+      readSourceImportsUncached(db, relativePath);
+      getReExports(db, relativePath);
+      warmed += 1;
+    }
+    options.onBatch?.({ files: warmed, total: files.length });
+    collectGarbage();
+    await options.yieldToEventLoop?.();
+  }
+  return { files: warmed };
 }
 
 function collectSourceDependencyEdges(

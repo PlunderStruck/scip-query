@@ -16,6 +16,7 @@ import {
   type SemanticReferenceMaterializationResult,
 } from '../semantic/shared-primitives.js';
 import { materializeSemanticCalleeCache } from '../semantic/symbol-evidence.js';
+import { warmSourceDependencyProducts, type SourceDependencyWarmProgress } from '../symbols/graph/file-dep-graph.js';
 import {
   warmTypeScriptReferenceFragments,
   type TypeScriptReferenceFragmentWarmProgress,
@@ -186,6 +187,8 @@ export interface HealthSemanticPrewarmResult {
   referenceCacheWrites: number;
   referenceMisses: number;
   referenceIncomplete: number;
+  /** Indexed files whose import and re-export products were persisted before the provider built. */
+  sourceDependencyFiles?: number;
   /** Indexed TypeScript files whose reference fragments are persisted; absent when the fragment path was unavailable. */
   referenceFragmentFiles?: number;
   /** TypeScript reference fragments computed and persisted by this run. */
@@ -207,6 +210,16 @@ export interface HealthSemanticPrewarmRuntime {
     marker: HealthSemanticPrewarmMarker,
   ): void;
   candidateDefinitions(db: ScipDatabase, opts: HealthCliOptions): IndexedDefinition[];
+  /**
+   * Persist every indexed file's import and re-export products in yielding
+   * batches before the semantic provider builds, so the synchronous file
+   * dependency graph the provider needs parses nothing and no whole-project
+   * parse holds every tree until the event loop turns.
+   */
+  warmSourceDependencies?(
+    db: ScipDatabase,
+    onBatch?: (progress: SourceDependencyWarmProgress) => void,
+  ): Promise<{ files: number }>;
   /**
    * Persist a reference fragment for every indexed TypeScript file without
    * assembling the project-wide reference map; null when the fragment path is
@@ -324,6 +337,12 @@ const DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME: HealthSemanticPrewarmRuntime = {
     new ProjectIndex(db)
       .scopedDefinitions(opts.scope)
       .filter((definition) => semanticProviderLanguageForPath(definition.relativePath) !== null),
+  warmSourceDependencies: (db, onBatch) =>
+    warmSourceDependencyProducts(db, {
+      onBatch,
+      collectGarbage: collectNativeGarbage,
+      yieldToEventLoop: () => new Promise<void>((resolve) => setImmediate(resolve)),
+    }),
   warmReferenceFragments: (db, onBatch) =>
     warmTypeScriptReferenceFragments(db, (relativePath) => getSemanticProvider(db, relativePath), { onBatch }),
   materializeReferences: (db, definitions, opts) =>
@@ -497,6 +516,24 @@ async function runHealthSemanticPrewarm(
     await runtime.yieldToEventLoop?.();
   };
 
+  // The provider's file dependency graph parses every indexed file in one
+  // synchronous sweep when its products are cold, and Tree-sitter cannot free
+  // a tree until the event loop turns; persisting the per-file products in
+  // yielding batches first bounds that sweep to one batch.
+  let sourceDependencyFiles: number | null = null;
+  if (runtime.warmSourceDependencies) {
+    const warmSourceDependencies = runtime.warmSourceDependencies.bind(runtime);
+    let warmedFiles = 0;
+    sourceDependencyFiles = await profileAsyncSpan(
+      'health.semantic-prewarm.source-dependencies',
+      async () => {
+        warmedFiles = (await warmSourceDependencies(db)).files;
+        return warmedFiles;
+      },
+      () => ({ files: warmedFiles }),
+    );
+  }
+
   // TypeScript references are served per file from persisted fragments, so the
   // fragment rows are the warm state. Persisting them file by file bounds the
   // working set by one provider batch; assembling the project-wide reference
@@ -578,9 +615,12 @@ async function runHealthSemanticPrewarm(
       collections: pressure.collections,
     }),
   );
-  const fragmentDisclosure = fragments
-    ? { referenceFragmentFiles: fragments.files, referenceFragmentComputedFiles: fragments.computedFiles }
-    : {};
+  const fragmentDisclosure = {
+    ...(sourceDependencyFiles === null ? {} : { sourceDependencyFiles }),
+    ...(fragments
+      ? { referenceFragmentFiles: fragments.files, referenceFragmentComputedFiles: fragments.computedFiles }
+      : {}),
+  };
   if (references.incomplete > 0) {
     return {
       status: 'partial',
