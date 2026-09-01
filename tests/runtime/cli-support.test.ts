@@ -15,6 +15,7 @@ import {
   healthPhaseConcurrency,
   healthPhaseTasks,
   healthPhaseTimeoutMs,
+  orderHealthPhaseTasksByCost,
   defaultHealthSemanticPrewarmHeapMb,
   healthSemanticPrewarmFileBatches,
   healthSemanticPrewarmHeapMb,
@@ -233,6 +234,28 @@ describe('healthPhaseTimeoutMs', () => {
     expect(healthPhaseTimeoutMs({}, { SCIP_QUERY_HEALTH_PHASE_TIMEOUT_MS: '0' })).toBeUndefined();
     expect(healthPhaseTimeoutMs({}, { SCIP_QUERY_HEALTH_PHASE_TIMEOUT_MS: 'nope' })).toBe(30000);
     expect(healthPhaseTimeoutMs({ full: true }, { SCIP_QUERY_HEALTH_PHASE_TIMEOUT_MS: 'nope' })).toBe(600000);
+  });
+});
+
+describe('orderHealthPhaseTasksByCost', () => {
+  it('starts the heaviest isolated tasks first and keeps the original order for ties', () => {
+    expect(
+      orderHealthPhaseTasksByCost([
+        ['cycles'],
+        ['drift'],
+        ['dead'],
+        ['similar', 'extract-candidates'],
+        ['wrapper-candidates'],
+        ['git-evidence'],
+      ]),
+    ).toEqual([
+      ['similar', 'extract-candidates'],
+      ['wrapper-candidates'],
+      ['dead'],
+      ['cycles'],
+      ['drift'],
+      ['git-evidence'],
+    ]);
   });
 });
 

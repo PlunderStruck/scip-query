@@ -37,12 +37,28 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
   that would only be suppressed as fresh. The check runs on the Git poll
   interval and does not depend on a Git checkout.
 
+### Native memory in whole-project sweeps is retained by glibc, not leaked
+
+- Attribution on a 7,800-file repository (no watch service): a full-health
+  prewarm child creates ~14,000 Tree-sitter trees, all but the 256 held by
+  the bounded tree cache are finalized within minutes, V8's own malloc use
+  stays at 1 MB, yet ~8.5 GB stays resident in glibc's main arena for the
+  life of the process. The memory is free and reused by that process; it is
+  simply never returned to the OS. Isolated children release it on exit and
+  the watch service worker on retirement. On hosts where that high-water
+  mark matters, run scip-query under an allocator that returns memory, for
+  example `LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2`.
+
 ### Faster full health and a durable dossier
 
 - `health --full` phases run in a memory-gated pool instead of strictly one
   at a time: one isolated child per ~7 GiB of half the machine's memory, at
   most four (`SCIP_QUERY_HEALTH_FULL_CONCURRENCY` still overrides). A 61 GiB
-  host runs four phases at once; a 16 GiB laptop keeps one.
+  host runs four phases at once; a 16 GiB laptop keeps one. The pool starts
+  the heaviest phases first (wrapper candidates, complexity hotspots,
+  passthrough candidates, stale abstractions, similar/extract), so the last
+  worker does not finish alone. Measured on a 7,800-file repository with
+  warm caches and no watch service: 4:20 → 1:29, peak 5.8 GiB.
 - The health dossier is published atomically, so an interrupted setup leaves
   the previous complete dossier in place instead of a half-written one. Each
   audit first records an attempt marker (`health-dossier.attempt.json`, run
