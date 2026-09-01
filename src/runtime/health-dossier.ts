@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { createFileAtomicExclusive, replaceFileAtomic } from '../storage/atomic-file.js';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -46,15 +46,78 @@ interface HealthDossierReport {
   }>;
   healthDossier: ProjectSetupHealthDossier | null;
   generatedAt?: string;
+  /** Identity of the published index generation the audit ran against; null when unavailable. */
+  indexGeneration?: string | null;
+  /** The audit attempt this dossier completes; a stale attempt marker means an earlier run never finished. */
+  attempt?: HealthDossierAttempt;
+}
+
+export interface HealthDossierAttempt {
+  runId: string;
+  startedAt: string;
+  indexGeneration: string | null;
+  completedAt?: string;
+}
+
+export interface HealthDossierAttemptHandle {
+  /** Path of the attempt marker next to the dossier. */
+  attemptPath: string;
+  attempt: HealthDossierAttempt;
+  /** An earlier attempt whose marker was never cleared: its audit was interrupted before publishing a dossier. */
+  interrupted: HealthDossierAttempt | null;
+}
+
+export function healthDossierDirectory(projectRoot: string, dossierDir?: string): string {
+  return dossierDir ? resolve(projectRoot, dossierDir) : join(projectRoot, 'docs', 'scip-query');
+}
+
+/**
+ * Record that a health audit started before any of its work runs. The marker
+ * is published atomically next to the dossier and cleared only after the
+ * dossier is written, so an interrupted audit leaves evidence instead of a
+ * dossier that silently describes an older run as current.
+ */
+export function beginHealthDossierAttempt(
+  projectRoot: string,
+  attempt: Omit<HealthDossierAttempt, 'completedAt'>,
+  opts: { dossierDir?: string } = {},
+): HealthDossierAttemptHandle {
+  const attemptPath = join(healthDossierDirectory(projectRoot, opts.dossierDir), 'health-dossier.attempt.json');
+  const interrupted = readHealthDossierAttempt(attemptPath);
+  mkdirSync(dirname(attemptPath), { recursive: true });
+  const content = `${JSON.stringify(attempt, null, 2)}\n`;
+  if (existsSync(attemptPath)) replaceFileAtomic(attemptPath, content, { durability: 'durable' });
+  else createFileAtomicExclusive(attemptPath, content, { durability: 'durable' });
+  return { attemptPath, attempt, interrupted };
+}
+
+export function finishHealthDossierAttempt(handle: HealthDossierAttemptHandle): void {
+  rmSync(handle.attemptPath, { force: true });
+}
+
+export function readHealthDossierAttempt(attemptPath: string): HealthDossierAttempt | null {
+  if (!existsSync(attemptPath)) return null;
+  try {
+    const parsed = JSON.parse(
+      readSmallArtifactText(attemptPath, 'health dossier attempt'),
+    ) as Partial<HealthDossierAttempt>;
+    if (typeof parsed.runId !== 'string' || typeof parsed.startedAt !== 'string') return null;
+    return {
+      runId: parsed.runId,
+      startedAt: parsed.startedAt,
+      indexGeneration: typeof parsed.indexGeneration === 'string' ? parsed.indexGeneration : null,
+      ...(typeof parsed.completedAt === 'string' ? { completedAt: parsed.completedAt } : {}),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function writeProjectHealthDossier<Report extends HealthDossierReport>(
   report: Report,
   opts: { dossierDir?: string } = {},
 ): ProjectSetupHealthDossier {
-  const dossierDir = opts.dossierDir
-    ? resolve(report.projectRoot, opts.dossierDir)
-    : join(report.projectRoot, 'docs', 'scip-query');
+  const dossierDir = healthDossierDirectory(report.projectRoot, opts.dossierDir);
   const pending: ProjectSetupHealthDossier = {
     markdownPath: join(dossierDir, 'health-dossier.md'),
     jsonPath: join(dossierDir, 'health-dossier.json'),
@@ -87,6 +150,12 @@ function renderHealthDossierMarkdown(report: HealthDossierReport): string {
     `Project: ${report.projectRoot}`,
     `Setup verdict: ${report.verdict}`,
     `Health score: ${formatHealthScoreSummary(report.health)}`,
+    `Index generation: ${report.indexGeneration ?? 'unavailable'}`,
+    ...(report.attempt
+      ? [
+          `Audit attempt: ${report.attempt.runId} started ${report.attempt.startedAt}, completed ${report.attempt.completedAt ?? 'not recorded'}`,
+        ]
+      : []),
     '',
     '## Items That Need Attention',
     '',
@@ -204,6 +273,10 @@ function jsonEqualIgnoringGeneratedAt(left: string, right: string): boolean {
     const rightParsed = JSON.parse(right) as Record<string, unknown>;
     delete leftParsed['generatedAt'];
     delete rightParsed['generatedAt'];
+    // Attempt identity and timestamps change on every run; only the audited
+    // content (including the index generation) decides whether the dossier changed.
+    delete leftParsed['attempt'];
+    delete rightParsed['attempt'];
     return JSON.stringify(leftParsed) === JSON.stringify(rightParsed);
   } catch {
     return left === right;

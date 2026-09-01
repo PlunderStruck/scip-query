@@ -1,4 +1,6 @@
 import { existsSync } from 'node:fs';
+import { publishedSqliteGenerationIdentity } from '../storage/sqlite-generation.js';
+import { randomUUID } from 'node:crypto';
 import { externalScipConverterSelected } from '../platform/scip-cli.js';
 import type { ProjectConfig, SupportedLanguage } from '../domain/types.js';
 import type { HealthReport } from '../queries/index.js';
@@ -22,6 +24,9 @@ import {
   writeProjectHealthDossier,
   formatHealthScoreSummary as formatHealthScore,
   type ProjectSetupHealthDossier,
+  beginHealthDossierAttempt,
+  finishHealthDossierAttempt,
+  type HealthDossierAttempt,
 } from './health-dossier.js';
 import { getIndexFreshness, type IndexFreshness } from './index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from './project-readiness.js';
@@ -130,6 +135,10 @@ export interface ProjectSetupReport {
   health: ProjectSetupHealthSummary;
   smokeTests: ProjectSetupSmokeTest[];
   healthDossier: ProjectSetupHealthDossier | null;
+  /** Published index generation the health audit ran against; null when no generation is published. */
+  indexGeneration?: string | null;
+  /** The health audit attempt this report completes. */
+  attempt?: HealthDossierAttempt;
   setupAgent: SetupAgentResult | null;
   changeScopes: ProjectSetupChangeScopes;
   filesWritten: string[];
@@ -457,6 +466,27 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
   opts.onStatus?.(
     opts.runHealth === true ? 'Running optional full health audit…' : 'Skipping optional full health audit.',
   );
+  const healthAttempt =
+    opts.runHealth === true
+      ? beginHealthDossierAttempt(
+          projectRoot,
+          {
+            runId: randomUUID(),
+            startedAt: new Date().toISOString(),
+            indexGeneration: publishedSqliteGenerationIdentity(paths.dbPath),
+          },
+          { dossierDir: opts.dossierDir },
+        )
+      : null;
+  if (healthAttempt?.interrupted) {
+    addStep(steps, {
+      id: 'health-dossier-attempt',
+      label: 'Previous health audit',
+      status: 'warn',
+      message: `A health audit started at ${healthAttempt.interrupted.startedAt} (index generation ${healthAttempt.interrupted.indexGeneration ?? 'unavailable'}) did not complete; the dossier it would have written was never published.`,
+      details: [healthAttempt.attemptPath],
+    });
+  }
   const health = opts.runHealth === true ? await runSetupHealth(paths.dbPath, steps) : skippedSetupHealth(steps);
   const rustSemanticSession = readiness.languages.includes('rust')
     ? rustSemanticSessionStatus(projectRoot, process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'])
@@ -573,7 +603,12 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     report.verdict = setupVerdict(steps, readiness);
     return report;
   }
+  if (healthAttempt) {
+    report.indexGeneration = healthAttempt.attempt.indexGeneration;
+    report.attempt = { ...healthAttempt.attempt, completedAt: new Date().toISOString() };
+  }
   const healthDossier = writeProjectHealthDossier(report, { dossierDir: opts.dossierDir });
+  if (healthAttempt && healthDossier.status !== 'failed') finishHealthDossierAttempt(healthAttempt);
   report.healthDossier = healthDossier;
   report.changeScopes.repository.push(...healthDossier.written);
   report.filesWritten = [...report.filesWritten, ...healthDossier.written];

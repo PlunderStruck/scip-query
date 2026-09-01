@@ -30,6 +30,7 @@ import {
   rustScipOccurrenceReferencesForDefinition,
 } from './rust/scip-occurrence-references.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
+import { getAllDefinitions } from '../symbols/definition-catalog.js';
 import {
   countMissingTypeScriptReferenceFragments,
   materializeTypeScriptReferenceFragments,
@@ -165,6 +166,47 @@ export function semanticConsumerReadiness(
       'service is running; run `scip-query health --full` once or start the service with `scip-query watch --daemon`, ' +
       'then re-run this command.',
   };
+}
+
+interface AssembledTypeScriptReferences {
+  projectFingerprint: string;
+  references: Map<number, SemanticReference[]>;
+  files: number;
+  cacheHits: number;
+  cacheMisses: number;
+  computedFiles: number;
+}
+
+/**
+ * The project-wide TypeScript reference map assembled from persisted
+ * fragments, kept per database for the life of the process. Every consumer
+ * that materializes TypeScript references (each health phase, isolated and
+ * dead analysis, consumer evidence) previously reassembled the same map from
+ * the same rows; a child that runs several phases now pays for it once.
+ */
+const ASSEMBLED_TYPESCRIPT_REFERENCES = createPerDbValue<AssembledTypeScriptReferences | null>(
+  'typescript-reference-map',
+  { clearGroups: ['whole-project'] },
+);
+
+function assembledTypeScriptReferences(db: ScipDatabase): AssembledTypeScriptReferences | null {
+  return ASSEMBLED_TYPESCRIPT_REFERENCES.get(db, () => {
+    const projectFingerprint = projectEvidenceFingerprint(db);
+    if (!projectFingerprint) return null;
+    const definitions = getAllDefinitions(db).filter(
+      (definition) => semanticProviderLanguageForPath(definition.relativePath) === 'typescript',
+    );
+    const materialization = materializeTypeScriptReferenceFragments(db, definitions, (p) => getSemanticProvider(db, p));
+    if (!materialization) return null;
+    return {
+      projectFingerprint,
+      references: materialization.references,
+      files: materialization.files,
+      cacheHits: materialization.cacheHits,
+      cacheMisses: materialization.cacheMisses,
+      computedFiles: materialization.computedFiles,
+    };
+  });
 }
 
 export function semanticEvidenceProduct(db: ScipDatabase): SemanticEvidenceProduct {
@@ -404,19 +446,14 @@ function materializeSemanticReferenceBatch(
       !materializedReferences.has(definition.symbolId) &&
       !incompleteReferences.has(definition.symbolId),
   );
-  const fragmentMaterialization = materializeTypeScriptReferenceFragments(db, fragmentCandidates, (p) =>
-    getSemanticProvider(db, p),
-  );
-  if (fragmentMaterialization) {
+  const assembled = fragmentCandidates.length > 0 ? assembledTypeScriptReferences(db) : null;
+  if (assembled) {
     fragmentDefinitions = fragmentCandidates.length;
-    fragmentCacheHits = fragmentMaterialization.cacheHits;
-    fragmentCacheMisses = fragmentMaterialization.cacheMisses;
-    fragmentComputedFiles = fragmentMaterialization.computedFiles;
+    fragmentCacheHits = assembled.cacheHits;
+    fragmentCacheMisses = assembled.cacheMisses;
+    fragmentComputedFiles = assembled.computedFiles;
     for (const definition of fragmentCandidates) {
-      materializedReferences.set(
-        definition.symbolId,
-        fragmentMaterialization.references.get(definition.symbolId) ?? [],
-      );
+      materializedReferences.set(definition.symbolId, assembled.references.get(definition.symbolId) ?? []);
     }
   }
 
