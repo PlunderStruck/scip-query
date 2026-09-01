@@ -1451,6 +1451,7 @@ describe('reindex reliability', () => {
     const outputScip = join(cacheDir, 'index.scip');
     const outputDb = join(cacheDir, 'index.db');
     const { reindex } = await loadReindexFixture({
+      externalScipConverter: true,
       languages: ['typescript'],
       platform: 'win32',
       scipCli: { resolveScipBinary: () => null },
@@ -1473,6 +1474,7 @@ describe('reindex reliability', () => {
     mkdirSync(cacheDir);
     const tryInstallScipCli = vi.fn(() => true);
     const { reindex } = await loadReindexFixture({
+      externalScipConverter: true,
       languages: ['typescript'],
       platform: 'linux',
       scipCli: { resolveScipBinary: () => null, tryInstallScipCli },
@@ -1499,6 +1501,7 @@ describe('reindex reliability', () => {
       return true;
     });
     const { reindex } = await loadReindexFixture({
+      externalScipConverter: true,
       languages: ['typescript'],
       platform: 'linux',
       scipCli: {
@@ -1525,6 +1528,7 @@ describe('reindex reliability', () => {
     mkdirSync(cacheDir);
     const tryInstallScipCli = vi.fn(() => true);
     const { reindex } = await loadReindexFixture({
+      externalScipConverter: true,
       languages: ['typescript'],
       platform: 'linux',
       scipCli: { resolveScipBinary: () => null, tryInstallScipCli },
@@ -1606,6 +1610,8 @@ async function loadReindexFixture(opts: {
     resolveScipBinary?: () => string | null;
     tryInstallScipCli?: (onStatus: (message: string) => void) => boolean;
   };
+  /** Select the legacy external `scip expt-convert` path, which is the only consumer of the scip binary. */
+  externalScipConverter?: boolean;
   processIdentities?: ReadonlyMap<number, ProcessIdentityModule.ProcessIdentity>;
   afterIndexerOutput?: () => void;
   indexCoverage?: (dbPath: string) =>
@@ -1920,9 +1926,20 @@ async function loadReindexFixture(opts: {
   vi.doMock('../../src/reindex/install.js', () => ({
     tryInstallIndexer: () => true,
   }));
+  const resolveScipBinary = opts.scipCli?.resolveScipBinary ?? (() => 'scip');
   vi.doMock('../../src/platform/scip-cli.js', () => ({
-    resolveScipBinary: opts.scipCli?.resolveScipBinary ?? (() => 'scip'),
-    tryInstallScipCli: opts.scipCli?.tryInstallScipCli ?? (() => true),
+    resolveScipBinary,
+    resolveScipBinaryWithSource: () => {
+      const path = resolveScipBinary();
+      return path ? { source: 'path', path } : null;
+    },
+    tryInstallScipCli: opts.scipCli?.tryInstallScipCli ?? (async () => true),
+    installScipCliFromRelease: async () => null,
+    getScipVersion: () => 'scip version v0.8.1',
+    scipVersionMatchesPin: () => true,
+    SCIP_VERSION: 'v0.8.1',
+    externalScipConverterSelected: () =>
+      opts.externalScipConverter === true || process.env['SCIP_QUERY_SQLITE_CONVERTER'] === 'scip-cli',
   }));
   vi.doMock('../../src/reindex/augmentation/augment.js', () => ({
     augmentAuxiliaryDocuments: () => ({ scanned: 0, inserted: 0, existing: 0 }),

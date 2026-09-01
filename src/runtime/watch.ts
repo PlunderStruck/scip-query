@@ -38,6 +38,7 @@ import { REINDEX_WORKER_RETRYABLE_EXIT_CODE } from '../reindex/reindex-worker-pr
 import { BoundedProcessError, runBoundedProcess } from '../platform/bounded-process.js';
 import { readProcessIdentity } from '../platform/process-identity.js';
 import { publishedSqliteGenerationIdentity } from '../storage/sqlite-generation.js';
+import { getIndexFreshness, type IndexFreshnessState } from './index-freshness.js';
 
 export interface WatcherOptions {
   projectRoot: string;
@@ -46,6 +47,10 @@ export interface WatcherOptions {
   reindexRunner?: ReindexRunner;
   subscriptionFactory?: WatchSubscriptionFactory;
   budgetInspector?: WatchBudgetInspector;
+  /** Reads the identity of the currently published index generation; defaults to the SQLite generation state. */
+  publishedGeneration?: (outputDb: string) => string | null;
+  /** Reports whether the published index matches the working tree; defaults to the CLI freshness check. */
+  indexFreshness?: (projectRoot: string, config: ProjectConfig, outputDb: string) => IndexFreshnessState;
   gitReader?: GitReader;
   outputDb?: string;
   clock?: WatchClock;
@@ -205,11 +210,21 @@ export class Watcher {
   private pendingChangesIncompleteReason: string | undefined;
   private reindexInFlight = false;
   private lastReindexEnd = 0;
+  /** Generation identity the watcher last saw; a different published identity means someone else refreshed. */
+  private lastObservedGeneration: string | null = null;
+  private readonly publishedGeneration: (outputDb: string) => string | null;
+  private readonly indexFreshness: (
+    projectRoot: string,
+    config: ProjectConfig,
+    outputDb: string,
+  ) => IndexFreshnessState;
 
   // Chokidar maintains the platform-specific subscriptions beneath each root.
   private fsWatchers: WatchSubscription[] = [];
   private sourcePollingFallbackStarted = false;
   private gitPollTimer: WatchTimer | null = null;
+  /** Polls for generations published outside the watcher while work is pending; runs even without Git. */
+  private reconcileTimer: WatchTimer | null = null;
   private lastGitState: GitStateSnapshot | null = null;
   /** When unset, idle Git polls read HEAD/index from the filesystem instead of spawning git. */
   private preferFilesystemGitState = true;
@@ -247,6 +262,9 @@ export class Watcher {
     this.reindexRunner = opts.reindexRunner ?? createReindexRunner();
     this.subscriptionFactory = opts.subscriptionFactory ?? defaultWatchSubscriptionFactory;
     this.budgetInspector = opts.budgetInspector ?? inspectReindexActivityBudget;
+    this.publishedGeneration = opts.publishedGeneration ?? publishedSqliteGenerationIdentity;
+    this.indexFreshness = opts.indexFreshness ?? defaultIndexFreshnessState;
+    this.lastObservedGeneration = this.readPublishedGeneration();
     watcherInputStates.set(this, {
       projectRoot: opts.projectRoot,
       config: opts.config,
@@ -297,6 +315,7 @@ export class Watcher {
     this.clearCooldownTimer();
     this.clearBudgetTimer();
     this.clearGitPollTimer();
+    this.clearReconcileTimer();
     const operation = this.activeOperation;
     if (operation) {
       this.setStatus({
@@ -474,6 +493,7 @@ export class Watcher {
   // visible together.
   private triggerReindex(): void {
     if (this.reindexInFlight || this.stopped) return;
+    if (this.reconcileExternalPublication()) return;
 
     const budget = this.inspectBudget();
     const allowExpensiveRebuild = this.watchConfig.allowExpensiveRebuild && budget.state !== 'paused';
@@ -557,6 +577,7 @@ export class Watcher {
           return;
         }
         refreshPublishedTypeScriptInputScope(this);
+        this.lastObservedGeneration = this.readPublishedGeneration();
         let completedIndexIsFresh = false;
         try {
           completedIndexIsFresh = this.onReindexComplete(durationMs, trigger, { pendingChanges: this.dirty }) === true;
@@ -741,6 +762,8 @@ export class Watcher {
 
   private setStatus(status: WatcherStatus): void {
     this.status = status;
+    if (status.state === 'cooldown' || status.state === 'budget-paused') this.armReconcileTimer(status.until);
+    else this.clearReconcileTimer();
     this.onStatus(status);
   }
 
@@ -839,6 +862,86 @@ export class Watcher {
     );
     this.gitPollTimer = this.clock.setInterval(() => this.pollGitState(), this.watchConfig.gitPollMs);
     this.gitPollTimer.unref?.();
+  }
+
+  /**
+   * While a refresh waits out a cooldown or a budget pause, re-check on the
+   * Git poll cadence whether someone else already published a fresh
+   * generation. The timer exists only during those states and never outlives
+   * the wait it belongs to, so idle watchers hold no standing timer.
+   */
+  private armReconcileTimer(until: number): void {
+    this.clearReconcileTimer();
+    const remaining = until - this.wallNow();
+    if (remaining <= 0 || !(this.watchConfig.gitPollMs > 0)) return;
+    const delay = Math.min(this.watchConfig.gitPollMs, remaining);
+    this.reconcileTimer = this.clock.setTimeout(() => {
+      this.reconcileTimer = null;
+      if (this.stopped || this.reconcileExternalPublication()) return;
+      if (this.status.state === 'cooldown' || this.status.state === 'budget-paused') {
+        this.armReconcileTimer(this.status.until);
+      }
+    }, delay);
+    this.reconcileTimer.unref?.();
+  }
+
+  private clearReconcileTimer(): void {
+    if (this.reconcileTimer) {
+      this.clock.clearTimeout(this.reconcileTimer);
+      this.reconcileTimer = null;
+    }
+  }
+
+  private readPublishedGeneration(): string | null {
+    try {
+      return this.publishedGeneration(this.outputDb);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * A manual `reindex` or `setup` publishes a generation the watcher did not
+   * produce. When one appears while work is pending (dirty, cooldown, budget
+   * pause, or a debounce wait) and the published index matches the working
+   * tree, the pending refresh is already satisfied: drop it and report the
+   * suppression instead of holding "changes pending" until the budget window
+   * or cooldown expires and then re-running a refresh that would only be
+   * suppressed as fresh anyway. Returns true when pending work was cleared.
+   */
+  private reconcileExternalPublication(): boolean {
+    if (this.stopped || this.reindexInFlight) return false;
+    const pending =
+      this.dirty ||
+      this.status.state === 'budget-paused' ||
+      this.status.state === 'cooldown' ||
+      this.status.state === 'waiting';
+    if (!pending) return false;
+    const generation = this.readPublishedGeneration();
+    if (generation === null || generation === this.lastObservedGeneration) return false;
+    this.lastObservedGeneration = generation;
+    let freshness: IndexFreshnessState;
+    try {
+      freshness = this.indexFreshness(this.projectRoot, this.config, this.outputDb);
+    } catch {
+      return false;
+    }
+    if (freshness !== 'fresh') return false;
+    const suppressedTrigger = this.pendingTrigger ?? { kind: 'unknown' as const };
+    this.clearDebounceTimer();
+    this.clearCooldownTimer();
+    this.clearBudgetTimer();
+    this.dirty = false;
+    this.changedFiles = 0;
+    this.pendingTrigger = null;
+    this.resetPendingChanges();
+    refreshPublishedTypeScriptInputScope(this);
+    this.onRefreshSuppressed({
+      ...suppressedTrigger,
+      detail: `a generation published outside the watcher is fresh${suppressedTrigger.detail ? ` (${suppressedTrigger.detail})` : ''}`,
+    });
+    this.setStatus({ state: 'idle' });
+    return true;
   }
 
   private pollGitState(): void {
@@ -1368,6 +1471,12 @@ function readPackedGitRefOid(commonDir: string, ref: string): string | undefined
     return undefined;
   }
   return undefined;
+}
+
+function defaultIndexFreshnessState(projectRoot: string, config: ProjectConfig, outputDb: string): IndexFreshnessState {
+  const cacheDir = dirname(outputDb);
+  return getIndexFreshness(projectRoot, config, { dbPath: outputDb, metaPath: join(cacheDir, 'meta.json'), cacheDir })
+    .state;
 }
 
 function gitStateFromIndexPath(head: string | undefined, indexPath: string): GitStateSnapshot {

@@ -201,7 +201,9 @@ export function readReindexActivitySummary(
     invalidLanguageDetails: 0,
     byLanguage: {},
     byTrigger: {},
+    automatic: { runs: 0, rebuilt: 0, fullRebuilds: 0, estimatedWriteBytes: 0 },
   };
+  const automatic = summary.automatic!;
   const path = reindexActivityPath(outputDb);
   let lines: string[] = [];
   if (readFile === defaultReadFile) {
@@ -272,14 +274,25 @@ export function readReindexActivitySummary(
       languageSummary.producedOutputBytes += detail.producedOutputBytes;
       languageSummary.durationMs += detail.durationMs;
     }
-    if (isExpensiveRebuild(record) && summary.oldestRebuildAt === undefined) {
+    const expensiveRebuild = isExpensiveRebuild(record);
+    if (expensiveRebuild && summary.oldestRebuildAt === undefined) {
       summary.oldestRebuildAt = record.recordedAt;
     }
-    if (isExpensiveRebuild(record)) {
+    if (expensiveRebuild) {
       summary.fullRebuilds = (summary.fullRebuilds ?? 0) + 1;
     }
     if (estimatedWriteBytes > 0 && summary.oldestWriteAt === undefined) {
       summary.oldestWriteAt = record.recordedAt;
+    }
+    if (isAutomaticTrigger(record.trigger)) {
+      automatic.runs += 1;
+      if (record.result === 'rebuilt') automatic.rebuilt += 1;
+      if (expensiveRebuild) {
+        automatic.fullRebuilds += 1;
+        automatic.oldestRebuildAt ??= record.recordedAt;
+      }
+      automatic.estimatedWriteBytes += estimatedWriteBytes;
+      if (estimatedWriteBytes > 0) automatic.oldestWriteAt ??= record.recordedAt;
     }
   }
   if (summary.ignoredPartialTailBytes > 0 && summary.confidence !== 'unavailable') {
@@ -394,13 +407,26 @@ export function inspectReindexActivityBudget(
   );
 }
 
+/** Refreshes the watcher started itself; `setup` and manual `reindex` are explicit consent. */
+export function isAutomaticTrigger(trigger: RefreshTrigger): boolean {
+  return trigger.kind.startsWith('watch-');
+}
+
 export function evaluateReindexActivityBudget(
   summary: ReindexActivitySummary,
   config: Required<WatchResourceBudgetConfig>,
   nowMs: number,
 ): ReindexActivityBudgetDecision {
-  const estimatedWriteBytes = summary.estimatedWriteBytes ?? summary.estimatedLogicalOutputBytes;
-  const expensiveRebuilds = summary.fullRebuilds ?? summary.rebuilt;
+  // Only the watcher's own refreshes consume the automatic budget. A legacy
+  // summary without the split falls back to the window totals.
+  const charged = summary.automatic ?? {
+    fullRebuilds: summary.fullRebuilds ?? summary.rebuilt,
+    estimatedWriteBytes: summary.estimatedWriteBytes ?? summary.estimatedLogicalOutputBytes,
+    oldestRebuildAt: summary.oldestRebuildAt,
+    oldestWriteAt: summary.oldestWriteAt,
+  };
+  const estimatedWriteBytes = charged.estimatedWriteBytes;
+  const expensiveRebuilds = charged.fullRebuilds;
   const consumption = { rebuilt: expensiveRebuilds, estimatedWriteBytes };
   if (!config.enabled) return { state: 'allowed', ...consumption };
   if (summary.confidence !== undefined && summary.confidence !== 'complete') {
@@ -416,18 +442,18 @@ export function evaluateReindexActivityBudget(
     return {
       state: 'paused',
       reason: 'rebuild-count',
-      until: budgetRetryAt(summary.oldestRebuildAt, config.windowMs, nowMs),
+      until: budgetRetryAt(charged.oldestRebuildAt, config.windowMs, nowMs),
       ...consumption,
-      detail: `${expensiveRebuilds}/${config.maxRebuilds} expensive full rebuild slots consumed`,
+      detail: `${expensiveRebuilds}/${config.maxRebuilds} expensive full rebuild slots consumed by automatic refreshes`,
     };
   }
   if (estimatedWriteBytes >= config.maxEstimatedWriteBytes) {
     return {
       state: 'paused',
       reason: 'estimated-write-bytes',
-      until: budgetRetryAt(summary.oldestWriteAt, config.windowMs, nowMs),
+      until: budgetRetryAt(charged.oldestWriteAt, config.windowMs, nowMs),
       ...consumption,
-      detail: `${estimatedWriteBytes}/${config.maxEstimatedWriteBytes} estimated write bytes consumed`,
+      detail: `${estimatedWriteBytes}/${config.maxEstimatedWriteBytes} estimated write bytes consumed by automatic refreshes`,
     };
   }
   return { state: 'allowed', ...consumption };

@@ -43,6 +43,7 @@ async function loadScipCli(opts: {
     execFileSync,
   }));
   vi.doMock('node:fs', () => ({
+    ...actualFs,
     existsSync: vi.fn(opts.existsSync ?? (() => false)),
     readFileSync: actualFs.readFileSync,
   }));
@@ -185,7 +186,9 @@ describe('scip CLI helpers', () => {
     });
 
     const status: string[] = [];
-    expect(tryInstallScipCli((message) => status.push(message))).toBe(true);
+    const offline = { fetch: async () => Promise.reject(new Error('offline')) };
+    await expect(tryInstallScipCli((message) => status.push(message), offline)).resolves.toBe(true);
+    expect(status).toContain('Could not install scip v0.8.1: offline');
     expect(execFileSync).toHaveBeenCalledWith(
       'go',
       ['install', 'github.com/sourcegraph/scip/cmd/scip@v0.8.1'],
@@ -209,9 +212,70 @@ describe('scip CLI helpers', () => {
     });
 
     const status: string[] = [];
-    expect(tryInstallScipCli((message) => status.push(message))).toBe(false);
+    const offline = { fetch: async () => Promise.reject(new Error('offline')) };
+    await expect(tryInstallScipCli((message) => status.push(message), offline)).resolves.toBe(false);
     expect(status).toContain('Could not auto-install scip CLI.');
-    expect(status).toContain('Install manually from: https://github.com/sourcegraph/scip/releases');
+    expect(status).toContain('Install manually from: https://github.com/sourcegraph/scip/releases/tag/v0.8.1');
+  });
+
+  it('installs the reviewed release archive without Go and prefers it over PATH afterwards', async () => {
+    const { installScipCliFromRelease, resolveScipDownload, SCIP_RELEASE_DIGESTS, cachedScipBinaryPath } =
+      await loadScipCli({ platform: 'linux', arch: 'x64', isBinaryAvailable: () => false });
+    const env = { XDG_CACHE_HOME: '/tmp/scip-cli-test-cache' };
+    const expectedBinary = cachedScipBinaryPath(env);
+    const download = resolveScipDownload('linux', 'x64');
+    expect(download).toEqual({
+      url: 'https://github.com/sourcegraph/scip/releases/download/v0.8.1/scip-linux-amd64.tar.gz',
+      filename: 'scip-linux-amd64.tar.gz',
+      sha256: SCIP_RELEASE_DIGESTS['scip-linux-amd64.tar.gz'],
+    });
+    expect(Object.keys(SCIP_RELEASE_DIGESTS).sort()).toEqual([
+      'scip-darwin-amd64.tar.gz',
+      'scip-darwin-arm64.tar.gz',
+      'scip-linux-amd64.tar.gz',
+      'scip-linux-arm64.tar.gz',
+    ]);
+    expect(resolveScipDownload('freebsd', 'x64')).toBeNull();
+
+    const fetch = vi.fn(async (opts: { cachePath: string; url: string; expectedSha256: string }) => ({
+      status: 'downloaded' as const,
+      path: opts.cachePath,
+      sha256: opts.expectedSha256,
+    }));
+    const extract = vi.fn();
+    const markExecutable = vi.fn();
+    const status: string[] = [];
+    await expect(
+      installScipCliFromRelease((message) => status.push(message), {
+        env,
+        fetch,
+        extract,
+        markExecutable,
+        probeVersion: () => 'scip version v0.8.1',
+      }),
+    ).resolves.toBe(expectedBinary);
+    expect(fetch).toHaveBeenCalledWith({
+      cachePath: expectedBinary.replace(/scip$/, 'scip-linux-amd64.tar.gz'),
+      url: download!.url,
+      expectedSha256: download!.sha256,
+    });
+    expect(extract).toHaveBeenCalledWith(
+      expectedBinary.replace(/scip$/, 'scip-linux-amd64.tar.gz'),
+      expect.any(String),
+    );
+    expect(markExecutable).toHaveBeenCalledWith(expectedBinary);
+    expect(status.at(-1)).toBe(`Installed reviewed scip v0.8.1 at ${expectedBinary}.`);
+
+    // A binary that does not report the pinned version is rejected.
+    await expect(
+      installScipCliFromRelease(() => undefined, {
+        env,
+        fetch,
+        extract,
+        markExecutable,
+        probeVersion: () => 'scip version v0.9.0',
+      }),
+    ).resolves.toBeNull();
   });
 
   it('keeps postinstall side-effect free', async () => {
@@ -300,6 +364,20 @@ describe('resolveScipBinaryPure (resolution matrix)', () => {
       resolveSidecar: (archName) => `/sidecar/scip-win32-${archName}.exe`,
     });
     expect(resolution).toEqual({ source: 'sidecar', path: '/sidecar/scip-win32-arm64.exe' });
+  });
+
+  it('outcome 5: the reviewed cached release outranks an arbitrary PATH binary', async () => {
+    const { resolveScipBinaryPure } = await loadReal();
+    const resolution = resolveScipBinaryPure({
+      platform: 'linux',
+      arch: 'x64',
+      env: {},
+      isOnPath: () => true,
+      fileExists: () => true,
+      resolveSidecar: () => null,
+      resolveCached: () => '/home/me/.cache/scip-query/scip/v0.8.1/scip',
+    });
+    expect(resolution).toEqual({ source: 'cache', path: '/home/me/.cache/scip-query/scip/v0.8.1/scip' });
   });
 
   it('outcome 4: not found anywhere', async () => {

@@ -199,10 +199,25 @@ describe('healthPhaseConcurrency', () => {
 });
 
 describe('fullHealthPhaseConcurrency', () => {
-  it('runs one memory-heavy phase task at a time unless explicitly overridden', () => {
-    expect(fullHealthPhaseConcurrency(20, {}, () => 14)).toBe(1);
-    expect(fullHealthPhaseConcurrency(20, { SCIP_QUERY_HEALTH_FULL_CONCURRENCY: '2' }, () => 14)).toBe(2);
-    expect(fullHealthPhaseConcurrency(1, {}, () => 14)).toBe(1);
+  const GIB = 1024 * 1024 * 1024;
+
+  it('runs as many memory-heavy phase tasks as half the machine can hold, at most four', () => {
+    // 61 GiB: floor(30.5 GiB / 7 GiB) = 4 → capped at the maximum of four.
+    expect(fullHealthPhaseConcurrency(20, {}, () => 24, 61 * GIB)).toBe(4);
+    // 32 GiB: floor(16 GiB / 7 GiB) = 2.
+    expect(fullHealthPhaseConcurrency(20, {}, () => 24, 32 * GIB)).toBe(2);
+    // 16 GiB laptop: one phase at a time, as before.
+    expect(fullHealthPhaseConcurrency(20, {}, () => 14, 16 * GIB)).toBe(1);
+    // Two cores leave one worker regardless of memory.
+    expect(fullHealthPhaseConcurrency(20, {}, () => 2, 128 * GIB)).toBe(1);
+    // Never more workers than tasks, and an unknown machine size falls back to CPU gating.
+    expect(fullHealthPhaseConcurrency(1, {}, () => 14, 61 * GIB)).toBe(1);
+    expect(fullHealthPhaseConcurrency(20, {}, () => 24, Number.NaN)).toBe(4);
+  });
+
+  it('honors an explicit override', () => {
+    expect(fullHealthPhaseConcurrency(20, { SCIP_QUERY_HEALTH_FULL_CONCURRENCY: '2' }, () => 14, 16 * GIB)).toBe(2);
+    expect(fullHealthPhaseConcurrency(20, { SCIP_QUERY_HEALTH_FULL_CONCURRENCY: '1' }, () => 24, 61 * GIB)).toBe(1);
   });
 });
 

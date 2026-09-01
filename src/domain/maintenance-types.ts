@@ -98,4 +98,21 @@ export interface ReindexActivitySummary {
   invalidLanguageDetails?: number;
   byLanguage?: Partial<Record<SupportedLanguage, ReindexLanguageActivitySummary>>;
   byTrigger: Partial<Record<RefreshTriggerKind, number>>;
+  /**
+   * The subset of runs the watcher started itself (`watch-*` triggers). The
+   * automatic resource budget is charged against this subset only: `setup`
+   * and manual `reindex` work is explicit consent, not watcher churn. Absent
+   * on legacy watch-state records; budget evaluation then falls back to the
+   * window totals.
+   */
+  automatic?: ReindexAutomaticActivitySummary;
+}
+
+export interface ReindexAutomaticActivitySummary {
+  runs: number;
+  rebuilt: number;
+  fullRebuilds: number;
+  estimatedWriteBytes: number;
+  oldestRebuildAt?: string;
+  oldestWriteAt?: string;
 }

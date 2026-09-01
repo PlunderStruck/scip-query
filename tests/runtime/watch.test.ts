@@ -335,6 +335,65 @@ describe('Watcher', () => {
     await watcher.stop();
   });
 
+  it('drops a budget-paused pending refresh once a manual reindex publishes a fresh generation', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-01T18:00:00.000Z'));
+    const projectRoot = createProject();
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const statuses: Array<{ state: string; dirty?: boolean }> = [];
+    const suppressed: unknown[] = [];
+    let generation = 'generation-setup';
+    let freshness: 'fresh' | 'stale' = 'stale';
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs: 250, cooldownMs: 0, gitPollMs: 1_000 } },
+      reindexRunner: { start: run },
+      budgetInspector: (_outputDb, _config, now) => ({
+        state: 'paused',
+        reason: 'estimated-write-bytes',
+        until: now.getTime() + 15 * 60_000,
+        rebuilt: 1,
+        estimatedWriteBytes: 1_449_816_966,
+        detail: 'write budget consumed',
+      }),
+      publishedGeneration: () => generation,
+      indexFreshness: () => freshness,
+      onStatus: (status) => statuses.push(status),
+      onRefreshSuppressed: (trigger) => suppressed.push(trigger),
+    });
+    watcher.start();
+
+    watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' }, { immediate: true });
+    expect(statuses.at(-1)).toEqual(expect.objectContaining({ state: 'budget-paused', dirty: true }));
+
+    // A generation appears that the watcher did not produce, but the tree moved on: keep waiting.
+    generation = 'generation-manual-1';
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(statuses.at(-1)).toEqual(expect.objectContaining({ state: 'budget-paused', dirty: true }));
+    expect(suppressed).toEqual([]);
+
+    // The next manual publication matches the working tree: the pending refresh is satisfied.
+    generation = 'generation-manual-2';
+    freshness = 'fresh';
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(statuses.at(-1)).toEqual({ state: 'idle' });
+    expect(suppressed).toEqual([
+      expect.objectContaining({
+        kind: 'watch-source',
+        detail: expect.stringContaining('published outside the watcher'),
+      }),
+    ]);
+    expect(run).not.toHaveBeenCalled();
+
+    // Once idle, nothing pends, so later publications are ignored.
+    generation = 'generation-manual-3';
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(statuses.at(-1)).toEqual({ state: 'idle' });
+    expect(suppressed).toHaveLength(1);
+    await watcher.stop();
+  });
+
   it('cancels a resource-budget retry when the watcher stops', async () => {
     vi.useFakeTimers();
     const projectRoot = createProject();

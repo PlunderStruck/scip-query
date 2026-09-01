@@ -7,6 +7,7 @@ import { ScipDatabase } from '../../../src/storage/db.js';
 import {
   exactSemanticCallerMap,
   semanticCallerMap,
+  semanticConsumerReadiness,
   semanticEvidenceProduct,
   semanticImportUsage,
   semanticSignature,
@@ -568,6 +569,32 @@ describe('TypeScript semantic provider', () => {
           misses: 0,
         }),
       );
+    });
+  });
+
+  it('lets a bounded command run semantic consumers only when fragments are warm or a service can compute them', async () => {
+    await withSemanticFixtureAsync(async (db) => {
+      const noService = () => false;
+      // Two files are cold; a limit of one cold file with no service degrades with the remedy.
+      expect(semanticConsumerReadiness(db, { coldFragmentLimit: 1, serviceAvailable: noService })).toEqual({
+        ready: false,
+        reason: expect.stringContaining('cold for 2 of 2 files and no watch service is running'),
+      });
+      // A live watch service computes the cold rows itself.
+      expect(semanticConsumerReadiness(db, { coldFragmentLimit: 1, serviceAvailable: () => true })).toEqual({
+        ready: true,
+      });
+      // Within the in-process limit the command may compute them.
+      expect(semanticConsumerReadiness(db, { coldFragmentLimit: 2, serviceAvailable: noService })).toEqual({
+        ready: true,
+      });
+
+      const resolveProvider = (relativePath: string) => getSemanticProvider(db, relativePath);
+      await warmTypeScriptReferenceFragments(db, resolveProvider, { yieldToEventLoop: async () => undefined });
+      // Warm fragments never need the compiler in the command process.
+      expect(semanticConsumerReadiness(db, { coldFragmentLimit: 0, serviceAvailable: noService })).toEqual({
+        ready: true,
+      });
     });
   });
 

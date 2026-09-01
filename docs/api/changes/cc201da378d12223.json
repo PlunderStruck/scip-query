@@ -1,0 +1,55 @@
+{
+  "acceptedAt": "2026-09-01T20:28:15.363Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "cc201da378d12223a1b1eb08f3cd1863a9837adae4b14a4a39dacde11cff653d",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "DiffImpactEvidenceRuntime changed from interface DiffImpactEvidenceRuntime { semanticConsumers(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<number, Set<string>>; sourceFallbackConsumers(db: S... to interface DiffImpactEvidenceRuntime { semanticConsumers(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<number, Set<string>>; sourceFallbackConsumers(db: S....",
+      "target": "./queries:DiffImpactEvidenceRuntime"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "DiffImpactEvidenceRuntime changed from interface DiffImpactEvidenceRuntime { semanticConsumers(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<number, Set<string>>; sourceFallbackConsumers(db: S... to interface DiffImpactEvidenceRuntime { semanticConsumers(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<number, Set<string>>; sourceFallbackConsumers(db: S....",
+      "target": "./queries/diff-impact:DiffImpactEvidenceRuntime"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "DiffImpactEvidenceRuntime changed from interface DiffImpactEvidenceRuntime { semanticConsumers(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<number, Set<string>>; sourceFallbackConsumers(db: S... to interface DiffImpactEvidenceRuntime { semanticConsumers(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<number, Set<string>>; sourceFallbackConsumers(db: S....",
+      "target": "./queries/index:DiffImpactEvidenceRuntime"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "tryInstallScipCli changed from declare function tryInstallScipCli(onStatus: (msg: string) => void): boolean; to declare function tryInstallScipCli(onStatus: (msg: string) => void, deps?: Partial<ScipReleaseInstallDeps>): Promise<boolean>;.",
+      "target": "./reindex:tryInstallScipCli"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "Watcher changed from declare class Watcher { private projectRoot; private config; private watchConfig; private outputDb; private languages?; private pnpmWorkspaces; private typescriptProjectMode?; p... to declare class Watcher { private projectRoot; private config; private watchConfig; private outputDb; private languages?; private pnpmWorkspaces; private typescriptProjectMode?; p....",
+      "target": "./runtime:Watcher"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "WatcherOptions changed from interface WatcherOptions { projectRoot: string; config: ProjectConfig; languages?: SupportedLanguage[]; reindexRunner?: ReindexRunner; subscriptionFactory?: WatchSubscriptionFac... to interface WatcherOptions { projectRoot: string; config: ProjectConfig; languages?: SupportedLanguage[]; reindexRunner?: ReindexRunner; subscriptionFactory?: WatchSubscriptionFac....",
+      "target": "./runtime:WatcherOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "t changed from declare function tryInstallScipCli(onStatus: (msg: string) => void): boolean; to declare function tryInstallScipCli(onStatus: (msg: string) => void, deps?: Partial<ScipReleaseInstallDeps>): Promise<boolean>;.",
+      "target": "scip-cli-<hash>.d.ts:t"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.22.0",
+  "previousDigest": "79d99c69e72fe7f72ad7c552489610569f99fd85b9dd8087378484e906aaae44",
+  "reason": "tryInstallScipCli now downloads the reviewed scip release (digest-verified) before falling back to go install, so it is async; the external scip binary itself is no longer required unless SCIP_QUERY_SQLITE_CONVERTER=scip-cli selects the legacy converter",
+  "schemaVersion": 1
+}
