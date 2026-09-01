@@ -37,6 +37,39 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
   that would only be suppressed as fresh. The check runs on the Git poll
   interval and does not depend on a Git checkout.
 
+### Health phases stop rebuilding the compiler program
+
+- Measured per child on a 7,800-file repository (cold cache, no watch
+  service): three phase children each spent about 17.5 seconds building the
+  TypeScript program to compute 118, 8, and 2 callee cache misses, and the
+  complexity phase held 1,975 parsed trees at exit because its per-definition
+  source-facts reads parsed every cold file synchronously.
+- The prewarm now persists every file's source-facts product in collecting,
+  yielding batches, and its callee pass covers the production-callable
+  definition sets the phases use (which add interface and class member
+  fallback rows the catalog does not carry), so phase children read the
+  cache and parse nothing.
+
+### Setup reports what is actually missing
+
+- A cold start on a fresh home directory (npm 11, no caches, a fresh clone)
+  installed in 7 seconds, indexed 7,780 TypeScript files in 123 seconds, ran
+  the full health audit, and answered search, evidence, and diff-impact in
+  about 2 seconds each. Its verdict was still `partial`, because setup
+  reported two consent skips for things that were not missing and counted
+  demand-started watching and an absent Rust toolchain as unavailable.
+- Without consent, the AST parser step now probes which selected-language
+  parsers load and reports "nothing to install" when all do; the consent skip
+  remains only for a parser that does not load, naming it. Indexer
+  remediation reports "nothing to install" when every detected language has a
+  runnable indexer. Demand-started watching (the default) is a configured
+  state, and its smoke row and the absent-Rust row are optional, so a
+  TypeScript repository with everything present reaches `ready`.
+- A wait on a path-change wake also compares each watched path's
+  modification time with the last one it settled on, so a change that
+  already happened resolves immediately even when the filesystem event
+  arrives late.
+
 ### Children keep the parent's NODE_OPTIONS
 
 - Isolated analysis children (the health prewarm, health phases, diff-impact

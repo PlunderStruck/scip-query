@@ -4,6 +4,7 @@ import { getHeapStatistics } from 'node:v8';
 import type { ObservationReceiptV2, ObservationSourceKind } from '../domain/observation-receipt.js';
 import type { IndexedDefinition } from '../domain/types.js';
 import { collectScopedDefinitionsInBatches } from '../symbols/definition-catalog.js';
+import { productionCallableDefinitions } from '../queries/internal/production-callables.js';
 import type { ScipDatabase } from '../storage/db.js';
 import * as queries from '../queries/index.js';
 import { profileAsyncSpan, profileSpan } from '../instrumentation/profile.js';
@@ -18,6 +19,7 @@ import {
 } from '../semantic/shared-primitives.js';
 import { materializeSemanticCalleeCache } from '../semantic/symbol-evidence.js';
 import { warmSourceDependencyProducts, type SourceDependencyWarmProgress } from '../symbols/graph/file-dep-graph.js';
+import { warmSourceFactsProducts } from '../source/facts/source-facts-warm.js';
 import {
   warmTypeScriptReferenceFragments,
   type TypeScriptReferenceFragmentWarmProgress,
@@ -190,6 +192,8 @@ export interface HealthSemanticPrewarmResult {
   referenceIncomplete: number;
   /** Indexed files whose import and re-export products were persisted before the provider built. */
   sourceDependencyFiles?: number;
+  /** Indexed files whose source-facts product was persisted before the provider built. */
+  sourceFactsFiles?: number;
   /** Indexed TypeScript files whose reference fragments are persisted; absent when the fragment path was unavailable. */
   referenceFragmentFiles?: number;
   /** TypeScript reference fragments computed and persisted by this run. */
@@ -226,6 +230,12 @@ export interface HealthSemanticPrewarmRuntime {
     db: ScipDatabase,
     onBatch?: (progress: SourceDependencyWarmProgress) => void,
   ): Promise<{ files: number }>;
+  /**
+   * Persist every indexed file's source-facts product in collecting, yielding
+   * batches. Health phases read facts per definition synchronously; a cold
+   * product parses the file, and that sweep would otherwise hold every tree.
+   */
+  warmSourceFacts?(db: ScipDatabase): Promise<{ files: number; withFacts: number }>;
   /**
    * Persist a reference fragment for every indexed TypeScript file without
    * assembling the project-wide reference map; null when the fragment path is
@@ -339,16 +349,36 @@ const DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME: HealthSemanticPrewarmRuntime = {
   readMarker: (db, cacheKey, fingerprint) => HEALTH_SEMANTIC_PREWARM_CACHE.read(db, cacheKey, fingerprint),
   writeMarker: (db, cacheKey, fingerprint, marker) =>
     HEALTH_SEMANTIC_PREWARM_CACHE.write(db, cacheKey, fingerprint, marker),
-  candidateDefinitions: async (db, opts) =>
-    (
-      await collectScopedDefinitionsInBatches(db, opts.scope, {
-        collectGarbage: collectNativeGarbage,
-        yieldToEventLoop: () => new Promise<void>((resolve) => setImmediate(resolve)),
-      })
-    ).filter((definition) => semanticProviderLanguageForPath(definition.relativePath) !== null),
+  candidateDefinitions: async (db, opts) => {
+    const catalog = await collectScopedDefinitionsInBatches(db, opts.scope, {
+      collectGarbage: collectNativeGarbage,
+      yieldToEventLoop: () => new Promise<void>((resolve) => setImmediate(resolve)),
+    });
+    // The phases ask for callees of the production-callable sets, which add
+    // fallback rows (interface and class members) the catalog does not carry.
+    // A handful of such misses makes a phase child build the whole compiler
+    // program; covering them here keeps the phases on the cache.
+    const seen = new Set(catalog.map((definition) => definition.symbolId));
+    const extra: IndexedDefinition[] = [];
+    for (const variant of [{}, { requireCallableSymbol: true }, { requireFunctionLikeSymbol: true }] as const) {
+      for (const definition of productionCallableDefinitions(db, { ...variant, scope: opts.scope })) {
+        if (seen.has(definition.symbolId)) continue;
+        seen.add(definition.symbolId);
+        extra.push(definition);
+      }
+    }
+    return [...catalog, ...extra].filter(
+      (definition) => semanticProviderLanguageForPath(definition.relativePath) !== null,
+    );
+  },
   warmSourceDependencies: (db, onBatch) =>
     warmSourceDependencyProducts(db, {
       onBatch,
+      collectGarbage: collectNativeGarbage,
+      yieldToEventLoop: () => new Promise<void>((resolve) => setImmediate(resolve)),
+    }),
+  warmSourceFacts: (db) =>
+    warmSourceFactsProducts(db, {
       collectGarbage: collectNativeGarbage,
       yieldToEventLoop: () => new Promise<void>((resolve) => setImmediate(resolve)),
     }),
@@ -543,6 +573,23 @@ async function runHealthSemanticPrewarm(
     );
   }
 
+  // Health phases read source facts per definition synchronously; persisting
+  // the per-file product here, in collecting batches, is what keeps that
+  // cold sweep from holding every tree in a phase child.
+  let sourceFactsFiles: number | null = null;
+  if (runtime.warmSourceFacts) {
+    const warmSourceFacts = runtime.warmSourceFacts.bind(runtime);
+    let warmedFacts = 0;
+    sourceFactsFiles = await profileAsyncSpan(
+      'health.semantic-prewarm.source-facts',
+      async () => {
+        warmedFacts = (await warmSourceFacts(db)).files;
+        return warmedFacts;
+      },
+      () => ({ files: warmedFacts }),
+    );
+  }
+
   // TypeScript references are served per file from persisted fragments, so the
   // fragment rows are the warm state. Persisting them file by file bounds the
   // working set by one provider batch; assembling the project-wide reference
@@ -626,6 +673,7 @@ async function runHealthSemanticPrewarm(
   );
   const fragmentDisclosure = {
     ...(sourceDependencyFiles === null ? {} : { sourceDependencyFiles }),
+    ...(sourceFactsFiles === null ? {} : { sourceFactsFiles }),
     ...(fragments
       ? { referenceFragmentFiles: fragments.files, referenceFragmentComputedFiles: fragments.computedFiles }
       : {}),

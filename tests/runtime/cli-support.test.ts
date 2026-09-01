@@ -132,6 +132,7 @@ function fakePrewarmRuntime(overrides: Partial<HealthSemanticPrewarmRuntime> = {
       cacheWrites: definitions.length,
     })),
     warmSourceDependencies: vi.fn(async () => ({ files: 2 })),
+    warmSourceFacts: vi.fn(async () => ({ files: 2, withFacts: 1 })),
     warmReferenceFragments: vi.fn(async () => ({ files: 1, cacheHits: 0, cacheMisses: 1, computedFiles: 1 })),
     materializeCallees: vi.fn(() => new Map([[1, []]])),
     releaseSemanticMemory: vi.fn(),
@@ -447,7 +448,7 @@ describe('prewarmHealthSemanticEvidence', () => {
 
     const result = await prewarmHealthSemanticEvidence(fakeLargeDb(), { full: true }, runtime);
 
-    expect(result).toMatchObject({ status: 'warmed', sourceDependencyFiles: 7, referenceFragmentFiles: 1 });
+    expect(result).toMatchObject({ status: 'warmed', sourceDependencyFiles: 7, sourceFactsFiles: 2, referenceFragmentFiles: 1 });
     // The dependency graph the provider needs must already be served from
     // persisted products when the provider builds; otherwise it parses every
     // file in one synchronous sweep that cannot free a single tree.
@@ -637,6 +638,7 @@ describe('prewarmHealthSemanticEvidence', () => {
       ).toEqual([
         { name: 'health.semantic-prewarm.candidate-definitions', definitions: 2 },
         { name: 'health.semantic-prewarm.source-dependencies' },
+        { name: 'health.semantic-prewarm.source-facts' },
         { name: 'health.semantic-prewarm.reference-fragments', definitions: 1, rows: 1 },
         { name: 'health.semantic-prewarm.references', definitions: 1, rows: 1 },
         { name: 'health.semantic-prewarm.release-reference-memory' },

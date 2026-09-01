@@ -32,7 +32,7 @@ import { getIndexFreshness, type IndexFreshness } from './index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from './project-readiness.js';
 import { installSkills, isScipInstalled } from './setup.js';
 import { ensureWatchService, type WatchServiceEnsureResult } from './watch-service.js';
-import { setupAstParsers, type AstParserSetupResult } from './ast-parser-setup.js';
+import { probeAstParsers, setupAstParsers, type AstParserSetupResult } from './ast-parser-setup.js';
 
 type HealthAction = HealthReport['actions'][number];
 type IndexerDependencyStatus = ReturnType<typeof getIndexerDependencyStatus>;
@@ -389,42 +389,70 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     }),
   });
 
-  const astParsers =
-    opts.installAstParsers !== true
-      ? {
-          supportedLanguages: [],
-          availableBefore: [],
-          installed: [],
-          availableAfter: [],
-          unavailable: [],
-          attempted: false,
-        }
-      : setupAstParsers(initialReadiness.languages);
-  addStep(steps, {
-    id: 'ast-parsers',
-    label: 'AST parser packages',
-    status: opts.installAstParsers !== true ? 'skipped' : astParsers.unavailable.length > 0 ? 'warn' : 'ok',
-    message:
-      opts.installAstParsers !== true
-        ? 'Skipped because installing missing parser packages requires explicit consent.'
-        : astParsers.supportedLanguages.length === 0
+  let astParsers: AstParserSetupResult;
+  if (opts.installAstParsers === true) {
+    astParsers = setupAstParsers(initialReadiness.languages);
+    addStep(steps, {
+      id: 'ast-parsers',
+      label: 'AST parser packages',
+      status: astParsers.unavailable.length > 0 ? 'warn' : 'ok',
+      message:
+        astParsers.supportedLanguages.length === 0
           ? 'No selected language uses a bundled Tree-sitter parser.'
           : `${astParsers.availableAfter.length}/${astParsers.supportedLanguages.length} selected language parser(s) available${astParsers.installed.length > 0 ? `; installed ${astParsers.installed.join(', ')}` : ''}.`,
-    details: [
-      ...(astParsers.unavailable.length > 0 ? [`Unavailable: ${astParsers.unavailable.join(', ')}`] : []),
-      ...(astParsers.error ? [astParsers.error] : []),
-    ],
-  });
+      details: [
+        ...(astParsers.unavailable.length > 0 ? [`Unavailable: ${astParsers.unavailable.join(', ')}`] : []),
+        ...(astParsers.error ? [astParsers.error] : []),
+      ],
+    });
+  } else {
+    // Without consent nothing is installed, but the parsers that ship
+    // prebuilt usually load already; report what loads instead of a skip
+    // that reads as missing.
+    const probe = probeAstParsers(initialReadiness.languages);
+    astParsers = {
+      supportedLanguages: probe.supportedLanguages,
+      availableBefore: probe.available,
+      installed: [],
+      availableAfter: probe.available,
+      unavailable: probe.missing,
+      attempted: false,
+    };
+    addStep(steps, {
+      id: 'ast-parsers',
+      label: 'AST parser packages',
+      status: probe.missing.length === 0 ? 'ok' : 'skipped',
+      message:
+        probe.supportedLanguages.length === 0
+          ? 'No selected language uses a bundled Tree-sitter parser.'
+          : probe.missing.length === 0
+            ? `${probe.available.length}/${probe.supportedLanguages.length} selected language parser(s) available; nothing to install.`
+            : 'Skipped because installing missing parser packages requires explicit consent.',
+      details: probe.missing.length > 0 ? [`Missing: ${probe.missing.join(', ')}`] : [],
+    });
+  }
 
   const installIndexers = opts.installIndexers === true;
   const indexerRemediation = installIndexers ? remediateIndexers(projectRoot, initialReadiness, steps) : [];
   if (!installIndexers) {
-    addStep(steps, {
-      id: 'indexer-remediation',
-      label: 'Indexer remediation',
-      status: 'skipped',
-      message: 'Skipped because installing missing indexers requires explicit consent.',
-    });
+    const missingIndexers = initialReadiness.indexers.filter((indexer) => !indexer.runnable);
+    addStep(
+      steps,
+      missingIndexers.length === 0
+        ? {
+            id: 'indexer-remediation',
+            label: 'Indexer remediation',
+            status: 'ok',
+            message: 'Nothing to install: every detected language has a runnable indexer.',
+          }
+        : {
+            id: 'indexer-remediation',
+            label: 'Indexer remediation',
+            status: 'skipped',
+            message: 'Skipped because installing missing indexers requires explicit consent.',
+            details: missingIndexers.map((indexer) => `Missing ${indexer.language}: ${indexer.binaryLabel}`),
+          },
+    );
   }
   const readyForIndexing = getProjectReadiness(projectRoot, config);
 
@@ -742,13 +770,21 @@ function startSetupWatchService(input: SetupWatchServiceInput): WatchServiceEnsu
                 reason: 'Skipped because the initial refresh did not produce a complete fresh generation.',
                 optional: false,
               }
-            : !input.watchConfig.autoStart
-              ? {
-                  reason:
-                    'Automatic startup is disabled by watch.autoStart=false; run scip-query watch --daemon when this worktree should be watched.',
-                  optional: true,
-                }
-              : null;
+            : null;
+  if (skipped === null && !input.watchConfig.autoStart) {
+    // Demand start is the default: the service starts with the first query
+    // that needs it. That is the configured state, not something setup left
+    // undone.
+    addStep(input.steps, {
+      id: 'watch-refresh',
+      label: 'Automatic indexing service',
+      status: 'ok',
+      optional: true,
+      message:
+        'Demand-started: the service starts with the first query that needs it (watch.autoStart=false); run scip-query watch --daemon to start it now.',
+    });
+    return null;
+  }
   if (skipped !== null) {
     addStep(input.steps, {
       id: 'watch-refresh',
@@ -951,12 +987,16 @@ function buildSetupSmokeTests(opts: {
           : opts.watchConfig.enabled && opts.watchService
             ? 'pass'
             : 'unavailable',
+      // A deliberate configuration (demand start, watch disabled) is a valid
+      // state for the smoke test too; only an incidental skip should warn.
+      ...(watchStep?.optional === true ? { optional: true } : {}),
       evidence: watchStep?.message ?? 'Watch refresh policy was not evaluated.',
     },
     {
       id: 'rust-semantic-session',
       command: 'scip-query status --json',
       status: opts.rustSemanticSession === null ? 'unavailable' : opts.rustSemanticSession.valid ? 'pass' : 'fail',
+      ...(opts.rustSemanticSession === null ? { optional: true } : {}),
       evidence:
         opts.rustSemanticSession === null
           ? 'Rust was not detected.'

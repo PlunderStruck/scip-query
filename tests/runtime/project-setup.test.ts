@@ -15,6 +15,7 @@ async function loadProjectSetup(
     configDiagnostics?: Array<{ level: 'error' | 'warning'; path: string; message: string }>;
     freshnessStates?: Array<'fresh' | 'stale' | 'missing' | 'unknown'>;
     indexerRunnable?: boolean;
+    missingAstParsers?: string[];
   } = {},
 ) {
   vi.resetModules();
@@ -128,6 +129,12 @@ async function loadProjectSetup(
     unavailable: [],
     attempted: false,
   }));
+  const missingAstParsers = overrides.missingAstParsers ?? [];
+  const probeAstParsers = vi.fn((selectedLanguages: string[]) => ({
+    supportedLanguages: selectedLanguages,
+    available: selectedLanguages.filter((language) => !missingAstParsers.includes(language)),
+    missing: selectedLanguages.filter((language) => missingAstParsers.includes(language)),
+  }));
   const configureProjectAutomaticRefresh = vi.fn(
     (_projectRoot: string, config: Record<string, unknown>, enabled: boolean) => {
       if (overrides.automaticRefreshConfigThrows) throw new Error('config write failed');
@@ -183,7 +190,7 @@ async function loadProjectSetup(
   });
   vi.doMock('../../src/runtime/agent-setup.js', () => ({ setupAgent }));
   vi.doMock('../../src/runtime/agent-hooks.js', () => ({ installProjectAgentHooks }));
-  vi.doMock('../../src/runtime/ast-parser-setup.js', () => ({ setupAstParsers }));
+  vi.doMock('../../src/runtime/ast-parser-setup.js', () => ({ probeAstParsers, setupAstParsers }));
   vi.doMock('../../src/runtime/cli-support.js', () => ({ cliVersion: '0.15.0', runIsolatedHealthReport }));
   vi.doMock('../../src/runtime/config.js', () => ({
     configureProjectAutomaticRefresh,
@@ -336,13 +343,38 @@ describe('runProjectSetup', () => {
 
   it('installs detected AST parsers only after explicit setup consent', async () => {
     const { module, setupAstParsers } = await loadProjectSetup({ languages: ['typescript', 'python'] });
-    const skipped = await module.runProjectSetup({ runHealth: false });
+    // Without consent the step probes instead of installing: parsers that
+    // already load are reported as such, not as a skip that reads as missing.
+    const probed = await module.runProjectSetup({ runHealth: false });
     expect(setupAstParsers).not.toHaveBeenCalled();
-    expect(skipped.steps).toContainEqual(expect.objectContaining({ id: 'ast-parsers', status: 'skipped' }));
+    expect(probed.steps).toContainEqual(
+      expect.objectContaining({
+        id: 'ast-parsers',
+        status: 'ok',
+        message: '2/2 selected language parser(s) available; nothing to install.',
+      }),
+    );
 
     const selected = await module.runProjectSetup({ runHealth: false, installAstParsers: true });
     expect(setupAstParsers).toHaveBeenCalledWith(['typescript', 'python']);
     expect(selected.steps).toContainEqual(expect.objectContaining({ id: 'ast-parsers', status: 'ok' }));
+  });
+
+  it('keeps the consent skip for a parser that does not load', async () => {
+    const { module, setupAstParsers } = await loadProjectSetup({
+      languages: ['typescript', 'kotlin'],
+      missingAstParsers: ['kotlin'],
+    });
+    const report = await module.runProjectSetup({ runHealth: false });
+    expect(setupAstParsers).not.toHaveBeenCalled();
+    expect(report.steps).toContainEqual(
+      expect.objectContaining({
+        id: 'ast-parsers',
+        status: 'skipped',
+        message: 'Skipped because installing missing parser packages requires explicit consent.',
+        details: ['Missing: kotlin'],
+      }),
+    );
   });
 
   it('plans guided setup choices without creating agent docs by default', async () => {
@@ -640,10 +672,17 @@ describe('runProjectSetup', () => {
     const report = await module.runProjectSetup();
 
     expect(ensureWatchService).not.toHaveBeenCalled();
+    // Demand start is the configured default, so the step is a configured
+    // state, not something setup left undone.
     expect(report.steps.find((step) => step.id === 'watch-refresh')).toMatchObject({
-      status: 'skipped',
+      status: 'ok',
+      optional: true,
       message:
-        'Automatic startup is disabled by watch.autoStart=false; run scip-query watch --daemon when this worktree should be watched.',
+        'Demand-started: the service starts with the first query that needs it (watch.autoStart=false); run scip-query watch --daemon to start it now.',
+    });
+    expect(report.smokeTests.find((test) => test.id === 'watch-refresh')).toMatchObject({
+      status: 'unavailable',
+      optional: true,
     });
   });
 
