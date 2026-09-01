@@ -6,6 +6,8 @@ export interface SourceFacts {
     name: string;
     startLine: number;
     endLine: number;
+    /** Branch points inside the callable (nested callables count in both); absent when no AST walk produced it. */
+    branches?: number;
     paramCount: number;
     params: Array<{ name: string; simple: boolean }>;
     paramsEndLine: number;

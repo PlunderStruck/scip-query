@@ -39,6 +39,46 @@ describe('source facts', () => {
     }
   });
 
+  it('counts branch points per callable during the facts walk, nested callables counting in both', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-facts-branches-'));
+    try {
+      const projectRoot = join(tempDir, 'project');
+      const dbPath = join(tempDir, 'index.db');
+      writeFixtureFiles(projectRoot, {
+        'src/branchy.ts': [
+          'export function outer(a: number, b: number): number {',
+          '  if (a > b && b > 0) return a;',
+          '  const inner = (x: number): number => {',
+          '    for (const y of [x]) {',
+          '      if (y) return y;',
+          '    }',
+          '    return x ? 1 : 0;',
+          '  };',
+          '  return inner(b);',
+          '}',
+          'export function flat(): number {',
+          '  return 1;',
+          '}',
+        ],
+      });
+      evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/branchy.ts').write();
+
+      const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(tempDir, 'index.scip') });
+      try {
+        const callables = getSourceFacts(db, 'src/branchy.ts')?.callables ?? [];
+        const byName = new Map(callables.map((callable) => [callable.name, callable.branches]));
+        // outer: if (1) + one && (1) + the nested for (1), if (1), ternary (1).
+        expect(byName.get('outer')).toBe(5);
+        expect(byName.get('inner')).toBe(3);
+        expect(byName.get('flat')).toBe(0);
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('extracts TypeScript private-method calls without the private marker', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-facts-private-method-'));
     try {

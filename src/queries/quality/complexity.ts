@@ -4,7 +4,8 @@ import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { stripCommentsAndStrings } from '../../source/primitives/source-stripper.js';
-import { getAst, smallestNodeCoveringLines, type SyntaxNode, walkNamedSyntax } from '../../source/ast.js';
+import { getAst, getSourceFacts, smallestNodeCoveringLines, type SyntaxNode, walkNamedSyntax } from '../../source/ast.js';
+import { branchContribution } from '../../source/ast/branch-nodes.js';
 import type { SymbolMatch } from '../../domain/symbol-types.js';
 
 export interface ComplexityResult {
@@ -109,7 +110,21 @@ export function branchEstimatesForDefinitions(
     definitionsByFile.set(definition.relativePath, bucket);
   }
 
-  for (const [relativePath, fileDefinitions] of definitionsByFile) {
+  for (const [relativePath, definitionsInFile] of definitionsByFile) {
+    // The persisted source facts already carry a branch count per callable;
+    // a definition whose range matches one exactly needs no parse.
+    const factBranches = new Map<string, number>();
+    for (const callable of getSourceFacts(db, relativePath)?.callables ?? []) {
+      if (callable.branches !== undefined) factBranches.set(`${callable.startLine}:${callable.endLine}`, callable.branches);
+    }
+    const fileDefinitions: SymbolMatch[] = [];
+    for (const definition of definitionsInFile) {
+      const branches = factBranches.get(`${definition.startLine}:${definition.endLine}`);
+      if (branches === undefined) fileDefinitions.push(definition);
+      else result.set(definition.symbolId, { branches, estimateBasis: 'ast' });
+    }
+    if (fileDefinitions.length === 0) continue;
+
     const ast = getAst(db, relativePath);
     const astDefinitions =
       ast === null
@@ -228,40 +243,6 @@ function addAstBranchEstimates(
   });
 }
 
-const AST_BRANCH_NODE_TYPES = new Set([
-  'if_statement',
-  'conditional_expression',
-  'ternary_expression',
-  'for_statement',
-  'for_in_statement',
-  'for_of_statement',
-  'while_statement',
-  'do_statement',
-  'switch_case',
-  'case_statement',
-  'catch_clause',
-  'except_clause',
-  'elif_clause',
-  'match_arm',
-]);
-
-function branchContribution(current: SyntaxNode): number {
-  if (AST_BRANCH_NODE_TYPES.has(current.type)) return 1;
-
-  if (
-    current.type === 'binary_expression' &&
-    current.parent?.type !== 'binary_expression' &&
-    (current.text.includes('&&') || current.text.includes('||'))
-  ) {
-    return countBooleanOperators(current.text);
-  }
-
-  return 0;
-}
-
-function countBooleanOperators(text: string): number {
-  return (text.match(/&&|\|\|/g) ?? []).length;
-}
 
 /**
  * Count branch points in source code using language-aware regex.

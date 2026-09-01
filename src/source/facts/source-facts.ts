@@ -8,6 +8,7 @@ import { getAst, parseAstSourceText } from '../ast/ast-core.js';
 import type { SyntaxNode, Tree } from '../ast/ast-types.js';
 import { getSourceText } from '../primitives/source-text.js';
 import { extractVueScriptBlock } from '../ast/vue-script.js';
+import { branchContribution } from '../ast/branch-nodes.js';
 import { callableFactForNode } from './source-callables.js';
 import { callSiteForNode } from './source-calls.js';
 import {
@@ -36,7 +37,7 @@ export interface SourceFactsResult {
   unavailable?: SourceFactsUnavailable;
 }
 
-export const SOURCE_FACTS_PAYLOAD_VERSION = 6;
+export const SOURCE_FACTS_PAYLOAD_VERSION = 7;
 
 // In-process layer keyed by (db, path, source) — previously a WeakMap on the
 // parsed Tree, but a persistent-cache hit never parses a Tree at all.
@@ -226,9 +227,21 @@ function buildSourceFacts(tree: Tree, language: AstLanguage): SourceFacts {
     if (arr[arr.length - 1] !== line) arr.push(line);
   };
 
+  // Every callable enclosing the current node; a branch node inside a nested
+  // function counts toward each enclosing callable, as the complexity query's
+  // own AST pass defines it.
+  const openCallables: SourceFacts['callables'] = [];
   const walk = (node: SyntaxNode): void => {
     const callable = callableFactForNode(node, language);
-    if (callable) callables.push(callable);
+    if (callable) {
+      callable.branches = 0;
+      callables.push(callable);
+      openCallables.push(callable);
+    }
+    const contribution = branchContribution(node);
+    if (contribution > 0) {
+      for (const open of openCallables) open.branches = (open.branches ?? 0) + contribution;
+    }
 
     const callSite = callSiteForNode(node, language);
     if (callSite) callSites.push(callSite);
@@ -246,6 +259,7 @@ function buildSourceFacts(tree: Tree, language: AstLanguage): SourceFacts {
     }
 
     for (const child of node.children) walk(child);
+    if (callable) openCallables.pop();
   };
   walk(tree.rootNode);
 

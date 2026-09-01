@@ -37,6 +37,41 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
   that would only be suppressed as fresh. The check runs on the Git poll
   interval and does not depend on a Git checkout.
 
+### The fragment warm pass stops recomputing hierarchy targets per batch
+
+- Profiled on a 7,800-file repository, the prewarm's reference scans spent
+  178 s across 51 batches, of which only 47 s was the per-file scan; the rest
+  was per-batch work over all 64,000 definitions, chiefly resolving every
+  definition's compiler node to build the class-hierarchy target map. That
+  map depends only on the definition set and the provider's program, so it
+  is now computed once per provider (a new profile span,
+  `typescript.references-map.hierarchy-targets`, records each computation).
+
+### Immutable SCIP shards are hard-linked where reflinks are unavailable
+
+- Every reindex staged its SCIP shards into the cache and back with byte
+  copies on filesystems without copy-on-write (ext4: ~325 MB per rebuild).
+  Cached shards and published index files are never opened for writing, so
+  they are now shared by hard link when a reflink is refused; a SQLite
+  candidate, which is patched in place, is still a real copy. Every clone
+  now removes its target first so no method ever writes through an inode
+  another generation still reads. Hard links count as shared bytes in the
+  reindex write telemetry, like reflinks.
+
+### Complexity reads branch counts from source facts
+
+- The source-facts walk now counts branch points per callable (a branch
+  inside a nested function counts toward each enclosing callable, as the
+  complexity query's own AST pass defined it), and the facts payload version
+  is 7. The complexity phase uses that count for every definition whose
+  range matches a callable and parses only the rest, so on a warm cache it
+  parses nothing; it parsed 4,287 files before.
+- Caller-file evidence is memoized per symbol within a process. The two
+  repository scans behind consumer provenance (indexed callsites and
+  source-fallback attribution) answer per symbol independently of which
+  other symbols were asked for, so a later call scans only for symbols it
+  has not seen; the wrapper phase asked three times.
+
 ### Health phases stop rebuilding the compiler program
 
 - Measured per child on a 7,800-file repository (cold cache, no watch

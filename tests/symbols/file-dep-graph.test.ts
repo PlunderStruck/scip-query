@@ -16,6 +16,8 @@ import {
 import { getAst, getAstForSource } from '../../src/source/ast.js';
 import { collectScopedDefinitionsInBatches, getScopedDefinitions } from '../../src/symbols/definition-catalog.js';
 import { warmSourceFactsProducts } from '../../src/source/facts/source-facts-warm.js';
+import { crossFileCallerEvidenceMap, sourceFallbackCallerEvidenceMap } from '../../src/symbols/references/caller-evidence.js';
+import { clearRegisteredCaches } from '../../src/storage/cache-registry.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 const PROFILE_ENV_KEYS = ['SCIP_QUERY_PROFILE', 'SCIP_QUERY_PROFILE_OUT', 'SCIP_QUERY_PROFILE_COMMAND'] as const;
@@ -339,6 +341,33 @@ describe('file dependency graph evidence', () => {
 
       expect(warmed).toEqual({ files: 4, withFacts: 4 });
       expect(events).toEqual(['batch:3/4', 'collect', 'yield', 'batch:4/4', 'collect', 'yield']);
+    });
+  });
+
+  it('memoizes caller files per symbol across calls and forgets them with the source-file group', () => {
+    withFixture((openDb) => {
+      const db = openDb();
+      const definitions = getScopedDefinitions(db);
+      const b = definitions.find((definition) => definition.relativePath === 'src/b.ts');
+      const a = definitions.find((definition) => definition.relativePath === 'src/a.ts');
+      expect(b && a).toBeTruthy();
+      const shape = (map: Map<number, Set<string>>): Array<[number, string[]]> =>
+        [...map].map(([id, files]) => [id, [...files].sort()]);
+
+      const first = crossFileCallerEvidenceMap(db, [b!], { semantic: false });
+      expect(first.get(b!.symbolId)).toEqual(new Set(['src/a.ts', 'src/c.ts']));
+      // A later call over a superset reuses b's answer and computes only a's.
+      const second = crossFileCallerEvidenceMap(db, [a!, b!], { semantic: false });
+      expect(second.get(b!.symbolId)).toEqual(first.get(b!.symbolId));
+      expect(shape(sourceFallbackCallerEvidenceMap(db, [b!]))).toEqual(
+        shape(sourceFallbackCallerEvidenceMap(db, [a!, b!])).filter(([id]) => id === b!.symbolId),
+      );
+      // Returned sets are copies: mutating one must not poison later answers.
+      second.get(b!.symbolId)!.add('src/poison.ts');
+      expect(crossFileCallerEvidenceMap(db, [b!], { semantic: false }).get(b!.symbolId)).toEqual(first.get(b!.symbolId));
+
+      clearRegisteredCaches(db, { groups: ['source-file'] });
+      expect(crossFileCallerEvidenceMap(db, [b!], { semantic: false }).get(b!.symbolId)).toEqual(first.get(b!.symbolId));
     });
   });
 });
