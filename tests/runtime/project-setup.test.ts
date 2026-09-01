@@ -233,6 +233,12 @@ async function loadProjectSetup(
     }),
   }));
   vi.doMock('../../src/runtime/health-dossier.js', () => ({
+    beginHealthDossierAttempt: vi.fn(() => ({
+      attemptPath: '/repo/docs/scip-query/health-dossier.attempt.json',
+      attempt: { runId: 'run-test', startedAt: '2026-09-01T18:00:00.000Z', indexGeneration: 'generation-test' },
+      interrupted: null,
+    })),
+    finishHealthDossierAttempt: vi.fn(),
     writeProjectHealthDossier: vi.fn(() => ({
       markdownPath: '/repo/docs/scip-query/health-dossier.md',
       jsonPath: '/repo/docs/scip-query/health-dossier.json',
@@ -907,6 +913,12 @@ describe('runProjectSetup', () => {
       })),
     }));
     vi.doMock('../../src/runtime/health-dossier.js', () => ({
+      beginHealthDossierAttempt: vi.fn(() => ({
+        attemptPath: '/repo/docs/scip-query/health-dossier.attempt.json',
+        attempt: { runId: 'run-test', startedAt: '2026-09-01T18:00:00.000Z', indexGeneration: 'generation-test' },
+        interrupted: null,
+      })),
+      finishHealthDossierAttempt: vi.fn(),
       writeProjectHealthDossier: vi.fn(() => ({
         markdownPath: '/repo/docs/scip-query/health-dossier.md',
         jsonPath: '/repo/docs/scip-query/health-dossier.json',

@@ -1,8 +1,13 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { writeProjectHealthDossier } from '../../src/runtime/health-dossier.js';
+import {
+  beginHealthDossierAttempt,
+  finishHealthDossierAttempt,
+  readHealthDossierAttempt,
+  writeProjectHealthDossier,
+} from '../../src/runtime/health-dossier.js';
 import type { ProjectSetupReport } from '../../src/runtime/project-setup.js';
 
 let tempRoots: string[] = [];
@@ -119,5 +124,77 @@ describe('writeProjectHealthDossier', () => {
     const second = writeProjectHealthDossier(report);
     expect(second.written).toEqual([]);
     expect(second.unchanged).toEqual([second.markdownPath, second.jsonPath]);
+  });
+});
+
+describe('health dossier attempts', () => {
+  it('records an attempt before the audit, exposes an interrupted one, and clears it after publication', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-health-attempt-'));
+    tempRoots.push(projectRoot);
+
+    const first = beginHealthDossierAttempt(projectRoot, {
+      runId: 'run-1',
+      startedAt: '2026-09-01T18:07:46.000Z',
+      indexGeneration: 'generation-a',
+    });
+    expect(first.interrupted).toBeNull();
+    expect(readHealthDossierAttempt(first.attemptPath)).toEqual({
+      runId: 'run-1',
+      startedAt: '2026-09-01T18:07:46.000Z',
+      indexGeneration: 'generation-a',
+    });
+
+    // The first audit crashed before publishing: the next setup sees the marker.
+    const second = beginHealthDossierAttempt(projectRoot, {
+      runId: 'run-2',
+      startedAt: '2026-09-01T18:25:00.000Z',
+      indexGeneration: 'generation-b',
+    });
+    expect(second.interrupted).toEqual(expect.objectContaining({ runId: 'run-1', indexGeneration: 'generation-a' }));
+
+    finishHealthDossierAttempt(second);
+    expect(existsSync(second.attemptPath)).toBe(false);
+    expect(readHealthDossierAttempt(second.attemptPath)).toBeNull();
+  });
+
+  it('publishes the generation and attempt in the dossier and ignores attempt timestamps when deciding change', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-health-attempt-'));
+    tempRoots.push(projectRoot);
+    const base = {
+      projectRoot,
+      verdict: 'ready',
+      health: { score: 90, riskScore: 10, hygieneScore: 95, issuesNeedAttention: [] },
+      smokeTests: [],
+      steps: [],
+      indexerRemediation: [],
+      healthDossier: null,
+      indexGeneration: 'generation-a',
+    };
+
+    const first = writeProjectHealthDossier(
+      { ...base, attempt: { runId: 'run-1', startedAt: '2026-09-01T18:00:00.000Z', indexGeneration: 'generation-a' } },
+      {},
+    );
+    expect(first.written).toHaveLength(2);
+    const json = JSON.parse(readFileSync(first.jsonPath, 'utf8')) as Record<string, unknown>;
+    expect(json).toEqual(expect.objectContaining({ indexGeneration: 'generation-a' }));
+    expect(json['attempt']).toEqual(expect.objectContaining({ runId: 'run-1' }));
+    expect(readFileSync(first.markdownPath, 'utf8')).toContain('Index generation: generation-a');
+
+    const second = writeProjectHealthDossier(
+      { ...base, attempt: { runId: 'run-2', startedAt: '2026-09-01T19:00:00.000Z', indexGeneration: 'generation-a' } },
+      {},
+    );
+    expect(second.unchanged).toContain(second.jsonPath);
+
+    const third = writeProjectHealthDossier(
+      {
+        ...base,
+        indexGeneration: 'generation-b',
+        attempt: { runId: 'run-3', startedAt: '2026-09-01T20:00:00.000Z', indexGeneration: 'generation-b' },
+      },
+      {},
+    );
+    expect(third.written).toContain(third.jsonPath);
   });
 });

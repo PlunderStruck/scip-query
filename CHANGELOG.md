@@ -44,7 +44,16 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
   most four (`SCIP_QUERY_HEALTH_FULL_CONCURRENCY` still overrides). A 61 GiB
   host runs four phases at once; a 16 GiB laptop keeps one.
 - The health dossier is published atomically, so an interrupted setup leaves
-  the previous complete dossier in place instead of a half-written one.
+  the previous complete dossier in place instead of a half-written one. Each
+  audit first records an attempt marker (`health-dossier.attempt.json`, run
+  id, start time, index generation) that is cleared only after the dossier
+  is written; a later setup reports an interrupted audit instead of letting
+  the older dossier pass as current, and the dossier names the index
+  generation and attempt it completed.
+- The project-wide TypeScript reference map assembled from persisted
+  fragments is now kept per database for the life of the process, so a child
+  that runs several health phases (or `isolated`, `dead`, and consumer
+  evidence in one command) builds it once instead of once per consumer.
 
 ### Architecture policy is clean again
 
