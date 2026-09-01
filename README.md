@@ -37,6 +37,17 @@ cd your-repository
 scip-query setup
 ```
 
+npm 11 and newer skip dependency install scripts by default and print an
+`install-scripts` warning listing them. For scip-query every listed script is
+a prebuild check (`node-gyp-build`) or the package's own install hint; the
+Tree-sitter grammars and SQLite binding ship prebuilt binaries for macOS,
+Linux, and Windows, so nothing needs to compile and the warning can be
+ignored. The one grammar without prebuilds, Kotlin, falls back to text
+parsing unless a C toolchain is present and the scripts are allowed. To
+silence the warning for global installs, run the `npm config set
+allow-scripts=... --location=user` command npm prints; `--allow-scripts` is
+rejected inside a project directory by design.
+
 Setup detects supported languages, installs or checks their indexers, builds
 the local index, installs the bundled skills, and writes concise agent guidance.
 When the repository declares valid architecture rules, setup also installs one

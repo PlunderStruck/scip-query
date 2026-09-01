@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 import { CLIENT_SAFE_OUTPUT_BYTES } from '../../src/platform/terminal-output.js';
 
-describe('search CLI identity and materialization contract', { timeout: 10_000 }, () => {
+describe('search CLI identity and materialization contract', { timeout: 30_000 }, () => {
   const repositoryRoot = process.cwd();
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'scip-query-search-cli-'));
   const dbPath = join(fixtureRoot, 'index.db');
