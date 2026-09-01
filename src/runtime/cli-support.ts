@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { getHeapStatistics } from 'node:v8';
 import type { ObservationReceiptV2, ObservationSourceKind } from '../domain/observation-receipt.js';
 import type { IndexedDefinition } from '../domain/types.js';
-import { ProjectIndex } from '../queries/internal/project-index.js';
+import { collectScopedDefinitionsInBatches } from '../symbols/definition-catalog.js';
 import type { ScipDatabase } from '../storage/db.js';
 import * as queries from '../queries/index.js';
 import { profileAsyncSpan, profileSpan } from '../instrumentation/profile.js';
@@ -209,7 +209,12 @@ export interface HealthSemanticPrewarmRuntime {
     projectFingerprint: string,
     marker: HealthSemanticPrewarmMarker,
   ): void;
-  candidateDefinitions(db: ScipDatabase, opts: HealthCliOptions): IndexedDefinition[];
+  /**
+   * Definitions to warm. The default reads them file by file in collecting,
+   * yielding batches: a cold definition product parses its file, and a
+   * synchronous whole-project read would hold every parsed tree at once.
+   */
+  candidateDefinitions(db: ScipDatabase, opts: HealthCliOptions): IndexedDefinition[] | Promise<IndexedDefinition[]>;
   /**
    * Persist every indexed file's import and re-export products in yielding
    * batches before the semantic provider builds, so the synchronous file
@@ -333,10 +338,13 @@ const DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME: HealthSemanticPrewarmRuntime = {
   readMarker: (db, cacheKey, fingerprint) => HEALTH_SEMANTIC_PREWARM_CACHE.read(db, cacheKey, fingerprint),
   writeMarker: (db, cacheKey, fingerprint, marker) =>
     HEALTH_SEMANTIC_PREWARM_CACHE.write(db, cacheKey, fingerprint, marker),
-  candidateDefinitions: (db, opts) =>
-    new ProjectIndex(db)
-      .scopedDefinitions(opts.scope)
-      .filter((definition) => semanticProviderLanguageForPath(definition.relativePath) !== null),
+  candidateDefinitions: async (db, opts) =>
+    (
+      await collectScopedDefinitionsInBatches(db, opts.scope, {
+        collectGarbage: collectNativeGarbage,
+        yieldToEventLoop: () => new Promise<void>((resolve) => setImmediate(resolve)),
+      })
+    ).filter((definition) => semanticProviderLanguageForPath(definition.relativePath) !== null),
   warmSourceDependencies: (db, onBatch) =>
     warmSourceDependencyProducts(db, {
       onBatch,
@@ -501,10 +509,10 @@ async function runHealthSemanticPrewarm(
   if (marker && marker.referenceIncomplete === 0) return skippedHealthSemanticPrewarm('cache-hit');
 
   let definitions: IndexedDefinition[] = [];
-  definitions = profileSpan(
+  definitions = await profileAsyncSpan(
     'health.semantic-prewarm.candidate-definitions',
-    () => {
-      definitions = runtime.candidateDefinitions(db, opts);
+    async () => {
+      definitions = await runtime.candidateDefinitions(db, opts);
       return definitions;
     },
     () => ({ definitions: definitions.length }),
