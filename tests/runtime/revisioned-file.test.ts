@@ -1,4 +1,14 @@
-import { chmodSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  lstatSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -45,6 +55,32 @@ describe('revision-aware file mutation', () => {
     ).toThrow(FileRevisionConflictError);
 
     expect(readFileSync(target, 'utf8')).toBe('theirs\n');
+  });
+
+  it('writes through a symbolic link instead of replacing it with a regular file', () => {
+    const { root, target } = fixture('original\n');
+    const link = join(root, 'link.json');
+    symlinkSync('state.json', link);
+
+    const result = mutateTextFileRevisionAware(link, () => ({ kind: 'write', text: 'through the link\n' }));
+
+    expect(result.changed).toBe(true);
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(readFileSync(target, 'utf8')).toBe('through the link\n');
+    expect(readdirSync(root).sort()).toEqual(['link.json', 'state.json']);
+  });
+
+  it('creates the target of a dangling symbolic link instead of replacing the link', () => {
+    const { root } = fixture('unused\n');
+    const link = join(root, 'dangling.json');
+    symlinkSync('created.json', link);
+
+    const result = mutateTextFileRevisionAware(link, () => ({ kind: 'write', text: 'created\n' }));
+
+    expect(result.changed).toBe(true);
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(readFileSync(join(root, 'created.json'), 'utf8')).toBe('created\n');
+    expect(readFileSync(link, 'utf8')).toBe('created\n');
   });
 
   it('bounds retries while a file keeps changing and leaves the latest bytes untouched', () => {

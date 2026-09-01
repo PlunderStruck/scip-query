@@ -13,6 +13,7 @@ import {
   readCachedSemanticCalleesForFile,
   readCachedSemanticReferences,
   readCachedSemanticReferencesForFile,
+  hasCachedFileEvidence,
   readCachedFileEvidence,
   rekeyCachedFileEvidenceBatch,
   rekeyCachedProjectEvidenceKind,
@@ -162,6 +163,9 @@ describe('evidence cache', () => {
 
       expect(PRODUCT_TEST.read(db, 'docs/product.md', 'hash-a')).toEqual({ marker: 'cached' });
       expect(PRODUCT_TEST.read(db, 'docs/product.md', 'hash-b')).toBeNull();
+      expect(PRODUCT_TEST.has(db, 'docs/product.md', 'hash-a')).toBe(true);
+      expect(PRODUCT_TEST.has(db, 'docs/product.md', 'hash-b')).toBe(false);
+      expect(PRODUCT_TEST.has(db, 'docs/other.md', 'hash-a')).toBe(false);
     } finally {
       db.close();
     }
@@ -254,6 +258,9 @@ describe('evidence cache', () => {
       writeCachedFileEvidence(second, 'doc-path-tokens', 'docs/shared.md', 'hash-b', 'shared-b');
       expect(readCachedFileEvidence(second, 'doc-path-tokens', 'docs/shared.md', 'hash-a')).toBe('shared-a');
       expect(readCachedFileEvidence(second, 'file-definitions', 'src/private.ts', 'hash-private')).toBeNull();
+      expect(hasCachedFileEvidence(second, 'doc-path-tokens', 'docs/shared.md', 'hash-a')).toBe(true);
+      expect(hasCachedFileEvidence(second, 'doc-path-tokens', 'docs/shared.md', 'hash-missing')).toBe(false);
+      expect(hasCachedFileEvidence(second, 'file-definitions', 'src/private.ts', 'hash-private')).toBe(false);
     } finally {
       second.close();
     }

@@ -6,7 +6,10 @@ import {
   createReferenceFragmentAccumulator,
   referenceFragmentsFromDefinitionMap,
 } from '../../../src/semantic/typescript/reference-fragments.js';
-import { typeScriptReferenceFragmentBatches } from '../../../src/semantic/typescript/reference-fragment-shadow.js';
+import {
+  relieveFragmentHeapPressure,
+  typeScriptReferenceFragmentBatches,
+} from '../../../src/semantic/typescript/reference-fragment-shadow.js';
 
 describe('TypeScript reference fragments', () => {
   const alpha = definition(1, 'pkg alpha().', 'alpha', 'src/api.ts');
@@ -120,3 +123,46 @@ function definition(symbolId: number, symbol: string, leaf: string, relativePath
     enclosingSymbol: null,
   };
 }
+
+describe('fragment batch heap pressure', () => {
+  function probe(fractions: number[], collected = true) {
+    const calls = { collect: 0, release: 0 };
+    return {
+      calls,
+      probe: {
+        heapUsedFraction: () => fractions.shift() ?? 0,
+        collect: () => {
+          calls.collect += 1;
+          return collected;
+        },
+        release: () => {
+          calls.release += 1;
+        },
+      },
+    };
+  }
+
+  it('leaves a session alone below the threshold', () => {
+    const { probe: p, calls } = probe([0.5]);
+    expect(relieveFragmentHeapPressure(p, 0.75)).toBe(false);
+    expect(calls).toEqual({ collect: 0, release: 0 });
+  });
+
+  it('collects first and keeps the session when garbage was the pressure', () => {
+    const { probe: p, calls } = probe([0.9, 0.4]);
+    expect(relieveFragmentHeapPressure(p, 0.75)).toBe(false);
+    expect(calls).toEqual({ collect: 1, release: 0 });
+  });
+
+  it('releases the session when live state stays above the threshold after a collection', () => {
+    const { probe: p, calls } = probe([0.9, 0.85]);
+    expect(relieveFragmentHeapPressure(p, 0.75)).toBe(true);
+    expect(calls).toEqual({ collect: 1, release: 1 });
+  });
+
+  it('releases without a second measurement when no collector is available', () => {
+    const { probe: p, calls } = probe([0.9, 0.1], false);
+    expect(relieveFragmentHeapPressure(p, 0.75)).toBe(true);
+    expect(calls).toEqual({ collect: 1, release: 1 });
+  });
+});

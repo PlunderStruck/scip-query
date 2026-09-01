@@ -1,4 +1,4 @@
-import { availableParallelism } from 'node:os';
+import { availableParallelism, totalmem } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { getHeapStatistics } from 'node:v8';
 import type { ObservationReceiptV2, ObservationSourceKind } from '../domain/observation-receipt.js';
@@ -6,8 +6,9 @@ import type { IndexedDefinition } from '../domain/types.js';
 import { ProjectIndex } from '../queries/internal/project-index.js';
 import type { ScipDatabase } from '../storage/db.js';
 import * as queries from '../queries/index.js';
-import { profileSpan } from '../instrumentation/profile.js';
-import { semanticProviderLanguageForPath } from '../semantic/provider-cache.js';
+import { profileAsyncSpan, profileSpan } from '../instrumentation/profile.js';
+import { collectNativeGarbage } from '../platform/native-gc.js';
+import { getSemanticProvider, semanticProviderLanguageForPath } from '../semantic/provider-cache.js';
 import { rustSemanticEngineIdentity } from '../semantic/rust/engine-identity.js';
 import {
   semanticEvidenceProduct,
@@ -15,6 +16,11 @@ import {
   type SemanticReferenceMaterializationResult,
 } from '../semantic/shared-primitives.js';
 import { materializeSemanticCalleeCache } from '../semantic/symbol-evidence.js';
+import {
+  warmTypeScriptReferenceFragments,
+  type TypeScriptReferenceFragmentWarmProgress,
+  type TypeScriptReferenceFragmentWarmResult,
+} from '../semantic/typescript/reference-fragment-shadow.js';
 import { sourceFrameworkApplicability } from '../source/primitives/source-fileset.js';
 import { projectEvidenceFingerprint, sha256Hex } from '../storage/evidence-cache.js';
 import { clearRegisteredCaches } from '../storage/cache-registry.js';
@@ -45,6 +51,16 @@ export const DIFF_IMPACT_BATCH_COMMAND = '__diff-impact-batch';
 const DIFF_IMPACT_BATCH_SIZE = 128;
 const DEFAULT_DIFF_IMPACT_BATCH_CONCURRENCY = 1;
 const MAX_DEFAULT_DIFF_IMPACT_BATCH_CONCURRENCY = 1;
+// A cold diff-impact batch with no watch service hosts the TypeScript compiler
+// program while it computes reference fragments for the changed files; on a
+// large repository that program alone exceeds Node's default old-space limit.
+const MAX_DEFAULT_DIFF_IMPACT_BATCH_HEAP_MB = 6144;
+const MIN_DEFAULT_DIFF_IMPACT_BATCH_HEAP_MB = 2048;
+// The same cold batch persists reference fragments for the whole project one
+// provider batch at a time; on a large repository that takes several minutes
+// even though every batch is resumable, so the batch gets the full-health
+// phase budget rather than the generic analysis timeout.
+const DEFAULT_DIFF_IMPACT_BATCH_TIMEOUT_MS = 10 * 60_000;
 const LARGE_COMMAND_SYMBOL_THRESHOLD = 25_000;
 const LARGE_COMMAND_DOCUMENT_THRESHOLD = 2_500;
 const DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT = 2_500;
@@ -54,7 +70,8 @@ const DEFAULT_FULL_HEALTH_PHASE_CONCURRENCY = 1;
 const DEFAULT_FULL_HEALTH_PHASE_HEAP_MB = 6144;
 const DEFAULT_FULL_HEALTH_PHASE_TIMEOUT_MS = 10 * 60_000;
 const DEFAULT_HEALTH_PHASE_TIMEOUT_MS = 30_000;
-const DEFAULT_HEALTH_SEMANTIC_PREWARM_HEAP_MB = 8192;
+const MAX_DEFAULT_HEALTH_SEMANTIC_PREWARM_HEAP_MB = 8192;
+const MIN_DEFAULT_HEALTH_SEMANTIC_PREWARM_HEAP_MB = 2048;
 const DEFAULT_HEALTH_SEMANTIC_PREWARM_TIMEOUT_MS = 10 * 60_000;
 const REACT_HEALTH_PHASES = new Set<HealthPhaseName>([
   'react-component-duplicates',
@@ -159,6 +176,10 @@ export interface HealthSemanticPrewarmResult {
   referenceCacheWrites: number;
   referenceMisses: number;
   referenceIncomplete: number;
+  /** Indexed TypeScript files whose reference fragments are persisted; absent when the fragment path was unavailable. */
+  referenceFragmentFiles?: number;
+  /** TypeScript reference fragments computed and persisted by this run. */
+  referenceFragmentComputedFiles?: number;
   calleeRows: number;
   error?: string;
 }
@@ -176,6 +197,17 @@ export interface HealthSemanticPrewarmRuntime {
     marker: HealthSemanticPrewarmMarker,
   ): void;
   candidateDefinitions(db: ScipDatabase, opts: HealthCliOptions): IndexedDefinition[];
+  /**
+   * Persist a reference fragment for every indexed TypeScript file without
+   * assembling the project-wide reference map; null when the fragment path is
+   * unavailable and definitions must be materialized one batch at a time.
+   * `onBatch` runs after each persisted provider batch and may release the
+   * semantic provider; the next batch resolves a fresh one.
+   */
+  warmReferenceFragments(
+    db: ScipDatabase,
+    onBatch?: (progress: TypeScriptReferenceFragmentWarmProgress) => void,
+  ): Promise<TypeScriptReferenceFragmentWarmResult | null>;
   materializeReferences(
     db: ScipDatabase,
     definitions: ReadonlyArray<IndexedDefinition>,
@@ -185,6 +217,10 @@ export interface HealthSemanticPrewarmRuntime {
   releaseSemanticMemory?(db: ScipDatabase): void;
   /** Fraction of the V8 old-space limit currently used; drives adaptive provider releases. */
   heapUsedFraction?(): number;
+  /** Force a collection so garbage is not mistaken for live pressure; true when a collector was available. */
+  collectGarbage?(): boolean;
+  /** Yield one event-loop turn between batches so second-pass finalizers can reclaim native memory. */
+  yieldToEventLoop?(): Promise<void>;
 }
 
 export interface DiffImpactCliOptions {
@@ -278,6 +314,8 @@ const DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME: HealthSemanticPrewarmRuntime = {
     new ProjectIndex(db)
       .scopedDefinitions(opts.scope)
       .filter((definition) => semanticProviderLanguageForPath(definition.relativePath) !== null),
+  warmReferenceFragments: (db, onBatch) =>
+    warmTypeScriptReferenceFragments(db, (relativePath) => getSemanticProvider(db, relativePath), { onBatch }),
   materializeReferences: (db, definitions, opts) =>
     semanticEvidenceProduct(db).materializeReferences(definitions, opts),
   materializeCallees: materializeSemanticCalleeCache,
@@ -286,30 +324,35 @@ const DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME: HealthSemanticPrewarmRuntime = {
     const stats = getHeapStatistics();
     return stats.heap_size_limit > 0 ? stats.used_heap_size / stats.heap_size_limit : 0;
   },
+  collectGarbage: collectNativeGarbage,
+  yieldToEventLoop: () => new Promise<void>((resolve) => setImmediate(resolve)),
 };
 
 /**
- * Callee prewarm computes with a live compiler session whose checker state
+ * Semantic prewarm computes with a live compiler session whose checker state
  * grows with every resolved file. Batching by file keeps each computation's
  * working set small, and every batch's rows are persisted before the next
  * batch starts, so a mid-pass release, crash, or timeout never loses
  * completed work — the next run resumes from the cache.
  */
-const HEALTH_SEMANTIC_PREWARM_CALLEE_BATCH_FILES = 256;
+const HEALTH_SEMANTIC_PREWARM_BATCH_FILES = 256;
 
 /**
- * Release the semantic provider only when the isolated heap is actually
- * under pressure: a release discards the compiler session, and rebuilding it
- * for the next batch is expensive, so it is paid only instead of an OOM.
+ * Relieve memory only when the isolated heap is actually under pressure, and
+ * measure that pressure after a forced collection so batch garbage is not
+ * mistaken for live state. A provider release discards the compiler session,
+ * and rebuilding it for the next batch is expensive, so it is paid only
+ * instead of an OOM: on a large repository the live compiler program alone
+ * can hold more than half of the isolated heap.
  */
-const HEALTH_SEMANTIC_PREWARM_RELEASE_HEAP_FRACTION = 0.6;
+const HEALTH_SEMANTIC_PREWARM_RELEASE_HEAP_FRACTION = 0.75;
 
-export function healthSemanticPrewarmCalleeBatches(
+export function healthSemanticPrewarmFileBatches(
   definitions: readonly IndexedDefinition[],
-  maxFilesPerBatch: number = HEALTH_SEMANTIC_PREWARM_CALLEE_BATCH_FILES,
+  maxFilesPerBatch: number = HEALTH_SEMANTIC_PREWARM_BATCH_FILES,
 ): IndexedDefinition[][] {
   if (!Number.isSafeInteger(maxFilesPerBatch) || maxFilesPerBatch < 1) {
-    throw new Error(`Callee prewarm batch size must be a positive safe integer; received ${maxFilesPerBatch}.`);
+    throw new Error(`Prewarm batch size must be a positive safe integer; received ${maxFilesPerBatch}.`);
   }
   const byFile = new Map<string, IndexedDefinition[]>();
   for (const definition of definitions) {
@@ -333,22 +376,22 @@ export function healthSemanticPrewarmCalleeBatches(
   return batches;
 }
 
-export function prewarmHealthSemanticEvidence(
+export async function prewarmHealthSemanticEvidence(
   db: ScipDatabase,
   opts: HealthCliOptions,
   runtime: HealthSemanticPrewarmRuntime = DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME,
-): HealthSemanticPrewarmResult {
+): Promise<HealthSemanticPrewarmResult> {
   if (opts.full !== true) return skippedHealthSemanticPrewarm('default-mode');
   if ((runtime.env ?? process.env)['SCIP_QUERY_HEALTH_SEMANTIC_PREWARM'] === '0') {
     return skippedHealthSemanticPrewarm('disabled');
   }
 
   let result = skippedHealthSemanticPrewarm('error');
-  return profileSpan(
+  return profileAsyncSpan(
     'health.semantic-prewarm',
-    () => {
+    async () => {
       try {
-        result = runHealthSemanticPrewarm(db, opts, runtime);
+        result = await runHealthSemanticPrewarm(db, opts, runtime);
       } catch (error) {
         result = skippedHealthSemanticPrewarm('error', {
           error: error instanceof Error ? error.message : String(error),
@@ -360,12 +403,67 @@ export function prewarmHealthSemanticEvidence(
   );
 }
 
+interface HeapPressureRelief {
+  /** Relieve pressure between batches; `release` discards the provider session as the last resort. */
+  relieve(opts: { release: boolean }): void;
+  readonly collections: number;
+  readonly releases: number;
+}
+
+function createHeapPressureRelief(db: ScipDatabase, runtime: HealthSemanticPrewarmRuntime): HeapPressureRelief {
+  let collections = 0;
+  let releases = 0;
+  const underPressure = (): boolean =>
+    (runtime.heapUsedFraction?.() ?? 0) >= HEALTH_SEMANTIC_PREWARM_RELEASE_HEAP_FRACTION;
+  return {
+    relieve({ release }) {
+      if (!underPressure()) return;
+      if (runtime.collectGarbage?.()) {
+        collections += 1;
+        if (!underPressure()) return;
+      }
+      if (!release) return;
+      runtime.releaseSemanticMemory?.(db);
+      releases += 1;
+    },
+    get collections() {
+      return collections;
+    },
+    get releases() {
+      return releases;
+    },
+  };
+}
+
+interface ReferenceMaterializationTotals {
+  definitions: number;
+  cacheHits: number;
+  cacheWrites: number;
+  inMemoryHits: number;
+  misses: number;
+  unkeyed: number;
+  incomplete: number;
+}
+
+function addReferenceMaterialization(
+  totals: ReferenceMaterializationTotals,
+  result: SemanticReferenceMaterializationResult,
+): void {
+  totals.definitions += result.definitions;
+  totals.cacheHits += result.cacheHits;
+  totals.cacheWrites += result.cacheWrites;
+  totals.inMemoryHits += result.inMemoryHits;
+  totals.misses += result.misses;
+  totals.unkeyed += result.unkeyed;
+  totals.incomplete += result.incomplete;
+}
+
 // scip-query: ignore-extract — reviewed E1 workflow owner; capability checks, prewarm execution, and disclosure stay together.
-function runHealthSemanticPrewarm(
+async function runHealthSemanticPrewarm(
   db: ScipDatabase,
   opts: HealthCliOptions,
   runtime: HealthSemanticPrewarmRuntime,
-): HealthSemanticPrewarmResult {
+): Promise<HealthSemanticPrewarmResult> {
   const fingerprint = runtime.projectFingerprint(db);
   if (!fingerprint) return skippedHealthSemanticPrewarm('missing-project-fingerprint');
 
@@ -384,18 +482,66 @@ function runHealthSemanticPrewarm(
   );
   if (definitions.length === 0) return skippedHealthSemanticPrewarm('no-semantic-definitions');
 
-  let referenceRows = 0;
-  const references = profileSpan(
-    'health.semantic-prewarm.references',
-    () => {
-      const result = runtime.materializeReferences(db, definitions, { prefetchCallees: false });
-      referenceRows = result.cacheHits + result.cacheWrites + result.inMemoryHits;
-      return result;
-    },
-    () => ({ definitions: definitions.length, rows: referenceRows }),
+  const pressure = createHeapPressureRelief(db, runtime);
+  const yieldToEventLoop = async (): Promise<void> => {
+    await runtime.yieldToEventLoop?.();
+  };
+
+  // TypeScript references are served per file from persisted fragments, so the
+  // fragment rows are the warm state. Persisting them file by file bounds the
+  // working set by one provider batch; assembling the project-wide reference
+  // map only to discard it is what exhausted the isolated heap before.
+  const typeScriptDefinitions = definitions.filter(
+    (definition) => semanticProviderLanguageForPath(definition.relativePath) === 'typescript',
   );
-  const referenceRowsKnown = references.cacheHits + references.cacheWrites + references.inMemoryHits;
-  if (referenceRowsKnown === 0 && references.misses + references.unkeyed > 0) {
+  let fragments: TypeScriptReferenceFragmentWarmResult | null = null;
+  if (typeScriptDefinitions.length > 0) {
+    let warmed: TypeScriptReferenceFragmentWarmResult | null = null;
+    fragments = await profileAsyncSpan(
+      'health.semantic-prewarm.reference-fragments',
+      async () => {
+        warmed = await runtime.warmReferenceFragments(db, () => pressure.relieve({ release: true }));
+        return warmed;
+      },
+      () => ({
+        definitions: typeScriptDefinitions.length,
+        rows: warmed?.computedFiles ?? 0,
+        files: warmed?.files ?? 0,
+        cacheHits: warmed?.cacheHits ?? 0,
+        available: warmed !== null,
+      }),
+    );
+  }
+
+  // Everything the fragment path does not cover is materialized per
+  // definition in file batches, each persisted before the next starts.
+  const referenceDefinitions = fragments
+    ? definitions.filter((definition) => semanticProviderLanguageForPath(definition.relativePath) !== 'typescript')
+    : definitions;
+  const references: ReferenceMaterializationTotals = {
+    definitions: 0,
+    cacheHits: 0,
+    cacheWrites: 0,
+    inMemoryHits: 0,
+    misses: 0,
+    unkeyed: 0,
+    incomplete: 0,
+  };
+  let referenceRows = 0;
+  await profileAsyncSpan(
+    'health.semantic-prewarm.references',
+    async () => {
+      for (const batch of healthSemanticPrewarmFileBatches(referenceDefinitions)) {
+        addReferenceMaterialization(references, runtime.materializeReferences(db, batch, { prefetchCallees: false }));
+        pressure.relieve({ release: true });
+        await yieldToEventLoop();
+      }
+      referenceRows = references.cacheHits + references.cacheWrites + references.inMemoryHits;
+    },
+    () => ({ definitions: referenceDefinitions.length, rows: referenceRows, releases: pressure.releases }),
+  );
+  const fragmentRows = fragments ? typeScriptDefinitions.length : 0;
+  if (referenceRows + fragmentRows === 0 && references.misses + references.unkeyed > 0) {
     return skippedHealthSemanticPrewarm('provider-unavailable', {
       definitions: definitions.length,
       referenceMisses: references.misses,
@@ -405,20 +551,26 @@ function runHealthSemanticPrewarm(
   profileSpan('health.semantic-prewarm.release-reference-memory', () => runtime.releaseSemanticMemory?.(db));
 
   let calleeRows = 0;
-  let calleeReleases = 0;
-  profileSpan(
+  const calleeReleasesBefore = pressure.releases;
+  await profileAsyncSpan(
     'health.semantic-prewarm.callees',
-    () => {
-      for (const batch of healthSemanticPrewarmCalleeBatches(definitions)) {
+    async () => {
+      for (const batch of healthSemanticPrewarmFileBatches(definitions)) {
         calleeRows += runtime.materializeCallees(db, batch).size;
-        if ((runtime.heapUsedFraction?.() ?? 0) >= HEALTH_SEMANTIC_PREWARM_RELEASE_HEAP_FRACTION) {
-          runtime.releaseSemanticMemory?.(db);
-          calleeReleases += 1;
-        }
+        pressure.relieve({ release: true });
+        await yieldToEventLoop();
       }
     },
-    () => ({ definitions: definitions.length, rows: calleeRows, releases: calleeReleases }),
+    () => ({
+      definitions: definitions.length,
+      rows: calleeRows,
+      releases: pressure.releases - calleeReleasesBefore,
+      collections: pressure.collections,
+    }),
   );
+  const fragmentDisclosure = fragments
+    ? { referenceFragmentFiles: fragments.files, referenceFragmentComputedFiles: fragments.computedFiles }
+    : {};
   if (references.incomplete > 0) {
     return {
       status: 'partial',
@@ -428,6 +580,7 @@ function runHealthSemanticPrewarm(
       referenceCacheWrites: references.cacheWrites,
       referenceMisses: references.misses,
       referenceIncomplete: references.incomplete,
+      ...fragmentDisclosure,
       calleeRows,
     };
   }
@@ -451,6 +604,7 @@ function runHealthSemanticPrewarm(
     referenceCacheWrites: references.cacheWrites,
     referenceMisses: references.misses,
     referenceIncomplete: references.incomplete,
+    ...fragmentDisclosure,
     calleeRows,
   };
 }
@@ -655,9 +809,32 @@ function runHealthSemanticPrewarmProcess(
   });
 }
 
-export function healthSemanticPrewarmHeapMb(env: NodeJS.ProcessEnv = process.env): number {
+export function healthSemanticPrewarmHeapMb(
+  env: NodeJS.ProcessEnv = process.env,
+  totalMemoryBytes: number = totalmem(),
+): number {
   const parsed = Number.parseInt(env['SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_HEAP_MB'] ?? '', 10);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : DEFAULT_HEALTH_SEMANTIC_PREWARM_HEAP_MB;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : defaultHealthSemanticPrewarmHeapMb(totalMemoryBytes);
+}
+
+/**
+ * The isolated prewarm heap is a backstop, not a budget: half of physical
+ * memory, bounded to [2 GiB, 8 GiB], so a machine that cannot host the
+ * previous fixed 8 GiB heap fails inside the child instead of swapping the
+ * whole host, while large machines keep the ceiling the batches were sized for.
+ */
+export function defaultHealthSemanticPrewarmHeapMb(totalMemoryBytes: number): number {
+  return boundedIsolatedHeapMb(totalMemoryBytes, {
+    min: MIN_DEFAULT_HEALTH_SEMANTIC_PREWARM_HEAP_MB,
+    max: MAX_DEFAULT_HEALTH_SEMANTIC_PREWARM_HEAP_MB,
+  });
+}
+
+/** Half of physical memory, bounded; the maximum when the machine size is unknown. */
+function boundedIsolatedHeapMb(totalMemoryBytes: number, bounds: { min: number; max: number }): number {
+  const halfOfMachineMb = Math.floor(totalMemoryBytes / (2 * 1024 * 1024));
+  if (!Number.isFinite(halfOfMachineMb) || halfOfMachineMb <= 0) return bounds.max;
+  return Math.max(bounds.min, Math.min(bounds.max, halfOfMachineMb));
 }
 
 export function healthSemanticPrewarmTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
@@ -1144,8 +1321,27 @@ function runDiffImpactBatchProcess(
     env: {
       ...process.env,
       SCIP_QUERY_DIFF_IMPACT_FILES: JSON.stringify(files),
+      NODE_OPTIONS: `--max-old-space-size=${diffImpactBatchHeapMb()}`,
     },
     label: 'Diff-impact batch',
+    timeoutMs: diffImpactBatchTimeoutMs(),
+  });
+}
+
+export function diffImpactBatchTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const parsed = Number.parseInt(env['SCIP_QUERY_DIFF_IMPACT_BATCH_TIMEOUT_MS'] ?? '', 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : DEFAULT_DIFF_IMPACT_BATCH_TIMEOUT_MS;
+}
+
+export function diffImpactBatchHeapMb(
+  env: NodeJS.ProcessEnv = process.env,
+  totalMemoryBytes: number = totalmem(),
+): number {
+  const parsed = Number.parseInt(env['SCIP_QUERY_DIFF_IMPACT_BATCH_HEAP_MB'] ?? '', 10);
+  if (Number.isSafeInteger(parsed) && parsed > 0) return parsed;
+  return boundedIsolatedHeapMb(totalMemoryBytes, {
+    min: MIN_DEFAULT_DIFF_IMPACT_BATCH_HEAP_MB,
+    max: MAX_DEFAULT_DIFF_IMPACT_BATCH_HEAP_MB,
   });
 }
 

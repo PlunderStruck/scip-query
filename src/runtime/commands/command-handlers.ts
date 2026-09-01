@@ -67,6 +67,7 @@ import {
   resolveActiveDbPath,
   resolveProjectRoot,
   withDb,
+  withDbAsync,
 } from '../cli-context.js';
 import {
   DIFF_IMPACT_BATCH_COMMAND,
@@ -254,10 +255,10 @@ export function handleHealthPhase(phase: unknown, rawOpts: unknown): void {
   });
 }
 
-export function handleHealthSemanticPrewarm(rawOpts: unknown): void {
+export async function handleHealthSemanticPrewarm(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
-  withDb((db) => {
-    const result = prewarmHealthSemanticEvidence(db, {
+  await withDbAsync(async (db) => {
+    const result = await prewarmHealthSemanticEvidence(db, {
       scope: stringOptionValue(opts, 'scope'),
       full: booleanOptionValue(opts, 'full'),
     });

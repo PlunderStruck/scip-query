@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import type * as TypeScript from 'typescript';
 import { detectAstLanguage, isVueSfcPath } from '../../source/ast/ast-language.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { withFileAccessRecording } from '../../platform/file-access-recorder.js';
+import { withFileAccessRecording } from '../../domain/file-access-recorder.js';
 import { getSourceFiles } from '../../source/primitives/source-fileset.js';
 import { readSourceTextUncached } from '../../source/primitives/source-text.js';
 import { fileContentHash } from '../../storage/evidence-cache.js';

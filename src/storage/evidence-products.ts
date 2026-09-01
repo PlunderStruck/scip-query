@@ -3,6 +3,7 @@ import { profileEnabled, profileSpan, profileWorkIdentity } from '../instrumenta
 import {
   FILE_EVIDENCE_KINDS,
   PROJECT_EVIDENCE_KINDS,
+  hasCachedFileEvidence,
   readCachedFileEvidence,
   readCachedProjectEvidence,
   projectEvidenceFingerprint,
@@ -56,6 +57,8 @@ export interface EvidenceProductManifestValidation {
 export interface FileEvidenceProduct<T> {
   kind: FileEvidenceKind;
   read(db: ScipDatabase, relativePath: string, contentHash: string): T | null;
+  /** Whether a row exists for this identity, without transferring or parsing its payload. */
+  has(db: ScipDatabase, relativePath: string, contentHash: string): boolean;
   write(db: ScipDatabase, relativePath: string, contentHash: string, value: T): void;
   writeBatch(db: ScipDatabase, entries: ReadonlyArray<{ relativePath: string; contentHash: string; value: T }>): void;
 }
@@ -260,6 +263,9 @@ export function createFileEvidenceProduct<T>(opts: FileEvidenceProductOptions<T>
           payloadBytes,
         }),
       );
+    },
+    has(db, relativePath, contentHash) {
+      return hasCachedFileEvidence(db, opts.kind, relativePath, contentHash);
     },
     write(db, relativePath, contentHash, value) {
       writeCachedFileEvidence(db, opts.kind, relativePath, contentHash, opts.serialize(value));

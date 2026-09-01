@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, lstatSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { resolveIndexStoragePaths } from '../platform/cache-layout.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
@@ -63,7 +63,8 @@ export function setupAgent(
 export function removeAgentSetup(projectRoot: string, opts: { dryRun?: boolean } = {}): RemoveAgentSetupResult {
   const result: RemoveAgentSetupResult = { removed: [], unchanged: [], skipped: [] };
   removeManagedBlock(projectRoot, 'AGENTS.md', opts, result);
-  removeManagedBlock(projectRoot, 'CLAUDE.md', opts, result);
+  if (aliasesAgentsFile(projectRoot, 'CLAUDE.md')) result.unchanged.push('CLAUDE.md');
+  else removeManagedBlock(projectRoot, 'CLAUDE.md', opts, result);
   removeArchitectureStopHooks(projectRoot, opts, result);
   removeLegacyPreCommitHook(projectRoot, opts, result);
   return result;
@@ -96,10 +97,28 @@ function writeInstructionsBlock(projectRoot: string, result: SetupAgentResult): 
 
   upsertManagedBlock(projectRoot, 'AGENTS.md', block, result);
 
+  // `CLAUDE.md -> AGENTS.md` is already wired: the link serves the guidance
+  // block written above, and writing the shim through the link would replace
+  // that block inside AGENTS.md with a self-reference.
+  if (aliasesAgentsFile(projectRoot, 'CLAUDE.md')) {
+    result.unchanged.push('CLAUDE.md');
+    return;
+  }
   const shim = [MD_BLOCK_BEGIN, '@AGENTS.md', MD_BLOCK_END].join('\n');
   upsertManagedBlock(projectRoot, 'CLAUDE.md', shim, result, (current) => {
     return current.includes('@AGENTS.md') && !current.includes(MD_BLOCK_BEGIN);
   });
+}
+
+/** Whether a managed guidance file is a symbolic link resolving to the project's AGENTS.md. */
+function aliasesAgentsFile(projectRoot: string, name: string): boolean {
+  const path = join(projectRoot, name);
+  try {
+    if (!lstatSync(path).isSymbolicLink()) return false;
+    return realpathSync(path) === realpathSync(join(projectRoot, 'AGENTS.md'));
+  } catch {
+    return false;
+  }
 }
 
 function upsertManagedBlock(

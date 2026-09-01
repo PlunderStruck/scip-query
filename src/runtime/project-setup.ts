@@ -459,6 +459,8 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     id: 'rust-semantic-session',
     label: 'Rust semantic session',
     status: rustSemanticSession === null ? 'skipped' : rustSemanticSession.valid ? 'ok' : 'failed',
+    // A language service the detected project cannot use is not missing readiness.
+    optional: rustSemanticSession === null,
     message:
       rustSemanticSession === null
         ? 'Skipped because Rust was not detected.'
@@ -682,26 +684,37 @@ interface SetupWatchServiceInput {
 }
 
 function startSetupWatchService(input: SetupWatchServiceInput): WatchServiceEnsureResult | null {
-  const skippedReason =
+  // A deliberate configuration (watch disabled, or automatic startup off) is a
+  // valid configured state, not incomplete setup; only the incidental skips
+  // keep the verdict at partial.
+  const skipped: { reason: string; optional: boolean } | null =
     input.readiness.languages.length === 0
-      ? 'Skipped because no supported languages were detected.'
+      ? { reason: 'Skipped because no supported languages were detected.', optional: false }
       : input.configHasErrors
-        ? 'Skipped because config validation has errors.'
+        ? { reason: 'Skipped because config validation has errors.', optional: false }
         : !input.watchConfig.enabled
-          ? 'Disabled by watch.enabled=false; setup left the explicit opt-out unchanged.'
+          ? { reason: 'Disabled by watch.enabled=false; setup left the explicit opt-out unchanged.', optional: true }
           : input.reindexResult === null ||
               input.reindexResult.skipped.length > 0 ||
               input.postReindexFreshness?.state !== 'fresh'
-            ? 'Skipped because the initial refresh did not produce a complete fresh generation.'
+            ? {
+                reason: 'Skipped because the initial refresh did not produce a complete fresh generation.',
+                optional: false,
+              }
             : !input.watchConfig.autoStart
-              ? 'Automatic startup is disabled by watch.autoStart=false; run scip-query watch --daemon when this worktree should be watched.'
+              ? {
+                  reason:
+                    'Automatic startup is disabled by watch.autoStart=false; run scip-query watch --daemon when this worktree should be watched.',
+                  optional: true,
+                }
               : null;
-  if (skippedReason !== null) {
+  if (skipped !== null) {
     addStep(input.steps, {
       id: 'watch-refresh',
       label: 'Automatic indexing service',
       status: 'skipped',
-      message: skippedReason,
+      optional: skipped.optional,
+      message: skipped.reason,
     });
     return null;
   }

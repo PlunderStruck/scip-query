@@ -5,7 +5,7 @@
  * through here so we pay the disk cost once per file per process.
  */
 import type { ScipDatabase } from '../../storage/db.js';
-import { recordFileAccess } from '../../platform/file-access-recorder.js';
+import { recordFileAccess } from '../../domain/file-access-recorder.js';
 import { isMissingProjectFileError, readProjectFileText } from '../../platform/project-files.js';
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 
