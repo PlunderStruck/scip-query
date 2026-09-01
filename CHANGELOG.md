@@ -4,6 +4,48 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+### Fresh installs work without Go or the scip binary
+
+- The external `scip` binary is no longer required. SCIP is converted to
+  SQLite in-process (since 0.22.0), but `reindex` and `setup` still refused to
+  run without `scip` on PATH; a fresh machine therefore could not index at all
+  unless Go was installed. The requirement now applies only when
+  `SCIP_QUERY_SQLITE_CONVERTER=scip-cli` selects the legacy converter, and
+  `check-deps` and the setup report say so instead of asking for consent.
+- When the legacy converter is selected, `--install-missing` installs the
+  reviewed `scip` release without Go: the pinned archive is downloaded into
+  the scip-query cache, verified against its published SHA-256, and extracted;
+  the cached reviewed binary then outranks any `scip` on PATH. A PATH binary
+  reporting a different version than the pin is reported as unverified, and
+  `--install-missing` replaces it with the reviewed release.
+- Tree-sitter grammars and better-sqlite3 ship prebuilt binaries, so npm 11's
+  install-script policy skipping their build scripts (which it reports as a
+  warning on `npm install -g`) does not affect parsing.
+
+### The watcher stops fighting manual refreshes
+
+- The automatic resource budget is charged only to refreshes the watcher
+  started itself (`watch-*` triggers). `setup` and manual `reindex` runs no
+  longer pause the watcher: on a large repository the first setup build alone
+  exceeded the 1 GiB write allowance and left the watcher "budget-paused,
+  changes pending" for the whole window.
+- When a generation the watcher did not produce is published while work is
+  pending (dirty, cooldown, budget pause, or a debounce wait) and the index
+  matches the working tree, the watcher drops the pending refresh, reports
+  it as suppressed, and returns to idle, instead of holding "changes pending"
+  until the budget window or cooldown expired and then re-running a refresh
+  that would only be suppressed as fresh. The check runs on the Git poll
+  interval and does not depend on a Git checkout.
+
+### Faster full health and a durable dossier
+
+- `health --full` phases run in a memory-gated pool instead of strictly one
+  at a time: one isolated child per ~7 GiB of half the machine's memory, at
+  most four (`SCIP_QUERY_HEALTH_FULL_CONCURRENCY` still overrides). A 61 GiB
+  host runs four phases at once; a 16 GiB laptop keeps one.
+- The health dossier is published atomically, so an interrupted setup leaves
+  the previous complete dossier in place instead of a half-written one.
+
 ### Architecture policy is clean again
 
 - The file-access recorder moved from `platform` to `domain` (it has no
@@ -58,10 +100,15 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
   RAM, bounded to 2–6 GiB; `SCIP_QUERY_DIFF_IMPACT_BATCH_HEAP_MB` overrides
   it) instead of Node's default old-space limit, and get the full-health phase
   time budget (10 minutes; `SCIP_QUERY_DIFF_IMPACT_BATCH_TIMEOUT_MS` overrides
-  it) instead of the generic 3-minute analysis timeout, because a cold batch
-  persists the whole project's fragments one resumable provider batch at a
-  time. Running `health --full` once, or keeping the watch service on, is
-  still the fast path: with warm fragments the same diff-impact takes seconds.
+  it) instead of the generic 3-minute analysis timeout.
+- A diff-impact batch no longer computes a whole project's reference fragments
+  in-process. When more than 256 files have cold fragments and no watch
+  service is running, the semantic consumer tier is reported as failed with
+  the remedy (`scip-query health --full` once, or `scip-query watch
+  --daemon`) and the source-fallback tier still runs; on a 7,800-file
+  repository the in-process computation took longer than the 10-minute batch
+  budget while the service or the prewarm warms the same rows in the
+  background. With warm fragments the same diff-impact takes seconds.
 
 ## [0.22.0]
 

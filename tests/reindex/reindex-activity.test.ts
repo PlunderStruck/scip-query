@@ -18,7 +18,7 @@ import {
   type ReindexActivityRecord,
 } from '../../src/reindex/reindex-activity.js';
 import { resolveWatchConfig } from '../../src/runtime/config.js';
-import type { SupportedLanguage } from '../../src/domain/types.js';
+import type { RefreshTriggerKind, SupportedLanguage } from '../../src/domain/types.js';
 
 const tempDirs: string[] = [];
 
@@ -104,6 +104,8 @@ describe('reindex activity', () => {
           },
         },
         byTrigger: { 'manual-cli': 2, 'watch-source': 1 },
+        // Both runs were manual; only the suppressed event came from the watcher.
+        automatic: { runs: 0, rebuilt: 0, fullRebuilds: 0, estimatedWriteBytes: 0 },
       }),
     );
   });
@@ -515,7 +517,7 @@ describe('reindex activity', () => {
       until: Date.parse('2026-07-24T12:16:00.000Z'),
       rebuilt: 8,
       estimatedWriteBytes: 900,
-      detail: '8/8 expensive full rebuild slots consumed',
+      detail: '8/8 expensive full rebuild slots consumed by automatic refreshes',
     });
     expect(
       evaluateReindexActivityBudget({ ...summary, rebuilt: 1, estimatedWriteBytes: 1_000 }, config, nowMs),
@@ -571,7 +573,10 @@ describe('reindex activity', () => {
     const cacheDir = createCache();
     const outputDb = join(cacheDir, 'index.db');
     for (let minute = 1; minute <= 4; minute += 1) {
-      appendReindexActivity(reindexActivityPath(outputDb), runRecord(`2026-07-24T12:0${minute}:00.000Z`));
+      appendReindexActivity(
+        reindexActivityPath(outputDb),
+        runRecord(`2026-07-24T12:0${minute}:00.000Z`, 'watch-source'),
+      );
     }
 
     expect(
@@ -591,8 +596,30 @@ describe('reindex activity', () => {
       until: Date.parse('2026-07-24T12:16:00.000Z'),
       rebuilt: 4,
       estimatedWriteBytes: 40,
-      detail: '4/4 expensive full rebuild slots consumed',
+      detail: '4/4 expensive full rebuild slots consumed by automatic refreshes',
     });
+  });
+
+  it('leaves the automatic budget open when only setup and manual reindexes ran', () => {
+    const cacheDir = createCache();
+    const outputDb = join(cacheDir, 'index.db');
+    appendReindexActivity(reindexActivityPath(outputDb), runRecord('2026-07-24T12:01:00.000Z', 'setup'));
+    for (let minute = 2; minute <= 4; minute += 1) {
+      appendReindexActivity(reindexActivityPath(outputDb), runRecord(`2026-07-24T12:0${minute}:00.000Z`, 'manual-cli'));
+    }
+
+    expect(
+      inspectReindexActivityBudget(
+        outputDb,
+        {
+          enabled: true,
+          windowMs: 15 * 60_000,
+          maxRebuilds: 2,
+          maxEstimatedWriteBytes: 20,
+        },
+        new Date('2026-07-24T12:10:00.000Z'),
+      ),
+    ).toEqual({ state: 'allowed', rebuilt: 0, estimatedWriteBytes: 0 });
   });
 
   it('fails closed when retained budget evidence is incomplete and allows explicit opt-out', () => {
@@ -664,12 +691,12 @@ function createCache(): string {
   return dir;
 }
 
-function runRecord(recordedAt: string): ReindexActivityRecord {
+function runRecord(recordedAt: string, trigger: RefreshTriggerKind = 'manual-cli'): ReindexActivityRecord {
   return {
     version: 1,
     event: 'run',
     recordedAt,
-    trigger: { kind: 'manual-cli' },
+    trigger: { kind: trigger },
     result: 'rebuilt',
     durationMs: 5,
     estimatedLogicalOutputBytes: 10,
@@ -702,3 +729,73 @@ function result(input: {
     },
   };
 }
+
+describe('automatic refresh budget accounting', () => {
+  const config = {
+    enabled: true,
+    windowMs: 15 * 60_000,
+    maxRebuilds: 2,
+    maxEstimatedWriteBytes: 1024 * 1024 * 1024,
+  };
+  const nowMs = Date.parse('2026-09-01T18:30:00.000Z');
+  const baseSummary = {
+    windowStartedAt: '2026-09-01T18:15:00.000Z',
+    windowEndedAt: '2026-09-01T18:30:00.000Z',
+    runs: 2,
+    rebuilt: 2,
+    fullRebuilds: 2,
+    reused: 0,
+    failed: 0,
+    suppressed: 0,
+    estimatedLogicalOutputBytes: 1_449_816_966,
+    estimatedWriteBytes: 1_449_816_966,
+    oldestRebuildAt: '2026-09-01T18:10:14.000Z',
+    oldestWriteAt: '2026-09-01T18:10:14.000Z',
+    byTrigger: { setup: 1, 'manual-cli': 1 },
+  };
+
+  it('does not charge setup and manual reindex work against the watcher budget', () => {
+    expect(
+      evaluateReindexActivityBudget(
+        { ...baseSummary, automatic: { runs: 0, rebuilt: 0, fullRebuilds: 0, estimatedWriteBytes: 0 } },
+        config,
+        nowMs,
+      ),
+    ).toEqual({ state: 'allowed', rebuilt: 0, estimatedWriteBytes: 0 });
+  });
+
+  it('still pauses when the watcher itself consumed the write budget', () => {
+    expect(
+      evaluateReindexActivityBudget(
+        {
+          ...baseSummary,
+          byTrigger: { 'watch-source': 1, 'manual-cli': 1 },
+          automatic: {
+            runs: 1,
+            rebuilt: 1,
+            fullRebuilds: 1,
+            estimatedWriteBytes: 1_200_000_000,
+            oldestRebuildAt: '2026-09-01T18:20:00.000Z',
+            oldestWriteAt: '2026-09-01T18:20:00.000Z',
+          },
+        },
+        config,
+        nowMs,
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        state: 'paused',
+        reason: 'estimated-write-bytes',
+        rebuilt: 1,
+        estimatedWriteBytes: 1_200_000_000,
+        detail: '1200000000/1073741824 estimated write bytes consumed by automatic refreshes',
+      }),
+    );
+  });
+
+  it('falls back to window totals for legacy summaries without the automatic split', () => {
+    expect(evaluateReindexActivityBudget(baseSummary, config, nowMs)).toEqual(
+      expect.objectContaining({ state: 'paused', reason: 'rebuild-count', rebuilt: 2 }),
+    );
+  });
+});

@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { externalScipConverterSelected } from '../../platform/scip-cli.js';
 import { dirname, join } from 'node:path';
 import type { SupportedLanguage } from '../../domain/types.js';
 import { GRAPH_RELATION_UNAVAILABLE_FRONTIERS } from '../../domain/graph-relation-providers.js';
@@ -343,9 +344,13 @@ export function handleCheckDeps(): void {
   let hasProblems = false;
   if (isScipInstalled()) {
     console.log('scip CLI: installed');
-  } else {
+  } else if (externalScipConverterSelected()) {
     printScipInstallInstructions();
     hasProblems = true;
+  } else {
+    console.log(
+      'scip CLI: not installed (not required; SCIP is converted to SQLite in-process unless SCIP_QUERY_SQLITE_CONVERTER=scip-cli).',
+    );
   }
 
   const projectRoot = resolveProjectRoot();

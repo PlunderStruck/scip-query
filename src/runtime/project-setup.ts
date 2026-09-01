@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { externalScipConverterSelected } from '../platform/scip-cli.js';
 import type { ProjectConfig, SupportedLanguage } from '../domain/types.js';
 import type { HealthReport } from '../queries/index.js';
 import { getIndexerDependencyStatus } from '../platform/indexer-toolchain.js';
@@ -313,13 +314,18 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     ...(automaticRefreshConfig ? { details: [automaticRefreshConfig.configPath] } : {}),
   });
 
+  const scipCliRequired = externalScipConverterSelected();
   addStep(steps, {
     id: 'scip-cli',
     label: 'scip CLI',
-    status: scipCliInstalled ? 'ok' : 'warn',
+    status: scipCliInstalled || !scipCliRequired ? 'ok' : 'warn',
     message: scipCliInstalled
       ? 'scip CLI is available.'
-      : 'scip CLI is not available; installation requires explicit --install-missing consent.',
+      : !scipCliRequired
+        ? 'scip CLI is not installed and not required: SCIP is converted to SQLite in-process (SCIP_QUERY_SQLITE_CONVERTER=scip-cli selects the external converter).'
+        : opts.installIndexers === true
+          ? 'scip CLI is not installed; the reviewed release will be installed during the index refresh.'
+          : 'scip CLI is required by SCIP_QUERY_SQLITE_CONVERTER=scip-cli but not installed; pass --install-missing to install the reviewed release.',
   });
 
   const skills =

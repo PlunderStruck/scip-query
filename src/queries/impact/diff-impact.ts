@@ -6,7 +6,11 @@ import { basename } from 'node:path';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { ProjectIndex } from '../internal/project-index.js';
-import { semanticCallerMap } from '../../semantic/shared-primitives.js';
+import {
+  semanticCallerMap,
+  semanticConsumerReadiness,
+  type SemanticConsumerReadiness,
+} from '../../semantic/shared-primitives.js';
 import { sourceFallbackCallerEvidenceMap } from '../../symbols/references/caller-evidence.js';
 import { isCallableSymbol, isModuleLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { getAst, type SyntaxNode } from '../../source/ast.js';
@@ -105,6 +109,8 @@ export type DiffImpactEvidenceTierStatus =
 export interface DiffImpactEvidenceRuntime {
   semanticConsumers(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<number, Set<string>>;
   sourceFallbackConsumers(db: ScipDatabase, definitions: ReadonlyArray<IndexedDefinition>): Map<number, Set<string>>;
+  /** Whether the semantic tier may run without hosting whole-project compiler work in this process. */
+  semanticReadiness?(db: ScipDatabase): SemanticConsumerReadiness;
 }
 
 export interface DiffImpactPartialOptions {
@@ -134,6 +140,7 @@ export interface DeclarationSpan {
 const DEFAULT_DIFF_IMPACT_EVIDENCE_RUNTIME: DiffImpactEvidenceRuntime = {
   semanticConsumers: semanticCallerMap,
   sourceFallbackConsumers: sourceFallbackCallerEvidenceMap,
+  semanticReadiness: semanticConsumerReadiness,
 };
 
 const DEFAULT_BASE_CONTENT_GIT_RUNTIME: BaseContentGitRuntime = {
@@ -227,9 +234,23 @@ export function diffImpactPartial(
   const fanInBySymbolId = scipFanInBySymbolId(db, symbolIds);
   const consumerFilesBySymbolId = scipConsumerFilesBySymbolId(db, symbolIds, allChangedFiles);
   const stillZeroAfterScip = defs.filter((def) => (fanInBySymbolId.get(def.symbolId) ?? 0) === 0);
-  const semanticEvidence = collectConsumerEvidence('semantic-consumers', stillZeroAfterScip.length, () =>
-    evidenceRuntime.semanticConsumers(db, stillZeroAfterScip),
-  );
+  // A cold fragment cache with no watch service would make this batch host
+  // the whole compiler program for minutes; degrade with the remedy instead.
+  const readiness: SemanticConsumerReadiness =
+    stillZeroAfterScip.length > 0 ? (evidenceRuntime.semanticReadiness?.(db) ?? { ready: true }) : { ready: true };
+  const semanticEvidence = readiness.ready
+    ? collectConsumerEvidence('semantic-consumers', stillZeroAfterScip.length, () =>
+        evidenceRuntime.semanticConsumers(db, stillZeroAfterScip),
+      )
+    : {
+        values: new Map<number, Set<string>>(),
+        status: {
+          tier: 'semantic-consumers' as const,
+          state: 'failed' as const,
+          attemptedSymbols: stillZeroAfterScip.length,
+          reason: readiness.reason,
+        },
+      };
   const semanticConsumers = semanticEvidence.values;
   // Semantic (ts-morph) resolves most cross-file gaps the raw SCIP index
   // misses, but shares the same tsconfig-alias/workspace-package resolution

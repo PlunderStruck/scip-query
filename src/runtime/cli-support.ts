@@ -67,6 +67,11 @@ const DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT = 2_500;
 const DEFAULT_HEALTH_PHASE_CONCURRENCY = 4;
 const MAX_DEFAULT_HEALTH_PHASE_CONCURRENCY = 12;
 const DEFAULT_FULL_HEALTH_PHASE_CONCURRENCY = 1;
+// Full phases run as isolated children that each reassemble the project's
+// reference map, so their count is gated by memory: one child per ~7 GiB of
+// half the machine (the 6 GiB phase heap plus native headroom), at most four.
+const MAX_DEFAULT_FULL_HEALTH_PHASE_CONCURRENCY = 4;
+const FULL_HEALTH_PHASE_MEMORY_BYTES = 7 * 1024 * 1024 * 1024;
 const DEFAULT_FULL_HEALTH_PHASE_HEAP_MB = 6144;
 const DEFAULT_FULL_HEALTH_PHASE_TIMEOUT_MS = 10 * 60_000;
 const DEFAULT_HEALTH_PHASE_TIMEOUT_MS = 30_000;
@@ -140,7 +145,12 @@ type HealthPhaseResultWithMeta = HealthPhaseResult & {
 type DiffImpactResult = ReturnType<typeof queries.diffImpact>;
 type DiffImpactPartial = ReturnType<typeof queries.diffImpactPartial>;
 type AvailableCpus = () => number;
-type ConcurrencyResolver = (itemCount: number, env?: NodeJS.ProcessEnv, availableCpus?: AvailableCpus) => number;
+type ConcurrencyResolver = (
+  itemCount: number,
+  env?: NodeJS.ProcessEnv,
+  availableCpus?: AvailableCpus,
+  totalMemoryBytes?: number,
+) => number;
 type HealthPhaseTask = HealthPhaseName[];
 
 export interface EvidenceBoundAnalysis<T> {
@@ -1056,7 +1066,8 @@ export const healthPhaseConcurrency = createAdaptiveConcurrencyResolver({
 export const fullHealthPhaseConcurrency = createAdaptiveConcurrencyResolver({
   envKey: 'SCIP_QUERY_HEALTH_FULL_CONCURRENCY',
   defaultMinimum: DEFAULT_FULL_HEALTH_PHASE_CONCURRENCY,
-  defaultMaximum: DEFAULT_FULL_HEALTH_PHASE_CONCURRENCY,
+  defaultMaximum: MAX_DEFAULT_FULL_HEALTH_PHASE_CONCURRENCY,
+  memoryPerTaskBytes: FULL_HEALTH_PHASE_MEMORY_BYTES,
 });
 
 export function renderHealthReport(report: HealthReport): void {
@@ -1275,23 +1286,28 @@ export function diffImpactBatches(files: readonly string[]): string[][] {
   return chunked(files, DIFF_IMPACT_BATCH_SIZE);
 }
 
-function createAdaptiveConcurrencyResolver(opts: {
+interface AdaptiveConcurrencyOptions {
   envKey: string;
   defaultMinimum: number;
   defaultMaximum: number;
-}): ConcurrencyResolver {
-  return (itemCount, env = process.env, availableCpus = availableParallelism) =>
-    adaptiveConcurrency(itemCount, env, availableCpus, opts);
+  /** When set, half of physical memory divided by this bounds the default as well. */
+  memoryPerTaskBytes?: number;
+}
+
+function createAdaptiveConcurrencyResolver(opts: AdaptiveConcurrencyOptions): ConcurrencyResolver {
+  return (itemCount, env = process.env, availableCpus = availableParallelism, totalMemoryBytes = totalmem()) =>
+    adaptiveConcurrency(itemCount, env, availableCpus, totalMemoryBytes, opts);
 }
 
 function adaptiveConcurrency(
   itemCount: number,
   env: NodeJS.ProcessEnv,
   availableCpus: AvailableCpus,
-  opts: { envKey: string; defaultMinimum: number; defaultMaximum: number },
+  totalMemoryBytes: number,
+  opts: AdaptiveConcurrencyOptions,
 ): number {
   const raw = env[opts.envKey];
-  const defaultConcurrency = defaultAdaptiveConcurrency(availableCpus, opts);
+  const defaultConcurrency = defaultAdaptiveConcurrency(availableCpus, totalMemoryBytes, opts);
   const parsed = raw ? parseInt(raw, 10) : defaultConcurrency;
   if (!Number.isFinite(parsed) || parsed < 1) return Math.min(defaultConcurrency, itemCount);
   return Math.min(parsed, itemCount);
@@ -1299,11 +1315,16 @@ function adaptiveConcurrency(
 
 function defaultAdaptiveConcurrency(
   availableCpus: AvailableCpus,
-  opts: { defaultMinimum: number; defaultMaximum: number },
+  totalMemoryBytes: number,
+  opts: AdaptiveConcurrencyOptions,
 ): number {
   const cpuCount = availableCpus();
   const adaptive = Number.isFinite(cpuCount) ? Math.max(opts.defaultMinimum, cpuCount - 1) : 0;
-  return Math.min(opts.defaultMaximum, Math.max(opts.defaultMinimum, adaptive));
+  const memoryBound =
+    opts.memoryPerTaskBytes !== undefined && Number.isFinite(totalMemoryBytes) && totalMemoryBytes > 0
+      ? Math.floor(totalMemoryBytes / 2 / opts.memoryPerTaskBytes)
+      : Number.POSITIVE_INFINITY;
+  return Math.min(opts.defaultMaximum, memoryBound, Math.max(opts.defaultMinimum, adaptive));
 }
 
 function runDiffImpactBatchProcess(

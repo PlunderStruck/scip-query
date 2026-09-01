@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
+import { createFileAtomicExclusive, replaceFileAtomic } from '../storage/atomic-file.js';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
@@ -190,7 +191,10 @@ function writeDossierArtifactIfChanged(
     result.unchanged.push(path);
     return;
   }
-  writeFileSync(path, content);
+  // Published atomically: a reader never sees a half-written dossier, and an
+  // interrupted setup leaves the previous complete dossier in place.
+  if (current === null) createFileAtomicExclusive(path, content, { durability: 'durable' });
+  else replaceFileAtomic(path, content, { durability: 'durable' });
   result.written.push(path);
 }
 

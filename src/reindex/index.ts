@@ -26,7 +26,16 @@ import type { ProjectInputChangeJournal } from '../domain/project-input-change-j
 import { profileAsyncSpan, profileEnabled, profileSpan, writeProfileEvent } from '../instrumentation/profile.js';
 import { hardenOwnedCacheTreeIfOwned } from '../platform/cache-layout.js';
 import { recoverTypeScriptPackageSemanticHash } from '../platform/typescript-semantic-hash.js';
-import { resolveScipBinary, tryInstallScipCli } from '../platform/scip-cli.js';
+import {
+  externalScipConverterSelected,
+  getScipVersion,
+  installScipCliFromRelease,
+  resolveScipBinary,
+  resolveScipBinaryWithSource,
+  SCIP_VERSION,
+  scipVersionMatchesPin,
+  tryInstallScipCli,
+} from '../platform/scip-cli.js';
 import {
   parseProcessIdentity,
   readProcessIdentity,
@@ -449,7 +458,9 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       return reused;
     }
 
-    await profileAsyncSpan('reindex.scip-cli-ready', () => ensureScipCliAvailable(skipAutoInstall, onStatus));
+    if (externalScipConverterSelected()) {
+      await profileAsyncSpan('reindex.scip-cli-ready', () => ensureScipCliAvailable(skipAutoInstall, onStatus));
+    }
 
     const tempPaths = createTempReindexPaths(paths);
     runDir = tempPaths.runDir;
@@ -2271,7 +2282,22 @@ function cacheLanguageShards(
 }
 
 async function ensureScipCliAvailable(skipAutoInstall: boolean, onStatus: (message: string) => void): Promise<void> {
-  if (resolveScipBinary()) {
+  const resolved = resolveScipBinaryWithSource();
+  if (resolved) {
+    if (resolved.source === 'path' && platform() !== 'win32') {
+      const version = getScipVersion();
+      if (!scipVersionMatchesPin(version)) {
+        if (skipAutoInstall) {
+          onStatus(
+            `scip on PATH reports ${version ?? 'an unknown version'}; the reviewed version is ${SCIP_VERSION} and ` +
+              'compatibility is unverified. Run scip-query setup --install-missing to install the reviewed release.',
+          );
+        } else {
+          onStatus(`scip on PATH reports ${version ?? 'an unknown version'}; installing the reviewed ${SCIP_VERSION}.`);
+          await installScipCliFromRelease(onStatus);
+        }
+      }
+    }
     return;
   }
 
@@ -2294,10 +2320,10 @@ async function ensureScipCliAvailable(skipAutoInstall: boolean, onStatus: (messa
   }
 
   onStatus('scip CLI not found on PATH. Attempting auto-install...');
-  if (!tryInstallScipCli(onStatus)) {
+  if (!(await tryInstallScipCli(onStatus))) {
     throw new Error(
       'The scip CLI is required but could not be installed.\n' +
-        'Install manually from: https://github.com/sourcegraph/scip/releases',
+        `Install manually from: https://github.com/sourcegraph/scip/releases/tag/${SCIP_VERSION}`,
     );
   }
 }

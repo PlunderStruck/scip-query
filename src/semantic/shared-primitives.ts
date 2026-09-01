@@ -1,4 +1,5 @@
 import type { IndexedDefinition, SymbolMatch } from '../domain/types.js';
+import { typeScriptSemanticServiceAvailable } from './typescript/remote-provider.js';
 import type { ScipDatabase } from '../storage/db.js';
 import {
   projectEvidenceFingerprint,
@@ -30,6 +31,7 @@ import {
 } from './rust/scip-occurrence-references.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 import {
+  countMissingTypeScriptReferenceFragments,
   materializeTypeScriptReferenceFragments,
   recordTypeScriptReferenceFragmentShadow,
 } from './typescript/reference-fragment-shadow.js';
@@ -131,6 +133,39 @@ const TYPESCRIPT_SIGNATURE_CACHE = createFileEvidenceProduct<Record<string, stri
   serialize: (value) => JSON.stringify(value),
   deserialize: parseCachedSignatureMap,
 });
+
+/**
+ * Files whose reference fragments a bounded command may compute in-process
+ * before the work is better left to the watch service or a `health --full`
+ * prewarm: two provider batches, a few seconds of compiler time.
+ */
+const COMMAND_COLD_FRAGMENT_LIMIT = 256;
+
+export type SemanticConsumerReadiness = { ready: true } | { ready: false; reason: string };
+
+/**
+ * Whether a bounded command (diff-impact batch, health phase) may materialize
+ * TypeScript reference fragments without hosting whole-project compiler work
+ * itself. Cold fragments beyond the limit are computed by the watch service
+ * when one is running; otherwise the caller degrades with this reason rather
+ * than spending minutes and gigabytes inside a command child.
+ */
+export function semanticConsumerReadiness(
+  db: ScipDatabase,
+  opts: { coldFragmentLimit?: number; serviceAvailable?: (db: ScipDatabase) => boolean } = {},
+): SemanticConsumerReadiness {
+  const limit = opts.coldFragmentLimit ?? COMMAND_COLD_FRAGMENT_LIMIT;
+  const coverage = countMissingTypeScriptReferenceFragments(db);
+  if (coverage === null || coverage.missing <= limit) return { ready: true };
+  if ((opts.serviceAvailable ?? typeScriptSemanticServiceAvailable)(db)) return { ready: true };
+  return {
+    ready: false,
+    reason:
+      `TypeScript reference fragments are cold for ${coverage.missing} of ${coverage.files} files and no watch ` +
+      'service is running; run `scip-query health --full` once or start the service with `scip-query watch --daemon`, ' +
+      'then re-run this command.',
+  };
+}
 
 export function semanticEvidenceProduct(db: ScipDatabase): SemanticEvidenceProduct {
   const materializedReferences = new Map<number, SemanticReference[]>();

@@ -369,6 +369,28 @@ function persistReferenceFragmentBatch(
   return filesInBatch.map((file) => ({ file, fragments: computed.get(file) ?? [] }));
 }
 
+export interface TypeScriptReferenceFragmentCoverage {
+  files: number;
+  missing: number;
+}
+
+/**
+ * How many indexed TypeScript files lack a persisted reference fragment for
+ * their current identity; null when identities are unavailable. Existence is
+ * checked without reading payloads, so this is cheap enough to gate a
+ * command before it commits to whole-project compiler work.
+ */
+export function countMissingTypeScriptReferenceFragments(db: ScipDatabase): TypeScriptReferenceFragmentCoverage | null {
+  const projectFiles = indexedTypeScriptFiles(db);
+  let missing = 0;
+  for (const file of projectFiles) {
+    const identity = typeScriptSemanticIdentityForFile(db, file, TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA);
+    if (!identity?.key) return null;
+    if (!REFERENCE_FRAGMENT_PRODUCT.has(db, file, identity.key)) missing += 1;
+  }
+  return { files: projectFiles.length, missing };
+}
+
 export interface TypeScriptReferenceFragmentWarmResult {
   files: number;
   cacheHits: number;

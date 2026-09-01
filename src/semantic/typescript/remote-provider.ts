@@ -205,6 +205,21 @@ export class TypeScriptSemanticRequester {
   }
 }
 
+/**
+ * Whether a live watch service can serve TypeScript semantic requests for this
+ * project, so that whole-project compiler work can be delegated instead of
+ * hosted by the calling process.
+ */
+export function typeScriptSemanticServiceAvailable(db: ScipDatabase): boolean {
+  if (process.env['SCIP_QUERY_SKIP_WATCH_SERVICE'] === '1') return false;
+  try {
+    const state = readWatchServiceState(watchServicePaths(dirname(db.config.dbPath)).statePath);
+    return usableServiceState(state, canonicalPath(db.config.projectRoot), DEFAULT_RUNTIME);
+  } catch {
+    return false;
+  }
+}
+
 function usableServiceState(
   state: WatchServiceState | null,
   projectRoot: string,
