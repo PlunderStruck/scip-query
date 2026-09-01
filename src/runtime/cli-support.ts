@@ -749,7 +749,7 @@ export async function runIsolatedHealthReportWithEvidence(
     return false;
   });
 
-  const runnableTasks = healthPhaseTasks(runnablePhases);
+  const runnableTasks = orderHealthPhaseTasksByCost(healthPhaseTasks(runnablePhases));
   const phaseWarnings: string[] = [];
   let prewarmMessage: IsolatedAnalysisResult<HealthSemanticPrewarmResult> | undefined;
   if (opts.full) {
@@ -872,6 +872,35 @@ export function shouldRunHealthPhase(
 
 export function healthPhaseTasks(phases: readonly HealthPhaseName[]): HealthPhaseTask[] {
   return groupAnalysisTasks(phases, [REACT_HEALTH_PHASES, VUE_HEALTH_TASK_PHASES, SIMILAR_EXTRACT_HEALTH_PHASES]);
+}
+
+/**
+ * Relative wall-time of the isolated phases measured on a ~7,800-file
+ * TypeScript repository with warm caches. Unlisted phases count as light. The
+ * pool runs tasks in order, so starting the heavy ones first keeps the last
+ * worker from finishing alone (longest-processing-time-first scheduling).
+ */
+const HEALTH_PHASE_COST_WEIGHT: Partial<Record<HealthPhaseName, number>> = {
+  'wrapper-candidates': 49,
+  'complexity-hotspots': 35,
+  'passthrough-candidates': 31,
+  'stale-abstractions': 30,
+  'extract-candidates': 29,
+  similar: 29,
+  dead: 20,
+  isolated: 12,
+  'react-component-duplicates': 10,
+  'react-hook-candidates': 10,
+  cycles: 8,
+};
+
+export function orderHealthPhaseTasksByCost(tasks: readonly HealthPhaseTask[]): HealthPhaseTask[] {
+  const weight = (task: HealthPhaseTask): number =>
+    task.reduce((sum, phase) => sum + (HEALTH_PHASE_COST_WEIGHT[phase] ?? 1), 0);
+  return tasks
+    .map((task, index) => ({ task, index, weight: weight(task) }))
+    .sort((left, right) => right.weight - left.weight || left.index - right.index)
+    .map((entry) => entry.task);
 }
 
 export function skippedHealthPhaseResult(phase: HealthPhaseName): HealthPhaseResult {
