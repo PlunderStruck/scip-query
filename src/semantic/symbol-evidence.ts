@@ -129,6 +129,10 @@ export function materializeSemanticCalleeCache(
       inMemoryRows,
       inMemoryCalleeCount,
       resultRows: result.size,
+      // A few miss identities so a profile can say which definitions a
+      // prior warm pass did not cover, not only how many.
+      missSample: misses.slice(0, 8).map((miss) => `${miss.def.relativePath}#${miss.def.symbol}`),
+      unkeyedSample: unkeyed.slice(0, 4).map((def) => `${def.relativePath}#${def.symbol}`),
     }),
   );
   if (misses.length === 0 && unkeyed.length === 0) return result;

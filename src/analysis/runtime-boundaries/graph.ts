@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
+import { collectNativeGarbage } from '../../platform/native-gc.js';
 import { createRequire } from 'node:module';
 import type * as TypeScript from 'typescript';
 import { detectAstLanguage, isVueSfcPath } from '../../source/ast/ast-language.js';
@@ -675,8 +676,11 @@ async function extractBoundaryFiles(
     filesSinceYield += 1;
     if (filesSinceYield >= EXTRACTION_YIELD_INTERVAL_FILES) {
       filesSinceYield = 0;
-      // Let queued second-pass finalizers free the native trees parsed by
-      // earlier iterations before this sweep parses more.
+      // A parsed tree is native memory behind a wrapper V8 never weighs, so
+      // the wrappers of earlier iterations are still alive unless something
+      // collects them; only then are their finalizers queued, and only the
+      // event-loop turn after that runs them.
+      collectNativeGarbage();
       await yieldToEventLoop();
     }
     const source = recordSpan('runtime-boundaries.file.read', () => readSourceTextUncached(db, file));

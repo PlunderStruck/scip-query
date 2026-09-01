@@ -8,6 +8,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import * as queries from '../queries/index.js';
 import { profileAsyncSpan, profileSpan } from '../instrumentation/profile.js';
 import { collectNativeGarbage } from '../platform/native-gc.js';
+import { nodeOptionsWithMaxOldSpace } from '../platform/node-options.js';
 import { getSemanticProvider, semanticProviderLanguageForPath } from '../semantic/provider-cache.js';
 import { rustSemanticEngineIdentity } from '../semantic/rust/engine-identity.js';
 import {
@@ -860,7 +861,7 @@ function runHealthSemanticPrewarmProcess(
     args,
     env: {
       ...process.env,
-      NODE_OPTIONS: `--max-old-space-size=${healthSemanticPrewarmHeapMb()}`,
+      NODE_OPTIONS: nodeOptionsWithMaxOldSpace(process.env.NODE_OPTIONS, healthSemanticPrewarmHeapMb()),
     },
     label: 'Health semantic prewarm',
     timeoutMs: healthSemanticPrewarmTimeoutMs(),
@@ -1054,7 +1055,7 @@ export function healthIsolatedFailureReason(error: unknown): string {
 function fullHealthPhaseProcessEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return {
     ...env,
-    NODE_OPTIONS: `--max-old-space-size=${fullHealthPhaseHeapMb(env)}`,
+    NODE_OPTIONS: nodeOptionsWithMaxOldSpace(env.NODE_OPTIONS, fullHealthPhaseHeapMb(env)),
   };
 }
 
@@ -1419,7 +1420,7 @@ function runDiffImpactBatchProcess(
     env: {
       ...process.env,
       SCIP_QUERY_DIFF_IMPACT_FILES: JSON.stringify(files),
-      NODE_OPTIONS: `--max-old-space-size=${diffImpactBatchHeapMb()}`,
+      NODE_OPTIONS: nodeOptionsWithMaxOldSpace(process.env.NODE_OPTIONS, diffImpactBatchHeapMb()),
     },
     label: 'Diff-impact batch',
     timeoutMs: diffImpactBatchTimeoutMs(),

@@ -37,6 +37,20 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
   that would only be suppressed as fresh. The check runs on the Git poll
   interval and does not depend on a Git checkout.
 
+### Children keep the parent's NODE_OPTIONS
+
+- Isolated analysis children (the health prewarm, health phases, diff-impact
+  batches) replaced `NODE_OPTIONS` wholesale with their heap bound, dropping
+  any `--require` preload, inspector flag, or user-set option the parent
+  carried. They now replace only the heap bound, the way reindex already did;
+  the helper is shared.
+- The reindex runtime-boundary sweep collects before each of its event-loop
+  turns, so the trees it parses are freed as it goes.
+- Callee cache scans now record a sample of miss identities in the profile,
+  so a profile can say which definitions a warm pass did not cover.
+- The CLI-spawning contract suites allow 30 seconds per test; they spawn the
+  built CLI and timed out under load at the 5-second default.
+
 ### Whole-project parses no longer hold every syntax tree at once
 
 - A parsed Tree-sitter tree is native memory behind a wrapper of a few bytes.

@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createFixtureDb, createFixtureProject } from '../fixtures/command-accuracy-fixtures.js';
 
-describe('code CLI output contract', () => {
+describe('code CLI output contract', { timeout: 30_000 }, () => {
   const repositoryRoot = process.cwd();
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'scip-query-code-cli-'));
   const dbPath = join(fixtureRoot, 'index.db');

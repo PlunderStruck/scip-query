@@ -4,6 +4,7 @@ import { basename, dirname, extname, join, resolve } from 'node:path';
 import { platform } from 'node:os';
 import { readFileWithinLimit, readSmallArtifactText, SCIP_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
 import { runBoundedProcess } from '../platform/bounded-process.js';
+import { inheritedMaxOldSpaceMb, nodeOptionsWithMaxOldSpace } from '../platform/node-options.js';
 import {
   buildProjectChangeManifest,
   isLanguageRelevantProjectInputPath,
@@ -717,17 +718,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function inheritedMaxOldSpaceMb(nodeOptions: string | undefined): number | undefined {
-  const match = nodeOptions?.match(/--max[-_]old[-_]space[-_]size(?:=|\s+)(\d+)/u);
-  if (!match) return undefined;
-  const value = Number.parseInt(match[1]!, 10);
-  return Number.isInteger(value) && value > 0 ? value : undefined;
-}
-
-function nodeOptionsWithMaxOldSpace(nodeOptions: string | undefined, maxHeapMb: number): string {
-  const preserved = (nodeOptions ?? '').replace(/(?:^|\s)--max[-_]old[-_]space[-_]size(?:=|\s+)\d+/gu, ' ').trim();
-  return [preserved, `--max-old-space-size=${maxHeapMb}`].filter(Boolean).join(' ');
-}
 
 export { detectLanguages } from './detect.js';
 export { augmentAuxiliaryDocuments, auxiliaryDocumentsAugmentationStage } from './augmentation/augment.js';
