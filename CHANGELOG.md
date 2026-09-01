@@ -57,6 +57,12 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 - The native-pressure estimate behind every parse assumed a tree costs 10x its
   source bytes; measured, it is about 23x, so forced collections came several
   gigabytes too late. The estimate is now 24x.
+- The prewarm's first stage read every file's definitions synchronously, and a
+  file whose definition product is cold is parsed to compute them: 6,978 trees
+  were alive 43 seconds in, before any other stage ran, setting a ~4.7 GB
+  high-water mark the process never gave back. Candidate definitions are now
+  read in the same collecting, yielding batches; the per-file product they
+  persist makes the health phases' later synchronous reads parse nothing.
 - The dependency-graph sweep parsed each file twice, once for imports and
   once for re-exports; the import parse now goes through the exact-bytes tree
   cache, so the re-export pass reuses the same tree.

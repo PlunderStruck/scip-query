@@ -28,6 +28,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { recordFileAccess } from '../domain/file-access-recorder.js';
 import { getCallableSites, type CallableSite } from '../source/ast.js';
+import { collectNativeGarbage } from '../platform/native-gc.js';
 import { sourceEvidence } from '../language-parsers/source-evidence.js';
 import {
   isFunctionLikeSymbol,
@@ -387,6 +388,49 @@ export function getScopedDefinitions(db: ScipDatabase, scope?: string): IndexedD
   return indexedDocumentPaths(db, { scope, includeIgnored: false })
     .flatMap((relativePath) => getDefinitionsForFile(db, relativePath))
     .filter((row) => !db.isIgnored(row.relativePath));
+}
+
+export interface ScopedDefinitionBatchOptions {
+  /** Files whose definitions are read between event-loop turns; default 64. */
+  batchSize?: number;
+  /** Forces a full collection before each yield; default: the process collector. */
+  collectGarbage?: () => boolean;
+  yieldToEventLoop?: () => Promise<void>;
+  onBatch?: (progress: { files: number; total: number; definitions: number }) => void;
+}
+
+/**
+ * The same definitions as `getScopedDefinitions`, read file by file in batches
+ * that end with a full collection and one event-loop turn. A file whose
+ * definition product is cold is parsed, and a parsed tree is native memory
+ * behind a wrapper V8 never weighs; its finalizer runs only after a
+ * collection has found the wrapper dead and the loop has turned. The
+ * synchronous form therefore holds every tree of a cold sweep at once, while
+ * this one holds one batch. Both persist the per-file product, so a later
+ * synchronous sweep reads and parses nothing.
+ */
+export async function collectScopedDefinitionsInBatches(
+  db: ScipDatabase,
+  scope: string | undefined,
+  options: ScopedDefinitionBatchOptions = {},
+): Promise<IndexedDefinition[]> {
+  const files = indexedDocumentPaths(db, { scope, includeIgnored: false });
+  const batchSize = Math.max(1, Math.floor(options.batchSize ?? 64));
+  const collectGarbage = options.collectGarbage ?? collectNativeGarbage;
+  const definitions: IndexedDefinition[] = [];
+  let read = 0;
+  for (let start = 0; start < files.length; start += batchSize) {
+    for (const relativePath of files.slice(start, start + batchSize)) {
+      for (const row of getDefinitionsForFile(db, relativePath)) {
+        if (!db.isIgnored(row.relativePath)) definitions.push(row);
+      }
+      read += 1;
+    }
+    options.onBatch?.({ files: read, total: files.length, definitions: definitions.length });
+    collectGarbage();
+    await options.yieldToEventLoop?.();
+  }
+  return definitions;
 }
 
 export function getScopedFunctionLikeDefinitions(db: ScipDatabase, scope?: string): IndexedDefinition[] {
