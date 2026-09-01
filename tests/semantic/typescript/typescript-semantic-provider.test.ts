@@ -25,7 +25,9 @@ import { typeScriptSemanticIdentityForFile } from '../../../src/semantic/typescr
 import {
   readTypeScriptReferenceFragment,
   TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA,
+  warmTypeScriptReferenceFragments,
 } from '../../../src/semantic/typescript/reference-fragment-shadow.js';
+import { getSemanticProvider } from '../../../src/semantic/provider-cache.js';
 import { createTsMorphProvider } from '../../../src/semantic/typescript/ts-morph-provider.js';
 
 function createSemanticFixtureDb(dbPath: string): void {
@@ -191,6 +193,22 @@ async function withSemanticFixtureAsync(run: (db: ScipDatabase) => Promise<void>
     ].join('\n'),
   );
   createSemanticFixtureDb(dbPath);
+  writeFileSync(
+    join(projectRoot, 'meta.json'),
+    JSON.stringify({
+      version: 3,
+      status: 'complete',
+      fingerprint: {
+        version: 2,
+        languages: ['typescript'],
+        pnpmWorkspaces: false,
+        typescriptProjectMode: 'single',
+        typescriptProjects: [],
+        files: fingerprintProjectFiles(projectRoot),
+      },
+      indexedLanguages: ['typescript'],
+    }),
+  );
 
   const db = new ScipDatabase({
     dbPath,
@@ -513,6 +531,43 @@ describe('TypeScript semantic provider', () => {
       expect(
         compareReferenceFragmentMaps(definitions, expected, assembleReferenceFragments(definitions, fragments)),
       ).toEqual(expect.objectContaining({ passed: true, missing: [], extra: [] }));
+    });
+  });
+
+  it('warms TypeScript reference fragments without assembling the project reference map', async () => {
+    await withSemanticFixtureAsync(async (db) => {
+      const resolveProvider = (relativePath: string) => getSemanticProvider(db, relativePath);
+      const yields: number[] = [];
+      const yieldToEventLoop = async () => {
+        yields.push(1);
+      };
+
+      await expect(warmTypeScriptReferenceFragments(db, resolveProvider, { yieldToEventLoop })).resolves.toEqual({
+        files: 2,
+        cacheHits: 0,
+        cacheMisses: 2,
+        computedFiles: 2,
+      });
+      // Two files fit in one provider batch; one event-loop turn was yielded after it.
+      expect(yields).toHaveLength(1);
+      await expect(warmTypeScriptReferenceFragments(db, resolveProvider, { yieldToEventLoop })).resolves.toEqual({
+        files: 2,
+        cacheHits: 2,
+        cacheMisses: 0,
+        computedFiles: 0,
+      });
+      expect(yields).toHaveLength(1);
+
+      const definitions = getAllDefinitions(db);
+      expect(semanticEvidenceProduct(db).materializeReferences(definitions)).toEqual(
+        expect.objectContaining({
+          fragmentDefinitions: definitions.length,
+          fragmentCacheHits: 2,
+          fragmentCacheMisses: 0,
+          fragmentComputedFiles: 0,
+          misses: 0,
+        }),
+      );
     });
   });
 

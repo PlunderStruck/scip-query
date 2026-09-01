@@ -26,7 +26,7 @@
  * symbol evidence modules and many query commands.
  */
 import type { ScipDatabase } from '../storage/db.js';
-import { recordFileAccess } from '../platform/file-access-recorder.js';
+import { recordFileAccess } from '../domain/file-access-recorder.js';
 import { getCallableSites, type CallableSite } from '../source/ast.js';
 import { sourceEvidence } from '../language-parsers/source-evidence.js';
 import {

@@ -1,4 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -28,6 +37,21 @@ describe('setupAgent', () => {
         skipped: [{ target: 'CLAUDE.md', reason: 'not writable' }],
       }),
     ).toEqual({ verdict: 'partial', ready: 1, skipped: 1 });
+  });
+
+  it('keeps CLAUDE.md as a symbolic link to AGENTS.md and writes the guidance once', () => {
+    writeFileSync(join(projectRoot, 'AGENTS.md'), '# Project\n');
+    symlinkSync('AGENTS.md', join(projectRoot, 'CLAUDE.md'));
+
+    const result = setupAgent(projectRoot);
+
+    expect(result.written).toEqual(['AGENTS.md']);
+    expect(result.unchanged).toEqual(['CLAUDE.md']);
+    expect(result.skipped).toEqual([]);
+    expect(lstatSync(join(projectRoot, 'CLAUDE.md')).isSymbolicLink()).toBe(true);
+    const agentsMd = readFileSync(join(projectRoot, 'AGENTS.md'), 'utf8');
+    expect(agentsMd.split('<!-- scip-query:agent-setup:begin -->')).toHaveLength(2);
+    expect(readFileSync(join(projectRoot, 'CLAUDE.md'), 'utf8')).toBe(agentsMd);
   });
 
   it('installs concise mapping guidance without lifecycle ceremony', () => {

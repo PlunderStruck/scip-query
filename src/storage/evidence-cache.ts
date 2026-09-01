@@ -63,6 +63,8 @@ interface EvidenceConnection {
   shared: SharedEvidenceConnection | null;
   readFileEvidence: Database.Statement;
   readLegacyFileEvidence: Database.Statement;
+  existsFileEvidence: Database.Statement;
+  existsLegacyFileEvidence: Database.Statement;
   writeFileEvidence: Database.Statement;
   rekeyFileEvidence: Database.Statement;
   readProjectEvidence: Database.Statement;
@@ -86,6 +88,7 @@ interface EvidenceConnection {
 interface SharedEvidenceConnection {
   evidence: Database.Database;
   readFileEvidence: Database.Statement;
+  existsFileEvidence: Database.Statement;
   writeFileEvidence: Database.Statement;
   touchFileEvidence: Database.Statement;
 }
@@ -247,6 +250,14 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
          ORDER BY version DESC
          LIMIT 1`,
       ),
+      existsFileEvidence: evidence.prepare(
+        'SELECT 1 AS present FROM file_evidence WHERE kind = ? AND relative_path = ? AND content_hash = ? AND version = ?',
+      ),
+      existsLegacyFileEvidence: evidence.prepare(
+        `SELECT 1 AS present FROM file_evidence
+         WHERE kind = ? AND relative_path = ? AND content_hash = ? AND ${LEGACY_VERSION_PREDICATE}
+         LIMIT 1`,
+      ),
       writeFileEvidence: evidence.prepare(
         'INSERT OR REPLACE INTO file_evidence (kind, relative_path, content_hash, version, payload) VALUES (?, ?, ?, ?, ?)',
       ),
@@ -357,6 +368,9 @@ function openSharedEvidenceConnection(path: string | undefined): SharedEvidenceC
       readFileEvidence: evidence.prepare(
         'SELECT payload FROM file_evidence WHERE kind = ? AND relative_path = ? AND content_hash = ? AND version = ?',
       ),
+      existsFileEvidence: evidence.prepare(
+        'SELECT 1 AS present FROM file_evidence WHERE kind = ? AND relative_path = ? AND content_hash = ? AND version = ?',
+      ),
       writeFileEvidence: evidence.prepare(
         `INSERT INTO file_evidence (kind, relative_path, content_hash, version, payload, last_accessed_at)
          VALUES (?, ?, ?, ?, ?, ?)
@@ -465,6 +479,38 @@ export function readCachedFileEvidence(
   } catch (error) {
     disable(db, 'file_evidence read', error);
     return null;
+  }
+}
+
+// scip-query: ignore-wrapper — public storage boundary; callers get a
+// disable-on-error existence check that never transfers the payload.
+export function hasCachedFileEvidence(
+  db: ScipDatabase,
+  kind: FileEvidenceKind,
+  relativePath: string,
+  contentHash: string,
+): boolean {
+  const connection = connectionFor(db);
+  if (!connection) return false;
+  try {
+    const row = (connection.existsFileEvidence.get(kind, relativePath, contentHash, VERSION) ??
+      connection.existsLegacyFileEvidence.get(kind, relativePath, contentHash)) as { present: number } | undefined;
+    if (row?.present !== undefined) return true;
+    if (!SHARED_FILE_EVIDENCE_KIND_SET.has(kind) || !connection.shared) return false;
+    try {
+      const shared = connection.shared.existsFileEvidence.get(kind, relativePath, contentHash, VERSION) as
+        | { present: number }
+        | undefined;
+      if (shared?.present === undefined) return false;
+      touchSharedFileEvidence(connection.shared, kind, relativePath, contentHash);
+      return true;
+    } catch (error) {
+      disableShared(connection, 'file_evidence exists', error);
+      return false;
+    }
+  } catch (error) {
+    disable(db, 'file_evidence exists', error);
+    return false;
   }
 }
 

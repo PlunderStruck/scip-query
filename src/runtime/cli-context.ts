@@ -7,7 +7,10 @@ import { loadProjectConfig } from './config.js';
 import type { ProjectConfig, ScipQueryConfig, WatcherStatus } from '../domain/types.js';
 import { getIndexFreshness, type IndexFreshness } from './index-freshness.js';
 import type { GitWorktreeContext, GitWorktreeContextObservation } from '../platform/git-worktree.js';
-import { withProjectFileListingCache } from '../platform/project-file-inventory-context.js';
+import {
+  enterProjectFileListingCache,
+  withProjectFileListingCache,
+} from '../platform/project-file-inventory-context.js';
 import { publishedSqliteGenerationIdentity } from '../storage/sqlite-generation.js';
 import { readSuppressionDir } from '../storage/suppression-store.js';
 import {
@@ -191,6 +194,25 @@ export function withDb<T>(run: (db: ScipDatabase) => T): T {
       db.close();
     }
   });
+}
+
+/**
+ * `withDb` for a command whose work yields to the event loop: the database and
+ * the shared file-listing cache stay open across every await and are released
+ * only after the returned promise settles.
+ */
+export async function withDbAsync<T>(run: (db: ScipDatabase) => Promise<T>): Promise<T> {
+  const releaseFileListingCache = enterProjectFileListingCache();
+  const db = openDb();
+  const previous = activeCliDatabase;
+  activeCliDatabase = db;
+  try {
+    return await run(db);
+  } finally {
+    activeCliDatabase = previous;
+    db.close();
+    releaseFileListingCache();
+  }
 }
 
 export function collect(value: string, prev: string[]): string[] {

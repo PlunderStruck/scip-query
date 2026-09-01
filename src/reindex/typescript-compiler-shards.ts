@@ -1,7 +1,7 @@
 import { readdirSync, rmSync } from 'node:fs';
 import { cpus, totalmem } from 'node:os';
 import { join } from 'node:path';
-import { readSourceArtifactText } from '../filesystem/bounded-file.js';
+import { readSourceArtifactText } from '../platform/bounded-file.js';
 import {
   isTypeScriptCompilerShardConfigPath,
   typescriptCompilerShardConfigFileName,

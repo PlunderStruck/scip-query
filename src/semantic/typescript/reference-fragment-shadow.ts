@@ -1,6 +1,9 @@
+import { getHeapStatistics } from 'node:v8';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type { FileDependencyGraph, ProjectInputSnapshot } from '../../domain/project-input.js';
-import { profileSpan } from '../../instrumentation/profile.js';
+import { profileAsyncSpan, profileSpan } from '../../instrumentation/profile.js';
+import { collectNativeGarbage } from '../../platform/native-gc.js';
+import { clearRegisteredCaches } from '../../storage/cache-registry.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { SemanticProvider, SemanticReference, SemanticReferenceFragment } from '../types.js';
@@ -235,23 +238,11 @@ export function materializeTypeScriptReferenceFragments(
           };
         }
 
-        const provider = resolveProvider(definitions[0]!.relativePath);
-        if (!provider.availability().available || !provider.referenceFragmentsForFiles) return null;
-        for (const batch of typeScriptReferenceFragmentBatches(missingFiles)) {
-          const filesInBatch = batch.map(({ file }) => file);
-          const computed = provider.referenceFragmentsForFiles(filesInBatch);
-          if (filesInBatch.some((file) => !computed.has(file))) return null;
-          REFERENCE_FRAGMENT_PRODUCT.writeBatch(
-            db,
-            batch.map(({ file, contentHash }) => ({
-              relativePath: file,
-              contentHash,
-              value: computed.get(file) ?? [],
-            })),
-          );
-          for (const file of filesInBatch) accumulator.add(computed.get(file) ?? []);
+        const persisted = persistMissingReferenceFragments(db, missingFiles, resolveProvider, (batch) => {
+          for (const { fragments } of batch) accumulator.add(fragments);
           computedFiles += batch.length;
-        }
+        });
+        if (!persisted) return null;
         state = 'computed';
         return {
           references: accumulator.finish(),
@@ -274,6 +265,198 @@ export function typeScriptReferenceFragmentBatches<T>(files: readonly T[]): T[][
     batches.push(files.slice(offset, offset + TYPESCRIPT_REFERENCE_FRAGMENT_BATCH_SIZE));
   }
   return batches;
+}
+
+interface MissingReferenceFragmentFile {
+  file: string;
+  contentHash: string;
+}
+
+/**
+ * Fraction of the isolated heap above which a persisted fragment batch relieves
+ * memory before the next one. An in-process compiler session resolves the
+ * hierarchy of every definition for each batch, so its live checker state can
+ * approach the whole program; discarding it is the bounded alternative to the
+ * heap-limit abort, and the next batch resolves a fresh session.
+ */
+const FRAGMENT_BATCH_RELEASE_HEAP_FRACTION = 0.75;
+
+export interface FragmentHeapPressureProbe {
+  /** Fraction of the V8 old-space limit currently used. */
+  heapUsedFraction(): number;
+  /** Force a collection so garbage is not mistaken for live pressure; true when a collector ran. */
+  collect(): boolean;
+  /** Discard the semantic provider session. */
+  release(): void;
+}
+
+function defaultFragmentHeapPressureProbe(db: ScipDatabase): FragmentHeapPressureProbe {
+  return {
+    heapUsedFraction: () => {
+      const stats = getHeapStatistics();
+      return stats.heap_size_limit > 0 ? stats.used_heap_size / stats.heap_size_limit : 0;
+    },
+    collect: collectNativeGarbage,
+    release: () => clearRegisteredCaches(db, { groups: ['semantic-provider'] }),
+  };
+}
+
+/**
+ * Measure the isolated heap after a forced collection and discard the compiler
+ * session only when live state still exceeds the threshold. Returns whether
+ * the session was released.
+ */
+export function relieveFragmentHeapPressure(
+  probe: FragmentHeapPressureProbe,
+  threshold: number = FRAGMENT_BATCH_RELEASE_HEAP_FRACTION,
+): boolean {
+  if (probe.heapUsedFraction() < threshold) return false;
+  if (probe.collect() && probe.heapUsedFraction() < threshold) return false;
+  probe.release();
+  return true;
+}
+
+interface PersistedReferenceFragmentFile {
+  file: string;
+  fragments: SemanticReferenceFragment[];
+}
+
+/**
+ * Compute and persist reference fragments for files whose current identity has
+ * no cached row. Every provider batch is written before the next one starts,
+ * so a mid-pass crash or timeout keeps completed batches and the next run
+ * resumes from the cache. The provider is resolved again for every batch so
+ * `onBatch` may discard the compiler session between batches: an in-process
+ * checker's state grows with every file it resolves, and a fresh session for
+ * the next batch is the bounded alternative to exhausting the heap. Returns
+ * false when the provider is unavailable or returned an incomplete batch.
+ */
+function persistMissingReferenceFragments(
+  db: ScipDatabase,
+  missingFiles: readonly MissingReferenceFragmentFile[],
+  resolveProvider: SemanticProviderResolver,
+  onBatch: (batch: readonly PersistedReferenceFragmentFile[]) => void,
+  probe: FragmentHeapPressureProbe = defaultFragmentHeapPressureProbe(db),
+): boolean {
+  for (const batch of typeScriptReferenceFragmentBatches(missingFiles)) {
+    const persisted = persistReferenceFragmentBatch(db, batch, resolveProvider);
+    if (!persisted) return false;
+    onBatch(persisted);
+    relieveFragmentHeapPressure(probe);
+  }
+  return true;
+}
+
+/** One provider batch: compute, persist, and report the fragments; null when the provider cannot serve it. */
+function persistReferenceFragmentBatch(
+  db: ScipDatabase,
+  batch: readonly MissingReferenceFragmentFile[],
+  resolveProvider: SemanticProviderResolver,
+): PersistedReferenceFragmentFile[] | null {
+  const filesInBatch = batch.map(({ file }) => file);
+  const provider = resolveProvider(filesInBatch[0]!);
+  if (!provider.availability().available || !provider.referenceFragmentsForFiles) return null;
+  const computed = provider.referenceFragmentsForFiles(filesInBatch);
+  if (filesInBatch.some((file) => !computed.has(file))) return null;
+  REFERENCE_FRAGMENT_PRODUCT.writeBatch(
+    db,
+    batch.map(({ file, contentHash }) => ({
+      relativePath: file,
+      contentHash,
+      value: computed.get(file) ?? [],
+    })),
+  );
+  return filesInBatch.map((file) => ({ file, fragments: computed.get(file) ?? [] }));
+}
+
+export interface TypeScriptReferenceFragmentWarmResult {
+  files: number;
+  cacheHits: number;
+  cacheMisses: number;
+  computedFiles: number;
+}
+
+export interface TypeScriptReferenceFragmentWarmProgress {
+  computedFiles: number;
+  missingFiles: number;
+}
+
+export interface TypeScriptReferenceFragmentWarmOptions {
+  /** Runs after each persisted provider batch; may release the semantic provider. */
+  onBatch?: (progress: TypeScriptReferenceFragmentWarmProgress) => void;
+  /** Yields one event-loop turn between batches; defaults to `setImmediate`. */
+  yieldToEventLoop?: () => Promise<void>;
+  /** Heap-pressure probe used between batches; defaults to the live V8 heap and the provider cache. */
+  probe?: FragmentHeapPressureProbe;
+}
+
+const yieldOneEventLoopTurn = (): Promise<void> => new Promise<void>((resolve) => setImmediate(resolve));
+
+/**
+ * Ensure every indexed TypeScript file has a persisted reference fragment for
+ * its current semantic identity without assembling the project-wide reference
+ * map. Health prewarm uses this instead of materializing references for every
+ * definition: the phases read fragments per file, so the persisted rows are
+ * the warm state, and the assembled map would only be held to be discarded —
+ * on a large repository that map alone is several gigabytes. Existence is
+ * checked without transferring payloads, computed batches are persisted one at
+ * a time, and after each persisted batch the heap is relieved (a forced
+ * collection, then discarding the compiler session when live state stays
+ * high; the next batch resolves a fresh provider), `onBatch` runs, and one
+ * event-loop turn is yielded so finalizer-owned native memory from the batch
+ * can be reclaimed before the next one starts. Returns null when the
+ * semantic identity or the fragment provider is unavailable.
+ */
+export async function warmTypeScriptReferenceFragments(
+  db: ScipDatabase,
+  resolveProvider: SemanticProviderResolver,
+  options: TypeScriptReferenceFragmentWarmOptions = {},
+): Promise<TypeScriptReferenceFragmentWarmResult | null> {
+  const yieldToEventLoop = options.yieldToEventLoop ?? yieldOneEventLoopTurn;
+  const probe = options.probe ?? defaultFragmentHeapPressureProbe(db);
+  let state = 'fallback';
+  let files = 0;
+  let cacheHits = 0;
+  let cacheMisses = 0;
+  let computedFiles = 0;
+  return profileAsyncSpan(
+    'typescript.reference-fragments.warm',
+    async () => {
+      try {
+        const projectFiles = indexedTypeScriptFiles(db);
+        files = projectFiles.length;
+        const missingFiles: MissingReferenceFragmentFile[] = [];
+        for (const file of projectFiles) {
+          const identity = typeScriptSemanticIdentityForFile(db, file, TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA);
+          if (!identity?.key) return null;
+          if (REFERENCE_FRAGMENT_PRODUCT.has(db, file, identity.key)) {
+            cacheHits += 1;
+          } else {
+            cacheMisses += 1;
+            missingFiles.push({ file, contentHash: identity.key });
+          }
+        }
+        if (missingFiles.length === 0) {
+          state = 'hit';
+          return { files, cacheHits, cacheMisses, computedFiles };
+        }
+
+        for (const batch of typeScriptReferenceFragmentBatches(missingFiles)) {
+          const persisted = persistReferenceFragmentBatch(db, batch, resolveProvider);
+          if (!persisted) return null;
+          computedFiles += persisted.length;
+          relieveFragmentHeapPressure(probe);
+          options.onBatch?.({ computedFiles, missingFiles: missingFiles.length });
+          await yieldToEventLoop();
+        }
+        state = 'computed';
+        return { files, cacheHits, cacheMisses, computedFiles };
+      } catch {
+        return null;
+      }
+    },
+    () => ({ state, files, cacheHits, cacheMisses, computedFiles }),
+  );
 }
 
 function unavailable(reason: string): TypeScriptReferenceFragmentShadowResult {

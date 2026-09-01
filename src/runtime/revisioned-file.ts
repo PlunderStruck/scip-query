@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { closeSync, fstatSync, openSync, rmSync } from 'node:fs';
+import { closeSync, fstatSync, lstatSync, openSync, readlinkSync, realpathSync, rmSync } from 'node:fs';
 import type { Stats } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { monotonicNowMs } from '../domain/time.js';
 import { tryAcquireProcessFileLock, type ProcessFileLock } from '../platform/process-file-lock.js';
 import { readTextFileDescriptorWithinLimit, SOURCE_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
@@ -98,10 +98,11 @@ export class FileContentConflictError extends Error {
  * retry or an explicit conflict instead of a blind overwrite.
  */
 export function mutateTextFileRevisionAware(
-  path: string,
+  requestedPath: string,
   transform: (snapshot: RevisionedTextSnapshot, attempt: number) => RevisionedTextMutation,
   options: RevisionedFileMutationOptions = {},
 ): RevisionedFileMutationResult {
+  const path = resolveSymbolicLinkTarget(requestedPath);
   const lock = acquireMutationLock(
     path,
     options.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS,
@@ -140,6 +141,29 @@ export function mutateTextFileRevisionAware(
     }
   } finally {
     lock.release();
+  }
+}
+
+/**
+ * A symbolic link is never replaced by the file it points to. The atomic
+ * commit renames a temporary file over the mutated path, which would turn
+ * `CLAUDE.md -> AGENTS.md` into a regular copy; mutating the link's target
+ * instead keeps the link and delivers the edit to the linked file. A dangling
+ * link resolves to the path it names so the file is created there and the
+ * link becomes valid.
+ */
+function resolveSymbolicLinkTarget(path: string): string {
+  let linkTarget: string;
+  try {
+    if (!lstatSync(path).isSymbolicLink()) return path;
+    linkTarget = readlinkSync(path);
+  } catch {
+    return path;
+  }
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(dirname(path), linkTarget);
   }
 }
 

@@ -4,6 +4,65 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+### Architecture policy is clean again
+
+- The file-access recorder moved from `platform` to `domain` (it has no
+  dependencies and is consumed by analysis, symbols, and source code), and the
+  compiler-shard planner reads bounded files through the `platform` re-export,
+  so `scip-query architecture` reports no forbidden edges and the setup-installed
+  Stop hook passes again. Both edges were introduced by the 0.22.0 performance
+  work.
+
+### Setup no longer replaces symbolic links or misreports configured projects
+
+- `setup` (and every other revision-aware file mutation: agent guidance,
+  hook files, config, suppressions) now writes through a symbolic link to its
+  target instead of renaming a regular file over the link. A repository with
+  `CLAUDE.md -> AGENTS.md` keeps the link and receives the guidance block once,
+  in `AGENTS.md`; previously the link was silently replaced by a regular copy
+  (git mode 120000 → 100644). A dangling link is resolved to the path it names
+  so the file is created there.
+- A TypeScript-only project no longer gets a `partial` setup verdict because
+  the Rust semantic session was inapplicable, and `watch.enabled=false` or
+  `watch.autoStart=false` is reported as a configured state rather than
+  incomplete setup. Skips that still mean incomplete setup (no supported
+  language, config errors, an incomplete initial refresh) keep `partial`.
+
+### Bounded full-health semantic prewarm
+
+- `health --full` no longer assembles the project-wide TypeScript reference
+  map inside its isolated prewarm child. The prewarm persists reference
+  fragments file by file (existence-checked without reading payloads, written
+  one provider batch at a time), materializes the remaining per-definition
+  references in persisted file batches, and yields between batches so native
+  memory is reclaimed. Those fragment rows are the evidence the health phases
+  read, so the warm state is unchanged; only the transient multi-gigabyte map
+  is gone. On a ~7,800-file TypeScript repository with no watch service
+  running (for example during `setup --health`), the child previously grew
+  past 17 GiB and aborted with SIGABRT.
+- Heap-pressure relief forces a collection before deciding to discard the
+  compiler session, so batch garbage is no longer mistaken for live pressure,
+  and the release threshold is 75% of the isolated heap.
+- The prewarm child's default heap is derived from physical memory (half of
+  RAM, bounded to 2–8 GiB) instead of a fixed 8 GiB;
+  `SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_HEAP_MB` still overrides it.
+- Every consumer of TypeScript reference fragments (health phases,
+  `diff-impact` batches, the prewarm) now relieves heap pressure between
+  persisted fragment batches: measure after a forced collection, and discard
+  the in-process compiler session when live state still exceeds 75% of the
+  isolated heap, so the next batch resolves a fresh session. A cold cache with
+  no watch service previously failed `diff-impact` on a large repository with
+  "JavaScript heap out of memory" because one batch child hosted the whole
+  compiler program without ever releasing it.
+- `diff-impact` batch children also run with a bounded isolated heap (half of
+  RAM, bounded to 2–6 GiB; `SCIP_QUERY_DIFF_IMPACT_BATCH_HEAP_MB` overrides
+  it) instead of Node's default old-space limit, and get the full-health phase
+  time budget (10 minutes; `SCIP_QUERY_DIFF_IMPACT_BATCH_TIMEOUT_MS` overrides
+  it) instead of the generic 3-minute analysis timeout, because a cold batch
+  persists the whole project's fragments one resumable provider batch at a
+  time. Running `health --full` once, or keeping the watch service on, is
+  still the fast path: with warm fragments the same diff-impact takes seconds.
+
 ## [0.22.0]
 
 ### Bounded indexing for large TypeScript repositories
