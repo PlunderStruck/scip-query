@@ -15,6 +15,7 @@ import {
 } from '../../src/symbols/graph/file-dep-graph.js';
 import { getAst, getAstForSource } from '../../src/source/ast.js';
 import { collectScopedDefinitionsInBatches, getScopedDefinitions } from '../../src/symbols/definition-catalog.js';
+import { warmSourceFactsProducts } from '../../src/source/facts/source-facts-warm.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 const PROFILE_ENV_KEYS = ['SCIP_QUERY_PROFILE', 'SCIP_QUERY_PROFILE_OUT', 'SCIP_QUERY_PROFILE_COMMAND'] as const;
@@ -317,6 +318,27 @@ describe('file dependency graph evidence', () => {
       expect(events).toEqual(['batch:3/4', 'collect', 'yield', 'batch:4/4', 'collect', 'yield']);
       expect(batched.map((row) => row.symbol)).toEqual(getScopedDefinitions(db).map((row) => row.symbol));
       expect(batched.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('persists source facts in collecting, yielding batches', async () => {
+    await withFixture(async (openDb) => {
+      const db = openDb();
+      const events: string[] = [];
+      const warmed = await warmSourceFactsProducts(db, {
+        batchSize: 3,
+        collectGarbage: () => {
+          events.push('collect');
+          return true;
+        },
+        yieldToEventLoop: async () => {
+          events.push('yield');
+        },
+        onBatch: (batch) => events.push(`batch:${batch.files}/${batch.total}`),
+      });
+
+      expect(warmed).toEqual({ files: 4, withFacts: 4 });
+      expect(events).toEqual(['batch:3/4', 'collect', 'yield', 'batch:4/4', 'collect', 'yield']);
     });
   });
 });

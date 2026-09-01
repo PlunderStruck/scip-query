@@ -57,6 +57,22 @@ export function astParserLanguages(languages: readonly SupportedLanguage[]): Sup
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
+export interface AstParserProbeResult {
+  supportedLanguages: SupportedLanguage[];
+  available: SupportedLanguage[];
+  missing: SupportedLanguage[];
+}
+
+/** Which selected languages' bundled Tree-sitter parsers load, without installing anything. */
+export function probeAstParsers(
+  languages: readonly SupportedLanguage[],
+  runtime: Pick<AstParserSetupRuntime, 'probe'> = DEFAULT_RUNTIME,
+): AstParserProbeResult {
+  const supportedLanguages = astParserLanguages(languages);
+  const available = supportedLanguages.filter((language) => runtime.probe(GRAMMAR_PACKAGES[language]!.ast));
+  return { supportedLanguages, available, missing: supportedLanguages.filter((l) => !available.includes(l)) };
+}
+
 export function setupAstParsers(
   languages: readonly SupportedLanguage[],
   opts: { packageRoot?: string; runtime?: AstParserSetupRuntime } = {},
