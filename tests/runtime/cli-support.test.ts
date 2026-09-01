@@ -131,6 +131,7 @@ function fakePrewarmRuntime(overrides: Partial<HealthSemanticPrewarmRuntime> = {
       incomplete: 0,
       cacheWrites: definitions.length,
     })),
+    warmSourceDependencies: vi.fn(async () => ({ files: 2 })),
     warmReferenceFragments: vi.fn(async () => ({ files: 1, cacheHits: 0, cacheMisses: 1, computedFiles: 1 })),
     materializeCallees: vi.fn(() => new Map([[1, []]])),
     releaseSemanticMemory: vi.fn(),
@@ -428,6 +429,31 @@ describe('prewarmHealthSemanticEvidence', () => {
     );
   });
 
+  it('persists import products in yielding batches before the provider builds', async () => {
+    const order: string[] = [];
+    const warmSourceDependencies = vi.fn(async () => {
+      order.push('source-dependencies');
+      return { files: 7 };
+    });
+    const warmReferenceFragments = vi.fn(async () => {
+      order.push('reference-fragments');
+      return { files: 1, cacheHits: 0, cacheMisses: 1, computedFiles: 1 };
+    });
+    const runtime = fakePrewarmRuntime({
+      candidateDefinitions: vi.fn(() => [fakeDefinition(1, 'src/main.ts')]),
+      warmSourceDependencies,
+      warmReferenceFragments,
+    });
+
+    const result = await prewarmHealthSemanticEvidence(fakeLargeDb(), { full: true }, runtime);
+
+    expect(result).toMatchObject({ status: 'warmed', sourceDependencyFiles: 7, referenceFragmentFiles: 1 });
+    // The dependency graph the provider needs must already be served from
+    // persisted products when the provider builds; otherwise it parses every
+    // file in one synchronous sweep that cannot free a single tree.
+    expect(order).toEqual(['source-dependencies', 'reference-fragments']);
+  });
+
   it('warms TypeScript reference fragments instead of assembling the project reference map', async () => {
     const definitions = Array.from({ length: 300 }, (_, index) => fakeDefinition(index + 1, `src/file-${index}.ts`));
     const warmReferenceFragments = vi.fn(
@@ -610,6 +636,7 @@ describe('prewarmHealthSemanticEvidence', () => {
           .map(({ name, definitions, rows }) => ({ name, definitions, rows })),
       ).toEqual([
         { name: 'health.semantic-prewarm.candidate-definitions', definitions: 2 },
+        { name: 'health.semantic-prewarm.source-dependencies' },
         { name: 'health.semantic-prewarm.reference-fragments', definitions: 1, rows: 1 },
         { name: 'health.semantic-prewarm.references', definitions: 1, rows: 1 },
         { name: 'health.semantic-prewarm.release-reference-memory' },

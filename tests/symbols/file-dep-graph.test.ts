@@ -11,7 +11,9 @@ import {
   carryFileDependencyGraph,
   materializeCarriedFileDependencyGraph,
   readPersistedFileDependencyGraph,
+  warmSourceDependencyProducts,
 } from '../../src/symbols/graph/file-dep-graph.js';
+import { getAst, getAstForSource } from '../../src/source/ast.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
 const PROFILE_ENV_KEYS = ['SCIP_QUERY_PROFILE', 'SCIP_QUERY_PROFILE_OUT', 'SCIP_QUERY_PROFILE_COMMAND'] as const;
@@ -43,7 +45,7 @@ describe('file dependency graph evidence', () => {
     tempDir = undefined;
   });
 
-  function withFixture(run: (openDb: () => ScipDatabase, profilePath: string) => void): void {
+  function withFixture<T>(run: (openDb: () => ScipDatabase, profilePath: string) => T): T {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-query-file-deps-'));
     const projectRoot = join(tempDir, 'project');
     const dbPath = join(tempDir, 'index.db');
@@ -105,7 +107,7 @@ describe('file dependency graph evidence', () => {
         indexPath: join(tempDir!, 'index.scip'),
       });
 
-    run(openDb, profilePath);
+    return run(openDb, profilePath);
   }
 
   it('persists graph evidence and reuses it from a fresh database connection', () => {
@@ -240,6 +242,58 @@ describe('file dependency graph evidence', () => {
         .map((line) => JSON.parse(line) as Record<string, unknown>)
         .filter((event) => event.name === 'file-dep-graph.product');
       expect(productEvents.at(-1)).toMatchObject({ hit: true, construction: 'carried', graphFiles: 2 });
+    });
+  });
+
+  it('warms import and re-export products in yielding batches so the synchronous build parses nothing new', async () => {
+    await withFixture(async (openDb) => {
+      const db = openDb();
+      const events: string[] = [];
+      const progress: Array<{ files: number; total: number }> = [];
+      const warmed = await warmSourceDependencyProducts(db, {
+        batchSize: 3,
+        collectGarbage: () => {
+          events.push('collect');
+          return true;
+        },
+        yieldToEventLoop: async () => {
+          events.push('yield');
+        },
+        onBatch: (batch) => {
+          progress.push(batch);
+          events.push(`batch:${batch.files}`);
+        },
+      });
+
+      expect(warmed).toEqual({ files: 4 });
+      expect(progress).toEqual([
+        { files: 3, total: 4 },
+        { files: 4, total: 4 },
+      ]);
+      // Every batch ends with a full collection, which queues the finalizers
+      // of the batch's dead trees, and then one event-loop turn, which runs
+      // them. The last batch is not exempt: its trees are otherwise held
+      // until whatever the caller does next yields.
+      expect(events).toEqual(['batch:3', 'collect', 'yield', 'batch:4', 'collect', 'yield']);
+      // The synchronous build reads the persisted products it just wrote.
+      expect(graphShape(buildFileDepGraph(db))).toEqual(
+        expect.arrayContaining([
+          ['src/a.ts', ['src/b.ts']],
+          ['src/c.ts', ['src/b.ts']],
+        ]),
+      );
+    });
+  });
+
+  it('shares one tree between the import sweep and getAst for identical bytes', () => {
+    withFixture((openDb) => {
+      const db = openDb();
+      const source = readFileSync(join(db.config.projectRoot, 'src/a.ts'), 'utf8');
+      const tree = getAstForSource(db, 'src/a.ts', source);
+      expect(tree).not.toBeNull();
+      // The re-export pass reads the same bytes through getAst; it must not
+      // parse the file a second time.
+      expect(getAst(db, 'src/a.ts')).toBe(tree);
     });
   });
 });

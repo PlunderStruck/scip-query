@@ -37,17 +37,32 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
   that would only be suppressed as fresh. The check runs on the Git poll
   interval and does not depend on a Git checkout.
 
-### Native memory in whole-project sweeps is retained by glibc, not leaked
+### Whole-project parses no longer hold every syntax tree at once
 
-- Attribution on a 7,800-file repository (no watch service): a full-health
-  prewarm child creates ~14,000 Tree-sitter trees, all but the 256 held by
-  the bounded tree cache are finalized within minutes, V8's own malloc use
-  stays at 1 MB, yet ~8.5 GB stays resident in glibc's main arena for the
-  life of the process. The memory is free and reused by that process; it is
-  simply never returned to the OS. Isolated children release it on exit and
-  the watch service worker on retirement. On hosts where that high-water
-  mark matters, run scip-query under an allocator that returns memory, for
-  example `LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2`.
+- A parsed Tree-sitter tree is native memory behind a wrapper of a few bytes.
+  V8 never feels its weight, so it rarely collects the wrapper, and the
+  finalizer that frees the tree runs only after a collection has found the
+  wrapper dead and the event loop has turned. A whole-project parse therefore
+  held every tree it made: on a 7,800-file repository the full-health prewarm
+  reached 14,000 trees and ~8.5 GB outside the V8 heap while `heapUsed` sat at
+  160 MB. Measured on the same box, forcing a full collection at each batch
+  boundary and yielding once keeps a 3,000-file sweep flat at 139 MB across
+  three passes; a minor collection frees almost nothing.
+- The prewarm now persists every file's import and re-export products in
+  batches that end with a full collection and one event-loop turn, before the
+  semantic provider builds, so the provider's synchronous dependency-graph
+  build reads products and parses nothing. A non-incremental reindex does the
+  same for the previous generation before the affected-set shadow builds its
+  graph, and only when that shadow will build one.
+- The native-pressure estimate behind every parse assumed a tree costs 10x its
+  source bytes; measured, it is about 23x, so forced collections came several
+  gigabytes too late. The estimate is now 24x.
+- The dependency-graph sweep parsed each file twice, once for imports and
+  once for re-exports; the import parse now goes through the exact-bytes tree
+  cache, so the re-export pass reuses the same tree.
+- Freed tree memory stays reusable inside the process but is not returned to
+  the OS by glibc; the resident high-water mark is now set by one batch plus
+  the bounded tree cache rather than by the repository.
 
 ### Faster full health and a durable dossier
 

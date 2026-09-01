@@ -161,6 +161,14 @@ function parseSource(parser: ParserInstance, source: string): Tree {
 // scip-query: ignore-wrapper — public parser-runtime operation consumed by
 // the AST facade; it hides parser pooling, optional grammar availability, and
 // chunked tree-sitter parsing behind one runtime boundary.
+/**
+ * Measured on TypeScript sources: a node-tree-sitter tree holds about 23x the
+ * bytes of the source it was parsed from (3,000 files, 21 MB of source, 493 MB
+ * of resident trees). Estimating at 10x let dead trees reach several
+ * gigabytes between collections.
+ */
+const NATIVE_TREE_BYTES_PER_SOURCE_BYTE = 24;
+
 export function parseAstSource(lang: AstLanguage, source: string): Tree | null {
   const parser = getParser(lang);
   if (!parser) return null;
@@ -169,7 +177,7 @@ export function parseAstSource(lang: AstLanguage, source: string): Tree | null {
     // A parsed tree's memory is native and freed only by its GC finalizer;
     // V8 never sees it, so whole-project sweeps must create collection
     // pressure themselves or dead trees accumulate to gigabytes of RSS.
-    noteFinalizerOwnedNativeAllocation(source.length * 10);
+    noteFinalizerOwnedNativeAllocation(source.length * NATIVE_TREE_BYTES_PER_SOURCE_BYTE);
     return tree;
   } catch {
     return null;

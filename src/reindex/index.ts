@@ -5,6 +5,7 @@ import { platform } from 'node:os';
 import { readFileWithinLimit, readSmallArtifactText, SCIP_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
 import { runBoundedProcess } from '../platform/bounded-process.js';
 import {
+  buildProjectChangeManifest,
   isLanguageRelevantProjectInputPath,
   projectInputSnapshotOrNull,
   type FileDependencyGraph,
@@ -90,9 +91,12 @@ import {
   captureTypeScriptPlanningDependencyGraph,
   carryFileDependencyGraph,
   materializeCarriedFileDependencyGraph,
+  readPersistedFileDependencyGraph,
+  warmSourceDependencyProducts,
 } from '../symbols/graph/file-dep-graph.js';
 import { auxiliaryDocumentsAugmentationStage } from './augmentation/augment.js';
 import { runtimeBoundaryAugmentationStage } from './runtime-boundaries.js';
+import { classifyAffectedSetFallback } from './affected-set.js';
 import {
   collectAffectedSetShadowRecord,
   createUnavailableAffectedSetShadowRecord,
@@ -1812,6 +1816,16 @@ async function publishFreshReindexArtifacts(
   }
 
   const previousSnapshot = previousProjectInputSnapshot(opts.paths.metaPath);
+  if (!(sqliteMaterialization.mode === 'incremental' && incrementalTypeScript)) {
+    await warmAffectedShadowDependencySources({
+      projectRoot: opts.projectRoot,
+      previousDbPath: opts.paths.outputDb,
+      previousIndexPath: opts.paths.outputScip,
+      previousSnapshot,
+      currentSnapshot: opts.fingerprint,
+      onStatus: opts.onStatus,
+    });
+  }
   const shadowRecord = profileSpan('reindex.publish.affected-shadow', () =>
     sqliteMaterialization.mode === 'incremental' && incrementalTypeScript
       ? buildIncrementalAffectedSetShadowRecord(incrementalTypeScript, sqliteMaterialization.changedDocumentPaths)
@@ -2025,6 +2039,16 @@ async function publishFullyReusedLanguageShardArtifacts(
     indexedOutputs.map((output) => output.language),
   );
 
+  if (shadowRecord === undefined || shadowRecord === null) {
+    await warmAffectedShadowDependencySources({
+      projectRoot: opts.projectRoot,
+      previousDbPath: opts.tempPaths.tempOutputDb,
+      previousIndexPath: opts.paths.outputScip,
+      previousSnapshot,
+      currentSnapshot: opts.fingerprint,
+      onStatus: opts.onStatus,
+    });
+  }
   shadowRecord ??= collectAffectedSetShadowRecord({
     projectRoot: opts.projectRoot,
     previousDbPath: opts.tempPaths.tempOutputDb,
@@ -2059,6 +2083,49 @@ async function publishFullyReusedLanguageShardArtifacts(
   refreshSqliteGenerationMetadata(opts.paths.outputDb, opts.paths.metaPath);
   persistAffectedSetShadowRecord(opts.paths.outputDb, shadowRecord, opts.onStatus);
   return lastRefresh;
+}
+
+/**
+ * The affected-set shadow builds the previous generation's file dependency
+ * graph synchronously. When that graph's product is cold, the build parses
+ * every indexed file in one sweep, and a parsed tree is freed only by a
+ * finalizer that runs after a collection and an event-loop turn, so the sweep
+ * would hold every tree at once. Persist the per-file import products first,
+ * in collecting and yielding batches, but only when the shadow will build the
+ * graph at all: a missing prior index or a full-project fallback never does.
+ */
+async function warmAffectedShadowDependencySources(input: {
+  projectRoot: string;
+  previousDbPath: string;
+  previousIndexPath: string;
+  previousSnapshot: ProjectInputSnapshot | null;
+  currentSnapshot: ProjectInputSnapshot;
+  onStatus: (message: string) => void;
+}): Promise<void> {
+  if (!existsSync(input.previousDbPath)) return;
+  const manifest = buildProjectChangeManifest(input.previousSnapshot, input.currentSnapshot);
+  if (manifest.changes.length === 0 || classifyAffectedSetFallback(manifest).fullProject) return;
+  let db: ScipDatabase | null = null;
+  try {
+    db = new ScipDatabase({
+      projectRoot: input.projectRoot,
+      dbPath: input.previousDbPath,
+      indexPath: input.previousIndexPath,
+    });
+    if (readPersistedFileDependencyGraph(db)) return;
+    const warmed = await profileAsyncSpan('reindex.publish.affected-shadow.warm-sources', () =>
+      warmSourceDependencyProducts(db as ScipDatabase, {
+        yieldToEventLoop: () => new Promise<void>((resolve) => setImmediate(resolve)),
+      }),
+    );
+    input.onStatus(`Persisted import products for ${warmed.files} document(s) before the affected-set shadow.`);
+  } catch (error) {
+    input.onStatus(
+      `Affected-set shadow import warm-up unavailable: ${error instanceof Error ? error.message : String(error)}.`,
+    );
+  } finally {
+    db?.close();
+  }
 }
 
 function previousProjectInputSnapshot(metaPath: string): ProjectInputSnapshot | null {
