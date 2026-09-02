@@ -97,7 +97,11 @@ function createLazyProjectBundle(
       // the listed count is the configured half.
       const listed = files();
       const count = listed === null ? 0 : Math.ceil(listed.size / 2);
-      scope = count > budget ? 'file-closure' : 'project';
+      // The heap estimate that sizes the worker (1.25 MB per file) runs
+      // above the measured cost (about 0.9 MB), so a project just over the
+      // budget still loads whole; file closures are for projects that cannot
+      // fit, since growing a program file by file rebuilds it repeatedly.
+      scope = count > budget * FILE_CLOSURE_SLACK ? 'file-closure' : 'project';
     }
     return scope;
   };
@@ -122,6 +126,8 @@ function createLazyProjectBundle(
     },
   };
 }
+
+const FILE_CLOSURE_SLACK = 1.35;
 
 export const FILE_SCOPED_PROJECT_MESSAGE =
   'TypeScript project-wide semantics are unavailable: a compiler project is file-scoped because its tsconfig lists more files than the worker heap can hold.';

@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-09-02T23:40:25.279Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "ee565e59aa4f10ce8bdfa0f96a5be7bcfe49f20db469b87c736cd62e45759128",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export applyWrapperFacadeEvidence.",
+      "target": "./queries/wrapper-candidates:applyWrapperFacadeEvidence"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.24.0",
+  "previousDigest": "acecfa470b73b0133b6fb3bd5bd78121eefd7e5b0f65ca62ffed6d63102af27b",
+  "reason": "wrapper-candidates exports applyWrapperFacadeEvidence, the post-pass that tiers a file of wrappers forwarding through one receiver as a facade",
+  "schemaVersion": 1
+}

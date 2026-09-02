@@ -1,5 +1,5 @@
 {
-  "digest": "acecfa470b73b0133b6fb3bd5bd78121eefd7e5b0f65ca62ffed6d63102af27b",
+  "digest": "ee565e59aa4f10ce8bdfa0f96a5be7bcfe49f20db469b87c736cd62e45759128",
   "kind": "scip-query-api-manifest",
   "schemaVersion": 1,
   "surface": {
@@ -7740,8 +7740,13 @@
         "types": "dist/queries/vue-large-view-<hash>.d.ts"
       },
       "./queries/wrapper-candidates": {
-        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ntype WrapperActionTier = 'direct' | 'signal';\n\ntype WrapperBodyShape = 'forwarding' | 'helper';\n\ninterface WrapperCandidate {\n    symbol: string;\n    shortName: string;\n    file: string;\n    startLine: number;\n    endLine: number;\n    loc: number;\n    singleCaller: string;\n    singleCallerShort: string;\n    callerFanIn: number;\n    actionTier: WrapperActionTier;\n    bodyShape: WrapperBodyShape;\n    boundaryEvidence: string[];\n}\n\ndeclare function wrapperCandidates(db: ScipDatabase, opts?: {\n    scope?: string;\n    maxLoc?: number;\n    limit?: number;\n    scanLimit?: number;\n    semantic?: boolean;\n}): WrapperCandidate[];\n\nexport { type WrapperActionTier, type WrapperBodyShape, type WrapperCandidate, wrapperCandidates };\n",
+        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ntype WrapperActionTier = 'direct' | 'signal';\n\ntype WrapperBodyShape = 'forwarding' | 'helper';\n\ninterface WrapperCandidate {\n    symbol: string;\n    shortName: string;\n    file: string;\n    startLine: number;\n    endLine: number;\n    loc: number;\n    singleCaller: string;\n    singleCallerShort: string;\n    callerFanIn: number;\n    actionTier: WrapperActionTier;\n    bodyShape: WrapperBodyShape;\n    boundaryEvidence: string[];\n}\n\ndeclare function wrapperCandidates(db: ScipDatabase, opts?: {\n    scope?: string;\n    maxLoc?: number;\n    limit?: number;\n    scanLimit?: number;\n    semantic?: boolean;\n}): WrapperCandidate[];\n\ndeclare function applyWrapperFacadeEvidence(candidates: readonly WrapperCandidate[], receivers: ReadonlyMap<string, string>): WrapperCandidate[];\n\nexport { applyWrapperFacadeEvidence, type WrapperActionTier, type WrapperBodyShape, type WrapperCandidate, wrapperCandidates };\n",
         "exports": [
+          {
+            "kind": "function",
+            "name": "applyWrapperFacadeEvidence",
+            "signature": "declare function applyWrapperFacadeEvidence(candidates: readonly WrapperCandidate[], receivers: ReadonlyMap<string, string>): WrapperCandidate[];"
+          },
           {
             "kind": "type",
             "name": "WrapperActionTier",

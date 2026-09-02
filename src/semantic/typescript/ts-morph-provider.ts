@@ -209,6 +209,17 @@ class TsMorphSemanticProvider implements SemanticProvider {
     };
   }
 
+  /**
+   * A file-scoped program rebuilds after each added source file; attaching a
+   * batch's files before any type query means one rebuild per batch.
+   */
+  private attachBatchFiles(definitions: readonly IndexedDefinition[]): void {
+    if (!hasFileScopedProject(this.projects)) return;
+    for (const relativePath of new Set(definitions.map((definition) => definition.relativePath))) {
+      this.sourceFiles.sourceFile(relativePath);
+    }
+  }
+
   /** Project-wide answers need every file of every project; a file-scoped project cannot give them. */
   private assertProjectWide(): void {
     if (hasFileScopedProject(this.projects)) throw new Error(FILE_SCOPED_PROJECT_MESSAGE);
@@ -747,6 +758,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
 
   calleesForDefinitions(definitions: readonly IndexedDefinition[]): Map<number, SemanticCallee[]> {
     const result = new Map<number, SemanticCallee[]>();
+    this.attachBatchFiles(definitions);
     const byFile = new Map<string, IndexedDefinition[]>();
     for (const definition of definitions) {
       const bucket = byFile.get(definition.relativePath);
@@ -775,6 +787,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
    * callee map so the two answers describe the same sites.
    */
   calleeCoverageForDefinitions(definitions: readonly IndexedDefinition[]): Map<number, SemanticCalleeCoverage> {
+    this.attachBatchFiles(definitions);
     const result = new Map<number, SemanticCalleeCoverage>();
     const byFile = new Map<string, IndexedDefinition[]>();
     for (const definition of definitions) {
