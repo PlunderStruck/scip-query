@@ -1,0 +1,109 @@
+{
+  "detector": "complexity-hotspots",
+  "repository": "launchpoint-backend",
+  "identity": "symbol",
+  "reviewed": "2026-09-02",
+  "note": "Sampled 20 of the 192 callables above the extreme score (seed 11) and recounted branch-like tokens over each body. True means the callable is an extreme hotspot by any reviewer's standard.",
+  "labels": [
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/CampaignActionsMenu.tsx#src:app:(authenticated):(dashboard):campaigns:[id]:campaign-detail:ui:CampaignActionsMenu:PayoutMaturedDialogBody()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/creators/groups/components/CreatorPipelineClient.tsx#src:app:(authenticated):(dashboard):creators:groups:components:CreatorPipelineClient:PersonRow()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/lib/support-agents/discord-poll/dm-acknowledge.ts#src:lib:support-agents:discord-poll:dm-acknowledge:acknowledgeDiscordDmBlocks()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/trigger/campaigns/pvp-link-media.trigger.ts#src:trigger:campaigns:pvp-link-media.trigger:runPvpLinkMedia()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/lib/economics/campaigns/earnings/queries/payout-ledger.ts#src:lib:economics:campaigns:earnings:queries:payout-ledger:planInstantPayoutDeltas()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/dedup-labels/DedupLabelClient.tsx#src:app:(authenticated):(dashboard):admin:dedup-labels:DedupLabelClient:DedupLabelClient()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/lib/campaigns/duplicate-videos/pixel-pair-sweep.ts#src:lib:campaigns:duplicate-videos:pixel-pair-sweep:runPixelPairSweep()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/new/components/EditorActionBar.tsx#src:app:(authenticated):(dashboard):campaigns:new:components:EditorActionBar:EditorActionBar()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/lib/campaigns/warmup.ts#src:lib:campaigns:warmup:listWarmupStatesForOffers()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/lib/economics/creator-compensation/display.ts#src:lib:economics:creator-compensation:display:resolveDisplayCompensationBatch()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/statsbot-sandbox/SlackTimelinePicker.tsx#src:app:(authenticated):(dashboard):admin:statsbot-sandbox:SlackTimelinePicker:SlackTimelinePicker()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/app/components/AthleteManagementModal.tsx#src:app:components:AthleteManagementModal:AthleteManagementModal()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/AnalyticsReportShareDialog.tsx#src:app:(authenticated):(dashboard):campaigns:[id]:campaign-detail:ui:AnalyticsReportShareDialog:AnalyticsReportShareDialog()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/lib/validate/submission.ts#src:lib:validate:submission:handleOfferSubmission()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/lib/campaigns/acceptance/service.ts#src:lib:campaigns:acceptance:service:adminInviteCreatorWithCompensation()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/data/use-creator-lifecycle.ts#src:app:(authenticated):(dashboard):campaigns:[id]:campaign-detail:data:use-creator-lifecycle:useCreatorLifecycle()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/app/(partner)/deals/AgencyDealsClient.tsx#src:app:(partner):deals:AgencyDealsClient:AgencyDealsClient()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/editor/components/generate-ideas-context.tsx#src:app:(authenticated):(dashboard):campaigns:editor:components:generate-ideas-context:EnabledGenerateIdeasProvider()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/lib/campaigns/relink/audit/core/plan.ts#src:lib:campaigns:relink:audit:core:plan:buildCreatorAuditPlan()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/SideshiftImportModal.tsx#src:app:(authenticated):(dashboard):campaigns:[id]:campaign-detail:ui:SideshiftImportModal:SideshiftImportModal()",
+      "verdict": "true",
+      "reason": "hundreds of lines with dozens of branches; text branch count agrees"
+    }
+  ]
+}

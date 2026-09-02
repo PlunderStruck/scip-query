@@ -22,6 +22,7 @@ import { leafName } from '../symbols/symbol-parser.js';
 import { getReExports } from '../language-parsers/index.js';
 import { isExplicitPackageSurfaceFile, isPackageSurfaceFile } from './package-surface.js';
 import { isRustPublicLibrarySymbol } from './rust-package-surface.js';
+import { isConfigReferencedFile } from './config-referenced-files.js';
 import { classifyFile } from '../source/primitives/file-kind.js';
 import { isFrameworkTaskFile } from './framework-task-surface.js';
 
@@ -128,6 +129,7 @@ export function isEntrySurface(db: ScipDatabase, file: string): boolean {
     kind === 'worker' ||
     isFrameworkEntrypointPath(normalized) ||
     isFrameworkTaskFile(db, normalized) ||
+    isConfigReferencedFile(db, normalized) ||
     isLiveBarrel(db, normalized)
   );
 }

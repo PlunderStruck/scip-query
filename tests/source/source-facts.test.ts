@@ -79,6 +79,44 @@ describe('source facts', () => {
     }
   });
 
+  it('keeps call sites whose target the grammar wraps in await, casts, or parentheses', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-facts-wrapped-targets-'));
+    try {
+      const projectRoot = join(tempDir, 'project');
+      const dbPath = join(tempDir, 'index.db');
+      writeFixtureFiles(projectRoot, {
+        'src/search.ts': [
+          'export async function search(client: Api, paths: Paths) {',
+          '  const data = await client.getData<Row[]>(paths.global());',
+          '  (client as Api).flush();',
+          '  client!.close();',
+          '  return data;',
+          '}',
+        ],
+      });
+      evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/search.ts').write();
+
+      const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(tempDir, 'index.scip') });
+      try {
+        const callSites = getSourceFacts(db, 'src/search.ts')?.callSites ?? [];
+        // `await client.getData<T>(...)` parses with the await bound to the
+        // member expression; the call site must still name `getData`.
+        expect(callSites).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ calleeLeaf: 'getData', calleeQualifier: 'client', memberAccess: true, line: 1 }),
+            expect.objectContaining({ calleeLeaf: 'global', calleeQualifier: 'paths', line: 1 }),
+            expect.objectContaining({ calleeLeaf: 'flush', memberAccess: true, line: 2 }),
+            expect.objectContaining({ calleeLeaf: 'close', memberAccess: true, line: 3 }),
+          ]),
+        );
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('extracts TypeScript private-method calls without the private marker', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-facts-private-method-'));
     try {

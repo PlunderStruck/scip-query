@@ -1,0 +1,104 @@
+{
+  "detector": "wrapper-candidates",
+  "repository": "vega-2.0",
+  "identity": "symbol",
+  "reviewed": "2026-09-02",
+  "note": "Sampled direct- and signal-tier rows from the full list (seed 11) and read each body. Vega's api layer is composed of services delegating to repositories and collaborators, so most direct rows are layering forwards labeled uncertain. True means a reviewer would inline the wrapper; false means it owns logic, a component, or module-private state.",
+  "labels": [
+    {
+      "id": "apps/web/src/stores/bootLoadingStore.ts#src:stores:bootLoadingStore:useBootComplete()",
+      "verdict": "uncertain",
+      "reason": "store hook over useSyncExternalStore with module-private subscribe and snapshot functions"
+    },
+    {
+      "id": "apps/api/src/modules/issues/repositories/issue-relationship.repository.ts#src:modules:issues:repositories:issue-relationship.repository:IssueRelationshipRepository:findIssueById()",
+      "verdict": "uncertain",
+      "reason": "repository method forwarding to its queries collaborator; layering"
+    },
+    {
+      "id": "apps/api/src/modules/notifications/notification-preferences.service.ts#src:modules:notifications:notification-preferences.service:NotificationPreferencesService:getPreferencesForUsers()",
+      "verdict": "uncertain",
+      "reason": "service method forwarding to the repository under a new name; layering"
+    },
+    {
+      "id": "apps/api/src/modules/notifications/notification-preferences.service.ts#src:modules:notifications:notification-preferences.service:NotificationPreferencesService:getPreferences()",
+      "verdict": "uncertain",
+      "reason": "service method forwarding to the repository; layering"
+    },
+    {
+      "id": "apps/api/src/modules/translation/comment-translation.service.ts#src:modules:translation:comment-translation.service:CommentTranslationService:isSameLanguageBase()",
+      "verdict": "uncertain",
+      "reason": "named variant of isSameLanguage with a default argument"
+    },
+    {
+      "id": "apps/api/src/services/sse-realtime.service.ts#src:services:sse-realtime.service:SseRealtimeService:sendToProject()",
+      "verdict": "uncertain",
+      "reason": "named room-kind variant of sendToScopedRoom; paired with sendToIssue"
+    },
+    {
+      "id": "apps/web/src/lib/i18n.ts#src:lib:i18n:isLanguageLoaded()",
+      "verdict": "false",
+      "reason": "accessor over the module-private loadedLanguages set; inlining would export the state"
+    },
+    {
+      "id": "apps/api/src/modules/users/users.avatar.ts#src:modules:users:users.avatar:buildUploadedAvatarUrl()",
+      "verdict": "true",
+      "reason": "domain-named alias of usersPublicApiPaths.avatar used once"
+    },
+    {
+      "id": "apps/api/src/services/sse-realtime.service.ts#src:services:sse-realtime.service:SseRealtimeService:sendToIssue()",
+      "verdict": "uncertain",
+      "reason": "named room-kind variant of sendToScopedRoom; paired with sendToProject"
+    },
+    {
+      "id": "apps/web/src/components/ui/mobileToolbarPanel.tsx#src:components:ui:mobileToolbarPanel:useMobileToolbarPanelState()",
+      "verdict": "false",
+      "reason": "hook that owns state and a memoized callback"
+    },
+    {
+      "id": "apps/web/src/components/issues/creation/create-issue-modal-template-actions.ts#src:components:issues:creation:create-issue-modal-template-actions:selectCreateIssueTemplate()",
+      "verdict": "false",
+      "reason": "multi-dispatch action"
+    },
+    {
+      "id": "apps/api/src/modules/translation/translation-service-loader.ts#src:modules:translation:translation-service-loader:getMessageTranslationService()",
+      "verdict": "false",
+      "reason": "lazy module loader with a cached instance"
+    },
+    {
+      "id": "apps/api/src/services/permissions.service.ts#src:services:permissions.service:PermissionsService:hasPermissionInSet()",
+      "verdict": "uncertain",
+      "reason": "class method aliasing a free function of the same name; API surface of the service"
+    },
+    {
+      "id": "apps/web/src/components/ui/FloatingToolbarLayer.tsx#src:components:ui:FloatingToolbarLayer:FloatingToolbarSpacer()",
+      "verdict": "false",
+      "reason": "a component"
+    },
+    {
+      "id": "apps/api/src/modules/notifications/notifications.repository.ts#src:modules:notifications:notifications.repository:NotificationsRepository:create()",
+      "verdict": "false",
+      "reason": "repository insert helper"
+    },
+    {
+      "id": "apps/web/src/components/ui/SettingsPageHeader.tsx#src:components:ui:SettingsPageHeader:SettingsPageHeader()",
+      "verdict": "false",
+      "reason": "a component"
+    },
+    {
+      "id": "apps/api/src/modules/issues/repositories/issue-write.repository.ts#src:modules:issues:repositories:issue-write.repository:IssueWriteRepository:listIssueComponentIds()",
+      "verdict": "false",
+      "reason": "query plus projection"
+    },
+    {
+      "id": "apps/web/src/api/issue-templates.ts#src:api:issue-templates:applyTemplate()",
+      "verdict": "false",
+      "reason": "API client function with two computed arguments"
+    },
+    {
+      "id": "apps/web/src/api/sprints.ts#src:api:sprints:createSprint",
+      "verdict": "false",
+      "reason": "API client function with a computed path"
+    }
+  ]
+}

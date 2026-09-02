@@ -3,7 +3,7 @@ import type { IndexedDefinition } from '../../domain/types.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
 import { isCallableSymbol, isRustTraitImplMember, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { getCallSites } from '../../source/facts/ast-facts.js';
-import { getSourceImports } from '../../language-parsers/index.js';
+import { getReExports, getSourceImports } from '../../language-parsers/index.js';
 import { pathsResolveSame } from '../../domain/path-normalization.js';
 import { classifyFile, isBarrel, isFrameworkEntrypointPath } from '../../analysis/file-classifier.js';
 import { profileSpan } from '../../instrumentation/profile.js';
@@ -71,6 +71,12 @@ export interface TwinDriftRecord {
    * `isDelegatePair`/`buildDelegationChecker` for that.
    */
   isThinForwarder: boolean;
+  /**
+   * For a thin forwarder, the leaf name of the one call its body makes; a
+   * forwarder whose target has a different name than its own is a stub over
+   * another concept (an HTTP client, an adapter), not a twin of it.
+   */
+  forwardTargetLeaf?: string | null;
 }
 
 export function twinDrift(
@@ -173,7 +179,22 @@ export function groupTwins(
     () => {
       const output: TwinGroup[] = [];
       for (const cluster of clusters) {
-        const members = twinMembersForCluster(cluster, recordsByLeaf, recordOrder);
+        const clusterMembers = twinMembersForCluster(cluster, recordsByLeaf, recordOrder);
+        // A member that calls another member of its cluster is a layer over it
+        // (a facade method, a controller over its service), not a parallel
+        // implementation of anything; it leaves the cluster before pairing so
+        // it cannot pair with the near-name members either.
+        const layered = new Set(
+          clusterMembers
+            .filter((member) =>
+              clusterMembers.some(
+                (other) =>
+                  other !== member && other.file !== member.file && isDelegatePair?.(member, other, clusterMembers),
+              ),
+            )
+            .map((member) => member.symbol),
+        );
+        const members = clusterMembers.filter((member) => !layered.has(member.symbol));
         if (members.length < 2) continue;
         if (new Set(members.map((member) => member.file)).size < 2) continue;
         let bestNonIdentical: { a: TwinDriftRecord; b: TwinDriftRecord; similarity: number } | null = null;
@@ -195,6 +216,7 @@ export function groupTwins(
             // similarity scoring, so a cluster whose *only* cross-file pair is a
             // delegation chain produces no group at all.
             if (isDelegatePair?.(a, b, members) || isDelegatePair?.(b, a, members)) continue;
+            if (isStubOverPeer(a, b) || isStubOverPeer(b, a)) continue;
             hasCrossFilePair = true;
             participatingSymbols.add(a.symbol);
             participatingSymbols.add(b.symbol);
@@ -363,6 +385,9 @@ function twinDriftRecord(db: ScipDatabase, definition: IndexedDefinition): TwinD
   const snippet = definitionSourceSnippet(db, definition);
   if (!snippet) return null;
   if (!isCallableSymbol(definition.symbol) && !isTopLevelArrowFunctionSnippet(snippet, definition.leaf)) return null;
+  // An abstract member and its overrides are one polymorphic contract; their
+  // bodies differ by design.
+  if (isAbstractOrOverrideDeclaration(snippet, definition.leaf)) return null;
   const strippedBody = stripCommentsAndStrings(extractImplementationBody(snippet));
   const normalizedBody = strippedBody.replace(/\s+/g, '');
   if (!normalizedBody || normalizedBody.length < 8) return null;
@@ -379,7 +404,35 @@ function twinDriftRecord(db: ScipDatabase, definition: IndexedDefinition): TwinD
     normalizedBody,
     tokens,
     isThinForwarder: isThinForwarderStrippedBody(strippedBody),
+    forwardTargetLeaf: thinForwardTargetLeaf(strippedBody),
   };
+}
+
+function isAbstractOrOverrideDeclaration(snippet: string, leaf: string): boolean {
+  const escapedLeaf = leaf.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const declaration = snippet.split('\n').slice(0, 2).join('\n');
+  return new RegExp(`\\b(?:abstract|override)\\b[^\\n]*\\b${escapedLeaf}\\s*[(<]`).test(declaration);
+}
+
+/** The leaf of the single call a thin forwarder makes, or null for any other body. */
+function thinForwardTargetLeaf(strippedBody: string): string | null {
+  if (!isThinForwarderStrippedBody(strippedBody)) return null;
+  const statements = splitTopLevelStatements(strippedBody.trim());
+  const last = forwardingCallText(statements[statements.length - 1]!);
+  const target = /^([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\(/.exec(last)?.[1];
+  if (!target) return null;
+  return target.split('.').pop() ?? null;
+}
+
+/**
+ * `stub` forwards its arguments to one call whose name is neither its own nor
+ * `peer`'s (a web client calling `apiClient.patchData`, an adapter calling a
+ * vendor function) while `peer` has a body of its own: the stub reaches the
+ * peer's concept through a boundary rather than reimplementing it.
+ */
+function isStubOverPeer(stub: TwinDriftRecord, peer: TwinDriftRecord): boolean {
+  const target = stub.forwardTargetLeaf;
+  return typeof target === 'string' && target !== stub.leaf && target !== peer.leaf && !peer.isThinForwarder;
 }
 
 function isTopLevelArrowFunctionSnippet(snippet: string, leaf: string): boolean {
@@ -488,6 +541,13 @@ function areNearNames(a: string, b: string): boolean {
   if (a.toLowerCase() === b.toLowerCase()) return true;
   if (a.length < 8 || b.length < 8) return false;
   if (Math.abs(a.length - b.length) > 2) return false;
+  // `requireUser` and `requireUserId`: the longer name appends a whole
+  // capitalized word, which names a different thing (an id, a list, a count)
+  // rather than misspelling the same one (`escapeRegex` / `escapeRegExp`).
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  if (longer.length > shorter.length && longer.startsWith(shorter) && /^[A-Z]/.test(longer.slice(shorter.length))) {
+    return false;
+  }
   if (commonCharacterPrefixLength(a.toLowerCase(), b.toLowerCase()) / Math.max(a.length, b.length) < 0.8) {
     return false;
   }
@@ -559,8 +619,15 @@ const CONVENTION_ONLY_MEMBER_LEAVES = new Set([
 ]);
 const TYPE_MEMBER_SYMBOL = /#(?:`[^`]+`|[^#/`]+)\(\)\.$/;
 
+/** `getBySlug`, `findByEmail`, `listForOrganization`: a lookup verb qualified by a key is a repository convention, not a concept. */
+const CONVENTION_MEMBER_LOOKUP_PATTERN =
+  /^(?:get|find|list|load|fetch|count|delete|remove|update|upsert)(?:By|For)[A-Z]\w*$/;
+
 function isConventionOnlyMemberTwin(symbol: string, leaf: string): boolean {
-  return CONVENTION_ONLY_MEMBER_LEAVES.has(leaf) && TYPE_MEMBER_SYMBOL.test(symbol);
+  return (
+    (CONVENTION_ONLY_MEMBER_LEAVES.has(leaf) || CONVENTION_MEMBER_LOOKUP_PATTERN.test(leaf)) &&
+    TYPE_MEMBER_SYMBOL.test(symbol)
+  );
 }
 
 /**
@@ -674,11 +741,7 @@ export function isSingleForwardingCallBody(rawSnippet: string): boolean {
   if (!body || CONTROL_FLOW_PATTERN.test(body)) return false;
   const statements = splitTopLevelStatements(body);
   if (statements.length !== 1) return false;
-  const statement = statements[0]!
-    .replace(/^return\s+/, '')
-    .replace(/^await\s+/, '')
-    .replace(/;\s*$/, '')
-    .trim();
+  const statement = forwardingCallText(statements[0]!);
   const match = SINGLE_FORWARDING_CALL_PATTERN.exec(statement);
   if (!match) return false;
   const args = match[1]!.replace(/\[\s*\]|\{\s*\}/g, '');
@@ -701,13 +764,35 @@ const CONTROL_FLOW_PATTERN = /\b(?:if|else|for|while|switch|try|catch|do)\b/;
 const FORWARDING_CALL_PATTERN = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\[[^[\]]*\])*\((?:[^()]|\([^()]*\))*\)$/;
 
 function isForwardingCallStatement(statement: string): boolean {
-  const trimmed = statement
-    .trim()
-    .replace(/^return\s+/, '')
-    .replace(/^await\s+/, '')
-    .replace(/;\s*$/, '')
-    .trim();
-  return FORWARDING_CALL_PATTERN.test(trimmed);
+  return FORWARDING_CALL_PATTERN.test(forwardingCallText(statement));
+}
+
+/** The call text of a statement with `return`, `await`, the trailing semicolon, and the call's type arguments removed. */
+function forwardingCallText(statement: string): string {
+  return withoutCallTypeArguments(
+    statement
+      .trim()
+      .replace(/^return\s+/, '')
+      .replace(/^await\s+/, '')
+      .replace(/;\s*$/, '')
+      .trim(),
+  );
+}
+
+/** `client.getData<Response<{ ok: true }>>(x)` -> `client.getData(x)`: type arguments are not arguments. */
+function withoutCallTypeArguments(call: string): string {
+  const open = call.indexOf('<');
+  if (open < 0 || !/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(call.slice(0, open))) return call;
+  let depth = 0;
+  for (let index = open; index < call.length; index += 1) {
+    const char = call[index];
+    if (char === '<') depth += 1;
+    else if (char === '>') {
+      depth -= 1;
+      if (depth === 0) return call[index + 1] === '(' ? call.slice(0, open) + call.slice(index + 1) : call;
+    }
+  }
+  return call;
 }
 
 /**
@@ -792,12 +877,31 @@ function reachesSameNameTarget(
     (site) => site.line >= from.startLine && site.line <= from.endLine && targetLocalNames.has(site.calleeLeaf),
   );
   if (sites.length === 0) return false;
+  // `issueOrderingService.updateBoardOrder(...)` where the receiver is an
+  // imported binding: the receiver's own module imports the target's file
+  // (a capabilities hub instantiating services), one hop beyond the barrel.
+  for (const site of sites) {
+    if (!site.calleeQualifier) continue;
+    const receiverImport = imports.find((entry) => entry.localName === site.calleeQualifier && entry.sourcePath);
+    if (!receiverImport?.sourcePath) continue;
+    if (pathsResolveSame(receiverImport.sourcePath, to.file)) return true;
+    for (const hop of getSourceImports(db, receiverImport.sourcePath)) {
+      if (hop.sourcePath && pathsResolveSame(hop.sourcePath, to.file)) return true;
+    }
+  }
 
   const importedFiles = new Set(
     imports
       .filter((entry) => entry.sourcePath && (entry.kind !== 'namespace' || entry.usedMembers.includes(to.leaf)))
       .map((entry) => entry.sourcePath!),
   );
+  // `import { recorder } from './runtime-settings.js'` where runtime-settings
+  // re-exports the recorder: the target's file sits one re-export away.
+  for (const file of [...importedFiles]) {
+    for (const reExport of getReExports(db, file)) {
+      if (reExport.sourcePath) importedFiles.add(reExport.sourcePath);
+    }
+  }
   if ([...importedFiles].some((file) => pathsResolveSame(file, to.file))) return true;
 
   for (const mid of clusterMembers) {

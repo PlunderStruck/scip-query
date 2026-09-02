@@ -38,11 +38,13 @@ import type {
 } from '../types.js';
 import { discoverTypeScriptTsconfigs } from './tsconfig-discovery.js';
 import {
+  FILE_SCOPED_PROJECT_MESSAGE,
   createTsMorphProjectBundles,
+  hasFileScopedProject,
   loadTsMorph,
-  unavailableProvider,
   type ProjectBundle,
   type TsMorphModule,
+  unavailableProvider,
 } from './ts-morph-runtime.js';
 import { profileEnabled, profileSpan } from '../../instrumentation/profile.js';
 import { referenceFragmentsFromDefinitionMap } from './reference-fragments.js';
@@ -193,11 +195,23 @@ class TsMorphSemanticProvider implements SemanticProvider {
 
   // scip-query: ignore-twin — providers report engine-specific capability evidence.
   availability(): SemanticAvailability {
+    const fileScoped = hasFileScopedProject(this.projects);
     return {
       available: true,
       tsconfigPath: this.projects[0]?.tsconfigPath,
       tsconfigPaths: this.projects.map((project) => project.tsconfigPath),
+      projectScope: fileScoped ? 'file-closure' : 'project',
+      ...(fileScoped
+        ? {
+            note: 'compiler projects are file-scoped: callees, signatures, and import usage are served per file; references and hierarchies are unavailable',
+          }
+        : {}),
     };
+  }
+
+  /** Project-wide answers need every file of every project; a file-scoped project cannot give them. */
+  private assertProjectWide(): void {
+    if (hasFileScopedProject(this.projects)) throw new Error(FILE_SCOPED_PROJECT_MESSAGE);
   }
 
   importUsage(file: string): SemanticImportUsage[] {
@@ -226,6 +240,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
     definitions: readonly IndexedDefinition[],
     opts: { exact?: boolean } = {},
   ): Map<number, SemanticReference[]> {
+    this.assertProjectWide();
     const result = new Map<number, SemanticReference[]>();
     const profiling = profileEnabled();
     const misses: IndexedDefinition[] = [];
@@ -304,6 +319,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
   }
 
   referenceFragmentsForFiles(files: readonly string[]): Map<string, SemanticReferenceFragment[]> {
+    this.assertProjectWide();
     const definitions = getAllDefinitions(this.db).filter((definition) => isTypeScriptLike(definition.relativePath));
     const availableFiles = files.filter((relativePath) => this.sourceFiles.sourceFile(relativePath) !== null);
     const references = this.referencesForDefinitionsBySymbolScan(definitions, availableFiles);

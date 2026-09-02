@@ -1,0 +1,109 @@
+{
+  "detector": "passthrough-candidates",
+  "repository": "vega-2.0",
+  "identity": "symbol",
+  "reviewed": "2026-09-02",
+  "note": "Sampled ten direct-tier and ten signal-tier rows (seed 11). Most direct rows are methods of composed services (NotificationsService, ProjectsService, ChatService) forwarding to collaborators: facades that inline advice must not target. True means a rename a reviewer would inline.",
+  "labels": [
+    {
+      "id": "apps/api/src/modules/notifications/notifications.service.ts#src:modules:notifications:notifications.service:NotificationsService:notifyIssueAssigned()",
+      "verdict": "false",
+      "reason": "NotificationsService is a facade composed of triggers, inbox, and preferences collaborators"
+    },
+    {
+      "id": "apps/api/src/modules/user-settings/overview-tint.service.ts#src:modules:user-settings:overview-tint.service:OverviewTintPreferenceService:setForUser()",
+      "verdict": "uncertain",
+      "reason": "service over its preference store; the stale comment says it normalizes, but it forwards"
+    },
+    {
+      "id": "apps/api/src/services/redis-control-bus.service.ts#src:services:redis-control-bus.service:RedisControlBusService:warmup()",
+      "verdict": "uncertain",
+      "reason": "control bus over its subscriber lifecycle collaborator"
+    },
+    {
+      "id": "packages/companion/src/companion-config-payloads.ts#src:companion-config-payloads:normalizeServerKey()",
+      "verdict": "true",
+      "reason": "rename of normalizeCompanionServerUrl"
+    },
+    {
+      "id": "apps/api/src/modules/projects/projects.service.ts#src:modules:projects:projects.service:ProjectsService:reorderUserProjects()",
+      "verdict": "false",
+      "reason": "ProjectsService is a facade composed of ordering and query services"
+    },
+    {
+      "id": "apps/api/src/modules/proposals/context/discovery-memory-builder.ts#src:modules:proposals:context:discovery-memory-builder:buildChecklistCompletion()",
+      "verdict": "true",
+      "reason": "private rename of computeDiscoveryChecklistProgress"
+    },
+    {
+      "id": "apps/api/src/modules/notifications/notification-inbox.service.ts#src:modules:notifications:notification-inbox.service:NotificationInboxService:markAsRead()",
+      "verdict": "uncertain",
+      "reason": "inbox service over the notifications repository; layering"
+    },
+    {
+      "id": "apps/api/src/modules/notifications/notification-inbox.service.ts#src:modules:notifications:notification-inbox.service:NotificationInboxService:getUnreadCount()",
+      "verdict": "uncertain",
+      "reason": "inbox service renaming a repository count; layering"
+    },
+    {
+      "id": "apps/api/src/modules/chat/chat.service.ts#src:modules:chat:chat.service:ChatService:getMessageById()",
+      "verdict": "false",
+      "reason": "ChatService is a facade composed of read, attachment, and other services"
+    },
+    {
+      "id": "apps/api/src/modules/translation/content-translation.service.ts#src:modules:translation:content-translation.service:ContentTranslationService:translateRealtime()",
+      "verdict": "uncertain",
+      "reason": "content translation service over its engine"
+    },
+    {
+      "id": "apps/api/src/modules/privacy/privacy.controller.ts#src:modules:privacy:privacy.controller:PrivacyController:getConsents()",
+      "verdict": "false",
+      "reason": "controller handler whose body runs inside jsonHandler; not a literal forward"
+    },
+    {
+      "id": "apps/api/src/modules/reports/reports.service.ts#src:modules:reports:reports.service:ReportsService:updateSavedReport()",
+      "verdict": "false",
+      "reason": "ReportsService facade with seven sibling forwards"
+    },
+    {
+      "id": "apps/api/src/modules/coding-agents-sessions/coding-agents-dispatch-session.service.ts#src:modules:coding-agents-sessions:coding-agents-dispatch-session.service:CodingAgentsDispatchSessionService:dispatchTicketRestore()",
+      "verdict": "false",
+      "reason": "dispatch session facade with twelve sibling forwards"
+    },
+    {
+      "id": "apps/api/src/modules/webhooks/webhooks.service.ts#src:modules:webhooks:webhooks.service:WebhooksService:updateForScope()",
+      "verdict": "false",
+      "reason": "WebhooksService facade over its registry"
+    },
+    {
+      "id": "apps/api/src/modules/coding-agents-sessions/coding-agents-dispatch-session.service.ts#src:modules:coding-agents-sessions:coding-agents-dispatch-session.service:CodingAgentsDispatchSessionService:resolveIssueTypeReference()",
+      "verdict": "uncertain",
+      "reason": "private method of a facade class forwarding to its context collaborator"
+    },
+    {
+      "id": "apps/api/src/modules/projects/projects.service.ts#src:modules:projects:projects.service:ProjectsService:getByOrganization()",
+      "verdict": "false",
+      "reason": "ProjectsService facade"
+    },
+    {
+      "id": "apps/api/src/modules/coding-agents-sessions/coding-agents-dispatch-session.service.ts#src:modules:coding-agents-sessions:coding-agents-dispatch-session.service:CodingAgentsDispatchSessionService:dispatchProjectRelationshipTypesList()",
+      "verdict": "false",
+      "reason": "dispatch session facade with thirteen sibling forwards"
+    },
+    {
+      "id": "apps/api/src/modules/ai-provider/ai-provider.manager.ts#src:modules:ai-provider:ai-provider.manager:AIProviderManager:duplicateModelProfile()",
+      "verdict": "false",
+      "reason": "AiProviderManager facade over its profile service"
+    },
+    {
+      "id": "apps/api/src/modules/auth/auth.service.ts#src:modules:auth:auth.service:AuthService:getPendingOrgInvitationsForEmail()",
+      "verdict": "false",
+      "reason": "AuthService facade over its invitation service"
+    },
+    {
+      "id": "apps/api/src/modules/coding-agents-sessions/coding-agents-dispatch-session.service.ts#src:modules:coding-agents-sessions:coding-agents-dispatch-session.service:CodingAgentsDispatchSessionService:revokeDispatchSession()",
+      "verdict": "false",
+      "reason": "dispatch session facade over its access service"
+    }
+  ]
+}

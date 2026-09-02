@@ -306,6 +306,8 @@ If output prints `Continue exactly:`, run the emitted command unchanged until
 transport is complete. Transport completion means every rendered character was
 retrieved; it does not make bounded analysis exhaustive.
 
+Output redirected to a regular file (`scip-query health --full > report.txt`) is written in full; page cursors apply to terminals and pipes, where the reader is an agent whose context the page budget protects.
+
 Use `--full` only when complete command coverage can change a decision. Always
 read a command's coverage note before claiming that every caller, consumer, or
 finding was considered.

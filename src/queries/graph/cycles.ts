@@ -82,8 +82,7 @@ export function dependencyCycleSummary(db: ScipDatabase, opts: DependencyCycleOp
     .filter((component) => isCyclicComponent(graph, component))
     .map((members) => {
       const component = [...members].sort();
-      const path = cycleWitness(graph, component);
-      const kind = classifyCycle(path);
+      const { path, kind } = classifyComponent(graph, component);
       return {
         path,
         component,
@@ -106,6 +105,46 @@ export function dependencyCycleSummary(db: ScipDatabase, opts: DependencyCycleOp
     edgeBasis,
     maxDepth,
   };
+}
+
+/**
+ * Classify a cyclic component by its content rather than by one witness path.
+ * The witness is a shortest return path from the lexically first member, so
+ * a component whose product files form a genuine cycle can still hand the
+ * classifier a path through a barrel or a test file that also sits in the
+ * component. Remove every structural file (barrel, test, entry) from the
+ * component first: if the remaining files still contain a cycle, that cycle
+ * is the finding and its witness is reported; if they do not, the component
+ * only cycles through module bookkeeping.
+ */
+function classifyComponent(
+  graph: ReadonlyMap<string, ReadonlySet<string>>,
+  component: readonly string[],
+): { path: string[]; kind: 'real' | 'module-hierarchy' } {
+  const path = cycleWitness(graph, component);
+  const structural = new Set(component.filter((file) => isStructuralCycleFile(file)));
+  if (structural.size === 0) return { path, kind: classifyCycle(path) };
+  const members = new Set(component);
+  const reduced = new Map<string, Set<string>>();
+  for (const file of component) {
+    if (structural.has(file)) continue;
+    reduced.set(
+      file,
+      new Set([...(graph.get(file) ?? [])].filter((node) => members.has(node) && !structural.has(node))),
+    );
+  }
+  const contentCycle = stronglyConnectedComponents(reduced)
+    .components.filter((candidate) => isCyclicComponent(reduced, candidate))
+    .map((candidate) => [...candidate].sort())
+    .sort((left, right) => left[0]!.localeCompare(right[0]!))[0];
+  if (!contentCycle) return { path, kind: 'module-hierarchy' };
+  const contentPath = cycleWitness(reduced, contentCycle);
+  return { path: contentPath, kind: classifyCycle(contentPath) };
+}
+
+function isStructuralCycleFile(file: string): boolean {
+  const kind = classifyFile(file);
+  return kind === 'test' || kind === 'barrel' || kind === 'entry' || isBarrelFile(file);
 }
 
 function isCyclicComponent(graph: ReadonlyMap<string, ReadonlySet<string>>, component: readonly string[]): boolean {

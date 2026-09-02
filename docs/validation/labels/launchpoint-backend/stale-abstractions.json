@@ -1,0 +1,88 @@
+{
+  "detector": "stale-abstractions",
+  "repository": "launchpoint-backend",
+  "identity": "symbol",
+  "countedTiers": [
+    "direct",
+    "signal"
+  ],
+  "reviewed": "2026-09-02",
+  "note": "Sampled 5 direct-tier and 10 signal-tier rows (seed 11) and checked consumers with a repository-wide word search. True means the consumer count is right and the advice applies; uncertain means the single consumer is the intended owner relationship.",
+  "labels": [
+    {
+      "id": "src/lib/boosts/http/types.ts#src:lib:boosts:http:types:BoostAuthStartResponse",
+      "verdict": "true",
+      "reason": "no consumers"
+    },
+    {
+      "id": "src/db/types.ts#src:db:types:TriggerTransaction",
+      "verdict": "true",
+      "reason": "no consumers"
+    },
+    {
+      "id": "src/lib/ad-campaigns/core/ports.ts#src:lib:ad-campaigns:core:ports:ManagedPublicationProviderReader",
+      "verdict": "true",
+      "reason": "no consumers"
+    },
+    {
+      "id": "src/app/components/OfferList/CreatorList.tsx#src:app:components:OfferList:CreatorList:SelectedGiftProduct",
+      "verdict": "true",
+      "reason": "no consumers"
+    },
+    {
+      "id": "src/lib/boosts/infra/providers/base-provider.ts#src:lib:boosts:infra:providers:base-provider:BoostTokenExchangeResult",
+      "verdict": "true",
+      "reason": "no consumers"
+    },
+    {
+      "id": "src/lib/campaigns/duplicate-videos/journaled-merge.ts#src:lib:campaigns:duplicate-videos:journaled-merge:MergeVideoRef",
+      "verdict": "true",
+      "reason": "one consumer file"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/editor/components/steps/form-section-labels.ts#src:app:(authenticated):(dashboard):campaigns:editor:components:steps:form-section-labels:FormSectionLabelContext",
+      "verdict": "true",
+      "reason": "one consumer file"
+    },
+    {
+      "id": "src/lib/economics/creator/wise.ts#src:lib:economics:creator:wise:WisePayoutResult",
+      "verdict": "true",
+      "reason": "one consumer file"
+    },
+    {
+      "id": "src/lib/campaigns/videos/creator-approval-funding.ts#src:lib:campaigns:videos:creator-approval-funding:PreparedPrioritizedCreatorApprovalFunding",
+      "verdict": "true",
+      "reason": "consumed only by a test file"
+    },
+    {
+      "id": "src/lib/campaigns/creator-read/core/creator-deal-visibility.ts#src:lib:campaigns:creator-read:core:creator-deal-visibility:CreatorDealEvidence",
+      "verdict": "true",
+      "reason": "consumed only by a test file"
+    },
+    {
+      "id": "src/app/api/admin/creator-posts/[creatorId]/route.ts#src:app:api:admin:creator-posts:[creatorId]:route:CreatorPostData",
+      "verdict": "uncertain",
+      "reason": "a route response type consumed by its client component; the API is the right owner"
+    },
+    {
+      "id": "src/lib/media/repair-video-thumbnails.ts#src:lib:media:repair-video-thumbnails:UnrenderableThumbnailRepairCandidate",
+      "verdict": "true",
+      "reason": "one consumer file"
+    },
+    {
+      "id": "src/trigger/notify/email-trigger.ts#src:trigger:notify:email-trigger:SendEmailPayload",
+      "verdict": "uncertain",
+      "reason": "a task payload type consumed by its single sender by design"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/media/components/CreativeCardSurface.tsx#src:app:(authenticated):(dashboard):media:components:CreativeCardSurface:CreativeCardPresentation",
+      "verdict": "true",
+      "reason": "one consumer file"
+    },
+    {
+      "id": "src/react-query-client/queries/admin/use-creator-scoring-queue.ts#src:react-query-client:queries:admin:use-creator-scoring-queue:CreatorDossierDeliveredVideo",
+      "verdict": "true",
+      "reason": "defined in a query hook file and used only by components"
+    }
+  ]
+}

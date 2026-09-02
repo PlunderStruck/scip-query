@@ -63,7 +63,44 @@ export interface CoChangeFinding {
   structurallyLinked: boolean;
   partnerClass: CoChangePartnerClass;
   partnerClassReasons: string[];
+  /**
+   * `direct`: focused commits changed both files, so the coupling is a
+   * finding. `signal`: every shared commit was a broad sweep, the pair is
+   * stale with at most two focused co-changes, or the partner is
+   * configuration, documentation, or a generated artifact.
+   */
+  actionTier: CoChangeActionTier;
+  tierReason: string;
   declaredCouplingSuggestion?: DeclaredCouplingSuggestion;
+}
+
+export type CoChangeActionTier = 'direct' | 'signal';
+
+export function coChangeActionTier(
+  pair: { focusedTogether: number; recency?: CoChangeRecency },
+  partnerClass: CoChangePartnerClass,
+): { actionTier: CoChangeActionTier; tierReason: string } {
+  if (
+    partnerClass === 'config-code' ||
+    partnerClass === 'doc-code' ||
+    partnerClass === 'generated-artifact' ||
+    partnerClass === 'schema-script'
+  ) {
+    return {
+      actionTier: 'signal',
+      tierReason: `${partnerClass} partner: configuration, documentation, schema, and generated files change alongside many sources`,
+    };
+  }
+  if (pair.focusedTogether === 0) {
+    return {
+      actionTier: 'signal',
+      tierReason: 'every shared commit was a broad sweep; no focused change touched both files',
+    };
+  }
+  if (pair.recency === 'stale' && pair.focusedTogether <= 2) {
+    return { actionTier: 'signal', tierReason: 'at most two focused co-changes, none of them recent' };
+  }
+  return { actionTier: 'direct', tierReason: `${pair.focusedTogether} focused co-change(s)` };
 }
 
 export interface CoChangeResult {
@@ -170,6 +207,7 @@ export function coChange(
       structurallyLinked,
       partnerClass: classification.partnerClass,
       partnerClassReasons: classification.reasons,
+      ...coChangeActionTier(pair, classification.partnerClass),
       ...(declaredCouplingSuggestion ? { declaredCouplingSuggestion } : {}),
     });
     if (findings.length >= limit) break;

@@ -6,6 +6,7 @@ import { SymbolInformation_Kind } from '@c4312/scip';
 import {
   groupTwins,
   isSingleForwardingCallBody,
+  isThinForwarderBody,
   twinDrift,
   type TwinDriftRecord,
 } from '../../../src/queries/cleanup/twin-drift.js';
@@ -367,6 +368,176 @@ describe('groupTwins (pure)', () => {
   });
 });
 
+describe('groupTwins layering and stubs', () => {
+  it('removes a member that delegates to a cluster peer before near-name pairing', () => {
+    const facade = record({
+      leaf: 'dispatchTicketSet',
+      file: 'src/session.ts',
+      tokens: ['return', 'this', '.', 'mutations', '.', 'dispatchTicketSet', '(', 'key', ')', ';'],
+      isThinForwarder: true,
+    });
+    const implementation = record({
+      leaf: 'dispatchTicketSet',
+      file: 'src/mutations.ts',
+      tokens: [
+        'await',
+        'assertPermission',
+        '(',
+        'key',
+        ')',
+        ';',
+        'return',
+        'setField',
+        '(',
+        'key',
+        ',',
+        'value',
+        ')',
+        ';',
+      ],
+    });
+    const sibling = record({
+      leaf: 'dispatchTicketGet',
+      file: 'src/queries.ts',
+      tokens: ['await', 'assertPermission', '(', 'key', ')', ';', 'return', 'getField', '(', 'key', ')', ';'],
+    });
+
+    const groups = groupTwins([facade, implementation, sibling], {
+      isDelegatePair: (from, to) => from.file === facade.file && to.file === implementation.file,
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.members.map((member) => member.file)).toEqual(['src/mutations.ts', 'src/queries.ts']);
+  });
+
+  it('does not pair a stub that forwards to a differently named call with a peer that has a body', () => {
+    const webClient = record({
+      leaf: 'getThroughput',
+      file: 'apps/web/src/api/reports.ts',
+      tokens: ['apiClient', '.', 'getData', '(', 'paths', '.', 'throughput', '(', 'projectId', ')', ')'],
+      isThinForwarder: true,
+      forwardTargetLeaf: 'getData',
+    });
+    const service = record({
+      leaf: 'getThroughput',
+      file: 'apps/api/src/reports.service.ts',
+      tokens: [
+        'const',
+        'cutoff',
+        '=',
+        'new',
+        'Date',
+        '(',
+        ')',
+        ';',
+        'const',
+        'rows',
+        '=',
+        'await',
+        'db',
+        '.',
+        'select',
+        '(',
+        ')',
+        ';',
+        'return',
+        'rows',
+        ';',
+      ],
+    });
+
+    expect(groupTwins([webClient, service])).toHaveLength(0);
+  });
+
+  it('does not cluster a name with the same name plus an appended capitalized word', () => {
+    const user = record({
+      leaf: 'requireUser',
+      file: 'src/users.service.ts',
+      tokens: [
+        'const',
+        'user',
+        '=',
+        'await',
+        'selectOne',
+        '(',
+        'db',
+        ')',
+        ';',
+        'if',
+        '(',
+        '!',
+        'user',
+        ')',
+        'throw',
+        ';',
+        'return',
+        'user',
+        ';',
+      ],
+    });
+    const userId = record({
+      leaf: 'requireUserId',
+      file: 'src/controller-helpers.ts',
+      tokens: [
+        'const',
+        'userId',
+        '=',
+        'req',
+        '.',
+        'user',
+        '?.',
+        'sub',
+        ';',
+        'if',
+        '(',
+        '!',
+        'userId',
+        ')',
+        'throw',
+        ';',
+        'return',
+        'userId',
+        ';',
+      ],
+    });
+
+    expect(groupTwins([user, userId])).toHaveLength(0);
+  });
+
+  it('treats key-qualified lookup members on unrelated classes as convention', () => {
+    const organization = record({
+      leaf: 'getBySlug',
+      symbol: 'scip-typescript npm fixture 1.0.0 src/`organizations.ts`/OrganizationService#getBySlug().',
+      file: 'src/organizations.ts',
+      tokens: [
+        'return',
+        'selectOne',
+        '(',
+        'db',
+        '.',
+        'select',
+        '(',
+        ')',
+        '.',
+        'from',
+        '(',
+        'organizations',
+        ')',
+        ')',
+        ';',
+      ],
+    });
+    const role = record({
+      leaf: 'getBySlug',
+      symbol: 'scip-typescript npm fixture 1.0.0 src/`roles.ts`/RoleService#getBySlug().',
+      file: 'src/roles.ts',
+      tokens: ['return', 'selectOne', '(', 'db', '.', 'select', '(', ')', '.', 'from', '(', 'roles', ')', ')', ';'],
+    });
+
+    expect(groupTwins([organization, role])).toHaveLength(0);
+  });
+});
+
 describe('twinDrift (db-backed)', () => {
   let tempDir: string;
   let db: ScipDatabase;
@@ -599,6 +770,87 @@ describe('twinDrift (db-backed) — layering exclusion', () => {
   });
 });
 
+describe('twinDrift (db-backed) — abstract members and re-exported delegates', () => {
+  let tempDir: string;
+  let db: ScipDatabase;
+
+  beforeAll(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-query-twin-drift-abstract-'));
+    const projectRoot = join(tempDir, 'project');
+    writeFixtureFiles(projectRoot, {
+      'src/base.ts': [
+        'export abstract class Runtime {',
+        '  protected abstract buildTurnState(input: unknown): unknown;',
+        '}',
+      ],
+      'src/backlog.ts': [
+        "import { Runtime } from './base.js';",
+        'export class BacklogRuntime extends Runtime {',
+        '  protected override buildTurnState(input: { backlog: string[] }) {',
+        '    return { backlog: [...input.backlog], pendingQuestion: null };',
+        '  }',
+        '}',
+      ],
+      'src/spec.ts': [
+        "import { Runtime } from './base.js';",
+        'export class SpecRuntime extends Runtime {',
+        '  protected override buildTurnState(input: { goals: string[] }) {',
+        '    return { goals: [...input.goals], interactions: [] };',
+        '  }',
+        '}',
+      ],
+      'src/recorder.ts': [
+        'export const recorder = {',
+        '  record(input: { organizationId: string }) {',
+        '    return { organizationId: input.organizationId, stored: true };',
+        '  },',
+        '};',
+      ],
+      'src/index.ts': ["export { recorder } from './recorder.js';"],
+      'src/usage.ts': [
+        "import { recorder } from './index.js';",
+        'export function record(input: { scope: { organizationId: string } }) {',
+        '  const ids = { organizationId: input.scope.organizationId };',
+        '  return recorder.record(ids);',
+        '}',
+      ],
+    });
+
+    const dbPath = join(tempDir, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/backlog.ts')
+      .document(2, 'typescript', 'src/spec.ts')
+      .document(3, 'typescript', 'src/recorder.ts')
+      .document(4, 'typescript', 'src/usage.ts')
+      .document(5, 'typescript', 'src/index.ts')
+      .symbol(
+        1,
+        'scip-typescript npm fixture 1.0.0 src/`backlog.ts`/BacklogRuntime#buildTurnState().',
+        'buildTurnState',
+        12,
+      )
+      .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`spec.ts`/SpecRuntime#buildTurnState().', 'buildTurnState', 12)
+      .symbol(3, 'scip-typescript npm fixture 1.0.0 src/`recorder.ts`/recorder.record().', 'record', 12)
+      .symbol(4, 'scip-typescript npm fixture 1.0.0 src/`usage.ts`/record().', 'record', 12)
+      .definition(1, 1, 1, 2, 2, 4, 3)
+      .definition(2, 2, 2, 2, 2, 4, 3)
+      .definition(3, 3, 3, 1, 2, 3, 3)
+      .definition(4, 4, 4, 1, 0, 4, 1)
+      .write();
+
+    db = new ScipDatabase({ dbPath, projectRoot });
+  });
+
+  afterAll(() => {
+    db.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('does not group overrides of one abstract member, nor a caller that reaches its target through a re-export', () => {
+    expect(twinDrift(db, { includeHomonyms: true })).toHaveLength(0);
+  });
+});
+
 describe('isSingleForwardingCallBody', () => {
   const body = (...lines: string[]) => ['function wrap(raw: string) {', ...lines, '}'].join('\n');
 
@@ -606,6 +858,14 @@ describe('isSingleForwardingCallBody', () => {
     expect(isSingleForwardingCallBody(body('  return inner(raw);'))).toBe(true);
     expect(isSingleForwardingCallBody(body('  await service.inner(tx, raw, MODE.Switch);'))).toBe(true);
     expect(isSingleForwardingCallBody(body('  return inner(raw ?? [], "deleted");'))).toBe(true);
+  });
+
+  it('reads a concise arrow body past braces inside its type arguments', () => {
+    const client = [
+      'export const updateBoardOrder = (projectId: string, issueId: string) =>',
+      '  apiClient.patchData<ApiResponse<{ success: boolean }>>(paths.boardReorder(projectId), { issueId });',
+    ].join('\n');
+    expect(isThinForwarderBody(client)).toBe(true);
   });
 
   it('rejects preparatory statements, callbacks, nested calls, and built literals', () => {

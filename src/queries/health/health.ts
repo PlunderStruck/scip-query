@@ -1215,11 +1215,25 @@ function hiddenCouplingHealthScore(finding: Pick<CoChangeFinding, 'commitScope' 
  * changes with its source because a tool rewrites it. Both stay visible in
  * `co-change` and are disclosed here instead of counted.
  */
-function hiddenCouplingHealthVerdict(finding: Pick<CoChangeFinding, 'partnerClass'>): {
+function hiddenCouplingHealthVerdict(
+  finding: Pick<CoChangeFinding, 'partnerClass'> & Partial<Pick<CoChangeFinding, 'actionTier'>>,
+): {
   counted: boolean;
   reason: string;
   detail: string;
 } {
+  if (
+    finding.actionTier === 'signal' &&
+    finding.partnerClass !== 'doc-code' &&
+    finding.partnerClass !== 'generated-artifact'
+  ) {
+    return {
+      counted: false,
+      reason: 'sweep-only-pairs',
+      detail:
+        'pairs whose shared commits were only broad sweeps, stale pairs with at most two focused co-changes, and configuration or schema partners; listed by co-change at signal tier',
+    };
+  }
   switch (finding.partnerClass) {
     case 'doc-code':
       return {

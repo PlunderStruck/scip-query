@@ -1,0 +1,109 @@
+{
+  "detector": "twin-drift",
+  "repository": "vega-2.0",
+  "identity": "group",
+  "reviewed": "2026-09-02",
+  "note": "Sampled twenty divergent groups (seed 11). Vega names controller handlers, service methods, and web API client functions after the same endpoint, so layering across the HTTP boundary and interface implementations dominate the false groups. True means the members implement one concept and drifted.",
+  "labels": [
+    {
+      "id": "requireUser|apps/api/src/modules/users/users.service.ts,apps/api/src/utils/controller-helpers.ts",
+      "verdict": "false",
+      "reason": "requireUser loads a user record; requireUserId reads an id from the request; a near-name match, not one concept"
+    },
+    {
+      "id": "getIntegration|apps/api/src/modules/integrations/github-connection.controller.ts,apps/api/src/modules/integrations/integrations.controller.ts",
+      "verdict": "false",
+      "reason": "two controllers' getIntegration handlers for different resources; a route-handler convention name"
+    },
+    {
+      "id": "shutdownLifecycleScheduler|apps/api/src/modules/issues/services/issue-duplicate-review.service.ts,apps/api/src/modules/privacy/lifecycle/privacy-lifecycle.service.ts",
+      "verdict": "true",
+      "reason": "two services with the same scheduler shutdown, one adding a log line"
+    },
+    {
+      "id": "updateBoardOrder|apps/api/src/modules/issues/issue-planning.controller.ts,apps/api/src/modules/issues/services/issue-ordering.service.ts,apps/web/src/api/issues.ts",
+      "verdict": "false",
+      "reason": "controller, service, and web client of one endpoint; layering across the HTTP boundary"
+    },
+    {
+      "id": "getProjectOrganization|apps/api/src/middleware/billing-enforcement.middleware.ts,apps/api/src/modules/codebase-analysis/codebase-analysis.controller.ts,apps/api/src/modules/issues/issue-controller-support.ts",
+      "verdict": "true",
+      "reason": "three resolvers of a project's organization with different sources"
+    },
+    {
+      "id": "getBySlug|apps/api/src/modules/organizations/organization-core.service.ts,apps/api/src/modules/roles/roles.service.ts",
+      "verdict": "false",
+      "reason": "getBySlug on unrelated organization and role services; a lookup convention name"
+    },
+    {
+      "id": "sleep|apps/api/src/modules/issues/services/issue-indexing-job.service.ts,apps/web/src/api/refreshCoordinator.ts",
+      "verdict": "true",
+      "reason": "two sleep helpers"
+    },
+    {
+      "id": "dispatchBacklogList|apps/api/src/modules/coding-agents-sessions/coding-agents-dispatch-project-queries.service.ts,apps/api/src/modules/coding-agents-sessions/coding-agents-dispatch-session.service.ts,packages/companion/src/agent-dispatch-tool-client.ts",
+      "verdict": "false",
+      "reason": "dispatch facade, its query service, and the companion HTTP client; layering"
+    },
+    {
+      "id": "assertNotDispatchSessionId|apps/api/src/modules/coding-agents/coding-agents-controller.shared.ts,packages/companion/src/agent-dispatch-client-utils.ts",
+      "verdict": "true",
+      "reason": "api and companion copies of the same assertion with drifted messages"
+    },
+    {
+      "id": "chat|apps/api/src/modules/ai/runtime/adapters/anthropic-adapter.ts,apps/api/src/modules/ai/runtime/adapters/openai-adapter.ts,apps/api/src/modules/ai/runtime/adapters/openrouter-adapter.ts",
+      "verdict": "false",
+      "reason": "chat() implementations of one ModelAdapter interface across vendors"
+    },
+    {
+      "id": "setWorkSessionStatus|apps/api/src/modules/coding-agents-sessions/work-session-events.service.ts,apps/api/src/modules/coding-agents-sessions/work-session.service.ts,packages/companion/src/agent-dispatch-work-session-client.ts",
+      "verdict": "false",
+      "reason": "events service, its facade, and the companion HTTP client; layering"
+    },
+    {
+      "id": "getThroughput|apps/api/src/modules/reports/reports-flow-analytics.service.ts,apps/api/src/modules/reports/reports.service.ts,apps/web/src/api/reports.ts",
+      "verdict": "false",
+      "reason": "analytics service, its facade, and the web client; layering"
+    },
+    {
+      "id": "validatePermissions|apps/api/src/modules/projects/project-roles.service.ts,apps/api/src/modules/roles/roles.service.ts",
+      "verdict": "true",
+      "reason": "two private permission validators with the same shape and different schemas"
+    },
+    {
+      "id": "dispatchTicketCustomFieldSet|apps/api/src/modules/coding-agents-sessions/coding-agents-dispatch-session.service.ts,apps/api/src/modules/coding-agents-sessions/coding-agents-dispatch-session.service.ts,apps/api/src/modules/coding-agents-sessions/coding-agents-dispatch-ticket-mutations.service.ts,apps/api/src/modules/coding-agents-sessions/coding-agents-dispatch-ticket-mutations.service.ts",
+      "verdict": "uncertain",
+      "reason": "a facade and its mutations service for Set and Unset; the two implementations share their shape"
+    },
+    {
+      "id": "record|apps/api/src/modules/ai-settings/ai-usage-recorder.service.ts,apps/api/src/modules/ai/runtime/ai-usage.service.ts",
+      "verdict": "false",
+      "reason": "ai-usage.service.record calls aiUsageRecorderService.record; layering"
+    },
+    {
+      "id": "addWatcher|apps/api/src/modules/issues/issue-watchers.controller.ts,apps/api/src/modules/issues/services/issue-watchers.service.ts,apps/web/src/api/issues.ts",
+      "verdict": "false",
+      "reason": "controller, service, and web client of one endpoint; layering"
+    },
+    {
+      "id": "getSavedReport|apps/api/src/modules/reports/reports-saved-reports.service.ts,apps/api/src/modules/reports/reports-saved-reports.service.ts,apps/api/src/modules/reports/reports.service.ts,apps/api/src/modules/reports/reports.service.ts,apps/web/src/api/reports.ts,apps/web/src/api/reports.ts",
+      "verdict": "false",
+      "reason": "saved-reports service, its facade, and the web clients, with getSavedReport and getSavedReports clustered; layering"
+    },
+    {
+      "id": "getDeliveries|apps/api/src/modules/webhooks/organization-webhooks.controller.ts,apps/api/src/modules/webhooks/project-webhooks.controller.ts",
+      "verdict": "true",
+      "reason": "organization and project webhook controllers with the same delivery handler differing by scope"
+    },
+    {
+      "id": "unlinkIssue|apps/api/src/modules/integrations/github-linked-item.controller.ts,apps/api/src/modules/integrations/github-linked-item.service.ts,apps/api/src/modules/integrations/integrations.controller.ts,apps/api/src/modules/integrations/integrations.service.ts",
+      "verdict": "true",
+      "reason": "two integration services deleting a linked issue with drifted return values"
+    },
+    {
+      "id": "buildTurnState|apps/api/src/modules/proposals/runtime/proposal-agent-runtime-base.ts,apps/api/src/modules/proposals/runtime/proposal-backlog-runtime.ts,apps/api/src/modules/proposals/runtime/proposal-software-dev-runtime.ts,apps/api/src/modules/proposals/runtime/proposal-srd-runtime.ts",
+      "verdict": "false",
+      "reason": "an abstract member and its overrides"
+    }
+  ]
+}

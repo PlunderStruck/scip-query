@@ -1,0 +1,109 @@
+{
+  "detector": "similar",
+  "repository": "launchpoint-backend",
+  "identity": "pair",
+  "reviewed": "2026-09-02",
+  "note": "Sampled 20 pairs from the full list (seed 11) and read both bodies. True means the pair shares domain behavior a reviewer would compare; false means only auth, guard, fetch, or list scaffolding is shared; uncertain means related by design.",
+  "labels": [
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/creator-growth/components/GeoSaturationClient.tsx#scip-typescript npm launchpoint-backend 0.1.0 src/app/`(authenticated)`/`(dashboard)`/admin/creator-growth/components/`GeoSaturationClient.tsx`/UnfinishedOnboardingChart().|src/app/(authenticated)/(dashboard)/admin/flagged/components/FlaggedCreatorsClient.tsx#scip-typescript npm launchpoint-backend 0.1.0 src/app/`(authenticated)`/`(dashboard)`/admin/flagged/components/`FlaggedCreatorsClient.tsx`/FlaggedCreatorsClient().",
+      "verdict": "false",
+      "reason": "two admin list clients sharing only fetch and list scaffolding"
+    },
+    {
+      "id": "src/lib/contract-esign/mobile-pdf.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/contract-esign/`mobile-pdf.ts`/renderCreatorContractPdfUrl().|src/lib/public-api/2026-07/campaigns/[campaign_id]/creators/[creator_id]/contract.pdf/query.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/public-api/2026-07/campaigns/`[campaign_id]`/creators/`[creator_id]`/`contract.pdf`/`query.ts`/getCampaignCreatorContractPdfQuery().",
+      "verdict": "true",
+      "reason": "mobile and public-API producers of a creator's contract PDF sharing the signature-record and render calls"
+    },
+    {
+      "id": "src/lib/referrals/attribute.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/referrals/`attribute.ts`/applySourceCreatorCode().|src/lib/referrals/attribute.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/referrals/`attribute.ts`/attributeReferral().",
+      "verdict": "true",
+      "reason": "referral attribution helper and its caller share the attribution decision path"
+    },
+    {
+      "id": "src/lib/ad-campaigns/operations/execute-managed-publication.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/ad-campaigns/operations/`execute-managed-publication.ts`/runMetaProviderOperation().|src/lib/ad-campaigns/operations/execute-managed-publication.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/ad-campaigns/operations/`execute-managed-publication.ts`/runTikTokManagedChildOperation().",
+      "verdict": "true",
+      "reason": "Meta and TikTok provider operations with the same plan-group and terminal-result shape"
+    },
+    {
+      "id": "src/lib/creators/pipeline.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/creators/`pipeline.ts`/getCreatorPipeline().|src/lib/creators/pipeline.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/creators/`pipeline.ts`/getCreatorPipelineEnrichment().",
+      "verdict": "uncertain",
+      "reason": "pipeline and its enrichment share group resolution; related by design"
+    },
+    {
+      "id": "src/app/api/buy/ad-campaigns/ads/[adId]/status/route.ts#scip-typescript npm launchpoint-backend 0.1.0 src/app/api/buy/ad-campaigns/ads/`[adId]`/status/`route.ts`/handlePost().|src/app/api/buy/ad-campaigns/managed-publications/[publicationId]/reconcile/route.ts#scip-typescript npm launchpoint-backend 0.1.0 src/app/api/buy/ad-campaigns/managed-publications/`[publicationId]`/reconcile/`route.ts`/handleManagedPublicationReconcilePost().",
+      "verdict": "false",
+      "reason": "two route handlers sharing auth and response scaffolding"
+    },
+    {
+      "id": "src/lib/campaigns/settle-creator-payout-reserve-leftovers.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/campaigns/`settle-creator-payout-reserve-leftovers.ts`/buildSettledCreatorPayoutReserveLeftoverCandidatesQuery().|src/scripts/pay-aged-creator-backlog.ts#scip-typescript npm launchpoint-backend 0.1.0 src/scripts/`pay-aged-creator-backlog.ts`/agedUnpaidPairsQuery().",
+      "verdict": "uncertain",
+      "reason": "two payout SQL builders sharing an exclusion helper"
+    },
+    {
+      "id": "src/lib/campaigns/acceptance/service.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/campaigns/acceptance/`service.ts`/fulfillShopifyBonuses().|src/lib/campaigns/videos/creator-approval.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/campaigns/videos/`creator-approval.ts`/applyCreatorApproval().",
+      "verdict": "true",
+      "reason": "bonus fulfillment and creator approval share gift-variant resolution"
+    },
+    {
+      "id": "src/app/api/v2/sell/portfolio/uploads/route.ts#scip-typescript npm launchpoint-backend 0.1.0 src/app/api/v2/sell/portfolio/uploads/`route.ts`/DELETE().|src/app/api/v2/sell/portfolio/work/import/route.ts#scip-typescript npm launchpoint-backend 0.1.0 src/app/api/v2/sell/portfolio/work/import/`route.ts`/POST().",
+      "verdict": "false",
+      "reason": "two routes sharing the sell-user guard scaffolding"
+    },
+    {
+      "id": "src/lib/boosts/infra/providers/tiktok/provider.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/boosts/infra/providers/tiktok/`provider.ts`/exchangeTikTokCodeForToken().|src/lib/boosts/infra/providers/tiktok/provider.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/boosts/infra/providers/tiktok/`provider.ts`/tiktokBusinessFormRequest().",
+      "verdict": "true",
+      "reason": "two TikTok business API calls with the same request shape"
+    },
+    {
+      "id": "src/lib/creators/read-model/pending.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/creators/read-model/`pending.ts`/refreshAllCreatorPendingPayouts().|src/lib/creators/read-model/pending.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/creators/read-model/`pending.ts`/refreshCreatorPendingPayoutsForUids().",
+      "verdict": "true",
+      "reason": "refresh-all and refresh-for-uids share the rebuild steps"
+    },
+    {
+      "id": "src/app/api/buy/ad-campaigns/managed-publications/preview/route.ts#scip-typescript npm launchpoint-backend 0.1.0 src/app/api/buy/ad-campaigns/managed-publications/preview/`route.ts`/handlePost().|src/app/api/buy/ad-campaigns/managed-publications/reusable-campaign/route.ts#scip-typescript npm launchpoint-backend 0.1.0 src/app/api/buy/ad-campaigns/managed-publications/reusable-campaign/`route.ts`/handleGet().",
+      "verdict": "false",
+      "reason": "two route handlers sharing auth scaffolding"
+    },
+    {
+      "id": "src/app/api/v2/sell/campaigns/[campaign_video_id]/contract/sign/route.ts#scip-typescript npm launchpoint-backend 0.1.0 src/app/api/v2/sell/campaigns/`[campaign_video_id]`/contract/sign/`route.ts`/POST().|src/app/api/v2/sell/campaigns/[campaign_video_id]/route.ts#scip-typescript npm launchpoint-backend 0.1.0 src/app/api/v2/sell/campaigns/`[campaign_video_id]`/`route.ts`/POST().",
+      "verdict": "false",
+      "reason": "two route handlers sharing the sell-user guard"
+    },
+    {
+      "id": "src/app/api/v2/sell/portfolio/work/import/route.ts#scip-typescript npm launchpoint-backend 0.1.0 src/app/api/v2/sell/portfolio/work/import/`route.ts`/POST().|src/app/api/v2/sell/portfolio/work/route.ts#scip-typescript npm launchpoint-backend 0.1.0 src/app/api/v2/sell/portfolio/work/`route.ts`/POST().",
+      "verdict": "false",
+      "reason": "two route handlers sharing the sell-user guard"
+    },
+    {
+      "id": "src/lib/creator-entities/infra/db/repository.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/creator-entities/infra/db/`repository.ts`/ensureTrackedCreatorAccountForEntityInTransaction().|src/lib/creator-entities/infra/db/repository.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/creator-entities/infra/db/`repository.ts`/storeResolvedAccountIdentitiesInRepository().",
+      "verdict": "uncertain",
+      "reason": "two repository writers sharing account normalization"
+    },
+    {
+      "id": "src/app/api/buy/ad-campaigns/account-settings/[accountId]/audiences/route.ts#scip-typescript npm launchpoint-backend 0.1.0 src/app/api/buy/ad-campaigns/account-settings/`[accountId]`/audiences/`route.ts`/handleGet().|src/app/api/buy/ad-campaigns/account-settings/[accountId]/tiktok-campaign/route.ts#scip-typescript npm launchpoint-backend 0.1.0 src/app/api/buy/ad-campaigns/account-settings/`[accountId]`/tiktok-campaign/`route.ts`/handlePost().",
+      "verdict": "false",
+      "reason": "two route handlers sharing auth scaffolding"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/CampaignDetailPage.tsx#scip-typescript npm launchpoint-backend 0.1.0 src/app/`(authenticated)`/`(dashboard)`/campaigns/`[id]`/campaign-detail/ui/`CampaignDetailPage.tsx`/CampaignDetailSession().|src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/content/CampaignContentPageClient.tsx#scip-typescript npm launchpoint-backend 0.1.0 src/app/`(authenticated)`/`(dashboard)`/campaigns/`[id]`/campaign-detail/ui/content/`CampaignContentPageClient.tsx`/CampaignContentPageClient().",
+      "verdict": "uncertain",
+      "reason": "two campaign page shells sharing query and context hooks"
+    },
+    {
+      "id": "src/app/api/v2/sell/media/multipart/create/route.ts#scip-typescript npm launchpoint-backend 0.1.0 src/app/api/v2/sell/media/multipart/create/`route.ts`/POST().|src/app/api/v2/sell/media/multipart/resume/route.ts#scip-typescript npm launchpoint-backend 0.1.0 src/app/api/v2/sell/media/multipart/resume/`route.ts`/POST().",
+      "verdict": "true",
+      "reason": "multipart create and resume share the upload trace and guard flow"
+    },
+    {
+      "id": "src/app/api/buy/creators/discover/searches/[id]/messages/route.ts#scip-typescript npm launchpoint-backend 0.1.0 src/app/api/buy/creators/discover/searches/`[id]`/messages/`route.ts`/handlePost().|src/app/api/buy/creators/discover/searches/route.ts#scip-typescript npm launchpoint-backend 0.1.0 src/app/api/buy/creators/discover/searches/`route.ts`/handlePost().",
+      "verdict": "false",
+      "reason": "two creator-search routes sharing access checks"
+    },
+    {
+      "id": "src/lib/campaigns/relink/audit/operations/gemini-gate.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/campaigns/relink/audit/operations/`gemini-gate.ts`/runGeminiGate().|src/lib/campaigns/relink/operations/relink-pair-evaluation.ts#scip-typescript npm launchpoint-backend 0.1.0 src/lib/campaigns/relink/operations/`relink-pair-evaluation.ts`/evaluateReferencePair().",
+      "verdict": "uncertain",
+      "reason": "gemini gate and pair evaluation share fingerprint building"
+    }
+  ]
+}

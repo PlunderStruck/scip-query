@@ -372,9 +372,10 @@ function typescriptWorkerHeapMb(): number {
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_TYPESCRIPT_WORKER_HEAP_MB;
 }
 
-/** Retaining one compiler graph costs about this much per indexed document on top of a fixed base. */
-const TYPESCRIPT_WORKER_HEAP_BASE_MB = 2_560;
-const TYPESCRIPT_WORKER_HEAP_PER_DOCUMENT_MB = 1.25;
+import {
+  TYPESCRIPT_WORKER_HEAP_BASE_MB,
+  TYPESCRIPT_WORKER_HEAP_PER_DOCUMENT_MB,
+} from '../semantic/typescript/project-budget.js';
 /** Never hand a worker more than this share of the machine, whatever the project size. */
 const TYPESCRIPT_WORKER_HEAP_MACHINE_SHARE = 0.6;
 

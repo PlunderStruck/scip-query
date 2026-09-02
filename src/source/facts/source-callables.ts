@@ -200,6 +200,11 @@ function isPassthroughBody(fnNode: SyntaxNode, language: AstLanguage): boolean {
 
   const callType = language === 'python' ? 'call' : 'call_expression';
   if (callNode.type !== callType) return false;
+  // `return jsonHandler(async () => {...})(req, res, next)`: the outer call's
+  // callee is itself a call, so the body runs a handler of its own. Matching
+  // parameters on the outer call do not make that a literal forward.
+  const callee = callNode.childForFieldName('function') ?? callNode.namedChild(0);
+  if (callee && (callee.type === callType || callee.type === 'call_expression')) return false;
 
   const argsNode = callNode.namedChildren.find((child) => child.type === 'arguments' || child.type === 'argument_list');
   if (!argsNode) return false;

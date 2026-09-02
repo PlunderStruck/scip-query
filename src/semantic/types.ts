@@ -11,6 +11,12 @@ export type SemanticAvailability = SemanticAvailabilityState & {
   resolvedBinary?: string;
   /** Positive capability detail; failure explanations belong in `reason`. */
   note?: string;
+  /**
+   * `file-closure` when a compiler project could not be loaded whole: per-file
+   * answers stay exact, project-wide answers (references, hierarchies) are
+   * unavailable.
+   */
+  projectScope?: 'project' | 'file-closure';
 };
 
 export function decodeSemanticAvailability(input: unknown): SemanticAvailability | null {

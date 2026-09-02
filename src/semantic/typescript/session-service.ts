@@ -57,6 +57,7 @@ export class TypeScriptSemanticServiceHost {
   private lastRequestAtMs: number | null = null;
   private lastError: string | null = null;
   private available: boolean | null = null;
+  private projectScope: 'project' | 'file-closure' | null = null;
   private readonly softMemoryLimitBytes: number | null;
   private readonly memoryUsage: () => { heapUsedBytes: number; heapLimitBytes: number };
 
@@ -88,7 +89,9 @@ export class TypeScriptSemanticServiceHost {
     try {
       this.syncGeneration(generation);
       const provider = this.host!.semanticProvider();
-      this.available = provider.availability().available;
+      const availability = provider.availability();
+      this.available = availability.available;
+      this.projectScope = availability.projectScope ?? null;
       this.requests += 1;
       this.lastRequestAtMs = this.now();
       this.lastError = null;
@@ -136,6 +139,7 @@ export class TypeScriptSemanticServiceHost {
       projectsCreated: stats?.projectsCreated ?? 0,
       heapUsedBytes: memory.heapUsedBytes,
       heapLimitBytes: memory.heapLimitBytes,
+      ...(this.projectScope ? { projectScope: this.projectScope } : {}),
       ...(this.softMemoryLimitBytes === null ? {} : { softMemoryLimitBytes: this.softMemoryLimitBytes }),
       retireRequested,
       ...(mailbox ? { mailbox } : {}),

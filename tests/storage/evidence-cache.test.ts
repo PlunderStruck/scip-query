@@ -975,3 +975,45 @@ describe('evidence cache', () => {
     }
   });
 });
+
+describe('evidence cache build identity', () => {
+  it('ignores and prunes product rows another build wrote', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-evidence-cache-build-'));
+    try {
+      const projectRoot = join(tempDir, 'project');
+      const dbPath = join(tempDir, 'index.db');
+      writeFixtureFiles(projectRoot, { 'src/a.ts': ['export const a = 1;'] });
+      evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/a.ts').write();
+      const open = () => new ScipDatabase({ projectRoot, dbPath, indexPath: join(tempDir, 'index.scip') });
+
+      const writer = open();
+      try {
+        writeCachedFileEvidence(writer, 'doc-path-tokens', 'src/a.ts', 'hash-a', 'tokens');
+        expect(readCachedFileEvidence(writer, 'doc-path-tokens', 'src/a.ts', 'hash-a')).toBe('tokens');
+      } finally {
+        writer.close();
+      }
+
+      // Another build of the same version wrote this row: same payload version
+      // constant, different build digest.
+      const evidence = new Database(join(tempDir, 'evidence.db'));
+      evidence.prepare("UPDATE file_evidence SET version = 'evidence-v1+otherbuild'").run();
+      evidence.close();
+
+      const reader = open();
+      try {
+        expect(readCachedFileEvidence(reader, 'doc-path-tokens', 'src/a.ts', 'hash-a')).toBeNull();
+      } finally {
+        reader.close();
+      }
+      const pruned = new Database(join(tempDir, 'evidence.db'), { readonly: true });
+      try {
+        expect(pruned.prepare('SELECT count(*) AS rows FROM file_evidence').get()).toEqual({ rows: 0 });
+      } finally {
+        pruned.close();
+      }
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});

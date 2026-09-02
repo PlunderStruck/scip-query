@@ -15,7 +15,9 @@ import {
 } from '../internal/consumer-evidence.js';
 import { mergeSetMaps } from '../../symbols/references/caller-evidence.js';
 import { boundaryEvidenceForSurfaces } from './boundary-evidence.js';
-import { definitionSourceSnippet } from './duplicate-bodies.js';
+import { definitionSourceSnippet, extractImplementationBody } from './duplicate-bodies.js';
+import { stripCommentsAndStrings } from '../../source/primitives/source-stripper.js';
+import { getSourceLines } from '../../source/primitives/source-text.js';
 import { isSingleForwardingCallBody } from './twin-drift.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 import { isClojureMacroDefinition } from '../../source/ast.js';
@@ -192,6 +194,8 @@ function wrapperCandidateForSymbol(
   const boundaryEvidence = wrapperBoundaryEvidence(db, symbol, callerFile, enclosing);
   const bodyShape = wrapperBodyShape(db, symbol);
   if (bodyShape === 'helper') boundaryEvidence.push('body computes or branches rather than forwarding one call');
+  const privateState = bodyShape === 'forwarding' ? modulePrivateStateReceiver(db, symbol) : null;
+  if (privateState) boundaryEvidence.push(`forwards through module-private state: ${privateState}`);
   return {
     symbol: symbol.symbol,
     shortName: shortenSymbol(symbol.symbol),
@@ -208,6 +212,22 @@ function wrapperCandidateForSymbol(
     bodyShape,
     boundaryEvidence,
   };
+}
+
+/**
+ * `isLanguageLoaded(lang) { return loadedLanguages.has(lang); }` forwards one
+ * call, but the receiver is a module-private variable: inlining the wrapper
+ * into its consumer would export the state the wrapper exists to hide.
+ */
+function modulePrivateStateReceiver(db: ScipDatabase, symbol: IndexedDefinition): string | null {
+  const snippet = definitionSourceSnippet(db, symbol);
+  if (!snippet) return null;
+  const body = stripCommentsAndStrings(extractImplementationBody(snippet)).trim();
+  const receiver = /^(?:return\s+)?(?:await\s+)?([A-Za-z_$][\w$]*)\s*[.(]/.exec(body)?.[1];
+  if (!receiver || receiver === 'this' || receiver === 'super') return null;
+  const escaped = receiver.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const privateDeclaration = new RegExp(`^(?:const|let|var)\\s+${escaped}\\b`);
+  return getSourceLines(db, symbol.relativePath).some((line) => privateDeclaration.test(line)) ? receiver : null;
 }
 
 function wrapperBodyShape(db: ScipDatabase, symbol: IndexedDefinition): WrapperBodyShape {

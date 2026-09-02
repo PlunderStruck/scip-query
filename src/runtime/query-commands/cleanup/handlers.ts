@@ -612,6 +612,11 @@ export const handleSimilarSignatures = budgetedListCommand('similar-signatures',
   after: (groups) => console.log(`\n${groups.length} group(s) found.`),
 });
 
+// Policy exclusions are human output: printing them from the query would
+// prepend text to a JSON document or export file. The row renderer runs
+// `after` only for human output.
+let duplicateBodyExclusions: ReadonlyArray<{ count: number; detail: string }> = [];
+
 export const handleDuplicateBodies = budgetedListCommand('duplicate-bodies', {
   query: ({ db, opts, budget }) => {
     const scan = queries.duplicateBodyScan(db, {
@@ -621,9 +626,7 @@ export const handleDuplicateBodies = budgetedListCommand('duplicate-bodies', {
       limit: definedLimitOption(opts, 'limit', 20),
       scanLimit: budget.scanLimit,
     });
-    for (const exclusion of scan.exclusions) {
-      console.log(`Policy exclusion: ${exclusion.count} ${exclusion.detail}`);
-    }
+    duplicateBodyExclusions = scan.exclusions;
     return scan.groups;
   },
   format: (group) => {
@@ -638,7 +641,12 @@ export const handleDuplicateBodies = budgetedListCommand('duplicate-bodies', {
   },
   emptyMessage: () => 'No exact duplicate function bodies found.',
   heuristicLabel: 'duplicate body candidates',
-  after: (groups) => console.log(`\n${groups.length} group(s) found.`),
+  after: (groups) => {
+    for (const exclusion of duplicateBodyExclusions) {
+      console.log(`Policy exclusion: ${exclusion.count} ${exclusion.detail}`);
+    }
+    console.log(`\n${groups.length} group(s) found.`);
+  },
 });
 
 export const handleTwinDrift = budgetedListCommand('twin-drift', {

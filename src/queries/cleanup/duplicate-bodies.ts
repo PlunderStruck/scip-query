@@ -272,16 +272,33 @@ export function definitionSourceSnippet(db: ScipDatabase, definition: IndexedDef
  * drift" defect class this file's sibling detector hunts.
  */
 export function extractImplementationBody(source: string): string {
-  const firstBrace = source.indexOf('{');
-  const lastBrace = source.lastIndexOf('}');
-  if (firstBrace >= 0 && lastBrace > firstBrace) {
-    return source.slice(firstBrace + 1, lastBrace);
-  }
-  const arrow = source.indexOf('=>');
-  if (arrow >= 0) {
-    return source.slice(arrow + 2).replace(/;+\s*$/, '');
+  // The body starts at the first brace or arrow outside every parenthesis:
+  // a destructured parameter, a parameter type, or a type argument
+  // (`patchData<{ success: boolean }>(...)`) can hold braces before it.
+  let depth = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]!;
+    if (char === '(' || char === '[') {
+      depth += 1;
+    } else if (char === ')' || char === ']') {
+      depth = Math.max(0, depth - 1);
+    } else if (char === '{') {
+      if (depth === 0) return sliceBlockBody(source, index);
+      depth += 1;
+    } else if (char === '}') {
+      depth = Math.max(0, depth - 1);
+    } else if (depth === 0 && char === '=' && source[index + 1] === '>') {
+      const rest = source.slice(index + 2).trimStart();
+      if (rest.startsWith('{')) return sliceBlockBody(rest, 0);
+      return rest.replace(/;+\s*$/, '');
+    }
   }
   return source;
+}
+
+function sliceBlockBody(source: string, openBrace: number): string {
+  const lastBrace = source.lastIndexOf('}');
+  return lastBrace > openBrace ? source.slice(openBrace + 1, lastBrace) : source;
 }
 
 /**

@@ -308,6 +308,11 @@ export interface CliJsonExportReceiptV1 {
 export interface CliOutputPaginationRuntime {
   writeStdout(value: string): void;
   writeStderr(value: string): void;
+  /**
+   * True when stdout is a regular file (a shell redirect). The reader is then
+   * a person or a bounded file read later, not a terminal or an agent's pipe.
+   */
+  stdoutIsRegularFile?(): boolean;
 }
 
 const defaultRuntime: CliOutputPaginationRuntime = {
@@ -316,6 +321,13 @@ const defaultRuntime: CliOutputPaginationRuntime = {
   },
   writeStderr: (value) => {
     process.stderr.write(value);
+  },
+  stdoutIsRegularFile: () => {
+    try {
+      return fstatSync(1).isFile();
+    } catch {
+      return false;
+    }
   },
 };
 
@@ -392,6 +404,23 @@ async function runWithCliOutputPaginationInSession(
       assertNavigationMapCanStart(options.cwd, options.sourceSession !== false);
     }
     await runJsonWithOversizeWarning(options, action, runtime);
+    return;
+  }
+
+  // Human output redirected to a regular file is a document read later in
+  // full; a page cursor there would truncate it. Cursors stay for terminals
+  // and pipes, where the reader is an agent whose context the page budget
+  // protects from a client that truncates long tool results mid-way.
+  if (
+    !options.json &&
+    options.cursor === undefined &&
+    options.pageSize === undefined &&
+    runtime.stdoutIsRegularFile?.() === true
+  ) {
+    if (options.command === 'system-map') {
+      assertNavigationMapCanStart(options.cwd, options.sourceSession !== false);
+    }
+    await runHumanToRegularFile(options, action, maxOutputCharacters);
     return;
   }
 
@@ -734,6 +763,31 @@ async function runJsonWithOversizeWarning(
   } finally {
     process.stdout.write = originalWrite;
   }
+}
+
+/** Write complete human output straight through to a redirected file, keeping only the character safety fuse. */
+async function runHumanToRegularFile(
+  options: CliOutputPaginationOptions,
+  action: () => void | Promise<void>,
+  maxOutputCharacters: number,
+): Promise<void> {
+  const originalWrite = process.stdout.write;
+  let written = 0;
+  process.stdout.write = ((chunk: string | Uint8Array, encodingOrCallback?: unknown, callback?: unknown): boolean => {
+    const bytes = outputChunkToBuffer(chunk, encodingOrCallback);
+    written += bytes.length;
+    if (written > maxOutputCharacters) throw new Error(outputSafetyLimitMessage(maxOutputCharacters, false));
+    originalWrite.call(process.stdout, bytes);
+    invokeWriteCallback(encodingOrCallback, callback);
+    return true;
+  }) as typeof process.stdout.write;
+  try {
+    await action();
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+  recordNavigationOutputDelivery(options.command, options.cwd, true, options.sourceSession !== false);
+  finalizeSourceEmission(true);
 }
 
 function installStdoutCapture(write: (bytes: Buffer) => void): () => void {

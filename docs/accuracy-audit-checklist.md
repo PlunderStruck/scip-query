@@ -42,6 +42,29 @@ The certification thresholds and publication rules live in
 Program closure and the private-shadow decision live in
 [`2026-07-11-accuracy-program-closure.md`](./validation/2026-07-11-accuracy-program-closure.md).
 
+## 2026-09-02 TypeScript label review
+
+The matrix below is the 2026-07-10 snapshot. On 2026-09-02 the TypeScript
+detectors that feed the health report were re-audited against reviewed
+label sets (`docs/validation/labels/<repository>/<detector>.json`, scored by
+`scripts/score-detector-labels.ts`). Each row names the repository, the
+sample, and the result after that day's fixes; the truth rules are in the
+label files' notes.
+
+| Detector                                              | Repository        | Sample                     | Precision / recall of labeled rows                             | Notes                                                                              |
+| ----------------------------------------------------- | ----------------- | -------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `dead`                                                | Launchpoint       | 20 of 65 dead-code rows    | 0.95 / 1.0, then 1.0 after the config-referenced entry surface | word search outside the defining file as the truth rule                            |
+| `similar`                                             | Launchpoint       | 20 pairs                   | 1.0 / 0.43                                                     | four true pairs sit at signal tier by the earlier scaffolding calibration          |
+| `stale-abstractions`                                  | Launchpoint       | 5 direct, 10 signal        | 1.0 / 1.0                                                      | signal rows are counted findings (`countedTiers`)                                  |
+| `complexity-hotspots`                                 | Launchpoint       | 20 of the 192 extreme rows | 1.0 / 1.0                                                      | text recount of branch tokens agrees                                               |
+| `react-large-component-pressure`                      | Launchpoint       | 20 components              | 1.0 / 1.0                                                      | two static templates labeled uncertain                                             |
+| `co-change`                                           | Launchpoint       | 20 non-doc pairs           | 0.53 before the signal tier                                    | sweep-only, stale, and configuration pairs are signal tier and not counted         |
+| `extract-candidates`                                  | Launchpoint, Vega | 20 each                    | 1.0 / 1.0; 0.875 / 0.54                                        | Vega misses are wide-interface support rows; element-boundary snapping added       |
+| `wrapper-candidates`                                  | Launchpoint, Vega | 20 each                    | direct tier 0 false; 1.0 / 1.0                                 | forwarding shape, owner-qualified boundary names, module-private state             |
+| `passthrough-candidates`                              | Launchpoint, Vega | 20 each                    | 1.0 / 1.0; 1.0 / 1.0                                           | shared vocabulary, composed-service facades, curried handlers                      |
+| `twin-drift`                                          | Launchpoint, Vega | 20 groups each             | 0.77 / 1.0; 0.83 / 0.71                                        | layering, stubs, overrides, key-qualified lookups, near-name suffix words          |
+| `react-component-duplicates`, `react-hook-candidates` | Launchpoint       | full-list review (morning) | see the calibration document                                   | policy exclusions for generic mechanics, hook/component pairs, vendored primitives |
+
 ## Certification Matrix
 
 Legend: `certified`, `qualified`, `experimental`, `insufficient`, `unsupported`,

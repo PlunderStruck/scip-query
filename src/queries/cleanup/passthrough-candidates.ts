@@ -5,7 +5,12 @@ import { isPackageSurfaceFile } from '../../analysis/package-surface.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { isClojureMacroDefinition, isLiteralPassthrough } from '../../source/ast.js';
 import type { IndexedDefinition } from '../../domain/types.js';
-import { isFunctionLikeSymbol, ownerQualifiedLeafName, shortenSymbol } from '../../symbols/symbol-parser.js';
+import {
+  isFunctionLikeSymbol,
+  ownerQualifiedLeafName,
+  ownerTypeName,
+  shortenSymbol,
+} from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { compareDefinitionsBySmallestLoc, definitionLoc } from '../query-utils.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
@@ -70,15 +75,30 @@ const FACADE_SIBLING_FORWARDS = 3;
  */
 export function applyFacadeEvidence(candidates: readonly PassthroughCandidate[]): PassthroughCandidate[] {
   const siblingForwards = new Map<string, number>();
+  // A service composed of collaborators (`NotificationsService` forwarding
+  // to its triggers, inbox, and preferences services) is a facade even when
+  // no single collaborator receives three forwards: count a class's methods
+  // that forward to members of other classes.
+  const composedForwards = new Map<string, number>();
   for (const candidate of candidates) {
     if (candidate.file === candidate.forwardsToFile) continue;
     const key = `${candidate.file}\u0000${candidate.forwardsToFile}`;
     siblingForwards.set(key, (siblingForwards.get(key) ?? 0) + 1);
+    const owner = ownerTypeName(candidate.symbol);
+    const target = ownerTypeName(candidate.forwardsTo);
+    if (!owner || !target || owner === target) continue;
+    const composedKey = `${candidate.file}\u0000${owner}`;
+    composedForwards.set(composedKey, (composedForwards.get(composedKey) ?? 0) + 1);
   }
   return candidates.map((candidate) => {
     const siblings = siblingForwards.get(`${candidate.file}\u0000${candidate.forwardsToFile}`) ?? 0;
-    if (siblings < FACADE_SIBLING_FORWARDS) return candidate;
-    const evidence = `facade: ${siblings} sibling forwards from this file to ${candidate.forwardsToFile}`;
+    const owner = ownerTypeName(candidate.symbol);
+    const composed = owner ? (composedForwards.get(`${candidate.file}\u0000${owner}`) ?? 0) : 0;
+    if (siblings < FACADE_SIBLING_FORWARDS && composed < FACADE_SIBLING_FORWARDS) return candidate;
+    const evidence =
+      siblings >= FACADE_SIBLING_FORWARDS
+        ? `facade: ${siblings} sibling forwards from this file to ${candidate.forwardsToFile}`
+        : `facade: ${composed} methods of ${owner} forward to members of its collaborators`;
     const boundaryEvidence = [...candidate.boundaryEvidence, evidence];
     return {
       ...candidate,

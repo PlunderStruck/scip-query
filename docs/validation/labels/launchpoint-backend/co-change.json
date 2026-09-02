@@ -1,0 +1,109 @@
+{
+  "detector": "co-change",
+  "repository": "launchpoint-backend",
+  "identity": "file-pair",
+  "reviewed": "2026-09-02",
+  "note": "Sampled 20 findings without documentation or generated partners (seed 11). True means the pair shares a feature and changes together in focused commits; false means sweeps, skeletons, or configuration hubs; uncertain means broad-only co-change of related modules.",
+  "labels": [
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/dedup-labels/DedupLabelClient.tsx|src/lib/dedup-labels/operations/label-queue.ts",
+      "verdict": "true",
+      "reason": "admin client and its label queue operations; focused co-changes"
+    },
+    {
+      "id": "src/lib/bio/queries.ts|src/lib/bio/types.ts",
+      "verdict": "uncertain",
+      "reason": "queries and types of one module; probably import-linked"
+    },
+    {
+      "id": "src/app/api/buy/clients/settings/route.ts|src/db/schema/index.ts",
+      "verdict": "false",
+      "reason": "a settings route and the schema barrel in broad sweeps only"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/post-imports/components/PostImportTrackerClient.tsx|src/lib/campaigns/import-unlinked/operations/import-tracker-admin.ts",
+      "verdict": "true",
+      "reason": "tracker client and its admin operations"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/home/loading.tsx|src/app/(authenticated)/(dashboard)/todos/loading.tsx",
+      "verdict": "false",
+      "reason": "two route loading skeletons changed in sweeps"
+    },
+    {
+      "id": "src/lib/economics/campaigns/earnings/paid-base-payouts.ts|src/lib/economics/creator-compensation/display.ts",
+      "verdict": "false",
+      "reason": "two economics modules changed together only in broad sweeps"
+    },
+    {
+      "id": "src/app/api/admin/athletes/[athlete_id]/submissions/route.ts|src/app/components/AthleteManagementModal.tsx",
+      "verdict": "true",
+      "reason": "athlete submissions route and the modal that calls it"
+    },
+    {
+      "id": "src/lib/campaigns/videos/listing.ts|src/react-query-client/queries/videos/video-cache-updates.ts",
+      "verdict": "uncertain",
+      "reason": "listing and cache updates changed together only in broad sweeps"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/post-imports/components/PostImportTrackerClient.tsx|src/react-query-client/query-keys.ts",
+      "verdict": "false",
+      "reason": "query-keys is a registry hub every feature touches"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/(list)/loading.tsx|src/app/(authenticated)/(dashboard)/campaigns/[id]/loading.tsx",
+      "verdict": "false",
+      "reason": "two route loading skeletons changed in sweeps"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/@modal/(.)media/[id]/page.tsx|src/app/(authenticated)/(dashboard)/media/[id]/page.tsx",
+      "verdict": "true",
+      "reason": "an intercepting route and its target page"
+    },
+    {
+      "id": "src/app/api/buy/creators/groups/route.ts|src/react-query-client/queries/creators/use-creator-groups-query.ts",
+      "verdict": "true",
+      "reason": "creator groups API route and its query hook"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/editor/components/UrlImportCard.tsx|src/app/(authenticated)/(dashboard)/campaigns/editor/components/steps/ProductSection.tsx",
+      "verdict": "true",
+      "reason": "two campaign editor sections changed together in focused commits"
+    },
+    {
+      "id": "src/app/api/v2/sell/account/posts/route.ts|src/lib/posts/queries.ts",
+      "verdict": "true",
+      "reason": "sell posts route and the posts queries behind it"
+    },
+    {
+      "id": "package.json|trigger.config.ts",
+      "verdict": "false",
+      "reason": "package.json and trigger config; configuration hub"
+    },
+    {
+      "id": "src/app/api/admin/athletes/route.ts|src/react-query-client/queries/athletes/use-admin-athletes-query.ts",
+      "verdict": "true",
+      "reason": "admin athletes route and its query hook"
+    },
+    {
+      "id": "src/app/api/v2/sell/campaigns/types.ts|src/lib/campaigns/warmup/http/dto.ts",
+      "verdict": "uncertain",
+      "reason": "sell campaign types and warmup DTOs; broad sweeps"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/loading.tsx|src/app/(authenticated)/(dashboard)/todos/loading.tsx",
+      "verdict": "false",
+      "reason": "two route loading skeletons changed in sweeps"
+    },
+    {
+      "id": "src/app/components/AthleteInvestigation/AthleteInvestigation.tsx|src/lib/admin/creator-investigation/queries.ts",
+      "verdict": "true",
+      "reason": "investigation UI and its queries; focused co-changes"
+    },
+    {
+      "id": ".husky/pre-commit|package.json",
+      "verdict": "false",
+      "reason": "husky hook and package.json; configuration hub"
+    }
+  ]
+}

@@ -33,7 +33,7 @@ from current evidence.
 | `project:semantic-import-usage`           | Rust compiler-backed import usage for one source file, including source-fallback facts plus `rust-analyzer`-resolved project-local definition files when available.                                                                                                                                                                                                                                                                                  | `project_evidence` | `src/semantic/shared-primitives.ts`                    | kind, relative path, project fingerprint, language, semantic engine, payload version                                                 | Project fingerprint, indexed language set, Rust semantic engine identity, or payload version change.                                                                                | `tests/semantic/rust/rust-semantic-cache-gate.test.ts`                       | Safe when project fingerprint and Rust semantic engine identity match; workspace and multi-language changes flow through the project fingerprint.                                                                                       |
 | `project:semantic-signatures`             | Rust semantic signature text for one indexed definition.                                                                                                                                                                                                                                                                                                                                                                                             | `project_evidence` | `src/semantic/shared-primitives.ts`                    | kind, relative path, symbol, project fingerprint, language, semantic engine, payload version                                         | Project fingerprint, indexed language set, Rust semantic engine identity, or payload version change.                                                                                | `tests/semantic/rust/rust-semantic-cache-gate.test.ts`                       | Safe when project fingerprint, symbol, source path, and Rust semantic engine identity match.                                                                                                                                            |
 | `project:health-semantic-prewarm`         | Completion marker for one full-health semantic cache prewarm against an exact published project generation and CLI version.                                                                                                                                                                                                                                                                                                                          | `project_evidence` | `src/runtime/cli-support.ts`                           | kind, scope, CLI version, project fingerprint, payload version                                                                       | Project fingerprint, indexed language set, CLI version, or payload version change.                                                                                                  | `tests/runtime/cli-support.test.ts`                                          | Safe only for the exact published generation and CLI version; it stores no semantic facts itself.                                                                                                                                       |
-| `project:typescript-hierarchy-targets`    | Class and interface hierarchy targets for one whole-project TypeScript definition set, keyed by the set's symbol ids; lets a rebuilt compiler session skip resolving every definition's node again. |
+| `project:typescript-hierarchy-targets`    | Class and interface hierarchy targets for one whole-project TypeScript definition set, keyed by the set's symbol ids; lets a rebuilt compiler session skip resolving every definition's node again.                                                                                                                                                                                                                                                  |
 
 2026-07-23 verification: adding the zero-valued
 `architectureViolations` field to deferred drift-phase output does not change
@@ -51,6 +51,21 @@ health child result changes that child protocol but not the
 `project:health-semantic-prewarm` product, payload owner, cache key, marker, or
 invalidation triggers. Claim qualification is derived after the cached health
 report is assembled.
+
+## Build identity
+
+File and project evidence rows carry `evidence-v1+<build digest>` as their
+version, where the digest is the running entry bundle's identity (the same
+value the health report cache keys on). A row is readable only by the build
+that wrote it; rows other builds wrote are deleted from the local
+`evidence.db` when a connection opens. This closes the development gap where
+analysis logic changed without a payload-version bump and a rebuilt CLI kept
+serving a previous build's rows. Released builds are one build per version,
+so users see one recompute per upgrade, which payload bumps already caused.
+The compiler-derived `semantic_callees` and `semantic_references` tables keep
+the schema-only `evidence-v1` version: their producers carry explicit schema
+constants (`typescript-callees-v3-alias-resolved`) and the rows are the most
+expensive to recompute.
 
 ## Access recency and eviction
 

@@ -6,6 +6,86 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [0.24.0]
 
+### Oversized compiler projects are served from file closures
+
+- A tsconfig that lists more files than the semantic worker's heap can hold
+  (by the same estimate that sizes the heap: 2,560 MB plus 1.25 MB per
+  file) is no longer loaded whole and no longer declined. Its compiler
+  program starts empty and grows by the import closure of each requested
+  file, so callees, callee coverage, signatures, and import usage stay
+  exact per file; references and hierarchies, which need every file, are
+  declined per request and the cheap paths answer them. The service status
+  and provider availability report `projectScope: file-closure`.
+
+### Second-repository review: layering, facades, stubs, and configuration entry points
+
+- A member that calls another member of its twin cluster leaves the cluster
+  before pairing, so a facade method no longer pairs with its near-name
+  siblings either; the delegation check follows one re-export hop, so a
+  caller importing through a barrel is recognized. A thin forwarder whose
+  single call has a different name than its own (a web client calling
+  `apiClient.getData`, a vendor adapter) is a stub over its peer's concept,
+  not a twin of it. Overrides of one abstract member and key-qualified
+  lookup members (`getBySlug`, `findByEmail`) on unrelated classes are
+  convention, not drift.
+- A class whose methods forward to members of several collaborators is a
+  composed-service facade even when no single collaborator receives three
+  forwards. A body of the form `return handler(async () => {...})(req, res,
+next)` is a curried handler, not a literal passthrough.
+- A wrapper forwarding through a module-private variable
+  (`return loadedLanguages.has(lang)`) is a boundary signal: inlining it
+  would export the state it hides.
+- Rendered extraction regions grow to element boundaries: a region cut
+  inside a JSX element now reaches its closing tag or, when it only
+  straddles two elements, fails the size rules instead of reporting a
+  fragment.
+- Co-change findings carry an action tier. Pairs whose shared commits were
+  only broad sweeps, stale pairs with at most two focused co-changes, and
+  configuration, schema, documentation, or generated partners are signal
+  tier and no longer count toward the hidden-coupling score.
+- Source files a root configuration names by path (`next.config.js`
+  `images.loaderFile`, a `package.json` script running `src/scripts/x.ts`)
+  are entry surfaces: their exports are invoked by the framework or tool,
+  not dead.
+- `duplicate-bodies --json` no longer prints policy-exclusion lines into
+  the JSON document or export file; they remain in human output.
+- Label sets for dead code, similar pairs, stale abstractions, complexity
+  hotspots, large components, and co-change on Launchpoint, and for twin
+  drift, wrappers, passthroughs, and extraction on Vega, live under
+  `docs/validation/labels/`.
+
+### Human output redirected to a file is complete
+
+- When stdout is a regular file (`scip-query health --full > report.txt`),
+  human output is written in full. Page cursors remain for terminals and
+  pipes, where the reader is an agent whose context the page budget
+  protects from a client that truncates long tool results.
+
+### Call sites the grammar wraps are no longer dropped
+
+- `await client.getData<T>(...)` parses with the `await` bound to the member
+  expression, and `(a as B).run()`, `a!.run()`, and `(fn)()` wrap the target
+  the same way. The call-site extractor now reads through those wrappers,
+  so the occurrence and AST callee tiers see the call; source facts carry
+  a new payload version. Found by the Vega self-audit's one oracle-only edge.
+
+### Evidence products keyed by build
+
+- File and project evidence rows are keyed by the running build's digest
+  as well as their payload version, and rows another build wrote are pruned
+  when the cache opens. A development build with changed analysis logic
+  never reads a previous build's rows; compiler-derived callee and reference
+  rows keep their schema-only keys.
+
+### Dependency cycles classified by component content
+
+- A cyclic component is classified by what remains after its barrels,
+  tests, and entry files are removed: if the product files still cycle,
+  that cycle is the finding and its witness is reported; if not, the
+  component only cycles through module bookkeeping. Previously the
+  verdict followed one witness path, which could run through a barrel that
+  a genuine product cycle sat beside.
+
 ### Wrapper, passthrough, and twin-drift findings reviewed against source
 
 - A wrapper is `forwarding`-shaped only when its body is exactly one call

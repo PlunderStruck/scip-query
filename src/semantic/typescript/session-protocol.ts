@@ -49,6 +49,8 @@ export interface TypeScriptSemanticServiceStatus {
   heapUsedBytes?: number;
   heapLimitBytes?: number;
   softMemoryLimitBytes?: number;
+  /** `file-closure` when a compiler project is served from file closures because its tsconfig exceeds the heap budget. */
+  projectScope?: 'project' | 'file-closure';
   /** The worker asks to be retired after this response so its compiler programs are released. */
   retireRequested?: boolean;
   mailbox?: BoundedMailboxStatus;

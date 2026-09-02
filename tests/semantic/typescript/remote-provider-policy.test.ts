@@ -127,6 +127,56 @@ describe('service-backed TypeScript provider fallback policy', { timeout: 60_000
     }
   });
 
+  it('treats a file-scoped decline as unavailable for that request only', () => {
+    const { db } = fixture(2_600);
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const kinds: string[] = [];
+    const requester = {
+      request(request: { kind: string; definitions?: Array<{ symbolId: number }> }) {
+        kinds.push(request.kind);
+        if (request.kind === 'availability') {
+          return { available: true, tsconfigPaths: ['tsconfig.json'], projectScope: 'file-closure' };
+        }
+        if (request.kind === 'references') {
+          throw new Error(
+            'TypeScript semantic worker failed: TypeScript project-wide semantics are unavailable: a compiler project is file-scoped because its tsconfig lists more files than the worker heap can hold.',
+          );
+        }
+        return (request.definitions ?? []).map((definition) => [
+          definition.symbolId,
+          [{ symbol: 'x', file: 'src/x.ts', line: 0 }],
+        ]);
+      },
+    };
+    try {
+      const provider = createServiceBackedTypeScriptProvider(db, undefined, { requester });
+      const definition = {
+        symbolId: 1,
+        symbol: 'sym1',
+        relativePath: 'src/a.ts',
+        documentId: 1,
+        startLine: 0,
+        startChar: 0,
+        endLine: 2,
+        endChar: 1,
+        leaf: 'a',
+        parentTypeName: null,
+        isFunctionLike: true,
+        isTypeLike: false,
+        kind: SymbolInformation_Kind.Function,
+        documentation: null,
+        enclosingSymbol: null,
+      };
+      expect(provider.referencesForDefinitions?.([definition])?.size ?? 0).toBe(0);
+      // The service stays in use for per-file answers after the decline.
+      expect([...(provider.calleesForDefinitions?.([definition])?.keys() ?? [])]).toEqual([1]);
+      expect(kinds).toContain('callees');
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      db.close();
+    }
+  });
+
   it('keeps the direct compiler fallback below the large index thresholds', () => {
     const { db } = fixture(3);
     const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);

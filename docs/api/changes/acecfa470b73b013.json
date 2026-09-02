@@ -1,0 +1,61 @@
+{
+  "acceptedAt": "2026-09-02T23:10:01.276Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "acecfa470b73b0133b6fb3bd5bd78121eefd7e5b0f65ca62ffed6d63102af27b",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CoChangeFinding changed from interface CoChangeFinding { fileA: string; fileB: string; together: number; confidence: number; changesA: number; changesB: number; focusedTogether: number; broadTogether: numbe... to interface CoChangeFinding { fileA: string; fileB: string; together: number; confidence: number; changesA: number; changesB: number; focusedTogether: number; broadTogether: numbe....",
+      "target": "./queries:CoChangeFinding"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "TwinDriftRecord changed from interface TwinDriftRecord { leaf: string; symbol: string; shortName: string; file: string; startLine: number; endLine: number; loc: number; normalizedBody: string; tokens: reado... to interface TwinDriftRecord { leaf: string; symbol: string; shortName: string; file: string; startLine: number; endLine: number; loc: number; normalizedBody: string; tokens: reado....",
+      "target": "./queries:TwinDriftRecord"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export CoChangeActionTier.",
+      "target": "./queries/co-change:CoChangeActionTier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CoChangeFinding changed from interface CoChangeFinding { fileA: string; fileB: string; together: number; confidence: number; changesA: number; changesB: number; focusedTogether: number; broadTogether: numbe... to interface CoChangeFinding { fileA: string; fileB: string; together: number; confidence: number; changesA: number; changesB: number; focusedTogether: number; broadTogether: numbe....",
+      "target": "./queries/co-change:CoChangeFinding"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export coChangeActionTier.",
+      "target": "./queries/co-change:coChangeActionTier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CoChangeFinding changed from interface CoChangeFinding { fileA: string; fileB: string; together: number; confidence: number; changesA: number; changesB: number; focusedTogether: number; broadTogether: numbe... to interface CoChangeFinding { fileA: string; fileB: string; together: number; confidence: number; changesA: number; changesB: number; focusedTogether: number; broadTogether: numbe....",
+      "target": "./queries/index:CoChangeFinding"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "TwinDriftRecord changed from interface TwinDriftRecord { leaf: string; symbol: string; shortName: string; file: string; startLine: number; endLine: number; loc: number; normalizedBody: string; tokens: reado... to interface TwinDriftRecord { leaf: string; symbol: string; shortName: string; file: string; startLine: number; endLine: number; loc: number; normalizedBody: string; tokens: reado....",
+      "target": "./queries/index:TwinDriftRecord"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "TwinDriftRecord changed from interface TwinDriftRecord { leaf: string; symbol: string; shortName: string; file: string; startLine: number; endLine: number; loc: number; normalizedBody: string; tokens: reado... to interface TwinDriftRecord { leaf: string; symbol: string; shortName: string; file: string; startLine: number; endLine: number; loc: number; normalizedBody: string; tokens: reado....",
+      "target": "./queries/twin-drift:TwinDriftRecord"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.24.0",
+  "previousDigest": "586e3752383a4285f492e118170817c5342b599cf6e8535ba4774f3920226172",
+  "reason": "co-change findings carry actionTier and tierReason, ProjectBundle carries scope for file-scoped compiler projects, symbol-parser exports ownerTypeName, twin-drift records carry forwardTargetLeaf, and analysis exports config-referenced files",
+  "schemaVersion": 1
+}

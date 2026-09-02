@@ -16,31 +16,29 @@ Everything below is open as of the 0.24.0 release. Closed items live in
   oracle-only rows are calls the indexer left unbound and the leaf-name
   fallback could not place. Not yet read individually.
 - **Extraction regions are exclusive but coherence is still a judgment.**
-  The reviewed Launchpoint sample scores 1.0/1.0, but it is twenty rows.
-  Regions that merge through one long statement (a fluent query chain, a
-  large literal) are found; a unit that spans several statement-level
-  lines with other statements between its calls is not, even when a
-  reviewer would still cut there.
-- **Label sets exist for six detectors** (React component duplicates,
-  hook candidates, extraction, wrappers, passthroughs, twin drift), all on
-  Launchpoint. Twin drift keeps four convention-name groups (`printReport`
-  across scripts, `emptyCounts`, `sumOf`, per-logger `nextTraceFields`)
-  whose similarity is structural; an identifier-weighted similarity would
-  separate them but also drops two true groups in the sample, so it needs a
-  second repository's labels before changing. The other detectors have no
-  label set and no second repository.
+  Both label sets score the signal tier at 0.875 or better; the misses are
+  wide-interface regions at support tier (hooks and controllers with many
+  locals) and the false rows are fragments of object literals. A unit whose
+  calls are separated by unrelated statements is still not found; no
+  labeled miss had that shape, so the gap rule stays unbuilt.
+- **Label sets cover every health-counted detector on Launchpoint and four
+  detectors on Vega 2.0.** Twin drift keeps two Vega false groups that share
+  a handler name across controllers of different resources, and similar
+  pairs keep four true Launchpoint pairs at signal tier because shared
+  domain-noun callees without a behavior verb are scaffolding by the earlier
+  calibration. Python, Rust, and the other languages have no label set.
 - **`docs/accuracy-audit-checklist.md` still carries the Python-era rows**
   for every detector; only the extraction row notes the rebuild.
 
 ## Operational
 
-- **Semantic memory is bounded by the largest compiler project, not by the
-  repository.** Compiler projects load one at a time and the worker retires
-  under memory pressure, so a monorepo of many tsconfigs fits where its sum
-  did not. A single tsconfig whose program exceeds the worker heap (a
-  7,000-file root project on a 3 GB worker) still cannot be served; the run
-  then completes without semantic enrichment and says so on stderr. The
-  heap estimate respects the cgroup limit inside containers.
+- **Project-wide semantics need the whole compiler project.** A tsconfig
+  larger than the worker heap's file budget is served from file closures:
+  callees, coverage, signatures, and import usage stay exact, while
+  references and hierarchies are declined per request and answered by the
+  cheap paths. On a machine whose heap fits the project nothing changes.
+  The self-audit's references question reports the oracle unavailable in
+  that mode rather than measuring against a partial scan.
 - **The 732-file symbol-reference cycle component on Launchpoint** is
   classified module-hierarchy because its witness passes through barrels
   and tests. On the imports-only basis it shrinks to 57 files with no cycle

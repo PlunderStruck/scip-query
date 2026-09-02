@@ -149,6 +149,33 @@ describe('persistent TypeScript semantic host', () => {
   });
 });
 
+describe('file-scoped compiler projects', () => {
+  it('serves a tsconfig above the file budget from file closures and still resolves imports', () => {
+    const fixture = semanticFixture();
+    const tsMorph = loadTsMorph()!;
+    const bundles = createTsMorphProjectBundles(tsMorph, [join(fixture.projectRoot, 'tsconfig.json')], {
+      fileBudget: 1,
+    });
+    expect(bundles[0]!.scope).toBe('file-closure');
+    expect(bundles[0]!.loaded).toBe(false);
+
+    const sourceFiles = createTypeScriptSourceFiles(fixture.db, bundles);
+    const consumer = sourceFiles.sourceFile('src/consumer.ts');
+    expect(consumer).not.toBeNull();
+    // The program holds only the requested file as a source, yet the checker
+    // resolves its import through the closure.
+    expect(bundles[0]!.project.getSourceFiles().map((file) => file.getBaseName())).toEqual(['consumer.ts']);
+    const answer = consumer!.getVariableDeclarationOrThrow('answer');
+    expect(answer.getType().getText()).toBe('1');
+
+    const whole = createTsMorphProjectBundles(tsMorph, [join(fixture.projectRoot, 'tsconfig.json')], {
+      fileBudget: 2,
+    });
+    expect(whole[0]!.scope).toBe('project');
+    fixture.db.close();
+  });
+});
+
 function semanticFixture(): { projectRoot: string; db: ScipDatabase } {
   const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-ts-session-host-'));
   tempDirs.push(projectRoot);

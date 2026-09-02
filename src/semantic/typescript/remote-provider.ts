@@ -229,7 +229,13 @@ function splitByFile(definitions: readonly IndexedDefinition[]): [IndexedDefinit
 
 function isUnsupportedRequestError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return message.includes('invalid mailbox request') || message.includes('Unhandled TypeScript semantic request');
+  return (
+    message.includes('invalid mailbox request') ||
+    message.includes('Unhandled TypeScript semantic request') ||
+    // A file-scoped compiler project answers per-file requests and declines
+    // project-wide ones; the decline is per request, not a service failure.
+    message.includes('compiler project is file-scoped')
+  );
 }
 
 /** Mirrors the CLI's large-index thresholds: above them a command process must not host the compiler itself. */

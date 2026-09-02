@@ -388,7 +388,48 @@ function snapToBlock(
     if (below >= definition.endLine || callLines.has(below) || !isBlockCloser(lines[below] ?? '')) break;
     end = below;
   }
+  if (hasRenderMember(span)) {
+    // A rendered region cut inside an element (`<HeroStat` above, `/>` two
+    // lines below) is a fragment; grow it to the element boundaries so the
+    // region is a subtree, or so a span that only straddles two elements
+    // fails the size rules honestly.
+    let balance = jsxTagBalance(lines, start, end);
+    for (let step = 0; balance > 0 && step < JSX_SNAP_LINES && end + 1 < definition.endLine; step += 1) {
+      end += 1;
+      balance = jsxTagBalance(lines, start, end);
+    }
+    // Growing upward stops at the function's own `return (`: a region that
+    // swallows it is the function's control flow, not a child component.
+    for (
+      let step = 0;
+      balance < 0 &&
+      step < JSX_SNAP_LINES &&
+      start - 1 > definition.startLine &&
+      !/^\s*return\b/.test(lines[start - 1] ?? '');
+      step += 1
+    ) {
+      start -= 1;
+      balance = jsxTagBalance(lines, start, end);
+    }
+  }
   return { start, end, members: span.members };
+}
+
+const JSX_SNAP_LINES = 40;
+const JSX_OPEN_TAG = /<([A-Za-z][\w.:-]*)(?=[\s/>])/g;
+const JSX_CLOSE_TAG = /<\/[A-Za-z][\w.:-]*\s*>/g;
+const JSX_SELF_CLOSE = /\/>/g;
+
+/** Opening tags minus closing and self-closing tags over the lines; zero when the lines hold whole elements. */
+function jsxTagBalance(lines: readonly string[], start: number, end: number): number {
+  let balance = 0;
+  for (let line = start; line <= end; line += 1) {
+    const text = lines[line] ?? '';
+    balance += (text.match(JSX_OPEN_TAG) ?? []).length;
+    balance -= (text.match(JSX_CLOSE_TAG) ?? []).length;
+    balance -= (text.match(JSX_SELF_CLOSE) ?? []).length;
+  }
+  return balance;
 }
 
 function isBlockOpener(line: string): boolean {

@@ -30,7 +30,11 @@ import {
 } from '../../../src/semantic/typescript/reference-fragment-shadow.js';
 import { indexedTypeScriptFiles } from '../../../src/semantic/typescript/semantic-identity-context.js';
 import { getSemanticProvider } from '../../../src/semantic/provider-cache.js';
-import { createTsMorphProvider } from '../../../src/semantic/typescript/ts-morph-provider.js';
+import {
+  createTsMorphProvider,
+  createTsMorphProviderFromProjects,
+} from '../../../src/semantic/typescript/ts-morph-provider.js';
+import { createTsMorphProjectBundles, loadTsMorph } from '../../../src/semantic/typescript/ts-morph-runtime.js';
 
 function createSemanticFixtureDb(dbPath: string): void {
   const db = new Database(dbPath);
@@ -507,6 +511,45 @@ describe('TypeScript semantic provider', () => {
       expect(provider.calleeCoverageForDefinitions?.([caller])).toEqual(
         new Map([[caller.symbolId, { callSites: 3, resolvedInRepository: 1, resolvedExternal: 1, unresolved: 1 }]]),
       );
+      provider.dispose?.();
+    });
+  });
+
+  it('answers callees from a file-scoped project and declines project-wide references', () => {
+    withSemanticFixture((db) => {
+      writeFileSync(
+        join(db.config.projectRoot, 'src/caller.ts'),
+        ["import { usedHelper } from './api';", 'export function caller(): void {', '  usedHelper();', '}', ''].join(
+          '\n',
+        ),
+      );
+      const sqlite = new Database(db.config.dbPath);
+      sqlite.exec(`
+        INSERT INTO documents (id, language, relative_path) VALUES (3, 'typescript', 'src/caller.ts');
+        INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES (3, 3, 0, 0, 4, X'');
+        INSERT INTO global_symbols (id, symbol, display_name, kind, documentation)
+          VALUES (99, 'scip-typescript npm fixture 1.0.0 src/\`caller.ts\`/caller().', 'caller', 12, 'function caller(): void');
+        INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char)
+          VALUES (99, 3, 99, 1, 0, 3, 1);
+        INSERT INTO mentions (chunk_id, symbol_id, role) VALUES (3, 99, 1);
+      `);
+      sqlite.close();
+      const tsMorph = loadTsMorph()!;
+      const bundles = createTsMorphProjectBundles(tsMorph, [join(db.config.projectRoot, 'tsconfig.json')], {
+        fileBudget: 0,
+      });
+      const provider = createTsMorphProviderFromProjects(db, tsMorph, bundles);
+      expect(provider.availability()).toEqual(
+        expect.objectContaining({ available: true, projectScope: 'file-closure' }),
+      );
+      const caller = getAllDefinitions(db).find((definition) => definition.leaf === 'caller')!;
+      expect(
+        provider
+          .calleesForDefinitions?.([caller])
+          ?.get(caller.symbolId)
+          ?.map((callee) => callee.file),
+      ).toEqual(['src/api.ts']);
+      expect(() => provider.referencesForDefinitions?.([caller])).toThrow(/compiler project is file-scoped/);
       provider.dispose?.();
     });
   });

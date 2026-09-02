@@ -128,6 +128,89 @@ describe('wrapper-candidates', () => {
     }
   });
 
+  it('marks a forward through module-private state as a boundary signal', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-wrapper-private-state-'));
+    tempDirs.push(root);
+    const consumer = (name: string) => [
+      "import { load } from './store';",
+      `export function ${name}(lang: string) {`,
+      '  return load(lang);',
+      '}',
+    ];
+    writeFixtureFiles(root, {
+      'src/i18n.ts': [
+        'const loadedLanguages = new Set<string>();',
+        'export function isLanguageLoaded(lang: string): boolean {',
+        '  return loadedLanguages.has(lang);',
+        '}',
+      ],
+      'src/store.ts': [
+        "import { isLanguageLoaded } from './i18n';",
+        'export function load(lang: string) {',
+        '  return isLanguageLoaded(lang);',
+        '}',
+      ],
+      'src/a.ts': consumer('a'),
+      'src/b.ts': consumer('b'),
+      'src/c.ts': consumer('c'),
+      'src/d.ts': consumer('d'),
+    });
+    const dbPath = join(root, 'index.db');
+    const sym = (file: string, name: string) => `scip-typescript npm fixture 1.0.0 src/\`${file}\`/${name}().`;
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/i18n.ts')
+      .document(2, 'typescript', 'src/store.ts')
+      .document(3, 'typescript', 'src/a.ts')
+      .document(4, 'typescript', 'src/b.ts')
+      .document(5, 'typescript', 'src/c.ts')
+      .document(6, 'typescript', 'src/d.ts')
+      .symbol(1, sym('i18n.ts', 'isLanguageLoaded'), 'isLanguageLoaded', 12)
+      .symbol(2, sym('store.ts', 'load'), 'load', 12)
+      .symbol(3, sym('a.ts', 'a'), 'a', 12)
+      .symbol(4, sym('b.ts', 'b'), 'b', 12)
+      .symbol(5, sym('c.ts', 'c'), 'c', 12)
+      .symbol(6, sym('d.ts', 'd'), 'd', 12)
+      .definition(1, 1, 1, 1, 0, 3, 1)
+      .definition(2, 2, 2, 1, 0, 3, 1)
+      .definition(3, 3, 3, 1, 0, 3, 1)
+      .definition(4, 4, 4, 1, 0, 3, 1)
+      .definition(5, 5, 5, 1, 0, 3, 1)
+      .definition(6, 6, 6, 1, 0, 3, 1)
+      .chunk(1, 1, 0, 4)
+      .chunk(2, 2, 0, 4)
+      .chunk(3, 3, 0, 4)
+      .chunk(4, 4, 0, 4)
+      .chunk(5, 5, 0, 4)
+      .chunk(6, 6, 0, 4)
+      .mention(1, 1, 1)
+      .mention(2, 2, 1)
+      .mention(2, 1, 0)
+      .mention(3, 3, 1)
+      .mention(3, 2, 0)
+      .mention(4, 4, 1)
+      .mention(4, 2, 0)
+      .mention(5, 5, 1)
+      .mention(5, 2, 0)
+      .mention(6, 6, 1)
+      .mention(6, 2, 0)
+      .write();
+    const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+    try {
+      expect(wrapperCandidates(db, { limit: 10, semantic: false })).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            shortName: expect.stringContaining('isLanguageLoaded'),
+            bodyShape: 'forwarding',
+            actionTier: 'signal',
+            boundaryEvidence: expect.arrayContaining(['forwards through module-private state: loadedLanguages']),
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   it('excludes Rust trait implementation methods from wrapper advice', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-wrapper-rust-trait-'));
     tempDirs.push(root);

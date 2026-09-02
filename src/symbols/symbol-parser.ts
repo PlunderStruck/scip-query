@@ -305,6 +305,15 @@ export function ownerQualifiedLeafName(raw: string): string {
   return owner && owner.suffix === 'type' ? `${owner.name} ${last.name}` : last.name;
 }
 
+/** The enclosing type's name when the symbol is a member declared on one, else null. */
+export function ownerTypeName(raw: string): string | null {
+  const parsed = parseSymbol(raw);
+  if ('kind' in parsed && parsed.kind === 'local') return null;
+  const descriptors = (parsed as ScipSymbol).descriptors;
+  const owner = descriptors[descriptors.length - 2];
+  return owner && owner.suffix === 'type' ? owner.name : null;
+}
+
 /** Return the suffix of the last descriptor, if the symbol parsed cleanly. */
 export function leafSuffix(raw: string): DescriptorSuffix | null {
   const parsed = parseSymbol(raw);

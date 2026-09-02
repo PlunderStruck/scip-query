@@ -1,0 +1,109 @@
+{
+  "detector": "extract-candidates",
+  "repository": "vega-2.0",
+  "identity": "symbol",
+  "reviewed": "2026-09-02",
+  "note": "Sampled ten signal-tier and ten support-tier candidates (seed 11) and read each largest region. True means a coherent unit a reviewer would extract; false means a fragment crossing element or literal boundaries, render branches, or hook wiring.",
+  "labels": [
+    {
+      "id": "apps/web/src/routes/home/components/bento.tsx#src:routes:home:components:bento:BentoActivityDigestTile()",
+      "verdict": "false",
+      "reason": "spans the end of one Link element and the opening of TileContentSwap; a fragment"
+    },
+    {
+      "id": "apps/web/src/routes/projects/components/settings/codebase/CodebaseOverviewStatusCard.tsx#src:routes:projects:components:settings:codebase:CodebaseOverviewStatusCard:CodebaseOverviewStatusCardSummary()",
+      "verdict": "true",
+      "reason": "a group of HeroStat elements; a coherent stat row"
+    },
+    {
+      "id": "apps/api/src/scripts/diagnostics/live-api-fuzz.ts#src:scripts:diagnostics:live-api-fuzz:main()",
+      "verdict": "true",
+      "reason": "the sequence of fuzz runs; a coherent runAllFuzzers helper"
+    },
+    {
+      "id": "apps/api/src/modules/integrations/github-auth.service.ts#src:modules:integrations:github-auth.service:GitHubAuthService:resolveSelectedRepositoryIdsForToken()",
+      "verdict": "true",
+      "reason": "token then repository fetch and filter; a coherent resolve-repositories step"
+    },
+    {
+      "id": "apps/web/src/routes/projects/components/settings/ProjectSettingsRoutes.tsx#src:routes:projects:components:settings:ProjectSettingsRoutes:ProjectSettingsRoutes()",
+      "verdict": "false",
+      "reason": "entries inside a routes object literal; a fragment of a map"
+    },
+    {
+      "id": "packages/companion/src/companion-config-auth.ts#src:companion-config-auth:setConfiguredAuthToken()",
+      "verdict": "true",
+      "reason": "write-token-to-backend try block; a coherent helper"
+    },
+    {
+      "id": "apps/api/src/modules/ai/runtime/unified-agent-loop.ts#src:modules:ai:runtime:unified-agent-loop:executeAvailableToolCall()",
+      "verdict": "uncertain",
+      "reason": "error trace, tool message, and usage emission; plausible but tied to loop state"
+    },
+    {
+      "id": "apps/api/src/modules/issues/services/issue-indexing-job.service.ts#src:modules:issues:services:issue-indexing-job.service:IssueIndexingJobService:getOrCreateJobAcrossInstances()",
+      "verdict": "true",
+      "reason": "the redis claim block; a coherent claim-job step"
+    },
+    {
+      "id": "apps/api/src/runtime/effect/external-http-runtime.ts#src:runtime:effect:external-http-runtime:runOneAttempt()",
+      "verdict": "true",
+      "reason": "failure-to-typed-error mapping; a coherent helper"
+    },
+    {
+      "id": "apps/web/src/hooks/usePushNotifications.ts#src:hooks:usePushNotifications:ensurePushSubscription()",
+      "verdict": "true",
+      "reason": "subscribe and persist; a coherent helper"
+    },
+    {
+      "id": "apps/web/src/routes/platform/components/PlatformAnalyticsSection.tsx#src:routes:platform:components:PlatformAnalyticsSection:AIUsageContent()",
+      "verdict": "true",
+      "reason": "table row builders; extractable row-builder helpers"
+    },
+    {
+      "id": "apps/api/src/modules/proposals/proposal-discovery-chat.service.ts#src:modules:proposals:proposal-discovery-chat.service:ProposalDiscoveryChatService:runDiscoveryAutoContinuation()",
+      "verdict": "uncertain",
+      "reason": "the continuation call and its handling; plausible but long"
+    },
+    {
+      "id": "apps/web/src/routes/members/MemberRemovalPreflightDialog.tsx#src:routes:members:MemberRemovalPreflightDialog:MemberRemovalPreflightDialog()",
+      "verdict": "false",
+      "reason": "error and impact render branches; not one unit"
+    },
+    {
+      "id": "apps/web/src/components/chat/behavior/useChatMessageListController.ts#src:components:chat:behavior:useChatMessageListController:useChatMessageListController()",
+      "verdict": "false",
+      "reason": "hook wiring at the top of a controller; not extractable"
+    },
+    {
+      "id": "apps/web/src/routes/projects/components/settings/custom-fields/useProjectCustomFields.ts#src:routes:projects:components:settings:custom-fields:useProjectCustomFields:useProjectCustomFieldMutationCommands()",
+      "verdict": "true",
+      "reason": "unassign mutation with its error handling; a coherent command"
+    },
+    {
+      "id": "apps/api/src/modules/ai/runtime/unified-agent-loop.ts#src:modules:ai:runtime:unified-agent-loop:runAgentLoop()",
+      "verdict": "uncertain",
+      "reason": "the agent loop iteration body; extractable but large"
+    },
+    {
+      "id": "apps/web/src/components/chat/presentation/PeerChatMessageView.tsx#src:components:chat:presentation:PeerChatMessageView:PeerOrVegaChatMessageView()",
+      "verdict": "true",
+      "reason": "the hover actions subtree; a child component"
+    },
+    {
+      "id": "apps/web/src/routes/workflows/workflow-list-transition-commands.ts#src:routes:workflows:workflow-list-transition-commands:useWorkflowListTransitionCommandController()",
+      "verdict": "true",
+      "reason": "the transition toggle handler"
+    },
+    {
+      "id": "apps/web/src/components/projects/useProjectRolesMatrixController.ts#src:components:projects:useProjectRolesMatrixController:useProjectRolesMatrixController()",
+      "verdict": "true",
+      "reason": "the create-role handler"
+    },
+    {
+      "id": "apps/web/src/routes/organizations/components/TransferOwnershipSection.tsx#src:routes:organizations:components:TransferOwnershipSection:TransferOwnershipSection()",
+      "verdict": "true",
+      "reason": "the transfer try/catch"
+    }
+  ]
+}

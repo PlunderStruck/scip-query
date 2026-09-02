@@ -51,10 +51,10 @@ function callTargetForNode(node: SyntaxNode, language: AstLanguage): SyntaxNode 
 
   if (language === 'typescript' || language === 'tsx' || language === 'javascript') {
     if (node.type === 'call_expression') {
-      return node.childForFieldName('function') ?? node.namedChild(0);
+      return unwrapCallTarget(node.childForFieldName('function') ?? node.namedChild(0));
     }
     if (node.type === 'new_expression') {
-      return node.childForFieldName('constructor') ?? node.namedChild(0);
+      return unwrapCallTarget(node.childForFieldName('constructor') ?? node.namedChild(0));
     }
     if (JSX_ELEMENT_NODE_TYPES.has(node.type)) {
       return jsxComponentTarget(node);
@@ -62,6 +62,30 @@ function callTargetForNode(node: SyntaxNode, language: AstLanguage): SyntaxNode 
   }
 
   return null;
+}
+
+/**
+ * Wrappers the grammar can put around a call target without changing what is
+ * called: `await client.get<T>(x)` parses with the `await` bound to the member
+ * expression, and `(a as B).run()`, `a!.run()`, and `(fn)()` wrap the target
+ * the same way. Read through them so the call site keeps its leaf.
+ */
+const CALL_TARGET_WRAPPERS = new Set([
+  'await_expression',
+  'parenthesized_expression',
+  'non_null_expression',
+  'as_expression',
+  'satisfies_expression',
+]);
+
+function unwrapCallTarget(node: SyntaxNode | null): SyntaxNode | null {
+  let current = node;
+  while (current && CALL_TARGET_WRAPPERS.has(current.type)) {
+    const inner = current.namedChild(0);
+    if (!inner) return current;
+    current = inner;
+  }
+  return current;
 }
 
 /**

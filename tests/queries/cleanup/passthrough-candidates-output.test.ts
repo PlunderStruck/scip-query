@@ -45,6 +45,10 @@ function withPassthroughFixture(run: (db: ScipDatabase) => void): void {
         'function forwardHorse(name: string) {',
         '  return deleteHorseImpl(name);',
         '}',
+        '',
+        'export function handler(req: string, res: string, next: string) {',
+        '  return jsonHandler(async () => deleteHorseImpl(req))(req, res, next);',
+        '}',
       ],
       'src/auth/rates.ts': [
         'export function toBaseRate(raw: string) {',
@@ -75,6 +79,7 @@ function withPassthroughFixture(run: (db: ScipDatabase) => void): void {
       .symbol(7, 'scip-typescript npm fixture 1.0.0 src/`contracts.ts`/forwardHorse().', 'forwardHorse', 6)
       .symbol(8, 'scip-typescript npm fixture 1.0.0 src/auth/`rates.ts`/toBaseRate().', 'toBaseRate', 6)
       .symbol(9, 'scip-typescript npm fixture 1.0.0 src/auth/`rates.ts`/parseBaseRate().', 'parseBaseRate', 6)
+      .symbol(10, 'scip-typescript npm fixture 1.0.0 src/`contracts.ts`/handler().', 'handler', 6)
       .definition(1, 1, 1, 0, 0, 2, 1)
       .definition(2, 1, 2, 4, 0, 6, 1)
       .definition(3, 1, 3, 8, 0, 10, 1)
@@ -84,6 +89,7 @@ function withPassthroughFixture(run: (db: ScipDatabase) => void): void {
       .definition(7, 2, 7, 8, 0, 10, 1)
       .definition(8, 3, 8, 0, 0, 2, 1)
       .definition(9, 3, 9, 4, 0, 6, 1)
+      .definition(10, 2, 10, 12, 0, 14, 1)
       .chunk(1, 1, 0, 2)
       .chunk(2, 1, 4, 6, 1)
       .chunk(3, 1, 8, 10, 2)
@@ -93,6 +99,7 @@ function withPassthroughFixture(run: (db: ScipDatabase) => void): void {
       .chunk(7, 2, 8, 10, 2)
       .chunk(8, 3, 0, 2)
       .chunk(9, 3, 4, 6, 1)
+      .chunk(10, 2, 12, 14, 3)
       .mention(1, 1, 1)
       .mention(1, 2, 0)
       .mention(2, 2, 1)
@@ -107,6 +114,8 @@ function withPassthroughFixture(run: (db: ScipDatabase) => void): void {
       .mention(8, 8, 1)
       .mention(8, 9, 0)
       .mention(9, 9, 1)
+      .mention(10, 10, 1)
+      .mention(10, 6, 0)
       .write();
 
     const config: ScipQueryConfig = {
@@ -185,10 +194,57 @@ describe('passthroughCandidates output classification', () => {
         publicFacadeEvidence: [],
       });
 
+      // `handler` returns `jsonHandler(async () => ...)(req, res, next)`: the
+      // matching outer arguments do not make a curried handler a forward.
+      expect(results.find((result) => result.shortName.endsWith('handler()'))).toBeUndefined();
+
       const report = health(db);
       const passthroughScore = report.scoreBreakdown.find((deduction) => deduction.axis === 'passthroughs');
       expect(passthroughScore?.detail).toContain('5 passthrough candidate(s) (3.5 score-weighted)');
     });
+  });
+});
+
+describe('applyFacadeEvidence (composed service)', () => {
+  it('tiers a class whose methods forward to members of several collaborators as a facade', () => {
+    const member = (owner: string, name: string, file: string, target: string, targetFile: string) => ({
+      symbol: `scip-typescript npm fixture 1.0.0 src/\`${file}\`/${owner}#${name}().`,
+      shortName: `${owner}:${name}()`,
+      file: `src/${file}`,
+      startLine: 0,
+      endLine: 2,
+      loc: 3,
+      forwardsTo: `scip-typescript npm fixture 1.0.0 src/\`${targetFile}\`/${target}#${name}().`,
+      forwardsToShort: `${target}:${name}()`,
+      forwardsToFile: `src/${targetFile}`,
+      actionTier: 'direct' as const,
+      boundaryEvidence: [] as string[],
+      publicFacadeEvidence: [] as string[],
+      recommendation: 'inline',
+    });
+    const results = applyFacadeEvidence([
+      member(
+        'NotificationsService',
+        'notifyAssigned',
+        'notifications.service.ts',
+        'TriggersService',
+        'triggers.service.ts',
+      ),
+      member('NotificationsService', 'markAsRead', 'notifications.service.ts', 'InboxService', 'inbox.service.ts'),
+      member(
+        'NotificationsService',
+        'updatePreferences',
+        'notifications.service.ts',
+        'PreferencesService',
+        'preferences.service.ts',
+      ),
+      member('ReportsService', 'getPulse', 'reports.service.ts', 'PulseService', 'pulse.service.ts'),
+    ]);
+    expect(results.slice(0, 3).map((row) => row.actionTier)).toEqual(['signal', 'signal', 'signal']);
+    expect(results[0]?.boundaryEvidence).toEqual([
+      'facade: 3 methods of NotificationsService forward to members of its collaborators',
+    ]);
+    expect(results[3]).toEqual(expect.objectContaining({ actionTier: 'direct', boundaryEvidence: [] }));
   });
 });
 

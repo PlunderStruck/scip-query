@@ -32,6 +32,14 @@ export interface DetectorLabelSet {
   repository: string;
   /** Row identity scheme; must match `rowIdentity` below. */
   identity: 'pair' | 'symbol' | 'group' | 'file-pair';
+  /**
+   * Action tiers the detector counts as findings. When absent, `support`
+   * rows and, for detectors that use `direct | signal`, `signal` rows are
+   * treated as demoted. A detector whose `signal` rows are counted findings
+   * (stale-abstractions lists single-consumer types at signal tier and
+   * health counts them) names its counted tiers explicitly.
+   */
+  countedTiers?: string[];
   labels: DetectorLabel[];
 }
 
@@ -70,7 +78,7 @@ export function rowIdentity(identity: DetectorLabelSet['identity'], row: Record<
     }
     case 'symbol': {
       const file = text('file') ?? text('relativePath');
-      const name = text('shortName') ?? text('symbol');
+      const name = text('shortName') ?? text('symbol') ?? text('component');
       return file && name ? `${file}#${name}` : null;
     }
     case 'group': {
@@ -90,7 +98,7 @@ export function dumpRows(dump: unknown): Record<string, unknown>[] {
   const result = (dump as { result?: unknown }).result ?? dump;
   if (Array.isArray(result)) return result as Record<string, unknown>[];
   if (result && typeof result === 'object') {
-    for (const key of ['results', 'findings', 'groups', 'symbols', 'cycles']) {
+    for (const key of ['results', 'findings', 'groups', 'symbols', 'cycles', 'rows', 'pairs']) {
       const value = (result as Record<string, unknown>)[key];
       if (Array.isArray(value)) return value as Record<string, unknown>[];
     }
@@ -107,12 +115,15 @@ export function scoreLabels(labelSet: DetectorLabelSet, dump: unknown): LabelSco
   // review lead). When a dump carries any `direct` row, its `signal` rows are
   // the demoted ones.
   const directVocabulary = rows.some((row) => row['actionTier'] === 'direct');
+  const counted = labelSet.countedTiers ? new Set(labelSet.countedTiers) : null;
   const tiers = new Map<string, 'signal' | 'support'>();
   for (const row of rows) {
     const id = rowIdentity(labelSet.identity, row);
     if (!id) continue;
     const actionTier = row['actionTier'];
-    const demoted = actionTier === 'support' || (directVocabulary && actionTier === 'signal');
+    const demoted = counted
+      ? typeof actionTier === 'string' && !counted.has(actionTier)
+      : actionTier === 'support' || (directVocabulary && actionTier === 'signal');
     const tier = demoted ? 'support' : 'signal';
     if (tiers.get(id) !== 'signal') tiers.set(id, tier);
   }

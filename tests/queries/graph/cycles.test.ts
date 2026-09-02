@@ -30,6 +30,74 @@ describe('cycles', () => {
     });
   });
 
+  it('classifies a component by its product files when the witness path runs through a barrel', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-barrel-witness-cycle-'));
+    try {
+      const dbPath = join(root, 'index.db');
+      // `a` cycles with the barrel (`a -> api/index -> a`) and with `zed`
+      // (`a -> zed -> a`). The lexically first neighbor of `a` is the barrel,
+      // so the witness alone would read as module structure; the product
+      // files still form a cycle without it.
+      writeFixtureFiles(root, {
+        'src/a.ts':
+          "import { fromIndex } from './api/index';\nimport { zed } from './zed';\nexport const a = fromIndex + zed;\n",
+        'src/api/index.ts': "import { a } from '../a';\nexport const fromIndex = a;\n",
+        'src/zed.ts': "import { a } from './a';\nexport const zed = a;\n",
+      });
+      evidenceFixtureDb(dbPath)
+        .document(1, 'typescript', 'src/a.ts')
+        .document(2, 'typescript', 'src/api/index.ts')
+        .document(3, 'typescript', 'src/zed.ts')
+        .write();
+      const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+      try {
+        expect(cycleSummary(db).cycles).toEqual([
+          expect.objectContaining({
+            kind: 'real',
+            classification: 'dependency-cycle',
+            component: ['src/a.ts', 'src/api/index.ts', 'src/zed.ts'],
+            path: ['src/a.ts', 'src/zed.ts', 'src/a.ts'],
+          }),
+        ]);
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps a component that only cycles through its barrel as module structure', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-barrel-only-cycle-'));
+    try {
+      const dbPath = join(root, 'index.db');
+      writeFixtureFiles(root, {
+        'src/a.ts': "import { b } from './index';\nexport const a = b;\n",
+        'src/b.ts': "import { a } from './index';\nexport const b = a;\n",
+        'src/index.ts': "import { a } from './a';\nimport { b } from './b';\nexport { a, b };\n",
+      });
+      evidenceFixtureDb(dbPath)
+        .document(1, 'typescript', 'src/a.ts')
+        .document(2, 'typescript', 'src/b.ts')
+        .document(3, 'typescript', 'src/index.ts')
+        .write();
+      const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+      try {
+        expect(cycleSummary(db).cycles).toEqual([
+          expect.objectContaining({
+            kind: 'module-hierarchy',
+            classification: 'module-structure-candidate',
+            component: ['src/a.ts', 'src/b.ts', 'src/index.ts'],
+          }),
+        ]);
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('distinguishes symbol-reference cycles from the narrower import graph', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-query-ambient-cycle-'));
     try {

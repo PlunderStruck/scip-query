@@ -1,0 +1,109 @@
+{
+  "detector": "dead",
+  "repository": "launchpoint-backend",
+  "identity": "symbol",
+  "reviewed": "2026-09-02",
+  "note": "Sampled 20 of the 65 dead-code rows (seed 11) and checked every symbol with a repository-wide word search outside its defining file. True means nothing references it; false means a framework or configuration reference the graph cannot see.",
+  "labels": [
+    {
+      "id": "src/lib/creator-recruitment/urgency.ts#src:lib:creator-recruitment:urgency:CAMPAIGN_URGENCY_CLASSES",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/lib/observability/loggers/metrics-fetch.ts#src:lib:observability:loggers:metrics-fetch:METRICS_FETCH_ATTEMPT_EVENT",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/lib/economics/creator-compensation/pay-row-kind.ts#src:lib:economics:creator-compensation:pay-row-kind:isFirstApprovalFeeRow()",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/lib/economics/campaigns/manual-payouts/core/status.ts#src:lib:economics:campaigns:manual-payouts:core:status:isManualPayoutJobMetricsInFlight()",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/lib/campaigns/import-unlinked/core/import-ledger.ts#src:lib:campaigns:import-unlinked:core:import-ledger:campaignPostImportItemKindSchema",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/server/legacy-campaign-detail-route-data.ts#src:app:(authenticated):(dashboard):campaigns:[id]:campaign-detail:server:legacy-campaign-detail-route-data:getLegacyCampaignDetailRouteChrome",
+      "verdict": "true",
+      "reason": "the only text hit is a test asserting a string is absent"
+    },
+    {
+      "id": "src/lib/discord/reconciliation/queries.ts#src:lib:discord:reconciliation:queries:loadArmedDiscordWatchesForCreator()",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/lib/agency/creator-links.ts#src:lib:agency:creator-links:unlinkCreatorFromAgency()",
+      "verdict": "true",
+      "reason": "the e2e hits are a same-named local helper in the spec"
+    },
+    {
+      "id": "src/lib/ad-campaigns/core/pending-ad-publish.ts#src:lib:ad-campaigns:core:pending-ad-publish:PENDING_AD_PUBLISH_CANCEL_REASON_VALUES",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/lib/utils/duration.ts#src:lib:utils:duration:toSeconds",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/lib/ad-campaigns/core/pending-ad-publish.ts#src:lib:ad-campaigns:core:pending-ad-publish:isActivePendingAdPublishStatus()",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/components/ui/motion.ts#src:components:ui:motion:fadeIn",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/components/ui/motion.ts#src:components:ui:motion:popIn",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/lib/ad-campaigns/core/managed-publication-state.ts#src:lib:ad-campaigns:core:managed-publication-state:MANAGED_PROVIDER_OPERATION_STATUS_VALUES",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/lib/utils/duration.ts#src:lib:utils:duration:toDays",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/lib/creators/agency-network.ts#src:lib:creators:agency-network:getAgencyCampaignCreatorCounts()",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/lib/utils/duration.ts#src:lib:utils:duration:toMinutes",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/lib/statsbot/coding/verify.ts#src:lib:statsbot:coding:verify:formatVerifyFailuresForAgent()",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/lib/media/image-loader.ts#src:lib:media:image-loader:imageLoader()",
+      "verdict": "false",
+      "reason": "default export of the file next.config names as images.loaderFile; the framework invokes it"
+    },
+    {
+      "id": "src/lib/statsbot/coding/github-write.ts#src:lib:statsbot:coding:github-write:createOrUpdateStatsbotPullRequest()",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    }
+  ]
+}

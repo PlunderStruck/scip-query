@@ -1,0 +1,109 @@
+{
+  "detector": "react-large-component-pressure",
+  "repository": "launchpoint-backend",
+  "identity": "symbol",
+  "reviewed": "2026-09-02",
+  "note": "Sampled 20 components (seed 11) and located each declaration. True means decomposition pressure is real; uncertain means a static layout or template where the pressure is nominal.",
+  "labels": [
+    {
+      "id": "src/app/components/AdminClientSearchDialog.tsx#AdminClientSearchDialog",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/components/creator-profile/CreatorCampaignGroups.tsx#CreatorCampaignGroups",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/media/components/ManageAdsScreen.tsx#ManageAdsScreen",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/media/components/CampaignFirstPaidAdComposer.tsx#AdSetCopyEditor",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/components/campaign-onboarding/WelcomeState.tsx#WelcomeState",
+      "verdict": "uncertain",
+      "reason": "a static onboarding layout with no behavior"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/media/components/account-settings/AccountSettingsSections.tsx#AdSetSection",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/media/components/account-settings/AccountSettingsSections.tsx#IdentityAndCopySection",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/form/components/BudgetChangeDialog.tsx#BudgetChangeDialog",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "emails/BrandDailyDigest.tsx#BrandDailyDigest",
+      "verdict": "uncertain",
+      "reason": "an email template; static layout with no behavior"
+    },
+    {
+      "id": "src/app/(partner)/deals/AgencyDealsClient.tsx#TextCreatorsPanel",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/media/components/MediaPlayerModal.tsx#PerformanceChart",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/components/ManageIMessages.tsx#ManageIMessages",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/media/components/PaidAdsAccountSwitcher.tsx#PaidAdsAccountSwitcher",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/components/ClientCreatorBlockListPanel.tsx#ClientCreatorBlockListPanel",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/app/(public)/offer/[code]/offer-claim-flow.tsx#OfferClaimFlow",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/creators/CreatorsSectionOverlays.tsx#CreatorsSectionOverlays",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/statsbot-sandbox/BenchmarksTab.tsx#BenchmarkDetailView",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/SideshiftImportModal.tsx#SideshiftImportModal",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/media/components/RunAdSearchableSelect.tsx#RunAdSearchableSelect",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/app/(public)/faq/faq-board.tsx#FaqBoard",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    }
+  ]
+}

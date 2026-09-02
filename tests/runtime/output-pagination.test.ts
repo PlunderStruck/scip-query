@@ -33,6 +33,7 @@ import {
   runWithCliOutputPagination,
   type CliOutputPageEnvelopeV1,
   type CliOutputPaginationOptions,
+  type CliOutputPaginationRuntime,
 } from '../../src/runtime/output-pagination.js';
 import { bindSourceEmissionGeneration, renderSourceEvidence } from '../../src/runtime/source-emission-session.js';
 import {
@@ -52,6 +53,7 @@ afterEach(() => {
 async function invoke(
   content: string | readonly Uint8Array[] | (() => void),
   overrides: Partial<CliOutputPaginationOptions> = {},
+  runtimeOverrides: Partial<CliOutputPaginationRuntime> = {},
 ): Promise<{ stdout: string; stderr: string }> {
   const directStdout: Buffer[] = [];
   vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
@@ -81,6 +83,7 @@ async function invoke(
     {
       writeStdout: (value) => renderedStdout.push(value),
       writeStderr: (value) => stderr.push(value),
+      ...runtimeOverrides,
     },
   );
   return {
@@ -261,6 +264,15 @@ describe('universal CLI output pagination', () => {
     expect(pages.map((page) => page.page.outputHash)).toEqual(
       Array.from({ length: pages.length }, () => pages[0]!.page.outputHash),
     );
+  });
+
+  it('writes complete human output when stdout is a regular file', async () => {
+    const content = `${'line of a report\n'.repeat(Math.ceil((HUMAN_OUTPUT_PAGE_CONTENT_BYTES * 3) / 17))}`;
+    const result = await invoke(content, {}, { stdoutIsRegularFile: () => true });
+
+    expect(result.stdout).toBe(content);
+    expect(result.stdout).not.toContain('[Incomplete:');
+    expect(result.stderr).toBe('');
   });
 
   it('automatically pages oversized human output as readable text with one exact continuation', async () => {
