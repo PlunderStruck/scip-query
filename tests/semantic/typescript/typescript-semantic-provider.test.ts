@@ -28,6 +28,7 @@ import {
   TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA,
   warmTypeScriptReferenceFragments,
 } from '../../../src/semantic/typescript/reference-fragment-shadow.js';
+import { indexedTypeScriptFiles } from '../../../src/semantic/typescript/semantic-identity-context.js';
 import { getSemanticProvider } from '../../../src/semantic/provider-cache.js';
 import { createTsMorphProvider } from '../../../src/semantic/typescript/ts-morph-provider.js';
 
@@ -532,6 +533,24 @@ describe('TypeScript semantic provider', () => {
       expect(
         compareReferenceFragmentMaps(definitions, expected, assembleReferenceFragments(definitions, fragments)),
       ).toEqual(expect.objectContaining({ passed: true, missing: [], extra: [] }));
+    });
+  });
+
+  it('warms only the files of a shard when a file slice is given', async () => {
+    await withSemanticFixtureAsync(async (db) => {
+      const resolveProvider = (relativePath: string) => getSemanticProvider(db, relativePath);
+      const everything = await warmTypeScriptReferenceFragments(db, resolveProvider, { yieldToEventLoop: async () => {} });
+      expect(everything).not.toBeNull();
+      const all = everything!.files;
+      expect(all).toBeGreaterThan(1);
+      const first = indexedTypeScriptFiles(db).slice(0, 1);
+      const sliced = await warmTypeScriptReferenceFragments(db, resolveProvider, {
+        files: first,
+        yieldToEventLoop: async () => {},
+      });
+      // The slice bounds the pass to its files; the full pass already
+      // persisted them, so the slice finds them warm.
+      expect(sliced).toMatchObject({ files: 1, cacheHits: 1, cacheMisses: 0 });
     });
   });
 

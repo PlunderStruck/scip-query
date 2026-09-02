@@ -16,6 +16,7 @@ import {
 import { getAst, getAstForSource } from '../../src/source/ast.js';
 import { collectScopedDefinitionsInBatches, getScopedDefinitions } from '../../src/symbols/definition-catalog.js';
 import { warmSourceFactsProducts } from '../../src/source/facts/source-facts-warm.js';
+import { warmFileProducts } from '../../src/runtime/file-product-warm.js';
 import { crossFileCallerEvidenceMap, sourceFallbackCallerEvidenceMap } from '../../src/symbols/references/caller-evidence.js';
 import { clearRegisteredCaches } from '../../src/storage/cache-registry.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
@@ -368,6 +369,36 @@ describe('file dependency graph evidence', () => {
 
       clearRegisteredCaches(db, { groups: ['source-file'] });
       expect(crossFileCallerEvidenceMap(db, [b!], { semantic: false }).get(b!.symbolId)).toEqual(first.get(b!.symbolId));
+    });
+  });
+
+  it('warms every per-file product in one collecting sweep and returns the files\' definitions', async () => {
+    await withFixture(async (openDb) => {
+      const db = openDb();
+      const events: string[] = [];
+      const warmed = await warmFileProducts(db, ['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/barrel.ts'], {
+        batchSize: 3,
+        collectGarbage: () => {
+          events.push('collect');
+          return true;
+        },
+        yieldToEventLoop: async () => {
+          events.push('yield');
+        },
+        onBatch: (batch) => events.push(`batch:${batch.files}/${batch.total}`),
+      });
+
+      expect(warmed.files).toBe(4);
+      expect(warmed.definitions.map((row) => row.symbol)).toEqual(getScopedDefinitions(db).map((row) => row.symbol));
+      expect(events).toEqual(['batch:3/4', 'collect', 'yield', 'batch:4/4', 'collect', 'yield']);
+      // The sweep persisted the import products too: the synchronous graph
+      // build reads them back without parsing.
+      expect(graphShape(buildFileDepGraph(db))).toEqual(
+        expect.arrayContaining([
+          ['src/a.ts', ['src/b.ts']],
+          ['src/c.ts', ['src/b.ts']],
+        ]),
+      );
     });
   });
 });

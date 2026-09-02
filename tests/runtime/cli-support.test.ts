@@ -3,25 +3,28 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  aggregateHealthSemanticPrewarmResults,
   commandAnalysisBudget,
+  defaultHealthSemanticPrewarmHeapMb,
   deferredHealthPhaseResult,
-  diffImpactBatches,
   diffImpactBatchConcurrency,
   diffImpactBatchHeapMb,
   diffImpactBatchTimeoutMs,
+  diffImpactBatches,
   fullHealthPhaseConcurrency,
   fullHealthPhaseHeapMb,
   healthIsolatedFailureReason,
   healthPhaseConcurrency,
   healthPhaseTasks,
   healthPhaseTimeoutMs,
-  orderHealthPhaseTasksByCost,
-  defaultHealthSemanticPrewarmHeapMb,
   healthSemanticPrewarmFileBatches,
   healthSemanticPrewarmHeapMb,
+  healthSemanticPrewarmShardPlan,
   healthSemanticPrewarmTimeoutMs,
   operationObservationReceipt,
+  orderHealthPhaseTasksByCost,
   prewarmHealthSemanticEvidence,
+  shardFilesForPrewarm,
   shouldRunHealthPhase,
   skippedHealthPhaseResult,
   type HealthSemanticPrewarmRuntime,
@@ -131,8 +134,7 @@ function fakePrewarmRuntime(overrides: Partial<HealthSemanticPrewarmRuntime> = {
       incomplete: 0,
       cacheWrites: definitions.length,
     })),
-    warmSourceDependencies: vi.fn(async () => ({ files: 2 })),
-    warmSourceFacts: vi.fn(async () => ({ files: 2, withFacts: 1 })),
+    projectFiles: vi.fn(() => ['src/main.ts', 'src/lib.rs']),
     warmReferenceFragments: vi.fn(async () => ({ files: 1, cacheHits: 0, cacheMisses: 1, computedFiles: 1 })),
     materializeCallees: vi.fn(() => new Map([[1, []]])),
     releaseSemanticMemory: vi.fn(),
@@ -434,29 +436,47 @@ describe('prewarmHealthSemanticEvidence', () => {
     );
   });
 
-  it('persists import products in yielding batches before the provider builds', async () => {
+  it('reads candidate definitions for the worker files before the provider builds', async () => {
     const order: string[] = [];
-    const warmSourceDependencies = vi.fn(async () => {
-      order.push('source-dependencies');
-      return { files: 7 };
+    const candidateDefinitions = vi.fn(async (_db: unknown, _opts: unknown, files: readonly string[]) => {
+      order.push(`definitions:${files.join(',')}`);
+      return [fakeDefinition(1, 'src/main.ts')];
     });
-    const warmReferenceFragments = vi.fn(async () => {
-      order.push('reference-fragments');
+    const warmReferenceFragments = vi.fn(async (_db: unknown, _onBatch: unknown, files?: readonly string[]) => {
+      order.push(`fragments:${files?.join(',') ?? ''}`);
       return { files: 1, cacheHits: 0, cacheMisses: 1, computedFiles: 1 };
     });
     const runtime = fakePrewarmRuntime({
-      candidateDefinitions: vi.fn(() => [fakeDefinition(1, 'src/main.ts')]),
-      warmSourceDependencies,
+      projectFiles: vi.fn(() => ['src/main.ts', 'src/other.ts']),
+      candidateDefinitions,
       warmReferenceFragments,
     });
 
     const result = await prewarmHealthSemanticEvidence(fakeLargeDb(), { full: true }, runtime);
 
-    expect(result).toMatchObject({ status: 'warmed', sourceDependencyFiles: 7, sourceFactsFiles: 2, referenceFragmentFiles: 1 });
-    // The dependency graph the provider needs must already be served from
-    // persisted products when the provider builds; otherwise it parses every
-    // file in one synchronous sweep that cannot free a single tree.
-    expect(order).toEqual(['source-dependencies', 'reference-fragments']);
+    expect(result).toMatchObject({ status: 'warmed', warmedFiles: 2, referenceFragmentFiles: 1 });
+    // The per-file products the provider's synchronous dependency-graph build
+    // reads are persisted by the definition pass, so it must run first, and
+    // both passes see the same worker file list.
+    expect(order).toEqual(['definitions:src/main.ts,src/other.ts', 'fragments:src/main.ts,src/other.ts']);
+  });
+
+  it('leaves the completion marker to the parent when running as a shard', async () => {
+    const runtime = fakePrewarmRuntime({
+      projectFiles: vi.fn((_db: unknown, opts: { shard?: { index: number; count: number } }) =>
+        shardFilesForPrewarm(['a.ts', 'b.ts', 'c.ts'], opts.shard),
+      ),
+      candidateDefinitions: vi.fn(() => [fakeDefinition(1, 'src/main.ts')]),
+    });
+
+    const result = await prewarmHealthSemanticEvidence(
+      fakeLargeDb(),
+      { full: true, shard: { index: 1, count: 2 } },
+      runtime,
+    );
+
+    expect(result).toMatchObject({ status: 'warmed', warmedFiles: 1 });
+    expect(runtime.writeMarker).not.toHaveBeenCalled();
   });
 
   it('warms TypeScript reference fragments instead of assembling the project reference map', async () => {
@@ -641,8 +661,6 @@ describe('prewarmHealthSemanticEvidence', () => {
           .map(({ name, definitions, rows }) => ({ name, definitions, rows })),
       ).toEqual([
         { name: 'health.semantic-prewarm.candidate-definitions', definitions: 2 },
-        { name: 'health.semantic-prewarm.source-dependencies' },
-        { name: 'health.semantic-prewarm.source-facts' },
         { name: 'health.semantic-prewarm.reference-fragments', definitions: 1, rows: 1 },
         { name: 'health.semantic-prewarm.references', definitions: 1, rows: 1 },
         { name: 'health.semantic-prewarm.release-reference-memory' },
@@ -839,5 +857,67 @@ describe('diffImpactBatchConcurrency', () => {
     expect(diffImpactBatchConcurrency(20, { SCIP_QUERY_DIFF_IMPACT_CONCURRENCY: '6' }, () => 14)).toBe(6);
     expect(diffImpactBatchConcurrency(20, { SCIP_QUERY_DIFF_IMPACT_CONCURRENCY: '100' }, () => 14)).toBe(20);
     expect(diffImpactBatchConcurrency(20, { SCIP_QUERY_DIFF_IMPACT_CONCURRENCY: 'nope' }, () => 14)).toBe(1);
+  });
+});
+
+describe('parallel prewarm shards', () => {
+  it('slices files deterministically into disjoint, covering shards', () => {
+    const files = ['a', 'b', 'c', 'd', 'e'];
+    const shards = [0, 1, 2].map((index) => shardFilesForPrewarm(files, { index, count: 3 }));
+    expect(shards).toEqual([['a', 'd'], ['b', 'e'], ['c']]);
+    expect(shardFilesForPrewarm(files, undefined)).toEqual(files);
+    expect(shardFilesForPrewarm(files, { index: 0, count: 1 })).toEqual(files);
+  });
+
+  it('plans shards from memory left after a host reserve, the cpu count, and an override', () => {
+    const GIB = 1024 * 1024 * 1024;
+    // 61 GB, 24 cpus: (61 - 8) / 14 = 3 workers at 12 GB each.
+    expect(healthSemanticPrewarmShardPlan({}, 24, 61 * GIB)).toEqual({ shards: 3, heapMb: 12288 });
+    // 48 GB, 14 cpus: two workers.
+    expect(healthSemanticPrewarmShardPlan({}, 14, 48 * GIB)).toEqual({ shards: 2, heapMb: 12288 });
+    // 16 GB: one worker with the ordinary bounded heap.
+    expect(healthSemanticPrewarmShardPlan({}, 8, 16 * GIB)).toEqual({ shards: 1, heapMb: 8192 });
+    // Few cpus cap the plan; an explicit override lowers it further.
+    expect(healthSemanticPrewarmShardPlan({}, 2, 128 * GIB)).toEqual({ shards: 1, heapMb: 16384 });
+    expect(healthSemanticPrewarmShardPlan({ SCIP_QUERY_HEALTH_PREWARM_SHARDS: '2' }, 24, 128 * GIB)).toEqual({
+      shards: 2,
+      heapMb: 12288,
+    });
+    expect(healthSemanticPrewarmShardPlan({}, 24, 128 * GIB).shards).toBe(4);
+  });
+
+  it('aggregates shard results, letting the weakest shard withhold completion', () => {
+    const warmed = (definitions: number): Parameters<typeof aggregateHealthSemanticPrewarmResults>[0][number] => ({
+      status: 'warmed',
+      reason: 'cache-miss',
+      definitions,
+      referenceCacheHits: 1,
+      referenceCacheWrites: 2,
+      referenceMisses: 0,
+      referenceIncomplete: 0,
+      calleeRows: 3,
+      warmedFiles: 10,
+      referenceFragmentFiles: 4,
+    });
+    expect(aggregateHealthSemanticPrewarmResults([warmed(5), warmed(7)])).toMatchObject({
+      status: 'warmed',
+      definitions: 12,
+      referenceCacheWrites: 4,
+      calleeRows: 6,
+      warmedFiles: 20,
+      referenceFragmentFiles: 8,
+    });
+    expect(
+      aggregateHealthSemanticPrewarmResults([warmed(5), { ...warmed(7), status: 'partial', reason: 'incomplete-references' }]),
+    ).toMatchObject({ status: 'partial', reason: 'incomplete-references', definitions: 12 });
+    expect(
+      aggregateHealthSemanticPrewarmResults([
+        { ...warmed(0), status: 'skipped', reason: 'cache-hit' },
+        { ...warmed(0), status: 'skipped', reason: 'cache-hit' },
+      ]),
+    ).toMatchObject({ status: 'skipped', reason: 'cache-hit' });
+    expect(
+      aggregateHealthSemanticPrewarmResults([warmed(5), { ...warmed(0), status: 'skipped', reason: 'provider-unavailable' }]),
+    ).toMatchObject({ status: 'skipped', reason: 'provider-unavailable' });
   });
 });

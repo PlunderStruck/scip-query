@@ -259,9 +259,20 @@ export function handleHealthPhase(phase: unknown, rawOpts: unknown): void {
 export async function handleHealthSemanticPrewarm(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
   await withDbAsync(async (db) => {
+    const shardIndex = Number.parseInt(stringOptionValue(opts, 'shardIndex') ?? '', 10);
+    const shardCount = Number.parseInt(stringOptionValue(opts, 'shardCount') ?? '', 10);
+    const shard =
+      Number.isSafeInteger(shardIndex) &&
+      Number.isSafeInteger(shardCount) &&
+      shardCount > 1 &&
+      shardIndex >= 0 &&
+      shardIndex < shardCount
+        ? { index: shardIndex, count: shardCount }
+        : undefined;
     const result = await prewarmHealthSemanticEvidence(db, {
       scope: stringOptionValue(opts, 'scope'),
       full: booleanOptionValue(opts, 'full'),
+      ...(shard ? { shard } : {}),
     });
     printIsolatedAnalysisResult(HEALTH_SEMANTIC_PREWARM_COMMAND, result);
   });
