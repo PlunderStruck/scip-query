@@ -13,11 +13,12 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
   call, or a literal the body builds now makes it a helper (signal tier, not
   counted by health). The two-statement allowance had classified computed
   keys, reductions, and two-step operations as inline advice.
-- Boundary-term evidence for wrappers and passthroughs uses leaf names
-  instead of path-qualified short names, so a directory both sides live in
-  (`lib/auth/`, `social-providers/`) no longer reads as a boundary, and a
-  term present on both sides (`toBaseRate` forwarding to `parseBaseRate`)
-  is shared vocabulary rather than a reason to demote the finding.
+- Boundary-term evidence for wrappers and passthroughs reads owner-qualified
+  leaf names (`BaseLogger log`) instead of path-qualified short names, so a
+  directory both sides live in (`lib/auth/`, `social-providers/`) no longer
+  reads as a boundary while an enclosing class still counts, and a term
+  present on both sides (`toBaseRate` forwarding to `parseBaseRate`) is
+  shared vocabulary rather than a reason to demote the finding.
 - A twin-drift member that calls its same-name counterpart (an operations
   function over its use-case, a component over the function it renders)
   is a layer, not a parallel implementation; the delegation exclusion no
