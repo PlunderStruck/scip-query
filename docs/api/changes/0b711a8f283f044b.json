@@ -1,0 +1,115 @@
+{
+  "acceptedAt": "2026-09-02T19:42:05.695Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "0b711a8f283f044b0cc8e09db5080be8b72742e2ac53545010330e3230843676",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export HealthProvenance.",
+      "target": "./queries:HealthProvenance"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "HealthReport changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes....",
+      "target": "./queries:HealthReport"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export healthProvenance.",
+      "target": "./queries:healthProvenance"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "healthReportFromPhases changed from declare function healthReportFromPhases(phaseResults: HealthPhaseResult[]): HealthReport; to declare function healthReportFromPhases(phaseResults: HealthPhaseResult[], db?: ScipDatabase): HealthReport;.",
+      "target": "./queries:healthReportFromPhases"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export healthProvenance.",
+      "target": "./queries/health:healthProvenance"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "healthReportFromPhases changed from declare function healthReportFromPhases(phaseResults: HealthPhaseResult[]): HealthReport; to declare function healthReportFromPhases(phaseResults: HealthPhaseResult[], db?: ScipDatabase): HealthReport;.",
+      "target": "./queries/health:healthReportFromPhases"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export HealthProvenance.",
+      "target": "./queries/index:HealthProvenance"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "HealthReport changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes....",
+      "target": "./queries/index:HealthReport"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export healthProvenance.",
+      "target": "./queries/index:healthProvenance"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "healthReportFromPhases changed from declare function healthReportFromPhases(phaseResults: HealthPhaseResult[]): HealthReport; to declare function healthReportFromPhases(phaseResults: HealthPhaseResult[], db?: ScipDatabase): HealthReport;.",
+      "target": "./queries/index:healthReportFromPhases"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthProvenance { computedAt: string; generation: { identity: string; publishedAt: string | null; mode: 'incremental' | 'full' | null; }; git: { head: string; branch:....",
+      "target": "health-<hash>.d.ts:b"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "c changed from declare function healthPhase(db: ScipDatabase, phase: HealthPhaseName, opts?: { scope?: string; full?: boolean; }): HealthPhaseResult; to interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes....",
+      "target": "health-<hash>.d.ts:c"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "d changed from declare function healthReportFromPhases(phaseResults: HealthPhaseResult[]): HealthReport; to declare function healthPhase(db: ScipDatabase, phase: HealthPhaseName, opts?: { scope?: string; full?: boolean; }): HealthPhaseResult;.",
+      "target": "health-<hash>.d.ts:d"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "e changed from type HealthPhaseName = (typeof HEALTH_PHASES)[number]; to declare function healthProvenance(db: ScipDatabase): HealthProvenance;.",
+      "target": "health-<hash>.d.ts:e"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "f changed from declare function healthPhases(db: ScipDatabase, phases: readonly HealthPhaseName[], opts?: { scope?: string; full?: boolean; }): HealthPhaseResult[]; to declare function healthReportFromPhases(phaseResults: HealthPhaseResult[], db?: ScipDatabase): HealthReport;.",
+      "target": "health-<hash>.d.ts:f"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration g.",
+      "target": "health-<hash>.d.ts:g"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration i.",
+      "target": "health-<hash>.d.ts:i"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.23.0",
+  "previousDigest": "691732912f24c3f2e012109bb60b7ca9607a3825384c2ef6740f414085668581",
+  "reason": "HealthReport gains an optional provenance field (index generation identity, publication time and mode, git head, branch, uncommitted-path count, computation time); healthProvenance is exported and healthReportFromPhases takes an optional database to attach it. Consumers constructing HealthReport literals are unaffected; the remaining listed changes are renumbered internal declarations in the health chunk",
+  "schemaVersion": 1
+}

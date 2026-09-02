@@ -13,7 +13,12 @@ scip-query health --full
 
 The health report combines graph structure, duplication, drift, complexity,
 history, suppressions, coverage contracts, and React and Vue analyses. Its
-score is a summary, not proof of correctness.
+score is a summary, not proof of correctness. The `Input:` line under the
+file and symbol counts names the index generation and the git commit,
+branch, and uncommitted-path count the report was computed from
+(`provenance` in `health --json`); compare two reports only when that line
+matches, because a repository change and a detector change move the same
+numbers.
 
 ## Focused detector families
 

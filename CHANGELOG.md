@@ -4,6 +4,16 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+### Health reports name the input they were computed from
+
+- `health` now records provenance: the immutable index generation identity
+  (with its publication time and mode when the generation store has them),
+  the git HEAD, branch, and uncommitted-path count, and the computation time.
+  The text report prints it as an `Input:` line under the file and symbol
+  counts; `health --json` carries it as `provenance`. Two reports whose
+  provenance differs were computed from different inputs, which the file and
+  symbol counts alone could not show.
+
 ### Incremental TypeScript refresh survives a reused-shard publication
 
 - A publication that reused the TypeScript shard (only non-TypeScript inputs

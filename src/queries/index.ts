@@ -79,7 +79,7 @@ export { passthroughCandidates } from './cleanup/passthrough-candidates.js';
 export { staleAbstractions } from './cleanup/stale-abstractions.js';
 export { unusedParams } from './cleanup/unused-params.js';
 export { complexityHotspots } from './quality/complexity-hotspots.js';
-export { HEALTH_PHASES, health, healthPhase, healthReportFromPhases } from './health/health.js';
+export { HEALTH_PHASES, health, healthPhase, healthProvenance, healthReportFromPhases } from './health/health.js';
 export { convergence } from './cleanup/convergence.js';
 export { code, codeBatch } from './navigation/code.js';
 export { complexity } from './quality/complexity.js';
@@ -327,7 +327,7 @@ export type {
   LocalityRecommendedTier,
   LocalitySourceUnit,
 } from './cleanup/locality-candidates.js';
-export type { HealthAction, HealthReport } from './health/health-report.js';
+export type { HealthAction, HealthProvenance, HealthReport } from './health/health-report.js';
 export type { ConvergenceResult } from './cleanup/convergence.js';
 export type {
   CodeBatchEntry,

@@ -90,6 +90,21 @@ export interface HealthValidation {
 
 // scip-query: ignore-stale — public report envelope returned by health() and
 // rendered by CLI/reporting entry points.
+/** What a report was computed from, so two runs can be compared as the same or different input. */
+export interface HealthProvenance {
+  computedAt: string;
+  generation: {
+    /** Immutable index generation identity the report read. */
+    identity: string;
+    /** When that generation was published, when the generation store records it. */
+    publishedAt: string | null;
+    /** How that generation was produced, when the generation store records it. */
+    mode: 'incremental' | 'full' | null;
+  };
+  /** Null when the project is not a git repository. */
+  git: { head: string; branch: string | null; dirtyPaths: number } | null;
+}
+
 export interface HealthReport {
   /** Headline = min(riskScore, hygieneScore); kept for compatibility. */
   score: number;
@@ -99,6 +114,8 @@ export interface HealthReport {
   hygieneScore: number;
   scoreBreakdown: ScoreDeduction[];
   overview: { documents: number; symbols: number; indexSizeBytes: number };
+  /** Absent only on reports written by older builds. */
+  provenance?: HealthProvenance;
   findings: {
     deadSymbols: number;
     deadLoc: number;
@@ -151,7 +168,7 @@ function healthScoreCount(summary: { count: number; scoreCount?: number }): numb
   return summary.scoreCount ?? summary.count;
 }
 
-export function buildHealthReport(analyses: HealthAnalyses): HealthReport {
+export function buildHealthReport(analyses: HealthAnalyses, provenance?: HealthProvenance): HealthReport {
   const actions = buildHealthActions(analyses);
   const { breakdown, pressure } = computeHealthScore(analyses);
   const riskScore = scoreFromDeductions(breakdown, 'risk');
@@ -167,6 +184,7 @@ export function buildHealthReport(analyses: HealthAnalyses): HealthReport {
       symbols: analyses.statsResult.symbols,
       indexSizeBytes: analyses.statsResult.indexSizeBytes,
     },
+    ...(provenance ? { provenance } : {}),
     findings: {
       deadSymbols: analyses.dead.count,
       deadLoc: analyses.dead.loc,

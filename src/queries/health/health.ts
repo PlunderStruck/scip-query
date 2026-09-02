@@ -16,6 +16,8 @@ import { vueComponentDuplicates } from '../frontend/vue-component-duplicates.js'
 import { vueComposableCandidates } from '../frontend/vue-composable-candidates.js';
 import { vueLargeViewPressure } from '../frontend/vue-large-view-pressure.js';
 import { extractCandidates } from '../cleanup/extract-candidates.js';
+import { gitProvenance } from '../../analysis/git-provenance.js';
+import { readSqliteGenerationState } from '../../storage/sqlite-generation.js';
 import { wrapperCandidates, type WrapperCandidate } from '../cleanup/wrapper-candidates.js';
 import { passthroughCandidates } from '../cleanup/passthrough-candidates.js';
 import { staleAbstractions } from '../cleanup/stale-abstractions.js';
@@ -31,7 +33,7 @@ import { buildHealthReport } from './health-report.js';
 import { HEALTH_DETECTOR_PROFILES } from '../internal/health-detector-profiles.js';
 import { clearWholeProjectEvidenceCaches } from '../internal/cache-invalidation.js';
 import { requestGarbageCollection } from './health-cache-control.js';
-import type { HealthReport } from './health-report.js';
+import type { HealthProvenance, HealthReport } from './health-report.js';
 
 import type {
   ComplexitySummary,
@@ -225,8 +227,28 @@ const HEALTH_PHASE_RUNNERS: Record<HealthPhaseName, HealthPhaseRunner> = {
 export function health(db: ScipDatabase, opts: { scope?: string; full?: boolean } = {}): HealthReport {
   return withHealthRun(db, opts.full !== false, (statsResult, budget) => {
     const analyses = runHealthAnalyses(db, opts.scope, statsResult, budget);
-    return buildHealthReport(analyses);
+    return buildHealthReport(analyses, healthProvenance(db));
   });
+}
+
+/**
+ * The generation and git state this run read. Two reports are comparable
+ * only when these match; the "files | symbols" header alone cannot tell a
+ * detector change from a repository change.
+ */
+export function healthProvenance(db: ScipDatabase): HealthProvenance {
+  const identity = db.generation.identity;
+  const state = readSqliteGenerationState(db.config.dbPath);
+  const current = state?.currentGeneration === identity ? state : null;
+  return {
+    computedAt: new Date().toISOString(),
+    generation: {
+      identity,
+      publishedAt: current?.publishedAt ?? null,
+      mode: current?.publication?.mode ?? null,
+    },
+    git: gitProvenance(db.config.projectRoot),
+  };
 }
 
 export function healthPhase(
@@ -263,8 +285,8 @@ function withHealthRun<T>(
   }
 }
 
-export function healthReportFromPhases(phaseResults: HealthPhaseResult[]): HealthReport {
-  return buildHealthReport(healthAnalysesFromPhases(phaseResults));
+export function healthReportFromPhases(phaseResults: HealthPhaseResult[], db?: ScipDatabase): HealthReport {
+  return buildHealthReport(healthAnalysesFromPhases(phaseResults), db ? healthProvenance(db) : undefined);
 }
 
 function healthAnalysesFromPhases(phaseResults: readonly HealthPhaseResult[]): HealthAnalyses {

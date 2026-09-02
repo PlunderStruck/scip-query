@@ -136,6 +136,7 @@ function parseHealthSemanticPrewarmMarker(payload: string): HealthSemanticPrewar
 }
 
 type HealthReport = ReturnType<typeof queries.health>;
+type HealthProvenance = NonNullable<HealthReport['provenance']>;
 type HealthPhaseName = (typeof queries.HEALTH_PHASES)[number];
 type HealthPhaseResult = ReturnType<typeof queries.healthPhase>;
 type HealthPhaseResultWithMeta = HealthPhaseResult & {
@@ -852,10 +853,14 @@ export async function runIsolatedHealthReportWithEvidence(
     });
   }
 
-  const report = queries.healthReportFromPhases(queries.HEALTH_PHASES.map((phase) => resultByPhase.get(phase)!));
-  withDb((db) => {
+  const report = withDb((db) => {
+    const built = queries.healthReportFromPhases(
+      queries.HEALTH_PHASES.map((phase) => resultByPhase.get(phase)!),
+      db,
+    );
     const key = healthReportCacheKey(db, cacheOptions, cliVersion);
-    if (key) writeHealthReportCache(db, key, report);
+    if (key) writeHealthReportCache(db, key, built);
+    return built;
   });
   return {
     result: report,
@@ -1289,13 +1294,27 @@ export const fullHealthPhaseConcurrency = createAdaptiveConcurrencyResolver({
   memoryPerTaskBytes: FULL_HEALTH_PHASE_MEMORY_BYTES,
 });
 
+/** One line naming the exact input: enough to tell two runs apart before comparing their numbers. */
+export function describeHealthProvenance(provenance: HealthProvenance): string {
+  const generation = provenance.generation;
+  const produced = [generation.mode, generation.publishedAt ? `published ${generation.publishedAt}` : null]
+    .filter((part): part is string => part !== null)
+    .join(', ');
+  const git = provenance.git
+    ? `git ${provenance.git.head.slice(0, 12)}${provenance.git.branch ? ` on ${provenance.git.branch}` : ' (detached)'}, ${provenance.git.dirtyPaths} uncommitted path(s)`
+    : 'git: not a repository';
+  return `Input: generation ${generation.identity.slice(0, 12)}${produced ? ` (${produced})` : ''}; ${git}`;
+}
+
 export function renderHealthReport(report: HealthReport): void {
   console.log(`\n  Codebase Health Score: ${report.score}/100`);
   console.log(`    Risk:    ${report.riskScore}/100  (risk-oriented graph facts + change graph)`);
   console.log(`    Hygiene: ${report.hygieneScore}/100  (tidiness candidates)\n`);
   console.log(
-    `  ${report.overview.documents} files | ${report.overview.symbols} symbols | ${formatBytes(report.overview.indexSizeBytes)}\n`,
+    `  ${report.overview.documents} files | ${report.overview.symbols} symbols | ${formatBytes(report.overview.indexSizeBytes)}`,
   );
+  if (report.provenance) console.log(`  ${describeHealthProvenance(report.provenance)}`);
+  console.log('');
   if (report.warnings && report.warnings.length > 0) {
     console.log('  Warnings:');
     for (const warning of report.warnings) {
