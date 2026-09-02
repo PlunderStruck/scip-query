@@ -4,6 +4,8 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.24.0]
+
 ### Compiler callees resolve imported functions, and self-audit measures callee precision
 
 - The compiler callee path bound an imported call to its import alias and then
