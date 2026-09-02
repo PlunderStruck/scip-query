@@ -268,7 +268,9 @@ describe('healthSemanticPrewarmHeapMb', () => {
     const GIB = 1024 * 1024 * 1024;
     expect(healthSemanticPrewarmHeapMb({}, 64 * GIB)).toBe(16384);
     expect(healthSemanticPrewarmHeapMb({ SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_HEAP_MB: '6144' }, 64 * GIB)).toBe(6144);
-    expect(healthSemanticPrewarmHeapMb({ SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_HEAP_MB: 'invalid' }, 64 * GIB)).toBe(16384);
+    expect(healthSemanticPrewarmHeapMb({ SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_HEAP_MB: 'invalid' }, 64 * GIB)).toBe(
+      16384,
+    );
     expect(healthSemanticPrewarmHeapMb({ SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_HEAP_MB: '12288' }, 8 * GIB)).toBe(12288);
   });
 
@@ -908,7 +910,10 @@ describe('parallel prewarm shards', () => {
       referenceFragmentFiles: 8,
     });
     expect(
-      aggregateHealthSemanticPrewarmResults([warmed(5), { ...warmed(7), status: 'partial', reason: 'incomplete-references' }]),
+      aggregateHealthSemanticPrewarmResults([
+        warmed(5),
+        { ...warmed(7), status: 'partial', reason: 'incomplete-references' },
+      ]),
     ).toMatchObject({ status: 'partial', reason: 'incomplete-references', definitions: 12 });
     expect(
       aggregateHealthSemanticPrewarmResults([
@@ -917,7 +922,10 @@ describe('parallel prewarm shards', () => {
       ]),
     ).toMatchObject({ status: 'skipped', reason: 'cache-hit' });
     expect(
-      aggregateHealthSemanticPrewarmResults([warmed(5), { ...warmed(0), status: 'skipped', reason: 'provider-unavailable' }]),
+      aggregateHealthSemanticPrewarmResults([
+        warmed(5),
+        { ...warmed(0), status: 'skipped', reason: 'provider-unavailable' },
+      ]),
     ).toMatchObject({ status: 'skipped', reason: 'provider-unavailable' });
   });
 });

@@ -46,8 +46,10 @@ export function crossFileCallerEvidenceMap(
   opts: { semantic?: boolean; semanticEvidence?: SymbolSemanticEvidencePort } = {},
 ): Map<number, Set<string>> {
   if (definitions === undefined) return buildCrossFileCallerMap(db, definitions, opts);
-  const indexed = memoizedCallerFiles(INDEXED_CALLER_FILES.get(db, () => new Map()), definitions, (missing) =>
-    buildCrossFileCallerMap(db, missing, { semantic: false }),
+  const indexed = memoizedCallerFiles(
+    INDEXED_CALLER_FILES.get(db, () => new Map()),
+    definitions,
+    (missing) => buildCrossFileCallerMap(db, missing, { semantic: false }),
   );
   if (opts.semantic === false || !opts.semanticEvidence) return indexed;
   return mergeSetMaps(
@@ -70,8 +72,10 @@ export function sourceFallbackCallerEvidenceMap(
   opts: { skipPath?: (relativePath: string) => boolean } = {},
 ): Map<number, Set<string>> {
   if (opts.skipPath) return findCallerFiles(db, definitions, opts);
-  return memoizedCallerFiles(SOURCE_FALLBACK_CALLER_FILES.get(db, () => new Map()), definitions, (missing) =>
-    findCallerFiles(db, missing),
+  return memoizedCallerFiles(
+    SOURCE_FALLBACK_CALLER_FILES.get(db, () => new Map()),
+    definitions,
+    (missing) => findCallerFiles(db, missing),
   );
 }
 

@@ -539,7 +539,9 @@ describe('TypeScript semantic provider', () => {
   it('warms only the files of a shard when a file slice is given', async () => {
     await withSemanticFixtureAsync(async (db) => {
       const resolveProvider = (relativePath: string) => getSemanticProvider(db, relativePath);
-      const everything = await warmTypeScriptReferenceFragments(db, resolveProvider, { yieldToEventLoop: async () => {} });
+      const everything = await warmTypeScriptReferenceFragments(db, resolveProvider, {
+        yieldToEventLoop: async () => {},
+      });
       expect(everything).not.toBeNull();
       const all = everything!.files;
       expect(all).toBeGreaterThan(1);

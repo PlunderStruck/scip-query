@@ -72,7 +72,10 @@ describe('cloneFileWithFallback', () => {
       },
       copy: () => undefined,
     };
-    expect(cloneFileWithFallback('a', 'b', crossDevice, { shareImmutable: true })).toEqual({ method: 'copy', bytes: 3 });
+    expect(cloneFileWithFallback('a', 'b', crossDevice, { shareImmutable: true })).toEqual({
+      method: 'copy',
+      bytes: 3,
+    });
 
     const denied: FileCloneRuntime = {
       ...crossDevice,
