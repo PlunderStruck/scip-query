@@ -1,0 +1,49 @@
+{
+  "acceptedAt": "2026-09-02T17:02:51.857Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "c9a282b3a203aa5eb1b2fbd103ab8980ced079ef88a7bb91c17cffd5ab5f784b",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CallGraphEvidenceRow changed from interface CallGraphEvidenceRow { symbol: string; shortName: string; file: string; relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate'; evidenceStrength: 'e... to interface CallGraphEvidenceRow { symbol: string; shortName: string; file: string; relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate'; evidenceStrength: 'e....",
+      "target": "./queries:CallGraphEvidenceRow"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CallGraphEvidenceRow changed from interface CallGraphEvidenceRow { symbol: string; shortName: string; file: string; relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate'; evidenceStrength: 'e... to interface CallGraphEvidenceRow { symbol: string; shortName: string; file: string; relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate'; evidenceStrength: 'e....",
+      "target": "./queries/call-graph:CallGraphEvidenceRow"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "CallGraphEvidenceRow changed from interface CallGraphEvidenceRow { symbol: string; shortName: string; file: string; relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate'; evidenceStrength: 'e... to interface CallGraphEvidenceRow { symbol: string; shortName: string; file: string; relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate'; evidenceStrength: 'e....",
+      "target": "./queries/index:CallGraphEvidenceRow"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export applyFacadeEvidence.",
+      "target": "./queries/passthrough-candidates:applyFacadeEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AuditQuestion changed from type AuditQuestion = 'references' | 'callees'; to type AuditQuestion = 'references' | 'callees' | 'renders';.",
+      "target": "./queries/self-audit:AuditQuestion"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "C changed from interface CalleeRow { symbol: string; file: string; chunkId: number; source: CalleeEvidenceSource; callsiteLine?: number; } to interface CalleeRow { symbol: string; file: string; chunkId: number; source: CalleeEvidenceSource; callsiteLine?: number; kind?: 'jsx-render'; }.",
+      "target": "call-graph-evidence-<hash>.d.ts:C"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.23.0",
+  "previousDigest": "c145ce0fc4fc43838f6b285957f0b3ccf8955d1c530abbb32d17ba3a3f98887f",
+  "reason": "Graph accuracy work: call-graph rows gain an optional interaction=render marker for rendered JSX children, callee rows and semantic callees gain an optional jsx-render kind, passthrough-candidates exports applyFacadeEvidence, and the self-audit AuditQuestion union gains 'renders' (exhaustive switches over it must add the member).",
+  "schemaVersion": 1
+}

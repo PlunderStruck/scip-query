@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { passthroughCandidates } from '../../../src/queries/cleanup/passthrough-candidates.js';
+import { applyFacadeEvidence, passthroughCandidates } from '../../../src/queries/cleanup/passthrough-candidates.js';
 import { health } from '../../../src/queries/health/health.js';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -158,5 +158,36 @@ describe('passthroughCandidates output classification', () => {
       const passthroughScore = report.scoreBreakdown.find((deduction) => deduction.axis === 'passthroughs');
       expect(passthroughScore?.detail).toContain('4 passthrough candidate(s) (2.5 score-weighted)');
     });
+  });
+});
+
+describe('applyFacadeEvidence', () => {
+  it('tiers sibling forwards from one file to one collaborator as a facade boundary', () => {
+    const forward = (name: string, file: string, target: string) => ({
+      symbol: `sym:${name}`,
+      shortName: name,
+      file,
+      startLine: 0,
+      endLine: 2,
+      loc: 3,
+      forwardsTo: `sym:${name}-target`,
+      forwardsToShort: name,
+      forwardsToFile: target,
+      actionTier: 'direct' as const,
+      boundaryEvidence: [] as string[],
+      publicFacadeEvidence: [] as string[],
+      recommendation: 'inline',
+    });
+    const results = applyFacadeEvidence([
+      forward('login', 'src/auth.service.ts', 'src/auth-browser.service.ts'),
+      forward('logout', 'src/auth.service.ts', 'src/auth-browser.service.ts'),
+      forward('refresh', 'src/auth.service.ts', 'src/auth-browser.service.ts'),
+      forward('lone', 'src/other.service.ts', 'src/helper.ts'),
+    ]);
+    expect(results.slice(0, 3).map((row) => row.actionTier)).toEqual(['signal', 'signal', 'signal']);
+    expect(results[0]?.boundaryEvidence).toEqual([
+      'facade: 3 sibling forwards from this file to src/auth-browser.service.ts',
+    ]);
+    expect(results[3]).toEqual(expect.objectContaining({ actionTier: 'direct', boundaryEvidence: [] }));
   });
 });

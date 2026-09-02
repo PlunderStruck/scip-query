@@ -46,7 +46,7 @@ export function passthroughCandidates(
 ): PassthroughCandidate[] {
   const { scope, maxLoc = 15, limit = 30, scanLimit } = opts ?? {};
   const index = new ProjectIndex(db);
-  return runCandidateAnalysis({
+  const results = runCandidateAnalysis({
     candidates: () => getPassthroughCandidateSymbols(db, index, scope, maxLoc),
     orderCandidates: compareDefinitionsBySmallestLoc,
     scanLimit,
@@ -54,7 +54,38 @@ export function passthroughCandidates(
     prepare: (symbols) => index.calleeMap(symbols, { semantic: opts?.semantic !== false }),
     evaluate: (sym, calleeMap) => passthroughCandidateForSymbol(db, sym, calleeMap.get(sym.symbolId) ?? []),
     orderResults: (a, b) => a.loc - b.loc || a.file.localeCompare(b.file),
-    limit,
+  });
+  return applyFacadeEvidence(results).slice(0, limit === undefined ? results.length : limit);
+}
+
+/** Sibling forwards from one file to one target file that make the file a deliberate facade. */
+const FACADE_SIBLING_FORWARDS = 3;
+
+/**
+ * A file whose methods forward one by one to the same collaborator is a
+ * facade: it exists to keep one public surface over a module that was split
+ * behind it (a service composed of sub-services, a package entry over its
+ * internals). Inlining any single forward would breach that surface, so the
+ * whole family is a boundary signal rather than direct inline advice.
+ */
+export function applyFacadeEvidence(candidates: readonly PassthroughCandidate[]): PassthroughCandidate[] {
+  const siblingForwards = new Map<string, number>();
+  for (const candidate of candidates) {
+    if (candidate.file === candidate.forwardsToFile) continue;
+    const key = `${candidate.file}\u0000${candidate.forwardsToFile}`;
+    siblingForwards.set(key, (siblingForwards.get(key) ?? 0) + 1);
+  }
+  return candidates.map((candidate) => {
+    const siblings = siblingForwards.get(`${candidate.file}\u0000${candidate.forwardsToFile}`) ?? 0;
+    if (siblings < FACADE_SIBLING_FORWARDS) return candidate;
+    const evidence = `facade: ${siblings} sibling forwards from this file to ${candidate.forwardsToFile}`;
+    const boundaryEvidence = [...candidate.boundaryEvidence, evidence];
+    return {
+      ...candidate,
+      boundaryEvidence,
+      actionTier: 'signal',
+      recommendation: passthroughRecommendation('signal', boundaryEvidence, candidate.publicFacadeEvidence),
+    };
   });
 }
 

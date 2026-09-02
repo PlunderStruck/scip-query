@@ -1,0 +1,108 @@
+{
+  "detector": "react-component-duplicates",
+  "repository": "launchpoint-backend",
+  "identity": "pair",
+  "source": "full-list review of the 2026-09-02 health report (reviewer agent) verified against structural classes",
+  "labels": [
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/creators/CreatorAvatar.tsx#CreatorAvatarImageOwner|src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/creators/CreatorRow.tsx#Avatar",
+      "verdict": "true",
+      "reason": "same-folder avatar re-implementation down to the empty-URL comment"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/components/campaign-performance/PerformanceOverviewChart.tsx#SegmentedToggle|src/app/components/campaign-analytics-report/CampaignAnalyticsReportView.tsx#ReportSegmentedToggle",
+      "verdict": "true",
+      "reason": "dashboard toggle copied into the public report; one Tailwind class differs"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/components/campaign-performance/AudienceVisuals.tsx#AudienceBarList|src/app/components/campaign-analytics-report/CampaignAnalyticsReportView.tsx#AudienceBars",
+      "verdict": "true",
+      "reason": "dashboard bar list copied into the public report"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/components/campaign-performance/AudienceVisuals.tsx#AudienceGenderDonut|src/app/components/campaign-analytics-report/CampaignAnalyticsReportView.tsx#AudienceGenderDonut",
+      "verdict": "true",
+      "reason": "same arc math and SVG in dashboard and report"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/content/CampaignContentFilters.tsx#SortFilter|src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/content/CampaignContentFilters.tsx#SourceFilter",
+      "verdict": "true",
+      "reason": "two popover filters in one file with the same skeleton"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/media/components/BulkMetaRunDialog.tsx#SendingListThumb|src/app/(authenticated)/(dashboard)/media/components/RunAsAdPickerDialog.tsx#VideoPreviewCard",
+      "verdict": "true",
+      "reason": "thumbnail with play overlay in two media dialogs"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/media/components/BulkMetaAccountSelector.tsx#IdentityAvatar|src/app/(authenticated)/(dashboard)/media/components/RunAdScreen.tsx#MetaIdentityAvatar",
+      "verdict": "true",
+      "reason": "two Meta identity avatars wrapping the same primitive"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/creators/components/creator-row-cells.tsx#MatureSelectedButton|src/app/(authenticated)/(dashboard)/creators/components/creator-row-cells.tsx#UnlinkSelectedButton",
+      "verdict": "true",
+      "reason": "two confirm-dialog buttons with the same alert dialog skeleton"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/creators/CreatorAvatar.tsx#CreatorRowAvatar|src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/creators/CreatorRow.tsx#CreatorRowAvatar",
+      "verdict": "true",
+      "reason": "same tooltip wrapper in two neighbouring files"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/edit/[id]/[taskId]/page.tsx#EditCampaignTaskPage|src/app/(authenticated)/(dashboard)/campaigns/edit/[id]/page.tsx#EditCampaignPage",
+      "verdict": "false",
+      "reason": "two Next.js route entries sharing framework scaffolding (auth, hydrate, render)"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/editor/components/steps/strategy/ApprovalsPanel.test.tsx#TestActiveSectionProvider|src/app/(authenticated)/(dashboard)/campaigns/editor/components/steps/strategy/WhoCanJoinPanel.test.tsx#TestActiveSectionProvider",
+      "verdict": "false",
+      "reason": "test scaffolding copied between two panel tests"
+    },
+    {
+      "id": "emails/base-email-layout.property.test.tsx#AgencyInviteOracle|emails/base-email-layout.property.test.tsx#CampaignBrandInviteOracle",
+      "verdict": "false",
+      "reason": "email oracle components inside a property test"
+    },
+    {
+      "id": "emails/base-email-layout.property.test.tsx#JoinApprovedOracle|emails/base-email-layout.property.test.tsx#JoinDeniedOracle",
+      "verdict": "false",
+      "reason": "email oracle components inside a property test"
+    },
+    {
+      "id": "emails/base-email-layout.property.test.tsx#InviteOracle|emails/base-email-layout.property.test.tsx#JoinApprovedOracle",
+      "verdict": "false",
+      "reason": "email oracle components inside a property test"
+    },
+    {
+      "id": "emails/base-email-layout.property.test.tsx#InviteOracle|emails/base-email-layout.property.test.tsx#JoinDeniedOracle",
+      "verdict": "false",
+      "reason": "email oracle components inside a property test"
+    },
+    {
+      "id": "emails/base-email-layout.property.test.tsx#AgencyInviteOracle|emails/base-email-layout.property.test.tsx#JoinApprovedOracle",
+      "verdict": "false",
+      "reason": "email oracle components inside a property test"
+    },
+    {
+      "id": "src/components/ui/hover-card.tsx#HoverCardContent|src/components/ui/popover.tsx#PopoverContent",
+      "verdict": "false",
+      "reason": "shadcn primitives generated from one template"
+    },
+    {
+      "id": "src/components/ui/sidebar.tsx#SidebarGroupAction|src/components/ui/sidebar.tsx#SidebarMenuAction",
+      "verdict": "false",
+      "reason": "shadcn primitives generated from one template"
+    },
+    {
+      "id": "src/components/ui/dropdown-menu.tsx#DropdownMenuCheckboxItem|src/components/ui/dropdown-menu.tsx#DropdownMenuRadioItem",
+      "verdict": "false",
+      "reason": "shadcn primitives generated from one template"
+    },
+    {
+      "id": "src/components/ui/alert-dialog.tsx#AlertDialogAction|src/components/ui/alert-dialog.tsx#AlertDialogCancel",
+      "verdict": "false",
+      "reason": "shadcn primitives generated from one template"
+    }
+  ]
+}

@@ -13,6 +13,8 @@ export interface CallGraphEvidenceRow {
   relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate';
   evidenceStrength: 'exact' | 'candidate';
   evidenceSource: string;
+  /** `render` when the edge is a rendered component element (`<Child />`) rather than a call expression. */
+  interaction?: 'render';
 }
 
 export interface CallGraphResult {
@@ -97,6 +99,7 @@ export function callGraph(
     relationship: r.source === 'scip-chunk' ? 'chunk-candidate' : 'resolved-call',
     evidenceStrength: r.source === 'scip-chunk' ? 'candidate' : 'exact',
     evidenceSource: r.source,
+    ...(r.kind === 'jsx-render' ? { interaction: 'render' as const } : {}),
   }));
   return {
     symbol: target.symbol,

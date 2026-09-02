@@ -1991,7 +1991,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
               rows: result.callerEvidence
                 ? result.callerEvidence.map(
                     (c) =>
-                      `  [${c.evidenceStrength}:${c.relationship}] ${c.file}  ${c.shortName}  (${c.evidenceSource})`,
+                      `  [${c.evidenceStrength}:${c.relationship}${c.interaction ? `:${c.interaction}` : ''}] ${c.file}  ${c.shortName}  (${c.evidenceSource})`,
                   )
                 : result.callers.map((c) => `  ${c.file}  ${c.shortName}`),
             },
@@ -2000,7 +2000,7 @@ export const graphQueryCommandDescriptors: CommandDescriptor[] = [
               rows: result.calleeEvidence
                 ? result.calleeEvidence.map(
                     (c) =>
-                      `  [${c.evidenceStrength}:${c.relationship}] ${c.file}  ${c.shortName}  (${c.evidenceSource})`,
+                      `  [${c.evidenceStrength}:${c.relationship}${c.interaction ? `:${c.interaction}` : ''}] ${c.file}  ${c.shortName}  (${c.evidenceSource})`,
                   )
                 : result.callees.map((c) => `  ${c.file}  ${c.shortName}`),
             },

@@ -7,7 +7,7 @@ import { referenceSitesForSymbol } from '../../symbols/references/reference-site
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { detectAstLanguage, getSourceFacts } from '../../source/ast.js';
 
-export type AuditQuestion = 'references' | 'callees';
+export type AuditQuestion = 'references' | 'callees' | 'renders';
 export type AuditOracleKind = 'semantic' | 'source';
 
 export interface AuditDisagreement {
@@ -85,6 +85,7 @@ export function selfAudit(
   const tallies: Record<AuditQuestion, QuestionTally> = {
     references: emptyTally(),
     callees: emptyTally(),
+    renders: emptyTally(),
   };
   const disagreements: AuditDisagreement[] = [];
   let oracleAnswered = 0;
@@ -99,11 +100,17 @@ export function selfAudit(
         ? semanticReferences(db, definition).map((ref) => ref.file)
         : [...(sourceOracle?.referencesBySymbolId.get(definition.symbolId) ?? [])],
     );
+    const oracleCalleeRows: ReadonlyArray<{ file: string; kind?: 'jsx-render' }> =
+      oracleKind === 'semantic'
+        ? (semanticOracleCallees.get(definition.symbolId) ?? [])
+        : [...(sourceOracle?.calleesBySymbolId.get(definition.symbolId) ?? [])].map((file) => ({ file }));
     const oracleCals = crossFileSet(
       definition,
-      oracleKind === 'semantic'
-        ? (semanticOracleCallees.get(definition.symbolId) ?? []).map((callee) => callee.file)
-        : [...(sourceOracle?.calleesBySymbolId.get(definition.symbolId) ?? [])],
+      oracleCalleeRows.filter((callee) => callee.kind !== 'jsx-render').map((callee) => callee.file),
+    );
+    const oracleRenders = crossFileSet(
+      definition,
+      oracleCalleeRows.filter((callee) => callee.kind === 'jsx-render').map((callee) => callee.file),
     );
     oracleAnswered += 1;
 
@@ -111,13 +118,23 @@ export function selfAudit(
       definition,
       referenceSitesForSymbol(db, definition, { semanticEvidence: symbolSemanticEvidence }).map((site) => site.file),
     );
+    const cheapCalleeRows = index.calleeMap([definition], { semantic: false }).get(definition.symbolId) ?? [];
     const cheapCals = crossFileSet(
       definition,
-      (index.calleeMap([definition], { semantic: false }).get(definition.symbolId) ?? []).map((callee) => callee.file),
+      cheapCalleeRows.filter((callee) => callee.kind !== 'jsx-render').map((callee) => callee.file),
+    );
+    const cheapRenders = crossFileSet(
+      definition,
+      cheapCalleeRows.filter((callee) => callee.kind === 'jsx-render').map((callee) => callee.file),
     );
 
+    // The compiler oracle only enumerates call shapes it resolved, so an
+    // empty answer is ambiguous unless the body has no call or render site
+    // at all; then "nothing" is the complete answer and the comparison holds.
+    const sites = callSiteKindsInDefinition(db, definition);
     const referencesComplete = oracleComplete(oracleKind, 'references');
-    const calleesComplete = oracleComplete(oracleKind, 'callees');
+    const calleesComplete = oracleComplete(oracleKind, 'callees') || sites.calls === 0;
+    const rendersComplete = oracleComplete(oracleKind, 'renders') || sites.renders === 0;
     scoreQuestion(
       tallies.references,
       definition,
@@ -128,6 +145,7 @@ export function selfAudit(
       disagreements,
     );
     scoreQuestion(tallies.callees, definition, 'callees', cheapCals, oracleCals, calleesComplete, disagreements);
+    scoreQuestion(tallies.renders, definition, 'renders', cheapRenders, oracleRenders, rendersComplete, disagreements);
   }
 
   disagreements.sort(
@@ -140,7 +158,7 @@ export function selfAudit(
     sampleSize: sampled.length,
     oracleCoverage: sampled.length > 0 ? round3(oracleAnswered / sampled.length) : 0,
     oracleKind,
-    scores: (['references', 'callees'] as const).map((question) =>
+    scores: (['references', 'callees', 'renders'] as const).map((question) =>
       finalizeScore(question, tallies[question], oracleKind),
     ),
     topDisagreements: disagreements.slice(0, maxDisagreements),
@@ -228,7 +246,24 @@ function scoreQuestion(
 const SEMANTIC_ORACLE_COMPLETE: Record<AuditQuestion, boolean> = {
   references: true,
   callees: false,
+  renders: false,
 };
+
+/** Call and render sites the source parser found inside one definition's range. */
+function callSiteKindsInDefinition(
+  db: ScipDatabase,
+  definition: IndexedDefinition,
+): { calls: number; renders: number } {
+  const facts = getSourceFacts(db, definition.relativePath);
+  let calls = 0;
+  let renders = 0;
+  for (const site of facts?.callSites ?? []) {
+    if (site.line < definition.startLine || site.line > definition.endLine) continue;
+    if (site.kind === 'jsx-render') renders += 1;
+    else calls += 1;
+  }
+  return { calls, renders };
+}
 
 function finalizeScore(question: AuditQuestion, tally: QuestionTally, oracleKind: AuditOracleKind): AuditQuestionScore {
   const recall = tally.oracleTotal > 0 ? tally.agreed / tally.oracleTotal : 1;

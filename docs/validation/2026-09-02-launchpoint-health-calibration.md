@@ -60,3 +60,18 @@ three-way beat-list editor sharing `useStableListKeys`, the same-folder
 `CreatorAvatar`/`CreatorRow` avatar copy, 105 copies of
 `hasPvpSettlementSnapshotSql` and 42 of `hasDeliveredApprovedWorkSql`, and the
 `api-to-form-values` / `form-values-to-api-payload` co-change pair.
+
+## Second repository: Vega
+
+Same build, `Vega_2.0` (2,712 files; Next.js web app plus a NestJS API in one
+monorepo). Health 79 / 98 / 79. Exclusion classes on this repository: 36
+test-file components, 12 hook-versus-component pairs, 23 pairs already covered
+by a project hook, 117 single-consumer helpers, 8 kit duplicate members, 34
+entry-surface dead symbols. All were checked against their rows and none
+removed product-relevant findings. Two conventions this repository has and
+Launchpoint lacks were added as policies afterwards: CRUD and lifecycle
+method names shared across unrelated classes no longer form drifted-twin
+groups, and files that forward three or more methods to the same
+collaborator are treated as facades in `passthrough-candidates` (357 forwards
+went from 171 direct to 38 direct). The graph-level work that came out of the
+same investigation is tracked in `docs/plans/2026-09-02-graph-accuracy-investigation.md`.

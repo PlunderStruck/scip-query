@@ -1,5 +1,5 @@
 {
-  "digest": "c145ce0fc4fc43838f6b285957f0b3ccf8955d1c530abbb32d17ba3a3f98887f",
+  "digest": "c9a282b3a203aa5eb1b2fbd103ab8980ced079ef88a7bb91c17cffd5ab5f784b",
   "kind": "scip-query-api-manifest",
   "schemaVersion": 1,
   "surface": {
@@ -266,7 +266,7 @@
           {
             "kind": "type",
             "name": "CallGraphEvidenceRow",
-            "signature": "interface CallGraphEvidenceRow {\n    symbol: string;\n    shortName: string;\n    file: string;\n    relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate';\n    evidenceStrength: 'exact' | 'candidate';\n    evidenceSource: string;\n}"
+            "signature": "interface CallGraphEvidenceRow {\n    symbol: string;\n    shortName: string;\n    file: string;\n    relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate';\n    evidenceStrength: 'exact' | 'candidate';\n    evidenceSource: string;\n    interaction?: 'render';\n}"
           },
           {
             "kind": "type",
@@ -2542,7 +2542,7 @@
         "types": "dist/queries/by-kind.d.ts"
       },
       "./queries/call-graph": {
-        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ninterface CallGraphEvidenceRow {\n    symbol: string;\n    shortName: string;\n    file: string;\n    relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate';\n    evidenceStrength: 'exact' | 'candidate';\n    evidenceSource: string;\n}\n\ninterface CallGraphResult {\n    symbol: string;\n    shortName: string;\n    callers: Array<{\n        symbol: string;\n        shortName: string;\n        file: string;\n    }>;\n    callees: Array<{\n        symbol: string;\n        shortName: string;\n        file: string;\n    }>;\n    callerEvidence?: CallGraphEvidenceRow[];\n    calleeEvidence?: CallGraphEvidenceRow[];\n    coverage?: {\n        scope: 'indexed-static-call-graph';\n        blindSpots: string[];\n    };\n}\n\ndeclare function callGraph(db: ScipDatabase, symbolPattern: string, opts?: {\n    semantic?: boolean;\n}): CallGraphResult | null;\n\nexport { callGraph, type CallGraphEvidenceRow, type CallGraphResult };\n",
+        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ninterface CallGraphEvidenceRow {\n    symbol: string;\n    shortName: string;\n    file: string;\n    relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate';\n    evidenceStrength: 'exact' | 'candidate';\n    evidenceSource: string;\n    interaction?: 'render';\n}\n\ninterface CallGraphResult {\n    symbol: string;\n    shortName: string;\n    callers: Array<{\n        symbol: string;\n        shortName: string;\n        file: string;\n    }>;\n    callees: Array<{\n        symbol: string;\n        shortName: string;\n        file: string;\n    }>;\n    callerEvidence?: CallGraphEvidenceRow[];\n    calleeEvidence?: CallGraphEvidenceRow[];\n    coverage?: {\n        scope: 'indexed-static-call-graph';\n        blindSpots: string[];\n    };\n}\n\ndeclare function callGraph(db: ScipDatabase, symbolPattern: string, opts?: {\n    semantic?: boolean;\n}): CallGraphResult | null;\n\nexport { callGraph, type CallGraphEvidenceRow, type CallGraphResult };\n",
         "exports": [
           {
             "kind": "function",
@@ -2552,7 +2552,7 @@
           {
             "kind": "type",
             "name": "CallGraphEvidenceRow",
-            "signature": "interface CallGraphEvidenceRow {\n    symbol: string;\n    shortName: string;\n    file: string;\n    relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate';\n    evidenceStrength: 'exact' | 'candidate';\n    evidenceSource: string;\n}"
+            "signature": "interface CallGraphEvidenceRow {\n    symbol: string;\n    shortName: string;\n    file: string;\n    relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate';\n    evidenceStrength: 'exact' | 'candidate';\n    evidenceSource: string;\n    interaction?: 'render';\n}"
           },
           {
             "kind": "type",
@@ -4059,7 +4059,7 @@
           {
             "kind": "type",
             "name": "CallGraphEvidenceRow",
-            "signature": "interface CallGraphEvidenceRow {\n    symbol: string;\n    shortName: string;\n    file: string;\n    relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate';\n    evidenceStrength: 'exact' | 'candidate';\n    evidenceSource: string;\n}"
+            "signature": "interface CallGraphEvidenceRow {\n    symbol: string;\n    shortName: string;\n    file: string;\n    relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate';\n    evidenceStrength: 'exact' | 'candidate';\n    evidenceSource: string;\n    interaction?: 'render';\n}"
           },
           {
             "kind": "type",
@@ -6256,8 +6256,13 @@
         "types": "dist/queries/outline.d.ts"
       },
       "./queries/passthrough-candidates": {
-        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport { S as SymbolMatch } from \"../symbol-types-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ndeclare function isExportedDefinition(db: ScipDatabase, sym: SymbolMatch): boolean;\n\ntype PassthroughActionTier = 'direct' | 'signal';\n\ninterface PassthroughCandidate {\n    symbol: string;\n    shortName: string;\n    file: string;\n    startLine: number;\n    endLine: number;\n    loc: number;\n    forwardsTo: string;\n    forwardsToShort: string;\n    forwardsToFile: string;\n    actionTier: PassthroughActionTier;\n    boundaryEvidence: string[];\n    publicFacadeEvidence: string[];\n    recommendation: string;\n}\n\ndeclare function passthroughCandidates(db: ScipDatabase, opts?: {\n    scope?: string;\n    maxLoc?: number;\n    limit?: number;\n    scanLimit?: number;\n    semantic?: boolean;\n}): PassthroughCandidate[];\n\nexport { isExportedDefinition, type PassthroughActionTier, type PassthroughCandidate, passthroughCandidates };\n",
+        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport { S as SymbolMatch } from \"../symbol-types-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ndeclare function isExportedDefinition(db: ScipDatabase, sym: SymbolMatch): boolean;\n\ntype PassthroughActionTier = 'direct' | 'signal';\n\ninterface PassthroughCandidate {\n    symbol: string;\n    shortName: string;\n    file: string;\n    startLine: number;\n    endLine: number;\n    loc: number;\n    forwardsTo: string;\n    forwardsToShort: string;\n    forwardsToFile: string;\n    actionTier: PassthroughActionTier;\n    boundaryEvidence: string[];\n    publicFacadeEvidence: string[];\n    recommendation: string;\n}\n\ndeclare function passthroughCandidates(db: ScipDatabase, opts?: {\n    scope?: string;\n    maxLoc?: number;\n    limit?: number;\n    scanLimit?: number;\n    semantic?: boolean;\n}): PassthroughCandidate[];\n\ndeclare function applyFacadeEvidence(candidates: readonly PassthroughCandidate[]): PassthroughCandidate[];\n\nexport { applyFacadeEvidence, isExportedDefinition, type PassthroughActionTier, type PassthroughCandidate, passthroughCandidates };\n",
         "exports": [
+          {
+            "kind": "function",
+            "name": "applyFacadeEvidence",
+            "signature": "declare function applyFacadeEvidence(candidates: readonly PassthroughCandidate[]): PassthroughCandidate[];"
+          },
           {
             "kind": "function",
             "name": "isExportedDefinition",
@@ -6546,7 +6551,7 @@
         "types": "dist/queries/refs.d.ts"
       },
       "./queries/self-audit": {
-        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ntype AuditQuestion = 'references' | 'callees';\n\ntype AuditOracleKind = 'semantic' | 'source';\n\ninterface AuditDisagreement {\n    symbol: string;\n    question: AuditQuestion;\n    cheapOnly: string[];\n    oracleOnly: string[];\n}\n\ninterface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n}\n\ninterface SelfAuditResult {\n    available: boolean;\n    sampleSize: number;\n    oracleCoverage: number;\n    oracleKind?: AuditOracleKind;\n    scores: AuditQuestionScore[];\n    topDisagreements: AuditDisagreement[];\n}\n\ndeclare function selfAudit(db: ScipDatabase, opts?: {\n    samples?: number;\n    scope?: string;\n    maxDisagreements?: number;\n}): SelfAuditResult;\n\nexport { type AuditDisagreement, type AuditOracleKind, type AuditQuestion, type AuditQuestionScore, selfAudit, type SelfAuditResult };\n",
+        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ntype AuditQuestion = 'references' | 'callees' | 'renders';\n\ntype AuditOracleKind = 'semantic' | 'source';\n\ninterface AuditDisagreement {\n    symbol: string;\n    question: AuditQuestion;\n    cheapOnly: string[];\n    oracleOnly: string[];\n}\n\ninterface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n}\n\ninterface SelfAuditResult {\n    available: boolean;\n    sampleSize: number;\n    oracleCoverage: number;\n    oracleKind?: AuditOracleKind;\n    scores: AuditQuestionScore[];\n    topDisagreements: AuditDisagreement[];\n}\n\ndeclare function selfAudit(db: ScipDatabase, opts?: {\n    samples?: number;\n    scope?: string;\n    maxDisagreements?: number;\n}): SelfAuditResult;\n\nexport { type AuditDisagreement, type AuditOracleKind, type AuditQuestion, type AuditQuestionScore, selfAudit, type SelfAuditResult };\n",
         "exports": [
           {
             "kind": "type",
@@ -6561,7 +6566,7 @@
           {
             "kind": "type",
             "name": "AuditQuestion",
-            "signature": "type AuditQuestion = 'references' | 'callees';"
+            "signature": "type AuditQuestion = 'references' | 'callees' | 'renders';"
           },
           {
             "kind": "type",
@@ -8400,7 +8405,7 @@
     },
     "internalDeclarations": [
       {
-        "declaration": "type CalleeEvidenceSource = 'ast-callsite' | 'semantic-callee' | 'scip-chunk';\n\ninterface CalleeRow {\n    symbol: string;\n    file: string;\n    chunkId: number;\n    source: CalleeEvidenceSource;\n    callsiteLine?: number;\n}\n\nexport type { CalleeEvidenceSource as a, CalleeRow as C };\n",
+        "declaration": "type CalleeEvidenceSource = 'ast-callsite' | 'semantic-callee' | 'scip-chunk';\n\ninterface CalleeRow {\n    symbol: string;\n    file: string;\n    chunkId: number;\n    source: CalleeEvidenceSource;\n    callsiteLine?: number;\n    kind?: 'jsx-render';\n}\n\nexport type { CalleeEvidenceSource as a, CalleeRow as C };\n",
         "module": "call-graph-evidence-<hash>.d.ts"
       },
       {

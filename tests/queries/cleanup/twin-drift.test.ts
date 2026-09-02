@@ -561,3 +561,33 @@ describe('groupTwins framework route conventions', () => {
     expect(groups.map((group) => group.leaf)).toEqual(['handler']);
   });
 });
+
+describe('groupTwins convention-only class members', () => {
+  it('does not group CRUD and lifecycle method names shared across unrelated classes', () => {
+    const tokens = ['const', 'row', '=', 'await', 'this', '.', 'repo', '.', 'remove', '(', 'id', ')', ';'];
+    const groups = groupTwins([
+      record({
+        leaf: 'delete',
+        symbol: 'scip-typescript npm fixture 1.0.0 src/`chat.service.ts`/ChatService#delete().',
+        file: 'src/chat.service.ts',
+        tokens,
+      }),
+      record({
+        leaf: 'delete',
+        symbol: 'scip-typescript npm fixture 1.0.0 src/`issue.service.ts`/IssueService#delete().',
+        file: 'src/issue.service.ts',
+        tokens: [...tokens, 'audit'],
+      }),
+    ]);
+    expect(groups).toEqual([]);
+  });
+
+  it('still groups free functions that share a CRUD verb name', () => {
+    const tokens = ['const', 'row', '=', 'await', 'repo', '.', 'remove', '(', 'id', ')', ';'];
+    const groups = groupTwins([
+      record({ leaf: 'deleteRecord', file: 'src/chat.ts', tokens }),
+      record({ leaf: 'deleteRecord', file: 'src/issue.ts', tokens: [...tokens, 'audit'] }),
+    ]);
+    expect(groups.map((group) => group.leaf)).toEqual(['deleteRecord']);
+  });
+});

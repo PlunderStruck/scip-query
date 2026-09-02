@@ -1,0 +1,108 @@
+{
+  "detector": "react-hook-candidates",
+  "repository": "launchpoint-backend",
+  "identity": "pair",
+  "source": "full-list review of the 2026-09-02 health report (reviewer agent) verified against structural classes",
+  "labels": [
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/editor/components/steps/ProductCreativeStep/script-montage-editors.tsx#MontageBeatList|src/app/(authenticated)/(dashboard)/campaigns/editor/components/steps/ProductCreativeStep/talking-head-script-editor.tsx#TalkingHeadScriptEditor",
+      "verdict": "true",
+      "reason": "three-way beat-list editor sharing useStableListKeys and add/remove/update handlers"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/editor/components/steps/ProductCreativeStep/script-montage-editors.tsx#MontageBeatList|src/app/(authenticated)/(dashboard)/campaigns/shared/components/RepurposeBeatTimeline.tsx#RepurposeBeatTimeline",
+      "verdict": "true",
+      "reason": "three-way beat-list editor sharing useStableListKeys and add/remove/update handlers"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/editor/components/steps/ProductCreativeStep/talking-head-script-editor.tsx#TalkingHeadScriptEditor|src/app/(authenticated)/(dashboard)/campaigns/shared/components/RepurposeBeatTimeline.tsx#RepurposeBeatTimeline",
+      "verdict": "true",
+      "reason": "three-way beat-list editor sharing useStableListKeys and add/remove/update handlers"
+    },
+    {
+      "id": "src/app/agency-invite/page.tsx#AgencyInvitePage|src/app/brand-invite/page.tsx#BrandInvitePage",
+      "verdict": "true",
+      "reason": "public pages with the same token-check-then-redirect state machine"
+    },
+    {
+      "id": "src/app/brand-invite/page.tsx#BrandInvitePage|src/app/invoice/page.tsx#InvoicePage",
+      "verdict": "true",
+      "reason": "public pages with the same token-check-then-redirect state machine"
+    },
+    {
+      "id": "src/app/agency-invite/page.tsx#AgencyInvitePage|src/app/invoice/page.tsx#InvoicePage",
+      "verdict": "true",
+      "reason": "public pages with the same token-check-then-redirect state machine"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/editor/components/steps/CanvasPayscaleDialog.tsx#CanvasPayscaleDialog|src/app/(authenticated)/(dashboard)/campaigns/editor/components/steps/canvas-pay/canvas-video-payment-dialog.tsx#CanvasVideoPaymentDialog",
+      "verdict": "true",
+      "reason": "two dialogs editing canvas pay with the same open/edit/save shape"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/creators/CreatorRowContextMenu.tsx#CreatorGroupsSubmenu|src/app/(authenticated)/(dashboard)/components/creator-profile/CreatorCampaignGroups.tsx#CreatorCampaignGroups",
+      "verdict": "true",
+      "reason": "group-membership pickers sharing the editor hook and toggle handler"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/components/creator-profile/CreatorCampaignGroups.tsx#CreatorCampaignGroups|src/app/(authenticated)/(dashboard)/creators/components/CreatorActionsMenu.tsx#CreatorActionsMenu",
+      "verdict": "true",
+      "reason": "group-membership pickers sharing the editor hook and toggle handler"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/media/components/MetaAccountOnboardingModal.tsx#MetaAccountOnboardingModal|src/app/(authenticated)/(dashboard)/settings/components/sections/PaidAdsMetaAccountRows.tsx#PaidAdsMetaAccountRowsPanel",
+      "verdict": "true",
+      "reason": "same run-once sync effect with a ref guard in two places"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/recruitment/CreatorRecruitmentClient.tsx#RecruitmentCampaignPicker|src/app/(authenticated)/(dashboard)/admin/recruitment/CreatorRecruitmentClient.tsx#RecruitmentClientPicker",
+      "verdict": "true",
+      "reason": "two typeahead pickers in one file"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/editor/components/ImportPlacementDialog.tsx#ImportPlacementDialog|src/app/(authenticated)/(dashboard)/campaigns/editor/components/ImportPlacementDialog.tsx#ImportPlacementPanel",
+      "verdict": "true",
+      "reason": "dialog and inline panel for the same form"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/@modal/(.)media/[id]/page.tsx#MediaModalContent|src/app/(authenticated)/(dashboard)/media/[id]/page.tsx#MediaPageContent",
+      "verdict": "uncertain",
+      "reason": "intercepting route and its target repeat the same body; fix is a shared view, not a hook"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/clients/AdminClientsClient.tsx#AdminClientsClient|src/app/(authenticated)/(dashboard)/admin/clients/components/DossierSections.tsx#TimelineSection",
+      "verdict": "uncertain",
+      "reason": "share only useQuery plus a page state; a pagination hook is plausible but weak"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/code-health/components/CodeHealthClient.tsx#useSymbolSource|src/app/agency-invite/page.tsx#AgencyInvitePage",
+      "verdict": "false",
+      "reason": "a hook paired with a component on generic fetch-in-effect mechanics"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/code-health/components/CodeHealthClient.tsx#useSymbolSource|src/app/brand-invite/page.tsx#BrandInvitePage",
+      "verdict": "false",
+      "reason": "a hook paired with a component on generic fetch-in-effect mechanics"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/code-health/components/CodeHealthClient.tsx#useSymbolSource|src/app/invoice/page.tsx#InvoicePage",
+      "verdict": "false",
+      "reason": "a hook paired with a component on generic fetch-in-effect mechanics"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/code-health/components/CodeHealthClient.tsx#useSymbolSource|src/app/(authenticated)/(dashboard)/campaigns/editor/components/generate-ideas-context.tsx#EnabledGenerateIdeasProvider",
+      "verdict": "false",
+      "reason": "a hook paired with a component on generic fetch-in-effect mechanics"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/CampaignActionsMenu.tsx#CampaignActionsMenu|src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/CampaignSettingsMenu.tsx#CampaignSettingsMenu",
+      "verdict": "false",
+      "reason": "share only an open flag and its change handler"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/CampaignSettingsMenu.tsx#CampaignSettingsMenu|src/app/(authenticated)/(dashboard)/home/components/dashboard/TargetingFilters.tsx#TargetingFilters",
+      "verdict": "false",
+      "reason": "share only an open flag and its change handler"
+    }
+  ]
+}

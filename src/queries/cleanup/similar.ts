@@ -1021,7 +1021,11 @@ function buildCalleeFingerprints(
       const rawFingerprints = candidates.map((d) => ({
         symbol: d.symbol,
         file: d.relativePath,
-        callees: meaningfulCallees((calleeMap.get(d.symbolId) ?? []).map((c) => c.symbol)),
+        // Rendered children describe JSX structure, which the React duplicate
+        // detector already compares; the callee fingerprint stays about calls.
+        callees: meaningfulCallees(
+          (calleeMap.get(d.symbolId) ?? []).filter((c) => c.kind !== 'jsx-render').map((c) => c.symbol),
+        ),
         paramCount: index.callableSignature(d)?.paramCount ?? -1,
       }));
       const trimmed = trimSameFileSiblingSaturatedCallees(rawFingerprints);

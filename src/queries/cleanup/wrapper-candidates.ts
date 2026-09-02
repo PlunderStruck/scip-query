@@ -292,13 +292,31 @@ function enclosingCaller(
   refRow: MentionChunk,
 ): IndexedDefinition | null {
   // SCIP gives us the chunk that contains the reference, but chunks can be
-  // file-wide. Refine via source-text scan: find a line within the chunk's
-  // range where the symbol's leaf identifier actually appears, then look up
-  // the enclosing definition from that precise line. Falls back to the
-  // chunk's start line when source isn't readable / leaf isn't unique.
+  // file-wide. Refine via source-text scan: find the lines within the chunk's
+  // range where the symbol's leaf identifier appears, and prefer the first
+  // one that sits inside a callable — the import line names the symbol too,
+  // and choosing it would lose the function-level caller and its fan-in.
   const callerDefs = index.definitionsForFile(callerFile);
-  const refinedLine = refineCallSiteLine(db, callerFile, symbol, refRow.start_line, refRow.end_line);
-  return findEnclosingDefinition(callerDefs, refinedLine);
+  for (const line of candidateCallSiteLines(db, callerFile, symbol, refRow.start_line, refRow.end_line)) {
+    const enclosing = findEnclosingDefinition(callerDefs, line);
+    if (enclosing?.isFunctionLike) return enclosing;
+  }
+  return findEnclosingDefinition(
+    callerDefs,
+    refineCallSiteLine(db, callerFile, symbol, refRow.start_line, refRow.end_line),
+  );
+}
+
+function candidateCallSiteLines(
+  db: ScipDatabase,
+  file: string,
+  symbol: string,
+  chunkStart: number,
+  chunkEnd: number,
+): number[] {
+  const leaf = leafName(symbol);
+  if (!leaf) return [];
+  return (getIdentifierLineMap(db, file).get(leaf) ?? []).filter((line) => line >= chunkStart && line <= chunkEnd);
 }
 
 function wrapperCallerFanIn(

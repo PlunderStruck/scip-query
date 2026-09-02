@@ -4,6 +4,7 @@ import type { SyntaxNode } from '../ast/ast-types.js';
 import { extractCallLeaf } from './source-calls.js';
 import { callableFactForNode, callableFactNodeTypes } from './source-callables.js';
 import { getSourceFacts } from './source-facts.js';
+import type { CallSiteKind } from './source-fact-types.js';
 
 const CALLABLE_FACT_LANGUAGES = new Set<AstLanguage>(['rust', 'typescript', 'tsx', 'javascript', 'python', 'clojure']);
 const AST_CALLABLE_FACT_LANGUAGES = new Set<AstLanguage>(['rust', 'typescript', 'tsx', 'javascript', 'python']);
@@ -14,7 +15,11 @@ export interface CallableSite {
   endLine: number;
 }
 
+export type { CallSiteKind } from './source-fact-types.js';
+
 export interface CallSite {
+  /** Invocation shape; absent on older or non-JS facts and read as `call`. */
+  kind?: CallSiteKind;
   /** Leaf name of what is being called, for example "foo" for `obj.foo()`. */
   calleeLeaf: string;
   /** Optional namespace/module qualifier, for example "conn" for `conn/transact!`. */

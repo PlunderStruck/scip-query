@@ -73,6 +73,8 @@ export interface SemanticCallee {
   line: number;
   /** Zero-based source line of the call expression when the provider retains it. */
   callsiteLine?: number;
+  /** `jsx-render` when the compiler resolved a rendered component element rather than a call. */
+  kind?: 'jsx-render';
 }
 
 export interface SemanticReferenceAndCalleeMaps {

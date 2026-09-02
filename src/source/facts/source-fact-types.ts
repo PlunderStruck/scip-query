@@ -1,5 +1,14 @@
 import type { AstLanguage } from '../ast/ast-language.js';
 
+/**
+ * `call` and `new` are invocations. `jsx-render` is a component element
+ * (`<Child />`): the framework invokes `Child` when this component renders,
+ * so it is an execution edge for reachability, fan-out, and impact, while
+ * consumers that reason about literal call syntax (forwarding shape,
+ * similarity fingerprints) can exclude it.
+ */
+export type CallSiteKind = 'call' | 'new' | 'jsx-render';
+
 export interface SourceFacts {
   language: AstLanguage;
   callables: Array<{
@@ -15,6 +24,8 @@ export interface SourceFacts {
     clojureKind?: 'function' | 'macro' | 'method';
   }>;
   callSites: Array<{
+    /** Invocation shape; absent on older payloads and read as `call`. */
+    kind?: CallSiteKind;
     calleeLeaf: string;
     calleeQualifier?: string;
     calleeText?: string;

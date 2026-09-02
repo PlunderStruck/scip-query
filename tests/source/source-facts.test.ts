@@ -387,3 +387,53 @@ describe('source facts', () => {
     }
   });
 });
+
+describe('source facts JSX render sites', () => {
+  it('records rendered component elements as jsx-render call sites and skips host elements', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-source-facts-jsx-'));
+    try {
+      const projectRoot = join(tempDir, 'project');
+      const dbPath = join(tempDir, 'index.db');
+      writeFixtureFiles(projectRoot, {
+        'src/Panel.tsx': [
+          "import { Child } from './Child';",
+          "import * as Menu from './menu';",
+          'export function Panel({ items }: { items: string[] }) {',
+          '  const total = count(items);',
+          '  return (',
+          '    <div className="panel">',
+          '      <Child total={total} />',
+          '      <Menu.Item label="first" />',
+          '      <svg:rect width="1" />',
+          '      <this.Legacy />',
+          '    </div>',
+          '  );',
+          '}',
+        ],
+      });
+      evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/Panel.tsx').write();
+
+      const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(tempDir, 'index.scip') });
+      try {
+        const sites = getSourceFacts(db, 'src/Panel.tsx')?.callSites ?? [];
+        expect(sites).toEqual([
+          expect.objectContaining({ kind: 'call', calleeLeaf: 'count', line: 3 }),
+          expect.objectContaining({ kind: 'jsx-render', calleeLeaf: 'Child', memberAccess: false, line: 6 }),
+          expect.objectContaining({
+            kind: 'jsx-render',
+            calleeLeaf: 'Item',
+            memberAccess: true,
+            calleeQualifier: 'Menu',
+            line: 7,
+          }),
+          expect.objectContaining({ kind: 'jsx-render', calleeLeaf: 'Legacy', memberAccess: true, line: 9 }),
+        ]);
+        expect(sites.some((site) => site.calleeLeaf === 'div' || site.calleeLeaf === 'rect')).toBe(false);
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});

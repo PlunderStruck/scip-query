@@ -30,6 +30,8 @@ export interface CalleeRow {
   source: CalleeEvidenceSource;
   /** Zero-based source line of the call expression when retained by the evidence source. */
   callsiteLine?: number;
+  /** `jsx-render` when the edge is a rendered component element rather than a call expression. */
+  kind?: 'jsx-render';
 }
 
 // scip-query: ignore-stale — exported caller evidence record shared through
@@ -385,6 +387,7 @@ export function buildAstCalleeMap(db: ScipDatabase, definitions: ReadonlyArray<S
         chunkId: site.line,
         source: 'ast-callsite',
         callsiteLine: site.line,
+        ...(site.kind === 'jsx-render' ? { kind: 'jsx-render' as const } : {}),
       });
     }
   }
@@ -654,7 +657,7 @@ function symbolLocationsByDocument(definitions: ReadonlyArray<SymbolLocation>): 
 // SCIP mentions, AST callsites, Rust attribute calls, and TypeScript semantics
 // intentionally contribute to one cross-file reference map.
 function toCalleeRows(
-  semantic: Map<number, Array<{ symbol: string; file: string; callsiteLine?: number }>>,
+  semantic: Map<number, Array<{ symbol: string; file: string; callsiteLine?: number; kind?: 'jsx-render' }>>,
 ): Map<number, CalleeRow[]> {
   const out = new Map<number, CalleeRow[]>();
   for (const [symbolId, callees] of semantic) {
@@ -666,6 +669,7 @@ function toCalleeRows(
         chunkId: -1,
         source: 'semantic-callee',
         ...(callee.callsiteLine === undefined ? {} : { callsiteLine: callee.callsiteLine }),
+        ...(callee.kind === 'jsx-render' ? { kind: 'jsx-render' as const } : {}),
       });
     }
     out.set(symbolId, rows);

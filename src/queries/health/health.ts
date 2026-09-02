@@ -988,7 +988,6 @@ type ReactHookHealthCandidate = Pick<
   | 'sharedHandlers'
   | 'sharedHandlerVerbs'
   | 'evidenceClass'
-  | 'pairContext'
 >;
 
 function reactHookHealthScore(candidate: ReactHookHealthCandidate): number {
@@ -1008,13 +1007,6 @@ function reactHookHealthVerdict(candidate: ReactHookHealthCandidate): {
   reason: string;
   detail: string;
 } {
-  if (candidate.pairContext === 'framework-route-pair') {
-    return {
-      weight: 0,
-      reason: 'framework-route-pairs',
-      detail: 'pairs of framework route entries that share only routing scaffolding',
-    };
-  }
   if (candidate.evidenceClass === 'generic-workflow-scaffolding') {
     return {
       weight: 0,

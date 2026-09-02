@@ -234,12 +234,11 @@ function pairContextVerdict(
   recommendation: string,
 ): { actionTier: ReactHookActionTier; recommendation: string } {
   switch (pairContext) {
+    // Two route entries that share *behavior* (a fetch-then-redirect state
+    // machine, a token check) share product logic, not routing scaffolding;
+    // only structural overlap between route files is framework-shaped.
     case 'framework-route-pair':
-      return {
-        actionTier: 'support',
-        recommendation:
-          'Framework route entries share routing scaffolding by design; extract a hook only for repeated non-routing behavior.',
-      };
+      return { actionTier, recommendation };
     case 'intercepting-route-pair':
       return {
         actionTier,

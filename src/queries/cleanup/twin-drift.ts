@@ -149,6 +149,7 @@ export function groupTwins(
     (record) =>
       !isSyntheticLeaf(record.leaf) &&
       !isConventionOnlyTwinLeaf(record.leaf) &&
+      !isConventionOnlyMemberTwin(record.symbol, record.leaf) &&
       !isFrameworkRouteConventionTwin(record.file, record.leaf) &&
       classifyFile(record.file) !== 'test' &&
       !isRustTraitImplMember(record.symbol) &&
@@ -329,6 +330,7 @@ function twinDriftCandidateDefinitions(definitions: readonly IndexedDefinition[]
     (definition) =>
       definition.leaf &&
       !isSyntheticLeaf(definition.leaf) &&
+      !isConventionOnlyMemberTwin(definition.symbol, definition.leaf) &&
       !isFrameworkRouteConventionTwin(definition.relativePath, definition.leaf) &&
       !isRustTraitImplMember(definition.symbol) &&
       !isRustInlineTestSymbol(definition.symbol) &&
@@ -505,6 +507,60 @@ function isConventionOnlyTwinLeaf(leaf: string): boolean {
 }
 
 const CONVENTION_ONLY_TWIN_LEAVES = new Set(['main', 'row']);
+
+/**
+ * Method names that an object-oriented convention hands to every class of a
+ * kind: CRUD verbs on services and repositories, lifecycle verbs on anything
+ * with a lifecycle. `ChatService.delete` and `IssueService.delete` share a
+ * name because both are services, not because they implement one concept,
+ * so a same-name cluster of such members carries no drift signal. Applied
+ * only to members declared directly on a type; free functions keep the
+ * ordinary near-name rules.
+ */
+const CONVENTION_ONLY_MEMBER_LEAVES = new Set([
+  'close',
+  'connect',
+  'count',
+  'create',
+  'delete',
+  'destroy',
+  'disconnect',
+  'dispose',
+  'execute',
+  'exists',
+  'find',
+  'findAll',
+  'findById',
+  'findOne',
+  'get',
+  'getAll',
+  'getById',
+  'handle',
+  'init',
+  'initialize',
+  'list',
+  'load',
+  'open',
+  'patch',
+  'process',
+  'read',
+  'remove',
+  'reset',
+  'run',
+  'save',
+  'shutdown',
+  'start',
+  'stop',
+  'toJSON',
+  'toString',
+  'update',
+  'upsert',
+]);
+const TYPE_MEMBER_SYMBOL = /#(?:`[^`]+`|[^#/`]+)\(\)\.$/;
+
+function isConventionOnlyMemberTwin(symbol: string, leaf: string): boolean {
+  return CONVENTION_ONLY_MEMBER_LEAVES.has(leaf) && TYPE_MEMBER_SYMBOL.test(symbol);
+}
 
 /**
  * Names a file-system router or its per-route glue dictates: every Next.js

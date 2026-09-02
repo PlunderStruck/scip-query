@@ -1169,7 +1169,11 @@ class TsMorphSemanticProvider implements SemanticProvider {
         if (profiling) checkerLookupMs = Math.round(performance.now() - checkerStart);
         const symbolCache = new Map<TypeScriptSymbol, ResolvedCalleeTarget | null>();
         const visit = (node: ts.Node): void => {
-          if (this.tsMorph.ts.isCallExpression(node) || this.tsMorph.ts.isNewExpression(node)) {
+          if (
+            this.tsMorph.ts.isCallExpression(node) ||
+            this.tsMorph.ts.isNewExpression(node) ||
+            isJsxComponentElement(this.tsMorph.ts, node)
+          ) {
             if (profiling) callNodes += 1;
             const callee = this.semanticCalleeForCallNode(
               checker,
@@ -1218,7 +1222,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
     checker: TypeScriptTypeChecker,
     sourceFile: ts.SourceFile,
     definitions: ReadonlyArray<IndexedDefinition>,
-    node: ts.CallExpression | ts.NewExpression,
+    node: ts.CallExpression | ts.NewExpression | ts.JsxOpeningElement | ts.JsxSelfClosingElement,
     symbolCache: Map<TypeScriptSymbol, ResolvedCalleeTarget | null>,
     requestedSymbolIds?: ReadonlySet<number>,
     stats?: CalleeMapProfileStats,
@@ -1231,7 +1235,11 @@ class TsMorphSemanticProvider implements SemanticProvider {
       if (stats) stats.skippedUnrequestedCallers += 1;
       return null;
     }
-    const expression = node.expression;
+    const render = this.tsMorph.ts.isJsxOpeningElement(node) || this.tsMorph.ts.isJsxSelfClosingElement(node);
+    // `isJsxComponentElement` admits only identifier and property-access tags,
+    // both expressions; a namespaced tag (`<svg:rect>`) never reaches here.
+    if (render && this.tsMorph.ts.isJsxNamespacedName(node.tagName)) return null;
+    const expression = render ? (node.tagName as ts.Expression) : node.expression;
     const symbol = this.compilerSymbolForExpression(checker, expression, stats);
     let target: ResolvedCalleeTarget | null = null;
     if (symbol) {
@@ -1257,6 +1265,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
             file: target.file,
             line: target.line,
             callsiteLine: lineOfCompilerNode(sourceFile, node),
+            ...(render ? { kind: 'jsx-render' as const } : {}),
           },
         }
       : null;
@@ -1551,6 +1560,22 @@ function addReferencesForSymbols(
     bucket.push(...references);
     index.set(symbolId, bucket);
   }
+}
+
+/**
+ * A JSX element whose tag denotes a component the framework will invoke: a
+ * capitalized identifier or a property access. Host elements (`<div>`) and
+ * namespaced tags are never components.
+ */
+function isJsxComponentElement(
+  compiler: typeof ts,
+  node: ts.Node,
+): node is ts.JsxOpeningElement | ts.JsxSelfClosingElement {
+  if (!compiler.isJsxOpeningElement(node) && !compiler.isJsxSelfClosingElement(node)) return false;
+  const tag = node.tagName;
+  if (compiler.isPropertyAccessExpression(tag)) return true;
+  if (compiler.isIdentifier(tag)) return /^[A-Z]/.test(tag.text);
+  return false;
 }
 
 function dedupeCallees(callees: SemanticCallee[]): SemanticCallee[] {
