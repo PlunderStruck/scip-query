@@ -1119,6 +1119,11 @@ async function runLanguageIndexersForFreshReindex(
           previousSnapshot: previousProjectInputSnapshot(opts.paths.metaPath),
           currentSnapshot: opts.fingerprint,
           projectMode: opts.opts.typescriptProjectMode,
+          ...(acceptedGeneration.state === 'current' &&
+          acceptedGeneration.generation.publication?.scipCompanion === 'deferred' &&
+          acceptedGeneration.generation.publication.typescriptOverlayGeneration
+            ? { previousOverlayGeneration: acceptedGeneration.generation.publication.typescriptOverlayGeneration }
+            : {}),
           onStatus: opts.onStatus,
           onUnavailable: (reason) => {
             typescriptIncrementalUnavailableReason = reason;

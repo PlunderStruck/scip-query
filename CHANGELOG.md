@@ -4,6 +4,17 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+### Incremental TypeScript refresh survives a reused-shard publication
+
+- A publication that reused the TypeScript shard (only non-TypeScript inputs
+  changed) advances the project snapshot without writing a new overlay, so
+  the next TypeScript edit looked for an overlay named by the new snapshot,
+  found nothing, and every refresh failed with "deferred TypeScript SCIP
+  base has no matching overlay generation" until an explicit
+  `--allow-expensive-rebuild`. The incremental planner now bases the next
+  overlay on the overlay generation the accepted publication carries, which
+  is the overlay that exists.
+
 ### Extraction candidates are exclusive regions, not line coincidences
 
 - `extract-candidates` now reports contiguous line ranges whose callees are

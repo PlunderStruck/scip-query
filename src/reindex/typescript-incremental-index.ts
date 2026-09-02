@@ -44,6 +44,13 @@ export interface TypeScriptIncrementalEligibilityInput {
   graph: FileDependencyGraph | null;
   producerIdentity: string;
   rootTsconfigExists: boolean;
+  /**
+   * The overlay generation the accepted publication carries. A publication
+   * that reused the TypeScript shard advances the project snapshot without
+   * committing a new overlay, so the snapshot-derived identity would name an
+   * overlay that was never written; the publication record is authoritative.
+   */
+  previousOverlayGeneration?: string;
 }
 
 export interface TypeScriptIncrementalProjectPlan {
@@ -91,6 +98,8 @@ export interface MaterializeTypeScriptIncrementalInput {
   previousSnapshot: ProjectInputSnapshot | null;
   currentSnapshot: ProjectInputSnapshot;
   projectMode: TypeScriptProjectMode | undefined;
+  /** Overlay generation carried by the accepted publication, when its companion is deferred. */
+  previousOverlayGeneration?: string;
   onStatus: (message: string) => void;
   /** Receives the exact reason that made the safe incremental path unavailable. */
   onUnavailable?: (reason: string) => void;
@@ -219,7 +228,9 @@ export function planTypeScriptIncrementalUpdate(
     manifest: incrementalManifest,
     plan,
     projectIdentity,
-    previousFragmentGeneration: typeScriptFragmentGenerationIdentity(input.previousSnapshot, input.producerIdentity),
+    previousFragmentGeneration:
+      input.previousOverlayGeneration ??
+      typeScriptFragmentGenerationIdentity(input.previousSnapshot, input.producerIdentity),
     nextFragmentGeneration: typeScriptFragmentGenerationIdentity(input.currentSnapshot, input.producerIdentity),
     projects,
     deletedFiles: effectiveDeletedPaths,
@@ -523,6 +534,9 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       graph,
       producerIdentity: availability.producerIdentity,
       rootTsconfigExists: existsSync(join(input.projectRoot, 'tsconfig.json')),
+      ...(input.previousOverlayGeneration === undefined
+        ? {}
+        : { previousOverlayGeneration: input.previousOverlayGeneration }),
     });
     if (!eligibility.eligible) throw new Error(eligibility.reason);
     const baseGeneration = publishedTypeScriptIndexGeneration(input.previousDbPath);

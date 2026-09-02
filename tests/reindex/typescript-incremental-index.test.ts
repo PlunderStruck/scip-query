@@ -71,6 +71,33 @@ describe('TypeScript incremental index eligibility', () => {
     expect(rootWorkspace.eligible).toBe(true);
   });
 
+  test('bases the next overlay on the accepted publication pointer when one is carried', () => {
+    const previous = snapshot({ a: 'a1', b: 'b1', config: 'c1' });
+    const current = snapshot({ a: 'a2', b: 'b1', config: 'c1' });
+    const input = {
+      projectMode: 'single' as const,
+      previousSnapshot: previous,
+      currentSnapshot: current,
+      projectFiles: ['src/a.ts', 'src/b.ts'],
+      graph: new Map([['src/b.ts', new Set(['src/a.ts'])]]),
+      producerIdentity: 'scip-typescript:0.4.0:test',
+      rootTsconfigExists: true,
+    };
+    const derived = planTypeScriptIncrementalUpdate(input);
+    const carried = planTypeScriptIncrementalUpdate({
+      ...input,
+      previousOverlayGeneration: 'overlay-from-publication',
+    });
+    expect(derived.eligible && carried.eligible).toBe(true);
+    if (!derived.eligible || !carried.eligible) return;
+    // A publication that reused the TypeScript shard moved the snapshot on
+    // without writing an overlay for it; the pointer it carries names the
+    // overlay that exists, the snapshot-derived identity does not.
+    expect(carried.previousFragmentGeneration).toBe('overlay-from-publication');
+    expect(carried.previousFragmentGeneration).not.toBe(derived.previousFragmentGeneration);
+    expect(carried.nextFragmentGeneration).toBe(derived.nextFragmentGeneration);
+  });
+
   test('refreshes only the edited document when its tokens and line boundaries are unchanged', () => {
     const previous = snapshot({ a: 'a1', b: 'b1', config: 'c1' });
     const current = snapshot({ a: 'a2', b: 'b1', config: 'c1' });

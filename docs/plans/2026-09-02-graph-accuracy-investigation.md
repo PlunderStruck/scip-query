@@ -217,7 +217,7 @@ outbound locals of a planted block. `extract-candidates --full --json`
 still needs a 12 GB heap on Launchpoint, which is recorded as an open
 operational issue.
 
-### Lead 8 (open): the cycles phase flaps between five cycles and none
+### Lead 8 (closed): the cycles phase did not flap; the repository changed
 
 Three full Launchpoint health runs today on nearly identical indexes
 reported five dependency cycles, then none, then five, then none again,
@@ -226,3 +226,20 @@ ride on that finding flip with it (risk 69 versus 87). The empty runs
 share nothing obvious with each other yet; the next step is to run the
 `cycles` command alone against the same generation several times and
 compare its evidence coverage between an empty and a non-empty answer.
+
+Result. The four runs were on four index generations of a checkout another
+agent was moving. The five-cycle runs were built from Launchpoint commit
+`55227a380`; the empty runs were built from a branch that already contained
+`7bfaa770b` "Remove all detected dependency cycles (#3462)", which is now on
+Launchpoint's main. Standalone `cycles` on the current generation reports two
+module-hierarchy components and no dependency cycle, twice in a row. The
+detector was consistent throughout; the finding disappeared because the team
+acted on it.
+
+The investigation found a real defect next to it. After a publication that
+reused the TypeScript shard (a `package.json` change), the project snapshot
+moved on but no overlay was written for it, so the next TypeScript edit made
+every refresh fail with "deferred TypeScript SCIP base has no matching
+overlay generation" and the watcher served a stale generation while logging
+a failed run every few seconds. The incremental planner now bases the next
+overlay on the overlay generation the accepted publication carries.
