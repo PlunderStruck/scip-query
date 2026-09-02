@@ -38,7 +38,15 @@ next)` is a curried handler, not a literal passthrough.
 - Rendered extraction regions grow to element boundaries: a region cut
   inside a JSX element now reaches its closing tag or, when it only
   straddles two elements, fails the size rules instead of reporting a
-  fragment.
+  fragment. Growth stops at the function's own `return`, and the candidate's
+  region is the largest extractable one rather than the largest one, so a
+  smaller signal-tier region beside a region that holds the function's
+  return is the advice.
+- Concise arrow bodies are read past braces in parameter types and type
+  arguments (`(x) => client.patchData<{ ok: true }>(x)`), so arrow-function
+  wrappers, twins, and duplicate bodies see the real body. A file of
+  wrappers that all forward through one receiver (a copy catalog, a client
+  object) is a facade over it and its wrappers are signal tier.
 - Co-change findings carry an action tier. Pairs whose shared commits were
   only broad sweeps, stale pairs with at most two focused co-changes, and
   configuration, schema, documentation, or generated partners are signal

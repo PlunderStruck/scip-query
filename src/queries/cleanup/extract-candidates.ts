@@ -220,7 +220,15 @@ function extractionCandidateForSymbol(
     .sort((a, b) => b.lines - a.lines || a.startLine - b.startLine);
   if (regions.length === 0) return null;
 
-  const best = regions[0]!;
+  // The candidate's region is the largest one a reviewer could extract: a
+  // larger region that swallowed the function's own `return` is its control
+  // flow, and a smaller extractable region beside it is the better advice.
+  const allCallLines = new Set(uses.flatMap((use) => use.lines));
+  const best = [...regions].sort((a, b) => {
+    const rankA = tierRank(tierFor(a, locals.available, ownReturnStatements(locals.lines, a, allCallLines)).tier);
+    const rankB = tierRank(tierFor(b, locals.available, ownReturnStatements(locals.lines, b, allCallLines)).tier);
+    return rankA - rankB || b.lines - a.lines || a.startLine - b.startLine;
+  })[0]!;
   const reasons = [
     `${uses.length} callees placed on call lines across ${loc} lines` +
       (unpositioned > 0 ? `; ${unpositioned} callee row(s) without a call line ignored` : ''),
@@ -239,7 +247,7 @@ function extractionCandidateForSymbol(
     );
   }
   reasons.push(`${intervals.length - regionMemberCount(spans, best)} callee(s) stay outside the largest region`);
-  const ownReturns = ownReturnStatements(locals.lines, best, new Set(uses.flatMap((use) => use.lines)));
+  const ownReturns = ownReturnStatements(locals.lines, best, allCallLines);
   const tier = tierFor(best, locals.available, ownReturns);
   reasons.push(tier.reason);
 

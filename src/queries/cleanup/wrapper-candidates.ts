@@ -68,7 +68,8 @@ export function wrapperCandidates(
   const { scope, maxLoc = 15, limit = 30, scanLimit } = opts ?? {};
   const index = new ProjectIndex(db);
   const reverseFanIn = buildReverseFileFanIn(index.fileDependencyGraph(scope));
-  return runCandidateAnalysis({
+  const receivers = new Map<string, string>();
+  const results = runCandidateAnalysis({
     candidates: () => getWrapperCandidateSymbols(db, index, scope, maxLoc),
     orderCandidates: compareDefinitionsBySmallestLoc,
     scanLimit,
@@ -78,11 +79,13 @@ export function wrapperCandidates(
       // it, dynamic dispatch or macro-style calls can falsely look like wrappers.
       callerFileMap: consumerMapForWrapperCandidates(db, index, symbols, { semantic: opts?.semantic !== false }),
       reverseFanIn,
+      receivers,
     }),
     evaluate: (symbol, maps) => wrapperCandidateForSymbol(db, index, symbol, maps),
     orderResults: (left, right) => right.callerFanIn - left.callerFanIn || right.loc - left.loc,
     limit,
   });
+  return applyWrapperFacadeEvidence(results, receivers);
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
@@ -164,6 +167,8 @@ function wrapperCandidateForSymbol(
   maps: {
     callerFileMap: Map<number, Set<string>>;
     reverseFanIn: Map<string, number>;
+    /** Root identifier each forwarding wrapper calls through, by wrapper symbol; feeds the facade post-pass. */
+    receivers: Map<string, string>;
   },
 ): WrapperCandidate | null {
   const externalFiles = externalCallerFiles(db, index, symbol, maps.callerFileMap);
@@ -194,7 +199,9 @@ function wrapperCandidateForSymbol(
   const boundaryEvidence = wrapperBoundaryEvidence(db, symbol, callerFile, enclosing);
   const bodyShape = wrapperBodyShape(db, symbol);
   if (bodyShape === 'helper') boundaryEvidence.push('body computes or branches rather than forwarding one call');
-  const privateState = bodyShape === 'forwarding' ? modulePrivateStateReceiver(db, symbol) : null;
+  const receiver = bodyShape === 'forwarding' ? forwardReceiver(db, symbol) : null;
+  if (receiver) maps.receivers.set(symbol.symbol, receiver);
+  const privateState = receiver && isModulePrivateVariable(db, symbol.relativePath, receiver) ? receiver : null;
   if (privateState) boundaryEvidence.push(`forwards through module-private state: ${privateState}`);
   return {
     symbol: symbol.symbol,
@@ -214,20 +221,63 @@ function wrapperCandidateForSymbol(
   };
 }
 
-/**
- * `isLanguageLoaded(lang) { return loadedLanguages.has(lang); }` forwards one
- * call, but the receiver is a module-private variable: inlining the wrapper
- * into its consumer would export the state the wrapper exists to hide.
- */
-function modulePrivateStateReceiver(db: ScipDatabase, symbol: IndexedDefinition): string | null {
+/** The root identifier a forwarding wrapper calls through (`loadedLanguages` in `loadedLanguages.has(lang)`, `copy` in `copy.deals.title(x)`). */
+function forwardReceiver(db: ScipDatabase, symbol: IndexedDefinition): string | null {
   const snippet = definitionSourceSnippet(db, symbol);
   if (!snippet) return null;
   const body = stripCommentsAndStrings(extractImplementationBody(snippet)).trim();
   const receiver = /^(?:return\s+)?(?:await\s+)?([A-Za-z_$][\w$]*)\s*[.(]/.exec(body)?.[1];
   if (!receiver || receiver === 'this' || receiver === 'super') return null;
+  return receiver;
+}
+
+/**
+ * `isLanguageLoaded(lang) { return loadedLanguages.has(lang); }` forwards one
+ * call, but the receiver is a module-private variable: inlining the wrapper
+ * into its consumer would export the state the wrapper exists to hide.
+ */
+function isModulePrivateVariable(db: ScipDatabase, relativePath: string, receiver: string): boolean {
   const escaped = receiver.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const privateDeclaration = new RegExp(`^(?:const|let|var)\\s+${escaped}\\b`);
-  return getSourceLines(db, symbol.relativePath).some((line) => privateDeclaration.test(line)) ? receiver : null;
+  return getSourceLines(db, relativePath).some((line) => privateDeclaration.test(line));
+}
+
+/** Sibling forwards from one file through one receiver that make the file a facade over it. */
+const WRAPPER_FACADE_SIBLING_FORWARDS = 3;
+
+/**
+ * A file of wrappers that all forward through one receiver (`copy.ts`
+ * building notification copy from one catalog object) is a facade over that
+ * collaborator: inlining any one of them would breach the surface the file
+ * keeps, so the family is a boundary signal rather than inline advice.
+ */
+export function applyWrapperFacadeEvidence(
+  candidates: readonly WrapperCandidate[],
+  receivers: ReadonlyMap<string, string>,
+): WrapperCandidate[] {
+  const siblings = new Map<string, number>();
+  const keyFor = (candidate: WrapperCandidate): string | null => {
+    const receiver = receivers.get(candidate.symbol);
+    return receiver && candidate.bodyShape === 'forwarding' ? `${candidate.file}\u0000${receiver}` : null;
+  };
+  for (const candidate of candidates) {
+    const key = keyFor(candidate);
+    if (key) siblings.set(key, (siblings.get(key) ?? 0) + 1);
+  }
+  return candidates.map((candidate) => {
+    const key = keyFor(candidate);
+    const count = key ? (siblings.get(key) ?? 0) : 0;
+    if (count < WRAPPER_FACADE_SIBLING_FORWARDS) return candidate;
+    const receiver = receivers.get(candidate.symbol)!;
+    return {
+      ...candidate,
+      actionTier: 'signal',
+      boundaryEvidence: [
+        ...candidate.boundaryEvidence,
+        `facade: ${count} sibling forwards from this file through ${receiver}`,
+      ],
+    };
+  });
 }
 
 function wrapperBodyShape(db: ScipDatabase, symbol: IndexedDefinition): WrapperBodyShape {

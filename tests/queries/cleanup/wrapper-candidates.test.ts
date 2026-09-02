@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ScipDatabase } from '../../../src/storage/db.js';
-import { wrapperCandidates } from '../../../src/queries/cleanup/wrapper-candidates.js';
+import { applyWrapperFacadeEvidence, wrapperCandidates } from '../../../src/queries/cleanup/wrapper-candidates.js';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';
 
@@ -209,6 +209,39 @@ describe('wrapper-candidates', () => {
     } finally {
       db.close();
     }
+  });
+
+  it('tiers a file of wrappers that forward through one receiver as a facade', () => {
+    const row = (name: string, file: string) => ({
+      symbol: `sym:${file}:${name}`,
+      shortName: name,
+      file,
+      startLine: 0,
+      endLine: 2,
+      loc: 3,
+      singleCaller: 'caller',
+      singleCallerShort: 'caller',
+      callerFanIn: 6,
+      actionTier: 'direct' as const,
+      bodyShape: 'forwarding' as const,
+      boundaryEvidence: [] as string[],
+    });
+    const rows = [
+      row('buildWelcomeCopy', 'src/copy.ts'),
+      row('buildPayoutCopy', 'src/copy.ts'),
+      row('buildReminderCopy', 'src/copy.ts'),
+      row('formatPhone', 'src/phone.ts'),
+    ];
+    const receivers = new Map([
+      [rows[0]!.symbol, 'COPY'],
+      [rows[1]!.symbol, 'COPY'],
+      [rows[2]!.symbol, 'COPY'],
+      [rows[3]!.symbol, 'parse'],
+    ]);
+    const results = applyWrapperFacadeEvidence(rows, receivers);
+    expect(results.slice(0, 3).map((candidate) => candidate.actionTier)).toEqual(['signal', 'signal', 'signal']);
+    expect(results[0]?.boundaryEvidence).toEqual(['facade: 3 sibling forwards from this file through COPY']);
+    expect(results[3]).toEqual(expect.objectContaining({ actionTier: 'direct', boundaryEvidence: [] }));
   });
 
   it('excludes Rust trait implementation methods from wrapper advice', () => {

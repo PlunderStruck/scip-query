@@ -1,0 +1,59 @@
+{
+  "detector": "duplicate-bodies",
+  "repository": "launchpoint-backend",
+  "identity": "group",
+  "reviewed": "2026-09-02",
+  "note": "Sampled 10 of the 184 groups (seed 11) after the JSON export fix and read the canonical body of each. True means the members are byte-identical product bodies a reviewer would consolidate or accept as deliberate copies; the policy already removes test, route-verb, constructor, and vendored bodies.",
+  "labels": [
+    {
+      "id": "7712693c584edca8|src/lib/boosts/core/ad-platform-analytics-metrics.ts,src/lib/campaigns/videos/boost-chart.ts",
+      "verdict": "true",
+      "reason": "identical ROAS calculation in boosts and boost-chart"
+    },
+    {
+      "id": "68f4437faeb4bb8a|src/scripts/backfill-canvas-config-to-net.ts,src/scripts/backfill-canvas-video-payscale-stamp.ts",
+      "verdict": "true",
+      "reason": "identical script argument parser in two backfill scripts"
+    },
+    {
+      "id": "15acaeec186620cc|src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/CreatorsToResignCard.tsx,src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/NeedsAttentionCard.tsx",
+      "verdict": "true",
+      "reason": "identical initials helper in two cards"
+    },
+    {
+      "id": "7ff0444c87bca1c6|scripts/dedup-baseline-experiment.ts,src/lib/dedup-labels/infra/post-evidence.ts",
+      "verdict": "true",
+      "reason": "identical chunking helper in a tooling script and a product module"
+    },
+    {
+      "id": "6354c2e69fbc8775|src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/model/due-date.ts,src/lib/utils/date.ts",
+      "verdict": "true",
+      "reason": "identical date input formatting under two names"
+    },
+    {
+      "id": "0ab4aa4dd0f64f5b|src/app/components/analytics/GeoChart.tsx,src/app/components/analytics/SchoolChart.tsx,src/app/components/analytics/TopPerformers.tsx",
+      "verdict": "true",
+      "reason": "identical number formatting in three analytics components"
+    },
+    {
+      "id": "4faff6725a892628|src/scripts/dupe-lab.ts,src/scripts/report-engine-mistakes.ts,src/trigger/analyze/media-analysis-batch-backfill.trigger.ts",
+      "verdict": "true",
+      "reason": "identical chunk helper in a trigger and two scripts"
+    },
+    {
+      "id": "03046692183c515c|src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/CheckinLocationsMap.tsx,src/app/(authenticated)/(dashboard)/home/components/dashboard/AudienceMap.tsx",
+      "verdict": "true",
+      "reason": "identical point coordinate reader in two maps"
+    },
+    {
+      "id": "6919985f9b015140|src/app/(authenticated)/(dashboard)/media/components/MediaPlayerModal.tsx,src/app/(authenticated)/(dashboard)/todos/components/posts/UntrackedPostsSurface.tsx",
+      "verdict": "true",
+      "reason": "identical date label formatting under two names"
+    },
+    {
+      "id": "dd770e45fb996d6e|src/lib/campaigns/deal-brief.ts,src/lib/public-api/2026-07/campaigns/[campaign_id]/schema.ts",
+      "verdict": "true",
+      "reason": "identical video example parser in the public API schema and deal brief"
+    }
+  ]
+}
