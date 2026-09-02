@@ -923,7 +923,9 @@ function runHealthSemanticPrewarmProcess(
       ...process.env,
       NODE_OPTIONS: nodeOptionsWithMaxOldSpace(process.env.NODE_OPTIONS, heapMb),
     },
-    label: opts.shard ? `Health semantic prewarm ${opts.shard.index + 1}/${opts.shard.count}` : 'Health semantic prewarm',
+    label: opts.shard
+      ? `Health semantic prewarm ${opts.shard.index + 1}/${opts.shard.count}`
+      : 'Health semantic prewarm',
     timeoutMs: healthSemanticPrewarmTimeoutMs(),
   });
 }
@@ -994,7 +996,12 @@ export function aggregateHealthSemanticPrewarmResults(
     results.find((result) => result.status === 'partial') ??
     results.find((result) => result.status === 'skipped' && result.reason !== 'cache-hit');
   if (weakest) {
-    return { ...totals, status: weakest.status, reason: weakest.reason, ...(weakest.error ? { error: weakest.error } : {}) };
+    return {
+      ...totals,
+      status: weakest.status,
+      reason: weakest.reason,
+      ...(weakest.error ? { error: weakest.error } : {}),
+    };
   }
   if (results.length > 0 && results.every((result) => result.status === 'skipped')) {
     return { ...totals, status: 'skipped', reason: 'cache-hit' };

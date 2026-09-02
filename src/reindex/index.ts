@@ -718,7 +718,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-
 export { detectLanguages } from './detect.js';
 export { augmentAuxiliaryDocuments, auxiliaryDocumentsAugmentationStage } from './augmentation/augment.js';
 export { runPostIndexAugmentation } from './augmentation/post-index-augmentation.js';
@@ -1377,7 +1376,10 @@ function cacheFreshTypeScriptProjectShards(
     const project = run.id.slice('typescript:'.length);
     const shardPath = typescriptProjectShardPath(outputDb, project);
     mkdirSync(dirname(shardPath), { recursive: true });
-    recordFileClone(writeTelemetry, cloneFileWithFallback(run.scipPath, shardPath, undefined, { shareImmutable: true }));
+    recordFileClone(
+      writeTelemetry,
+      cloneFileWithFallback(run.scipPath, shardPath, undefined, { shareImmutable: true }),
+    );
   }
 }
 

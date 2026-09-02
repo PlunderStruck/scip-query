@@ -465,8 +465,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
    * this provider's program, so they are computed once per set and reused
    * until the provider is discarded.
    */
-  private hierarchyTargetsMemo: { key: string; targets: Map<string, Map<number, IndexedDefinition>> } | null =
-    null;
+  private hierarchyTargetsMemo: { key: string; targets: Map<string, Map<number, IndexedDefinition>> } | null = null;
 
   private hierarchyTargetsForDefinitions(
     definitions: readonly IndexedDefinition[],

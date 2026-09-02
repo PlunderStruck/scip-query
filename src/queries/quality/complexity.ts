@@ -4,7 +4,13 @@ import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { stripCommentsAndStrings } from '../../source/primitives/source-stripper.js';
-import { getAst, getSourceFacts, smallestNodeCoveringLines, type SyntaxNode, walkNamedSyntax } from '../../source/ast.js';
+import {
+  getAst,
+  getSourceFacts,
+  smallestNodeCoveringLines,
+  type SyntaxNode,
+  walkNamedSyntax,
+} from '../../source/ast.js';
 import { branchContribution } from '../../source/ast/branch-nodes.js';
 import type { SymbolMatch } from '../../domain/symbol-types.js';
 
@@ -115,7 +121,8 @@ export function branchEstimatesForDefinitions(
     // a definition whose range matches one exactly needs no parse.
     const factBranches = new Map<string, number>();
     for (const callable of getSourceFacts(db, relativePath)?.callables ?? []) {
-      if (callable.branches !== undefined) factBranches.set(`${callable.startLine}:${callable.endLine}`, callable.branches);
+      if (callable.branches !== undefined)
+        factBranches.set(`${callable.startLine}:${callable.endLine}`, callable.branches);
     }
     const fileDefinitions: SymbolMatch[] = [];
     for (const definition of definitionsInFile) {
@@ -242,7 +249,6 @@ function addAstBranchEstimates(
     }
   });
 }
-
 
 /**
  * Count branch points in source code using language-aware regex.
