@@ -264,19 +264,23 @@ describe('orderHealthPhaseTasksByCost', () => {
 describe('healthSemanticPrewarmHeapMb', () => {
   it('uses a bounded isolated heap with an explicit override', () => {
     const GIB = 1024 * 1024 * 1024;
-    expect(healthSemanticPrewarmHeapMb({}, 64 * GIB)).toBe(8192);
+    expect(healthSemanticPrewarmHeapMb({}, 64 * GIB)).toBe(16384);
     expect(healthSemanticPrewarmHeapMb({ SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_HEAP_MB: '6144' }, 64 * GIB)).toBe(6144);
-    expect(healthSemanticPrewarmHeapMb({ SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_HEAP_MB: 'invalid' }, 64 * GIB)).toBe(8192);
+    expect(healthSemanticPrewarmHeapMb({ SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_HEAP_MB: 'invalid' }, 64 * GIB)).toBe(16384);
     expect(healthSemanticPrewarmHeapMb({ SCIP_QUERY_HEALTH_SEMANTIC_PREWARM_HEAP_MB: '12288' }, 8 * GIB)).toBe(12288);
   });
 
   it('derives the default heap from physical memory within fixed bounds', () => {
     const GIB = 1024 * 1024 * 1024;
-    expect(defaultHealthSemanticPrewarmHeapMb(64 * GIB)).toBe(8192);
+    // Half of physical memory, between 2 GB and 16 GB: a large compiler
+    // program then crosses the pressure threshold, and rebuilds its session,
+    // far less often on a big machine, while a laptop keeps today's bound.
+    expect(defaultHealthSemanticPrewarmHeapMb(64 * GIB)).toBe(16384);
+    expect(defaultHealthSemanticPrewarmHeapMb(32 * GIB)).toBe(16384);
     expect(defaultHealthSemanticPrewarmHeapMb(16 * GIB)).toBe(8192);
     expect(defaultHealthSemanticPrewarmHeapMb(8 * GIB)).toBe(4096);
     expect(defaultHealthSemanticPrewarmHeapMb(2 * GIB)).toBe(2048);
-    expect(defaultHealthSemanticPrewarmHeapMb(Number.NaN)).toBe(8192);
+    expect(defaultHealthSemanticPrewarmHeapMb(Number.NaN)).toBe(16384);
   });
 });
 

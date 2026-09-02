@@ -54,6 +54,7 @@ export const PROJECT_EVIDENCE_KINDS = [
   'semantic-import-usage',
   'semantic-signatures',
   'health-semantic-prewarm',
+  'typescript-hierarchy-targets',
 ] as const;
 
 export type ProjectEvidenceKind = (typeof PROJECT_EVIDENCE_KINDS)[number];
