@@ -213,6 +213,12 @@ export const EVIDENCE_PRODUCT_MANIFEST: readonly EvidenceProductManifestEntry[] 
     stalenessTest: 'tests/runtime/cli-support.test.ts',
     owner: 'src/runtime/cli-support.ts',
   }),
+  projectManifest('typescript-hierarchy-targets', {
+    dependsOn: ['project-fingerprint', 'indexed-language-set', 'tool-version'],
+    keyParts: ['kind', 'definitionSet', 'projectFingerprint', 'payloadVersion'],
+    stalenessTest: 'tests/semantic/typescript/typescript-semantic-provider.test.ts',
+    owner: 'src/semantic/typescript/ts-morph-provider.ts',
+  }),
 ];
 
 export function createFileEvidenceProduct<T>(opts: FileEvidenceProductOptions<T>): FileEvidenceProduct<T> {

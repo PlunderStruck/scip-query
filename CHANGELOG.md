@@ -40,12 +40,18 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 ### The fragment warm pass stops recomputing hierarchy targets per batch
 
 - Profiled on a 7,800-file repository, the prewarm's reference scans spent
-  178 s across 51 batches, of which only 47 s was the per-file scan; the rest
-  was per-batch work over all 64,000 definitions, chiefly resolving every
-  definition's compiler node to build the class-hierarchy target map. That
-  map depends only on the definition set and the provider's program, so it
-  is now computed once per provider (a new profile span,
-  `typescript.references-map.hierarchy-targets`, records each computation).
+  258 s across 61 batches, of which 63 s was the per-file scan; the rest was
+  building the class-hierarchy target map, about 20 s per compiler session,
+  and the pass discarded its session under heap pressure thirteen times.
+  The map depends only on the sources and the definition set, so it is now
+  memoized per session and persisted per project generation as the
+  `typescript-hierarchy-targets` product; a rebuilt session reads it back.
+  A new profile span, `typescript.references-map.hierarchy-targets`, records
+  each computation and whether it was a hit.
+- The prewarm's default isolated heap may now reach 16 GB on machines with
+  at least 32 GB of memory (it stays at half of physical memory below that),
+  so a large compiler program crosses the pressure threshold, and rebuilds
+  its session, far less often.
 
 ### Immutable SCIP shards are hard-linked where reflinks are unavailable
 

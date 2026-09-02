@@ -1,5 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import type { ScipDatabase } from '../../storage/db.js';
+import { projectEvidenceFingerprint } from '../../storage/evidence-cache.js';
+import { createProjectEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { discoverWorkspacePackages, type WorkspacePackage } from '../../platform/workspace-packages.js';
 import { resolveImportPath } from '../../source/primitives/import-path-resolver.js';
@@ -471,10 +473,37 @@ class TsMorphSemanticProvider implements SemanticProvider {
   ): Map<string, Map<number, IndexedDefinition>> {
     const key = hierarchyDefinitionSetKey(definitions);
     if (this.hierarchyTargetsMemo?.key === key) return this.hierarchyTargetsMemo.targets;
+    // Resolving every definition's compiler node costs ~20 s per compiler
+    // session on a large repository, and the fragment warm pass discards
+    // sessions under heap pressure; the map depends only on the sources and
+    // the definition set, so it is persisted per project generation.
+    const projectFingerprint = projectEvidenceFingerprint(this.db);
+    const cacheKey = `definitions:${key}`;
+    let hit = false;
     const targets = profileSpan(
       'typescript.references-map.hierarchy-targets',
-      () => this.computeHierarchyTargets(definitions),
-      () => ({ definitions: definitions.length }),
+      () => {
+        if (projectFingerprint) {
+          const persisted = HIERARCHY_TARGETS_PRODUCT.read(this.db, cacheKey, projectFingerprint);
+          if (persisted && persisted.projectRoot === this.db.config.projectRoot) {
+            hit = true;
+            return hierarchyTargetsFromPayload(persisted, definitions);
+          }
+        }
+        const computed = this.computeHierarchyTargets(definitions);
+        if (projectFingerprint) {
+          HIERARCHY_TARGETS_PRODUCT.write(this.db, cacheKey, projectFingerprint, {
+            version: HIERARCHY_TARGETS_PAYLOAD_VERSION,
+            projectRoot: this.db.config.projectRoot,
+            entries: [...computed].map(([symbolKey, bySymbolId]) => [
+              symbolKey,
+              [...bySymbolId.values()].map((definition) => definition.symbol),
+            ]),
+          });
+        }
+        return computed;
+      },
+      () => ({ definitions: definitions.length, hit }),
     );
     this.hierarchyTargetsMemo = { key, targets };
     return targets;
@@ -1449,6 +1478,48 @@ function createReferenceMapProfileStats(): ReferenceMapProfileStats {
     hierarchyReferences: 0,
     hierarchyMs: 0,
   };
+}
+
+const HIERARCHY_TARGETS_PAYLOAD_VERSION = 1;
+
+interface HierarchyTargetsPayload {
+  version: number;
+  /** Symbol keys embed absolute compiler file names; a moved checkout recomputes. */
+  projectRoot: string;
+  entries: Array<[symbolKey: string, symbols: string[]]>;
+}
+
+const HIERARCHY_TARGETS_PRODUCT = createProjectEvidenceProduct<HierarchyTargetsPayload>({
+  kind: 'typescript-hierarchy-targets',
+  invalidation: evidenceProductInvalidation('typescript-hierarchy-targets'),
+  serialize: (value) => JSON.stringify(value),
+  deserialize: (payload) => {
+    try {
+      const raw = JSON.parse(payload) as HierarchyTargetsPayload;
+      if (raw.version !== HIERARCHY_TARGETS_PAYLOAD_VERSION || typeof raw.projectRoot !== 'string') return null;
+      if (!Array.isArray(raw.entries)) return null;
+      return raw;
+    } catch {
+      return null;
+    }
+  },
+});
+
+function hierarchyTargetsFromPayload(
+  payload: HierarchyTargetsPayload,
+  definitions: readonly IndexedDefinition[],
+): Map<string, Map<number, IndexedDefinition>> {
+  const bySymbol = new Map(definitions.map((definition) => [definition.symbol, definition]));
+  const targets = new Map<string, Map<number, IndexedDefinition>>();
+  for (const [symbolKey, symbols] of payload.entries) {
+    const symbolTargets = new Map<number, IndexedDefinition>();
+    for (const symbol of symbols) {
+      const definition = bySymbol.get(symbol);
+      if (definition) symbolTargets.set(definition.symbolId, definition);
+    }
+    if (symbolTargets.size > 0) targets.set(symbolKey, symbolTargets);
+  }
+  return targets;
 }
 
 /** Identity of a definition set for memoization: every symbol id, in order. */
