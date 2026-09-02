@@ -131,16 +131,17 @@
         "paths": [
           "src/runtime/agent-setup.ts",
           "src/runtime/ast-parser-setup.ts",
+          "src/runtime/claim-qualification.ts",
           "src/runtime/cleanup-verify.ts",
           "src/runtime/cli-context.ts",
           "src/runtime/cli-invocation.ts",
-          "src/runtime/claim-qualification.ts",
-          "src/runtime/command-operation.ts",
-          "src/runtime/cli-support.ts",
-          "src/runtime/config.ts",
           "src/runtime/cli-json-envelope.ts",
+          "src/runtime/cli-support.ts",
+          "src/runtime/command-operation.ts",
+          "src/runtime/config.ts",
           "src/runtime/cursor-codec.ts",
           "src/runtime/evidence-command-freshness.ts",
+          "src/runtime/file-product-warm.ts",
           "src/runtime/generated-agent-command-catalog.ts",
           "src/runtime/git-worktree-context-cache.ts",
           "src/runtime/health-capability-disclosure.ts",
@@ -154,13 +155,13 @@
           "src/runtime/project-readiness.ts",
           "src/runtime/project-reindex.ts",
           "src/runtime/project-setup.ts",
-          "src/runtime/query-service.ts",
           "src/runtime/query-service-fastpath.ts",
           "src/runtime/query-service-server.ts",
+          "src/runtime/query-service.ts",
           "src/runtime/refs-pagination.ts",
           "src/runtime/render.ts",
-          "src/runtime/result-pagination.ts",
           "src/runtime/repository-cache-lifecycle.ts",
+          "src/runtime/result-pagination.ts",
           "src/runtime/revisioned-file.ts",
           "src/runtime/setup-wizard.ts",
           "src/runtime/setup.ts",
@@ -172,12 +173,12 @@
           "src/runtime/update-notice.ts",
           "src/runtime/watch-refresh-coordinator.ts",
           "src/runtime/watch-server.ts",
-          "src/runtime/watch-service.ts",
           "src/runtime/watch-service-prune.ts",
+          "src/runtime/watch-service.ts",
           "src/runtime/watch.ts",
           "src/runtime/worker-request-lane.ts"
         ],
-        "maxFiles": 47
+        "maxFiles": 48
       },
       {
         "name": "test-fixtures",
@@ -221,7 +222,7 @@
       {
         "name": "source",
         "paths": ["src/source/**", "src/language-parsers/**"],
-        "maxFiles": 60
+        "maxFiles": 61
       },
       {
         "name": "storage",
