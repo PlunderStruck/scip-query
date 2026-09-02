@@ -126,6 +126,16 @@ Vega section below.
    moved passthroughs from 171 direct / 186 signal to 38 / 319 and the
    pressure penalty from 4 to 3 points.
 
+Final verification on Launchpoint with the deployed build: `call-graph` on
+`BulkMetaRunDialog` now lists 10 exact render edges (the dialog primitives,
+`ManagedAdPublicationProgress`, and the same-file children that were
+previously invisible); `self-audit --samples 100` compares references for
+100 symbols (precision 0.963, recall 1.0), callees for 22 (recall 1.0, 78
+still skipped as partial), and renders for 92 (recall 1.0). Both Launchpoint
+label sets score precision 1.0 and recall 1.0. Counting rendered children as
+fan-out raised the extreme complexity count from 140 to 173, all React
+orchestrators that were under-measured before; health is 66 / 87 / 66.
+
 Follow-up lead recorded for a later change:
 
 | #   | Lead                                                                                                                                                                       | Evidence                                                                                                                                           | Status |
