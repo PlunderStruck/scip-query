@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3';
 import process from 'node:process';
 import { rmSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -33,7 +34,11 @@ import { maybeSweepRepositoryCache, DEFAULT_REPOSITORY_SWEEP_INTERVAL_MS } from 
 import { WatchRefreshCoordinator } from './watch-refresh-coordinator.js';
 import { initializeBoundedMailbox, maintainBoundedMailbox } from '../storage/bounded-mailbox.js';
 import { publishedSqliteGenerationIdentity } from '../storage/sqlite-generation.js';
-import { createTypeScriptIndexMailboxLane, createTypeScriptSemanticMailboxLane } from './typescript-mailbox-lanes.js';
+import {
+  createTypeScriptIndexMailboxLane,
+  createTypeScriptSemanticMailboxLane,
+  recommendedTypeScriptWorkerHeapMb,
+} from './typescript-mailbox-lanes.js';
 
 const HEARTBEAT_INTERVAL_MS = 2_000;
 const ACTIVITY_POLL_INTERVAL_MS = 5_000;
@@ -342,6 +347,20 @@ async function runWatchServiceLifecycle(input: {
   if (shutdownError) throw shutdownError;
 }
 
+/** Documents in the accepted index, or zero when it cannot be read; sizes the compiler workers. */
+function indexedDocumentCount(dbPath: string): number {
+  try {
+    const sqlite = new Database(dbPath, { readonly: true, fileMustExist: true });
+    try {
+      return (sqlite.prepare('SELECT count(*) AS documents FROM documents').get() as { documents: number }).documents;
+    } finally {
+      sqlite.close();
+    }
+  } catch {
+    return 0;
+  }
+}
+
 function createWatchServiceMailboxLanes(input: {
   semanticPaths: ReturnType<typeof typeScriptSemanticMailboxPaths>;
   indexPaths: ReturnType<typeof typeScriptIndexMailboxPaths>;
@@ -352,13 +371,16 @@ function createWatchServiceMailboxLanes(input: {
   onIndexBusy(deadlineAtMs: number | undefined): void;
   onFatal(error: Error): void;
 }) {
+  const typescript = input.config.indexer?.typescript;
+  const workerHeapMb =
+    typescript?.workerHeapMb ?? recommendedTypeScriptWorkerHeapMb(indexedDocumentCount(input.dbPath));
   const semanticLane = createTypeScriptSemanticMailboxLane({
     paths: input.semanticPaths,
     projectRoot: input.projectRoot,
+    workerHeapMb,
     onBusy: input.onSemanticBusy,
     onFatal: input.onFatal,
   });
-  const typescript = input.config.indexer?.typescript;
   const indexLane = createTypeScriptIndexMailboxLane({
     paths: input.indexPaths,
     projectRoot: input.projectRoot,
@@ -366,7 +388,7 @@ function createWatchServiceMailboxLanes(input: {
     ...(typescript?.maxWarmSessions === undefined ? {} : { maxActiveSessions: typescript.maxWarmSessions }),
     ...(typescript?.workerIdleMs === undefined ? {} : { workerIdleMs: typescript.workerIdleMs }),
     ...(typescript?.workerSoftMemoryMb === undefined ? {} : { workerSoftMemoryMb: typescript.workerSoftMemoryMb }),
-    ...(typescript?.workerHeapMb === undefined ? {} : { workerHeapMb: typescript.workerHeapMb }),
+    workerHeapMb,
     onBusy: input.onIndexBusy,
     onFatal: input.onFatal,
   });

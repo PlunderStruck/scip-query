@@ -115,3 +115,19 @@ In the full health run (profile: functions of at least 15 lines with at least
 with 504 support-tier regions disclosed under policy exclusions. The score
 did not move on this axis because extraction pressure only deducts above one
 percent of symbols.
+
+## Extraction rules and memory (same day, later)
+
+With the eight-line minimum, the own-return rule, and statement-aware
+merging (exclusive call spans inside one multi-line statement form one
+region; rendered subtrees keep the proximity rule) the full extraction list
+is 939 rows: 369 signal-tier and 570 support-tier. The twenty-row reviewed
+sample scores precision 1.0 and recall 1.0: all six labeled true regions at
+signal tier, every labeled false region at support tier or absent. A
+cold-cache `extract-candidates --full --json` at the default heap completes
+in 1:17 at 1.8 GB resident with semantic enrichment intact (no declined
+service requests), against a heap-limit crash before.
+
+`self-audit --samples 100` on the same index with the complete-oracle rule:
+references precision 1.0 / recall 1.0; callees precision 0.988 / recall 1.0
+over 100 compared symbols (none skipped); renders precision 1.0 / recall 1.0.

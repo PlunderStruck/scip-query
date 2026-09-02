@@ -43,8 +43,14 @@ export type ChunkOccurrenceLookup =
   | ({ available: true } & FileOccurrenceTargets)
   | { available: false; reason: 'no-document' | 'no-occurrence-data' };
 
+/**
+ * Decoded occurrences are re-derivable from the index in milliseconds, but a
+ * large file holds thousands of them; a whole-project pass must not keep
+ * every file's decode resident, so the cache is bounded by recency.
+ */
 const FILE_OCCURRENCE_LOOKUP = createPerDbCache<string, ChunkOccurrenceLookup>('scip-chunk-occurrence-targets', {
-  clearGroups: ['whole-project', 'definition-catalog'],
+  clearGroups: ['whole-project', 'definition-catalog', 'source-file'],
+  maxEntries: 256,
 });
 
 const DEFINITION_BY_SYMBOL = createPerDbValue<Map<string, IndexedDefinition>>('scip-chunk-occurrence-definitions', {

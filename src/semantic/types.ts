@@ -77,6 +77,19 @@ export interface SemanticCallee {
   kind?: 'jsx-render';
 }
 
+/**
+ * How completely the compiler could account for one definition's call and
+ * render sites. A definition with no unresolved site has a complete callee
+ * oracle: every call either landed on an indexed definition or on a symbol
+ * outside the repository.
+ */
+export interface SemanticCalleeCoverage {
+  callSites: number;
+  resolvedInRepository: number;
+  resolvedExternal: number;
+  unresolved: number;
+}
+
 export interface SemanticReferenceAndCalleeMaps {
   references: Map<number, SemanticReference[]>;
   callees: Map<number, SemanticCallee[]>;
@@ -99,5 +112,7 @@ export interface SemanticProvider {
   ): SemanticReferenceAndCalleeMaps;
   calleesFor(definition: IndexedDefinition): SemanticCallee[];
   calleesForDefinitions?(definitions: readonly IndexedDefinition[]): Map<number, SemanticCallee[]>;
+  /** Per-definition accounting of call sites the compiler resolved, resolved externally, or could not resolve. */
+  calleeCoverageForDefinitions?(definitions: readonly IndexedDefinition[]): Map<number, SemanticCalleeCoverage>;
   signatureFor(definition: IndexedDefinition): string | null;
 }

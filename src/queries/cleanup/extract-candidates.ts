@@ -52,6 +52,11 @@ export interface ExtractCandidate {
   actionTier: ExtractCandidateActionTier;
   /** Why the candidate sits at its tier. */
   tierReason: string;
+  /**
+   * Return statements of the function itself inside the largest region: a
+   * region that returns for the function is its control flow, not a helper.
+   */
+  ownReturnsInRegion: number;
   evidenceReasons: string[];
   recommendation: string;
   /** Qualifying regions, largest first. */
@@ -61,7 +66,7 @@ export interface ExtractCandidate {
 /** A region must carry this many distinct exclusive callees. */
 const MIN_REGION_CALLEES = 3;
 /** A region must span this many source lines. */
-const MIN_REGION_LINES = 5;
+const MIN_REGION_LINES = 8;
 /** A region covering more of the body than this is the function itself, not a seam. */
 const MAX_REGION_BODY_SHARE = 0.75;
 /** The rest of the function must keep this many distinct callees of its own. */
@@ -104,7 +109,6 @@ interface FileLocals {
 
 interface ExtractionContext {
   callees: Map<number, CalleeRow[]>;
-  localsByFile: Map<string, FileLocals>;
 }
 
 /**
@@ -150,14 +154,13 @@ export function extractCandidates(
     profile: { name: 'extract-candidates' },
     prepare: (symbols) => ({
       callees: index.calleeMap(symbols, { semantic: opts.semantic !== false }),
-      localsByFile: new Map(),
     }),
     evaluate: (definition, context) =>
       extractionCandidateForSymbol(
         definition,
         context.callees.get(definition.symbolId) ?? [],
         minCallees,
-        fileLocalsFor(db, context.localsByFile, definition.relativePath),
+        fileLocalsFor(db, definition.relativePath),
       ),
     orderResults: (a, b) =>
       tierRank(a.actionTier) - tierRank(b.actionTier) || b.regions[0]!.lines - a.regions[0]!.lines || b.loc - a.loc,
@@ -169,17 +172,18 @@ function tierRank(tier: ExtractCandidateActionTier): number {
   return tier === 'signal' ? 0 : 1;
 }
 
-function fileLocalsFor(db: ScipDatabase, cache: Map<string, FileLocals>, relativePath: string): FileLocals {
-  const cached = cache.get(relativePath);
-  if (cached) return cached;
+/**
+ * Per-file locals and source lines come from bounded per-database caches;
+ * holding them per run would keep every visited file resident on a
+ * whole-project pass.
+ */
+function fileLocalsFor(db: ScipDatabase, relativePath: string): FileLocals {
   const occurrences = scipOccurrenceTargetsForFile(db, relativePath)?.locals ?? [];
-  const entry: FileLocals = {
+  return {
     available: occurrences.length > 0,
     occurrences,
     lines: getSourceLines(db, relativePath),
   };
-  cache.set(relativePath, entry);
-  return entry;
 }
 
 // scip-query: ignore-extract — this is the detector's own per-symbol unit;
@@ -205,9 +209,11 @@ function extractionCandidateForSymbol(
   }
 
   const callLines = new Set(uses.flatMap((use) => use.lines));
-  const spans = mergeAdjacentSpans(exclusiveSpans(intervals)).map((span) =>
-    snapToBlock(span, definition, locals.lines, callLines),
-  );
+  const spans = mergeAdjacentSpans(
+    exclusiveSpans(intervals),
+    locals.lines,
+    bodyIndentation(definition, locals.lines),
+  ).map((span) => snapToBlock(span, definition, locals.lines, callLines));
   const regions = spans
     .filter((span) => qualifies(span, intervals.length, loc))
     .map((span) => describeRegion(definition, span, ambient, locals))
@@ -233,7 +239,8 @@ function extractionCandidateForSymbol(
     );
   }
   reasons.push(`${intervals.length - regionMemberCount(spans, best)} callee(s) stay outside the largest region`);
-  const tier = tierFor(best, locals.available);
+  const ownReturns = ownReturnStatements(locals.lines, best, new Set(uses.flatMap((use) => use.lines)));
+  const tier = tierFor(best, locals.available, ownReturns);
   reasons.push(tier.reason);
 
   return {
@@ -250,6 +257,7 @@ function extractionCandidateForSymbol(
     extractionKind: best.kind,
     actionTier: tier.tier,
     tierReason: tier.reason,
+    ownReturnsInRegion: ownReturns,
     evidenceReasons: reasons,
     recommendation: recommendationFor(best, locals.available),
     regions,
@@ -302,12 +310,24 @@ function exclusiveSpans(intervals: readonly CalleeInterval[]): RegionSpan[] {
   return spans;
 }
 
-/** Exclusive spans whose call lines sit close together form one region. */
-function mergeAdjacentSpans(spans: readonly RegionSpan[]): RegionSpan[] {
+/**
+ * Exclusive spans form one region when their call lines sit close together
+ * or when no statement-level line separates them: a fluent chain or a
+ * literal that spans dozens of lines is one statement, and a region never
+ * cuts through a statement.
+ */
+function mergeAdjacentSpans(spans: readonly RegionSpan[], lines: readonly string[], bodyIndent: number): RegionSpan[] {
   const merged: RegionSpan[] = [];
   for (const span of spans) {
     const current = merged[merged.length - 1];
-    if (current && span.start - current.end <= REGION_MERGE_GAP_LINES) {
+    // A rendered subtree is a cut inside one statement, so render spans keep
+    // the proximity rule only; call spans also merge across a statement.
+    const sameStatement =
+      current !== undefined &&
+      !hasRenderMember(current) &&
+      !hasRenderMember(span) &&
+      !statementBoundaryBetween(lines, current.end, span.start, bodyIndent);
+    if (current && (span.start - current.end <= REGION_MERGE_GAP_LINES || sameStatement)) {
       current.end = span.end;
       current.members.push(...span.members);
     } else {
@@ -315,6 +335,33 @@ function mergeAdjacentSpans(spans: readonly RegionSpan[]): RegionSpan[] {
     }
   }
   return merged;
+}
+
+function hasRenderMember(span: RegionSpan): boolean {
+  return span.members.some((member) => member.render);
+}
+
+/**
+ * The indentation of the function's own statements: the first non-blank
+ * line of the body. The shallowest line would be wrong here because
+ * template literals and multi-line strings put text at column zero.
+ */
+function bodyIndentation(definition: IndexedDefinition, lines: readonly string[]): number {
+  for (let line = definition.startLine + 1; line < definition.endLine; line += 1) {
+    const text = lines[line] ?? '';
+    if (text.trim().length > 0) return indentation(text);
+  }
+  return 0;
+}
+
+/** True when a line between `from` and `to` (exclusive) sits exactly at the function's statement level. */
+function statementBoundaryBetween(lines: readonly string[], from: number, to: number, bodyIndent: number): boolean {
+  for (let line = from + 1; line < to; line += 1) {
+    const text = lines[line] ?? '';
+    if (text.trim().length === 0) continue;
+    if (indentation(text) === bodyIndent) return true;
+  }
+  return false;
 }
 
 /**
@@ -444,7 +491,14 @@ function localName(lines: readonly string[], occurrence: LocalOccurrence): strin
 function tierFor(
   region: ExtractRegion,
   localsAvailable: boolean,
+  ownReturns: number,
 ): { tier: ExtractCandidateActionTier; reason: string } {
+  if (ownReturns > 0) {
+    return {
+      tier: 'support',
+      reason: `support tier: the largest region holds ${ownReturns} return statement(s) of the function itself, so it is the function's control flow rather than a helper`,
+    };
+  }
   if (!localsAvailable)
     return { tier: 'signal', reason: 'signal tier: local data flow unknown, interface cost not assessed' };
   const inbound = region.inboundLocals.length;
@@ -459,6 +513,29 @@ function tierFor(
     tier: 'support',
     reason: `support tier: the largest region would take ${inbound} local(s) in and hand ${outbound} back, more than ${MAX_SIGNAL_INBOUND_LOCALS} in or ${MAX_SIGNAL_OUTBOUND_LOCALS} out`,
   };
+}
+
+/**
+ * Count `return` statements inside the region that belong to the function
+ * rather than to a callback nested in it: a return indented no deeper than
+ * the shallowest call line of the region sits at the region's own level.
+ */
+function ownReturnStatements(lines: readonly string[], region: ExtractRegion, callLines: ReadonlySet<number>): number {
+  let shallowestCall = Number.POSITIVE_INFINITY;
+  for (let line = region.startLine; line <= region.endLine; line += 1) {
+    if (callLines.has(line)) shallowestCall = Math.min(shallowestCall, indentation(lines[line] ?? ''));
+  }
+  if (!Number.isFinite(shallowestCall)) return 0;
+  let returns = 0;
+  for (let line = region.startLine; line <= region.endLine; line += 1) {
+    const text = lines[line] ?? '';
+    if (/^\s*return\b/u.test(text) && indentation(text) <= shallowestCall) returns += 1;
+  }
+  return returns;
+}
+
+function indentation(line: string): number {
+  return line.length - line.trimStart().length;
 }
 
 function recommendationFor(region: ExtractRegion, localsAvailable: boolean): string {

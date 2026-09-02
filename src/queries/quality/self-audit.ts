@@ -1,7 +1,12 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { ProjectIndex } from '../internal/project-index.js';
-import { semanticCalleeMap, semanticEvidenceProduct, semanticReferences } from '../../semantic/shared-primitives.js';
+import {
+  semanticCalleeMap,
+  semanticEvidenceProduct,
+  semanticReferences,
+  semanticCalleeCoverage,
+} from '../../semantic/shared-primitives.js';
 import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 import { referenceSitesForSymbol } from '../../symbols/references/reference-sites.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
@@ -34,6 +39,8 @@ export interface AuditQuestionScore {
   unverified: number;
   /** Samples skipped because the oracle is partial and produced no comparable answer. */
   skippedOraclePartial: number;
+  /** Compared symbols whose oracle accounted for every call site; precision is measured over these only. */
+  completeOracleSymbols: number;
   /** Cheap-path rows over the whole sample by evidence source; empty for the references question. */
   cheapSources: Record<string, number>;
 }
@@ -94,6 +101,10 @@ export function selfAudit(
 
   const semanticOracleCallees: ReturnType<typeof semanticCalleeMap> =
     oracleKind === 'semantic' ? semanticCalleeMap(db, sampled) : new Map();
+  // The compiler names the call sites it could not bind; a definition with
+  // none of those has a complete callee oracle, so cheap-only files there
+  // are false positives rather than unverified answers.
+  const semanticCoverage = oracleKind === 'semantic' ? semanticCalleeCoverage(db, sampled) : new Map();
   const sourceOracle = oracleKind === 'source' ? buildClojureSourceOracle(db, index, sampled) : null;
   for (const definition of sampled) {
     const oracleRefs = crossFileSet(
@@ -138,9 +149,12 @@ export function selfAudit(
     // empty answer is ambiguous unless the body has no call or render site
     // at all; then "nothing" is the complete answer and the comparison holds.
     const sites = callSiteKindsInDefinition(db, definition);
+    const coverage = semanticCoverage.get(definition.symbolId);
+    const compilerAccountedForEverySite = coverage !== undefined && coverage.unresolved === 0;
     const referencesComplete = oracleComplete(oracleKind, 'references');
-    const calleesComplete = oracleComplete(oracleKind, 'callees') || sites.calls === 0;
-    const rendersComplete = oracleComplete(oracleKind, 'renders') || sites.renders === 0;
+    const calleesComplete = oracleComplete(oracleKind, 'callees') || compilerAccountedForEverySite || sites.calls === 0;
+    const rendersComplete =
+      oracleComplete(oracleKind, 'renders') || compilerAccountedForEverySite || sites.renders === 0;
     scoreQuestion(
       tallies.references,
       definition,
@@ -177,11 +191,25 @@ interface QuestionTally {
   cheapTotal: number;
   oracleTotal: number;
   skippedOraclePartial: number;
+  /** Subset of compared symbols whose oracle was complete, and the cheap rows and agreements among them. */
+  completeSymbols: number;
+  completeCheapTotal: number;
+  completeAgreed: number;
   sources: Record<string, number>;
 }
 
 function emptyTally(): QuestionTally {
-  return { comparedSymbols: 0, agreed: 0, cheapTotal: 0, oracleTotal: 0, skippedOraclePartial: 0, sources: {} };
+  return {
+    comparedSymbols: 0,
+    agreed: 0,
+    cheapTotal: 0,
+    oracleTotal: 0,
+    skippedOraclePartial: 0,
+    completeSymbols: 0,
+    completeCheapTotal: 0,
+    completeAgreed: 0,
+    sources: {},
+  };
 }
 
 /** Deterministic stride sample — reproducible runs without randomness. */
@@ -232,11 +260,17 @@ function scoreQuestion(
   tally.comparedSymbols += 1;
   tally.cheapTotal += cheap.size;
   tally.oracleTotal += oracle.size;
+  if (oracleComplete) {
+    tally.completeSymbols += 1;
+    tally.completeCheapTotal += cheap.size;
+  }
   const cheapOnly: string[] = [];
   const oracleOnly: string[] = [];
   for (const file of cheap) {
-    if (oracle.has(file)) tally.agreed += 1;
-    else cheapOnly.push(file);
+    if (oracle.has(file)) {
+      tally.agreed += 1;
+      if (oracleComplete) tally.completeAgreed += 1;
+    } else cheapOnly.push(file);
   }
   for (const file of oracle) {
     if (!cheap.has(file)) oracleOnly.push(file);
@@ -274,15 +308,19 @@ function callSiteKindsInDefinition(
 
 function finalizeScore(question: AuditQuestion, tally: QuestionTally, oracleKind: AuditOracleKind): AuditQuestionScore {
   const recall = tally.oracleTotal > 0 ? tally.agreed / tally.oracleTotal : 1;
-  const unverified = tally.cheapTotal - tally.agreed;
-  const complete = oracleComplete(oracleKind, question);
+  // Precision is defined only where the oracle was complete: a cheap-only
+  // answer next to a partial oracle is unverified, not wrong.
+  const precision = tally.completeCheapTotal > 0 ? round3(tally.completeAgreed / tally.completeCheapTotal) : null;
+  const unverified = tally.cheapTotal - tally.agreed - (tally.completeCheapTotal - tally.completeAgreed);
+  void oracleKind;
   return {
     question,
     comparedSymbols: tally.comparedSymbols,
-    precision: complete && tally.cheapTotal > 0 ? round3(tally.agreed / tally.cheapTotal) : null,
+    precision,
     recall: round3(recall),
     unverified,
     skippedOraclePartial: tally.skippedOraclePartial,
+    completeOracleSymbols: tally.completeSymbols,
     cheapSources: tally.sources,
   };
 }

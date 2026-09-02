@@ -243,3 +243,67 @@ every refresh fail with "deferred TypeScript SCIP base has no matching
 overlay generation" and the watcher served a stale generation while logging
 a failed run every few seconds. The incremental planner now bases the next
 overlay on the overlay generation the accepted publication carries.
+
+### Lead 9 (closed): whole-project semantic passes ran out of memory
+
+`extract-candidates --full --json` died at the default 4 GB heap on
+Launchpoint. Profiling a cold-cache run showed the sequence: the command sent
+every candidate definition to the semantic service in one request; the
+service's compiler worker died at its 6 GB heap ceiling
+(`typescript-semantic/dead-letter` recorded "Worker terminated due to
+reaching memory limit"); the service-backed provider then fell back to an
+in-process compiler, which loaded 19 TypeScript projects into the command
+process and died there. The warm-cache rerun peaked at 1.5 GB, which is
+why the failure looked intermittent.
+
+Four changes, each verified on the VM with the semantic callee cache
+cleared and the default heap: bulk callee requests go out in bounded
+per-file batches of at most 256 definitions; a service failure on a large
+index (2,500 documents or 25,000 symbols) disables semantic enrichment for
+the rest of the run with a stderr notice instead of loading the compiler
+in-process; a service that merely lacks a request kind keeps serving the
+others; and the service sizes its compiler worker heaps from the indexed
+document count with a machine-memory ceiling (Launchpoint: 12.2 GB on a
+61 GB machine). The cold run now completes in 1:32 at 2.3 GB resident with
+no declined requests and no dead-lettered work, answering 69 batched
+service requests. The occurrence-decode cache is bounded to 256 files, and
+the extraction run no longer holds every visited file's locals.
+
+### Lead 10 (closed): the compiler callee oracle dropped imported functions
+
+Building the precision oracle exposed a gap in the oracle itself. The
+compiler callee path bound an imported call to its import alias and looked
+for a definition at the import statement, so every cross-file call to an
+imported function was missing from the semantic callee product and from the
+self-audit oracle; member calls through typed receivers were unaffected,
+which is why the oracle still looked strong on dependency-injected code.
+Aliases now resolve to their declarations, and cached compiler callees
+carry a new schema.
+
+The compiler also reports, per definition, how many call and render sites
+it bound inside the repository, bound to a library or ambient symbol, or
+could not bind. A definition with no unbound site has a complete oracle, so
+a cheap-only file there is a false positive rather than an unverified
+answer, and `self-audit` measures callee and render precision over those
+symbols. Vega, 300 samples: callees precision 1.0 and recall 0.989 over
+299 compared symbols (87 compared before, no precision claim); renders
+precision 1.0 and recall 1.0 over 300; references precision 0.956 and
+recall 1.0.
+
+### Lead 7 follow-up: extraction rules from the reviewed sample
+
+Reading twenty sampled regions in Launchpoint source
+(`docs/validation/labels/launchpoint-backend/extract-candidates.json`)
+showed two false-positive shapes among exclusive regions: regions that hold
+`return` statements of the function itself (its branch structure, not a
+helper) and blocks of five to seven lines that are a statement or two. A
+region now needs eight lines, and a region holding the function's own
+returns (a return indented no deeper than the region's shallowest call) is
+support tier. A first cut of those rules also lost a labeled true region
+whose calls sit inside one fluent query statement, and an attempt to merge
+across statements swallowed every rendered subtree inside a `return`; the
+rule that survived both is that exclusive call spans merge when no line at
+the function's statement indentation separates them, while spans with
+rendered members keep the proximity rule. The label set scores precision
+1.0 and recall 1.0 against the current output; the Launchpoint full list is
+369 signal-tier and 570 support-tier candidates.

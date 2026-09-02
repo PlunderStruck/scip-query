@@ -2077,12 +2077,26 @@ async function publishFullyReusedLanguageShardArtifacts(
     typescriptProjectShardContext,
     lastRefresh,
   });
+  // Every shard is carried, so the SCIP companion keeps the accepted
+  // generation's state; dropping the marker here made the next incremental
+  // run read the deferred companion as current.
+  metadata.scipCompanion = acceptedScipCompanion(opts.paths);
   assertProjectInputsUnchanged(opts);
   pruneTypeScriptProjectShardCache(opts.paths.outputDb, pruneProjects);
   writeReindexMeta(opts.paths.metaPath, metadata);
   refreshSqliteGenerationMetadata(opts.paths.outputDb, opts.paths.metaPath);
   persistAffectedSetShadowRecord(opts.paths.outputDb, shadowRecord, opts.onStatus);
   return lastRefresh;
+}
+
+/** The accepted generation's SCIP companion state: metadata first, then the publication record, else current. */
+function acceptedScipCompanion(paths: ReindexOutputPaths): 'current' | 'deferred' {
+  const fromMetadata = readReindexMetaOrNull(paths.metaPath)?.scipCompanion;
+  if (fromMetadata) return fromMetadata;
+  const generation = inspectSqliteGeneration(paths.outputDb, paths.metaPath);
+  return generation.state === 'current' && generation.generation.publication?.scipCompanion === 'deferred'
+    ? 'deferred'
+    : 'current';
 }
 
 /**

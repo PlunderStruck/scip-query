@@ -87,6 +87,8 @@ export class TypeScriptSemanticServiceHost {
           return [...provider.referenceFragmentsForFiles(request.files)];
         case 'callees':
           return [...resolveCalleeMap(provider, request.definitions)];
+        case 'callee-coverage':
+          return [...(provider.calleeCoverageForDefinitions?.(request.definitions) ?? new Map())];
         case 'signature':
           return provider.signatureFor(request.definition);
         default:

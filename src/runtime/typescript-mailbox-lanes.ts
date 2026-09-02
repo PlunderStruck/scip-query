@@ -1,3 +1,4 @@
+import { totalmem } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import { Worker } from 'node:worker_threads';
@@ -356,6 +357,26 @@ const DEFAULT_TYPESCRIPT_WORKER_HEAP_MB = 6144;
 function typescriptWorkerHeapMb(): number {
   const configured = Number.parseInt(process.env['SCIP_TS_WORKER_HEAP_MB'] ?? '', 10);
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_TYPESCRIPT_WORKER_HEAP_MB;
+}
+
+/** Retaining one compiler graph costs about this much per indexed document on top of a fixed base. */
+const TYPESCRIPT_WORKER_HEAP_BASE_MB = 2_560;
+const TYPESCRIPT_WORKER_HEAP_PER_DOCUMENT_MB = 1.25;
+/** Never hand a worker more than this share of the machine, whatever the project size. */
+const TYPESCRIPT_WORKER_HEAP_MACHINE_SHARE = 0.6;
+
+/**
+ * A heap ceiling sized to the project: the default fits a few thousand
+ * documents, and a larger repository dies mid-request at the default instead
+ * of answering. The environment override and the project configuration still
+ * win over this estimate.
+ */
+export function recommendedTypeScriptWorkerHeapMb(documents: number, totalMemoryBytes = totalmem()): number {
+  const configured = Number.parseInt(process.env['SCIP_TS_WORKER_HEAP_MB'] ?? '', 10);
+  if (Number.isFinite(configured) && configured > 0) return configured;
+  const estimate = Math.ceil(TYPESCRIPT_WORKER_HEAP_BASE_MB + documents * TYPESCRIPT_WORKER_HEAP_PER_DOCUMENT_MB);
+  const machineCeiling = Math.floor((totalMemoryBytes * TYPESCRIPT_WORKER_HEAP_MACHINE_SHARE) / (1024 * 1024));
+  return Math.max(DEFAULT_TYPESCRIPT_WORKER_HEAP_MB, Math.min(estimate, machineCeiling));
 }
 
 function typescriptWorkerSoftMemoryMb(configuredHeapMb?: number): number {

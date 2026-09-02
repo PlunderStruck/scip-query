@@ -28,6 +28,7 @@ import type {
   SemanticProvider,
   SemanticReference,
   SemanticReferenceFragment,
+  SemanticCalleeCoverage,
 } from '../types.js';
 import { decodeSemanticAvailability } from '../types.js';
 import { createTsMorphProvider } from './ts-morph-provider.js';
@@ -67,16 +68,36 @@ export function createServiceBackedTypeScriptProvider(
   let directProvider: SemanticProvider | null = null;
   let cachedAvailability: SemanticAvailability | null = null;
   let remoteFailed = process.env['SCIP_QUERY_SKIP_WATCH_SERVICE'] === '1';
+  // A service failure on a large index must not become an in-process
+  // compiler load: that is the same work the service's bounded worker just
+  // could not finish, now inside a command process with a smaller heap.
+  let serviceDeclined: string | null = null;
   const direct = (): SemanticProvider => {
     directProvider ??= createTsMorphProvider(db, relativePath);
     return directProvider;
   };
-  const request = <T>(value: TypeScriptSemanticRequest, decode: (response: unknown) => T, fallback: () => T): T => {
+  const request = <T>(
+    value: TypeScriptSemanticRequest,
+    decode: (response: unknown) => T,
+    fallback: () => T,
+    unavailable: () => T = fallback,
+  ): T => {
+    if (serviceDeclined !== null) return unavailable();
     if (remoteFailed) return fallback();
     try {
       return decode(requester.request(value));
-    } catch {
+    } catch (error) {
+      // A service that does not know this request kind is healthy for every
+      // other kind; answer this one as unavailable and keep using it.
+      if (isUnsupportedRequestError(error)) return unavailable();
       remoteFailed = true;
+      if (!inProcessCompilerAllowed(db)) {
+        serviceDeclined = error instanceof Error ? error.message : String(error);
+        console.error(
+          `TypeScript semantic service request failed (${serviceDeclined}); semantic enrichment is disabled for the rest of this run because the index is too large for an in-process compiler.`,
+        );
+        return unavailable();
+      }
       return fallback();
     }
   };
@@ -90,6 +111,7 @@ export function createServiceBackedTypeScriptProvider(
       () =>
         direct().referencesForDefinitions?.(definitions, batchOpts) ??
         new Map(definitions.map((definition) => [definition.symbolId, direct().referencesFor(definition)])),
+      () => new Map(),
     );
   const calleesForDefinitions = (definitions: readonly IndexedDefinition[]): Map<number, SemanticCallee[]> =>
     request(
@@ -98,12 +120,21 @@ export function createServiceBackedTypeScriptProvider(
       () =>
         direct().calleesForDefinitions?.(definitions) ??
         new Map(definitions.map((definition) => [definition.symbolId, direct().calleesFor(definition)])),
+      () => new Map(),
     );
 
   return {
     language: 'typescript',
     availability: () => {
-      cachedAvailability ??= request({ kind: 'availability' }, parseAvailability, () => direct().availability());
+      cachedAvailability ??= request(
+        { kind: 'availability' },
+        parseAvailability,
+        () => direct().availability(),
+        () => ({
+          available: false,
+          reason: `TypeScript semantic service declined: ${serviceDeclined ?? 'unknown'}`,
+        }),
+      );
       return cachedAvailability;
     },
     importUsage: (file) =>
@@ -111,6 +142,7 @@ export function createServiceBackedTypeScriptProvider(
         { kind: 'import-usage', file },
         (response) => response as SemanticImportUsage[],
         () => direct().importUsage(file),
+        () => [],
       ),
     referencesFor: (definition) => referencesForDefinitions([definition]).get(definition.symbolId) ?? [],
     referencesForDefinitions,
@@ -119,13 +151,55 @@ export function createServiceBackedTypeScriptProvider(
         { kind: 'reference-fragments', files: [...files] },
         (response) => stringMap<SemanticReferenceFragment[]>(response),
         () => direct().referenceFragmentsForFiles?.(files) ?? new Map(),
+        () => new Map(),
       ),
     calleesFor: (definition) => calleesForDefinitions([definition]).get(definition.symbolId) ?? [],
     calleesForDefinitions,
+    calleeCoverageForDefinitions: (definitions) =>
+      request(
+        { kind: 'callee-coverage', definitions: [...definitions] },
+        (response) => numericMap<SemanticCalleeCoverage>(response),
+        () => direct().calleeCoverageForDefinitions?.(definitions) ?? new Map(),
+        () => new Map(),
+      ),
     signatureFor: (definition) =>
-      request({ kind: 'signature', definition }, parseSignature, () => direct().signatureFor(definition)),
+      request(
+        { kind: 'signature', definition },
+        parseSignature,
+        () => direct().signatureFor(definition),
+        () => null,
+      ),
     dispose: () => directProvider?.dispose?.(),
   };
+}
+
+function isUnsupportedRequestError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('invalid mailbox request') || message.includes('Unhandled TypeScript semantic request');
+}
+
+/** Mirrors the CLI's large-index thresholds: above them a command process must not host the compiler itself. */
+const IN_PROCESS_COMPILER_MAX_DOCUMENTS = 2_500;
+const IN_PROCESS_COMPILER_MAX_SYMBOLS = 25_000;
+const IN_PROCESS_COMPILER_ALLOWED = new WeakMap<ScipDatabase, boolean>();
+
+function inProcessCompilerAllowed(db: ScipDatabase): boolean {
+  const cached = IN_PROCESS_COMPILER_ALLOWED.get(db);
+  if (cached !== undefined) return cached;
+  const allowed = indexFitsInProcessCompiler(db);
+  IN_PROCESS_COMPILER_ALLOWED.set(db, allowed);
+  return allowed;
+}
+
+function indexFitsInProcessCompiler(db: ScipDatabase): boolean {
+  try {
+    const row = db.get<{ documents: number; symbols: number }>(
+      'SELECT (SELECT count(*) FROM documents) AS documents, (SELECT count(*) FROM global_symbols) AS symbols',
+    );
+    return !row || (row.documents < IN_PROCESS_COMPILER_MAX_DOCUMENTS && row.symbols < IN_PROCESS_COMPILER_MAX_SYMBOLS);
+  } catch {
+    return true;
+  }
 }
 
 export class TypeScriptSemanticRequester {

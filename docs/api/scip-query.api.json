@@ -1,5 +1,5 @@
 {
-  "digest": "0b711a8f283f044b0cc8e09db5080be8b72742e2ac53545010330e3230843676",
+  "digest": "ba2c212d7308f4c1b150176621860d429632ede29f4edcb1f46c4aa6de976729",
   "kind": "scip-query-api-manifest",
   "schemaVersion": 1,
   "surface": {
@@ -181,7 +181,7 @@
           {
             "kind": "type",
             "name": "AuditQuestionScore",
-            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    cheapSources: Record<string, number>;\n}"
+            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    completeOracleSymbols: number;\n    cheapSources: Record<string, number>;\n}"
           },
           {
             "kind": "type",
@@ -951,7 +951,7 @@
           {
             "kind": "type",
             "name": "ExtractCandidate",
-            "signature": "interface ExtractCandidate {\n    symbol: string;\n    shortName: string;\n    relativePath: string;\n    startLine: number;\n    endLine: number;\n    loc: number;\n    totalCallees: number;\n    unpositionedCallees: number;\n    ambientCallees: string[];\n    localsAvailable: boolean;\n    extractionKind: ExtractCandidateKind;\n    actionTier: ExtractCandidateActionTier;\n    tierReason: string;\n    evidenceReasons: string[];\n    recommendation: string;\n    regions: ExtractRegion[];\n}"
+            "signature": "interface ExtractCandidate {\n    symbol: string;\n    shortName: string;\n    relativePath: string;\n    startLine: number;\n    endLine: number;\n    loc: number;\n    totalCallees: number;\n    unpositionedCallees: number;\n    ambientCallees: string[];\n    localsAvailable: boolean;\n    extractionKind: ExtractCandidateKind;\n    actionTier: ExtractCandidateActionTier;\n    tierReason: string;\n    ownReturnsInRegion: number;\n    evidenceReasons: string[];\n    recommendation: string;\n    regions: ExtractRegion[];\n}"
           },
           {
             "kind": "type",
@@ -3591,12 +3591,12 @@
         "types": "dist/queries/evidence.d.ts"
       },
       "./queries/extract-candidates": {
-        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ntype ExtractCandidateKind = 'call-region' | 'render-region';\n\ntype ExtractCandidateActionTier = 'signal' | 'support';\n\ninterface ExtractRegion {\n    startLine: number;\n    endLine: number;\n    lines: number;\n    kind: ExtractCandidateKind;\n    callees: string[];\n    renderCallees: number;\n    inboundLocals: string[];\n    outboundLocals: string[];\n    ambientCallees: string[];\n}\n\ninterface ExtractCandidate {\n    symbol: string;\n    shortName: string;\n    relativePath: string;\n    startLine: number;\n    endLine: number;\n    loc: number;\n    totalCallees: number;\n    unpositionedCallees: number;\n    ambientCallees: string[];\n    localsAvailable: boolean;\n    extractionKind: ExtractCandidateKind;\n    actionTier: ExtractCandidateActionTier;\n    tierReason: string;\n    evidenceReasons: string[];\n    recommendation: string;\n    regions: ExtractRegion[];\n}\n\ndeclare function extractCandidates(db: ScipDatabase, opts?: {\n    scope?: string;\n    minLoc?: number;\n    minCallees?: number;\n    limit?: number;\n    scanLimit?: number;\n    semantic?: boolean;\n}): ExtractCandidate[];\n\nexport { type ExtractCandidate, type ExtractCandidateActionTier, type ExtractCandidateKind, extractCandidates, type ExtractRegion };\n",
+        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ntype ExtractCandidateKind = 'call-region' | 'render-region';\n\ntype ExtractCandidateActionTier = 'signal' | 'support';\n\ninterface ExtractRegion {\n    startLine: number;\n    endLine: number;\n    lines: number;\n    kind: ExtractCandidateKind;\n    callees: string[];\n    renderCallees: number;\n    inboundLocals: string[];\n    outboundLocals: string[];\n    ambientCallees: string[];\n}\n\ninterface ExtractCandidate {\n    symbol: string;\n    shortName: string;\n    relativePath: string;\n    startLine: number;\n    endLine: number;\n    loc: number;\n    totalCallees: number;\n    unpositionedCallees: number;\n    ambientCallees: string[];\n    localsAvailable: boolean;\n    extractionKind: ExtractCandidateKind;\n    actionTier: ExtractCandidateActionTier;\n    tierReason: string;\n    ownReturnsInRegion: number;\n    evidenceReasons: string[];\n    recommendation: string;\n    regions: ExtractRegion[];\n}\n\ndeclare function extractCandidates(db: ScipDatabase, opts?: {\n    scope?: string;\n    minLoc?: number;\n    minCallees?: number;\n    limit?: number;\n    scanLimit?: number;\n    semantic?: boolean;\n}): ExtractCandidate[];\n\nexport { type ExtractCandidate, type ExtractCandidateActionTier, type ExtractCandidateKind, extractCandidates, type ExtractRegion };\n",
         "exports": [
           {
             "kind": "type",
             "name": "ExtractCandidate",
-            "signature": "interface ExtractCandidate {\n    symbol: string;\n    shortName: string;\n    relativePath: string;\n    startLine: number;\n    endLine: number;\n    loc: number;\n    totalCallees: number;\n    unpositionedCallees: number;\n    ambientCallees: string[];\n    localsAvailable: boolean;\n    extractionKind: ExtractCandidateKind;\n    actionTier: ExtractCandidateActionTier;\n    tierReason: string;\n    evidenceReasons: string[];\n    recommendation: string;\n    regions: ExtractRegion[];\n}"
+            "signature": "interface ExtractCandidate {\n    symbol: string;\n    shortName: string;\n    relativePath: string;\n    startLine: number;\n    endLine: number;\n    loc: number;\n    totalCallees: number;\n    unpositionedCallees: number;\n    ambientCallees: string[];\n    localsAvailable: boolean;\n    extractionKind: ExtractCandidateKind;\n    actionTier: ExtractCandidateActionTier;\n    tierReason: string;\n    ownReturnsInRegion: number;\n    evidenceReasons: string[];\n    recommendation: string;\n    regions: ExtractRegion[];\n}"
           },
           {
             "kind": "type",
@@ -3994,7 +3994,7 @@
           {
             "kind": "type",
             "name": "AuditQuestionScore",
-            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    cheapSources: Record<string, number>;\n}"
+            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    completeOracleSymbols: number;\n    cheapSources: Record<string, number>;\n}"
           },
           {
             "kind": "type",
@@ -4764,7 +4764,7 @@
           {
             "kind": "type",
             "name": "ExtractCandidate",
-            "signature": "interface ExtractCandidate {\n    symbol: string;\n    shortName: string;\n    relativePath: string;\n    startLine: number;\n    endLine: number;\n    loc: number;\n    totalCallees: number;\n    unpositionedCallees: number;\n    ambientCallees: string[];\n    localsAvailable: boolean;\n    extractionKind: ExtractCandidateKind;\n    actionTier: ExtractCandidateActionTier;\n    tierReason: string;\n    evidenceReasons: string[];\n    recommendation: string;\n    regions: ExtractRegion[];\n}"
+            "signature": "interface ExtractCandidate {\n    symbol: string;\n    shortName: string;\n    relativePath: string;\n    startLine: number;\n    endLine: number;\n    loc: number;\n    totalCallees: number;\n    unpositionedCallees: number;\n    ambientCallees: string[];\n    localsAvailable: boolean;\n    extractionKind: ExtractCandidateKind;\n    actionTier: ExtractCandidateActionTier;\n    tierReason: string;\n    ownReturnsInRegion: number;\n    evidenceReasons: string[];\n    recommendation: string;\n    regions: ExtractRegion[];\n}"
           },
           {
             "kind": "type",
@@ -6581,7 +6581,7 @@
         "types": "dist/queries/refs.d.ts"
       },
       "./queries/self-audit": {
-        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ntype AuditQuestion = 'references' | 'callees' | 'renders';\n\ntype AuditOracleKind = 'semantic' | 'source';\n\ninterface AuditDisagreement {\n    symbol: string;\n    question: AuditQuestion;\n    cheapOnly: string[];\n    oracleOnly: string[];\n}\n\ninterface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    cheapSources: Record<string, number>;\n}\n\ninterface SelfAuditResult {\n    available: boolean;\n    sampleSize: number;\n    oracleCoverage: number;\n    oracleKind?: AuditOracleKind;\n    scores: AuditQuestionScore[];\n    topDisagreements: AuditDisagreement[];\n}\n\ndeclare function selfAudit(db: ScipDatabase, opts?: {\n    samples?: number;\n    scope?: string;\n    maxDisagreements?: number;\n}): SelfAuditResult;\n\nexport { type AuditDisagreement, type AuditOracleKind, type AuditQuestion, type AuditQuestionScore, selfAudit, type SelfAuditResult };\n",
+        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ntype AuditQuestion = 'references' | 'callees' | 'renders';\n\ntype AuditOracleKind = 'semantic' | 'source';\n\ninterface AuditDisagreement {\n    symbol: string;\n    question: AuditQuestion;\n    cheapOnly: string[];\n    oracleOnly: string[];\n}\n\ninterface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    completeOracleSymbols: number;\n    cheapSources: Record<string, number>;\n}\n\ninterface SelfAuditResult {\n    available: boolean;\n    sampleSize: number;\n    oracleCoverage: number;\n    oracleKind?: AuditOracleKind;\n    scores: AuditQuestionScore[];\n    topDisagreements: AuditDisagreement[];\n}\n\ndeclare function selfAudit(db: ScipDatabase, opts?: {\n    samples?: number;\n    scope?: string;\n    maxDisagreements?: number;\n}): SelfAuditResult;\n\nexport { type AuditDisagreement, type AuditOracleKind, type AuditQuestion, type AuditQuestionScore, selfAudit, type SelfAuditResult };\n",
         "exports": [
           {
             "kind": "type",
@@ -6601,7 +6601,7 @@
           {
             "kind": "type",
             "name": "AuditQuestionScore",
-            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    cheapSources: Record<string, number>;\n}"
+            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    completeOracleSymbols: number;\n    cheapSources: Record<string, number>;\n}"
           },
           {
             "kind": "function",

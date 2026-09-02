@@ -467,6 +467,50 @@ function withMonorepoSemanticFixture(run: (db: ScipDatabase) => void): void {
 }
 
 describe('TypeScript semantic provider', () => {
+  it('accounts for every call site as repository, external, or unresolved', () => {
+    withSemanticFixture((db) => {
+      writeFileSync(
+        join(db.config.projectRoot, 'src/caller.ts'),
+        [
+          "import { usedHelper } from './api';",
+          'export function caller(): void {',
+          '  usedHelper();',
+          "  console.log('external');",
+          '  unknownThing();',
+          '}',
+          '',
+        ].join('\n'),
+      );
+      // Index the caller the way the converter would, so the provider can
+      // attribute its call sites.
+      const sqlite = new Database(db.config.dbPath);
+      sqlite.exec(`
+        INSERT INTO documents (id, language, relative_path) VALUES (3, 'typescript', 'src/caller.ts');
+        INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES (3, 3, 0, 0, 6, X'');
+        INSERT INTO global_symbols (id, symbol, display_name, kind, documentation)
+          VALUES (99, 'scip-typescript npm fixture 1.0.0 src/\`caller.ts\`/caller().', 'caller', 12, 'function caller(): void');
+        INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char)
+          VALUES (99, 3, 99, 1, 0, 5, 1);
+        INSERT INTO mentions (chunk_id, symbol_id, role) VALUES (3, 99, 1);
+      `);
+      sqlite.close();
+      const provider = createTsMorphProvider(db);
+      const caller = getAllDefinitions(db).find((definition) => definition.leaf === 'caller')!;
+      expect(caller).toBeDefined();
+      // The callee map and the coverage walk must agree on what resolved.
+      expect(
+        provider
+          .calleesForDefinitions?.([caller])
+          ?.get(caller.symbolId)
+          ?.map((callee) => callee.file),
+      ).toEqual(['src/api.ts']);
+      expect(provider.calleeCoverageForDefinitions?.([caller])).toEqual(
+        new Map([[caller.symbolId, { callSites: 3, resolvedInRepository: 1, resolvedExternal: 1, unresolved: 1 }]]),
+      );
+      provider.dispose?.();
+    });
+  });
+
   it('keeps the file-first reference scan exact across override families', () => {
     withSemanticFixture((db) => {
       addOverrideReferenceFixture(db);

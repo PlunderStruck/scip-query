@@ -12,7 +12,7 @@ const sym = (leaf: string) => `scip-typescript npm fixture 1.0.0 src/\`orchestra
 
 /**
  * `processOrder` loads and validates (lines 3-4), charges inside one block
- * (lines 11-15) using three callees nothing else uses, then summarizes.
+ * (lines 11-18) using six callees nothing else uses, then summarizes.
  * `trace` runs across the whole body. `mixed` interleaves every callee so no
  * cut leaves an exclusive region.
  */
@@ -28,9 +28,12 @@ const ORCHESTRATOR = [
   '  const total = normalized.total;',
   '  let receipt = null;',
   '  if (total > 0) {',
-  '    const charge = chargeCard(normalized, total);',
+  '    const idempotencyKey = buildIdempotencyKey(normalized);',
+  '    const charge = chargeCard(normalized, total, idempotencyKey);',
   '    receipt = sendReceipt(charge);',
   '    recordAudit(charge, receipt);',
+  '    confirmCharge(charge);',
+  '    scheduleFollowUp(receipt);',
   '  }',
   "  trace('charged');",
   '  const summary = summarize(receipt);',
@@ -39,25 +42,46 @@ const ORCHESTRATOR = [
   '}',
   'export function mixed(orderId: string) {',
   '  const order = loadOrder(orderId);',
-  '  const charge = chargeCard(order, 1);',
+  '  const charge = chargeCard(order, 1, "k");',
   '  validateOrder(order);',
   '  sendReceipt(charge);',
   '  normalizeOrder(order);',
   '  recordAudit(charge, order);',
   '  loadOrder(orderId);',
-  '  chargeCard(order, 2);',
+  '  chargeCard(order, 2, "k");',
   '  validateOrder(order);',
   '  sendReceipt(charge);',
   '  normalizeOrder(order);',
   '  return recordAudit(charge, order);',
   '}',
+  'export function buildReport(orderId: string) {',
+  '  const order = loadOrder(orderId);',
+  '  validateOrder(order);',
+  '  const report = {',
+  '    id: order.id,',
+  '    summary: summarize(',
+  '      order,',
+  '    ),',
+  '    audit: recordAudit(',
+  '      order,',
+  '      order,',
+  '    ),',
+  '    final: finalize(',
+  '      order,',
+  '    ),',
+  '  };',
+  '  return report;',
+  '}',
   'export function trace(step: string) { return step; }',
   'export function loadOrder(id: string) { return { id, total: 1 }; }',
   'export function validateOrder(order: { id: string }) { return Boolean(order.id); }',
   'export function normalizeOrder(order: { id: string; total: number }) { return order; }',
-  'export function chargeCard(order: { id: string }, total: number) { return { order, total }; }',
+  'export function buildIdempotencyKey(order: { id: string }) { return order.id; }',
+  'export function chargeCard(order: { id: string }, total: number, key: string) { return { order, total, key }; }',
   'export function sendReceipt(charge: { total: number }) { return { charge }; }',
   'export function recordAudit(charge: unknown, receipt: unknown) { return [charge, receipt]; }',
+  'export function confirmCharge(charge: unknown) { return charge; }',
+  'export function scheduleFollowUp(receipt: unknown) { return receipt; }',
   'export function summarize(receipt: unknown) { return { receipt }; }',
   'export function finalize(summary: unknown) { return summary; }',
 ];
@@ -67,9 +91,12 @@ const HELPERS = [
   'loadOrder',
   'validateOrder',
   'normalizeOrder',
+  'buildIdempotencyKey',
   'chargeCard',
   'sendReceipt',
   'recordAudit',
+  'confirmCharge',
+  'scheduleFollowUp',
   'summarize',
   'finalize',
 ];
@@ -78,22 +105,33 @@ function buildFixture(): { root: string; db: ScipDatabase } {
   const root = mkdtempSync(join(tmpdir(), 'scip-query-extract-candidates-'));
   writeFixtureFiles(root, { 'src/orchestrator.ts': ORCHESTRATOR });
   const dbPath = join(root, 'index.db');
+  const lineOf = (prefix: string) => ORCHESTRATOR.findIndex((text) => text.startsWith(prefix));
+  const endOf = (start: number) => start + ORCHESTRATOR.slice(start).findIndex((text) => text === '}');
+  const processStart = lineOf('export function processOrder');
+  const mixedStart = lineOf('export function mixed');
+  const reportStart = lineOf('export function buildReport');
+  const helpersStart = lineOf('export function trace(');
   const fixture = evidenceFixtureDb(dbPath)
     .document(1, 'typescript', 'src/orchestrator.ts')
     .chunk(1, 1, 0, ORCHESTRATOR.length);
   fixture
     .symbol(1, sym('processOrder'), 'processOrder', SymbolInformation_Kind.Function)
-    .definition(1, 1, 1, 0, 0, 19, 1);
-  fixture.symbol(2, sym('mixed'), 'mixed', SymbolInformation_Kind.Function).definition(2, 1, 2, 20, 0, 33, 1);
+    .definition(1, 1, 1, processStart, 0, endOf(processStart), 1);
+  fixture
+    .symbol(2, sym('mixed'), 'mixed', SymbolInformation_Kind.Function)
+    .definition(2, 1, 2, mixedStart, 0, endOf(mixedStart), 1);
+  fixture
+    .symbol(90, sym('buildReport'), 'buildReport', SymbolInformation_Kind.Function)
+    .definition(90, 1, 90, reportStart, 0, endOf(reportStart), 1);
   HELPERS.forEach((leaf, index) => {
-    const line = 34 + index;
+    const line = lineOf(`export function ${leaf}(`);
     fixture
       .symbol(3 + index, sym(leaf), leaf, SymbolInformation_Kind.Function)
       .definition(3 + index, 1, 3 + index, line, 0, line, 60);
   });
   // Indexer bindings at every call line, and local symbols with their declaration and use sites.
   ORCHESTRATOR.forEach((text, line) => {
-    if (line >= 34) return;
+    if (line >= helpersStart) return;
     for (const leaf of HELPERS) {
       const column = text.indexOf(`${leaf}(`);
       if (column >= 0) fixture.occurrence(1, sym(leaf), line, 0, column, column + leaf.length);
@@ -122,21 +160,25 @@ function buildFixture(): { root: string; db: ScipDatabase } {
   local(4, 'normalized', 7, [
     [8, false],
     [11, false],
+    [12, false],
   ]);
   local(5, 'total', 8, [
     [10, false],
-    [11, false],
+    [12, false],
   ]);
   local(6, 'receipt', 9, [
-    [12, true],
-    [13, false],
+    [13, true],
+    [14, false],
     [16, false],
+    [19, false],
   ]);
-  local(7, 'charge', 11, [
-    [12, false],
+  local(7, 'idempotencyKey', 11, [[12, false]]);
+  local(8, 'charge', 12, [
     [13, false],
+    [14, false],
+    [15, false],
   ]);
-  local(8, 'summary', 16, [[18, false]]);
+  local(9, 'summary', 19, [[21, false]]);
   fixture.write();
   return { root, db: new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') }) };
 }
@@ -153,25 +195,45 @@ describe('extractCandidates regions', () => {
     try {
       const results = extractCandidates(db, { minLoc: 10, minCallees: 6, semantic: false });
       expect(results.map((result) => result.shortName)).toEqual(['src:orchestrator:processOrder()']);
+
+      // Calls spread through one multi-line statement belong to one region:
+      // no statement-level line separates them, so the three calls inside the
+      // literal form one seam from the first call line to the last.
+      const sparse = extractCandidates(db, { minLoc: 10, minCallees: 3, semantic: false }).find(
+        (result) => result.shortName === 'src:orchestrator:buildReport()',
+      );
+      const reportStart = ORCHESTRATOR.findIndex((text) => text.startsWith('export function buildReport'));
+      expect(
+        sparse?.regions.map((region) => [
+          region.startLine - reportStart,
+          region.endLine - reportStart,
+          region.callees.length,
+        ]),
+      ).toEqual([[5, 12, 3]]);
+      expect(sparse?.ownReturnsInRegion).toBe(0);
       const candidate = results[0]!;
       expect(candidate).toMatchObject({
         actionTier: 'signal',
         extractionKind: 'call-region',
-        totalCallees: 9,
+        totalCallees: 12,
         unpositionedCallees: 0,
         ambientCallees: ['src:orchestrator:trace()'],
         localsAvailable: true,
+        ownReturnsInRegion: 0,
       });
       expect(candidate.regions).toEqual([
         {
           startLine: 10,
-          endLine: 14,
-          lines: 5,
+          endLine: 17,
+          lines: 8,
           kind: 'call-region',
           callees: [
+            'src:orchestrator:buildIdempotencyKey()',
             'src:orchestrator:chargeCard()',
             'src:orchestrator:sendReceipt()',
             'src:orchestrator:recordAudit()',
+            'src:orchestrator:confirmCharge()',
+            'src:orchestrator:scheduleFollowUp()',
           ],
           renderCallees: 0,
           inboundLocals: ['normalized', 'receipt', 'total'],
@@ -179,21 +241,22 @@ describe('extractCandidates regions', () => {
           ambientCallees: [],
         },
       ]);
-      expect(candidate.recommendation).toContain('lines 11-15 as a helper');
+      expect(candidate.recommendation).toContain('lines 11-18 as a helper');
       expect(candidate.recommendation).toContain(
         'take 3 local(s) in (normalized, receipt, total) and hand 1 back (receipt)',
       );
       expect(candidate.evidenceReasons).toEqual(
         expect.arrayContaining([
-          '9 callees placed on call lines across 20 lines',
+          '12 callees placed on call lines across 23 lines',
           '1 ambient callee(s) used across the body: src:orchestrator:trace()',
-          'lines 11-15 (5 lines) use 3 callees exclusively; 3 local(s) in, 1 out',
+          'lines 11-18 (8 lines) use 6 callees exclusively; 3 local(s) in, 1 out',
           '5 callee(s) stay outside the largest region',
         ]),
       );
 
       const report = health(db);
-      expect(report.findings.extractionCandidates).toBe(1);
+      // processOrder and buildReport both qualify under the health profile.
+      expect(report.findings.extractionCandidates).toBe(2);
       expect(report.scoreBreakdown.some((deduction) => deduction.axis === 'extract')).toBe(false);
       expect(report.actions.find((action) => action.category === 'Extraction candidates')?.description).toContain(
         'review same-file or feature-local extraction seams',

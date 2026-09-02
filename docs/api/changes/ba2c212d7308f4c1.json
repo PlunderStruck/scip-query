@@ -1,0 +1,49 @@
+{
+  "acceptedAt": "2026-09-02T20:16:42.816Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "ba2c212d7308f4c1b150176621860d429632ede29f4edcb1f46c4aa6de976729",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AuditQuestionScore changed from interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; chea... to interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; comp....",
+      "target": "./queries:AuditQuestionScore"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ExtractCandidate changed from interface ExtractCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; totalCallees: number; unpositionedCallees:... to interface ExtractCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; totalCallees: number; unpositionedCallees:....",
+      "target": "./queries:ExtractCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ExtractCandidate changed from interface ExtractCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; totalCallees: number; unpositionedCallees:... to interface ExtractCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; totalCallees: number; unpositionedCallees:....",
+      "target": "./queries/extract-candidates:ExtractCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AuditQuestionScore changed from interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; chea... to interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; comp....",
+      "target": "./queries/index:AuditQuestionScore"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ExtractCandidate changed from interface ExtractCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; totalCallees: number; unpositionedCallees:... to interface ExtractCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; totalCallees: number; unpositionedCallees:....",
+      "target": "./queries/index:ExtractCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AuditQuestionScore changed from interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; chea... to interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; comp....",
+      "target": "./queries/self-audit:AuditQuestionScore"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.23.0",
+  "previousDigest": "0b711a8f283f044b0cc8e09db5080be8b72742e2ac53545010330e3230843676",
+  "reason": "ExtractCandidate gains ownReturnsInRegion (regions holding the function's own return statements are support tier) and AuditQuestionScore gains completeOracleSymbols (self-audit precision is measured only over symbols whose compiler oracle accounted for every call site)",
+  "schemaVersion": 1
+}

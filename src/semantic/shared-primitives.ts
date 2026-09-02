@@ -20,6 +20,7 @@ import type {
   SemanticProvider,
   SemanticProviderLanguage,
   SemanticReference,
+  SemanticCalleeCoverage,
 } from './types.js';
 import { getSemanticProvider, semanticProviderLanguageForPath } from './provider-cache.js';
 import { profileEnabled, profileSpan } from '../instrumentation/profile.js';
@@ -788,6 +789,32 @@ export function semanticCalleeMap(
   return semanticEvidenceProduct(db).calleeMap(definitions);
 }
 
+/**
+ * Compiler accounting of every call and render site in the given definitions,
+ * for judging whether the compiler's callee answer is complete. Never cached:
+ * it is an audit instrument, not an evidence product.
+ */
+export function semanticCalleeCoverage(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<IndexedDefinition>,
+): Map<number, SemanticCalleeCoverage> {
+  const result = new Map<number, SemanticCalleeCoverage>();
+  const groups = new Map<SemanticProvider, IndexedDefinition[]>();
+  for (const definition of definitions) {
+    const provider = availableSemanticProvider(db, definition.relativePath);
+    if (!provider?.calleeCoverageForDefinitions) continue;
+    const bucket = groups.get(provider);
+    if (bucket) bucket.push(definition);
+    else groups.set(provider, [definition]);
+  }
+  for (const [provider, grouped] of groups) {
+    for (const batch of calleeRequestBatches(grouped)) {
+      for (const [symbolId, coverage] of provider.calleeCoverageForDefinitions!(batch)) result.set(symbolId, coverage);
+    }
+  }
+  return result;
+}
+
 function buildSemanticCalleeMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<IndexedDefinition | SymbolMatch>,
@@ -821,13 +848,18 @@ function buildSemanticCalleeMap(
       }
 
       for (const [provider, groupedDefinitions] of bulkGroups) {
-        const calleeMap = provider.calleesForDefinitions!(groupedDefinitions);
-        for (const definition of groupedDefinitions) {
-          const callees = calleeMap.get(definition.symbolId) ?? [];
-          recordSemanticCallees(result, definition.symbolId, callees, profiling, (count) => {
-            definitionsWithCallees += 1;
-            calleeCount += count;
-          });
+        // One request per bounded batch: a whole-project pass sent every
+        // definition at once, and the service worker that answers it holds
+        // every touched compiler program until the request completes.
+        for (const batch of calleeRequestBatches(groupedDefinitions)) {
+          const calleeMap = provider.calleesForDefinitions!(batch);
+          for (const definition of batch) {
+            const callees = calleeMap.get(definition.symbolId) ?? [];
+            recordSemanticCallees(result, definition.symbolId, callees, profiling, (count) => {
+              definitionsWithCallees += 1;
+              calleeCount += count;
+            });
+          }
         }
       }
 
@@ -849,6 +881,29 @@ function buildSemanticCalleeMap(
       rows: result.size,
     }),
   );
+}
+
+/** Definitions per bulk callee request; batches never split a file so the provider still answers a file in one pass. */
+const CALLEE_REQUEST_BATCH_DEFINITIONS = 256;
+
+function calleeRequestBatches(definitions: readonly IndexedDefinition[]): IndexedDefinition[][] {
+  const byFile = new Map<string, IndexedDefinition[]>();
+  for (const definition of definitions) {
+    const bucket = byFile.get(definition.relativePath);
+    if (bucket) bucket.push(definition);
+    else byFile.set(definition.relativePath, [definition]);
+  }
+  const batches: IndexedDefinition[][] = [];
+  let current: IndexedDefinition[] = [];
+  for (const fileDefinitions of byFile.values()) {
+    if (current.length > 0 && current.length + fileDefinitions.length > CALLEE_REQUEST_BATCH_DEFINITIONS) {
+      batches.push(current);
+      current = [];
+    }
+    current.push(...fileDefinitions);
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
 }
 
 function recordSemanticCallees(

@@ -34,6 +34,7 @@ import type {
   SemanticProvider,
   SemanticReference,
   SemanticReferenceFragment,
+  SemanticCalleeCoverage,
 } from '../types.js';
 import { discoverTypeScriptTsconfigs } from './tsconfig-discovery.js';
 import {
@@ -751,6 +752,65 @@ class TsMorphSemanticProvider implements SemanticProvider {
     return result;
   }
 
+  /**
+   * Account for every call and render site inside the requested definitions:
+   * resolved to an indexed definition, resolved to a symbol outside the
+   * repository, or left without a compiler symbol. Uses the same walk as the
+   * callee map so the two answers describe the same sites.
+   */
+  calleeCoverageForDefinitions(definitions: readonly IndexedDefinition[]): Map<number, SemanticCalleeCoverage> {
+    const result = new Map<number, SemanticCalleeCoverage>();
+    const byFile = new Map<string, IndexedDefinition[]>();
+    for (const definition of definitions) {
+      const bucket = byFile.get(definition.relativePath);
+      if (bucket) bucket.push(definition);
+      else byFile.set(definition.relativePath, [definition]);
+      result.set(definition.symbolId, { callSites: 0, resolvedInRepository: 0, resolvedExternal: 0, unresolved: 0 });
+    }
+    for (const [relativePath, fileDefinitions] of byFile) {
+      const sourceFile = this.sourceFiles.sourceFile(relativePath);
+      if (!sourceFile) continue;
+      const checker = this.compilerCheckerForSourceFile(sourceFile);
+      const compilerSourceFile = sourceFile.compilerNode;
+      const symbolCache = new Map<TypeScriptSymbol, ResolvedCalleeTarget | null>();
+      const visit = (node: ts.Node): void => {
+        if (
+          this.tsMorph.ts.isCallExpression(node) ||
+          this.tsMorph.ts.isNewExpression(node) ||
+          isJsxComponentElement(this.tsMorph.ts, node)
+        ) {
+          const caller = findContainingDefinition(fileDefinitions, lineOfCompilerNode(compilerSourceFile, node));
+          const coverage = caller ? result.get(caller.symbolId) : undefined;
+          if (coverage) {
+            coverage.callSites += 1;
+            const render = this.tsMorph.ts.isJsxOpeningElement(node) || this.tsMorph.ts.isJsxSelfClosingElement(node);
+            const expression =
+              render && !this.tsMorph.ts.isJsxNamespacedName(node.tagName)
+                ? (node.tagName as ts.Expression)
+                : render
+                  ? null
+                  : node.expression;
+            const symbol = expression ? this.compilerSymbolForExpression(checker, expression) : undefined;
+            if (!symbol) {
+              coverage.unresolved += 1;
+            } else {
+              let target = symbolCache.get(symbol);
+              if (target === undefined) {
+                target = this.definitionFromCompilerSymbol(symbol);
+                symbolCache.set(symbol, target);
+              }
+              if (target) coverage.resolvedInRepository += 1;
+              else coverage.resolvedExternal += 1;
+            }
+          }
+        }
+        this.tsMorph.ts.forEachChild(node, visit);
+      };
+      visit(compilerSourceFile);
+    }
+    return result;
+  }
+
   private referencesForDefinitionNode(
     definition: IndexedDefinition,
     node: Node | null,
@@ -1279,7 +1339,16 @@ class TsMorphSemanticProvider implements SemanticProvider {
     const symbolStart = stats ? performance.now() : 0;
     const symbol = checker.getSymbolAtLocation(expression);
     if (stats) stats.expressionSymbolMs += performance.now() - symbolStart;
-    if (symbol) return symbol;
+    if (symbol) {
+      // An imported callee binds to the import alias; the declaration that
+      // maps to an indexed definition is behind it.
+      if ((symbol.flags & this.tsMorph.ts.SymbolFlags.Alias) === 0) return symbol;
+      try {
+        return checker.getAliasedSymbol(symbol);
+      } catch {
+        return symbol;
+      }
+    }
 
     if (stats) stats.typeFallbacks += 1;
     const typeStart = stats ? performance.now() : 0;

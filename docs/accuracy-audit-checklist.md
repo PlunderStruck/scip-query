@@ -167,7 +167,7 @@ consolidation would improve the code.
 - [x] `wrapper-candidates` — certified production single-caller relationship
 - [x] `passthrough-candidates` — certified literal-forwarding relationship
 - [x] `stale-abstractions` — certified relationship
-- [x] `extract-candidates` — certified measurement; extraction remains contextual
+- [x] `extract-candidates` — certified measurement; extraction remains contextual. Rebuilt 2026-09-02 around exclusive line regions with compiler-known locals; the Python row above predates the rebuild, and the current reviewed sample is `docs/validation/labels/launchpoint-backend/extract-candidates.json`
 - [x] `locality-candidates` — certified relationship; movement remains contextual
 - [x] `drift` — qualified; subtype breadth incomplete
 - [x] `co-change` — certified relationship

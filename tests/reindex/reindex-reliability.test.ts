@@ -466,6 +466,27 @@ describe('reindex reliability', () => {
       }),
     );
     expect(fragmentPruneCalls.at(-1)).toEqual([]);
+
+    // A project-input change outside every language shard (a package.json
+    // script) republishes the carried shards as a new generation; the
+    // deferred companion must survive that carry, or the next TypeScript edit
+    // reads the base shard as current.
+    const statePath = join(cacheDir, '.scipquery-generations/state.json');
+    const generationBefore = JSON.parse(readFileSync(statePath, 'utf8')).currentGeneration as string;
+    writeFileSync(join(projectRoot, 'package.json'), '{"name":"fixture","scripts":{"check":"tsc -p ."}}\n');
+    await reindex({ projectRoot, outputScip, outputDb, onStatus: () => undefined });
+    expect(attempts.get('typescript')).toBe(1);
+    const carriedState = JSON.parse(readFileSync(statePath, 'utf8')) as {
+      currentGeneration: string;
+      publication?: { scipCompanion?: string };
+    };
+    expect(carriedState.currentGeneration).not.toBe(generationBefore);
+    // The metadata marker and the publication record must agree on the
+    // companion state; the carried run used to drop the marker while the
+    // record still said deferred, and the next incremental run read the
+    // stale base shard as current.
+    const carried = JSON.parse(readFileSync(metaPath, 'utf8')) as { scipCompanion?: string };
+    expect(carried.scipCompanion).toBe(carriedState.publication?.scipCompanion);
   });
 
   it('reuses a deferred TypeScript shard when only another language changed', async () => {

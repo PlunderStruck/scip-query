@@ -23,6 +23,7 @@ export type TypeScriptSemanticRequest =
   | { kind: 'references'; definitions: IndexedDefinition[]; exact?: boolean }
   | { kind: 'reference-fragments'; files: string[] }
   | { kind: 'callees'; definitions: IndexedDefinition[] }
+  | { kind: 'callee-coverage'; definitions: IndexedDefinition[] }
   | { kind: 'signature'; definition: IndexedDefinition };
 
 export interface TypeScriptSemanticMailboxEnvelope extends BoundedMailboxRequestIdentity {
@@ -142,6 +143,7 @@ function isTypeScriptSemanticRequest(value: unknown): value is TypeScriptSemanti
         definitionArray(request.definitions) && (request.exact === undefined || typeof request.exact === 'boolean')
       );
     case 'callees':
+    case 'callee-coverage':
       return definitionArray(request.definitions);
     case 'signature':
       return isIndexedDefinition(request.definition);

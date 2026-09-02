@@ -1,0 +1,109 @@
+{
+  "detector": "extract-candidates",
+  "repository": "launchpoint-backend",
+  "identity": "symbol",
+  "reviewed": "2026-09-02",
+  "note": "Sampled 12 signal-tier and 8 support-tier candidates from the full list (seed 7) and read each largest region in source. True means the region is a coherent unit a reviewer would consider extracting; false means it is the function's own control flow, a fragment, or unrelated concerns; uncertain means plausible but costly.",
+  "labels": [
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/creators/VideoPayActions.tsx#src:app:(authenticated):(dashboard):campaigns:[id]:campaign-detail:ui:creators:VideoPayActions:VideoExcludeButton()",
+      "verdict": "true",
+      "reason": "a confirm-exclude dialog subtree with its trigger button; a coherent child component"
+    },
+    {
+      "id": "src/lib/campaigns/lifecycle/planner.ts#src:lib:campaigns:lifecycle:planner:buildAwaitingContentPlan()",
+      "verdict": "false",
+      "reason": "the region is the function's branch-and-return body, not a helper"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/editor/components/steps/FulfillmentSection.tsx#src:app:(authenticated):(dashboard):campaigns:editor:components:steps:FulfillmentSection:ManualRedemptionFields()",
+      "verdict": "uncertain",
+      "reason": "two form fields out of a larger field list; extraction is possible but marginal"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/creators/CreatorSpendModal.tsx#src:app:(authenticated):(dashboard):campaigns:[id]:campaign-detail:ui:creators:CreatorSpendModal:CreatorSpendModal()",
+      "verdict": "false",
+      "reason": "a seven-line dialog header in a 26-line component; nothing to extract"
+    },
+    {
+      "id": "src/lib/utils/buyer-todo-utils.ts#src:lib:utils:buyer-todo-utils:getBuyerTodoCountsByOffer()",
+      "verdict": "true",
+      "reason": "the pending-applicant query conditions form one query-building helper with one input"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/media/components/ManagedAdPublicationProgress.tsx#src:app:(authenticated):(dashboard):media:components:ManagedAdPublicationProgress:ManagedAdPublicationProgress()",
+      "verdict": "false",
+      "reason": "spans the error-branch retry button and the loaded-state header; two render branches, not one unit"
+    },
+    {
+      "id": "src/lib/imessage/send-queue.ts#src:lib:imessage:send-queue:queueIMessageBatchSkippingActiveRecipients()",
+      "verdict": "false",
+      "reason": "a five-line input-normalization prelude; three statements, not a helper"
+    },
+    {
+      "id": "src/components/ui/date-range-picker.tsx#src:components:ui:date-range-picker:DateRangePicker",
+      "verdict": "true",
+      "reason": "the preset select subtree inside a 564-line component; a coherent child component"
+    },
+    {
+      "id": "src/scripts/run-internal-support-lab.ts#src:scripts:run-internal-support-lab:main()",
+      "verdict": "true",
+      "reason": "the run-all-cases concurrency loop is one step of the script with a clear input and output"
+    },
+    {
+      "id": "src/components/team-switcher.tsx#src:components:team-switcher:TeamSwitcher()",
+      "verdict": "true",
+      "reason": "the dropdown menu contents form one child component"
+    },
+    {
+      "id": "src/lib/post-matching/core/signals.ts#src:lib:post-matching:core:signals:computeMatchSignals()",
+      "verdict": "false",
+      "reason": "the region is the function's return object; extracting it is the function itself"
+    },
+    {
+      "id": "src/app/components/AthleteInvestigation/TrustScoreSection.tsx#src:app:components:AthleteInvestigation:TrustScoreSection:TrustScoreSection()",
+      "verdict": "true",
+      "reason": "the violation history table is one child component with one input"
+    },
+    {
+      "id": "src/lib/creator-verification/scoring-queue.ts#src:lib:creator-verification:scoring-queue:buildCreatorScoringSwipeQueueQuery()",
+      "verdict": "false",
+      "reason": "a six-line cursor prelude handing three values back; not a unit"
+    },
+    {
+      "id": "src/lib/post-matching/pair-evidence/evaluate.ts#src:lib:post-matching:pair-evidence:evaluate:buildCompletePostClusters()",
+      "verdict": "uncertain",
+      "reason": "the union-find clustering core is coherent but needs six locals in and four back"
+    },
+    {
+      "id": "src/scripts/plan-crosswire-mopup.ts#src:scripts:plan-crosswire-mopup:main()",
+      "verdict": "false",
+      "reason": "signal handling plus the scan loop; unrelated concerns in one range"
+    },
+    {
+      "id": "src/lib/statsbot/pi/statsbot-extension.ts#src:lib:statsbot:pi:statsbot-extension:statsbotExtension()",
+      "verdict": "false",
+      "reason": "434 lines of environment loading and tool registration; not one unit"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/take-rates/TakeRatesClient.tsx#src:app:(authenticated):(dashboard):admin:take-rates:TakeRatesClient:TakeRatesClient()",
+      "verdict": "false",
+      "reason": "the whole tabbed page body; the component itself"
+    },
+    {
+      "id": "src/trigger/shopify/backfill-tracking.trigger.ts#src:trigger:shopify:backfill-tracking.trigger:runBackfillShopifyTracking()",
+      "verdict": "uncertain",
+      "reason": "per-order cancel handling and normalization inside a loop; plausible helper with a wide interface"
+    },
+    {
+      "id": "src/scripts/merge-synthetic-crossposts.ts#src:scripts:merge-synthetic-crossposts:main()",
+      "verdict": "false",
+      "reason": "two separate CLI modes in one range"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/creators/CanvasVideoListRow.tsx#src:app:(authenticated):(dashboard):campaigns:[id]:campaign-detail:ui:creators:CanvasVideoListRow:CanvasVideoListRow()",
+      "verdict": "false",
+      "reason": "an early-return branch plus most of the main body; the component itself"
+    }
+  ]
+}

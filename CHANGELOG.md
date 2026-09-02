@@ -4,6 +4,51 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+### Compiler callees resolve imported functions, and self-audit measures callee precision
+
+- The compiler callee path bound an imported call to its import alias and then
+  looked for a definition at the import statement, so every cross-file call to
+  an imported function was dropped from the semantic callee product and from
+  the self-audit oracle. Aliases now resolve to their declaration; cached
+  compiler callees carry a new schema so they recompute.
+- The compiler now also reports, per definition, how many call and render
+  sites it resolved inside the repository, resolved to a library or ambient
+  symbol, or could not bind at all. `self-audit` treats a definition with no
+  unbound site as a complete oracle and measures callee and render precision
+  over those symbols; a cheap-only answer next to a partial oracle stays
+  unverified. Scores report `completeOracleSymbols`.
+
+### Whole-project semantic passes stay inside memory
+
+- `extract-candidates --full` (and every other full-mode semantic pass) sent
+  the whole candidate set to the semantic service in one request; on a large
+  repository the service's worker died at its heap limit and the command then
+  loaded the compiler in-process and died at its own. Bulk callee requests are
+  now sent in bounded per-file batches, a service failure on a large index
+  disables semantic enrichment for the run instead of loading the compiler
+  in-process (with a stderr notice), a service that merely lacks a request
+  kind keeps serving the others, and the service sizes its compiler worker
+  heaps from the indexed document count with a machine-memory ceiling.
+  Decoded occurrence data is held in a bounded cache instead of per run.
+
+### Extraction candidates require a real block and stay out of control flow
+
+- A region must span eight lines, and a region holding a `return` statement
+  of the function itself is support tier: it is the function's control flow,
+  not a helper. Exclusive call spans inside one multi-line statement (a
+  fluent query chain, a large literal) now form one region, since a region
+  never cuts through a statement; rendered subtrees keep the proximity rule
+  because a subtree is a legitimate cut inside a `return`. A reviewed
+  Launchpoint label set
+  (`docs/validation/labels/launchpoint-backend/extract-candidates.json`)
+  scores against the current output.
+
+### Carried publications keep the deferred-companion marker
+
+- A publication that carried every language shard rewrote the metadata
+  without the `scipCompanion` marker while its publication record still said
+  `deferred`; the marker is now carried from the accepted generation.
+
 ### Health reports name the input they were computed from
 
 - `health` now records provenance: the immutable index generation identity

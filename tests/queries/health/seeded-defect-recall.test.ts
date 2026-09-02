@@ -97,7 +97,10 @@ const FILES: Record<string, string[]> = {
     '  let written = 0;',
     '  if (enriched.length > 0) {',
     '    const batch = openBatch(enriched);',
+    '    const receipt = stampBatch(batch);',
     '    written = writeBatch(batch);',
+    '    auditBatch(batch, receipt);',
+    '    notifyBatch(receipt);',
     '    closeBatch(batch);',
     '  }',
     '  const elapsed = Date.now() - started;',
@@ -109,7 +112,10 @@ const FILES: Record<string, string[]> = {
     'export function validateRows(rows: string[][]) { return rows.filter((row) => row.length > 0); }',
     "export function enrichRows(rows: string[][]) { return rows.map((row) => [...row, 'x']); }",
     'export function openBatch(rows: string[][]) { return { rows }; }',
+    'export function stampBatch(batch: { rows: string[][] }) { return { batch, at: 1 }; }',
     'export function writeBatch(batch: { rows: string[][] }) { return batch.rows.length; }',
+    'export function auditBatch(batch: { rows: string[][] }, receipt: unknown) { return [batch, receipt]; }',
+    'export function notifyBatch(receipt: unknown) { return receipt; }',
     'export function closeBatch(batch: { rows: string[][] }) { return batch.rows.length; }',
     'export function summarizeRows(rows: string[][], written: number) { return { rows: rows.length, written, elapsed: 0 }; }',
     'export function publishReport(report: { rows: number; written: number; elapsed: number }) { return report; }',
@@ -197,15 +203,18 @@ describe('seeded defect recall', () => {
       [15, 'src/ui/Parent.tsx', 'Parent', 1, 3],
       [16, 'src/ui/Child.tsx', 'Child', 0, 2],
       [17, 'src/ui/App.tsx', 'App', 3, 11],
-      [18, 'src/seam/orchestrate.ts', 'orchestrateImport', 0, 15],
-      [19, 'src/seam/orchestrate.ts', 'parseRows', 16, 16],
-      [20, 'src/seam/orchestrate.ts', 'validateRows', 17, 17],
-      [21, 'src/seam/orchestrate.ts', 'enrichRows', 18, 18],
-      [22, 'src/seam/orchestrate.ts', 'openBatch', 19, 19],
-      [23, 'src/seam/orchestrate.ts', 'writeBatch', 20, 20],
-      [24, 'src/seam/orchestrate.ts', 'closeBatch', 21, 21],
-      [25, 'src/seam/orchestrate.ts', 'summarizeRows', 22, 22],
-      [26, 'src/seam/orchestrate.ts', 'publishReport', 23, 23],
+      [18, 'src/seam/orchestrate.ts', 'orchestrateImport', 0, 18],
+      [19, 'src/seam/orchestrate.ts', 'parseRows', 19, 19],
+      [20, 'src/seam/orchestrate.ts', 'validateRows', 20, 20],
+      [21, 'src/seam/orchestrate.ts', 'enrichRows', 21, 21],
+      [22, 'src/seam/orchestrate.ts', 'openBatch', 22, 22],
+      [23, 'src/seam/orchestrate.ts', 'stampBatch', 23, 23],
+      [24, 'src/seam/orchestrate.ts', 'writeBatch', 24, 24],
+      [25, 'src/seam/orchestrate.ts', 'auditBatch', 25, 25],
+      [26, 'src/seam/orchestrate.ts', 'notifyBatch', 26, 26],
+      [27, 'src/seam/orchestrate.ts', 'closeBatch', 27, 27],
+      [28, 'src/seam/orchestrate.ts', 'summarizeRows', 28, 28],
+      [29, 'src/seam/orchestrate.ts', 'publishReport', 29, 29],
     ];
     for (const [id, file, leaf, start, end] of symbols) {
       const doc = docIds.get(file)!;
@@ -235,7 +244,10 @@ describe('seeded defect recall', () => {
       ['src/ui/App.tsx', 14],
       ['src/ui/App.tsx', 15],
       ['src/entry/use-all.ts', 18],
-      ...([19, 20, 21, 22, 23, 24, 25, 26] as const).map((id): [string, number] => ['src/seam/orchestrate.ts', id]),
+      ...([19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29] as const).map((id): [string, number] => [
+        'src/seam/orchestrate.ts',
+        id,
+      ]),
     ];
     for (const [file, doc] of docIds) {
       builder.chunk(doc, doc, 0, FILES[file]!.length);
@@ -285,7 +297,7 @@ describe('seeded defect recall', () => {
       const seams = extractCandidates(db, { semantic: false });
       expect(seams.map((candidate) => candidate.shortName)).toEqual(['src:seam/orchestrate:orchestrateImport()']);
       expect(seams[0]!.regions.map((region) => [region.startLine, region.endLine, region.callees.length])).toEqual([
-        [6, 10, 3],
+        [6, 13, 6],
       ]);
 
       const report = health(db, { full: true });
