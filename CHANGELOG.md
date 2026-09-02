@@ -4,6 +4,8 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+## [0.23.0]
+
 ### Fresh installs work without Go or the scip binary
 
 - The external `scip` binary is no longer required. SCIP is converted to
