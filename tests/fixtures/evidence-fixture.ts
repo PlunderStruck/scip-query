@@ -1,3 +1,6 @@
+import { create, toBinary } from '@bufbuild/protobuf';
+import { DocumentSchema, OccurrenceSchema } from '@c4312/scip';
+import { zstdCompressSync } from 'node:zlib';
 import Database from 'better-sqlite3';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -100,6 +103,12 @@ class EvidenceFixtureDb {
     symbolId: number;
     role: number;
   }> = [];
+  private readonly occurrences: Array<{
+    chunkId: number;
+    symbol: string;
+    line: number;
+    roles: number;
+  }> = [];
 
   constructor(private readonly dbPath: string) {}
 
@@ -134,6 +143,16 @@ class EvidenceFixtureDb {
 
   chunk(id: number, documentId: number, startLine: number, endLine: number, chunkIndex = 0): this {
     this.chunks.push({ id, documentId, chunkIndex, startLine, endLine });
+    return this;
+  }
+
+  /**
+   * A compiler-resolved occurrence stored in the chunk's occurrence blob, the
+   * way every SCIP-to-SQLite converter persists it. `symbol` is the SCIP
+   * symbol the indexer bound at `line`; it need not be a declared symbol.
+   */
+  occurrence(chunkId: number, symbol: string, line: number, roles = 0): this {
+    this.occurrences.push({ chunkId, symbol, line, roles });
     return this;
   }
 
@@ -185,11 +204,27 @@ class EvidenceFixtureDb {
   private insertChunks(sqliteDb: Database.Database): void {
     const stmt = sqliteDb.prepare(
       `INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences)
-       VALUES (?, ?, ?, ?, ?, X'00')`,
+       VALUES (?, ?, ?, ?, ?, ?)`,
     );
     for (const chunk of this.chunks) {
-      stmt.run(chunk.id, chunk.documentId, chunk.chunkIndex, chunk.startLine, chunk.endLine);
+      stmt.run(chunk.id, chunk.documentId, chunk.chunkIndex, chunk.startLine, chunk.endLine, this.chunkBlob(chunk.id));
     }
+  }
+
+  /** A one-byte placeholder when no occurrence was declared; otherwise the converter's zstd `Document{occurrences}` frame. */
+  private chunkBlob(chunkId: number): Buffer {
+    const occurrences = this.occurrences.filter((occurrence) => occurrence.chunkId === chunkId);
+    if (occurrences.length === 0) return Buffer.from([0]);
+    const document = create(DocumentSchema, {
+      occurrences: occurrences.map((occurrence) =>
+        create(OccurrenceSchema, {
+          range: [occurrence.line, 0, 1],
+          symbol: occurrence.symbol,
+          symbolRoles: occurrence.roles,
+        }),
+      ),
+    });
+    return zstdCompressSync(Buffer.from(toBinary(DocumentSchema, document)));
   }
 
   private insertMentions(sqliteDb: Database.Database): void {

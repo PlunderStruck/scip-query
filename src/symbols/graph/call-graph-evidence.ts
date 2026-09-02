@@ -15,11 +15,19 @@ import type { IndexedDefinition, SymbolLocation, SymbolMatch } from '../../domai
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from '../leaf-symbol-index.js';
 import type { GlobalLeafCandidate } from '../leaf-symbol-index.js';
 import { scipFunctionLikeKindNumbers, scipTypeLikeKindNumbers } from '../symbol-kind.js';
+import { scipOccurrenceTargetsForFile } from './scip-occurrence-call-targets.js';
+import { occurrenceLeafKey, type FileOccurrenceTargets } from './scip-chunk-occurrences.js';
 import { pathsResolveSame } from '../../domain/path-normalization.js';
 import type { SymbolSemanticEvidencePort } from '../semantic-evidence-port.js';
 import { fileDependencyPaths } from './file-dep-graph.js';
 
-export type CalleeEvidenceSource = 'ast-callsite' | 'semantic-callee' | 'scip-chunk';
+/**
+ * Where a callee edge came from. `scip-occurrence` is the indexer's own
+ * binding at the call line (compiler-resolved at index time); `ast-callsite`
+ * is a leaf-name resolution over imports and local receivers; the other two
+ * are the on-demand compiler and chunk co-occurrence paths.
+ */
+export type CalleeEvidenceSource = 'scip-occurrence' | 'ast-callsite' | 'semantic-callee' | 'scip-chunk';
 export type CallerEvidenceSource = 'caller-map-inversion' | 'resolved-reference' | 'semantic-reference';
 
 // scip-query: ignore-stale — reviewed S1 owned contract; graph construction materializes this callee evidence row.
@@ -67,7 +75,8 @@ export function getCalleeRowsForSymbol(
   });
   const callees = opts.callableOnly
     ? (map.get(symbol.symbolId) ?? []).filter(
-        (callee) => isCallableSymbol(callee.symbol) || callee.source === 'ast-callsite',
+        (callee) =>
+          isCallableSymbol(callee.symbol) || callee.source === 'ast-callsite' || callee.source === 'scip-occurrence',
       )
     : (map.get(symbol.symbolId) ?? []);
   return typeof opts.limit === 'number' ? callees.slice(0, opts.limit) : callees;
@@ -372,12 +381,21 @@ export function buildAstCalleeMap(db: ScipDatabase, definitions: ReadonlyArray<S
     const callsites = getCallSites(db, file);
     if (!callsites) continue; // Source unreadable — defs return empty callee arrays.
     const ownerByLine = createDefinitionLineIndex(fileDefs);
+    const occurrences = occurrenceCalleeIndex(scipOccurrenceTargetsForFile(db, file));
 
     for (const site of callsites) {
       const owner = ownerByLine.get(site.line);
       if (!owner) continue;
 
-      const pick = resolveAstCalleeCandidate(db, file, leafIndex, site);
+      // Tier 1: the indexer bound this line-and-leaf to exactly one repository
+      // definition. Tier 2: a leaf-name resolution, skipped when the indexer
+      // bound the same key to a symbol outside the repository.
+      const occurrencePick = occurrences ? pickOccurrenceCallee(occurrences, site) : null;
+      const pick =
+        occurrencePick ??
+        (occurrences?.externalLeafKeys.has(occurrenceLeafKey(site.line, site.calleeLeaf))
+          ? null
+          : resolveAstCalleeCandidate(db, file, leafIndex, site));
       if (!pick) continue;
       if (pick.symbol === owner.symbol) continue; // skip self-recursion
 
@@ -385,7 +403,7 @@ export function buildAstCalleeMap(db: ScipDatabase, definitions: ReadonlyArray<S
         symbol: pick.symbol,
         file: pick.file,
         chunkId: site.line,
-        source: 'ast-callsite',
+        source: occurrencePick ? 'scip-occurrence' : 'ast-callsite',
         callsiteLine: site.line,
         ...(site.kind === 'jsx-render' ? { kind: 'jsx-render' as const } : {}),
       });
@@ -393,6 +411,43 @@ export function buildAstCalleeMap(db: ScipDatabase, definitions: ReadonlyArray<S
   }
 
   return result;
+}
+
+interface OccurrenceCalleeIndex {
+  targetsByLine: Map<number, IndexedDefinition[]>;
+  externalLeafKeys: Set<string>;
+}
+
+function occurrenceCalleeIndex(fileTargets: FileOccurrenceTargets | null): OccurrenceCalleeIndex | null {
+  if (!fileTargets) return null;
+  const targetsByLine = new Map<number, IndexedDefinition[]>();
+  for (const target of fileTargets.targets) {
+    const bucket = targetsByLine.get(target.sourceLine);
+    if (bucket) bucket.push(target.definition);
+    else targetsByLine.set(target.sourceLine, [target.definition]);
+  }
+  return { targetsByLine, externalLeafKeys: fileTargets.externalLeafKeys };
+}
+
+/**
+ * The indexer's binding for one call site: the definitions it resolved on
+ * that line whose leaf is the called name. One distinct definition is an
+ * exact edge; several (two same-named targets on one line) stay unresolved
+ * rather than guessed.
+ */
+function pickOccurrenceCallee(
+  occurrences: OccurrenceCalleeIndex,
+  site: { line: number; calleeLeaf: string },
+): { symbol: string; file: string } | null {
+  const onLine = occurrences.targetsByLine.get(site.line);
+  if (!onLine) return null;
+  let pick: IndexedDefinition | null = null;
+  for (const definition of onLine) {
+    if (definition.leaf !== site.calleeLeaf) continue;
+    if (pick && pick.symbol !== definition.symbol) return null;
+    pick = definition;
+  }
+  return pick ? { symbol: pick.symbol, file: pick.relativePath } : null;
 }
 
 function definitionsByFile(

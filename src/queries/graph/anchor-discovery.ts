@@ -2437,7 +2437,7 @@ function candidateKindRank(kind: AnchorDiscoveryCandidate['kind']): number {
 }
 
 function calleeStrength(source: CalleeEvidenceSource): 'exact' | 'derived' {
-  return source === 'semantic-callee' || source === 'scip-chunk' ? 'exact' : 'derived';
+  return source === 'semantic-callee' || source === 'scip-chunk' || source === 'scip-occurrence' ? 'exact' : 'derived';
 }
 
 function relationStrengthRank(strength: AnchorDiscoveryRelation['strength']): number {

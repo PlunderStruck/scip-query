@@ -1,5 +1,5 @@
 {
-  "digest": "c9a282b3a203aa5eb1b2fbd103ab8980ced079ef88a7bb91c17cffd5ab5f784b",
+  "digest": "d0da741204dd766eee5c163d22d9d25a48ef4f03f717686649327b41374a0c69",
   "kind": "scip-query-api-manifest",
   "schemaVersion": 1,
   "surface": {
@@ -181,7 +181,7 @@
           {
             "kind": "type",
             "name": "AuditQuestionScore",
-            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n}"
+            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    cheapSources: Record<string, number>;\n}"
           },
           {
             "kind": "type",
@@ -3974,7 +3974,7 @@
           {
             "kind": "type",
             "name": "AuditQuestionScore",
-            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n}"
+            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    cheapSources: Record<string, number>;\n}"
           },
           {
             "kind": "type",
@@ -6551,7 +6551,7 @@
         "types": "dist/queries/refs.d.ts"
       },
       "./queries/self-audit": {
-        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ntype AuditQuestion = 'references' | 'callees' | 'renders';\n\ntype AuditOracleKind = 'semantic' | 'source';\n\ninterface AuditDisagreement {\n    symbol: string;\n    question: AuditQuestion;\n    cheapOnly: string[];\n    oracleOnly: string[];\n}\n\ninterface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n}\n\ninterface SelfAuditResult {\n    available: boolean;\n    sampleSize: number;\n    oracleCoverage: number;\n    oracleKind?: AuditOracleKind;\n    scores: AuditQuestionScore[];\n    topDisagreements: AuditDisagreement[];\n}\n\ndeclare function selfAudit(db: ScipDatabase, opts?: {\n    samples?: number;\n    scope?: string;\n    maxDisagreements?: number;\n}): SelfAuditResult;\n\nexport { type AuditDisagreement, type AuditOracleKind, type AuditQuestion, type AuditQuestionScore, selfAudit, type SelfAuditResult };\n",
+        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ntype AuditQuestion = 'references' | 'callees' | 'renders';\n\ntype AuditOracleKind = 'semantic' | 'source';\n\ninterface AuditDisagreement {\n    symbol: string;\n    question: AuditQuestion;\n    cheapOnly: string[];\n    oracleOnly: string[];\n}\n\ninterface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    cheapSources: Record<string, number>;\n}\n\ninterface SelfAuditResult {\n    available: boolean;\n    sampleSize: number;\n    oracleCoverage: number;\n    oracleKind?: AuditOracleKind;\n    scores: AuditQuestionScore[];\n    topDisagreements: AuditDisagreement[];\n}\n\ndeclare function selfAudit(db: ScipDatabase, opts?: {\n    samples?: number;\n    scope?: string;\n    maxDisagreements?: number;\n}): SelfAuditResult;\n\nexport { type AuditDisagreement, type AuditOracleKind, type AuditQuestion, type AuditQuestionScore, selfAudit, type SelfAuditResult };\n",
         "exports": [
           {
             "kind": "type",
@@ -6571,7 +6571,7 @@
           {
             "kind": "type",
             "name": "AuditQuestionScore",
-            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n}"
+            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    cheapSources: Record<string, number>;\n}"
           },
           {
             "kind": "function",
@@ -8405,7 +8405,7 @@
     },
     "internalDeclarations": [
       {
-        "declaration": "type CalleeEvidenceSource = 'ast-callsite' | 'semantic-callee' | 'scip-chunk';\n\ninterface CalleeRow {\n    symbol: string;\n    file: string;\n    chunkId: number;\n    source: CalleeEvidenceSource;\n    callsiteLine?: number;\n    kind?: 'jsx-render';\n}\n\nexport type { CalleeEvidenceSource as a, CalleeRow as C };\n",
+        "declaration": "type CalleeEvidenceSource = 'scip-occurrence' | 'ast-callsite' | 'semantic-callee' | 'scip-chunk';\n\ninterface CalleeRow {\n    symbol: string;\n    file: string;\n    chunkId: number;\n    source: CalleeEvidenceSource;\n    callsiteLine?: number;\n    kind?: 'jsx-render';\n}\n\nexport type { CalleeEvidenceSource as a, CalleeRow as C };\n",
         "module": "call-graph-evidence-<hash>.d.ts"
       },
       {

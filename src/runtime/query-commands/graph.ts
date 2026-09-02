@@ -1539,6 +1539,7 @@ function compactSystemMapRelationEvidence(value: string): string {
   return (
     {
       'ast-callsite': 'A',
+      'scip-occurrence': 'O',
       'ast-member-import-candidate': 'M',
       'compiler-cross-workspace-symbol': 'K',
       'semantic-callee': 'S',

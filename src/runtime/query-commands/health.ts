@@ -64,6 +64,12 @@ const handleSelfAudit = dbCommand(({ db, args, opts }) => {
     console.log(
       `  ${score.question.padEnd(11)} ${precision}  recall ${score.recall}  (${score.comparedSymbols} compared, ${score.skippedOraclePartial} skipped: oracle-partial)`,
     );
+    const sources = Object.entries(score.cheapSources).sort((left, right) => right[1] - left[1]);
+    if (sources.length > 0) {
+      console.log(
+        `${' '.repeat(14)}cheap rows by source: ${sources.map(([source, count]) => `${source} ${count}`).join(', ')}`,
+      );
+    }
   }
   if (result.topDisagreements.length > 0) {
     console.log('\nTop disagreements (debugging targets):');

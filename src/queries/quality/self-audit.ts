@@ -34,6 +34,8 @@ export interface AuditQuestionScore {
   unverified: number;
   /** Samples skipped because the oracle is partial and produced no comparable answer. */
   skippedOraclePartial: number;
+  /** Cheap-path rows over the whole sample by evidence source; empty for the references question. */
+  cheapSources: Record<string, number>;
 }
 
 export interface SelfAuditResult {
@@ -119,6 +121,10 @@ export function selfAudit(
       referenceSitesForSymbol(db, definition, { semanticEvidence: symbolSemanticEvidence }).map((site) => site.file),
     );
     const cheapCalleeRows = index.calleeMap([definition], { semantic: false }).get(definition.symbolId) ?? [];
+    for (const row of cheapCalleeRows) {
+      const sources = (row.kind === 'jsx-render' ? tallies.renders : tallies.callees).sources;
+      sources[row.source] = (sources[row.source] ?? 0) + 1;
+    }
     const cheapCals = crossFileSet(
       definition,
       cheapCalleeRows.filter((callee) => callee.kind !== 'jsx-render').map((callee) => callee.file),
@@ -171,10 +177,11 @@ interface QuestionTally {
   cheapTotal: number;
   oracleTotal: number;
   skippedOraclePartial: number;
+  sources: Record<string, number>;
 }
 
 function emptyTally(): QuestionTally {
-  return { comparedSymbols: 0, agreed: 0, cheapTotal: 0, oracleTotal: 0, skippedOraclePartial: 0 };
+  return { comparedSymbols: 0, agreed: 0, cheapTotal: 0, oracleTotal: 0, skippedOraclePartial: 0, sources: {} };
 }
 
 /** Deterministic stride sample — reproducible runs without randomness. */
@@ -276,6 +283,7 @@ function finalizeScore(question: AuditQuestion, tally: QuestionTally, oracleKind
     recall: round3(recall),
     unverified,
     skippedOraclePartial: tally.skippedOraclePartial,
+    cheapSources: tally.sources,
   };
 }
 

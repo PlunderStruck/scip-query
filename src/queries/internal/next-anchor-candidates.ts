@@ -1065,7 +1065,7 @@ function countResolvedTargetsByLeaf(targets: readonly ResolvedCalleeTarget[]): M
 }
 
 function calleeRowEvidenceStrength(source: CalleeEvidenceSource): ExplorationEvidenceStrength {
-  return source === 'semantic-callee' || source === 'scip-chunk' ? 'exact' : 'derived';
+  return source === 'semantic-callee' || source === 'scip-chunk' || source === 'scip-occurrence' ? 'exact' : 'derived';
 }
 
 function calleeRowEvidenceRank(source: CalleeEvidenceSource): number {

@@ -1,0 +1,37 @@
+{
+  "acceptedAt": "2026-09-02T17:52:55.479Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "d0da741204dd766eee5c163d22d9d25a48ef4f03f717686649327b41374a0c69",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AuditQuestionScore changed from interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; } to interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; chea....",
+      "target": "./queries:AuditQuestionScore"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AuditQuestionScore changed from interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; } to interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; chea....",
+      "target": "./queries/index:AuditQuestionScore"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AuditQuestionScore changed from interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; } to interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; chea....",
+      "target": "./queries/self-audit:AuditQuestionScore"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "a changed from type CalleeEvidenceSource = 'ast-callsite' | 'semantic-callee' | 'scip-chunk'; to type CalleeEvidenceSource = 'scip-occurrence' | 'ast-callsite' | 'semantic-callee' | 'scip-chunk';.",
+      "target": "call-graph-evidence-<hash>.d.ts:a"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.23.0",
+  "previousDigest": "c9a282b3a203aa5eb1b2fbd103ab8980ced079ef88a7bb91c17cffd5ab5f784b",
+  "reason": "Callee evidence gains the scip-occurrence source (indexer-resolved call targets read from chunk occurrence blobs) ahead of leaf-name resolution, and self-audit scores report cheap rows by evidence source",
+  "schemaVersion": 1
+}

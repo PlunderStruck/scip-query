@@ -140,4 +140,36 @@ Follow-up lead recorded for a later change:
 
 | #   | Lead                                                                                                                                                                       | Evidence                                                                                                                                           | Status |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 6   | The cheap callee path misses member calls through typed receivers (`this.dep.method()`), so bounded-mode callee consumers under-count fan-out in dependency-injected code. | Vega `self-audit`: callees recall 0.294 versus the compiler; every top disagreement is a controller or service calling an injected service method. | open   |
+| 6   | The cheap callee path misses member calls through typed receivers (`this.dep.method()`), so bounded-mode callee consumers under-count fan-out in dependency-injected code. | Vega `self-audit`: callees recall 0.294 versus the compiler; every top disagreement is a controller or service calling an injected service method. | closed |
+
+### Lead 6 result: the indexer's own bindings as the first callee tier
+
+The index already held the answer. Every SCIP-to-SQLite converter stores each
+chunk's occurrences as a zstd-compressed `Document{occurrences}` blob, and an
+occurrence at a call line is the symbol the indexer's compiler bound there.
+`buildAstCalleeMap` now resolves each call site in tiers:
+
+1. **`scip-occurrence`**: the definitions the indexer bound on that line
+   whose leaf is the called name. Exactly one distinct definition is an exact
+   edge; several stay unresolved rather than guessed. Rendered elements use
+   the same tier.
+2. **`ast-callsite`**: the previous leaf-name resolution over imports and
+   local receivers, used only when the indexer bound nothing for that
+   line-and-leaf. When the indexer bound the key to a symbol outside the
+   repository (a library or ambient symbol), the guess is refused, which
+   removes same-named false edges the fallback used to produce.
+
+The blobs are decoded per file on demand and cached, so no consumer loads the
+whole SCIP artifact; the artifact path survives only for indexes whose chunks
+carry no occurrence data (fixtures). Every consumer that maps evidence source
+to strength treats the new source as exact, `graph` prints it as `O`, and
+`self-audit` now prints cheap rows by source so a regression in the tier mix
+is visible.
+
+Vega, same build, `self-audit --samples 300`: callees recall 0.294 → 0.981
+over 87 compared symbols (378 occurrence-resolved rows, 49 leaf-name rows);
+renders recall 1.0 over 240; references unchanged at 1.0. No oracle-only
+callee disagreement remains in the reported list. The AST receiver-typing
+tier considered for this lead was not built: the occurrence tier already
+answers typed-receiver calls directly, and the remaining leaf-name rows are
+calls the indexer left unbound.

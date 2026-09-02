@@ -4,6 +4,18 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+### Callee edges start from the indexer's own bindings
+
+- The cheap callee path now reads the compiler-resolved occurrence the index
+  already stores for each call line before falling back to leaf-name
+  resolution. Member calls through typed receivers (`this.service.method()`)
+  resolve exactly, and a call the indexer bound to a library or ambient symbol
+  is no longer guessed onto a same-named repository function. Occurrences are
+  decoded per file from the chunk blobs, so no query loads the whole SCIP
+  artifact. `CalleeRow.source` gains `scip-occurrence`, `graph` prints it as
+  `O`, and `self-audit` reports cheap rows by evidence source. On a NestJS +
+  Next.js monorepo, callee recall against the compiler moved from 0.29 to 0.98.
+
 ### Eight judgment skills restored to the bundled suite
 
 - `install-skills` and `setup` now also link `principal-maintainability-review`,
@@ -271,7 +283,7 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
   in-process. When more than 256 files have cold fragments and no watch
   service is running, the semantic consumer tier is reported as failed with
   the remedy (`scip-query health --full` once, or `scip-query watch
-  --daemon`) and the source-fallback tier still runs; on a 7,800-file
+--daemon`) and the source-fallback tier still runs; on a 7,800-file
   repository the in-process computation took longer than the 10-minute batch
   budget while the service or the prewarm warms the same rows in the
   background. With warm fragments the same diff-impact takes seconds.

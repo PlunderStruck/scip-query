@@ -5,6 +5,11 @@ import { getSourceFacts } from '../../source/facts/source-facts.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { readScipArtifact } from '../../storage/scip-artifact.js';
 import { getAllDefinitions } from '../definition-catalog.js';
+import {
+  chunkOccurrenceTargetsForFile,
+  indexStoresOccurrenceData,
+  type FileOccurrenceTargets,
+} from './scip-chunk-occurrences.js';
 
 export interface ScipOccurrenceCallTarget {
   sourceLine: number;
@@ -38,6 +43,25 @@ interface ScipOccurrenceCallTargetIndex {
 const SCIP_OCCURRENCE_CALL_TARGET_INDEX = new WeakMap<ScipDatabase, ScipOccurrenceCallTargetIndex | null>();
 
 /**
+ * Compiler-resolved occurrence targets for one indexed file. The per-chunk
+ * occurrence blobs in the SQLite index are the primary source; the whole
+ * SCIP artifact is deserialized only for an index whose chunks carry no
+ * occurrence data. Null means no occurrence evidence exists for the file.
+ */
+export function scipOccurrenceTargetsForFile(db: ScipDatabase, relativePath: string): FileOccurrenceTargets | null {
+  const chunkLookup = chunkOccurrenceTargetsForFile(db, relativePath);
+  if (chunkLookup.available) return { targets: chunkLookup.targets, externalLeafKeys: chunkLookup.externalLeafKeys };
+  if (chunkLookup.reason === 'no-document') return null;
+  // An index that stores occurrence data never justifies deserializing the
+  // whole artifact; a file whose blobs failed to decode simply has no
+  // occurrence evidence. The artifact path exists for occurrence-less indexes.
+  if (indexStoresOccurrenceData(db)) return { targets: [], externalLeafKeys: new Set() };
+  const index = scipOccurrenceCallTargetIndex(db);
+  if (!index) return null;
+  return { targets: index.byFile.get(relativePath) ?? [], externalLeafKeys: new Set() };
+}
+
+/**
  * Recover compiler-resolved callees for a source range that has no callable
  * symbol of its own. A target is admitted only when the source parser and the
  * SCIP occurrence artifact report the same number of calls for that exact
@@ -55,11 +79,11 @@ export function scipOccurrenceCallTargetsForRange(
     return { available: Boolean(facts), targets: [], resolvedCallsites: 0, unresolvedCallsites: 0 };
   }
 
-  const index = scipOccurrenceCallTargetIndex(db);
-  if (!index) {
+  const fileTargets = scipOccurrenceTargetsForFile(db, relativePath);
+  if (!fileTargets) {
     return { available: false, targets: [], resolvedCallsites: 0, unresolvedCallsites: callsites.length };
   }
-  const occurrences = (index.byFile.get(relativePath) ?? [])
+  const occurrences = fileTargets.targets
     .filter((target) => target.sourceLine >= startLine && target.sourceLine <= endLine)
     .map((target): ScipOccurrenceCallTarget => ({ ...target, calleeLeaf: target.definition.leaf }));
   const sourceCounts = lineLeafCounts(callsites.map((site) => ({ line: site.line, leaf: site.calleeLeaf })));
@@ -88,13 +112,11 @@ export function scipOccurrenceDefinitionTargetsForRange(
   startLine: number,
   endLine: number,
 ): { available: boolean; targets: ScipOccurrenceDefinitionTarget[] } {
-  const index = scipOccurrenceCallTargetIndex(db);
-  if (!index) return { available: false, targets: [] };
+  const fileTargets = scipOccurrenceTargetsForFile(db, relativePath);
+  if (!fileTargets) return { available: false, targets: [] };
   return {
     available: true,
-    targets: (index.byFile.get(relativePath) ?? []).filter(
-      (target) => target.sourceLine >= startLine && target.sourceLine <= endLine,
-    ),
+    targets: fileTargets.targets.filter((target) => target.sourceLine >= startLine && target.sourceLine <= endLine),
   };
 }
 
@@ -111,11 +133,11 @@ export function scipOccurrenceCallableReferencesForRange(
   startLine: number,
   endLine: number,
 ): ScipOccurrenceCallableReferencesResult {
-  const index = scipOccurrenceCallTargetIndex(db);
-  if (!index) return { available: false, targets: [] };
+  const fileTargets = scipOccurrenceTargetsForFile(db, relativePath);
+  if (!fileTargets) return { available: false, targets: [] };
   return {
     available: true,
-    targets: (index.byFile.get(relativePath) ?? [])
+    targets: fileTargets.targets
       .filter(
         (target) =>
           target.sourceLine >= startLine &&

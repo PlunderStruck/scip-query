@@ -281,7 +281,7 @@ function sameFileCallClosureForRange(
     for (const callee of callees.get(caller.symbolId) ?? []) {
       if (callee.file !== requestedRange.relativePath) continue;
       if (
-        callee.source === 'ast-callsite' &&
+        (callee.source === 'ast-callsite' || callee.source === 'scip-occurrence') &&
         (callee.chunkId < requestedRange.startLine || callee.chunkId > requestedRange.endLine)
       ) {
         continue;
