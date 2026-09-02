@@ -103,7 +103,7 @@ type HealthPhaseResult =
   | { phase: 'vue-component-duplicates'; vueComponentDuplicates: CountLocSummary }
   | { phase: 'vue-composable-candidates'; vueComposableCandidates: CountLocSummary }
   | { phase: 'vue-large-view-pressure'; vueLargeViewPressure: CountLocSummary }
-  | { phase: 'extract-candidates'; extractCount: number }
+  | { phase: 'extract-candidates'; extractCount: number; extractExclusions: PolicyExclusionSummary[] }
   | { phase: 'wrapper-candidates'; wrappers: CountLocSummary }
   | { phase: 'passthrough-candidates'; passthroughs: CountLocSummary }
   | { phase: 'stale-abstractions'; stale: StaleSummary }
@@ -176,7 +176,7 @@ const HEALTH_PHASE_RUNNERS: Record<HealthPhaseName, HealthPhaseRunner> = {
   }),
   'extract-candidates': (db, scope, budget) => ({
     phase: 'extract-candidates',
-    extractCount: countExtractionHealthCandidates(db, scope, budget),
+    ...summarizeExtractionCandidates(db, scope, budget),
   }),
   'wrapper-candidates': (db, scope, budget) => ({
     phase: 'wrapper-candidates',
@@ -312,6 +312,10 @@ function healthAnalysesFromPhases(phaseResults: readonly HealthPhaseResult[]): H
       phaseResults,
       'extract-candidates',
     ).extractCount,
+    extractExclusions: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'extract-candidates' }>>(
+      phaseResults,
+      'extract-candidates',
+    ).extractExclusions,
     wrappers: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'wrapper-candidates' }>>(
       phaseResults,
       'wrapper-candidates',
@@ -428,20 +432,39 @@ function countSimilarHealthCandidates(db: ScipDatabase, scope: string | undefine
   return Math.min(count, budget.candidateResultLimit);
 }
 
-function countExtractionHealthCandidates(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): number {
-  return runHealthPhase(
-    db,
-    budget,
-    'extract-candidates',
-    () =>
-      extractCandidates(db, {
-        scope,
-        ...HEALTH_DETECTOR_PROFILES.extract,
-        limit: budget.candidateResultLimit,
-        scanLimit: budget.candidateScanLimit,
-        semantic: budget.semantic,
-      }).length,
-  );
+/**
+ * Signal-tier seams count; wide-interface regions are listed by the command
+ * at support tier and disclosed here as a policy exclusion.
+ */
+function summarizeExtractionCandidates(
+  db: ScipDatabase,
+  scope: string | undefined,
+  budget: HealthBudget,
+): { extractCount: number; extractExclusions: PolicyExclusionSummary[] } {
+  return runHealthPhase(db, budget, 'extract-candidates', () => {
+    const results = extractCandidates(db, {
+      scope,
+      ...HEALTH_DETECTOR_PROFILES.extract,
+      limit: budget.candidateResultLimit,
+      scanLimit: budget.candidateScanLimit,
+      semantic: budget.semantic,
+    });
+    const support = results.filter((candidate) => candidate.actionTier === 'support').length;
+    return {
+      extractCount: results.length - support,
+      extractExclusions:
+        support > 0
+          ? [
+              {
+                reason: 'wide-interface-regions',
+                detail:
+                  'largest region would take more than five locals in or hand more than two back; listed by extract-candidates at support tier',
+                count: support,
+              },
+            ]
+          : [],
+    };
+  });
 }
 
 function summarizeDuplicateBodies(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): CountLocSummary {

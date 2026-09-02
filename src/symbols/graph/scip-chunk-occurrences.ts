@@ -13,6 +13,19 @@ export interface ChunkOccurrenceTarget {
   definition: IndexedDefinition;
 }
 
+/** One occurrence of a `local N` symbol: a parameter, local variable, or other function-scoped binding. */
+export interface LocalOccurrence {
+  symbol: string;
+  line: number;
+  startChar: number;
+  endLine: number;
+  endChar: number;
+  /** True at the binding's declaration; false at every read or write of it. */
+  definition: boolean;
+  /** True where the indexer marked the occurrence as a write to the binding. */
+  write: boolean;
+}
+
 export interface FileOccurrenceTargets {
   /** References the indexer resolved to definitions inside the indexed repository. */
   targets: ChunkOccurrenceTarget[];
@@ -22,6 +35,8 @@ export interface FileOccurrenceTargets {
    * at such a key must not be guessed onto a same-named repository symbol.
    */
   externalLeafKeys: Set<string>;
+  /** Function-scoped bindings the indexer emitted, in document order; empty when the indexer emits none. */
+  locals: LocalOccurrence[];
 }
 
 export type ChunkOccurrenceLookup =
@@ -81,7 +96,7 @@ function decodeFileOccurrences(db: ScipDatabase, relativePath: string): ChunkOcc
   );
   if (rows.length === 0) {
     return indexStoresOccurrenceData(db)
-      ? { available: true, targets: [], externalLeafKeys: new Set() }
+      ? { available: true, targets: [], externalLeafKeys: new Set(), locals: [] }
       : { available: false, reason: 'no-occurrence-data' };
   }
   const definitions = DEFINITION_BY_SYMBOL.get(
@@ -90,6 +105,7 @@ function decodeFileOccurrences(db: ScipDatabase, relativePath: string): ChunkOcc
   );
   const targets: ChunkOccurrenceTarget[] = [];
   const externalLeafKeys = new Set<string>();
+  const locals: LocalOccurrence[] = [];
   try {
     for (const row of rows) {
       const blob = row.occurrences;
@@ -98,9 +114,14 @@ function decodeFileOccurrences(db: ScipDatabase, relativePath: string): ChunkOcc
       }
       const decoded = fromBinary(DocumentSchema, new Uint8Array(zstdDecompressSync(blob)));
       for (const occurrence of decoded.occurrences) {
-        if (!occurrence.symbol || (occurrence.symbolRoles & SymbolRole.Definition) !== 0) continue;
+        if (!occurrence.symbol) continue;
         const sourceLine = occurrence.range[0];
         if (!Number.isInteger(sourceLine)) continue;
+        if (occurrence.symbol.startsWith('local ')) {
+          locals.push(localOccurrence(occurrence.symbol, occurrence.range, occurrence.symbolRoles));
+          continue;
+        }
+        if ((occurrence.symbolRoles & SymbolRole.Definition) !== 0) continue;
         const definition = definitions.get(occurrence.symbol);
         if (definition) {
           targets.push({ sourceLine: sourceLine!, definition });
@@ -113,7 +134,21 @@ function decodeFileOccurrences(db: ScipDatabase, relativePath: string): ChunkOcc
   } catch {
     return { available: false, reason: 'no-occurrence-data' };
   }
-  return { available: true, targets, externalLeafKeys };
+  return { available: true, targets, externalLeafKeys, locals };
+}
+
+/** SCIP ranges are `[line, start, end]` on one line or `[startLine, start, endLine, end]` across lines. */
+function localOccurrence(symbol: string, range: readonly number[], roles: number): LocalOccurrence {
+  const multiLine = range.length === 4;
+  return {
+    symbol,
+    line: range[0]!,
+    startChar: range[1] ?? 0,
+    endLine: multiLine ? range[2]! : range[0]!,
+    endChar: multiLine ? (range[3] ?? 0) : (range[2] ?? 0),
+    definition: (roles & SymbolRole.Definition) !== 0,
+    write: (roles & SymbolRole.WriteAccess) !== 0,
+  };
 }
 
 /** Leaf identifier of a non-local external symbol, or null when the symbol carries no usable name. */

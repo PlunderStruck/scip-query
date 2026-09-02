@@ -8,6 +8,7 @@ import { health } from '../../../src/queries/health/health.js';
 import { cycles } from '../../../src/queries/graph/cycles.js';
 import { dead } from '../../../src/queries/cleanup/dead.js';
 import { duplicateBodies } from '../../../src/queries/cleanup/duplicate-bodies.js';
+import { extractCandidates } from '../../../src/queries/cleanup/extract-candidates.js';
 import { passthroughCandidates } from '../../../src/queries/cleanup/passthrough-candidates.js';
 import { twinDrift } from '../../../src/queries/cleanup/twin-drift.js';
 import { wrapperCandidates } from '../../../src/queries/cleanup/wrapper-candidates.js';
@@ -86,6 +87,33 @@ const FILES: Record<string, string[]> = {
     '}',
   ],
   'src/ui/Child.tsx': ['export function Child({ total }: { total: number }) {', '  return <span>{total}</span>;', '}'],
+  // Planted extraction seam: one block whose callees appear nowhere else in the function.
+  'src/seam/orchestrate.ts': [
+    'export function orchestrateImport(rawRows: string[]) {',
+    '  const started = Date.now();',
+    '  const parsed = parseRows(rawRows);',
+    '  const validated = validateRows(parsed);',
+    '  const enriched = enrichRows(validated);',
+    '  let written = 0;',
+    '  if (enriched.length > 0) {',
+    '    const batch = openBatch(enriched);',
+    '    written = writeBatch(batch);',
+    '    closeBatch(batch);',
+    '  }',
+    '  const elapsed = Date.now() - started;',
+    '  const report = summarizeRows(enriched, written);',
+    '  report.elapsed = elapsed;',
+    '  return publishReport(report);',
+    '}',
+    "export function parseRows(rows: string[]) { return rows.map((row) => row.split(',')); }",
+    'export function validateRows(rows: string[][]) { return rows.filter((row) => row.length > 0); }',
+    "export function enrichRows(rows: string[][]) { return rows.map((row) => [...row, 'x']); }",
+    'export function openBatch(rows: string[][]) { return { rows }; }',
+    'export function writeBatch(batch: { rows: string[][] }) { return batch.rows.length; }',
+    'export function closeBatch(batch: { rows: string[][] }) { return batch.rows.length; }',
+    'export function summarizeRows(rows: string[][], written: number) { return { rows: rows.length, written, elapsed: 0 }; }',
+    'export function publishReport(report: { rows: number; written: number; elapsed: number }) { return report; }',
+  ],
   // Consumers that keep every planted symbol except the orphan alive.
   'src/entry/use-all.ts': [
     "import { chunkFirst } from '../dup/first';",
@@ -93,7 +121,8 @@ const FILES: Record<string, string[]> = {
     "import { escapeRegex as escapeLeft } from '../twin/left';",
     "import { escapeRegex as escapeRight } from '../twin/right';",
     "import { outerWork } from '../pass/outer';",
-    'export const useAll = [chunkFirst([], 1), chunkSecond([], 1), escapeLeft("a"), escapeRight("b"), outerWork(1, 2)];',
+    "import { orchestrateImport } from '../seam/orchestrate';",
+    'export const useAll = [chunkFirst([], 1), chunkSecond([], 1), escapeLeft("a"), escapeRight("b"), outerWork(1, 2), orchestrateImport([])];',
   ],
   'src/ui/App.tsx': [
     "import { IssuePanel } from './IssuePanel';",
@@ -168,6 +197,15 @@ describe('seeded defect recall', () => {
       [15, 'src/ui/Parent.tsx', 'Parent', 1, 3],
       [16, 'src/ui/Child.tsx', 'Child', 0, 2],
       [17, 'src/ui/App.tsx', 'App', 3, 11],
+      [18, 'src/seam/orchestrate.ts', 'orchestrateImport', 0, 15],
+      [19, 'src/seam/orchestrate.ts', 'parseRows', 16, 16],
+      [20, 'src/seam/orchestrate.ts', 'validateRows', 17, 17],
+      [21, 'src/seam/orchestrate.ts', 'enrichRows', 18, 18],
+      [22, 'src/seam/orchestrate.ts', 'openBatch', 19, 19],
+      [23, 'src/seam/orchestrate.ts', 'writeBatch', 20, 20],
+      [24, 'src/seam/orchestrate.ts', 'closeBatch', 21, 21],
+      [25, 'src/seam/orchestrate.ts', 'summarizeRows', 22, 22],
+      [26, 'src/seam/orchestrate.ts', 'publishReport', 23, 23],
     ];
     for (const [id, file, leaf, start, end] of symbols) {
       const doc = docIds.get(file)!;
@@ -196,6 +234,8 @@ describe('seeded defect recall', () => {
       ['src/ui/App.tsx', 13],
       ['src/ui/App.tsx', 14],
       ['src/ui/App.tsx', 15],
+      ['src/entry/use-all.ts', 18],
+      ...([19, 20, 21, 22, 23, 24, 25, 26] as const).map((id): [string, number] => ['src/seam/orchestrate.ts', id]),
     ];
     for (const [file, doc] of docIds) {
       builder.chunk(doc, doc, 0, FILES[file]!.length);
@@ -242,12 +282,19 @@ describe('seeded defect recall', () => {
         ),
       ).toEqual(['IncidentPanel+IssuePanel']);
 
+      const seams = extractCandidates(db, { semantic: false });
+      expect(seams.map((candidate) => candidate.shortName)).toEqual(['src:seam/orchestrate:orchestrateImport()']);
+      expect(seams[0]!.regions.map((region) => [region.startLine, region.endLine, region.callees.length])).toEqual([
+        [6, 10, 3],
+      ]);
+
       const report = health(db, { full: true });
       expect(report.findings).toEqual(
         expect.objectContaining({
           cycles: 1,
           twinDriftGroups: 1,
           reactComponentDuplicatePairs: 1,
+          extractionCandidates: 1,
         }),
       );
       expect(report.findings.duplicateBodyGroups).toBeGreaterThanOrEqual(1);

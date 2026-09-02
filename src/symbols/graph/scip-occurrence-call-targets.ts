@@ -50,15 +50,17 @@ const SCIP_OCCURRENCE_CALL_TARGET_INDEX = new WeakMap<ScipDatabase, ScipOccurren
  */
 export function scipOccurrenceTargetsForFile(db: ScipDatabase, relativePath: string): FileOccurrenceTargets | null {
   const chunkLookup = chunkOccurrenceTargetsForFile(db, relativePath);
-  if (chunkLookup.available) return { targets: chunkLookup.targets, externalLeafKeys: chunkLookup.externalLeafKeys };
+  if (chunkLookup.available) {
+    return { targets: chunkLookup.targets, externalLeafKeys: chunkLookup.externalLeafKeys, locals: chunkLookup.locals };
+  }
   if (chunkLookup.reason === 'no-document') return null;
   // An index that stores occurrence data never justifies deserializing the
   // whole artifact; a file whose blobs failed to decode simply has no
   // occurrence evidence. The artifact path exists for occurrence-less indexes.
-  if (indexStoresOccurrenceData(db)) return { targets: [], externalLeafKeys: new Set() };
+  if (indexStoresOccurrenceData(db)) return { targets: [], externalLeafKeys: new Set(), locals: [] };
   const index = scipOccurrenceCallTargetIndex(db);
   if (!index) return null;
-  return { targets: index.byFile.get(relativePath) ?? [], externalLeafKeys: new Set() };
+  return { targets: index.byFile.get(relativePath) ?? [], externalLeafKeys: new Set(), locals: [] };
 }
 
 /**

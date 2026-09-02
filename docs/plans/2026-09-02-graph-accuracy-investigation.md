@@ -173,3 +173,56 @@ callee disagreement remains in the reported list. The AST receiver-typing
 tier considered for this lead was not built: the occurrence tier already
 answers typed-receiver calls directly, and the remaining leaf-name rows are
 calls the indexer left unbound.
+
+### Lead 7: extraction candidates measured line coincidence, not seams
+
+Asked whether `extract-candidates` was accurate, the answer was no, for two
+structural reasons. Clusters were connected components of a callee
+co-occurrence graph, so no edge ever crossed clusters and the reported
+isolation was always 100%. The co-occurrence key was `CalleeRow.chunkId`,
+which the original detector read as a SCIP chunk of about 200 occurrences
+but which the AST callee path sets to the call line and the compiler path
+sets to minus one. In bounded mode a cluster was therefore "names sharing
+one line"; in full mode every compiler-resolved callee collapsed into one
+cluster spanning two thirds of the body (median span share 0.67 on this
+repository, 148 candidates, none of them seams). Launchpoint reported
+1,258 rows, 84% labeled orchestration because they had ten callees.
+
+The detector was rebuilt around a definition that can be checked line by
+line. A seam is a contiguous range whose callees appear nowhere else in
+the function: each callee's first-to-last use interval must stay whole,
+overlapping intervals merge, call lines within two lines of each other
+join, and the range grows over the enclosing block's opener and closer.
+A region counts only when it has three exclusive callees, five lines, at
+most three quarters of the body, and leaves two callees outside. Callees
+used across half the body are ambient and reported separately. The SCIP
+`local` occurrences the index already stores give each region its data
+flow: bindings declared before and used inside are parameters, bindings
+declared inside (or written inside) and read after are returned values.
+A region that would take more than five locals in or hand more than two
+back is support tier, listed by the command and disclosed by `health` as
+a policy exclusion rather than counted.
+
+| Repository  | Before | After (signal / support) | Signal region lines, median | Signal share of body, median |
+| ----------- | ------ | ------------------------ | --------------------------- | ---------------------------- |
+| scip-query  | 148    | 51 / 71                  | 16                          | 0.26                         |
+| Vega        | 237    | 106 / 91                 | 19                          | 0.23                         |
+| Launchpoint | 1,096  | 438 / 492                | 20                          | 0.22                         |
+
+Every reported region is exclusive by construction, so the remaining
+judgment is whether the region is a coherent unit, and the interface cost
+is printed for that judgment. The seeded-defect recall test plants a seam
+and asserts its exact line range; the output test asserts the inbound and
+outbound locals of a planted block. `extract-candidates --full --json`
+still needs a 12 GB heap on Launchpoint, which is recorded as an open
+operational issue.
+
+### Lead 8 (open): the cycles phase flaps between five cycles and none
+
+Three full Launchpoint health runs today on nearly identical indexes
+reported five dependency cycles, then none, then five, then none again,
+with no deferral warning in the empty runs. The eighteen risk points that
+ride on that finding flip with it (risk 69 versus 87). The empty runs
+share nothing obvious with each other yet; the next step is to run the
+`cycles` command alone against the same generation several times and
+compare its evidence coverage between an empty and a non-empty answer.

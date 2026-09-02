@@ -228,6 +228,7 @@ function collectPolicyExclusions(analyses: HealthAnalyses): HealthPolicyExclusio
     }
   };
   for (const [detector, pick] of POLICY_EXCLUSION_SOURCES) push(detector, pick(analyses).exclusions);
+  push('extract-candidates', analyses.extractExclusions);
   push('complexity-hotspots', analyses.complexity.exclusions);
   push('co-change', analyses.gitEvidence?.hiddenCoupling.exclusions);
   return exclusions;
@@ -524,7 +525,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Extraction candidates',
       evidence: 'heuristic',
-      description: `${analyses.extractCount} large functions with isolated callee clusters — review same-file or feature-local extraction seams`,
+      description: `${analyses.extractCount} large functions with a contiguous region whose callees appear nowhere else in the body — review same-file or feature-local extraction seams`,
       effort: 'medium',
       impact: 'medium',
       count: analyses.extractCount,

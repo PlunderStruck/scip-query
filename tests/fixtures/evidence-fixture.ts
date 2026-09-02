@@ -108,6 +108,8 @@ class EvidenceFixtureDb {
     symbol: string;
     line: number;
     roles: number;
+    startChar: number;
+    endChar: number;
   }> = [];
 
   constructor(private readonly dbPath: string) {}
@@ -151,8 +153,8 @@ class EvidenceFixtureDb {
    * way every SCIP-to-SQLite converter persists it. `symbol` is the SCIP
    * symbol the indexer bound at `line`; it need not be a declared symbol.
    */
-  occurrence(chunkId: number, symbol: string, line: number, roles = 0): this {
-    this.occurrences.push({ chunkId, symbol, line, roles });
+  occurrence(chunkId: number, symbol: string, line: number, roles = 0, startChar = 0, endChar = startChar + 1): this {
+    this.occurrences.push({ chunkId, symbol, line, roles, startChar, endChar });
     return this;
   }
 
@@ -218,7 +220,7 @@ class EvidenceFixtureDb {
     const document = create(DocumentSchema, {
       occurrences: occurrences.map((occurrence) =>
         create(OccurrenceSchema, {
-          range: [occurrence.line, 0, 1],
+          range: [occurrence.line, occurrence.startChar, occurrence.endChar],
           symbol: occurrence.symbol,
           symbolRoles: occurrence.roles,
         }),

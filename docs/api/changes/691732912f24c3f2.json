@@ -1,0 +1,79 @@
+{
+  "acceptedAt": "2026-09-02T19:00:45.308Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "691732912f24c3f2e012109bb60b7ca9607a3825384c2ef6740f414085668581",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ExtractCandidate changed from interface ExtractCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; totalCallees: number; extractionKind: Extr... to interface ExtractCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; totalCallees: number; unpositionedCallees:....",
+      "target": "./queries:ExtractCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ExtractCandidateActionTier changed from type ExtractCandidateActionTier = 'signal'; to type ExtractCandidateActionTier = 'signal' | 'support';.",
+      "target": "./queries:ExtractCandidateActionTier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ExtractCandidateKind changed from type ExtractCandidateKind = 'workflow-orchestration' | 'broad-helper-cluster' | 'cohesive-helper-cluster'; to type ExtractCandidateKind = 'call-region' | 'render-region';.",
+      "target": "./queries:ExtractCandidateKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ExtractCandidate changed from interface ExtractCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; totalCallees: number; extractionKind: Extr... to interface ExtractCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; totalCallees: number; unpositionedCallees:....",
+      "target": "./queries/extract-candidates:ExtractCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ExtractCandidateActionTier changed from type ExtractCandidateActionTier = 'signal'; to type ExtractCandidateActionTier = 'signal' | 'support';.",
+      "target": "./queries/extract-candidates:ExtractCandidateActionTier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ExtractCandidateKind changed from type ExtractCandidateKind = 'workflow-orchestration' | 'broad-helper-cluster' | 'cohesive-helper-cluster'; to type ExtractCandidateKind = 'call-region' | 'render-region';.",
+      "target": "./queries/extract-candidates:ExtractCandidateKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ExtractRegion.",
+      "target": "./queries/extract-candidates:ExtractRegion"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ExtractCandidate changed from interface ExtractCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; totalCallees: number; extractionKind: Extr... to interface ExtractCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; totalCallees: number; unpositionedCallees:....",
+      "target": "./queries/index:ExtractCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ExtractCandidateActionTier changed from type ExtractCandidateActionTier = 'signal'; to type ExtractCandidateActionTier = 'signal' | 'support';.",
+      "target": "./queries/index:ExtractCandidateActionTier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ExtractCandidateKind changed from type ExtractCandidateKind = 'workflow-orchestration' | 'broad-helper-cluster' | 'cohesive-helper-cluster'; to type ExtractCandidateKind = 'call-region' | 'render-region';.",
+      "target": "./queries/index:ExtractCandidateKind"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-changed",
+      "message": "Non-exported declarations changed in referenced module health-<hash>.d.ts.",
+      "target": "health-<hash>.d.ts"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.23.0",
+  "previousDigest": "d0da741204dd766eee5c163d22d9d25a48ef4f03f717686649327b41374a0c69",
+  "reason": "extract-candidates reports exclusive line regions with local data flow instead of line-coincidence clusters: ExtractCandidate.clusters becomes regions, kinds become call-region and render-region, and a support tier marks wide interfaces",
+  "schemaVersion": 1
+}

@@ -449,13 +449,13 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'extract-candidates',
     command: 'extract-candidates',
     agent: analysisAgentContract(
-      'Which cohesive code regions are strong extraction candidates?',
-      'symbol identities with cohesion, reuse, and extraction evidence',
+      'Which contiguous regions of a large function use callees that appear nowhere else in it?',
+      'symbol identities with exclusive callee regions and the local data each region would need',
       [],
       'bounded',
       'repository',
     ),
-    description: 'Find heuristic extraction candidates from isolated callee clusters',
+    description: 'Find extraction candidates: contiguous regions whose callees are used nowhere else in the function',
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--min-loc <n>', 'Minimum function LOC', parseInteger, 10),

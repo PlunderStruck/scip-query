@@ -199,10 +199,15 @@ export const handleExtractCandidates = budgetedDbCommand('extract-candidates', (
     console.log(`  Kind: ${r.extractionKind}; tier: ${r.actionTier}`);
     console.log(`  Recommendation: ${r.recommendation}`);
     for (const reason of r.evidenceReasons) console.log(`  - ${reason}`);
-    for (let i = 0; i < r.clusters.length; i++) {
-      const c = r.clusters[i]!;
-      console.log(`  Cluster ${i + 1} (${Math.round(c.isolation * 100)}% isolated, ${c.callees.length} callees):`);
-      for (const callee of c.callees) console.log(`    ${callee}`);
+    for (let i = 0; i < r.regions.length; i++) {
+      const region = r.regions[i]!;
+      console.log(
+        `  Region ${i + 1} ${displayRange(region.startLine, region.endLine)} (${region.lines} lines, ${region.kind}, ${region.callees.length} exclusive callees):`,
+      );
+      for (const callee of region.callees) console.log(`    ${callee}`);
+      if (region.inboundLocals.length > 0) console.log(`    needs: ${region.inboundLocals.join(', ')}`);
+      if (region.outboundLocals.length > 0) console.log(`    returns: ${region.outboundLocals.join(', ')}`);
+      if (region.ambientCallees.length > 0) console.log(`    also uses ambient: ${region.ambientCallees.join(', ')}`);
     }
   }
   console.log(`\n${results.length} extraction candidate(s) found.`);

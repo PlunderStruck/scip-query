@@ -30,6 +30,8 @@ export interface HealthAnalyses {
   vueComposableCandidates: CountLocSummary;
   vueLargeViewPressure: CountLocSummary;
   extractCount: number;
+  /** Wide-interface regions listed by extract-candidates at support tier and not counted. */
+  extractExclusions: PolicyExclusionSummary[];
   wrappers: CountLocSummary;
   passthroughs: CountLocSummary;
   stale: StaleSummary;

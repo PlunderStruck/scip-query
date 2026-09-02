@@ -100,3 +100,18 @@ had (cycles and cycle pressure, 18 points); the calibration run listed none.
 `self-audit --samples 100` on the same index: references precision 1.0 /
 recall 1.0; callees recall 1.0 over 13 compared with 218 occurrence-resolved
 rows against 24 leaf-name rows; renders recall 1.0 over 91.
+
+## Extraction candidates rebuilt (same day)
+
+The extraction detector reported 1,258 rows in the full run above. Those rows
+measured callees sharing a source line, not extraction seams (see lead 7 in
+`docs/plans/2026-09-02-graph-accuracy-investigation.md`). With the rebuilt
+detector the standalone full list is 930 rows: 438 signal-tier regions
+(313 call regions, 125 rendered subtrees) and 492 support-tier regions whose
+extraction would need more than five locals in or more than two back.
+Signal regions are 20 lines at the median and 22% of their function.
+In the full health run (profile: functions of at least 15 lines with at least
+5 callees) the finding is 483 signal-tier candidates against 1,258 before,
+with 504 support-tier regions disclosed under policy exclusions. The score
+did not move on this axis because extraction pressure only deducts above one
+percent of symbols.

@@ -1,114 +1,205 @@
-import Database from 'better-sqlite3';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { SymbolInformation_Kind, SymbolRole } from '@c4312/scip';
 import { extractCandidates } from '../../../src/queries/cleanup/extract-candidates.js';
 import { health } from '../../../src/queries/health/health.js';
-import type { ScipQueryConfig } from '../../../src/domain/types.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
-import { createEvidenceSchema } from '../../fixtures/evidence-fixture.js';
+import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';
 
-function withExtractionFixture(run: (db: ScipDatabase) => void): void {
-  const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-extract-candidates-'));
-  const dbPath = join(tempDir, 'index.db');
-  try {
-    mkdirSync(join(tempDir, 'src'), { recursive: true });
-    const sqliteDb = new Database(dbPath);
-    createEvidenceSchema(sqliteDb);
-    sqliteDb.exec(`
-      INSERT INTO documents (id, language, relative_path, text) VALUES
-        (1, 'typescript', 'src/orchestrator.ts', '');
+const sym = (leaf: string) => `scip-typescript npm fixture 1.0.0 src/\`orchestrator.ts\`/${leaf}().`;
 
-      INSERT INTO global_symbols (id, symbol, display_name, kind) VALUES
-        (1, 'scip-typescript npm fixture 1.0.0 src/\`orchestrator.ts\`/processOrder().', 'processOrder', 6),
-        (2, 'scip-typescript npm fixture 1.0.0 src/\`orchestrator.ts\`/loadOrder().', 'loadOrder', 6),
-        (3, 'scip-typescript npm fixture 1.0.0 src/\`orchestrator.ts\`/validateOrder().', 'validateOrder', 6),
-        (4, 'scip-typescript npm fixture 1.0.0 src/\`orchestrator.ts\`/normalizeOrder().', 'normalizeOrder', 6),
-        (5, 'scip-typescript npm fixture 1.0.0 src/\`orchestrator.ts\`/chargeCard().', 'chargeCard', 6),
-        (6, 'scip-typescript npm fixture 1.0.0 src/\`orchestrator.ts\`/sendReceipt().', 'sendReceipt', 6),
-        (7, 'scip-typescript npm fixture 1.0.0 src/\`orchestrator.ts\`/recordAudit().', 'recordAudit', 6);
+/**
+ * `processOrder` loads and validates (lines 3-4), charges inside one block
+ * (lines 11-15) using three callees nothing else uses, then summarizes.
+ * `trace` runs across the whole body. `mixed` interleaves every callee so no
+ * cut leaves an exclusive region.
+ */
+const ORCHESTRATOR = [
+  'export function processOrder(orderId: string) {',
+  "  trace('start');",
+  '  const order = loadOrder(orderId);',
+  '  const valid = validateOrder(order);',
+  '  if (!valid) {',
+  '    return null;',
+  '  }',
+  '  const normalized = normalizeOrder(order);',
+  '  const total = normalized.total;',
+  '  let receipt = null;',
+  '  if (total > 0) {',
+  '    const charge = chargeCard(normalized, total);',
+  '    receipt = sendReceipt(charge);',
+  '    recordAudit(charge, receipt);',
+  '  }',
+  "  trace('charged');",
+  '  const summary = summarize(receipt);',
+  "  trace('done');",
+  '  return finalize(summary);',
+  '}',
+  'export function mixed(orderId: string) {',
+  '  const order = loadOrder(orderId);',
+  '  const charge = chargeCard(order, 1);',
+  '  validateOrder(order);',
+  '  sendReceipt(charge);',
+  '  normalizeOrder(order);',
+  '  recordAudit(charge, order);',
+  '  loadOrder(orderId);',
+  '  chargeCard(order, 2);',
+  '  validateOrder(order);',
+  '  sendReceipt(charge);',
+  '  normalizeOrder(order);',
+  '  return recordAudit(charge, order);',
+  '}',
+  'export function trace(step: string) { return step; }',
+  'export function loadOrder(id: string) { return { id, total: 1 }; }',
+  'export function validateOrder(order: { id: string }) { return Boolean(order.id); }',
+  'export function normalizeOrder(order: { id: string; total: number }) { return order; }',
+  'export function chargeCard(order: { id: string }, total: number) { return { order, total }; }',
+  'export function sendReceipt(charge: { total: number }) { return { charge }; }',
+  'export function recordAudit(charge: unknown, receipt: unknown) { return [charge, receipt]; }',
+  'export function summarize(receipt: unknown) { return { receipt }; }',
+  'export function finalize(summary: unknown) { return summary; }',
+];
 
-      INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
-        (1, 1, 1, 0, 0, 39, 1),
-        (2, 1, 2, 42, 0, 43, 1),
-        (3, 1, 3, 45, 0, 46, 1),
-        (4, 1, 4, 48, 0, 49, 1),
-        (5, 1, 5, 51, 0, 52, 1),
-        (6, 1, 6, 54, 0, 55, 1),
-        (7, 1, 7, 57, 0, 58, 1);
+const HELPERS = [
+  'trace',
+  'loadOrder',
+  'validateOrder',
+  'normalizeOrder',
+  'chargeCard',
+  'sendReceipt',
+  'recordAudit',
+  'summarize',
+  'finalize',
+];
 
-      INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
-        (1, 1, 0, 0, 12, X'00'),
-        (2, 1, 1, 13, 30, X'00'),
-        (3, 1, 2, 42, 43, X'00'),
-        (4, 1, 3, 45, 46, X'00'),
-        (5, 1, 4, 48, 49, X'00'),
-        (6, 1, 5, 51, 52, X'00'),
-        (7, 1, 6, 54, 55, X'00'),
-        (8, 1, 7, 57, 58, X'00');
-
-      INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
-        (1, 1, 1),
-        (3, 2, 1),
-        (4, 3, 1),
-        (5, 4, 1),
-        (6, 5, 1),
-        (7, 6, 1),
-        (8, 7, 1),
-        (1, 2, 0),
-        (1, 3, 0),
-        (1, 4, 0),
-        (2, 5, 0),
-        (2, 6, 0),
-        (2, 7, 0);
-    `);
-    sqliteDb.close();
-
-    const config: ScipQueryConfig = {
-      dbPath,
-      indexPath: join(tempDir, 'index.scip'),
-      projectRoot: tempDir,
-    };
-    const db = new ScipDatabase(config);
-    try {
-      run(db);
-    } finally {
-      db.close();
+function buildFixture(): { root: string; db: ScipDatabase } {
+  const root = mkdtempSync(join(tmpdir(), 'scip-query-extract-candidates-'));
+  writeFixtureFiles(root, { 'src/orchestrator.ts': ORCHESTRATOR });
+  const dbPath = join(root, 'index.db');
+  const fixture = evidenceFixtureDb(dbPath)
+    .document(1, 'typescript', 'src/orchestrator.ts')
+    .chunk(1, 1, 0, ORCHESTRATOR.length);
+  fixture
+    .symbol(1, sym('processOrder'), 'processOrder', SymbolInformation_Kind.Function)
+    .definition(1, 1, 1, 0, 0, 19, 1);
+  fixture.symbol(2, sym('mixed'), 'mixed', SymbolInformation_Kind.Function).definition(2, 1, 2, 20, 0, 33, 1);
+  HELPERS.forEach((leaf, index) => {
+    const line = 34 + index;
+    fixture
+      .symbol(3 + index, sym(leaf), leaf, SymbolInformation_Kind.Function)
+      .definition(3 + index, 1, 3 + index, line, 0, line, 60);
+  });
+  // Indexer bindings at every call line, and local symbols with their declaration and use sites.
+  ORCHESTRATOR.forEach((text, line) => {
+    if (line >= 34) return;
+    for (const leaf of HELPERS) {
+      const column = text.indexOf(`${leaf}(`);
+      if (column >= 0) fixture.occurrence(1, sym(leaf), line, 0, column, column + leaf.length);
     }
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
+  });
+  const local = (id: number, name: string, declarationLine: number, uses: Array<[number, boolean]>) => {
+    const at = (line: number) => ORCHESTRATOR[line]!.indexOf(name);
+    fixture.occurrence(
+      1,
+      `local ${id}`,
+      declarationLine,
+      SymbolRole.Definition,
+      at(declarationLine),
+      at(declarationLine) + name.length,
+    );
+    for (const [line, write] of uses) {
+      fixture.occurrence(1, `local ${id}`, line, write ? SymbolRole.WriteAccess : 0, at(line), at(line) + name.length);
+    }
+  };
+  local(1, 'orderId', 0, [[2, false]]);
+  local(2, 'order', 2, [
+    [3, false],
+    [7, false],
+  ]);
+  local(3, 'valid', 3, [[4, false]]);
+  local(4, 'normalized', 7, [
+    [8, false],
+    [11, false],
+  ]);
+  local(5, 'total', 8, [
+    [10, false],
+    [11, false],
+  ]);
+  local(6, 'receipt', 9, [
+    [12, true],
+    [13, false],
+    [16, false],
+  ]);
+  local(7, 'charge', 11, [
+    [12, false],
+    [13, false],
+  ]);
+  local(8, 'summary', 16, [[18, false]]);
+  fixture.write();
+  return { root, db: new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') }) };
 }
 
-describe('extractCandidates output classification', () => {
-  it('labels extraction candidates as contextual workflow-orchestration signals', () => {
-    withExtractionFixture((db) => {
-      const results = extractCandidates(db, { minLoc: 20, minCallees: 6, semantic: false });
-      const candidate = results.find((result) => result.shortName === 'src:orchestrator:processOrder()');
+describe('extractCandidates regions', () => {
+  const tempDirs: string[] = [];
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
 
-      expect(candidate).toBeDefined();
+  it('reports the exclusive block with the locals it would take in and hand back', () => {
+    const { root, db } = buildFixture();
+    tempDirs.push(root);
+    try {
+      const results = extractCandidates(db, { minLoc: 10, minCallees: 6, semantic: false });
+      expect(results.map((result) => result.shortName)).toEqual(['src:orchestrator:processOrder()']);
+      const candidate = results[0]!;
       expect(candidate).toMatchObject({
         actionTier: 'signal',
-        extractionKind: 'workflow-orchestration',
-        totalCallees: 6,
+        extractionKind: 'call-region',
+        totalCallees: 9,
+        unpositionedCallees: 0,
+        ambientCallees: ['src:orchestrator:trace()'],
+        localsAvailable: true,
       });
-      expect(candidate!.recommendation).toContain('keep the orchestration sequence together');
-      expect(candidate!.evidenceReasons).toEqual(
+      expect(candidate.regions).toEqual([
+        {
+          startLine: 10,
+          endLine: 14,
+          lines: 5,
+          kind: 'call-region',
+          callees: [
+            'src:orchestrator:chargeCard()',
+            'src:orchestrator:sendReceipt()',
+            'src:orchestrator:recordAudit()',
+          ],
+          renderCallees: 0,
+          inboundLocals: ['normalized', 'receipt', 'total'],
+          outboundLocals: ['receipt'],
+          ambientCallees: [],
+        },
+      ]);
+      expect(candidate.recommendation).toContain('lines 11-15 as a helper');
+      expect(candidate.recommendation).toContain(
+        'take 3 local(s) in (normalized, receipt, total) and hand 1 back (receipt)',
+      );
+      expect(candidate.evidenceReasons).toEqual(
         expect.arrayContaining([
-          '6 distinct callees across 2 co-occurrence cluster(s)',
-          '2 extractable cluster(s) passed size and isolation thresholds',
+          '9 callees placed on call lines across 20 lines',
+          '1 ambient callee(s) used across the body: src:orchestrator:trace()',
+          'lines 11-15 (5 lines) use 3 callees exclusively; 3 local(s) in, 1 out',
+          '5 callee(s) stay outside the largest region',
         ]),
       );
-      expect(candidate!.clusters).toHaveLength(2);
-      expect(candidate!.clusters.every((cluster) => cluster.isolation === 1)).toBe(true);
 
       const report = health(db);
-      expect(report.findings.extractionCandidates).toBeGreaterThan(0);
+      expect(report.findings.extractionCandidates).toBe(1);
       expect(report.scoreBreakdown.some((deduction) => deduction.axis === 'extract')).toBe(false);
       expect(report.actions.find((action) => action.category === 'Extraction candidates')?.description).toContain(
         'review same-file or feature-local extraction seams',
       );
-    });
+    } finally {
+      db.close();
+    }
   });
 });

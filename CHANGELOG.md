@@ -4,6 +4,21 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+### Extraction candidates are exclusive regions, not line coincidences
+
+- `extract-candidates` now reports contiguous line ranges whose callees are
+  used nowhere else in the function, grown over the enclosing block's opener
+  and closer, and only when the range is at least five lines, at most three
+  quarters of the body, and leaves the rest of the function with callees of
+  its own. Callees used across the body (loggers, translators) are reported
+  as ambient instead of gluing every region together. When the indexer
+  emitted local-symbol occurrences, each region lists the bindings an
+  extraction would take as parameters and hand back. The previous
+  implementation keyed callee co-occurrence on a source line, so its
+  "clusters" were names sharing one line and its isolation score was always
+  100%; `ExtractCandidate.clusters` is replaced by `regions` and the kinds
+  are now `call-region` and `render-region`.
+
 ### Callee edges start from the indexer's own bindings
 
 - The cheap callee path now reads the compiler-resolved occurrence the index

@@ -91,15 +91,15 @@ The output should include confidence, reasons, counterevidence, and the exact co
 
 The locality analyzer should not replace existing analyzers. It should complete their story.
 
-| Existing analyzer                                    | What it says today                                    | Locality companion question                                                                           |
-| ---------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `react-large-component-pressure`                     | This React component is too large.                    | If pieces are extracted, which ones are private, feature-local, or shared?                            |
-| `vue-large-view-pressure`                            | This Vue SFC is too large.                            | Should extracted child components/composables live beside the view, in the feature, or in app shared? |
-| `extract-candidates`                                 | This function contains a possible extraction cluster. | Would the extracted helper have one real owner or a broader consumer set?                             |
-| `react-hook-candidates`, `vue-composable-candidates` | Several components repeat behavior.                   | Is the hook/composable local to one feature or reusable across domains?                               |
-| `recent-duplicates`, `echo`                          | New code duplicates older code.                       | Which existing owner should the new code reuse, and would reuse widen the wrong API?                  |
-| `incomplete-migration`                               | A helper extraction stopped halfway.                  | Is the helper in the right place for all remaining call sites?                                        |
-| `co-change`                                          | Files move together historically.                     | Does history imply a hidden shared owner or only a local synchronization point?                       |
+| Existing analyzer                                    | What it says today                               | Locality companion question                                                                           |
+| ---------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `react-large-component-pressure`                     | This React component is too large.               | If pieces are extracted, which ones are private, feature-local, or shared?                            |
+| `vue-large-view-pressure`                            | This Vue SFC is too large.                       | Should extracted child components/composables live beside the view, in the feature, or in app shared? |
+| `extract-candidates`                                 | This function has a region of exclusive callees. | Would the extracted helper have one real owner or a broader consumer set?                             |
+| `react-hook-candidates`, `vue-composable-candidates` | Several components repeat behavior.              | Is the hook/composable local to one feature or reusable across domains?                               |
+| `recent-duplicates`, `echo`                          | New code duplicates older code.                  | Which existing owner should the new code reuse, and would reuse widen the wrong API?                  |
+| `incomplete-migration`                               | A helper extraction stopped halfway.             | Is the helper in the right place for all remaining call sites?                                        |
+| `co-change`                                          | Files move together historically.                | Does history imply a hidden shared owner or only a local synchronization point?                       |
 
 ## Algorithm Sketch
 

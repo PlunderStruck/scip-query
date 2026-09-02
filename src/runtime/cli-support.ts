@@ -1243,7 +1243,7 @@ export function deferredHealthPhaseResult(
     case 'vue-large-view-pressure':
       return { ...skippedHealthPhaseResult(phase), ...meta };
     case 'extract-candidates':
-      return { phase, extractCount: 0, ...meta };
+      return { phase, extractCount: 0, extractExclusions: [], ...meta };
     case 'wrapper-candidates':
       return { phase, wrappers: { count: 0, loc: 0, files: [] }, ...meta };
     case 'passthrough-candidates':

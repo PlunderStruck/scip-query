@@ -23,6 +23,7 @@ score is a summary, not proof of correctness.
 | Parallel implementations    | `twin-drift`, `incomplete-migration`, `drift`                                               |
 | Unused or disconnected code | `dead`, `isolated`, `unused-params`                                                         |
 | Excess indirection          | `wrapper-candidates`, `passthrough-candidates`, `stale-abstractions`, `redundant-reexports` |
+| Extraction seams            | `extract-candidates`                                                                        |
 | Change pressure             | `complexity-hotspots`, `co-change`, `cycles`                                                |
 | Documentation               | `doc-drift`                                                                                 |
 | React                       | `react-component-duplicates`, `react-hook-candidates`, `react-large-component-pressure`     |
@@ -69,3 +70,4 @@ still find it.
 | `passthrough-candidates`                                                                | a file with three or more methods forwarding to the same collaborator is a facade; its forwards become boundary signals instead of direct inline advice                                                                                    |
 | `co-change` (hidden coupling)                                                           | documentation that changes alongside the code it describes (`doc-drift` owns stale docs); generated artifacts such as migration journals, snapshots, and codegen output                                                                    |
 | `complexity-hotspots` (extreme count)                                                   | callables above the extreme score only through fan-in, with fewer than 10 branches                                                                                                                                                         |
+| `extract-candidates`                                                                    | regions whose extraction would take more than five locals in or hand more than two back (support tier: wide interface); only regions with a narrow or unknown interface count                                                              |
