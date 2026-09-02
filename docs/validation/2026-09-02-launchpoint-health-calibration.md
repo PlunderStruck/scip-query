@@ -75,3 +75,28 @@ groups, and files that forward three or more methods to the same
 collaborator are treated as facades in `passthrough-candidates` (357 forwards
 went from 171 direct to 38 direct). The graph-level work that came out of the
 same investigation is tracked in `docs/plans/2026-09-02-graph-accuracy-investigation.md`.
+
+## Callee tier follow-up (same day)
+
+The occurrence-resolved callee tier recorded in
+`docs/plans/2026-09-02-graph-accuracy-investigation.md` (lead 6) changes
+what the callee-based detectors can see. Full-mode Launchpoint run with that
+build, against the calibration run above (caches cleared, 7m49s):
+
+| Finding               | Calibration | Callee tier | Read                                                       |
+| --------------------- | ----------- | ----------- | ---------------------------------------------------------- |
+| Complexity hotspots   | 173         | 191         | fan-out now counts calls through typed receivers           |
+| Extraction candidates | 1027        | 1258        | isolated callee clusters need the edges to exist           |
+| Similar pairs         | 198         | 209         | callee fingerprints are denser                             |
+| Passthroughs          | 110 (62.75) | 123 (69.75) | literal forwards whose target the leaf path could not bind |
+| Wrappers              | 73 (54.25)  | 73 (54.25)  | unchanged                                                  |
+| React hooks           | 52 (31.5)   | 52 (31.5)   | unchanged                                                  |
+| Dead code             | 65          | 65          | unchanged                                                  |
+| Drifted twins         | 555         | 554         | unchanged within noise                                     |
+
+Score 66 / 69 / 66. The risk axis differs from the calibration run's 87 only
+because this run reports the five dependency cycles the original report also
+had (cycles and cycle pressure, 18 points); the calibration run listed none.
+`self-audit --samples 100` on the same index: references precision 1.0 /
+recall 1.0; callees recall 1.0 over 13 compared with 218 occurrence-resolved
+rows against 24 leaf-name rows; renders recall 1.0 over 91.
