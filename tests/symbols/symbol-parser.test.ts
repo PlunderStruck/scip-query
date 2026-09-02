@@ -3,6 +3,7 @@ import {
   parseSymbol,
   shortenSymbol,
   leafName,
+  ownerQualifiedLeafName,
   isFunctionLikeSymbol,
   isModuleLikeSymbol,
   isDirectChildSymbol,
@@ -190,5 +191,23 @@ describe('symbol helpers', () => {
 
     expect(isDirectChildSymbol(parent, child)).toBe(true);
     expect(isDirectChildSymbol(parent, grandchild)).toBe(false);
+  });
+});
+
+describe('ownerQualifiedLeafName', () => {
+  it('prefixes a member with its enclosing type and nothing else', () => {
+    expect(ownerQualifiedLeafName('semanticdb maven . . fixture/StatusBadgeRelay#normalizeBadgeStatus().')).toBe(
+      'StatusBadgeRelay normalizeBadgeStatus',
+    );
+    expect(
+      ownerQualifiedLeafName('scip-typescript npm app 1.0.0 src/lib/observability/`logger.ts`/BaseLogger#log().'),
+    ).toBe('BaseLogger log');
+  });
+
+  it('returns a free function leaf without its directory or file', () => {
+    expect(
+      ownerQualifiedLeafName('scip-typescript npm app 1.0.0 src/lib/auth/`twilio-verify.ts`/formatPhoneNumber().'),
+    ).toBe('formatPhoneNumber');
+    expect(ownerQualifiedLeafName('local 42')).toBe('42');
   });
 });

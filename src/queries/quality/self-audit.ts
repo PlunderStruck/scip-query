@@ -6,7 +6,7 @@ import {
   semanticEvidenceProduct,
   semanticReferences,
   semanticCalleeCoverage,
-  semanticCompilerVisibleFiles,
+  semanticCompilerProjectOf,
 } from '../../semantic/shared-primitives.js';
 import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 import { referenceSitesForSymbol } from '../../symbols/references/reference-sites.js';
@@ -42,7 +42,7 @@ export interface AuditQuestionScore {
   skippedOraclePartial: number;
   /** Compared symbols whose oracle accounted for every call site; precision is measured over these only. */
   completeOracleSymbols: number;
-  /** Cheap-path answers in files outside every compiler project; the oracle cannot see them, so they are neither confirmed nor wrong. */
+  /** Cheap-path answers the oracle's compiler project cannot see (another project, or no project); neither confirmed nor wrong. */
   outsideOracleCoverage: number;
   /** Cheap-path rows over the whole sample by evidence source; empty for the references question. */
   cheapSources: Record<string, number>;
@@ -108,7 +108,12 @@ export function selfAudit(
   // none of those has a complete callee oracle, so cheap-only files there
   // are false positives rather than unverified answers.
   const semanticCoverage = oracleKind === 'semantic' ? semanticCalleeCoverage(db, sampled) : new Map();
-  const compilerSees = (oracleKind === 'semantic' ? semanticCompilerVisibleFiles(db) : null) ?? (() => true);
+  const compilerProjectOf = oracleKind === 'semantic' ? semanticCompilerProjectOf(db) : null;
+  // The compiler resolves a callee across projects through its declaration,
+  // but it finds references only inside the definition's own project.
+  const compilerSeesFile = (file: string): boolean => compilerProjectOf === null || compilerProjectOf(file) !== null;
+  const compilerSeesReference = (definition: IndexedDefinition, file: string): boolean =>
+    compilerProjectOf === null || compilerProjectOf(file) === compilerProjectOf(definition.relativePath);
   const sourceOracle = oracleKind === 'source' ? buildClojureSourceOracle(db, index, sampled) : null;
   for (const definition of sampled) {
     const oracleRefs = crossFileSet(
@@ -167,7 +172,7 @@ export function selfAudit(
       oracleRefs,
       referencesComplete,
       disagreements,
-      compilerSees,
+      (file) => compilerSeesReference(definition, file),
     );
     scoreQuestion(
       tallies.callees,
@@ -177,7 +182,7 @@ export function selfAudit(
       oracleCals,
       calleesComplete,
       disagreements,
-      compilerSees,
+      compilerSeesFile,
     );
     scoreQuestion(
       tallies.renders,
@@ -187,7 +192,7 @@ export function selfAudit(
       oracleRenders,
       rendersComplete,
       disagreements,
-      compilerSees,
+      compilerSeesFile,
     );
   }
 

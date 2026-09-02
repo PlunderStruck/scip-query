@@ -6,6 +6,27 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [0.24.0]
 
+### Wrapper, passthrough, and twin-drift findings reviewed against source
+
+- A wrapper is `forwarding`-shaped only when its body is exactly one call
+  with plain-value arguments; a preparatory statement, a callback, a nested
+  call, or a literal the body builds now makes it a helper (signal tier, not
+  counted by health). The two-statement allowance had classified computed
+  keys, reductions, and two-step operations as inline advice.
+- Boundary-term evidence for wrappers and passthroughs uses leaf names
+  instead of path-qualified short names, so a directory both sides live in
+  (`lib/auth/`, `social-providers/`) no longer reads as a boundary, and a
+  term present on both sides (`toBaseRate` forwarding to `parseBaseRate`)
+  is shared vocabulary rather than a reason to demote the finding.
+- A twin-drift member that calls its same-name counterpart (an operations
+  function over its use-case, a component over the function it renders)
+  is a layer, not a parallel implementation; the delegation exclusion no
+  longer requires the caller to be a thin forwarder, and an aliased import
+  of the counterpart counts only under its alias.
+- Reviewed label sets for the three detectors on `launchpoint-backend`
+  live under `docs/validation/labels/launchpoint-backend/`; the label
+  scorer understands the `direct | signal` tier vocabulary.
+
 ### The semantic worker loads one compiler project at a time
 
 - Compiler projects are built lazily: a tsconfig's project exists only once a

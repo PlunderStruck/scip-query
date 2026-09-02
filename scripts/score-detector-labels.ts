@@ -102,11 +102,18 @@ export function scoreLabels(labelSet: DetectorLabelSet, dump: unknown): LabelSco
   const rows = dumpRows(dump);
   // A row reported at support tier is visible but not a finding; count it
   // apart so a demotion reads as neither a hit nor a miss.
+  // Detectors name their tiers two ways: `signal | support` (signal is the
+  // finding) and `direct | signal` (direct is the finding, signal the demoted
+  // review lead). When a dump carries any `direct` row, its `signal` rows are
+  // the demoted ones.
+  const directVocabulary = rows.some((row) => row['actionTier'] === 'direct');
   const tiers = new Map<string, 'signal' | 'support'>();
   for (const row of rows) {
     const id = rowIdentity(labelSet.identity, row);
     if (!id) continue;
-    const tier = row['actionTier'] === 'support' ? 'support' : 'signal';
+    const actionTier = row['actionTier'];
+    const demoted = actionTier === 'support' || (directVocabulary && actionTier === 'signal');
+    const tier = demoted ? 'support' : 'signal';
     if (tiers.get(id) !== 'signal') tiers.set(id, tier);
   }
   const present: Record<LabelVerdict, number> = { true: 0, false: 0, uncertain: 0 };

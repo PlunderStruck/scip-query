@@ -131,3 +131,58 @@ service requests), against a heap-limit crash before.
 `self-audit --samples 100` on the same index with the complete-oracle rule:
 references precision 1.0 / recall 1.0; callees precision 0.988 / recall 1.0
 over 100 compared symbols (none skipped); renders precision 1.0 / recall 1.0.
+
+## Wrappers, passthroughs, and twin drift reviewed (same day, later)
+
+Twenty rows of each detector, sampled from the full list with seed 11 (ten
+direct-tier and ten signal-tier rows for wrappers and passthroughs, twenty
+divergent groups for twin drift), were read in source on the VM and labeled
+under `docs/validation/labels/launchpoint-backend/`. The first scoring found
+three detector rules at fault, none specific to this repository:
+
+| Detector               | Before                                          | Rule at fault                                                                                                                                                            | After                                                                                               |
+| ---------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| wrapper-candidates     | direct tier: 0 true, 5 false, 5 uncertain       | the `forwarding` shape allowed a preparatory statement, callbacks, nested calls, and built literals (a map/sort/slice chain, `JSON.stringify([...])`, two awaited steps) | direct tier: 0 false, 4 uncertain; the five computations are helper-shaped signal rows, not counted |
+| passthrough-candidates | precision 0.714 (4 true rows demoted to signal) | boundary terms came from path-qualified names (`social-providers/`, `lib/auth/`) and from tokens both sides share (`rate`, `pool`, `transaction`)                        | precision 1.0 / recall 1.0; facades and the logger method stay signal                               |
+| twin-drift             | precision 0.684 (443 groups)                    | the delegation exclusion required a thin forwarder, so an operations function over its use-case and a component over the function it renders were twins                  | precision 0.765 / recall 1.0 (422 groups; 21 layering groups gone)                                  |
+
+The four twin-drift groups still labeled false share a name by convention
+only (`printReport` across three scripts, `emptyCounts`, `sumOf`, a
+per-logger `nextTraceFields`); their token similarity comes from structure
+(`console.log`, `return { ...: 0 }`), not shared identifiers. An
+identifier-weighted similarity would separate them but also drops two true
+groups (`Spinner`, `PlatformBadge`) whose bodies share a concept and few
+identifiers, so it is recorded as a lead rather than changed.
+
+`self-audit --samples 60` on Vega under the per-project coverage rule:
+references precision 1.0 / recall 1.0; callees 1.0 / 0.967; renders 1.0 / 1.0.
+
+## Full health under the 0.24.0 release build (same day, evening)
+
+Cold report cache, `health --full`, package built from the release tree
+(tarball digest `52f90fa09a05…`), checkout `3ca18e944` on the other agent's
+`regression-testing-part-2` branch with 23 uncommitted paths, index
+generation `8d611d5518f7`. Two runs, identical findings: 131 s at 2.6 GB
+resident with a cold semantic cache, then 63 s with it warm.
+
+| Axis                   | Count                                                   |
+| ---------------------- | ------------------------------------------------------- |
+| Score                  | 66 / 100 (risk 87, hygiene 66)                          |
+| Dead code              | 65 symbols (2,782 entry-surface, 86 generated excluded) |
+| Similar pairs          | 204                                                     |
+| Drifted twins          | 536 groups                                              |
+| React duplicates       | 28 pairs                                                |
+| React hook reuse       | 52 pairs (31.5 weighted)                                |
+| React large components | 263                                                     |
+| Extract candidates     | 417 signal (589 wide-interface excluded)                |
+| Wrapper functions      | 43 (28.75 weighted; 645 helper-shaped excluded)         |
+| Passthroughs           | 128                                                     |
+| Stale abstractions     | 776                                                     |
+| Complexity hotspots    | 192                                                     |
+
+Against the morning run: wrappers 43 counted where the forwarding shape
+previously admitted helper bodies, twins 536 against 554 (layering groups
+gone; the checkout also moved), extraction 417 against 483 (the eight-line
+minimum and own-return rule). The `Input:` line now names the generation,
+commit, branch, and dirty-path count, so a later comparison can tell a
+detector change from a repository change.

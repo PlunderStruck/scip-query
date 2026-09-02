@@ -288,6 +288,23 @@ export function leafName(raw: string): string {
   return last.name;
 }
 
+/**
+ * The leaf name qualified by its enclosing type when it has one
+ * (`BaseLogger log`, `StatusBadgeRelay normalizeBadgeStatus`); a free function
+ * is its leaf alone. Package, directory, and file descriptors are never
+ * included, so a detector reading names for vocabulary does not see the
+ * directory a symbol lives in.
+ */
+export function ownerQualifiedLeafName(raw: string): string {
+  const parsed = parseSymbol(raw);
+  if ('kind' in parsed && parsed.kind === 'local') return parsed.id;
+  const descriptors = (parsed as ScipSymbol).descriptors;
+  const last = descriptors[descriptors.length - 1];
+  if (!last) return '';
+  const owner = descriptors[descriptors.length - 2];
+  return owner && owner.suffix === 'type' ? `${owner.name} ${last.name}` : last.name;
+}
+
 /** Return the suffix of the last descriptor, if the symbol parsed cleanly. */
 export function leafSuffix(raw: string): DescriptorSuffix | null {
   const parsed = parseSymbol(raw);

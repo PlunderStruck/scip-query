@@ -1,5 +1,5 @@
 {
-  "digest": "ba2c212d7308f4c1b150176621860d429632ede29f4edcb1f46c4aa6de976729",
+  "digest": "586e3752383a4285f492e118170817c5342b599cf6e8535ba4774f3920226172",
   "kind": "scip-query-api-manifest",
   "schemaVersion": 1,
   "surface": {
@@ -181,7 +181,7 @@
           {
             "kind": "type",
             "name": "AuditQuestionScore",
-            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    completeOracleSymbols: number;\n    cheapSources: Record<string, number>;\n}"
+            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    completeOracleSymbols: number;\n    outsideOracleCoverage: number;\n    cheapSources: Record<string, number>;\n}"
           },
           {
             "kind": "type",
@@ -3994,7 +3994,7 @@
           {
             "kind": "type",
             "name": "AuditQuestionScore",
-            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    completeOracleSymbols: number;\n    cheapSources: Record<string, number>;\n}"
+            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    completeOracleSymbols: number;\n    outsideOracleCoverage: number;\n    cheapSources: Record<string, number>;\n}"
           },
           {
             "kind": "type",
@@ -6581,7 +6581,7 @@
         "types": "dist/queries/refs.d.ts"
       },
       "./queries/self-audit": {
-        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ntype AuditQuestion = 'references' | 'callees' | 'renders';\n\ntype AuditOracleKind = 'semantic' | 'source';\n\ninterface AuditDisagreement {\n    symbol: string;\n    question: AuditQuestion;\n    cheapOnly: string[];\n    oracleOnly: string[];\n}\n\ninterface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    completeOracleSymbols: number;\n    cheapSources: Record<string, number>;\n}\n\ninterface SelfAuditResult {\n    available: boolean;\n    sampleSize: number;\n    oracleCoverage: number;\n    oracleKind?: AuditOracleKind;\n    scores: AuditQuestionScore[];\n    topDisagreements: AuditDisagreement[];\n}\n\ndeclare function selfAudit(db: ScipDatabase, opts?: {\n    samples?: number;\n    scope?: string;\n    maxDisagreements?: number;\n}): SelfAuditResult;\n\nexport { type AuditDisagreement, type AuditOracleKind, type AuditQuestion, type AuditQuestionScore, selfAudit, type SelfAuditResult };\n",
+        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ntype AuditQuestion = 'references' | 'callees' | 'renders';\n\ntype AuditOracleKind = 'semantic' | 'source';\n\ninterface AuditDisagreement {\n    symbol: string;\n    question: AuditQuestion;\n    cheapOnly: string[];\n    oracleOnly: string[];\n}\n\ninterface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    completeOracleSymbols: number;\n    outsideOracleCoverage: number;\n    cheapSources: Record<string, number>;\n}\n\ninterface SelfAuditResult {\n    available: boolean;\n    sampleSize: number;\n    oracleCoverage: number;\n    oracleKind?: AuditOracleKind;\n    scores: AuditQuestionScore[];\n    topDisagreements: AuditDisagreement[];\n}\n\ndeclare function selfAudit(db: ScipDatabase, opts?: {\n    samples?: number;\n    scope?: string;\n    maxDisagreements?: number;\n}): SelfAuditResult;\n\nexport { type AuditDisagreement, type AuditOracleKind, type AuditQuestion, type AuditQuestionScore, selfAudit, type SelfAuditResult };\n",
         "exports": [
           {
             "kind": "type",
@@ -6601,7 +6601,7 @@
           {
             "kind": "type",
             "name": "AuditQuestionScore",
-            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    completeOracleSymbols: number;\n    cheapSources: Record<string, number>;\n}"
+            "signature": "interface AuditQuestionScore {\n    question: AuditQuestion;\n    comparedSymbols: number;\n    precision: number | null;\n    recall: number;\n    unverified: number;\n    skippedOraclePartial: number;\n    completeOracleSymbols: number;\n    outsideOracleCoverage: number;\n    cheapSources: Record<string, number>;\n}"
           },
           {
             "kind": "function",
@@ -7533,7 +7533,7 @@
         "types": "dist/queries/twin-ab.d.ts"
       },
       "./queries/twin-drift": {
-        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ntype TwinRelationship = 'identical' | 'divergent' | 'homonym';\n\ninterface TwinMember {\n    symbol: string;\n    shortName: string;\n    file: string;\n    startLine: number;\n    endLine: number;\n    loc: number;\n}\n\ninterface TwinGroup {\n    leaf: string;\n    relationship: TwinRelationship;\n    maxDivergence: number;\n    members: TwinMember[];\n    firstDivergentTokens?: string;\n}\n\ninterface TwinDriftRecord {\n    leaf: string;\n    symbol: string;\n    shortName: string;\n    file: string;\n    startLine: number;\n    endLine: number;\n    loc: number;\n    normalizedBody: string;\n    tokens: readonly string[];\n    isThinForwarder: boolean;\n}\n\ndeclare function twinDrift(db: ScipDatabase, opts?: {\n    scope?: string;\n    minSimilarity?: number;\n    includeHomonyms?: boolean;\n    limit?: number;\n    scanLimit?: number;\n}): TwinGroup[];\n\ndeclare function allTwinGroups(db: ScipDatabase, opts?: {\n    scope?: string;\n    minSimilarity?: number;\n    scanLimit?: number;\n}): TwinGroup[];\n\ndeclare function groupTwins(records: readonly TwinDriftRecord[], opts?: {\n    minSimilarity?: number;\n    isDelegatePair?: (from: TwinDriftRecord, to: TwinDriftRecord, clusterMembers: readonly TwinDriftRecord[]) => boolean;\n}): TwinGroup[];\n\ndeclare function isThinForwarderBody(rawSnippet: string): boolean;\n\ndeclare function splitTopLevelStatements(body: string): string[];\n\nexport { allTwinGroups, groupTwins, isThinForwarderBody, splitTopLevelStatements, twinDrift, type TwinDriftRecord, type TwinGroup, type TwinMember, type TwinRelationship };\n",
+        "declaration": "import { S as ScipDatabase } from \"../db-<hash>.js\";\n\nimport \"better-sqlite3\";\n\nimport \"../config-types-<hash>.js\";\n\ntype TwinRelationship = 'identical' | 'divergent' | 'homonym';\n\ninterface TwinMember {\n    symbol: string;\n    shortName: string;\n    file: string;\n    startLine: number;\n    endLine: number;\n    loc: number;\n}\n\ninterface TwinGroup {\n    leaf: string;\n    relationship: TwinRelationship;\n    maxDivergence: number;\n    members: TwinMember[];\n    firstDivergentTokens?: string;\n}\n\ninterface TwinDriftRecord {\n    leaf: string;\n    symbol: string;\n    shortName: string;\n    file: string;\n    startLine: number;\n    endLine: number;\n    loc: number;\n    normalizedBody: string;\n    tokens: readonly string[];\n    isThinForwarder: boolean;\n}\n\ndeclare function twinDrift(db: ScipDatabase, opts?: {\n    scope?: string;\n    minSimilarity?: number;\n    includeHomonyms?: boolean;\n    limit?: number;\n    scanLimit?: number;\n}): TwinGroup[];\n\ndeclare function allTwinGroups(db: ScipDatabase, opts?: {\n    scope?: string;\n    minSimilarity?: number;\n    scanLimit?: number;\n}): TwinGroup[];\n\ndeclare function groupTwins(records: readonly TwinDriftRecord[], opts?: {\n    minSimilarity?: number;\n    isDelegatePair?: (from: TwinDriftRecord, to: TwinDriftRecord, clusterMembers: readonly TwinDriftRecord[]) => boolean;\n}): TwinGroup[];\n\ndeclare function isThinForwarderBody(rawSnippet: string): boolean;\n\ndeclare function isSingleForwardingCallBody(rawSnippet: string): boolean;\n\ndeclare function splitTopLevelStatements(body: string): string[];\n\nexport { allTwinGroups, groupTwins, isSingleForwardingCallBody, isThinForwarderBody, splitTopLevelStatements, twinDrift, type TwinDriftRecord, type TwinGroup, type TwinMember, type TwinRelationship };\n",
         "exports": [
           {
             "kind": "function",
@@ -7544,6 +7544,11 @@
             "kind": "function",
             "name": "groupTwins",
             "signature": "declare function groupTwins(records: readonly TwinDriftRecord[], opts?: {\n    minSimilarity?: number;\n    isDelegatePair?: (from: TwinDriftRecord, to: TwinDriftRecord, clusterMembers: readonly TwinDriftRecord[]) => boolean;\n}): TwinGroup[];"
+          },
+          {
+            "kind": "function",
+            "name": "isSingleForwardingCallBody",
+            "signature": "declare function isSingleForwardingCallBody(rawSnippet: string): boolean;"
           },
           {
             "kind": "function",

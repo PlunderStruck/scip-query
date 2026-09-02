@@ -14,7 +14,7 @@ describe('wrapper-candidates', () => {
     for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
   });
 
-  it('reports a tiny wrapper whose sole caller has broad fan-in', () => {
+  function singleConsumerFixture(normalizeBody: readonly string[]): ScipDatabase {
     const root = mkdtempSync(join(tmpdir(), 'scip-wrapper-candidates-'));
     tempDirs.push(root);
     writeFixtureFiles(root, {
@@ -22,7 +22,7 @@ describe('wrapper-candidates', () => {
         'package fixture;',
         'public final class NormalizeRelay {',
         '  public static String normalize(String raw) {',
-        '    return raw.trim();',
+        ...normalizeBody,
         '  }',
         '}',
       ],
@@ -89,7 +89,11 @@ describe('wrapper-candidates', () => {
       dbPath,
       indexPath: join(root, 'index.scip'),
     };
-    const db = new ScipDatabase(config);
+    return new ScipDatabase(config);
+  }
+
+  it('reports a tiny wrapper whose sole caller has broad fan-in', () => {
+    const db = singleConsumerFixture(['    return Normalizer.normalize(raw);']);
     try {
       expect(wrapperCandidates(db, { limit: 10, semantic: false })).toEqual(
         expect.arrayContaining([
@@ -98,6 +102,24 @@ describe('wrapper-candidates', () => {
             singleCallerShort: expect.stringContaining('render'),
             callerFanIn: 4,
             bodyShape: 'forwarding',
+          }),
+        ]),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('keeps a single-consumer callable that prepares its argument as a helper-shaped signal', () => {
+    const db = singleConsumerFixture(['    String key = raw.trim();', '    return Normalizer.normalize(key);']);
+    try {
+      expect(wrapperCandidates(db, { limit: 10, semantic: false })).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            shortName: expect.stringContaining('normalize'),
+            bodyShape: 'helper',
+            actionTier: 'signal',
+            boundaryEvidence: expect.arrayContaining(['body computes or branches rather than forwarding one call']),
           }),
         ]),
       );

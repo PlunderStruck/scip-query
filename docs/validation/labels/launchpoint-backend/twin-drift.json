@@ -1,0 +1,109 @@
+{
+  "detector": "twin-drift",
+  "repository": "launchpoint-backend",
+  "identity": "group",
+  "reviewed": "2026-09-02",
+  "note": "Sampled 20 divergent groups from the full list (seed 11) and read every member body. True means the members implement the same concept and have drifted; false means coincidental name reuse, a layering pair where one member calls the other, or a per-class convention method; uncertain means the same concept implemented from different sources.",
+  "labels": [
+    {
+      "id": "Spinner|src/app/(authenticated)/onboarding/onboarding-client.tsx,src/components/ui/spinner.tsx",
+      "verdict": "true",
+      "reason": "an onboarding-local full-screen spinner beside the shared ui spinner; parallel implementations"
+    },
+    {
+      "id": "getOrCreateCampaignParent|src/lib/social-providers/migration/queries.ts,src/scripts/repair-instagram-zero-view-submissions.ts",
+      "verdict": "true",
+      "reason": "migration query and repair script both create campaign parents with drifted lookups"
+    },
+    {
+      "id": "guardCampaign|src/scripts/repair-higgsfield-deleted-post-makewhole.ts,src/scripts/repair-higgsfield-mature-topup.ts",
+      "verdict": "true",
+      "reason": "two repair scripts with the same guard and drifted messages"
+    },
+    {
+      "id": "responseError|src/app/(authenticated)/(dashboard)/admin/live-clusters/LiveClusterReviewClient.tsx,src/react-query-client/queries/campaigns/use-campaign-links-query.ts",
+      "verdict": "true",
+      "reason": "identical helpers with different error schemas"
+    },
+    {
+      "id": "getCreatorProfiles|src/lib/campaign-insights/needs-attention.ts,src/lib/public-api/v1/creator-profile.ts",
+      "verdict": "uncertain",
+      "reason": "same name and return shape but different sources (users table vs Firebase); parallel by concept, not by code"
+    },
+    {
+      "id": "PlatformBadge|src/app/(authenticated)/(dashboard)/admin/dedup-labels/DedupLabelClient.tsx,src/app/(authenticated)/(dashboard)/admin/platform-videos/PlatformVideosClient.tsx",
+      "verdict": "true",
+      "reason": "two admin badge components for the same concept"
+    },
+    {
+      "id": "getAcceptedOfferGroups|src/app/components/AthleteInvestigation/OffersSection.tsx,src/lib/fin-support/creator-status.ts",
+      "verdict": "true",
+      "reason": "near-identical grouping helpers"
+    },
+    {
+      "id": "nextTraceFields|src/lib/observability/loggers/campaign-validation.ts,src/lib/observability/loggers/import-post.ts",
+      "verdict": "false",
+      "reason": "per-logger private method with logger-specific fields; a convention, not drift"
+    },
+    {
+      "id": "summarizeValue|src/app/api/v2/oauth/[provider]/app-callback/route.ts,src/app/api/v2/oauth/[provider]/callback/route.ts,src/lib/social-accounts/sentry.ts",
+      "verdict": "true",
+      "reason": "two identical copies plus one drifted variant"
+    },
+    {
+      "id": "printReport|src/scripts/backfill-deadline-removal-close-reasons.ts,src/scripts/repair-the-now-source-content-types.ts,src/scripts/sideshift-unpaid.ts",
+      "verdict": "false",
+      "reason": "script report printers that share only the name"
+    },
+    {
+      "id": "scopeClientIds|src/lib/analytics/read-model/creator-entities.ts,src/lib/creators/read-model/scope.ts",
+      "verdict": "true",
+      "reason": "two implementations of the same scope resolution with drifted agency handling"
+    },
+    {
+      "id": "getBoostDestinationCandidates|src/lib/boosts/core/use-cases/destinations.ts,src/lib/boosts/operations/destinations.ts",
+      "verdict": "false",
+      "reason": "the operations function calls the use-case; layering, not twins"
+    },
+    {
+      "id": "ManualPayoutViewFreshness|src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/creators/ManualPayoutViewFreshness.tsx,src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/ui/creators/manual-payout-view-freshness.ts",
+      "verdict": "false",
+      "reason": "a function and the component that calls it, grouped by case-insensitive leaf"
+    },
+    {
+      "id": "resolveCampaignAgencyClientId|src/lib/campaigns/campaign-agency.ts,src/lib/campaigns/enrollment/service.ts",
+      "verdict": "true",
+      "reason": "singular and plural variants resolve the agency client with different management checks"
+    },
+    {
+      "id": "sumOf|src/lib/boosts/core/campaign-paid-summary.ts,src/scripts/sideshift-unpaid.ts",
+      "verdict": "false",
+      "reason": "a generic reducer and a script-local sum share only the name"
+    },
+    {
+      "id": "engagementRate|src/lib/analytics/performance/audience.ts,src/lib/public-api/v1/posts.ts",
+      "verdict": "true",
+      "reason": "same formula with drifted rounding and return type"
+    },
+    {
+      "id": "emptyCounts|src/lib/campaigns/warmup/account-owner-repair.ts,src/lib/campaigns/warmup/proof-link-repair.ts,src/scripts/repair-facebook-merged-duplicate-post-owners.ts",
+      "verdict": "false",
+      "reason": "status-count initializers for unrelated record types"
+    },
+    {
+      "id": "b64url|src/lib/boosts/http/oauth-state.ts,src/lib/campaign-analytics-report/password.ts,src/lib/funnel-reactivation/unsubscribe-token.ts,src/lib/oauth/state.ts,src/lib/offer-claim-links/tokens.ts",
+      "verdict": "true",
+      "reason": "five copies of the same encoder"
+    },
+    {
+      "id": "getNextActionForVideo|src/lib/admin/creator-investigation/queries.ts,src/lib/campaigns/creator-read/http/mobile-campaign-response.ts",
+      "verdict": "true",
+      "reason": "admin and mobile next-action logic diverged"
+    },
+    {
+      "id": "parseCarouselMediaUrls|src/lib/campaigns/canvas-creator-application.ts,src/lib/campaigns/videos/canvas-draft-autoreview.ts,src/lib/campaigns/videos/listing.ts",
+      "verdict": "true",
+      "reason": "three parsers of the same schema with drifted null and error handling"
+    }
+  ]
+}

@@ -5,7 +5,7 @@ import { isPackageSurfaceFile } from '../../analysis/package-surface.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { isClojureMacroDefinition, isLiteralPassthrough } from '../../source/ast.js';
 import type { IndexedDefinition } from '../../domain/types.js';
-import { isFunctionLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
+import { isFunctionLikeSymbol, ownerQualifiedLeafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { compareDefinitionsBySmallestLoc, definitionLoc } from '../query-utils.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
@@ -135,11 +135,15 @@ function passthroughBoundaryEvidence(
     sym.startLine,
     'passthrough',
     'explicit ignore-passthrough comment',
+    // Owner-qualified leaf names only: the path-qualified short name would
+    // leak directory tokens (`social-providers/`, `lib/auth/`) into the name
+    // surface, and a directory both sides live in is not a boundary between
+    // them; an enclosing class (`BaseLogger`) still counts.
     [
-      { label: 'passthrough name', value: shortenSymbol(sym.symbol) },
-      { label: 'callee name', value: shortenSymbol(callee.symbol) },
-      { label: 'passthrough module', value: basename(sym.relativePath, extname(sym.relativePath)) },
-      { label: 'callee module', value: basename(callee.file, extname(callee.file)) },
+      { label: 'passthrough name', value: ownerQualifiedLeafName(sym.symbol), side: 'self' },
+      { label: 'callee name', value: ownerQualifiedLeafName(callee.symbol), side: 'other' },
+      { label: 'passthrough module', value: basename(sym.relativePath, extname(sym.relativePath)), side: 'self' },
+      { label: 'callee module', value: basename(callee.file, extname(callee.file)), side: 'other' },
     ],
   );
 }

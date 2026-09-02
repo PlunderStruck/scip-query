@@ -1,0 +1,37 @@
+{
+  "acceptedAt": "2026-09-02T21:55:09.002Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "586e3752383a4285f492e118170817c5342b599cf6e8535ba4774f3920226172",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AuditQuestionScore changed from interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; comp... to interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; comp....",
+      "target": "./queries:AuditQuestionScore"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AuditQuestionScore changed from interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; comp... to interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; comp....",
+      "target": "./queries/index:AuditQuestionScore"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "AuditQuestionScore changed from interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; comp... to interface AuditQuestionScore { question: AuditQuestion; comparedSymbols: number; precision: number | null; recall: number; unverified: number; skippedOraclePartial: number; comp....",
+      "target": "./queries/self-audit:AuditQuestionScore"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export isSingleForwardingCallBody.",
+      "target": "./queries/twin-drift:isSingleForwardingCallBody"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.24.0",
+  "previousDigest": "ba2c212d7308f4c1b150176621860d429632ede29f4edcb1f46c4aa6de976729",
+  "reason": "AuditQuestionScore gains outsideOracleCoverage (cheap answers the definition's compiler project cannot verify) and twin-drift exports isSingleForwardingCallBody for the wrapper forwarding shape",
+  "schemaVersion": 1
+}

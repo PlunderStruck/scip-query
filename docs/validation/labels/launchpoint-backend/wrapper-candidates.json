@@ -1,0 +1,109 @@
+{
+  "detector": "wrapper-candidates",
+  "repository": "launchpoint-backend",
+  "identity": "symbol",
+  "reviewed": "2026-09-02",
+  "note": "Sampled 10 direct-tier and 10 signal-tier rows from the full list (seed 11) and read each body with its single caller. True means a reviewer would inline the wrapper into its only consumer; false means the body has its own logic or owns a boundary; uncertain means a pure forward whose name carries domain meaning.",
+  "labels": [
+    {
+      "id": "src/lib/bug-mining/grouping.ts#src:lib:bug-mining:grouping:meanClosestMemberSimilarity()",
+      "verdict": "false",
+      "reason": "map, sort, slice chain then mean; a computation with a named threshold, not a forward"
+    },
+    {
+      "id": "src/lib/campaigns/creator-slot-filters.ts#src:lib:campaigns:creator-slot-filters:isCreatorVideoNotQuitSql()",
+      "verdict": "uncertain",
+      "reason": "named SQL predicate over one isNull call; inlining loses the filter vocabulary"
+    },
+    {
+      "id": "src/lib/social-accounts/repository.ts#src:lib:social-accounts:repository:switchMainAccount()",
+      "verdict": "uncertain",
+      "reason": "names the AccountSwitch cleanup mode of unlinkMainAccount; a forward with a constant"
+    },
+    {
+      "id": "src/lib/creators/roster-metrics.ts#src:lib:creators:roster-metrics:consistencyTotal()",
+      "verdict": "false",
+      "reason": "reduce with an inline lambda is a computation, not a forward"
+    },
+    {
+      "id": "src/trigger/social/canvas-view-bonus-refresh.trigger.ts#src:trigger:social:canvas-view-bonus-refresh.trigger:canvasRefreshTargetKey()",
+      "verdict": "false",
+      "reason": "builds a JSON key from three fields; the key format is the point of the function"
+    },
+    {
+      "id": "src/lib/support-agents/operations/intake.ts#src:lib:support-agents:operations:intake:enqueueDiscordSupportHandoff()",
+      "verdict": "false",
+      "reason": "two awaited steps (idempotency key, then task trigger); not a thin forward"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/model/creator-post.ts#src:app:(authenticated):(dashboard):campaigns:[id]:campaign-detail:model:creator-post:getDeletedPostPublishedAt()",
+      "verdict": "uncertain",
+      "reason": "named variant of earliestLinkedSubmissionDate with a status constant; paired with getLivePostPublishedAt"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/campaigns/[id]/campaign-detail/model/creator-post.ts#src:app:(authenticated):(dashboard):campaigns:[id]:campaign-detail:model:creator-post:getLivePostPublishedAt()",
+      "verdict": "uncertain",
+      "reason": "named variant of earliestLinkedSubmissionDate with a status constant; paired with getDeletedPostPublishedAt"
+    },
+    {
+      "id": "src/lib/media/media-gallery-sql.ts#src:lib:media:media-gallery-sql:buildMediaGalleryHydrationQuery()",
+      "verdict": "false",
+      "reason": "derives query needs and then builds the hydration; two steps"
+    },
+    {
+      "id": "src/lib/campaigns/import-unlinked/operations/import-graph.ts#src:lib:campaigns:import-unlinked:operations:import-graph:prepareImportMedia()",
+      "verdict": "uncertain",
+      "reason": "composes prepareImportSource then processImportMedia for one caller; the name documents the stage"
+    },
+    {
+      "id": "src/lib/user/queries.ts#src:lib:user:queries:createBioLink()",
+      "verdict": "false",
+      "reason": "data-access helper that owns the insert; the repository layer is the boundary"
+    },
+    {
+      "id": "src/lib/validate/creator-facing-feedback.ts#src:lib:validate:creator-facing-feedback:getCreatorFacingStoredErrorFeedback()",
+      "verdict": "false",
+      "reason": "branching copy mapping"
+    },
+    {
+      "id": "src/lib/contract-esign/blocks.ts#src:lib:contract-esign:blocks:parseResolvedContractBlocks()",
+      "verdict": "false",
+      "reason": "safeParse with a null fallback; a parse helper"
+    },
+    {
+      "id": "src/lib/support-agents/discord-poll/identity.ts#src:lib:support-agents:discord-poll:identity:resolveDiscordActor()",
+      "verdict": "false",
+      "reason": "fetch then classify; two steps"
+    },
+    {
+      "id": "src/lib/boosts/core/model.ts#src:lib:boosts:core:model:requireConnectedBoostIntegration()",
+      "verdict": "false",
+      "reason": "guard that throws and narrows the type"
+    },
+    {
+      "id": "src/lib/campaigns/relink/audit/core/tiers.ts#src:lib:campaigns:relink:audit:core:tiers:weakerTier()",
+      "verdict": "false",
+      "reason": "ordering computation"
+    },
+    {
+      "id": "src/lib/economics/campaigns/earnings/queries/manual-payout-offer-payouts.ts#src:lib:economics:campaigns:earnings:queries:manual-payout-offer-payouts:findBlockingManualPayoutHold()",
+      "verdict": "false",
+      "reason": "find with a status predicate"
+    },
+    {
+      "id": "src/lib/campaigns/import-unlinked/operations/bulk-import.ts#src:lib:campaigns:import-unlinked:operations:bulk-import:paidOffPlatformMarkedByLabel()",
+      "verdict": "false",
+      "reason": "branching label builder"
+    },
+    {
+      "id": "src/lib/economics/campaigns/earnings/queries/read-models.ts#src:lib:economics:campaigns:earnings:queries:read-models:matchOfferPayoutCompensationId()",
+      "verdict": "false",
+      "reason": "branching SQL predicate"
+    },
+    {
+      "id": "src/components/media-uploader/copy.ts#src:components:media-uploader:copy:removeMediaUploadCopy()",
+      "verdict": "false",
+      "reason": "copy catalog entry"
+    }
+  ]
+}

@@ -66,7 +66,7 @@ const handleSelfAudit = dbCommand(({ db, args, opts }) => {
     );
     if (score.outsideOracleCoverage > 0) {
       console.log(
-        `${' '.repeat(14)}${score.outsideOracleCoverage} cheap answer(s) in files outside every compiler project (unverifiable, not counted)`,
+        `${' '.repeat(14)}${score.outsideOracleCoverage} cheap answer(s) outside the oracle's compiler project (unverifiable, not counted)`,
       );
     }
     const sources = Object.entries(score.cheapSources).sort((left, right) => right[1] - left[1]);

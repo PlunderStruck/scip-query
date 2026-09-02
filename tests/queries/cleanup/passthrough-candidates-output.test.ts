@@ -46,11 +46,21 @@ function withPassthroughFixture(run: (db: ScipDatabase) => void): void {
         '  return deleteHorseImpl(name);',
         '}',
       ],
+      'src/auth/rates.ts': [
+        'export function toBaseRate(raw: string) {',
+        '  return parseBaseRate(raw);',
+        '}',
+        '',
+        'function parseBaseRate(raw: string) {',
+        '  return raw.length;',
+        '}',
+      ],
     });
 
     evidenceFixtureDb(dbPath)
       .document(1, 'typescript', 'src/passthrough.ts')
       .document(2, 'typescript', 'src/contracts.ts')
+      .document(3, 'typescript', 'src/auth/rates.ts')
       .symbol(
         1,
         'scip-typescript npm fixture 1.0.0 src/`passthrough.ts`/storageAdapterDelete().',
@@ -63,6 +73,8 @@ function withPassthroughFixture(run: (db: ScipDatabase) => void): void {
       .symbol(5, 'scip-typescript npm fixture 1.0.0 src/`contracts.ts`/deleteHorse().', 'deleteHorse', 6)
       .symbol(6, 'scip-typescript npm fixture 1.0.0 src/`contracts.ts`/deleteHorseImpl().', 'deleteHorseImpl', 6)
       .symbol(7, 'scip-typescript npm fixture 1.0.0 src/`contracts.ts`/forwardHorse().', 'forwardHorse', 6)
+      .symbol(8, 'scip-typescript npm fixture 1.0.0 src/auth/`rates.ts`/toBaseRate().', 'toBaseRate', 6)
+      .symbol(9, 'scip-typescript npm fixture 1.0.0 src/auth/`rates.ts`/parseBaseRate().', 'parseBaseRate', 6)
       .definition(1, 1, 1, 0, 0, 2, 1)
       .definition(2, 1, 2, 4, 0, 6, 1)
       .definition(3, 1, 3, 8, 0, 10, 1)
@@ -70,6 +82,8 @@ function withPassthroughFixture(run: (db: ScipDatabase) => void): void {
       .definition(5, 2, 5, 0, 0, 2, 1)
       .definition(6, 2, 6, 4, 0, 6, 1)
       .definition(7, 2, 7, 8, 0, 10, 1)
+      .definition(8, 3, 8, 0, 0, 2, 1)
+      .definition(9, 3, 9, 4, 0, 6, 1)
       .chunk(1, 1, 0, 2)
       .chunk(2, 1, 4, 6, 1)
       .chunk(3, 1, 8, 10, 2)
@@ -77,6 +91,8 @@ function withPassthroughFixture(run: (db: ScipDatabase) => void): void {
       .chunk(5, 2, 0, 2)
       .chunk(6, 2, 4, 6, 1)
       .chunk(7, 2, 8, 10, 2)
+      .chunk(8, 3, 0, 2)
+      .chunk(9, 3, 4, 6, 1)
       .mention(1, 1, 1)
       .mention(1, 2, 0)
       .mention(2, 2, 1)
@@ -88,6 +104,9 @@ function withPassthroughFixture(run: (db: ScipDatabase) => void): void {
       .mention(6, 6, 1)
       .mention(7, 7, 1)
       .mention(7, 6, 0)
+      .mention(8, 8, 1)
+      .mention(8, 9, 0)
+      .mention(9, 9, 1)
       .write();
 
     const config: ScipQueryConfig = {
@@ -154,9 +173,21 @@ describe('passthroughCandidates output classification', () => {
         recommendation: expect.stringContaining('Inline or remove this passthrough'),
       });
 
+      // `toBaseRate` and `parseBaseRate` share the `rate` token, and `auth`
+      // is the directory both live in: shared vocabulary and a shared path
+      // are not a boundary between the forward and its target.
+      const sharedVocabulary = results.find((result) => result.shortName.endsWith('toBaseRate()'));
+      expect(sharedVocabulary).toBeDefined();
+      expect(sharedVocabulary).toMatchObject({
+        actionTier: 'direct',
+        forwardsToShort: 'src:auth:rates:parseBaseRate()',
+        boundaryEvidence: [],
+        publicFacadeEvidence: [],
+      });
+
       const report = health(db);
       const passthroughScore = report.scoreBreakdown.find((deduction) => deduction.axis === 'passthroughs');
-      expect(passthroughScore?.detail).toContain('4 passthrough candidate(s) (2.5 score-weighted)');
+      expect(passthroughScore?.detail).toContain('5 passthrough candidate(s) (3.5 score-weighted)');
     });
   });
 });

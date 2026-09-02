@@ -1,0 +1,109 @@
+{
+  "detector": "passthrough-candidates",
+  "repository": "launchpoint-backend",
+  "identity": "symbol",
+  "reviewed": "2026-09-02",
+  "note": "Sampled 10 direct-tier and 10 signal-tier rows from the full list (seed 11) and read each body with its forward target. True means the forward is a rename a reviewer would inline (direct advice is right); false means a facade, side-effect wrapper, or public surface that must stay; uncertain means an alias whose name or layer might be intentional.",
+  "labels": [
+    {
+      "id": "src/lib/pipeline/pipeline.ts#src:lib:pipeline:pipeline:pipeline()",
+      "verdict": "uncertain",
+      "reason": "public functional constructor over Pipeline.of; an API alias rather than accidental indirection"
+    },
+    {
+      "id": "src/lib/economics/campaigns/earnings/queries/brand-paid-video-money.ts#src:lib:economics:campaigns:earnings:queries:brand-paid-video-money:getBrandPaidVideoCents()",
+      "verdict": "true",
+      "reason": "same-file rename of listCreditedVideoCents"
+    },
+    {
+      "id": "src/app/(authenticated)/(dashboard)/admin/campaign-priorities/components/CampaignPrioritiesClient.tsx#src:app:(authenticated):(dashboard):admin:campaign-priorities:components:CampaignPrioritiesClient:sortTableItems()",
+      "verdict": "true",
+      "reason": "same-file rename of groupByClientOrder"
+    },
+    {
+      "id": "src/lib/support-agents/runtime/trace.ts#src:lib:support-agents:runtime:trace:compactSupportTraceEvent()",
+      "verdict": "true",
+      "reason": "exported same-file rename of compactOne"
+    },
+    {
+      "id": "src/lib/posts/service.ts#src:lib:posts:service:removePostFromDeal()",
+      "verdict": "uncertain",
+      "reason": "service-layer forward to the queries layer; a layering convention with a single forward"
+    },
+    {
+      "id": "src/lib/campaigns/creator-read/infra/db/parsers.ts#src:lib:campaigns:creator-read:infra:db:parsers:parseJsonObjectOrNull()",
+      "verdict": "uncertain",
+      "reason": "renames a boosts helper for the creator-read parsers; hides the cross-module dependency"
+    },
+    {
+      "id": "src/lib/post-matching/core/signals.ts#src:lib:post-matching:core:signals:screenTextVariant()",
+      "verdict": "true",
+      "reason": "private rename of overlayTextDiffersBeyondOcrNoise"
+    },
+    {
+      "id": "src/lib/imessage/send-queue.ts#src:lib:imessage:send-queue:getStaleActiveCutoffDate()",
+      "verdict": "true",
+      "reason": "private rename of getIMessageQueueActiveCutoffDate"
+    },
+    {
+      "id": "src/lib/creators/campaign-codes.ts#src:lib:creators:campaign-codes:campaignCodeInviteUrl()",
+      "verdict": "true",
+      "reason": "exported rename of buildCampaignInviteUrl"
+    },
+    {
+      "id": "src/lib/campaigns/import-unlinked/infra/linked-accounts.ts#src:lib:campaigns:import-unlinked:infra:linked-accounts:listLinkedCanvasAccounts()",
+      "verdict": "uncertain",
+      "reason": "infra adapter naming over loadDealConnectedAccounts in a ports-and-adapters layout"
+    },
+    {
+      "id": "src/lib/phash/operations/media-processing.ts#src:lib:phash:operations:media-processing:extractAudioToWav()",
+      "verdict": "false",
+      "reason": "operations facade with five sibling forwards to the local media service"
+    },
+    {
+      "id": "src/lib/social-providers/utils/priceable-views.ts#src:lib:social-providers:utils:priceable-views:priceableViews()",
+      "verdict": "uncertain",
+      "reason": "same-file domain alias of averageMetric; the providers term comes from the path, not a boundary"
+    },
+    {
+      "id": "src/lib/campaigns/task-policy.ts#src:lib:campaigns:task-policy:taskCompletesOnApproval()",
+      "verdict": "uncertain",
+      "reason": "same-file policy alias of isNoPostTask; the policy name may diverge from the predicate"
+    },
+    {
+      "id": "src/lib/observability/loggers/post-matching.ts#src:lib:observability:loggers:post-matching:logPostMatchLateCandidates()",
+      "verdict": "false",
+      "reason": "typed logger method over BaseLogger.log; a side-effect boundary"
+    },
+    {
+      "id": "src/lib/boosts/infra/db/read-models.ts#src:lib:boosts:infra:db:read-models:listPendingBoostRequestsBySubmissionIds()",
+      "verdict": "false",
+      "reason": "read-model facade with four sibling forwards"
+    },
+    {
+      "id": "src/lib/economics/creator-compensation/compute.ts#src:lib:economics:creator-compensation:compute:toBaseRate()",
+      "verdict": "true",
+      "reason": "private same-directory rename of parseCompensationBaseRate; the rate term is not a boundary"
+    },
+    {
+      "id": "src/lib/campaigns/repurpose-media.ts#src:lib:campaigns:repurpose-media:taskUsesManagedRepurposePool()",
+      "verdict": "true",
+      "reason": "private same-file rename of taskShouldUseManagedRepurposePool; the pool term is not a boundary"
+    },
+    {
+      "id": "src/lib/auth/twilio-verify.ts#src:lib:auth:twilio-verify:formatPhoneNumber()",
+      "verdict": "true",
+      "reason": "exported rename of toPossibleE164PhoneNumber in the same directory; the auth term comes from the path"
+    },
+    {
+      "id": "src/lib/boosts/infra/db/read-models.ts#src:lib:boosts:infra:db:read-models:getLatestBoostMetricsForOffers()",
+      "verdict": "false",
+      "reason": "read-model facade with four sibling forwards"
+    },
+    {
+      "id": "src/lib/campaigns/creator-payout-reserves.ts#src:lib:campaigns:creator-payout-reserves:releaseCreatorPayoutReserveInTransaction()",
+      "verdict": "true",
+      "reason": "same-file rename of releaseCreatorPayoutReserveAmountInTransaction; the transaction term names a parameter"
+    }
+  ]
+}

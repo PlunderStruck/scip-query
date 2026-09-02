@@ -123,11 +123,12 @@ export function groupTwins(
     minSimilarity?: number;
     /**
      * Injected so this stays a pure/DB-free function for `groupTwins`'s unit
-     * tests: `isDelegatePair(from, to, clusterMembers)` answers "is `from` a
-     * thin forwarder whose call target resolves to `to` (directly, or by
-     * chaining through same-leaf-name delegates found in `clusterMembers`)?"
-     * `allTwinGroups` wires the real, source/import-backed implementation
-     * via `buildDelegationChecker`.
+     * tests: `isDelegatePair(from, to, clusterMembers)` answers "does `from`
+     * call `to` (directly, or by chaining through same-leaf-name thin
+     * forwarders found in `clusterMembers`)?" A member that calls its
+     * same-name counterpart is a layer over it, not a parallel
+     * implementation. `allTwinGroups` wires the real, source/import-backed
+     * implementation via `buildDelegationChecker`.
      */
     isDelegatePair?: (
       from: TwinDriftRecord,
@@ -660,6 +661,33 @@ export function isThinForwarderBody(rawSnippet: string): boolean {
   return isThinForwarderStrippedBody(stripCommentsAndStrings(extractImplementationBody(rawSnippet)));
 }
 
+/**
+ * Stricter than `isThinForwarderBody`: exactly one statement, that statement
+ * is one call (optionally returned or awaited), and its arguments are plain
+ * values — identifiers, member paths, literals, `??`/`||` defaults, spreads.
+ * A preparatory statement, a callback, a nested call, or an array/object
+ * literal the body builds makes the callable a helper rather than the
+ * "inline this into its only consumer" shape the wrapper claim describes.
+ */
+export function isSingleForwardingCallBody(rawSnippet: string): boolean {
+  const body = stripCommentsAndStrings(extractImplementationBody(rawSnippet)).trim();
+  if (!body || CONTROL_FLOW_PATTERN.test(body)) return false;
+  const statements = splitTopLevelStatements(body);
+  if (statements.length !== 1) return false;
+  const statement = statements[0]!
+    .replace(/^return\s+/, '')
+    .replace(/^await\s+/, '')
+    .replace(/;\s*$/, '')
+    .trim();
+  const match = SINGLE_FORWARDING_CALL_PATTERN.exec(statement);
+  if (!match) return false;
+  const args = match[1]!.replace(/\[\s*\]|\{\s*\}/g, '');
+  return !COMPUTED_ARGUMENT_PATTERN.test(args);
+}
+
+const SINGLE_FORWARDING_CALL_PATTERN = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\[[^[\]]*\])*\(([\s\S]*)\)$/;
+const COMPUTED_ARGUMENT_PATTERN = /[()[\]{}]|=>|\b(?:await|new|function)\b/;
+
 function isThinForwarderStrippedBody(strippedBody: string): boolean {
   const body = strippedBody.trim();
   if (!body) return false;
@@ -728,7 +756,6 @@ function buildDelegationChecker(
 ): (from: TwinDriftRecord, to: TwinDriftRecord, clusterMembers: readonly TwinDriftRecord[]) => boolean {
   const cache = new Map<string, boolean>();
   return (from, to, clusterMembers) => {
-    if (!from.isThinForwarder) return false;
     const key = `${from.symbol}\x00${to.symbol}`;
     const cached = cache.get(key);
     if (cached !== undefined) return cached;
@@ -750,14 +777,17 @@ function reachesSameNameTarget(
   visited.add(from.symbol);
 
   const imports = getSourceImports(db, from.file);
-  // `import { x as y }` lets the forwarder call the target under a local
-  // alias; the call-site leaf is then the alias, not the target's own name.
-  const targetLocalNames = new Set([to.leaf]);
+  // `import { x as y }` lets the caller reach the target under a local alias;
+  // the call-site leaf is then the alias, not the target's own name. Once an
+  // alias exists, a bare `x(...)` inside `from` names `from`'s own file (its
+  // own recursion or a same-file sibling), so only the alias counts.
+  const targetLocalNames = new Set<string>();
   for (const entry of imports) {
     if (entry.importedName === to.leaf && entry.localName && entry.localName !== to.leaf) {
       targetLocalNames.add(entry.localName);
     }
   }
+  if (targetLocalNames.size === 0) targetLocalNames.add(to.leaf);
   const sites = (getCallSites(db, from.file) ?? []).filter(
     (site) => site.line >= from.startLine && site.line <= from.endLine && targetLocalNames.has(site.calleeLeaf),
   );

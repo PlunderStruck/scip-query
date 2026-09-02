@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { SymbolInformation_Kind } from '@c4312/scip';
-import { groupTwins, twinDrift, type TwinDriftRecord } from '../../../src/queries/cleanup/twin-drift.js';
+import {
+  groupTwins,
+  isSingleForwardingCallBody,
+  twinDrift,
+  type TwinDriftRecord,
+} from '../../../src/queries/cleanup/twin-drift.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';
@@ -535,6 +540,80 @@ describe('twinDrift (db-backed) — delegation-chain exclusion', () => {
     const groups = twinDrift(db, { includeHomonyms: true });
 
     expect(groups).toHaveLength(0);
+  });
+});
+
+describe('twinDrift (db-backed) — layering exclusion', () => {
+  let tempDir: string;
+  let db: ScipDatabase;
+
+  beforeAll(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-query-twin-drift-layering-'));
+    const projectRoot = join(tempDir, 'project');
+    writeFixtureFiles(projectRoot, {
+      'src/operations.ts': [
+        "import { getCandidates as getCandidatesUseCase } from './use-case.js';",
+        'export async function getCandidates(clientId: string) {',
+        '  const repository = createRepository();',
+        '  const provider = createProvider();',
+        '  return getCandidatesUseCase({ repository, provider, clientId });',
+        '}',
+        'function createRepository() {',
+        '  return {};',
+        '}',
+        'function createProvider() {',
+        '  return {};',
+        '}',
+      ],
+      'src/use-case.ts': [
+        'export async function getCandidates(params: { repository: unknown; provider: unknown; clientId: string }) {',
+        '  const repository = await Promise.resolve(params.repository);',
+        '  const provider = await Promise.resolve(params.provider);',
+        '  return [repository, provider, params.clientId];',
+        '}',
+      ],
+    });
+
+    const dbPath = join(tempDir, 'index.db');
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/operations.ts')
+      .document(2, 'typescript', 'src/use-case.ts')
+      .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`operations.ts`/getCandidates().', 'getCandidates', 12)
+      .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`use-case.ts`/getCandidates().', 'getCandidates', 12)
+      .definition(1, 1, 1, 1, 0, 5, 1)
+      .definition(2, 2, 2, 0, 0, 4, 1)
+      .write();
+
+    db = new ScipDatabase({ dbPath, projectRoot });
+  });
+
+  afterAll(() => {
+    db.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('does not report a member that builds its inputs and calls its same-name counterpart under an alias', () => {
+    const groups = twinDrift(db, { includeHomonyms: true });
+
+    expect(groups).toHaveLength(0);
+  });
+});
+
+describe('isSingleForwardingCallBody', () => {
+  const body = (...lines: string[]) => ['function wrap(raw: string) {', ...lines, '}'].join('\n');
+
+  it('accepts one call whose arguments are plain values', () => {
+    expect(isSingleForwardingCallBody(body('  return inner(raw);'))).toBe(true);
+    expect(isSingleForwardingCallBody(body('  await service.inner(tx, raw, MODE.Switch);'))).toBe(true);
+    expect(isSingleForwardingCallBody(body('  return inner(raw ?? [], "deleted");'))).toBe(true);
+  });
+
+  it('rejects preparatory statements, callbacks, nested calls, and built literals', () => {
+    expect(isSingleForwardingCallBody(body('  const key = raw.trim();', '  return inner(key);'))).toBe(false);
+    expect(isSingleForwardingCallBody(body('  return items.reduce((sum, n) => sum + n, 0);'))).toBe(false);
+    expect(isSingleForwardingCallBody(body('  return outer(await inner(raw), raw);'))).toBe(false);
+    expect(isSingleForwardingCallBody(body('  return JSON.stringify([raw.id, raw.kind]);'))).toBe(false);
+    expect(isSingleForwardingCallBody(body('  if (!raw) return null;', '  return inner(raw);'))).toBe(false);
   });
 });
 

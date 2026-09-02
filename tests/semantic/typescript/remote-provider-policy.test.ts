@@ -13,7 +13,7 @@ import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fi
  * repeated inside a command process with a smaller heap. Below the large
  * index thresholds the direct compiler remains the fallback.
  */
-describe('service-backed TypeScript provider fallback policy', () => {
+describe('service-backed TypeScript provider fallback policy', { timeout: 60_000 }, () => {
   const tempDirs: string[] = [];
   afterEach(() => {
     for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });

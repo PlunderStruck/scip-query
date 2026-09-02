@@ -4,7 +4,7 @@ import { findEnclosingDefinition } from '../../symbols/definition-catalog.js';
 import { getIdentifierLineMap } from '../../symbols/identifier-index.js';
 import { leafName } from '../../symbols/symbol-parser.js';
 import type { IndexedDefinition } from '../../domain/types.js';
-import { isInRustTestModule, shortenSymbol } from '../../symbols/symbol-parser.js';
+import { isInRustTestModule, ownerQualifiedLeafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { compareDefinitionsBySmallestLoc, definitionLoc } from '../query-utils.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
@@ -16,16 +16,16 @@ import {
 import { mergeSetMaps } from '../../symbols/references/caller-evidence.js';
 import { boundaryEvidenceForSurfaces } from './boundary-evidence.js';
 import { definitionSourceSnippet } from './duplicate-bodies.js';
-import { isThinForwarderBody } from './twin-drift.js';
+import { isSingleForwardingCallBody } from './twin-drift.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 import { isClojureMacroDefinition } from '../../source/ast.js';
 
 export type WrapperActionTier = 'direct' | 'signal';
 /**
- * `forwarding`: the body is nothing more than one call (optionally returned
- * or awaited, with at most one preparatory statement) — the shape the
- * wrapper claim describes. `helper`: the body computes, branches, or builds
- * something itself; it merely has one consumer.
+ * `forwarding`: the body is exactly one call (optionally returned or awaited)
+ * whose arguments are plain values — the shape the wrapper claim describes.
+ * `helper`: the body prepares something first, passes a callback, a nested
+ * call, or a literal it builds, or branches; it merely has one consumer.
  */
 export type WrapperBodyShape = 'forwarding' | 'helper';
 
@@ -213,7 +213,7 @@ function wrapperCandidateForSymbol(
 function wrapperBodyShape(db: ScipDatabase, symbol: IndexedDefinition): WrapperBodyShape {
   const snippet = definitionSourceSnippet(db, symbol);
   if (!snippet) return 'helper';
-  return isThinForwarderBody(snippet) ? 'forwarding' : 'helper';
+  return isSingleForwardingCallBody(snippet) ? 'forwarding' : 'helper';
 }
 
 function getWrapperCandidateSymbols(
@@ -401,10 +401,14 @@ function wrapperBoundaryEvidence(
     'wrapper',
     'explicit ignore-wrapper comment',
     [
-      { label: 'wrapper name', value: shortenSymbol(symbol.symbol) },
-      { label: 'caller name', value: enclosing?.symbol ? shortenSymbol(enclosing.symbol) : basename(callerFile) },
-      { label: 'wrapper path', value: symbol.relativePath },
-      { label: 'caller path', value: callerFile },
+      { label: 'wrapper name', value: ownerQualifiedLeafName(symbol.symbol), side: 'self' },
+      {
+        label: 'caller name',
+        value: enclosing?.symbol ? ownerQualifiedLeafName(enclosing.symbol) : basename(callerFile),
+        side: 'other',
+      },
+      { label: 'wrapper path', value: symbol.relativePath, side: 'self' },
+      { label: 'caller path', value: callerFile, side: 'other' },
     ],
   );
 }

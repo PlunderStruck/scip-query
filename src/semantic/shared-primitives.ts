@@ -793,18 +793,25 @@ export function semanticCalleeMap(
 }
 
 /**
- * Files the TypeScript compiler projects can see, from the tsconfigs alone.
- * A reference the cheap path finds in a file outside every project (a test
- * file excluded from the build config) is one the compiler oracle could
- * never confirm, so an audit must not count it as a false positive.
+ * Which compiler project a file belongs to, from the tsconfigs alone. The
+ * reference oracle searches one project at a time, so a reference the cheap
+ * path finds in a file outside every project (a test excluded from the build
+ * config) or in another project than the definition's (a workspace package
+ * consumer) is one the oracle could never confirm; an audit must not count
+ * it as a false positive.
  */
-export function semanticCompilerVisibleFiles(db: ScipDatabase): ((relativePath: string) => boolean) | null {
+export function semanticCompilerProjectOf(db: ScipDatabase): ((relativePath: string) => number | null) | null {
   const tsMorph = loadTsMorph();
   if (!tsMorph) return null;
   const tsconfigPaths = discoverTypeScriptTsconfigs(db);
   if (tsconfigPaths.length === 0) return null;
-  const visible = typescriptProjectFileNames(tsMorph, tsconfigPaths);
-  return (relativePath) => visible.has(resolve(db.config.projectRoot, relativePath));
+  const projectByFile = new Map<string, number>();
+  tsconfigPaths.forEach((tsconfigPath, index) => {
+    for (const fileName of typescriptProjectFileNames(tsMorph, [tsconfigPath])) {
+      if (!projectByFile.has(fileName)) projectByFile.set(fileName, index);
+    }
+  });
+  return (relativePath) => projectByFile.get(resolve(db.config.projectRoot, relativePath)) ?? null;
 }
 
 /**

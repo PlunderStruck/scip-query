@@ -4,6 +4,14 @@ import { getSourceLines, suppressionCommentCategory } from '../../source/primiti
 export interface BoundaryEvidenceSurface {
   label: string;
   value: string | null | undefined;
+  /**
+   * Which side of the relationship the surface describes. A token present on
+   * both sides (`toBaseRate` forwarding to `parseBaseRate`; a wrapper and its
+   * caller both under `lib/auth/`) is the vocabulary the two share, not a
+   * boundary between them, so once every surface names a side only the
+   * asymmetric tokens count.
+   */
+  side?: 'self' | 'other';
 }
 
 export function boundaryEvidenceForSurfaces(
@@ -18,19 +26,39 @@ export function boundaryEvidenceForSurfaces(
   if (hasCleanupIgnoreComment(db, relativePath, startLine, ignoreCategory)) {
     evidence.add(ignoreLabel);
   }
+  const shared = sharedBoundaryTokens(surfaces);
   for (const surface of surfaces) {
     if (!surface.value) continue;
-    collectBoundaryTokenEvidence(evidence, surface.label, surface.value);
+    collectBoundaryTokenEvidence(evidence, surface.label, surface.value, shared);
   }
   return [...evidence].slice(0, 6);
 }
 
-function collectBoundaryTokenEvidence(evidence: Set<string>, surface: string, value: string): void {
+/** Tokens that occur on both sides of a sided surface set; empty when a side is unnamed. */
+function sharedBoundaryTokens(surfaces: readonly BoundaryEvidenceSurface[]): Set<string> {
+  const bySide = { self: new Set<string>(), other: new Set<string>() };
+  let sided = 0;
+  for (const surface of surfaces) {
+    if (!surface.side || !surface.value) continue;
+    sided += 1;
+    for (const token of boundaryTokens(surface.value)) bySide[surface.side].add(token);
+  }
+  if (sided === 0 || bySide.self.size === 0 || bySide.other.size === 0) return new Set();
+  return new Set([...bySide.self].filter((token) => bySide.other.has(token)));
+}
+
+function collectBoundaryTokenEvidence(
+  evidence: Set<string>,
+  surface: string,
+  value: string,
+  shared: ReadonlySet<string>,
+): void {
   const tokens = boundaryTokens(value);
   if (surface.endsWith('name') && hasTypeGuardBoundaryShape(tokens)) {
     evidence.add(`${surface} has type-guard boundary shape`);
   }
   for (const token of tokens) {
+    if (shared.has(token)) continue;
     const label = BOUNDARY_TOKEN_LABELS.get(token);
     if (!label) continue;
     evidence.add(`${surface} has ${label} term: ${token}`);
