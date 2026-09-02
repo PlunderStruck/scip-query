@@ -97,6 +97,7 @@ describe('wrapper-candidates', () => {
             shortName: expect.stringContaining('normalize'),
             singleCallerShort: expect.stringContaining('render'),
             callerFanIn: 4,
+            bodyShape: 'forwarding',
           }),
         ]),
       );

@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { buildFileExclusionClassifier, buildFileExclusionPredicate } from './dead-exclusions.js';
 import { getInactiveBarrelPaths, isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
+import { isGeneratedArtifactPath } from '../../analysis/generated-artifacts.js';
 import { definitionsGroupedByLeaf, getScopedDefinitionsMatchingSymbols } from '../../symbols/definition-catalog.js';
 import type { DeadOptions, IndexedDefinition } from '../../domain/types.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
@@ -56,6 +57,8 @@ export interface DeadSummary {
   applicability: {
     entrySurfaceExcluded: number;
     externalRootExcluded: number;
+    /** Zero-reference symbols in generated artifacts (migration dumps, codegen output); the generator owns them. */
+    generatedArtifactExcluded?: number;
     implicitUsageSignals: number;
   };
   totalCount: number;
@@ -314,12 +317,20 @@ function deadSummary(db: ScipDatabase, rows: readonly DeadRow[]): DeadSummary {
   let implicitUsageCount = 0;
   let entrySurfaceExcluded = 0;
   let externalRootExcluded = 0;
+  let generatedArtifactExcluded = 0;
   let totalLoc = 0;
 
   for (const row of rows) {
     if (db.isIgnored(row.relative_path)) continue;
     if (isEntrySurface(db, row.relative_path)) {
       entrySurfaceExcluded++;
+      continue;
+    }
+    // `drizzle-kit pull` dumps, codegen output, and migration snapshots are
+    // rewritten by their generator; a zero-reference export there is the
+    // generator's shape, not code a person can delete.
+    if (isGeneratedArtifactPath(row.relative_path)) {
+      generatedArtifactExcluded++;
       continue;
     }
     if (isRootedSymbol(db, row.symbol, row.relative_path)) {
@@ -366,6 +377,7 @@ function deadSummary(db: ScipDatabase, rows: readonly DeadRow[]): DeadSummary {
     applicability: {
       entrySurfaceExcluded,
       externalRootExcluded,
+      generatedArtifactExcluded,
       implicitUsageSignals: implicitUsageCount,
     },
     totalCount: symbols.length,

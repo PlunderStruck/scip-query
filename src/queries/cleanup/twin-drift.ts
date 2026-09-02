@@ -5,7 +5,7 @@ import { isCallableSymbol, isRustTraitImplMember, shortenSymbol } from '../../sy
 import { getCallSites } from '../../source/facts/ast-facts.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import { pathsResolveSame } from '../../domain/path-normalization.js';
-import { classifyFile, isBarrel } from '../../analysis/file-classifier.js';
+import { classifyFile, isBarrel, isFrameworkEntrypointPath } from '../../analysis/file-classifier.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 import { stripCommentsAndStrings } from '../../source/primitives/source-stripper.js';
 import { hasSuppressionCommentCategory } from '../../source/primitives/source-text.js';
@@ -149,6 +149,7 @@ export function groupTwins(
     (record) =>
       !isSyntheticLeaf(record.leaf) &&
       !isConventionOnlyTwinLeaf(record.leaf) &&
+      !isFrameworkRouteConventionTwin(record.file, record.leaf) &&
       classifyFile(record.file) !== 'test' &&
       !isRustTraitImplMember(record.symbol) &&
       !isRustInlineTestSymbol(record.symbol) &&
@@ -328,6 +329,7 @@ function twinDriftCandidateDefinitions(definitions: readonly IndexedDefinition[]
     (definition) =>
       definition.leaf &&
       !isSyntheticLeaf(definition.leaf) &&
+      !isFrameworkRouteConventionTwin(definition.relativePath, definition.leaf) &&
       !isRustTraitImplMember(definition.symbol) &&
       !isRustInlineTestSymbol(definition.symbol) &&
       !isRustConventionOnlyTwin(definition.symbol, definition.leaf),
@@ -504,6 +506,22 @@ function isConventionOnlyTwinLeaf(leaf: string): boolean {
 
 const CONVENTION_ONLY_TWIN_LEAVES = new Set(['main', 'row']);
 
+/**
+ * Names a file-system router or its per-route glue dictates: every Next.js
+ * `route.ts` exports the HTTP verbs and, by project convention, names its
+ * per-method implementation `handler`/`handleGet`/`postHandler`; every
+ * `page.tsx` exports a `*Page` default and `generateMetadata`. Two routes
+ * sharing such a name implement different endpoints by construction, so the
+ * name carries no concept identity. Only applied inside framework entry
+ * files, where the convention is the reason the name exists.
+ */
+const FRAMEWORK_ROUTE_CONVENTION_LEAF =
+  /^(?:handler|handle(?:Get|Post|Put|Patch|Delete|Options|Head|Request)|(?:get|post|put|patch|delete|options|head|route|request)Handler|generateMetadata|generateStaticParams|generateViewport|generateSitemaps|loader|action|clientLoader|clientAction|middleware|config|default|load|actions|[A-Z][A-Za-z0-9]*(?:Page|Layout|Loading|Template|Route|Screen))$/;
+
+function isFrameworkRouteConventionTwin(file: string, leaf: string): boolean {
+  return FRAMEWORK_ROUTE_CONVENTION_LEAF.test(leaf) && isFrameworkEntrypointPath(file.replace(/\\/g, '/'));
+}
+
 const GENERIC_CONTEXT_SEGMENTS = new Set([
   'app',
   'component',
@@ -675,13 +693,22 @@ function reachesSameNameTarget(
   if (hopsLeft <= 0 || visited.has(from.symbol)) return false;
   visited.add(from.symbol);
 
+  const imports = getSourceImports(db, from.file);
+  // `import { x as y }` lets the forwarder call the target under a local
+  // alias; the call-site leaf is then the alias, not the target's own name.
+  const targetLocalNames = new Set([to.leaf]);
+  for (const entry of imports) {
+    if (entry.importedName === to.leaf && entry.localName && entry.localName !== to.leaf) {
+      targetLocalNames.add(entry.localName);
+    }
+  }
   const sites = (getCallSites(db, from.file) ?? []).filter(
-    (site) => site.line >= from.startLine && site.line <= from.endLine && site.calleeLeaf === to.leaf,
+    (site) => site.line >= from.startLine && site.line <= from.endLine && targetLocalNames.has(site.calleeLeaf),
   );
   if (sites.length === 0) return false;
 
   const importedFiles = new Set(
-    getSourceImports(db, from.file)
+    imports
       .filter((entry) => entry.sourcePath && (entry.kind !== 'namespace' || entry.usedMembers.includes(to.leaf)))
       .map((entry) => entry.sourcePath!),
   );

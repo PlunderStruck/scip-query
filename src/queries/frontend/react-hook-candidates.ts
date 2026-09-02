@@ -16,6 +16,14 @@ import {
   type FrontendBehaviorActionTier,
   type FrontendBehaviorEvidenceClass,
 } from '../internal/frontend-behavior-evidence.js';
+import {
+  FRONTEND_EXCLUSION_DETAILS,
+  FrontendPolicyExclusions,
+  frontendProfileRolePolicy,
+  pairContextReason,
+  type FrontendPairContext,
+  type FrontendPolicyExclusion,
+} from '../internal/frontend-profile-roles.js';
 
 export type ReactHookEvidenceClass = FrontendBehaviorEvidenceClass;
 export type ReactHookActionTier = FrontendBehaviorActionTier;
@@ -40,11 +48,31 @@ export interface ReactHookCandidateResult {
   actionTier: ReactHookActionTier;
   evidenceClassReasons: string[];
   recommendation: string;
+  /** Whether both units are components or both are custom hooks. */
+  unitKind: 'component' | 'hook';
+  /** Structural relationship between the two files (route entries, intercepting routes, kit primitives). */
+  pairContext: FrontendPairContext;
   uniqueToA: string[];
   uniqueToB: string[];
   reason: string;
   locA: number;
   locB: number;
+}
+
+export interface ReactHookCandidateScan {
+  results: ReactHookCandidateResult[];
+  /** Rows the role policy removed before ranking, disclosed by reason. */
+  exclusions: FrontendPolicyExclusion[];
+}
+
+export interface ReactHookCandidateOptions {
+  minSimilarity?: number;
+  minSharedBehaviors?: number;
+  limit?: number;
+  scope?: string;
+  scanLimit?: number;
+  filePattern?: string;
+  focusFiles?: ReadonlySet<string>;
 }
 
 interface ReactBehaviorPairwiseProfile extends PairwiseFileProfile {
@@ -57,22 +85,33 @@ interface ReactBehaviorPairwiseProfile extends PairwiseFileProfile {
 // scip-query: ignore-similar - hook and component queries share profile ranking but report different React concepts.
 export function reactHookCandidates(
   db: ScipDatabase,
-  opts: {
-    minSimilarity?: number;
-    minSharedBehaviors?: number;
-    limit?: number;
-    scope?: string;
-    scanLimit?: number;
-    filePattern?: string;
-    focusFiles?: ReadonlySet<string>;
-  } = {},
+  opts: ReactHookCandidateOptions = {},
 ): ReactHookCandidateResult[] {
+  return reactHookCandidateScan(db, opts).results;
+}
+
+/**
+ * Shared-behavior scan with its policy exclusions. Test-file units never
+ * enter the comparison; a hook paired with a component is not an extraction
+ * lead (the hook already is the extraction target, and a component that
+ * re-implements it belongs to `recent-duplicates`); two vendored UI-kit
+ * files share behavior by construction.
+ */
+// scip-query: ignore-extract — reviewed E1 workflow owner; profile selection, pair policy, and ranking are one scan contract.
+export function reactHookCandidateScan(db: ScipDatabase, opts: ReactHookCandidateOptions = {}): ReactHookCandidateScan {
   const { minSimilarity = 0.45, minSharedBehaviors = 6, limit = 20, scope, scanLimit, filePattern, focusFiles } = opts;
+  const policy = frontendProfileRolePolicy(db);
+  const exclusions = new FrontendPolicyExclusions();
   const profiles = frontendBehaviorProduct(db)
     .reactProfiles({
       scope,
       minBehaviorTokens: Math.max(3, minSharedBehaviors),
       scanLimit,
+    })
+    .filter((profile) => {
+      if (policy.roleOf(profile.file) !== 'test') return true;
+      exclusions.record('test-files', FRONTEND_EXCLUSION_DETAILS.testFiles);
+      return false;
     })
     .map((profile) => ({
       file: profile.file,
@@ -82,21 +121,40 @@ export function reactHookCandidates(
     }));
   const candidateIndex = pairwiseCandidateIndexFromKeys(profiles, (profile) => profile.tokens);
 
-  return rankedPairwiseProfileResults({
+  const results = rankedPairwiseProfileResults({
     profiles,
     limit,
     filePattern,
     focusFiles,
     candidateIndex,
     profile: { name: 'react-hook-candidates' },
-    compare: (a, b) => compareReactHookProfiles(a, b, minSimilarity, minSharedBehaviors),
+    compare: (a, b) => {
+      const context = policy.pairContext(a.file, b.file);
+      const result = compareReactHookProfiles(a, b, minSimilarity, minSharedBehaviors, context);
+      if (!result) return null;
+      if (a.profile.kind !== b.profile.kind) {
+        exclusions.record('hook-component-pairs', FRONTEND_EXCLUSION_DETAILS.hookComponentPairs);
+        return null;
+      }
+      if (context === 'ui-kit-pair') {
+        exclusions.record('ui-kit-pairs', FRONTEND_EXCLUSION_DETAILS.uiKitPairs);
+        return null;
+      }
+      return result;
+    },
     sort: (a, b) =>
+      actionTierRank(a.actionTier) - actionTierRank(b.actionTier) ||
       b.similarity - a.similarity ||
       a.fileA.localeCompare(b.fileA) ||
       a.componentA.localeCompare(b.componentA) ||
       a.fileB.localeCompare(b.fileB) ||
       a.componentB.localeCompare(b.componentB),
   });
+  return { results, exclusions: exclusions.list() };
+}
+
+function actionTierRank(tier: ReactHookActionTier): number {
+  return tier === 'signal' ? 0 : 1;
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
@@ -105,6 +163,7 @@ function compareReactHookProfiles(
   b: ReactBehaviorPairwiseProfile,
   minSimilarity: number,
   minSharedBehaviors: number,
+  pairContext: FrontendPairContext,
 ): ReactHookCandidateResult | null {
   const shared = intersection(a.tokens, b.tokens);
   if (shared.size < minSharedBehaviors) return null;
@@ -128,6 +187,8 @@ function compareReactHookProfiles(
     sharedHandlers,
     sharedHandlerVerbs,
   });
+  const contextReason = pairContextReason(pairContext);
+  const verdict = pairContextVerdict(pairContext, evidence.actionTier, evidence.recommendation);
 
   return {
     fileA: a.file,
@@ -146,9 +207,11 @@ function compareReactHookProfiles(
     sharedHandlers,
     sharedHandlerVerbs,
     evidenceClass: evidence.evidenceClass,
-    actionTier: evidence.actionTier,
-    evidenceClassReasons: evidence.reasons,
-    recommendation: evidence.recommendation,
+    actionTier: verdict.actionTier,
+    evidenceClassReasons: contextReason ? [contextReason, ...evidence.reasons] : evidence.reasons,
+    recommendation: verdict.recommendation,
+    unitKind: a.profile.kind === 'hook' && b.profile.kind === 'hook' ? 'hook' : 'component',
+    pairContext,
     uniqueToA: sortedTokens(difference(a.tokens, b.tokens)).slice(0, 25),
     uniqueToB: sortedTokens(difference(b.tokens, a.tokens)).slice(0, 25),
     reason: reactBehaviorReason({
@@ -163,6 +226,30 @@ function compareReactHookProfiles(
     locA: a.profile.loc,
     locB: b.profile.loc,
   };
+}
+
+function pairContextVerdict(
+  pairContext: FrontendPairContext,
+  actionTier: ReactHookActionTier,
+  recommendation: string,
+): { actionTier: ReactHookActionTier; recommendation: string } {
+  switch (pairContext) {
+    case 'framework-route-pair':
+      return {
+        actionTier: 'support',
+        recommendation:
+          'Framework route entries share routing scaffolding by design; extract a hook only for repeated non-routing behavior.',
+      };
+    case 'intercepting-route-pair':
+      return {
+        actionTier,
+        recommendation:
+          'Render one shared view component from both the intercepting route and its target route instead of repeating the behavior in each body.',
+      };
+    case 'ui-kit-pair':
+    case 'product':
+      return { actionTier, recommendation };
+  }
 }
 
 function classifyReactHookEvidence(parts: {
@@ -274,6 +361,13 @@ function reactBehaviorReason(parts: {
   return reasons.join('; ') || 'shared React behavior profile';
 }
 
+/**
+ * Words that describe UI or data-fetching mechanics rather than a product
+ * concept. Framework hook vocabulary belongs here too: `useQueryClient`,
+ * `useMutation`, `useRouter`, and a `.mutate()` call are how every TanStack
+ * Query or Next.js component talks to its runtime, so sharing them is not
+ * evidence that two components implement the same domain behavior.
+ */
 const GENERIC_REACT_BEHAVIOR_WORDS = new Set([
   'add',
   'apply',
@@ -282,19 +376,26 @@ const GENERIC_REACT_BEHAVIOR_WORDS = new Set([
   'cancel',
   'change',
   'clear',
+  'client',
   'close',
+  'context',
   'create',
   'data',
+  'deferred',
   'delete',
+  'dispatch',
   'draft',
   'edit',
   'effect',
   'error',
   'fetch',
+  'field',
   'filter',
   'form',
   'handle',
   'has',
+  'id',
+  'infinite',
   'is',
   'item',
   'items',
@@ -302,8 +403,15 @@ const GENERIC_REACT_BEHAVIOR_WORDS = new Set([
   'loader',
   'loading',
   'memo',
+  'mutate',
+  'mutation',
   'name',
+  'navigate',
+  'navigation',
   'open',
+  'params',
+  'pathname',
+  'query',
   'reducer',
   'refresh',
   'ref',
@@ -311,6 +419,7 @@ const GENERIC_REACT_BEHAVIOR_WORDS = new Set([
   'request',
   'reset',
   'resource',
+  'router',
   'row',
   'rows',
   'save',
@@ -318,10 +427,13 @@ const GENERIC_REACT_BEHAVIOR_WORDS = new Set([
   'search',
   'select',
   'selected',
+  'selector',
   'state',
   'store',
   'submit',
+  'suspense',
   'toggle',
+  'transition',
   'update',
   'use',
   'value',

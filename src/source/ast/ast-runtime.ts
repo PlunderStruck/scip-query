@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { noteFinalizerOwnedNativeAllocation } from '../../platform/native-gc.js';
+import { noteFinalizerOwnedNativeAllocation } from '../../domain/native-gc.js';
 import type { AstLanguage } from './ast-language.js';
 import type { QueryInstance, Tree } from './ast-types.js';
 

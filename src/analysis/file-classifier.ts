@@ -23,6 +23,7 @@ import { getReExports } from '../language-parsers/index.js';
 import { isExplicitPackageSurfaceFile, isPackageSurfaceFile } from './package-surface.js';
 import { isRustPublicLibrarySymbol } from './rust-package-surface.js';
 import { classifyFile } from '../source/primitives/file-kind.js';
+import { isFrameworkTaskFile } from './framework-task-surface.js';
 
 export { classifyFile, fileKindRank, type FileKind } from '../source/primitives/file-kind.js';
 
@@ -122,7 +123,13 @@ function definesFunctions(db: ScipDatabase, relativePath: string): boolean {
 export function isEntrySurface(db: ScipDatabase, file: string): boolean {
   const normalized = normalizePath(file);
   const kind = classifyFile(file);
-  return kind === 'entry' || kind === 'worker' || isFrameworkEntrypointPath(normalized) || isLiveBarrel(db, normalized);
+  return (
+    kind === 'entry' ||
+    kind === 'worker' ||
+    isFrameworkEntrypointPath(normalized) ||
+    isFrameworkTaskFile(db, normalized) ||
+    isLiveBarrel(db, normalized)
+  );
 }
 
 /**

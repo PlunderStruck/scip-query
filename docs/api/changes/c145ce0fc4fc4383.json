@@ -1,0 +1,265 @@
+{
+  "acceptedAt": "2026-09-02T16:12:08.676Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "c145ce0fc4fc43838f6b285957f0b3ccf8955d1c530abbb32d17ba3a3f98887f",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DeadSummary changed from interface DeadSummary { symbols: DeadSymbolResult[]; counts: DeadCounts; applicability: { entrySurfaceExcluded: number; externalRootExcluded: number; implicitUsageSignals: numbe... to interface DeadSummary { symbols: DeadSymbolResult[]; counts: DeadCounts; applicability: { entrySurfaceExcluded: number; externalRootExcluded: number; generatedArtifactExcluded?:....",
+      "target": "./queries:DeadSummary"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HealthReport changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes....",
+      "target": "./queries:HealthReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ReactComponentDuplicateResult changed from interface ReactComponentDuplicateResult { fileA: string; componentA: string; fileB: string; componentB: string; similarity: number; tokenCountA: number; tokenCountB: number; sha... to interface ReactComponentDuplicateResult { fileA: string; componentA: string; fileB: string; componentB: string; similarity: number; tokenCountA: number; tokenCountB: number; sha....",
+      "target": "./queries:ReactComponentDuplicateResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ReactHookCandidateResult changed from interface ReactHookCandidateResult { fileA: string; componentA: string; fileB: string; componentB: string; similarity: number; tokenCountA: number; tokenCountB: number; sharedTo... to interface ReactHookCandidateResult { fileA: string; componentA: string; fileB: string; componentB: string; similarity: number; tokenCountA: number; tokenCountB: number; sharedTo....",
+      "target": "./queries:ReactHookCandidateResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "WrapperCandidate changed from interface WrapperCandidate { symbol: string; shortName: string; file: string; startLine: number; endLine: number; loc: number; singleCaller: string; singleCallerShort: string; c... to interface WrapperCandidate { symbol: string; shortName: string; file: string; startLine: number; endLine: number; loc: number; singleCaller: string; singleCallerShort: string; c....",
+      "target": "./queries:WrapperCandidate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export duplicateBodyScan.",
+      "target": "./queries:duplicateBodyScan"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "reactComponentDuplicates changed from declare function reactComponentDuplicates(db: ScipDatabase, opts?: { minSimilarity?: number; minTokens?: number; limit?: number; scope?: string; scanLimit?: number; filePattern?... to declare function reactComponentDuplicates(db: ScipDatabase, opts?: ReactComponentDuplicateOptions): ReactComponentDuplicateResult[];.",
+      "target": "./queries:reactComponentDuplicates"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "reactHookCandidates changed from declare function reactHookCandidates(db: ScipDatabase, opts?: { minSimilarity?: number; minSharedBehaviors?: number; limit?: number; scope?: string; scanLimit?: number; filePatt... to declare function reactHookCandidates(db: ScipDatabase, opts?: ReactHookCandidateOptions): ReactHookCandidateResult[];.",
+      "target": "./queries:reactHookCandidates"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "reactLargeComponentPressure changed from declare function reactLargeComponentPressure(db: ScipDatabase, opts?: { minComponentLines?: number; minFileLines?: number; minJsxTokens?: number; minBehaviorTokens?: number; lim... to declare function reactLargeComponentPressure(db: ScipDatabase, opts?: ReactLargeComponentPressureOptions): ReactLargeComponentPressureResult[];.",
+      "target": "./queries:reactLargeComponentPressure"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CoChangePartnerClass changed from type CoChangePartnerClass = 'doc-code' | 'config-code' | 'schema-script' | 'model-view' | 'test-code' | 'same-feature' | 'unknown'; to type CoChangePartnerClass = 'doc-code' | 'config-code' | 'generated-artifact' | 'schema-script' | 'model-view' | 'test-code' | 'same-feature' | 'unknown';.",
+      "target": "./queries/co-change:CoChangePartnerClass"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export isGeneratedArtifactPath.",
+      "target": "./queries/co-change:isGeneratedArtifactPath"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DeadSummary changed from interface DeadSummary { symbols: DeadSymbolResult[]; counts: DeadCounts; applicability: { entrySurfaceExcluded: number; externalRootExcluded: number; implicitUsageSignals: numbe... to interface DeadSummary { symbols: DeadSymbolResult[]; counts: DeadCounts; applicability: { entrySurfaceExcluded: number; externalRootExcluded: number; generatedArtifactExcluded?:....",
+      "target": "./queries/dead:DeadSummary"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DuplicateBodyExclusion.",
+      "target": "./queries/duplicate-bodies:DuplicateBodyExclusion"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export DuplicateBodyScan.",
+      "target": "./queries/duplicate-bodies:DuplicateBodyScan"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export duplicateBodyScan.",
+      "target": "./queries/duplicate-bodies:duplicateBodyScan"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DeadSummary changed from interface DeadSummary { symbols: DeadSymbolResult[]; counts: DeadCounts; applicability: { entrySurfaceExcluded: number; externalRootExcluded: number; implicitUsageSignals: numbe... to interface DeadSummary { symbols: DeadSymbolResult[]; counts: DeadCounts; applicability: { entrySurfaceExcluded: number; externalRootExcluded: number; generatedArtifactExcluded?:....",
+      "target": "./queries/index:DeadSummary"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HealthReport changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes....",
+      "target": "./queries/index:HealthReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ReactComponentDuplicateResult changed from interface ReactComponentDuplicateResult { fileA: string; componentA: string; fileB: string; componentB: string; similarity: number; tokenCountA: number; tokenCountB: number; sha... to interface ReactComponentDuplicateResult { fileA: string; componentA: string; fileB: string; componentB: string; similarity: number; tokenCountA: number; tokenCountB: number; sha....",
+      "target": "./queries/index:ReactComponentDuplicateResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ReactHookCandidateResult changed from interface ReactHookCandidateResult { fileA: string; componentA: string; fileB: string; componentB: string; similarity: number; tokenCountA: number; tokenCountB: number; sharedTo... to interface ReactHookCandidateResult { fileA: string; componentA: string; fileB: string; componentB: string; similarity: number; tokenCountA: number; tokenCountB: number; sharedTo....",
+      "target": "./queries/index:ReactHookCandidateResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "WrapperCandidate changed from interface WrapperCandidate { symbol: string; shortName: string; file: string; startLine: number; endLine: number; loc: number; singleCaller: string; singleCallerShort: string; c... to interface WrapperCandidate { symbol: string; shortName: string; file: string; startLine: number; endLine: number; loc: number; singleCaller: string; singleCallerShort: string; c....",
+      "target": "./queries/index:WrapperCandidate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export duplicateBodyScan.",
+      "target": "./queries/index:duplicateBodyScan"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "reactComponentDuplicates changed from declare function reactComponentDuplicates(db: ScipDatabase, opts?: { minSimilarity?: number; minTokens?: number; limit?: number; scope?: string; scanLimit?: number; filePattern?... to declare function reactComponentDuplicates(db: ScipDatabase, opts?: ReactComponentDuplicateOptions): ReactComponentDuplicateResult[];.",
+      "target": "./queries/index:reactComponentDuplicates"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "reactHookCandidates changed from declare function reactHookCandidates(db: ScipDatabase, opts?: { minSimilarity?: number; minSharedBehaviors?: number; limit?: number; scope?: string; scanLimit?: number; filePatt... to declare function reactHookCandidates(db: ScipDatabase, opts?: ReactHookCandidateOptions): ReactHookCandidateResult[];.",
+      "target": "./queries/index:reactHookCandidates"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "reactLargeComponentPressure changed from declare function reactLargeComponentPressure(db: ScipDatabase, opts?: { minComponentLines?: number; minFileLines?: number; minJsxTokens?: number; minBehaviorTokens?: number; lim... to declare function reactLargeComponentPressure(db: ScipDatabase, opts?: ReactLargeComponentPressureOptions): ReactLargeComponentPressureResult[];.",
+      "target": "./queries/index:reactLargeComponentPressure"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ReactComponentDuplicateOptions.",
+      "target": "./queries/react-component-duplicates:ReactComponentDuplicateOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ReactComponentDuplicateResult changed from interface ReactComponentDuplicateResult { fileA: string; componentA: string; fileB: string; componentB: string; similarity: number; tokenCountA: number; tokenCountB: number; sha... to interface ReactComponentDuplicateResult { fileA: string; componentA: string; fileB: string; componentB: string; similarity: number; tokenCountA: number; tokenCountB: number; sha....",
+      "target": "./queries/react-component-duplicates:ReactComponentDuplicateResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ReactComponentDuplicateScan.",
+      "target": "./queries/react-component-duplicates:ReactComponentDuplicateScan"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export reactComponentDuplicateScan.",
+      "target": "./queries/react-component-duplicates:reactComponentDuplicateScan"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "reactComponentDuplicates changed from declare function reactComponentDuplicates(db: ScipDatabase, opts?: { minSimilarity?: number; minTokens?: number; limit?: number; scope?: string; scanLimit?: number; filePattern?... to declare function reactComponentDuplicates(db: ScipDatabase, opts?: ReactComponentDuplicateOptions): ReactComponentDuplicateResult[];.",
+      "target": "./queries/react-component-duplicates:reactComponentDuplicates"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ReactHookCandidateOptions.",
+      "target": "./queries/react-hook-candidates:ReactHookCandidateOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ReactHookCandidateResult changed from interface ReactHookCandidateResult { fileA: string; componentA: string; fileB: string; componentB: string; similarity: number; tokenCountA: number; tokenCountB: number; sharedTo... to interface ReactHookCandidateResult { fileA: string; componentA: string; fileB: string; componentB: string; similarity: number; tokenCountA: number; tokenCountB: number; sharedTo....",
+      "target": "./queries/react-hook-candidates:ReactHookCandidateResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ReactHookCandidateScan.",
+      "target": "./queries/react-hook-candidates:ReactHookCandidateScan"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export reactHookCandidateScan.",
+      "target": "./queries/react-hook-candidates:reactHookCandidateScan"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "reactHookCandidates changed from declare function reactHookCandidates(db: ScipDatabase, opts?: { minSimilarity?: number; minSharedBehaviors?: number; limit?: number; scope?: string; scanLimit?: number; filePatt... to declare function reactHookCandidates(db: ScipDatabase, opts?: ReactHookCandidateOptions): ReactHookCandidateResult[];.",
+      "target": "./queries/react-hook-candidates:reactHookCandidates"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ReactLargeComponentPressureOptions.",
+      "target": "./queries/react-large-component-pressure:ReactLargeComponentPressureOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ReactLargeComponentPressureScan.",
+      "target": "./queries/react-large-component-pressure:ReactLargeComponentPressureScan"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "reactLargeComponentPressure changed from declare function reactLargeComponentPressure(db: ScipDatabase, opts?: { minComponentLines?: number; minFileLines?: number; minJsxTokens?: number; minBehaviorTokens?: number; lim... to declare function reactLargeComponentPressure(db: ScipDatabase, opts?: ReactLargeComponentPressureOptions): ReactLargeComponentPressureResult[];.",
+      "target": "./queries/react-large-component-pressure:reactLargeComponentPressure"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export reactLargeComponentPressureScan.",
+      "target": "./queries/react-large-component-pressure:reactLargeComponentPressureScan"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export WrapperBodyShape.",
+      "target": "./queries/wrapper-candidates:WrapperBodyShape"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "WrapperCandidate changed from interface WrapperCandidate { symbol: string; shortName: string; file: string; startLine: number; endLine: number; loc: number; singleCaller: string; singleCallerShort: string; c... to interface WrapperCandidate { symbol: string; shortName: string; file: string; startLine: number; endLine: number; loc: number; singleCaller: string; singleCallerShort: string; c....",
+      "target": "./queries/wrapper-candidates:WrapperCandidate"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module frontend-profile-roles-<hash>.d.ts was added or renamed.",
+      "target": "frontend-profile-roles-<hash>.d.ts"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes....",
+      "target": "health-<hash>.d.ts:b"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.23.0",
+  "previousDigest": "cc201da378d12223a1b1eb08f3cd1863a9837adae4b14a4a39dacde11cff653d",
+  "reason": "Health detectors now apply disclosed convention policies: result rows gain pairContext/unitKind (React pairs) and bodyShape (wrappers), HealthReport gains policyExclusions, CoChangePartnerClass gains generated-artifact, and duplicateBodyScan/isGeneratedArtifactPath are exported. Consumers that construct these result types or switch exhaustively on the partner class must add the new members.",
+  "schemaVersion": 1
+}

@@ -257,7 +257,7 @@ export const handleWrapperCandidates = budgetedListCommand('wrapper-candidates',
     }),
   format: (r) =>
     `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC)\n` +
-    `    Only called by: ${r.singleCallerShort}  (fan-in: ${r.callerFanIn}, tier: ${r.actionTier})` +
+    `    Only called by: ${r.singleCallerShort}  (fan-in: ${r.callerFanIn}, body: ${r.bodyShape}, tier: ${r.actionTier})` +
     (r.boundaryEvidence.length > 0 ? `\n    Boundary evidence: ${r.boundaryEvidence.join('; ')}` : ''),
   emptyMessage: () => 'No wrapper candidates found.',
   heuristicLabel: 'wrapper candidates',
@@ -608,14 +608,19 @@ export const handleSimilarSignatures = budgetedListCommand('similar-signatures',
 });
 
 export const handleDuplicateBodies = budgetedListCommand('duplicate-bodies', {
-  query: ({ db, opts, budget }) =>
-    queries.duplicateBodies(db, {
+  query: ({ db, opts, budget }) => {
+    const scan = queries.duplicateBodyScan(db, {
       scope: stringOptionValue(opts, 'scope'),
       maxLoc: definedNumberOption(opts, 'maxLoc', 15),
       minLoc: definedNumberOption(opts, 'minLoc', 3),
       limit: definedLimitOption(opts, 'limit', 20),
       scanLimit: budget.scanLimit,
-    }),
+    });
+    for (const exclusion of scan.exclusions) {
+      console.log(`Policy exclusion: ${exclusion.count} ${exclusion.detail}`);
+    }
+    return scan.groups;
+  },
   format: (group) => {
     const head = `\nBody hash: ${group.hash}  (${group.functions.length} functions)`;
     const body = group.functions

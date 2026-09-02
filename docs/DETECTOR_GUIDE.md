@@ -17,17 +17,17 @@ score is a summary, not proof of correctness.
 
 ## Focused detector families
 
-| Concern | Commands |
-| --- | --- |
-| Exact or near duplication | `duplicate-bodies`, `similar`, `recent-duplicates` |
-| Parallel implementations | `twin-drift`, `incomplete-migration`, `drift` |
-| Unused or disconnected code | `dead`, `isolated`, `unused-params` |
-| Excess indirection | `wrapper-candidates`, `passthrough-candidates`, `stale-abstractions`, `redundant-reexports` |
-| Change pressure | `complexity-hotspots`, `co-change`, `cycles` |
-| Documentation | `doc-drift` |
-| React | `react-component-duplicates`, `react-hook-candidates`, `react-large-component-pressure` |
-| Vue | `vue-component-duplicates`, `vue-composable-candidates`, `vue-large-view-pressure` |
-| Team structure policy | `architecture` |
+| Concern                     | Commands                                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| Exact or near duplication   | `duplicate-bodies`, `similar`, `recent-duplicates`                                          |
+| Parallel implementations    | `twin-drift`, `incomplete-migration`, `drift`                                               |
+| Unused or disconnected code | `dead`, `isolated`, `unused-params`                                                         |
+| Excess indirection          | `wrapper-candidates`, `passthrough-candidates`, `stale-abstractions`, `redundant-reexports` |
+| Change pressure             | `complexity-hotspots`, `co-change`, `cycles`                                                |
+| Documentation               | `doc-drift`                                                                                 |
+| React                       | `react-component-duplicates`, `react-hook-candidates`, `react-large-component-pressure`     |
+| Vue                         | `vue-component-duplicates`, `vue-composable-candidates`, `vue-large-view-pressure`          |
+| Team structure policy       | `architecture`                                                                              |
 
 Run focused commands through the `scip-query` CLI. Add `--full` only when that
 command supports it and exhaustive command coverage can change the decision.
@@ -44,3 +44,25 @@ command supports it and exhaustive command coverage can change the decision.
 Suppress a false or accepted finding with `scip-query suppress <id>` and a
 specific reason. A suppression addresses one finding; it must not disable an
 unrelated detector family.
+
+## Policy exclusions
+
+Some rows match a detector's pattern because a convention demands the
+match, not because anyone copied or wrapped anything. Detectors remove those
+rows from the counts `health` scores and disclose the removal instead of
+hiding it, under `Policy exclusions` in the text report and `policyExclusions`
+in `health --json`. An excluded row is still listed by its focused command
+(often at support tier), so a reviewer who disagrees with the policy can
+still find it.
+
+| Detector                                                                                | Excluded by policy                                                                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `react-component-duplicates`, `react-hook-candidates`, `react-large-component-pressure` | components in test files; pairs of vendored UI-kit primitives (the shadcn `components.json` `aliases.ui` directory or a `components/ui` directory); hook-versus-component pairs; loading placeholders that share only a skeleton primitive |
+| `react-component-duplicates`, `react-hook-candidates`                                   | two framework route entries (support tier: routing scaffolding); an intercepting route and its target are kept, with the recommendation to render one shared view                                                                          |
+| `react-hook-candidates`                                                                 | pairs whose overlap is only generic React or data-fetching mechanics (`useState`, `useMutation`, `.mutate()`, `useRouter`)                                                                                                                 |
+| `wrapper-candidates`                                                                    | constructors; single-consumer callables whose body computes or branches instead of forwarding one call (`bodyShape: helper`, signal tier)                                                                                                  |
+| `duplicate-bodies`                                                                      | duplicate members that are constructors, test-file bodies, route-file verb exports, or vendored UI-kit bodies; a group must keep two product files to count                                                                                |
+| `dead`                                                                                  | zero-reference symbols in framework entry surfaces (route handlers, pages, Trigger.dev task directories from `trigger.config.*`, live barrels) and in generated artifacts (`drizzle-kit pull` dumps, migration snapshots, codegen output)  |
+| `twin-drift`                                                                            | route-file convention names (`handler`, `handleGet`, `*Page`, `generateMetadata`) inside framework entry files                                                                                                                             |
+| `co-change` (hidden coupling)                                                           | documentation that changes alongside the code it describes (`doc-drift` owns stale docs); generated artifacts such as migration journals, snapshots, and codegen output                                                                    |
+| `complexity-hotspots` (extreme count)                                                   | callables above the extreme score only through fan-in, with fewer than 10 branches                                                                                                                                                         |

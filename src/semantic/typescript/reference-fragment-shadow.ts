@@ -2,7 +2,7 @@ import { getHeapStatistics } from 'node:v8';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type { FileDependencyGraph, ProjectInputSnapshot } from '../../domain/project-input.js';
 import { profileAsyncSpan, profileSpan } from '../../instrumentation/profile.js';
-import { collectNativeGarbage } from '../../platform/native-gc.js';
+import { collectNativeGarbage } from '../../domain/native-gc.js';
 import { clearRegisteredCaches } from '../../storage/cache-registry.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import type { ScipDatabase } from '../../storage/db.js';

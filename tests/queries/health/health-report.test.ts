@@ -135,3 +135,64 @@ describe('health report scoring', () => {
     });
   });
 });
+
+describe('health report policy calibration', () => {
+  it('scales the extreme-complexity pressure threshold with repository size', () => {
+    const small = buildHealthReport(emptyAnalyses({ complexity: { top: [], extremeCount: 12 } }));
+    const large = buildHealthReport(
+      emptyAnalyses({
+        statsResult: {
+          documents: 8_000,
+          symbols: 400_000,
+          definitions: 400_000,
+          references: 0,
+          indexSizeBytes: 0,
+          lastBuilt: null,
+        },
+        complexity: { top: [], extremeCount: 12 },
+      }),
+    );
+    const smallPressure = small.pressure.find((entry) => entry.axis === 'complexity-pressure');
+    const largePressure = large.pressure.find((entry) => entry.axis === 'complexity-pressure');
+    expect(smallPressure).toEqual(expect.objectContaining({ threshold: 3, extraPenalty: 4 }));
+    expect(largePressure).toBeUndefined();
+  });
+
+  it('discloses detector policy exclusions and scores component duplicates by weighted count', () => {
+    const report = buildHealthReport(
+      emptyAnalyses({
+        reactComponentDuplicates: {
+          count: 12,
+          scoreCount: 4,
+          loc: 0,
+          exclusions: [{ reason: 'ui-kit-pairs', detail: 'kit primitive pairs', count: 3 }],
+        },
+        complexity: {
+          top: [],
+          extremeCount: 0,
+          exclusions: [{ reason: 'popular-low-branch-callables', detail: 'fan-in only', count: 1 }],
+        },
+        gitEvidence: {
+          amplification: null,
+          hiddenCoupling: {
+            pairCount: 0,
+            scoreCount: 0,
+            exclusions: [{ reason: 'doc-sync-pairs', detail: 'doc sync', count: 5 }],
+            top: [],
+          },
+          fileStats: {},
+          commitsScanned: 10,
+        },
+      }),
+    );
+    expect(report.policyExclusions).toEqual([
+      expect.objectContaining({ detector: 'react-component-duplicates', reason: 'ui-kit-pairs', count: 3 }),
+      expect.objectContaining({ detector: 'complexity-hotspots', reason: 'popular-low-branch-callables', count: 1 }),
+      expect.objectContaining({ detector: 'co-change', reason: 'doc-sync-pairs', count: 5 }),
+    ]);
+    const deduction = report.scoreBreakdown.find((entry) => entry.axis === 'react-component-duplicates');
+    expect(deduction).toEqual(
+      expect.objectContaining({ points: 10, detail: expect.stringContaining('4 score-weighted') }),
+    );
+  });
+});

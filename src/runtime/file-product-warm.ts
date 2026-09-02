@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../storage/db.js';
 import type { IndexedDefinition } from '../domain/types.js';
-import { collectNativeGarbage } from '../platform/native-gc.js';
+import { collectNativeGarbage } from '../domain/native-gc.js';
 import { getDefinitionsForFile } from '../symbols/definition-catalog.js';
 import { getReExports, readSourceImportsUncached } from '../language-parsers/index.js';
 import { getSourceFactsResult } from '../source/facts/source-facts.js';

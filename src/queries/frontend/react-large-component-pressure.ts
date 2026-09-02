@@ -2,6 +2,12 @@ import { frontendBehaviorProduct } from '../../source/frontend-behavior-products
 import type { ReactComponentBehaviorProfile } from '../../source/react-profile.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { evaluatePressure, type PressureAxis } from '../internal/frontend-behavior-evidence.js';
+import {
+  FRONTEND_EXCLUSION_DETAILS,
+  FrontendPolicyExclusions,
+  frontendProfileRolePolicy,
+  type FrontendPolicyExclusion,
+} from '../internal/frontend-profile-roles.js';
 
 export type ReactLargeComponentPressureAxis = 'component' | 'file' | 'jsx-structure' | 'hook-behavior';
 export type ReactLargeComponentContextKind = 'component' | 'route-page';
@@ -28,19 +34,40 @@ export interface ReactLargeComponentPressureResult {
   loc: number;
 }
 
+export interface ReactLargeComponentPressureScan {
+  results: ReactLargeComponentPressureResult[];
+  /** Qualifying components the role policy removed, disclosed by reason. */
+  exclusions: FrontendPolicyExclusion[];
+}
+
+export interface ReactLargeComponentPressureOptions {
+  minComponentLines?: number;
+  minFileLines?: number;
+  minJsxTokens?: number;
+  minBehaviorTokens?: number;
+  limit?: number;
+  scope?: string;
+  scanLimit?: number;
+  filePattern?: string;
+}
+
 export function reactLargeComponentPressure(
   db: ScipDatabase,
-  opts: {
-    minComponentLines?: number;
-    minFileLines?: number;
-    minJsxTokens?: number;
-    minBehaviorTokens?: number;
-    limit?: number;
-    scope?: string;
-    scanLimit?: number;
-    filePattern?: string;
-  } = {},
+  opts: ReactLargeComponentPressureOptions = {},
 ): ReactLargeComponentPressureResult[] {
+  return reactLargeComponentPressureScan(db, opts).results;
+}
+
+/**
+ * Pressure scan with its policy exclusions. Components in test files and in
+ * vendored UI-kit directories are dropped only after they would have
+ * qualified, so the disclosed counts name real omissions rather than the
+ * number of files skipped.
+ */
+export function reactLargeComponentPressureScan(
+  db: ScipDatabase,
+  opts: ReactLargeComponentPressureOptions = {},
+): ReactLargeComponentPressureScan {
   const {
     minComponentLines = 300,
     minFileLines = 800,
@@ -51,11 +78,13 @@ export function reactLargeComponentPressure(
     scanLimit,
     filePattern,
   } = opts;
+  const policy = frontendProfileRolePolicy(db);
+  const exclusions = new FrontendPolicyExclusions();
   const profiles = frontendBehaviorProduct(db)
     .reactProfiles({ scope, scanLimit })
     .filter((profile) => profile.kind === 'component')
     .filter((profile) => !filePattern || profile.file.includes(filePattern) || profile.name.includes(filePattern));
-  return profiles
+  const results = profiles
     .map((profile) =>
       reactPressureResult(profile, {
         minComponentLines,
@@ -65,8 +94,21 @@ export function reactLargeComponentPressure(
       }),
     )
     .filter((result): result is ReactLargeComponentPressureResult => result !== null)
+    .filter((result) => {
+      const role = policy.roleOf(result.file);
+      if (role === 'test') {
+        exclusions.record('test-files', FRONTEND_EXCLUSION_DETAILS.testFiles);
+        return false;
+      }
+      if (role === 'ui-kit') {
+        exclusions.record('ui-kit-files', FRONTEND_EXCLUSION_DETAILS.uiKitFiles);
+        return false;
+      }
+      return true;
+    })
     .sort((a, b) => b.componentLines - a.componentLines || b.fileLines - a.fileLines || a.file.localeCompare(b.file))
     .slice(0, limit);
+  return { results, exclusions: exclusions.list() };
 }
 
 // scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
@@ -79,7 +121,7 @@ function reactPressureResult(
     minBehaviorTokens: number;
   },
 ): ReactLargeComponentPressureResult | null {
-  const substantialComponentLines = Math.max(80, Math.floor(thresholds.minComponentLines / 2));
+  const substantialComponentLines = Math.max(1, Math.floor(thresholds.minComponentLines / 2));
   const pressure = evaluatePressure(
     profile,
     reactPressureAxes({
@@ -136,18 +178,24 @@ function reactPressureAxes(thresholds: {
         value >= thresholds.minFileLines && profile.loc >= thresholds.substantialComponentLines,
       reason: (_profile, value) => `${value} file line(s)`,
     },
+    // Token counts measure vocabulary, not size: a 50-line component can name
+    // 80 distinct tags, props, and bindings. They only indicate pressure once
+    // the component is already substantial, so both token axes carry the
+    // same line guard the file axis uses.
     {
       axis: 'jsx-structure',
       value: (profile) => profile.jsxTokens.size,
       weightedValue: (_profile, value) => value * 3,
-      qualifies: (_profile, value) => value >= thresholds.minJsxTokens,
+      qualifies: (profile, value) =>
+        value >= thresholds.minJsxTokens && profile.loc >= thresholds.substantialComponentLines,
       reason: (_profile, value) => `${value} JSX structure token(s)`,
     },
     {
       axis: 'hook-behavior',
       value: (profile) => profile.behaviorTokens.size,
       weightedValue: (_profile, value) => value * 4,
-      qualifies: (_profile, value) => value >= thresholds.minBehaviorTokens,
+      qualifies: (profile, value) =>
+        value >= thresholds.minBehaviorTokens && profile.loc >= thresholds.substantialComponentLines,
       reason: (_profile, value) => `${value} behavior token(s)`,
     },
   ];

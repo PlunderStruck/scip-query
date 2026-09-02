@@ -537,3 +537,27 @@ describe('twinDrift (db-backed) — delegation-chain exclusion', () => {
     expect(groups).toHaveLength(0);
   });
 });
+
+describe('groupTwins framework route conventions', () => {
+  it('excludes route-file convention names that every route implements by construction', () => {
+    const tokens = ['return', 'json', '(', 'await', 'load', '(', 'req', ')', ')'];
+    const groups = groupTwins([
+      record({ leaf: 'handler', file: 'src/app/api/users/route.ts', tokens }),
+      record({ leaf: 'handler', file: 'src/app/api/posts/route.ts', tokens: [...tokens, 'limit'] }),
+      record({ leaf: 'handleGet', file: 'src/app/api/users/route.ts', tokens }),
+      record({ leaf: 'handleGet', file: 'src/app/api/posts/route.ts', tokens: [...tokens, 'limit'] }),
+      record({ leaf: 'UsersPage', file: 'src/app/users/page.tsx', tokens }),
+      record({ leaf: 'UsersPage', file: 'src/app/@modal/(.)users/page.tsx', tokens: [...tokens, 'limit'] }),
+    ]);
+    expect(groups).toEqual([]);
+  });
+
+  it('keeps the same convention names when they live outside framework entry files', () => {
+    const tokens = ['return', 'json', '(', 'await', 'load', '(', 'req', ')', ')'];
+    const groups = groupTwins([
+      record({ leaf: 'handler', file: 'src/lib/queue/users.ts', tokens }),
+      record({ leaf: 'handler', file: 'src/lib/queue/posts.ts', tokens: [...tokens, 'limit'] }),
+    ]);
+    expect(groups.map((group) => group.leaf)).toEqual(['handler']);
+  });
+});

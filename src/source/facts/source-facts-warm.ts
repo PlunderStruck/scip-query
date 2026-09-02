@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
-import { collectNativeGarbage } from '../../platform/native-gc.js';
+import { collectNativeGarbage } from '../../domain/native-gc.js';
 import { getSourceFactsResult } from './source-facts.js';
 
 export interface SourceFactsWarmOptions {

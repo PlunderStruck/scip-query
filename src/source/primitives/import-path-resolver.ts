@@ -259,6 +259,25 @@ function resolveTsconfigPathAliasImport(db: ScipDatabase, importerPath: string, 
   return null;
 }
 
+/**
+ * Resolve a tsconfig `paths` alias to the project-relative path it names,
+ * whether that target is a file or a directory (`@/components/ui` ->
+ * `src/components/ui`). Unlike `resolveImportPath`, no extension probing is
+ * attempted: this answers "which project path does this alias denote", which
+ * configuration files (shadcn `components.json`, route manifests) need when
+ * they refer to directories rather than importable modules.
+ */
+export function resolveTsconfigAliasPath(db: ScipDatabase, importerPath: string, specifier: string): string | null {
+  const config = tsconfigAliasConfigForImporter(db, importerPath);
+  if (!config) return null;
+  for (const target of matchTsconfigPathAlias(config, specifier)) {
+    const absolute = resolve(config.baseUrl, target);
+    if (!existsSync(absolute)) continue;
+    return normalizePath(relative(db.config.projectRoot, absolute));
+  }
+  return null;
+}
+
 function matchTsconfigPathAlias(config: TsconfigAliasConfig, specifier: string): string[] {
   const targets: string[] = [];
   for (const [pattern, patternTargets] of Object.entries(config.paths)) {

@@ -28,7 +28,7 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { recordFileAccess } from '../domain/file-access-recorder.js';
 import { getCallableSites, type CallableSite } from '../source/ast.js';
-import { collectNativeGarbage } from '../platform/native-gc.js';
+import { collectNativeGarbage } from '../domain/native-gc.js';
 import { sourceEvidence } from '../language-parsers/source-evidence.js';
 import {
   isFunctionLikeSymbol,

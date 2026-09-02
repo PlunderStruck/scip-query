@@ -15,10 +15,19 @@ import {
 } from '../internal/consumer-evidence.js';
 import { mergeSetMaps } from '../../symbols/references/caller-evidence.js';
 import { boundaryEvidenceForSurfaces } from './boundary-evidence.js';
+import { definitionSourceSnippet } from './duplicate-bodies.js';
+import { isThinForwarderBody } from './twin-drift.js';
 import { profileSpan } from '../../instrumentation/profile.js';
 import { isClojureMacroDefinition } from '../../source/ast.js';
 
 export type WrapperActionTier = 'direct' | 'signal';
+/**
+ * `forwarding`: the body is nothing more than one call (optionally returned
+ * or awaited, with at most one preparatory statement) — the shape the
+ * wrapper claim describes. `helper`: the body computes, branches, or builds
+ * something itself; it merely has one consumer.
+ */
+export type WrapperBodyShape = 'forwarding' | 'helper';
 
 export interface WrapperCandidate {
   symbol: string;
@@ -31,6 +40,7 @@ export interface WrapperCandidate {
   singleCallerShort: string;
   callerFanIn: number;
   actionTier: WrapperActionTier;
+  bodyShape: WrapperBodyShape;
   boundaryEvidence: string[];
 }
 
@@ -180,6 +190,8 @@ function wrapperCandidateForSymbol(
   if (fanInSource === 'function' ? callerFanIn <= 3 : callerFanIn <= 5) return null;
 
   const boundaryEvidence = wrapperBoundaryEvidence(db, symbol, callerFile, enclosing);
+  const bodyShape = wrapperBodyShape(db, symbol);
+  if (bodyShape === 'helper') boundaryEvidence.push('body computes or branches rather than forwarding one call');
   return {
     symbol: symbol.symbol,
     shortName: shortenSymbol(symbol.symbol),
@@ -190,9 +202,18 @@ function wrapperCandidateForSymbol(
     singleCaller: enclosing?.symbol ?? '',
     singleCallerShort: enclosing?.isFunctionLike ? shortenSymbol(enclosing.symbol) : basename(callerFile),
     callerFanIn,
+    // Direct advice ("inline this wrapper") needs a wrapper-shaped body and no
+    // boundary evidence; a single-consumer helper is a review signal only.
     actionTier: boundaryEvidence.length > 0 ? 'signal' : 'direct',
+    bodyShape,
     boundaryEvidence,
   };
+}
+
+function wrapperBodyShape(db: ScipDatabase, symbol: IndexedDefinition): WrapperBodyShape {
+  const snippet = definitionSourceSnippet(db, symbol);
+  if (!snippet) return 'helper';
+  return isThinForwarderBody(snippet) ? 'forwarding' : 'helper';
 }
 
 function getWrapperCandidateSymbols(
@@ -201,20 +222,29 @@ function getWrapperCandidateSymbols(
   scope: string | undefined,
   maxLoc: number,
 ): IndexedDefinition[] {
-  return index
-    .productionCallableDefinitions({
-      scope,
-      minLoc: 2,
-      maxLoc,
-      requireFunctionLikeSymbol: true,
-      // "Inline this wrapper" is wrong advice for published API — external
-      // consumers the index can't see depend on the wrapper staying put.
-      excludeRootedSymbols: true,
-      // Trait-required methods are contract implementations, not removable
-      // wrappers, even when only one repository caller invokes them directly.
-      excludeRustTraitImplMembers: true,
-    })
-    .filter((definition) => !isClojureMacroDefinition(db, definition));
+  return (
+    index
+      .productionCallableDefinitions({
+        scope,
+        minLoc: 2,
+        maxLoc,
+        requireFunctionLikeSymbol: true,
+        // "Inline this wrapper" is wrong advice for published API — external
+        // consumers the index can't see depend on the wrapper staying put.
+        excludeRootedSymbols: true,
+        // Trait-required methods are contract implementations, not removable
+        // wrappers, even when only one repository caller invokes them directly.
+        excludeRustTraitImplMembers: true,
+      })
+      .filter((definition) => !isClojureMacroDefinition(db, definition))
+      // A constructor is instantiated, not wrapped; scip names it `<constructor>`
+      // and every class has exactly one, so it can never be inlined.
+      .filter((definition) => !isSyntheticLeaf(definition.leaf))
+  );
+}
+
+function isSyntheticLeaf(leaf: string | null | undefined): boolean {
+  return typeof leaf === 'string' && leaf.startsWith('<') && leaf.endsWith('>');
 }
 
 function externalCallerFiles(

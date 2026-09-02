@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
-import { collectNativeGarbage } from '../../platform/native-gc.js';
+import { collectNativeGarbage } from '../../domain/native-gc.js';
 import { createRequire } from 'node:module';
 import type * as TypeScript from 'typescript';
 import { detectAstLanguage, isVueSfcPath } from '../../source/ast/ast-language.js';

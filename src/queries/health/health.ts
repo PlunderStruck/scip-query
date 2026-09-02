@@ -4,11 +4,14 @@ import { dead } from '../cleanup/dead.js';
 import { isolated } from '../cleanup/isolated.js';
 import { cycles } from '../graph/cycles.js';
 import { similarAllCount } from '../cleanup/similar.js';
-import { duplicateBodies } from '../cleanup/duplicate-bodies.js';
+import { duplicateBodyScan } from '../cleanup/duplicate-bodies.js';
 import { allTwinGroups } from '../cleanup/twin-drift.js';
-import { reactComponentDuplicates } from '../frontend/react-component-duplicates.js';
-import { reactHookCandidates } from '../frontend/react-hook-candidates.js';
-import { reactLargeComponentPressure } from '../frontend/react-large-component-pressure.js';
+import {
+  reactComponentDuplicateScan,
+  type ReactComponentDuplicateResult,
+} from '../frontend/react-component-duplicates.js';
+import { reactHookCandidateScan, type ReactHookCandidateResult } from '../frontend/react-hook-candidates.js';
+import { reactLargeComponentPressureScan } from '../frontend/react-large-component-pressure.js';
 import { vueComponentDuplicates } from '../frontend/vue-component-duplicates.js';
 import { vueComposableCandidates } from '../frontend/vue-composable-candidates.js';
 import { vueLargeViewPressure } from '../frontend/vue-large-view-pressure.js';
@@ -36,6 +39,7 @@ import type {
   DriftSummary,
   GitEvidenceSummary,
   HealthAnalyses,
+  PolicyExclusionSummary,
   StaleSummary,
   SuppressionSummary,
 } from './health-types.js';
@@ -52,6 +56,7 @@ interface HealthBudget {
 }
 
 const EXTREME_COMPLEXITY_SCORE = 50;
+const EXTREME_COMPLEXITY_MIN_BRANCHES = 10;
 const LARGE_HEALTH_SYMBOL_THRESHOLD = 25_000;
 const LARGE_HEALTH_DOCUMENT_THRESHOLD = 2_500;
 const DEFAULT_HEALTH_CANDIDATE_SCAN_LIMIT = 2_500;
@@ -371,7 +376,24 @@ function summarizeHealthDead(db: ScipDatabase, scope: string | undefined, budget
       scanLimit: budget.candidateScanLimit,
       semantic: budget.semantic,
     });
-    return summarizeLoc(filterHealthDeadSymbols(db, deadResult.symbols));
+    const applicability = deadResult.applicability;
+    return {
+      ...summarizeLoc(filterHealthDeadSymbols(db, deadResult.symbols)),
+      exclusions: mergePolicyExclusions([
+        {
+          reason: 'entry-surface-symbols',
+          detail:
+            'zero-reference symbols in framework entry surfaces (route handlers, pages, scheduled tasks, live barrels) that the framework invokes',
+          count: applicability.entrySurfaceExcluded,
+        },
+        {
+          reason: 'generated-artifact-symbols',
+          detail:
+            'zero-reference symbols in generated artifacts (migration dumps, codegen output) owned by their generator',
+          count: applicability.generatedArtifactExcluded ?? 0,
+        },
+      ]),
+    };
   });
 }
 
@@ -424,7 +446,7 @@ function countExtractionHealthCandidates(db: ScipDatabase, scope: string | undef
 
 function summarizeDuplicateBodies(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): CountLocSummary {
   return runHealthPhase(db, budget, 'duplicate-bodies', () => {
-    const groups = duplicateBodies(db, {
+    const scan = duplicateBodyScan(db, {
       scope,
       ...HEALTH_DETECTOR_PROFILES.duplicateBodies,
       limit: budget.candidateResultLimit,
@@ -432,13 +454,22 @@ function summarizeDuplicateBodies(db: ScipDatabase, scope: string | undefined, b
     });
     const files = new Set<string>();
     let duplicateLoc = 0;
-    for (const group of groups) {
+    for (const group of scan.groups) {
       for (const entry of group.functions.slice(1)) {
         files.add(entry.file);
         duplicateLoc += entry.loc;
       }
     }
-    return { count: groups.length, loc: duplicateLoc, files: [...files] };
+    return {
+      count: scan.groups.length,
+      loc: duplicateLoc,
+      files: [...files],
+      exclusions: scan.exclusions.map((exclusion) => ({
+        reason: exclusion.reason,
+        detail: `${exclusion.detail}; group members removed before counting`,
+        count: exclusion.count,
+      })),
+    };
   });
 }
 
@@ -477,12 +508,23 @@ function summarizeReactComponentDuplicates(
   budget: HealthBudget,
 ): CountLocSummary {
   return runHealthPhase(db, budget, 'react-component-duplicates', () => {
-    const results = reactComponentDuplicates(db, {
+    const scan = reactComponentDuplicateScan(db, {
       scope,
       limit: budget.candidateResultLimit,
       scanLimit: budget.candidateScanLimit,
     });
-    return summarizePairLoc(results);
+    const counted = scan.results.filter((result) => reactComponentHealthScore(result) > 0);
+    return {
+      ...summarizePairLocWithScore(counted, reactComponentHealthScore),
+      exclusions: mergePolicyExclusions(scan.exclusions, [
+        {
+          reason: 'support-tier-pairs',
+          detail:
+            'support-tier pairs (generic structure only, or framework route scaffolding); listed by react-component-duplicates but not counted',
+          count: scan.results.length - counted.length,
+        },
+      ]),
+    };
   });
 }
 
@@ -492,12 +534,27 @@ function summarizeReactHookCandidates(
   budget: HealthBudget,
 ): CountLocSummary {
   return runHealthPhase(db, budget, 'react-hook-candidates', () => {
-    const results = reactHookCandidates(db, {
+    const scan = reactHookCandidateScan(db, {
       scope,
       limit: budget.candidateResultLimit,
       scanLimit: budget.candidateScanLimit,
     });
-    return summarizePairLocWithScore(results, reactHookHealthScore);
+    const counted: ReactHookCandidateResult[] = [];
+    const uncounted = new Map<string, PolicyExclusionSummary>();
+    for (const result of scan.results) {
+      const verdict = reactHookHealthVerdict(result);
+      if (verdict.weight > 0) {
+        counted.push(result);
+        continue;
+      }
+      const exclusion = uncounted.get(verdict.reason) ?? { reason: verdict.reason, detail: verdict.detail, count: 0 };
+      exclusion.count += 1;
+      uncounted.set(verdict.reason, exclusion);
+    }
+    return {
+      ...summarizePairLocWithScore(counted, reactHookHealthScore),
+      exclusions: mergePolicyExclusions(scan.exclusions, [...uncounted.values()]),
+    };
   });
 }
 
@@ -507,12 +564,12 @@ function summarizeReactLargeComponentPressure(
   budget: HealthBudget,
 ): CountLocSummary {
   return runHealthPhase(db, budget, 'react-large-component-pressure', () => {
-    const results = reactLargeComponentPressure(db, {
+    const scan = reactLargeComponentPressureScan(db, {
       scope,
       limit: budget.candidateResultLimit,
       scanLimit: budget.candidateScanLimit,
     });
-    return summarizeUniqueFileLoc(results);
+    return { ...summarizeUniqueFileLoc(scan.results), exclusions: mergePolicyExclusions(scan.exclusions, []) };
   });
 }
 
@@ -570,7 +627,25 @@ function summarizeHealthWrappers(db: ScipDatabase, scope: string | undefined, bu
       scanLimit: budget.candidateScanLimit,
       semantic: budget.semantic,
     });
-    return summarizeLocWithScore(results, wrapperHealthScore);
+    // The wrapper claim is "one consumer and wrapper-shaped delegation"; a
+    // single-consumer helper that computes something satisfies only half of
+    // it, so it stays a disclosed review lead rather than a counted finding.
+    const forwarding = results.filter((candidate) => candidate.bodyShape === 'forwarding');
+    const helpers = results.length - forwarding.length;
+    return {
+      ...summarizeLocWithScore(forwarding, wrapperHealthScore),
+      exclusions:
+        helpers > 0
+          ? [
+              {
+                reason: 'single-consumer-helpers',
+                detail:
+                  'single-consumer callables whose body computes or branches instead of forwarding one call; listed by wrapper-candidates as signal tier',
+                count: helpers,
+              },
+            ]
+          : [],
+    };
   });
 }
 
@@ -630,14 +705,30 @@ function summarizeGitEvidence(db: ScipDatabase, budget: HealthBudget): GitEviden
     for (const [file, entry] of churn) {
       fileStats[file] = { changes: entry.changes, fixChanges: entry.fixChanges };
     }
+    const counted = coChangeResult.findings.filter((finding) => hiddenCouplingHealthVerdict(finding).counted);
+    const excluded = new Map<string, PolicyExclusionSummary>();
+    for (const finding of coChangeResult.findings) {
+      const verdict = hiddenCouplingHealthVerdict(finding);
+      if (verdict.counted) continue;
+      const entry = excluded.get(verdict.reason) ?? { reason: verdict.reason, detail: verdict.detail, count: 0 };
+      entry.count += 1;
+      excluded.set(verdict.reason, entry);
+    }
+    // Lead with the pair that carries the most score weight: a generated
+    // journal that co-changes 290 times is a striking example of nothing.
+    const ranked = [...counted].sort(
+      (left, right) =>
+        hiddenCouplingHealthScore(right) - hiddenCouplingHealthScore(left) || right.together - left.together,
+    );
     return {
       amplification: git.changeAmplification(),
       hiddenCoupling: {
-        pairCount: coChangeResult.findings.length,
+        pairCount: counted.length,
         scoreCount: roundHealthScoreCount(
-          coChangeResult.findings.reduce((sum, finding) => sum + hiddenCouplingHealthScore(finding), 0),
+          counted.reduce((sum, finding) => sum + hiddenCouplingHealthScore(finding), 0),
         ),
-        top: coChangeResult.findings.slice(0, 5).map((finding) => ({
+        exclusions: [...excluded.values()].sort((left, right) => left.reason.localeCompare(right.reason)),
+        top: ranked.slice(0, 5).map((finding) => ({
           fileA: finding.fileA,
           fileB: finding.fileB,
           together: finding.together,
@@ -718,13 +809,33 @@ function summarizeHealthComplexity(
       scanLimit: budget.candidateScanLimit,
       semantic: budget.semantic,
     });
+    // The score multiplies fan-in, so a 50-line primitive that every file
+    // imports outranks genuinely tangled code. "Extreme" is reserved for
+    // callables that also carry branch pressure; a popular leaf is a hot
+    // dependency, not a complexity hotspot.
+    const extreme = complexResult.filter(
+      (r) => r.score > EXTREME_COMPLEXITY_SCORE && r.branches >= EXTREME_COMPLEXITY_MIN_BRANCHES,
+    );
+    const popularLeaves = complexResult.filter(
+      (r) => r.score > EXTREME_COMPLEXITY_SCORE && r.branches < EXTREME_COMPLEXITY_MIN_BRANCHES,
+    ).length;
     return {
       top: complexResult.slice(0, 5).map((r) => ({
         symbol: r.shortName,
         score: r.score,
         file: r.file,
       })),
-      extremeCount: complexResult.filter((r) => r.score > EXTREME_COMPLEXITY_SCORE).length,
+      extremeCount: extreme.length,
+      exclusions:
+        popularLeaves > 0
+          ? [
+              {
+                reason: 'popular-low-branch-callables',
+                detail: `callables above the extreme score only through fan-in, with fewer than ${EXTREME_COMPLEXITY_MIN_BRANCHES} branches`,
+                count: popularLeaves,
+              },
+            ]
+          : [],
     };
   });
 }
@@ -864,26 +975,95 @@ function summarizePairLocWithScore<T extends { fileA: string; fileB: string; loc
   };
 }
 
-function reactHookHealthScore(candidate: {
-  sharedHooks: readonly string[];
-  sharedState: readonly string[];
-  sharedRequests: readonly string[];
-  sharedEffects: readonly string[];
-  sharedHandlers: readonly string[];
-  sharedHandlerVerbs: readonly string[];
-}): number {
-  const existingSharedAbstraction = candidate.sharedHooks.length > 0;
+function reactComponentHealthScore(result: Pick<ReactComponentDuplicateResult, 'actionTier'>): number {
+  return result.actionTier === 'signal' ? 1 : 0;
+}
+
+type ReactHookHealthCandidate = Pick<
+  ReactHookCandidateResult,
+  | 'sharedHooks'
+  | 'sharedState'
+  | 'sharedRequests'
+  | 'sharedEffects'
+  | 'sharedHandlers'
+  | 'sharedHandlerVerbs'
+  | 'evidenceClass'
+  | 'pairContext'
+>;
+
+function reactHookHealthScore(candidate: ReactHookHealthCandidate): number {
+  return reactHookHealthVerdict(candidate).weight;
+}
+
+/**
+ * Health weight of one shared-behavior pair, with the policy that zeroed it.
+ * A pair whose overlap is entirely generic React mechanics, or that only
+ * repeats a framework route's scaffolding, or whose concrete behavior is
+ * already carried by a hook both sides call, is not a hook-extraction
+ * finding; it stays visible in the detector output and is disclosed here.
+ */
+// scip-query: ignore-extract — reviewed E1 workflow owner; the weight tiers are one scoring policy.
+function reactHookHealthVerdict(candidate: ReactHookHealthCandidate): {
+  weight: number;
+  reason: string;
+  detail: string;
+} {
+  if (candidate.pairContext === 'framework-route-pair') {
+    return {
+      weight: 0,
+      reason: 'framework-route-pairs',
+      detail: 'pairs of framework route entries that share only routing scaffolding',
+    };
+  }
+  if (candidate.evidenceClass === 'generic-workflow-scaffolding') {
+    return {
+      weight: 0,
+      reason: 'generic-workflow-pairs',
+      detail: 'pairs whose shared behavior is only generic React mechanics (open/close/submit state and handlers)',
+    };
+  }
+  // A framework hook (`useQueryClient`, `useRouter`) is plumbing every
+  // component uses; only a project hook both sides call counts as an
+  // abstraction that already carries their shared behavior.
+  const existingSharedAbstraction = candidate.sharedHooks.some((hook) => !GENERIC_HOOK_NAMES.has(hook));
   const concreteSignals = concreteBehaviorSignalCount({
     namedState: candidate.sharedState,
     requests: candidate.sharedRequests,
     lifecycle: candidate.sharedEffects,
     functions: candidate.sharedHandlers,
   });
-  if (existingSharedAbstraction && concreteSignals <= 2) return 0;
-  if (existingSharedAbstraction) return 0.5;
+  if (existingSharedAbstraction && concreteSignals <= 2) {
+    return {
+      weight: 0,
+      reason: 'shared-hook-covered-pairs',
+      detail: 'pairs whose concrete shared behavior is already carried by a project hook both sides call',
+    };
+  }
+  if (!existingSharedAbstraction && concreteSignals === 0) {
+    return {
+      weight: 0,
+      reason: 'generic-workflow-pairs',
+      detail: 'pairs whose shared behavior is only generic React mechanics (open/close/submit state and handlers)',
+    };
+  }
+  const counted = { reason: 'counted', detail: 'counted' };
+  if (existingSharedAbstraction) return { weight: 0.5, ...counted };
   if (hasOnlyGenericBehavior(candidate.sharedState, candidate.sharedHandlers, candidate.sharedHandlerVerbs))
-    return 0.25;
-  return concreteSignals >= 2 ? 1 : 0.5;
+    return { weight: 0.25, ...counted };
+  return { weight: concreteSignals >= 2 ? 1 : 0.5, ...counted };
+}
+
+function mergePolicyExclusions(...groups: ReadonlyArray<readonly PolicyExclusionSummary[]>): PolicyExclusionSummary[] {
+  const merged = new Map<string, PolicyExclusionSummary>();
+  for (const group of groups) {
+    for (const exclusion of group) {
+      if (exclusion.count <= 0) continue;
+      const existing = merged.get(exclusion.reason);
+      if (existing) existing.count += exclusion.count;
+      else merged.set(exclusion.reason, { ...exclusion });
+    }
+  }
+  return [...merged.values()].sort((left, right) => left.reason.localeCompare(right.reason));
 }
 
 function vueComposableHealthScore(candidate: {
@@ -915,13 +1095,48 @@ function concreteBehaviorSignalCount(parts: {
   lifecycle: readonly string[];
   functions: readonly string[];
 }): number {
+  // A bare `.mutate()`, `fetch()`, or `useQuery()` names the runtime, not a
+  // product request; only a request with a domain name counts as concrete.
+  const domainRequests = parts.requests.filter((name) => !GENERIC_REQUEST_NAMES.has(name));
   return (
-    parts.requests.length * 2 +
+    domainRequests.length * 2 +
     parts.lifecycle.length +
     parts.namedState.filter((name) => !GENERIC_BEHAVIOR_NAMES.has(normalizeBehaviorName(name))).length +
     Math.min(parts.functions.length, 3)
   );
 }
+
+const GENERIC_HOOK_NAMES = new Set([
+  'useForm',
+  'useFormContext',
+  'useInfiniteQuery',
+  'useMutation',
+  'useParams',
+  'usePathname',
+  'useQuery',
+  'useQueryClient',
+  'useRouter',
+  'useSearchParams',
+  'useSelector',
+  'useDispatch',
+  'useSuspenseQuery',
+  'useTheme',
+  'useTranslation',
+]);
+
+const GENERIC_REQUEST_NAMES = new Set([
+  'axios',
+  'fetch',
+  'gql',
+  'graphql',
+  'mutate',
+  'query',
+  'request',
+  'useInfiniteQuery',
+  'useMutation',
+  'useQuery',
+  'useSuspenseQuery',
+]);
 
 function hasOnlyGenericBehavior(
   names: readonly string[],
@@ -948,10 +1163,42 @@ function passthroughHealthScore(candidate: { actionTier?: 'direct' | 'signal' })
   return candidate.actionTier === 'signal' ? 0.25 : 1;
 }
 
-function hiddenCouplingHealthScore(finding: Pick<CoChangeFinding, 'commitScope' | 'recency'>): number {
+function hiddenCouplingHealthScore(finding: Pick<CoChangeFinding, 'commitScope' | 'recency' | 'partnerClass'>): number {
+  if (!hiddenCouplingHealthVerdict(finding).counted) return 0;
   if (finding.commitScope === 'broad-sweep') return finding.recency === 'recent' ? 0.25 : 0;
   if (finding.commitScope === 'mixed') return finding.recency === 'recent' ? 0.5 : 0.25;
   return finding.recency === 'recent' ? 1 : 0.5;
+}
+
+/**
+ * Whether a co-change pair is hidden coupling in the sense the score claims:
+ * two source units that implement one concept without a visible link. A
+ * document that changes alongside the code it describes is documentation
+ * kept in sync (doc-drift owns the failure mode); a generated artifact
+ * changes with its source because a tool rewrites it. Both stay visible in
+ * `co-change` and are disclosed here instead of counted.
+ */
+function hiddenCouplingHealthVerdict(finding: Pick<CoChangeFinding, 'partnerClass'>): {
+  counted: boolean;
+  reason: string;
+  detail: string;
+} {
+  switch (finding.partnerClass) {
+    case 'doc-code':
+      return {
+        counted: false,
+        reason: 'doc-sync-pairs',
+        detail: 'documentation that changes alongside the code it describes (doc-drift owns stale docs)',
+      };
+    case 'generated-artifact':
+      return {
+        counted: false,
+        reason: 'generated-artifact-pairs',
+        detail: 'generated artifacts (migration journals, snapshots, codegen output) rewritten from their source',
+      };
+    default:
+      return { counted: true, reason: 'counted', detail: 'counted' };
+  }
 }
 
 function roundHealthScoreCount(count: number): number {

@@ -1,4 +1,9 @@
-import type { ChangeAmplificationSummary, HealthAnalyses } from './health-types.js';
+import type {
+  ChangeAmplificationSummary,
+  CountLocSummary,
+  HealthAnalyses,
+  PolicyExclusionSummary,
+} from './health-types.js';
 import type { DetectorEvidenceAssessment } from './detector-evidence-contracts.js';
 
 export type FindingEvidence = 'graph-fact' | 'heuristic' | 'change-graph';
@@ -23,6 +28,14 @@ export interface ScoreDeduction {
   detail: string;
   /** Risk deductions use graph/change evidence; hygiene deductions use candidate signals. */
   kind: 'risk' | 'hygiene';
+}
+
+/** One detector policy that removed rows from a finding count, with the count it removed. */
+export interface HealthPolicyExclusion {
+  detector: string;
+  reason: string;
+  detail: string;
+  count: number;
 }
 
 export interface HealthPressure {
@@ -121,6 +134,13 @@ export interface HealthReport {
   suppressions: { total: number; byCategory: Record<string, number> } | null;
   actions: HealthAction[];
   pressure: HealthPressure[];
+  /**
+   * Rows detector policies removed from the counts above (test scaffolding,
+   * vendored kit primitives, framework-mandated twins). Each row is still
+   * listed by its detector command; it is disclosed here so an excluded
+   * finding is never mistaken for an absent one.
+   */
+  policyExclusions: HealthPolicyExclusion[];
   topComplexity: Array<{ symbol: string; score: number; file?: string }>;
   /** Calibrated claim limits and recovery paths for detector evidence. */
   detectorEvidence: DetectorEvidenceAssessment[];
@@ -182,10 +202,35 @@ export function buildHealthReport(analyses: HealthAnalyses): HealthReport {
     suppressions: analyses.suppressions,
     actions,
     pressure,
+    policyExclusions: collectPolicyExclusions(analyses),
     topComplexity: analyses.complexity.top,
     detectorEvidence: analyses.detectorEvidence,
     warnings: analyses.warnings.length > 0 ? analyses.warnings : undefined,
   };
+}
+
+const POLICY_EXCLUSION_SOURCES: ReadonlyArray<[detector: string, pick: (analyses: HealthAnalyses) => CountLocSummary]> =
+  [
+    ['react-component-duplicates', (analyses) => analyses.reactComponentDuplicates],
+    ['react-hook-candidates', (analyses) => analyses.reactHookCandidates],
+    ['react-large-component-pressure', (analyses) => analyses.reactLargeComponentPressure],
+    ['wrapper-candidates', (analyses) => analyses.wrappers],
+    ['duplicate-bodies', (analyses) => analyses.duplicateBodies],
+    ['dead', (analyses) => analyses.dead],
+  ];
+
+function collectPolicyExclusions(analyses: HealthAnalyses): HealthPolicyExclusion[] {
+  const exclusions: HealthPolicyExclusion[] = [];
+  const push = (detector: string, rows: ReadonlyArray<PolicyExclusionSummary> | undefined): void => {
+    for (const exclusion of rows ?? []) {
+      if (exclusion.count <= 0) continue;
+      exclusions.push({ detector, reason: exclusion.reason, detail: exclusion.detail, count: exclusion.count });
+    }
+  };
+  for (const [detector, pick] of POLICY_EXCLUSION_SOURCES) push(detector, pick(analyses).exclusions);
+  push('complexity-hotspots', analyses.complexity.exclusions);
+  push('co-change', analyses.gitEvidence?.hiddenCoupling.exclusions);
+  return exclusions;
 }
 
 function buildHealthAxes(analyses: HealthAnalyses): HealthAxes {
@@ -407,7 +452,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Duplicated React components',
       evidence: 'heuristic',
-      description: `${analyses.reactComponentDuplicates.count} React component pair(s) share JSX structure — review whether local product intent justifies reuse`,
+      description: `${analyses.reactComponentDuplicates.count} React component pair(s) share JSX structure${scoreCountNote(analyses.reactComponentDuplicates, 'support-tier discount')} — review whether local product intent justifies reuse`,
       effort: 'medium',
       impact: 'medium',
       count: analyses.reactComponentDuplicates.count,
@@ -492,7 +537,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
       category: 'Wrapper functions',
       evidence: 'heuristic',
       evidenceContractId: 'wrapper-indirection-candidate',
-      description: `${analyses.wrappers.count} single-consumer symbols${scoreCountNote(analyses.wrappers, 'boundary-evidence discount')} — inspect whether each is indirection or an intentional API, framework, or ownership boundary`,
+      description: `${analyses.wrappers.count} wrapper-shaped single-consumer callables${scoreCountNote(analyses.wrappers, 'boundary-evidence discount')} — inspect whether each is indirection or an intentional API, framework, or ownership boundary`,
       effort: 'low',
       impact: 'low',
       count: analyses.wrappers.count,
@@ -710,11 +755,12 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
     `${analyses.twinDrift.count} drifted twin implementation group(s) (same or near-same name, diverged or identical bodies)`,
   );
 
-  const reactDuplicatePerMille = (analyses.reactComponentDuplicates.count / fileCount) * 1000;
+  const reactDuplicateScoreCount = healthScoreCount(analyses.reactComponentDuplicates);
+  const reactDuplicatePerMille = (reactDuplicateScoreCount / fileCount) * 1000;
   deduct(
     'react-component-duplicates',
     Math.min(10, Math.round(reactDuplicatePerMille)),
-    `${analyses.reactComponentDuplicates.count} duplicated React component pair(s)`,
+    scoreWeightedDetail(analyses.reactComponentDuplicates, 'duplicated React component pair(s)'),
   );
 
   const reactHookScoreCount = healthScoreCount(analyses.reactHookCandidates);
@@ -795,11 +841,14 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
   }
 
   pressureDeduct('cycles-pressure', 'Circular dependencies', analyses.realCycleCount, 3, 10, 3, 'cycle(s)');
+  // Every other candidate pressure scales with repository size; a fixed
+  // threshold of 3 hotspots would max out the penalty for any codebase past
+  // a few hundred files.
   pressureDeduct(
     'complexity-pressure',
     'Extreme complexity',
     analyses.complexity.extremeCount,
-    3,
+    Math.max(3, Math.round(fileCount * 0.005)),
     5,
     2,
     'extreme complexity hotspot(s)',
@@ -847,7 +896,7 @@ function computeHealthScore(analyses: HealthAnalyses): { breakdown: ScoreDeducti
   pressureDeduct(
     'react-component-duplicates-pressure',
     'Duplicated React components',
-    analyses.reactComponentDuplicates.count,
+    reactDuplicateScoreCount,
     Math.max(10, fileCount * 0.01),
     8,
     4,

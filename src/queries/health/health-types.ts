@@ -51,6 +51,20 @@ export interface CountLocSummary {
   loc: number;
   /** Files contributing findings — feeds fix-density validation. */
   files?: string[];
+  /**
+   * Rows a detector policy removed from the count (test scaffolding, vendored
+   * kit primitives, framework-mandated twins). Disclosed so an excluded row is
+   * never mistaken for an absent one.
+   */
+  exclusions?: PolicyExclusionSummary[];
+}
+
+export interface PolicyExclusionSummary {
+  /** Stable identifier for the excluding policy. */
+  reason: string;
+  /** Reviewer-facing explanation of what was excluded and why. */
+  detail: string;
+  count: number;
 }
 
 export interface StaleSummary extends CountLocSummary {
@@ -71,6 +85,8 @@ export interface DriftSummary {
 export interface ComplexitySummary {
   top: Array<{ symbol: string; score: number; file?: string }>;
   extremeCount: number;
+  /** Hotspots above the extreme score that policy did not count (disclosed). */
+  exclusions?: PolicyExclusionSummary[];
 }
 
 export interface GitEvidenceSummary {
@@ -78,6 +94,8 @@ export interface GitEvidenceSummary {
   hiddenCoupling: {
     pairCount: number;
     scoreCount: number;
+    /** Co-change pairs policy did not count as hidden coupling (disclosed). */
+    exclusions?: PolicyExclusionSummary[];
     top: Array<{
       fileA: string;
       fileB: string;

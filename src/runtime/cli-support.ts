@@ -7,7 +7,7 @@ import { productionCallableDefinitions } from '../queries/internal/production-ca
 import type { ScipDatabase } from '../storage/db.js';
 import * as queries from '../queries/index.js';
 import { profileAsyncSpan, profileSpan } from '../instrumentation/profile.js';
-import { collectNativeGarbage } from '../platform/native-gc.js';
+import { collectNativeGarbage } from '../domain/native-gc.js';
 import { nodeOptionsWithMaxOldSpace } from '../platform/node-options.js';
 import { getSemanticProvider, semanticProviderLanguageForPath } from '../semantic/provider-cache.js';
 import { rustSemanticEngineIdentity } from '../semantic/rust/engine-identity.js';
@@ -1335,6 +1335,14 @@ export function renderHealthReport(report: HealthReport): void {
   if (f.staleTypes > 0) console.log(`    Stale abstractions:   ${f.staleTypes}`);
   if (f.driftedFiles > 0) console.log(`    Pattern drift:        ${f.driftedFiles} files`);
   if (f.complexityHotspotCount > 0) console.log(`    Complexity hotspots:  ${f.complexityHotspotCount}`);
+
+  const policyExclusions = report.policyExclusions ?? [];
+  if (policyExclusions.length > 0) {
+    console.log('\n  Policy exclusions (listed by the detector command, not counted above):');
+    for (const exclusion of policyExclusions) {
+      console.log(`    ${exclusion.detector}: ${exclusion.count} ${exclusion.detail}`);
+    }
+  }
 
   if (report.actions.length > 0) {
     console.log('\n  Prioritized Actions (highest impact + lowest effort first):');

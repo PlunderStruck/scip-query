@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { projectFileExists } from '../../source/primitives/project-file-boundary.js';
 import { classifyFile } from '../../analysis/file-classifier.js';
+import { isGeneratedArtifactPath } from '../../analysis/generated-artifacts.js';
 import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import type {
   CoChangeCommitScope,
@@ -13,6 +14,7 @@ import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
 export type CoChangePartnerClass =
   | 'doc-code'
   | 'config-code'
+  | 'generated-artifact'
   | 'schema-script'
   | 'model-view'
   | 'test-code'
@@ -196,6 +198,12 @@ export function classifyCoChangePartner(fileA: string, fileB: string): CoChangeP
   const hasPair = (first: CoChangePathTag, second: CoChangePathTag): boolean =>
     (left.tags.has(first) && right.tags.has(second)) || (left.tags.has(second) && right.tags.has(first));
 
+  if (left.tags.has('generated') || right.tags.has('generated')) {
+    addReason(
+      'one side is a generated artifact (migration journal, snapshot, or codegen output) that a tool rewrites whenever its source changes',
+    );
+    return { partnerClass: 'generated-artifact', reasons };
+  }
   if (hasPair('doc', 'code')) {
     addReason('one side is documentation and the other is executable source');
     return { partnerClass: 'doc-code', reasons };
@@ -324,7 +332,9 @@ function hasStructuralLink(
   return declaredCouplings.some((group) => group.has(fileA) && group.has(fileB));
 }
 
-type CoChangePathTag = 'doc' | 'config' | 'schema' | 'script' | 'model' | 'view' | 'test' | 'code';
+type CoChangePathTag = 'doc' | 'config' | 'generated' | 'schema' | 'script' | 'model' | 'view' | 'test' | 'code';
+
+export { isGeneratedArtifactPath } from '../../analysis/generated-artifacts.js';
 
 interface CoChangePathFacts {
   tags: Set<CoChangePathTag>;
@@ -401,6 +411,7 @@ const GENERIC_PATH_TOKENS = new Set([
 function coChangePathFacts(file: string): CoChangePathFacts {
   const normalized = file.replace(/\\/g, '/');
   const tags = new Set<CoChangePathTag>();
+  if (isGeneratedArtifactPath(normalized)) tags.add('generated');
   if (DOC_TAG_PATH_PATTERN.test(normalized)) tags.add('doc');
   if (CONFIG_FILE_PATTERN.test(normalized)) tags.add('config');
   if (SCHEMA_FILE_PATTERN.test(normalized)) tags.add('schema');

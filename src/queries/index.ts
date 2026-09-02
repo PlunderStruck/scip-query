@@ -46,7 +46,13 @@ export { cleanupPlan } from './cleanup/cleanup-plan.js';
 export { incompleteMigration } from './impact/incomplete-migration.js';
 export { coChange } from './cleanup/co-change.js';
 export { docDrift } from './cleanup/doc-drift.js';
-export { duplicateBodies, exactDuplicateBodyMatches, normalizeBody, groupByHash } from './cleanup/duplicate-bodies.js';
+export {
+  duplicateBodies,
+  duplicateBodyScan,
+  exactDuplicateBodyMatches,
+  normalizeBody,
+  groupByHash,
+} from './cleanup/duplicate-bodies.js';
 export { twinDrift, groupTwins, allTwinGroups } from './cleanup/twin-drift.js';
 export { twinAb, defaultTwinAbOutPath } from './cleanup/twin-ab.js';
 export { notImplemented } from './cleanup/not-implemented.js';

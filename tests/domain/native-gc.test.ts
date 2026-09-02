@@ -3,7 +3,7 @@ import {
   collectNativeGarbage,
   noteFinalizerOwnedNativeAllocation,
   resetNativeAllocationPressureForTests,
-} from '../../src/platform/native-gc.js';
+} from '../../src/domain/native-gc.js';
 
 describe('finalizer-owned native allocation pressure', () => {
   afterEach(() => {

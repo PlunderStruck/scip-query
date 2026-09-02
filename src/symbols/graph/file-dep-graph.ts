@@ -5,7 +5,7 @@ import { createProjectEvidenceProduct, evidenceProductInvalidation } from '../..
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { profileSpan } from '../../instrumentation/profile.js';
-import { collectNativeGarbage } from '../../platform/native-gc.js';
+import { collectNativeGarbage } from '../../domain/native-gc.js';
 import type { FileDependencyGraph } from '../../domain/project-input.js';
 
 interface FileDependencyGraphPayload {

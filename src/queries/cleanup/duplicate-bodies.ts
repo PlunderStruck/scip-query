@@ -6,6 +6,9 @@ import { getSourceLines, hasSuppressionCommentCategory } from '../../source/prim
 import { stripCommentsAndStrings } from '../../source/primitives/source-stripper.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { getFileAddRecords } from '../../analysis/git-history.js';
+import { classifyFile, isFrameworkEntrypointPath } from '../../analysis/file-classifier.js';
+import { isUiKitFile } from '../../analysis/ui-kit-surface.js';
+import { leafName } from '../../symbols/symbol-parser.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';
 
 export interface DuplicateBodyEntry {
@@ -22,6 +25,19 @@ export interface DuplicateBodyGroup {
   hash: string;
   canonical: DuplicateBodyEntry;
   functions: DuplicateBodyEntry[];
+}
+
+export interface DuplicateBodyExclusion {
+  reason: string;
+  detail: string;
+  count: number;
+}
+
+export interface DuplicateBodyScan {
+  /** Groups that remain after the convention policy below. */
+  groups: DuplicateBodyGroup[];
+  /** Groups (or members) the policy removed, disclosed by reason. */
+  exclusions: DuplicateBodyExclusion[];
 }
 
 type DuplicateBodyEntryWithBody = DuplicateBodyEntry & { normalizedBody: string };
@@ -41,13 +57,94 @@ export function duplicateBodies(
   db: ScipDatabase,
   opts: { scope?: string; maxLoc?: number; minLoc?: number; limit?: number; scanLimit?: number } = {},
 ): DuplicateBodyGroup[] {
+  return duplicateBodyScan(db, opts).groups;
+}
+
+/**
+ * Exact-duplicate scan with the convention policy applied and disclosed.
+ * Identical bodies that exist because a convention demands them are not
+ * consolidation candidates: every class carries a `<constructor>`, every
+ * framework route file exports the same verb glue, vendored UI-kit files are
+ * generated from one template, and test files copy fixtures on purpose.
+ * Test-file members are dropped from mixed groups; a group survives only
+ * when two product files still share the body.
+ */
+// scip-query: ignore-extract — reviewed E1 workflow owner; candidate load, grouping, and convention policy are one scan contract.
+export function duplicateBodyScan(
+  db: ScipDatabase,
+  opts: { scope?: string; maxLoc?: number; minLoc?: number; limit?: number; scanLimit?: number } = {},
+): DuplicateBodyScan {
   const { scope, maxLoc = 15, minLoc = DEFAULT_MIN_BODY_LOC, limit, scanLimit } = opts;
   const ages = getFileAddRecords(db);
   const entries = duplicateBodyCandidates(db, { scope, maxLoc, scanLimit })
     .map((definition) => duplicateBodyEntry(db, definition, ages, minLoc))
     .filter((entry): entry is DuplicateBodyEntryWithBody => entry !== null);
-  const groups = groupByHash(entries);
-  return limit ? groups.slice(0, limit) : groups;
+  const { groups, exclusions } = applyDuplicateBodyPolicy(db, groupByHash(entries));
+  return { groups: limit ? groups.slice(0, limit) : groups, exclusions };
+}
+
+const FRAMEWORK_ROUTE_EXPORT = /^(?:GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD|default|loader|action|load|actions)$/;
+
+function applyDuplicateBodyPolicy(
+  db: ScipDatabase,
+  groups: readonly DuplicateBodyGroup[],
+): { groups: DuplicateBodyGroup[]; exclusions: DuplicateBodyExclusion[] } {
+  const counts = new Map<string, DuplicateBodyExclusion>();
+  const record = (reason: string, detail: string): void => {
+    const existing = counts.get(reason);
+    if (existing) existing.count += 1;
+    else counts.set(reason, { reason, detail, count: 1 });
+  };
+  const kept: DuplicateBodyGroup[] = [];
+  for (const group of groups) {
+    const functions: DuplicateBodyEntry[] = [];
+    for (const entry of group.functions) {
+      const verdict = duplicateBodyMemberVerdict(db, entry);
+      if (verdict) {
+        record(verdict.reason, verdict.detail);
+        continue;
+      }
+      functions.push(entry);
+    }
+    if (functions.length < 2 || new Set(functions.map((entry) => entry.file)).size < 2) continue;
+    kept.push({ hash: group.hash, canonical: functions[0]!, functions });
+  }
+  return {
+    groups: kept,
+    exclusions: [...counts.values()].sort((left, right) => left.reason.localeCompare(right.reason)),
+  };
+}
+
+function duplicateBodyMemberVerdict(
+  db: ScipDatabase,
+  entry: DuplicateBodyEntry,
+): { reason: string; detail: string } | null {
+  const leaf = leafName(entry.symbol);
+  if (leaf.startsWith('<') && leaf.endsWith('>')) {
+    return {
+      reason: 'synthetic-members',
+      detail: 'duplicate constructors and other compiler-named members every class carries',
+    };
+  }
+  if (classifyFile(entry.file) === 'test') {
+    return {
+      reason: 'test-file-members',
+      detail: 'duplicate bodies in test files (fixture reuse, not product duplication)',
+    };
+  }
+  if (FRAMEWORK_ROUTE_EXPORT.test(leaf) && isFrameworkEntrypointPath(entry.file)) {
+    return {
+      reason: 'framework-route-exports',
+      detail: 'duplicate route-file verb exports whose identical glue the framework convention dictates',
+    };
+  }
+  if (isUiKitFile(db, entry.file)) {
+    return {
+      reason: 'ui-kit-members',
+      detail: 'duplicate bodies in vendored UI-kit directories generated from one template',
+    };
+  }
+  return null;
 }
 
 export function exactDuplicateBodyMatches(
