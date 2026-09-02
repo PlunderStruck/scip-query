@@ -160,6 +160,8 @@ export const commandDescriptors: CommandDescriptor[] = [
       option('--json', 'Emit the private worker envelope without transport pagination'),
       option('-s, --scope <path>', 'Limit to files matching path'),
       option('--full', 'Materialize complete semantic evidence'),
+      option('--shard-index <n>', 'Warm only this zero-based slice of the indexed files'),
+      option('--shard-count <n>', 'Number of parallel prewarm slices'),
     ],
     renderShape: 'custom',
     handler: handlers.handleHealthSemanticPrewarm,

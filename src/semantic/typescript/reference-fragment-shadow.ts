@@ -404,6 +404,8 @@ export interface TypeScriptReferenceFragmentWarmProgress {
 }
 
 export interface TypeScriptReferenceFragmentWarmOptions {
+  /** Restrict the pass to these indexed files (a shard of a parallel prewarm); default: every indexed TypeScript file. */
+  files?: readonly string[];
   /** Runs after each persisted provider batch; may release the semantic provider. */
   onBatch?: (progress: TypeScriptReferenceFragmentWarmProgress) => void;
   /** Yields one event-loop turn between batches; defaults to `setImmediate`. */
@@ -445,7 +447,9 @@ export async function warmTypeScriptReferenceFragments(
     'typescript.reference-fragments.warm',
     async () => {
       try {
-        const projectFiles = indexedTypeScriptFiles(db);
+        const allFiles = indexedTypeScriptFiles(db);
+        const shard = options.files ? new Set(options.files) : null;
+        const projectFiles = shard ? allFiles.filter((file) => shard.has(file)) : allFiles;
         files = projectFiles.length;
         const missingFiles: MissingReferenceFragmentFile[] = [];
         for (const file of projectFiles) {

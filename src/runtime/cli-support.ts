@@ -3,7 +3,6 @@ import { fileURLToPath } from 'node:url';
 import { getHeapStatistics } from 'node:v8';
 import type { ObservationReceiptV2, ObservationSourceKind } from '../domain/observation-receipt.js';
 import type { IndexedDefinition } from '../domain/types.js';
-import { collectScopedDefinitionsInBatches } from '../symbols/definition-catalog.js';
 import { productionCallableDefinitions } from '../queries/internal/production-callables.js';
 import type { ScipDatabase } from '../storage/db.js';
 import * as queries from '../queries/index.js';
@@ -18,8 +17,8 @@ import {
   type SemanticReferenceMaterializationResult,
 } from '../semantic/shared-primitives.js';
 import { materializeSemanticCalleeCache } from '../semantic/symbol-evidence.js';
-import { warmSourceDependencyProducts, type SourceDependencyWarmProgress } from '../symbols/graph/file-dep-graph.js';
-import { warmSourceFactsProducts } from '../source/facts/source-facts-warm.js';
+import { warmFileProducts } from './file-product-warm.js';
+import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import {
   warmTypeScriptReferenceFragments,
   type TypeScriptReferenceFragmentWarmProgress,
@@ -171,6 +170,19 @@ export interface HealthCliOptions {
   scope?: string;
   full?: boolean;
   json?: boolean;
+  /** Prewarm worker only: this worker's slice of the indexed files. */
+  shard?: HealthPrewarmShard;
+}
+
+export interface HealthPrewarmShard {
+  index: number;
+  count: number;
+}
+
+/** Deterministic, disjoint, covering slices of a file list for parallel prewarm workers. */
+export function shardFilesForPrewarm<T>(files: readonly T[], shard: HealthPrewarmShard | undefined): T[] {
+  if (!shard || shard.count <= 1) return [...files];
+  return files.filter((_, index) => index % shard.count === shard.index);
 }
 
 export type HealthSemanticPrewarmSkipReason =
@@ -190,10 +202,8 @@ export interface HealthSemanticPrewarmResult {
   referenceCacheWrites: number;
   referenceMisses: number;
   referenceIncomplete: number;
-  /** Indexed files whose import and re-export products were persisted before the provider built. */
-  sourceDependencyFiles?: number;
-  /** Indexed files whose source-facts product was persisted before the provider built. */
-  sourceFactsFiles?: number;
+  /** Indexed files this worker warmed: the scoped project, or its shard of it. */
+  warmedFiles?: number;
   /** Indexed TypeScript files whose reference fragments are persisted; absent when the fragment path was unavailable. */
   referenceFragmentFiles?: number;
   /** TypeScript reference fragments computed and persisted by this run. */
@@ -214,28 +224,20 @@ export interface HealthSemanticPrewarmRuntime {
     projectFingerprint: string,
     marker: HealthSemanticPrewarmMarker,
   ): void;
+  /** The indexed files this worker warms: the scoped project, or its shard of it. */
+  projectFiles(db: ScipDatabase, opts: HealthCliOptions): readonly string[];
   /**
-   * Definitions to warm. The default reads them file by file in collecting,
-   * yielding batches: a cold definition product parses its file, and a
-   * synchronous whole-project read would hold every parsed tree at once.
+   * Definitions to warm, read from `files` in collecting, yielding batches
+   * that also persist each file's import, re-export, and source-facts
+   * products while its syntax tree is cached: one parse per file. A cold
+   * product parses its file, and a synchronous whole-project read would hold
+   * every parsed tree at once.
    */
-  candidateDefinitions(db: ScipDatabase, opts: HealthCliOptions): IndexedDefinition[] | Promise<IndexedDefinition[]>;
-  /**
-   * Persist every indexed file's import and re-export products in yielding
-   * batches before the semantic provider builds, so the synchronous file
-   * dependency graph the provider needs parses nothing and no whole-project
-   * parse holds every tree until the event loop turns.
-   */
-  warmSourceDependencies?(
+  candidateDefinitions(
     db: ScipDatabase,
-    onBatch?: (progress: SourceDependencyWarmProgress) => void,
-  ): Promise<{ files: number }>;
-  /**
-   * Persist every indexed file's source-facts product in collecting, yielding
-   * batches. Health phases read facts per definition synchronously; a cold
-   * product parses the file, and that sweep would otherwise hold every tree.
-   */
-  warmSourceFacts?(db: ScipDatabase): Promise<{ files: number; withFacts: number }>;
+    opts: HealthCliOptions,
+    files: readonly string[],
+  ): IndexedDefinition[] | Promise<IndexedDefinition[]>;
   /**
    * Persist a reference fragment for every indexed TypeScript file without
    * assembling the project-wide reference map; null when the fragment path is
@@ -246,6 +248,7 @@ export interface HealthSemanticPrewarmRuntime {
   warmReferenceFragments(
     db: ScipDatabase,
     onBatch?: (progress: TypeScriptReferenceFragmentWarmProgress) => void,
+    files?: readonly string[],
   ): Promise<TypeScriptReferenceFragmentWarmResult | null>;
   materializeReferences(
     db: ScipDatabase,
@@ -349,8 +352,10 @@ const DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME: HealthSemanticPrewarmRuntime = {
   readMarker: (db, cacheKey, fingerprint) => HEALTH_SEMANTIC_PREWARM_CACHE.read(db, cacheKey, fingerprint),
   writeMarker: (db, cacheKey, fingerprint, marker) =>
     HEALTH_SEMANTIC_PREWARM_CACHE.write(db, cacheKey, fingerprint, marker),
-  candidateDefinitions: async (db, opts) => {
-    const catalog = await collectScopedDefinitionsInBatches(db, opts.scope, {
+  projectFiles: (db, opts) =>
+    shardFilesForPrewarm(indexedDocumentPaths(db, { scope: opts.scope, includeIgnored: false }), opts.shard),
+  candidateDefinitions: async (db, opts, files) => {
+    const warmed = await warmFileProducts(db, files, {
       collectGarbage: collectNativeGarbage,
       yieldToEventLoop: () => new Promise<void>((resolve) => setImmediate(resolve)),
     });
@@ -358,32 +363,28 @@ const DEFAULT_HEALTH_SEMANTIC_PREWARM_RUNTIME: HealthSemanticPrewarmRuntime = {
     // fallback rows (interface and class members) the catalog does not carry.
     // A handful of such misses makes a phase child build the whole compiler
     // program; covering them here keeps the phases on the cache.
-    const seen = new Set(catalog.map((definition) => definition.symbolId));
+    // The fallback rows only come from the symbol-matching variants, which a
+    // `files` restriction would route back to the catalog; ask for the whole
+    // scope and keep this worker's files.
+    const fileSet = new Set(files);
+    const seen = new Set(warmed.definitions.map((definition) => definition.symbolId));
     const extra: IndexedDefinition[] = [];
     for (const variant of [{}, { requireCallableSymbol: true }, { requireFunctionLikeSymbol: true }] as const) {
       for (const definition of productionCallableDefinitions(db, { ...variant, scope: opts.scope })) {
-        if (seen.has(definition.symbolId)) continue;
+        if (!fileSet.has(definition.relativePath) || seen.has(definition.symbolId)) continue;
         seen.add(definition.symbolId);
         extra.push(definition);
       }
     }
-    return [...catalog, ...extra].filter(
+    return [...warmed.definitions, ...extra].filter(
       (definition) => semanticProviderLanguageForPath(definition.relativePath) !== null,
     );
   },
-  warmSourceDependencies: (db, onBatch) =>
-    warmSourceDependencyProducts(db, {
+  warmReferenceFragments: (db, onBatch, files) =>
+    warmTypeScriptReferenceFragments(db, (relativePath) => getSemanticProvider(db, relativePath), {
       onBatch,
-      collectGarbage: collectNativeGarbage,
-      yieldToEventLoop: () => new Promise<void>((resolve) => setImmediate(resolve)),
+      ...(files ? { files } : {}),
     }),
-  warmSourceFacts: (db) =>
-    warmSourceFactsProducts(db, {
-      collectGarbage: collectNativeGarbage,
-      yieldToEventLoop: () => new Promise<void>((resolve) => setImmediate(resolve)),
-    }),
-  warmReferenceFragments: (db, onBatch) =>
-    warmTypeScriptReferenceFragments(db, (relativePath) => getSemanticProvider(db, relativePath), { onBatch }),
   materializeReferences: (db, definitions, opts) =>
     semanticEvidenceProduct(db).materializeReferences(definitions, opts),
   materializeCallees: materializeSemanticCalleeCache,
@@ -539,14 +540,17 @@ async function runHealthSemanticPrewarm(
   const marker = runtime.readMarker(db, cacheKey, fingerprint);
   if (marker && marker.referenceIncomplete === 0) return skippedHealthSemanticPrewarm('cache-hit');
 
+  // A shard warms its slice of the indexed files; the parent that launched
+  // the shards writes the completion marker once every slice is warm.
+  const files = runtime.projectFiles(db, opts);
   let definitions: IndexedDefinition[] = [];
   definitions = await profileAsyncSpan(
     'health.semantic-prewarm.candidate-definitions',
     async () => {
-      definitions = await runtime.candidateDefinitions(db, opts);
+      definitions = await runtime.candidateDefinitions(db, opts, files);
       return definitions;
     },
-    () => ({ definitions: definitions.length }),
+    () => ({ definitions: definitions.length, files: files.length, shard: opts.shard ?? null }),
   );
   if (definitions.length === 0) return skippedHealthSemanticPrewarm('no-semantic-definitions');
 
@@ -554,41 +558,6 @@ async function runHealthSemanticPrewarm(
   const yieldToEventLoop = async (): Promise<void> => {
     await runtime.yieldToEventLoop?.();
   };
-
-  // The provider's file dependency graph parses every indexed file in one
-  // synchronous sweep when its products are cold, and Tree-sitter cannot free
-  // a tree until the event loop turns; persisting the per-file products in
-  // yielding batches first bounds that sweep to one batch.
-  let sourceDependencyFiles: number | null = null;
-  if (runtime.warmSourceDependencies) {
-    const warmSourceDependencies = runtime.warmSourceDependencies.bind(runtime);
-    let warmedFiles = 0;
-    sourceDependencyFiles = await profileAsyncSpan(
-      'health.semantic-prewarm.source-dependencies',
-      async () => {
-        warmedFiles = (await warmSourceDependencies(db)).files;
-        return warmedFiles;
-      },
-      () => ({ files: warmedFiles }),
-    );
-  }
-
-  // Health phases read source facts per definition synchronously; persisting
-  // the per-file product here, in collecting batches, is what keeps that
-  // cold sweep from holding every tree in a phase child.
-  let sourceFactsFiles: number | null = null;
-  if (runtime.warmSourceFacts) {
-    const warmSourceFacts = runtime.warmSourceFacts.bind(runtime);
-    let warmedFacts = 0;
-    sourceFactsFiles = await profileAsyncSpan(
-      'health.semantic-prewarm.source-facts',
-      async () => {
-        warmedFacts = (await warmSourceFacts(db)).files;
-        return warmedFacts;
-      },
-      () => ({ files: warmedFacts }),
-    );
-  }
 
   // TypeScript references are served per file from persisted fragments, so the
   // fragment rows are the warm state. Persisting them file by file bounds the
@@ -603,7 +572,7 @@ async function runHealthSemanticPrewarm(
     fragments = await profileAsyncSpan(
       'health.semantic-prewarm.reference-fragments',
       async () => {
-        warmed = await runtime.warmReferenceFragments(db, () => pressure.relieve({ release: true }));
+        warmed = await runtime.warmReferenceFragments(db, () => pressure.relieve({ release: true }), files);
         return warmed;
       },
       () => ({
@@ -672,8 +641,7 @@ async function runHealthSemanticPrewarm(
     }),
   );
   const fragmentDisclosure = {
-    ...(sourceDependencyFiles === null ? {} : { sourceDependencyFiles }),
-    ...(sourceFactsFiles === null ? {} : { sourceFactsFiles }),
+    warmedFiles: files.length,
     ...(fragments
       ? { referenceFragmentFiles: fragments.files, referenceFragmentComputedFiles: fragments.computedFiles }
       : {}),
@@ -692,16 +660,18 @@ async function runHealthSemanticPrewarm(
     };
   }
 
-  profileSpan('health.semantic-prewarm.marker-write', () =>
-    runtime.writeMarker(db, cacheKey, fingerprint, {
-      version: HEALTH_SEMANTIC_PREWARM_MARKER_VERSION,
-      definitions: definitions.length,
-      referenceCacheWrites: references.cacheWrites,
-      referenceIncomplete: references.incomplete,
-      calleeRows,
-      warmedAt: Date.now(),
-    }),
-  );
+  if (!opts.shard) {
+    profileSpan('health.semantic-prewarm.marker-write', () =>
+      runtime.writeMarker(db, cacheKey, fingerprint, {
+        version: HEALTH_SEMANTIC_PREWARM_MARKER_VERSION,
+        definitions: definitions.length,
+        referenceCacheWrites: references.cacheWrites,
+        referenceIncomplete: references.incomplete,
+        calleeRows,
+        warmedAt: Date.now(),
+      }),
+    );
+  }
 
   return {
     status: 'warmed',
@@ -848,10 +818,10 @@ export async function runIsolatedHealthReportWithEvidence(
 
   const runnableTasks = orderHealthPhaseTasksByCost(healthPhaseTasks(runnablePhases));
   const phaseWarnings: string[] = [];
-  let prewarmMessage: IsolatedAnalysisResult<HealthSemanticPrewarmResult> | undefined;
+  let prewarmMessages: IsolatedAnalysisResult<HealthSemanticPrewarmResult>[] = [];
   if (opts.full) {
     try {
-      prewarmMessage = await runHealthSemanticPrewarmProcess(opts);
+      prewarmMessages = await runHealthSemanticPrewarmProcesses(opts);
     } catch (error) {
       phaseWarnings.push(`Health semantic prewarm omitted: ${healthIsolatedFailureReason(error)}.`);
     }
@@ -891,29 +861,145 @@ export async function runIsolatedHealthReportWithEvidence(
     result: report,
     observationReceipt: operationObservationReceipt(
       anchors,
-      [prewarmMessage?.observationReceipt, ...runnableMessages.map((message) => message.observationReceipt)],
+      [
+        ...prewarmMessages.map((message) => message.observationReceipt),
+        ...runnableMessages.map((message) => message.observationReceipt),
+      ],
       ['index-generation', 'live-workspace'],
     ),
   };
 }
 
+export interface HealthPrewarmShardPlan {
+  /** Parallel prewarm workers; 1 means one unsharded worker that writes the marker itself. */
+  shards: number;
+  /** V8 heap bound per worker in MB. */
+  heapMb: number;
+}
+
+const PREWARM_SHARD_HEAP_MB = 12288;
+const PREWARM_SHARD_NATIVE_RESERVE_MB = 2048;
+const PREWARM_HOST_RESERVE_MB = 8192;
+const MAX_DEFAULT_HEALTH_PREWARM_SHARDS = 4;
+
+/**
+ * How many prewarm workers to run. Each worker holds the whole compiler
+ * program, so a worker needs a heap large enough not to shed it under
+ * pressure (12 GB) plus native room; only what is left after a host reserve
+ * is divided among workers, and a machine that cannot host two such workers
+ * runs the single worker with the larger default heap instead.
+ */
+export function healthSemanticPrewarmShardPlan(
+  env: NodeJS.ProcessEnv = process.env,
+  availableCpus: number = availableParallelism(),
+  totalMemoryBytes: number = totalmem(),
+): HealthPrewarmShardPlan {
+  const single = { shards: 1, heapMb: healthSemanticPrewarmHeapMb(env, totalMemoryBytes) };
+  const totalMb = Number.isFinite(totalMemoryBytes) && totalMemoryBytes > 0 ? totalMemoryBytes / (1024 * 1024) : 0;
+  const memoryBound = Math.floor(
+    Math.max(0, totalMb - PREWARM_HOST_RESERVE_MB) / (PREWARM_SHARD_HEAP_MB + PREWARM_SHARD_NATIVE_RESERVE_MB),
+  );
+  const cpuBound = Number.isFinite(availableCpus) ? Math.max(1, availableCpus - 1) : 1;
+  const parsed = Number.parseInt(env['SCIP_QUERY_HEALTH_PREWARM_SHARDS'] ?? '', 10);
+  const requested = Number.isSafeInteger(parsed) && parsed > 0 ? parsed : Number.POSITIVE_INFINITY;
+  const shards = Math.min(MAX_DEFAULT_HEALTH_PREWARM_SHARDS, memoryBound, cpuBound, requested);
+  if (!Number.isFinite(shards) || shards < 2) return single;
+  return { shards, heapMb: PREWARM_SHARD_HEAP_MB };
+}
+
 function runHealthSemanticPrewarmProcess(
   opts: HealthCliOptions,
+  heapMb: number,
 ): Promise<IsolatedAnalysisResult<HealthSemanticPrewarmResult>> {
   const cliPath = process.argv[1] ?? fileURLToPath(import.meta.url);
   const args: string[] = ['--full'];
   if (opts.scope) args.push('--scope', opts.scope);
+  if (opts.shard) args.push('--shard-index', String(opts.shard.index), '--shard-count', String(opts.shard.count));
   return runIsolatedJsonProcessWithEvidenceAsync<HealthSemanticPrewarmResult>({
     cliPath,
     command: HEALTH_SEMANTIC_PREWARM_COMMAND,
     args,
     env: {
       ...process.env,
-      NODE_OPTIONS: nodeOptionsWithMaxOldSpace(process.env.NODE_OPTIONS, healthSemanticPrewarmHeapMb()),
+      NODE_OPTIONS: nodeOptionsWithMaxOldSpace(process.env.NODE_OPTIONS, heapMb),
     },
-    label: 'Health semantic prewarm',
+    label: opts.shard ? `Health semantic prewarm ${opts.shard.index + 1}/${opts.shard.count}` : 'Health semantic prewarm',
     timeoutMs: healthSemanticPrewarmTimeoutMs(),
   });
+}
+
+/**
+ * Runs the prewarm as one worker, or as parallel shard workers when the host
+ * can hold several compiler programs, then writes the completion marker once
+ * every shard reports its slice warm. A failed or incomplete shard leaves no
+ * marker, so the next full health run retries.
+ */
+async function runHealthSemanticPrewarmProcesses(
+  opts: HealthCliOptions,
+  plan: HealthPrewarmShardPlan = healthSemanticPrewarmShardPlan(),
+): Promise<IsolatedAnalysisResult<HealthSemanticPrewarmResult>[]> {
+  if (plan.shards < 2) return [await runHealthSemanticPrewarmProcess(opts, plan.heapMb)];
+  const shards = Array.from({ length: plan.shards }, (_, index) => ({ index, count: plan.shards }));
+  const messages = await runAnalysisTasks(shards, plan.shards, (shard) =>
+    runHealthSemanticPrewarmProcess({ ...opts, shard }, plan.heapMb),
+  );
+  const aggregate = aggregateHealthSemanticPrewarmResults(messages.map((message) => message.result));
+  if (aggregate.status === 'warmed') {
+    withDb((db) => {
+      const fingerprint = projectEvidenceFingerprint(db);
+      if (!fingerprint) return;
+      HEALTH_SEMANTIC_PREWARM_CACHE.write(
+        db,
+        healthSemanticPrewarmCacheKey(opts, healthSemanticPrewarmEngineFingerprint(db)),
+        fingerprint,
+        {
+          version: HEALTH_SEMANTIC_PREWARM_MARKER_VERSION,
+          definitions: aggregate.definitions,
+          referenceCacheWrites: aggregate.referenceCacheWrites,
+          referenceIncomplete: aggregate.referenceIncomplete,
+          calleeRows: aggregate.calleeRows,
+          warmedAt: Date.now(),
+        },
+      );
+    });
+  }
+  return messages;
+}
+
+/**
+ * Sums shard results into one report. Every shard must have warmed (or found
+ * the project already warm) with complete references for the whole to count
+ * as warmed; otherwise the weakest shard's status and reason stand.
+ */
+export function aggregateHealthSemanticPrewarmResults(
+  results: readonly HealthSemanticPrewarmResult[],
+): HealthSemanticPrewarmResult {
+  const sum = (pick: (result: HealthSemanticPrewarmResult) => number | undefined): number =>
+    results.reduce((total, result) => total + (pick(result) ?? 0), 0);
+  const totals = {
+    definitions: sum((result) => result.definitions),
+    referenceCacheHits: sum((result) => result.referenceCacheHits),
+    referenceCacheWrites: sum((result) => result.referenceCacheWrites),
+    referenceMisses: sum((result) => result.referenceMisses),
+    referenceIncomplete: sum((result) => result.referenceIncomplete),
+    calleeRows: sum((result) => result.calleeRows),
+    warmedFiles: sum((result) => result.warmedFiles),
+    referenceFragmentFiles: sum((result) => result.referenceFragmentFiles),
+    referenceFragmentComputedFiles: sum((result) => result.referenceFragmentComputedFiles),
+  };
+  // A worker that crashed never produces a result: the runner throws and the
+  // parent reports the prewarm omitted. Among results, partial outranks an
+  // incidental skip, and either withholds the marker.
+  const weakest =
+    results.find((result) => result.status === 'partial') ??
+    results.find((result) => result.status === 'skipped' && result.reason !== 'cache-hit');
+  if (weakest) {
+    return { ...totals, status: weakest.status, reason: weakest.reason, ...(weakest.error ? { error: weakest.error } : {}) };
+  }
+  if (results.length > 0 && results.every((result) => result.status === 'skipped')) {
+    return { ...totals, status: 'skipped', reason: 'cache-hit' };
+  }
+  return { ...totals, status: 'warmed', reason: 'cache-miss' };
 }
 
 export function healthSemanticPrewarmHeapMb(

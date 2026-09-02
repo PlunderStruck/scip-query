@@ -37,6 +37,21 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
   that would only be suppressed as fresh. The check runs on the Git poll
   interval and does not depend on a Git checkout.
 
+### The full-health prewarm runs in parallel shards and parses each file once
+
+- The prewarm's three per-file warm sweeps (definitions, imports and
+  re-exports, source facts) parsed the repository twice; they are now one
+  sweep that computes every product while the file's syntax tree is still
+  cached, one parse per file.
+- On a host that can hold several compiler programs, the prewarm now runs as
+  parallel shard workers, each warming a deterministic slice of the indexed
+  files (definitions, reference fragments, callees) with a 12 GB heap, and
+  the parent writes the completion marker once every shard reports its slice
+  warm. The plan takes the memory left after an 8 GB host reserve divided by
+  14 GB per worker, capped by cpu count minus one and by four
+  (`SCIP_QUERY_HEALTH_PREWARM_SHARDS` overrides it); a machine that cannot
+  host two workers runs the single worker as before.
+
 ### The fragment warm pass stops recomputing hierarchy targets per batch
 
 - Profiled on a 7,800-file repository, the prewarm's reference scans spent
