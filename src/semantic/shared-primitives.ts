@@ -23,6 +23,9 @@ import type {
   SemanticCalleeCoverage,
 } from './types.js';
 import { getSemanticProvider, semanticProviderLanguageForPath } from './provider-cache.js';
+import { loadTsMorph, typescriptProjectFileNames } from './typescript/ts-morph-runtime.js';
+import { discoverTypeScriptTsconfigs } from './typescript/tsconfig-discovery.js';
+import { resolve } from 'node:path';
 import { profileEnabled, profileSpan } from '../instrumentation/profile.js';
 import { rustSemanticEngineIdentity } from './rust/engine-identity.js';
 import { rustDefaultImplReferenceMap, rustDefaultImplReferencesForDefinition } from './rust/default-impl-references.js';
@@ -787,6 +790,21 @@ export function semanticCalleeMap(
   definitions: ReadonlyArray<IndexedDefinition | SymbolMatch>,
 ): Map<number, SemanticCallee[]> {
   return semanticEvidenceProduct(db).calleeMap(definitions);
+}
+
+/**
+ * Files the TypeScript compiler projects can see, from the tsconfigs alone.
+ * A reference the cheap path finds in a file outside every project (a test
+ * file excluded from the build config) is one the compiler oracle could
+ * never confirm, so an audit must not count it as a false positive.
+ */
+export function semanticCompilerVisibleFiles(db: ScipDatabase): ((relativePath: string) => boolean) | null {
+  const tsMorph = loadTsMorph();
+  if (!tsMorph) return null;
+  const tsconfigPaths = discoverTypeScriptTsconfigs(db);
+  if (tsconfigPaths.length === 0) return null;
+  const visible = typescriptProjectFileNames(tsMorph, tsconfigPaths);
+  return (relativePath) => visible.has(resolve(db.config.projectRoot, relativePath));
 }
 
 /**

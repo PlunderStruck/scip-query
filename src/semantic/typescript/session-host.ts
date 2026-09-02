@@ -51,6 +51,8 @@ export class TypeScriptSemanticHost {
   private module: TsMorphModule | null = null;
   private projects: ProjectBundle[] | null = null;
   private provider: SemanticProvider | null = null;
+  /** Compiler projects built by sessions that have since been replaced or disposed. */
+  private retiredProjects = 0;
   private stats: TypeScriptSemanticHostStats = {
     providerRequests: 0,
     sessionsCreated: 0,
@@ -88,6 +90,7 @@ export class TypeScriptSemanticHost {
     if (!this.projects) return transition;
 
     if (transition.mode === 'replace') {
+      this.retiredProjects += this.loadedProjectCount();
       this.projects = null;
       this.module = null;
       this.stats.sessionsReplaced += 1;
@@ -101,12 +104,17 @@ export class TypeScriptSemanticHost {
   }
 
   snapshotStats(): TypeScriptSemanticHostStats {
-    return { ...this.stats };
+    return { ...this.stats, projectsCreated: this.retiredProjects + this.loadedProjectCount() };
+  }
+
+  private loadedProjectCount(): number {
+    return this.projects?.filter((bundle) => bundle.loaded).length ?? 0;
   }
 
   dispose(): void {
     this.provider?.dispose?.();
     this.provider = null;
+    this.retiredProjects += this.loadedProjectCount();
     this.projects = null;
     this.module = null;
   }
@@ -125,7 +133,6 @@ export class TypeScriptSemanticHost {
         return this.provider;
       }
       this.projects = this.createProjects(module, tsconfigPaths);
-      this.stats.projectsCreated += this.projects.length;
     }
     this.provider = this.createProvider(this.db, module, this.projects);
     this.stats.sessionsCreated += 1;
@@ -175,6 +182,8 @@ function applyProjectSourceChanges(
   transition: TypeScriptSessionTransition,
 ): void {
   for (const bundle of projects) {
+    // An unloaded bundle reads the current sources when it is first needed.
+    if (!bundle.loaded) continue;
     for (const relativePath of transition.deletedFiles) {
       bundle.project.getSourceFile(resolve(projectRoot, relativePath))?.forget();
     }

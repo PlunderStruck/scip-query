@@ -1,3 +1,4 @@
+import { cliBuildIdentity } from '../platform/cli-version.js';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -34,6 +35,8 @@ export interface HealthReportCacheKey {
   full: boolean;
   phaseTimeoutMs: number | null;
   gitHead: string | null;
+  /** Digest of the build that wrote the report; a version string alone cannot tell two builds apart. */
+  buildIdentity: string;
 }
 
 interface HealthReportCacheFile {
@@ -46,6 +49,7 @@ interface HealthReportCacheFile {
 
 interface HealthReportCacheKeyDeps {
   gitHead(cwd: string): string | null;
+  buildIdentity?(): string;
 }
 
 interface HealthReportCacheFileDeps {
@@ -73,6 +77,7 @@ export function healthReportCacheKey(
     full: opts.full === true,
     phaseTimeoutMs: opts.phaseTimeoutMs ?? null,
     gitHead: deps.gitHead(db.config.projectRoot),
+    buildIdentity: (deps.buildIdentity ?? cliBuildIdentity)(),
   };
 }
 
@@ -154,7 +159,8 @@ function isHealthReportCacheKey(value: unknown): value is HealthReportCacheKey {
     (candidate.scope === null || typeof candidate.scope === 'string') &&
     typeof candidate.full === 'boolean' &&
     (candidate.phaseTimeoutMs === null || typeof candidate.phaseTimeoutMs === 'number') &&
-    (candidate.gitHead === null || typeof candidate.gitHead === 'string')
+    (candidate.gitHead === null || typeof candidate.gitHead === 'string') &&
+    typeof candidate.buildIdentity === 'string'
   );
 }
 

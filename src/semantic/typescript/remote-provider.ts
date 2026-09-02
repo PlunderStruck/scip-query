@@ -59,12 +59,17 @@ export interface TypeScriptSemanticRequesterOptions {
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
+export interface ServiceBackedTypeScriptProviderOptions extends TypeScriptSemanticRequesterOptions {
+  /** Test seam: the transport that carries requests to the service. */
+  requester?: { request(request: TypeScriptSemanticRequest): unknown };
+}
+
 export function createServiceBackedTypeScriptProvider(
   db: ScipDatabase,
   relativePath?: string,
-  opts: TypeScriptSemanticRequesterOptions = {},
+  opts: ServiceBackedTypeScriptProviderOptions = {},
 ): SemanticProvider {
-  const requester = new TypeScriptSemanticRequester(db, opts);
+  const requester = opts.requester ?? new TypeScriptSemanticRequester(db, opts);
   let directProvider: SemanticProvider | null = null;
   let cachedAvailability: SemanticAvailability | null = null;
   let remoteFailed = process.env['SCIP_QUERY_SKIP_WATCH_SERVICE'] === '1';
@@ -75,6 +80,17 @@ export function createServiceBackedTypeScriptProvider(
   const direct = (): SemanticProvider => {
     directProvider ??= createTsMorphProvider(db, relativePath);
     return directProvider;
+  };
+  const failClosed = <T>(error: unknown, fallback: () => T, unavailable: () => T): T => {
+    remoteFailed = true;
+    if (!inProcessCompilerAllowed(db)) {
+      serviceDeclined = error instanceof Error ? error.message : String(error);
+      console.error(
+        `TypeScript semantic service request failed (${serviceDeclined}); semantic enrichment is disabled for the rest of this run because the index is too large for an in-process compiler.`,
+      );
+      return unavailable();
+    }
+    return fallback();
   };
   const request = <T>(
     value: TypeScriptSemanticRequest,
@@ -90,37 +106,59 @@ export function createServiceBackedTypeScriptProvider(
       // A service that does not know this request kind is healthy for every
       // other kind; answer this one as unavailable and keep using it.
       if (isUnsupportedRequestError(error)) return unavailable();
-      remoteFailed = true;
-      if (!inProcessCompilerAllowed(db)) {
-        serviceDeclined = error instanceof Error ? error.message : String(error);
-        console.error(
-          `TypeScript semantic service request failed (${serviceDeclined}); semantic enrichment is disabled for the rest of this run because the index is too large for an in-process compiler.`,
-        );
-        return unavailable();
+      return failClosed(error, fallback, unavailable);
+    }
+  };
+  /**
+   * A definition batch whose worker died of memory is retried as two halves
+   * split by file, down to single files, before the service counts as failed:
+   * the restarted worker loads only the projects the smaller batch needs.
+   */
+  const requestBatched = <T>(
+    definitions: readonly IndexedDefinition[],
+    build: (batch: readonly IndexedDefinition[]) => TypeScriptSemanticRequest,
+    decode: (response: unknown) => Map<number, T>,
+    fallback: () => Map<number, T>,
+  ): Map<number, T> => {
+    if (serviceDeclined !== null) return new Map();
+    if (remoteFailed) return fallback();
+    const run = (batch: readonly IndexedDefinition[]): Map<number, T> => {
+      try {
+        return decode(requester.request(build(batch)));
+      } catch (error) {
+        if (!isWorkerMemoryFailure(error)) throw error;
+        const halves = splitByFile(batch);
+        if (!halves) throw error;
+        return new Map([...run(halves[0]), ...run(halves[1])]);
       }
-      return fallback();
+    };
+    try {
+      return run(definitions);
+    } catch (error) {
+      if (isUnsupportedRequestError(error)) return new Map();
+      return failClosed(error, fallback, () => new Map());
     }
   };
   const referencesForDefinitions = (
     definitions: readonly IndexedDefinition[],
     batchOpts?: { exact?: boolean },
   ): Map<number, SemanticReference[]> =>
-    request(
-      { kind: 'references', definitions: [...definitions], ...(batchOpts?.exact ? { exact: true } : {}) },
+    requestBatched(
+      definitions,
+      (batch) => ({ kind: 'references', definitions: [...batch], ...(batchOpts?.exact ? { exact: true } : {}) }),
       (response) => numericMap<SemanticReference[]>(response),
       () =>
         direct().referencesForDefinitions?.(definitions, batchOpts) ??
         new Map(definitions.map((definition) => [definition.symbolId, direct().referencesFor(definition)])),
-      () => new Map(),
     );
   const calleesForDefinitions = (definitions: readonly IndexedDefinition[]): Map<number, SemanticCallee[]> =>
-    request(
-      { kind: 'callees', definitions: [...definitions] },
+    requestBatched(
+      definitions,
+      (batch) => ({ kind: 'callees', definitions: [...batch] }),
       (response) => numericMap<SemanticCallee[]>(response),
       () =>
         direct().calleesForDefinitions?.(definitions) ??
         new Map(definitions.map((definition) => [definition.symbolId, direct().calleesFor(definition)])),
-      () => new Map(),
     );
 
   return {
@@ -156,11 +194,11 @@ export function createServiceBackedTypeScriptProvider(
     calleesFor: (definition) => calleesForDefinitions([definition]).get(definition.symbolId) ?? [],
     calleesForDefinitions,
     calleeCoverageForDefinitions: (definitions) =>
-      request(
-        { kind: 'callee-coverage', definitions: [...definitions] },
+      requestBatched(
+        definitions,
+        (batch) => ({ kind: 'callee-coverage', definitions: [...batch] }),
         (response) => numericMap<SemanticCalleeCoverage>(response),
         () => direct().calleeCoverageForDefinitions?.(definitions) ?? new Map(),
-        () => new Map(),
       ),
     signatureFor: (definition) =>
       request(
@@ -171,6 +209,22 @@ export function createServiceBackedTypeScriptProvider(
       ),
     dispose: () => directProvider?.dispose?.(),
   };
+}
+
+function isWorkerMemoryFailure(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /memory limit|heap out of memory|worker terminated|worker failed/iu.test(message);
+}
+
+/** Two halves that never split a file, or null when the batch is already a single file. */
+function splitByFile(definitions: readonly IndexedDefinition[]): [IndexedDefinition[], IndexedDefinition[]] | null {
+  const files = [...new Set(definitions.map((definition) => definition.relativePath))].sort();
+  if (files.length < 2) return null;
+  const left = new Set(files.slice(0, Math.ceil(files.length / 2)));
+  return [
+    definitions.filter((definition) => left.has(definition.relativePath)),
+    definitions.filter((definition) => !left.has(definition.relativePath)),
+  ];
 }
 
 function isUnsupportedRequestError(error: unknown): boolean {

@@ -6,6 +6,29 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [0.24.0]
 
+### The semantic worker loads one compiler project at a time
+
+- Compiler projects are built lazily: a tsconfig's project exists only once a
+  request needs one of its files, files are routed to the tsconfig that
+  lists them, and a project that was never asked for costs nothing. The
+  semantic worker now carries the same soft-memory retirement mark as the
+  index worker, restarts once after a failure, and a batch whose worker died
+  of memory is retried as file halves down to single files before the
+  service counts as failed. Worker heaps are sized to the indexed document
+  count, capped by physical memory or the container's cgroup limit,
+  whichever is lower.
+
+### Self-audit distinguishes what the compiler cannot see
+
+- A cheap-path answer in a file outside every tsconfig (a test excluded from
+  the build config) is reported as outside oracle coverage rather than as a
+  false positive, and precision is measured over the rest.
+
+### Health report cache keyed by build
+
+- The cache key carries a digest of the running entry bundle, so two builds
+  under one version string never serve each other's reports.
+
 ### Compiler callees resolve imported functions, and self-audit measures callee precision
 
 - The compiler callee path bound an imported call to its import alias and then

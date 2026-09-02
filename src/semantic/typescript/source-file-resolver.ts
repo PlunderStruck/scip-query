@@ -28,7 +28,7 @@ export function createTypeScriptSourceFiles(
   indexedTypeScriptLikeDocuments(): string[];
 } {
   const sourceFileCache = new Map<string, SourceFileMatch | null>();
-  let sourceFileIndexes: ProjectSourceFileIndex[] | null = null;
+  const indexes = new Map<ProjectBundle, ProjectSourceFileIndex>();
   let indexedTypeScriptDocuments: string[] | null = null;
 
   const indexedDocuments = (): string[] => {
@@ -38,13 +38,30 @@ export function createTypeScriptSourceFiles(
     return indexedTypeScriptDocuments;
   };
 
-  const projectSourceFileIndexes = (): ProjectSourceFileIndex[] => {
-    sourceFileIndexes ??= profileSpan(
-      'typescript.source-file-index',
-      () => buildProjectSourceFileIndexes(db.config.projectRoot, projects, indexedDocuments()),
-      () => ({ projects: projects.length, indexedDocuments: indexedDocuments().length }),
+  // A bundle's index is built when the bundle is first consulted, which is
+  // also when its compiler program is created; bundles no request touches
+  // stay unloaded.
+  const indexFor = (bundle: ProjectBundle): ProjectSourceFileIndex =>
+    cached(indexes, bundle, () =>
+      profileSpan(
+        'typescript.source-file-index',
+        () => {
+          const sourceFiles = new Map<string, SourceFile>();
+          for (const sourceFile of bundle.project.getSourceFiles()) addSourceFileAliases(sourceFiles, sourceFile);
+          return { project: bundle.project, sourceFiles };
+        },
+        () => ({ tsconfigPath: bundle.tsconfigPath, indexedDocuments: indexedDocuments().length }),
+      ),
     );
-    return sourceFileIndexes;
+
+  const attach = (bundle: ProjectBundle, fullPath: string): SourceFileMatch | null => {
+    const index = indexFor(bundle);
+    let sourceFile = index.sourceFiles.get(fullPath) ?? null;
+    if (!sourceFile) {
+      sourceFile = bundle.project.addSourceFileAtPathIfExists(fullPath) ?? null;
+      if (sourceFile) addSourceFileAliases(index.sourceFiles, sourceFile);
+    }
+    return sourceFile ? { project: index.project, sourceFile } : null;
   };
 
   const sourceFileMatch = (relativePath: string): SourceFileMatch | null => {
@@ -52,15 +69,26 @@ export function createTypeScriptSourceFiles(
     return cached(sourceFileCache, relativePath, () => {
       const fullPath = resolveIndexedSourcePath(db.config.projectRoot, relativePath);
       if (!fullPath) return null;
-      for (const { project, sourceFiles } of projectSourceFileIndexes()) {
-        let sourceFile = sourceFiles.get(fullPath) ?? null;
-        if (!sourceFile) {
-          sourceFile = project.addSourceFileAtPathIfExists(fullPath) ?? null;
-          if (sourceFile) addSourceFileAliases(sourceFiles, sourceFile);
-        }
-        if (sourceFile) return { project, sourceFile };
+      // Loaded bundles that already hold the file answer without any work.
+      for (const bundle of projects) {
+        if (!bundle.loaded) continue;
+        const sourceFile = indexFor(bundle).sourceFiles.get(fullPath);
+        if (sourceFile) return { project: bundle.project, sourceFile };
       }
-      return null;
+      // Otherwise the tsconfig that lists the file owns it, even when that
+      // means building its project: another project's compiler options
+      // would resolve the file's imports differently.
+      const listed = projects.find((bundle) => bundle.fileNames?.has(fullPath));
+      if (listed) return attach(listed, fullPath);
+      // A file no config lists is attached to a project already loaded, else
+      // to the first (root) project, as before.
+      for (const bundle of projects) {
+        if (!bundle.loaded) continue;
+        const match = attach(bundle, fullPath);
+        if (match) return match;
+      }
+      const root = projects[0];
+      return root ? attach(root, fullPath) : null;
     });
   };
 
@@ -69,33 +97,6 @@ export function createTypeScriptSourceFiles(
     sourceFileMatch,
     indexedTypeScriptLikeDocuments: indexedDocuments,
   };
-}
-
-function buildProjectSourceFileIndexes(
-  projectRoot: string,
-  projects: readonly ProjectBundle[],
-  indexedDocuments: readonly string[],
-): ProjectSourceFileIndex[] {
-  const indexes = projects.map(({ project }) => {
-    const sourceFiles = new Map<string, SourceFile>();
-    for (const sourceFile of project.getSourceFiles()) addSourceFileAliases(sourceFiles, sourceFile);
-    return { project, sourceFiles };
-  });
-
-  for (const relativePath of indexedDocuments) {
-    const fullPath = resolveIndexedSourcePath(projectRoot, relativePath);
-    if (!fullPath) continue;
-    for (const index of indexes) {
-      if (index.sourceFiles.has(fullPath)) break;
-      const sourceFile = index.project.addSourceFileAtPathIfExists(fullPath) ?? null;
-      if (sourceFile) {
-        addSourceFileAliases(index.sourceFiles, sourceFile);
-        break;
-      }
-    }
-  }
-
-  return indexes;
 }
 
 function addSourceFileAliases(index: Map<string, SourceFile>, sourceFile: SourceFile): void {

@@ -64,6 +64,11 @@ const handleSelfAudit = dbCommand(({ db, args, opts }) => {
     console.log(
       `  ${score.question.padEnd(11)} ${precision}  recall ${score.recall}  (${score.comparedSymbols} compared, ${score.skippedOraclePartial} skipped: oracle-partial)`,
     );
+    if (score.outsideOracleCoverage > 0) {
+      console.log(
+        `${' '.repeat(14)}${score.outsideOracleCoverage} cheap answer(s) in files outside every compiler project (unverifiable, not counted)`,
+      );
+    }
     const sources = Object.entries(score.cheapSources).sort((left, right) => right[1] - left[1]);
     if (sources.length > 0) {
       console.log(

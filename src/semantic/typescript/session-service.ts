@@ -1,3 +1,4 @@
+import { getHeapStatistics } from 'node:v8';
 import { randomUUID } from 'node:crypto';
 import { readProcessIdentity } from '../../platform/process-identity.js';
 import { isProcessAlive } from '../../platform/process-liveness.js';
@@ -37,6 +38,9 @@ export interface TypeScriptSemanticServiceHostOptions {
   generationIdentity?: (dbPath: string) => string | null;
   readSnapshot?: (dbPath: string) => ProjectInputSnapshot | null;
   now?: () => number;
+  /** Heap used above this mark asks the lane to retire the worker after the response. */
+  softMemoryLimitMb?: number;
+  memoryUsage?: () => { heapUsedBytes: number; heapLimitBytes: number };
 }
 
 export class TypeScriptSemanticServiceHost {
@@ -53,9 +57,24 @@ export class TypeScriptSemanticServiceHost {
   private lastRequestAtMs: number | null = null;
   private lastError: string | null = null;
   private available: boolean | null = null;
+  private readonly softMemoryLimitBytes: number | null;
+  private readonly memoryUsage: () => { heapUsedBytes: number; heapLimitBytes: number };
 
   constructor(opts: TypeScriptSemanticServiceHostOptions) {
     this.openDb = opts.openDb;
+    if (
+      opts.softMemoryLimitMb !== undefined &&
+      (!Number.isInteger(opts.softMemoryLimitMb) || opts.softMemoryLimitMb < 1)
+    ) {
+      throw new Error('TypeScript semantic softMemoryLimitMb must be a positive integer.');
+    }
+    this.softMemoryLimitBytes = opts.softMemoryLimitMb === undefined ? null : opts.softMemoryLimitMb * 1024 * 1024;
+    this.memoryUsage =
+      opts.memoryUsage ??
+      (() => ({
+        heapUsedBytes: process.memoryUsage().heapUsed,
+        heapLimitBytes: getHeapStatistics().heap_size_limit,
+      }));
     this.createHost = opts.createHost ?? ((db) => new TypeScriptSemanticHost(db));
     this.generationIdentity = opts.generationIdentity
       ? (db) => opts.generationIdentity!(db.config.dbPath)
@@ -102,6 +121,8 @@ export class TypeScriptSemanticServiceHost {
 
   status(mailbox?: BoundedMailboxStatus): TypeScriptSemanticServiceStatus {
     const stats = this.host?.snapshotStats();
+    const memory = this.memoryUsage();
+    const retireRequested = this.softMemoryLimitBytes !== null && memory.heapUsedBytes >= this.softMemoryLimitBytes;
     return {
       protocolVersion: TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
       state: this.lastError ? 'error' : !this.host ? 'idle' : this.available ? 'ready' : 'unavailable',
@@ -113,6 +134,10 @@ export class TypeScriptSemanticServiceHost {
       sessionsRefreshed: stats?.sessionsRefreshed ?? 0,
       sessionsReplaced: stats?.sessionsReplaced ?? 0,
       projectsCreated: stats?.projectsCreated ?? 0,
+      heapUsedBytes: memory.heapUsedBytes,
+      heapLimitBytes: memory.heapLimitBytes,
+      ...(this.softMemoryLimitBytes === null ? {} : { softMemoryLimitBytes: this.softMemoryLimitBytes }),
+      retireRequested,
       ...(mailbox ? { mailbox } : {}),
     };
   }

@@ -74,6 +74,59 @@ describe('service-backed TypeScript provider fallback policy', () => {
     }
   });
 
+  it('retries a memory-failed batch as file halves before counting the service as failed', () => {
+    const { db } = fixture(2_600);
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const requests: number[] = [];
+    const requester = {
+      request(request: { kind: string; definitions?: Array<{ symbolId: number; relativePath: string }> }) {
+        if (request.kind === 'availability') return { available: true, tsconfigPaths: ['tsconfig.json'] };
+        const definitions = request.definitions ?? [];
+        const files = new Set(definitions.map((definition) => definition.relativePath));
+        requests.push(files.size);
+        if (files.size > 1) {
+          throw new Error(
+            'TypeScript semantic worker failed: Worker terminated due to reaching memory limit: JS heap out of memory',
+          );
+        }
+        return definitions.map((definition) => [definition.symbolId, [{ symbol: 'x', file: 'src/x.ts', line: 0 }]]);
+      },
+    };
+    try {
+      const provider = createServiceBackedTypeScriptProvider(db, undefined, { requester });
+      const definition = (symbolId: number, relativePath: string) => ({
+        symbolId,
+        symbol: `sym${symbolId}`,
+        relativePath,
+        documentId: symbolId,
+        startLine: 0,
+        startChar: 0,
+        endLine: 2,
+        endChar: 1,
+        leaf: 'a',
+        parentTypeName: null,
+        isFunctionLike: true,
+        isTypeLike: false,
+        kind: SymbolInformation_Kind.Function,
+        documentation: null,
+        enclosingSymbol: null,
+      });
+      const result = provider.calleesForDefinitions?.([
+        definition(1, 'src/a.ts'),
+        definition(2, 'src/b.ts'),
+        definition(3, 'src/c.ts'),
+        definition(4, 'src/d.ts'),
+      ]);
+      expect([...(result?.keys() ?? [])].sort()).toEqual([1, 2, 3, 4]);
+      // Four files failed, both halves of two failed, four single files answered.
+      expect(requests).toEqual([4, 2, 1, 1, 2, 1, 1]);
+      expect(stderr).not.toHaveBeenCalled();
+      expect(provider.availability().available).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
   it('keeps the direct compiler fallback below the large index thresholds', () => {
     const { db } = fixture(3);
     const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);

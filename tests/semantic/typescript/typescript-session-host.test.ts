@@ -2,13 +2,18 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { createTypeScriptSourceFiles } from '../../../src/semantic/typescript/source-file-resolver.js';
 import type { ProjectChangeManifest, ProjectFileChange } from '../../../src/domain/project-input.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import {
   TypeScriptSemanticHost,
   planTypeScriptSessionTransition,
 } from '../../../src/semantic/typescript/session-host.js';
-import { createTsMorphProjectBundles, type TsMorphModule } from '../../../src/semantic/typescript/ts-morph-runtime.js';
+import {
+  createTsMorphProjectBundles,
+  loadTsMorph,
+  type TsMorphModule,
+} from '../../../src/semantic/typescript/ts-morph-runtime.js';
 import { evidenceFixtureDb } from '../../fixtures/evidence-fixture.js';
 
 const tempDirs: string[] = [];
@@ -99,13 +104,47 @@ describe('persistent TypeScript semantic host', () => {
     host.advanceGeneration(fixture.db, manifest([change('modified', 'tsconfig.json', 'config')]));
     expect(host.semanticProvider().availability().available).toBe(true);
     expect(projectFactoryCalls).toBe(2);
+    // Bundles are recreated on a config change, but a compiler project is
+    // only built when a request needs one of its files.
     expect(host.snapshotStats()).toEqual(
       expect.objectContaining({
-        projectsCreated: 2,
+        projectsCreated: 1,
         sessionsReplaced: 1,
       }),
     );
+    expect(
+      host
+        .semanticProvider()
+        .importUsage('src/consumer.ts')
+        .map((entry) => entry.importedName),
+    ).toContain('two');
+    expect(host.snapshotStats().projectsCreated).toBe(2);
     host.dispose();
+    fixture.db.close();
+  });
+
+  it('loads only the compiler project whose tsconfig lists the requested file', () => {
+    const fixture = semanticFixture();
+    mkdirSync(join(fixture.projectRoot, 'packages/b/src'), { recursive: true });
+    writeFileSync(
+      join(fixture.projectRoot, 'packages/b/tsconfig.json'),
+      JSON.stringify({ compilerOptions: { strict: true }, include: ['src/**/*.ts'] }),
+    );
+    writeFileSync(join(fixture.projectRoot, 'packages/b/src/b.ts'), 'export const b = 1;\n');
+    const tsMorph = loadTsMorph()!;
+    const bundles = createTsMorphProjectBundles(tsMorph, [
+      join(fixture.projectRoot, 'tsconfig.json'),
+      join(fixture.projectRoot, 'packages/b/tsconfig.json'),
+    ]);
+    expect(bundles.map((bundle) => bundle.loaded)).toEqual([false, false]);
+    expect(bundles[1]!.fileNames?.has(join(fixture.projectRoot, 'packages/b/src/b.ts'))).toBe(true);
+
+    const sourceFiles = createTypeScriptSourceFiles(fixture.db, bundles);
+    expect(sourceFiles.sourceFile('packages/b/src/b.ts')).not.toBeNull();
+    // Only the owning tsconfig's project was built.
+    expect(bundles.map((bundle) => bundle.loaded)).toEqual([false, true]);
+    expect(sourceFiles.sourceFile('src/consumer.ts')).not.toBeNull();
+    expect(bundles.map((bundle) => bundle.loaded)).toEqual([true, true]);
     fixture.db.close();
   });
 });

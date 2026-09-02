@@ -25,7 +25,7 @@ type TypeScriptMailboxWorkerData =
       maxActiveSessions?: number;
       softMemoryLimitMb?: number;
     }
-  | { kind: 'semantic'; projectRoot: string };
+  | { kind: 'semantic'; projectRoot: string; softMemoryLimitMb?: number };
 
 type TypeScriptMailboxWorkerRequest =
   | { kind: 'request'; requestId: string; deadlineAtMs: number; payload: TypeScriptIndexEnvelope }
@@ -50,7 +50,10 @@ if (data.kind === 'index') {
     );
   });
 } else {
-  const host = new TypeScriptSemanticServiceHost({ openDb: () => openProjectDb(data.projectRoot) });
+  const host = new TypeScriptSemanticServiceHost({
+    openDb: () => openProjectDb(data.projectRoot),
+    ...(data.softMemoryLimitMb === undefined ? {} : { softMemoryLimitMb: data.softMemoryLimitMb }),
+  });
   parentPort.on('message', (value: unknown) => {
     const message = parseWorkerRequest<TypeScriptSemanticMailboxEnvelope>(value);
     const previousProfileEnvironment = captureProfileEnvironment();
@@ -110,8 +113,16 @@ function parseWorkerData(value: unknown): TypeScriptMailboxWorkerData {
       ...(data.softMemoryLimitMb === undefined ? {} : { softMemoryLimitMb: data.softMemoryLimitMb }),
     };
   }
-  if (data.kind === 'semantic' && typeof data.projectRoot === 'string') {
-    return { kind: 'semantic', projectRoot: data.projectRoot };
+  if (
+    data.kind === 'semantic' &&
+    typeof data.projectRoot === 'string' &&
+    optionalPositiveInteger(data.softMemoryLimitMb)
+  ) {
+    return {
+      kind: 'semantic',
+      projectRoot: data.projectRoot,
+      ...(data.softMemoryLimitMb === undefined ? {} : { softMemoryLimitMb: data.softMemoryLimitMb }),
+    };
   }
   throw new Error('TypeScript mailbox worker data is invalid.');
 }

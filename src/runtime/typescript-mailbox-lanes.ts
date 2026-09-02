@@ -2,6 +2,7 @@ import { totalmem } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import { Worker } from 'node:worker_threads';
+import { readTextFileWithinLimit, SMALL_ARTIFACT_MAX_BYTES } from '../filesystem/bounded-file.js';
 import { readProcessIdentity } from '../platform/process-identity.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
 import {
@@ -63,6 +64,7 @@ export interface TypeScriptIndexMailboxLaneOptions extends TypeScriptMailboxLane
 export interface TypeScriptSemanticMailboxLaneOptions extends TypeScriptMailboxLaneCommonOptions {
   paths: TypeScriptSemanticMailboxPaths;
   projectRoot: string;
+  workerSoftMemoryMb?: number;
 }
 
 export function createTypeScriptIndexMailboxLane(
@@ -152,6 +154,7 @@ export function createTypeScriptIndexMailboxLane(
 export function createTypeScriptSemanticMailboxLane(
   options: TypeScriptSemanticMailboxLaneOptions,
 ): TypeScriptMailboxWorkerLane<TypeScriptSemanticServiceStatus> {
+  const softMemoryLimitMb = options.workerSoftMemoryMb ?? typescriptWorkerSoftMemoryMb(options.workerHeapMb);
   const initialStatus = (): TypeScriptSemanticServiceStatus => ({
     protocolVersion: TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
     state: 'idle',
@@ -161,6 +164,8 @@ export function createTypeScriptSemanticMailboxLane(
     sessionsRefreshed: 0,
     sessionsReplaced: 0,
     projectsCreated: 0,
+    softMemoryLimitBytes: softMemoryLimitMb * 1024 * 1024,
+    retireRequested: false,
   });
   return createTypeScriptMailboxLane<TypeScriptSemanticMailboxEnvelope, unknown, TypeScriptSemanticServiceStatus>({
     name: 'TypeScript semantic',
@@ -169,7 +174,8 @@ export function createTypeScriptSemanticMailboxLane(
     limits: options.limits,
     initialStatus,
     parseEnvelope: parseTypeScriptSemanticEnvelope,
-    createWorker: () => createWorker(options, { kind: 'semantic', projectRoot: options.projectRoot }),
+    createWorker: () =>
+      createWorker(options, { kind: 'semantic', projectRoot: options.projectRoot, softMemoryLimitMb }),
     complete(claim, envelope, response, nowMs) {
       completeBoundedMailboxClaim(
         options.paths,
@@ -199,6 +205,13 @@ export function createTypeScriptSemanticMailboxLane(
       );
     },
     idleTtlMs: TYPESCRIPT_SEMANTIC_MAILBOX_WORKER_IDLE_MS,
+    // A worker that died mid-request restarts once for the next request; with
+    // lazily loaded compiler projects it comes back holding only what that
+    // request needs. Above the soft mark the worker is retired after its
+    // response for the same reason.
+    maxWorkerFailureRetries: 1,
+    retireAfterResponse: (status) => status.retireRequested === true,
+    statusWhenWorkerAbsent: (status) => ({ ...status, state: 'idle', heapUsedBytes: 0, retireRequested: false }),
     onBusy: options.onBusy,
     onFatal: options.onFatal,
   });
@@ -371,12 +384,39 @@ const TYPESCRIPT_WORKER_HEAP_MACHINE_SHARE = 0.6;
  * of answering. The environment override and the project configuration still
  * win over this estimate.
  */
-export function recommendedTypeScriptWorkerHeapMb(documents: number, totalMemoryBytes = totalmem()): number {
+export function recommendedTypeScriptWorkerHeapMb(
+  documents: number,
+  totalMemoryBytes = availableMemoryBytes(),
+): number {
   const configured = Number.parseInt(process.env['SCIP_TS_WORKER_HEAP_MB'] ?? '', 10);
   if (Number.isFinite(configured) && configured > 0) return configured;
   const estimate = Math.ceil(TYPESCRIPT_WORKER_HEAP_BASE_MB + documents * TYPESCRIPT_WORKER_HEAP_PER_DOCUMENT_MB);
   const machineCeiling = Math.floor((totalMemoryBytes * TYPESCRIPT_WORKER_HEAP_MACHINE_SHARE) / (1024 * 1024));
   return Math.max(DEFAULT_TYPESCRIPT_WORKER_HEAP_MB, Math.min(estimate, machineCeiling));
+}
+
+/**
+ * The memory this process may actually use: physical memory, lowered to the
+ * cgroup limit when the process runs inside a container. A worker sized to
+ * the host alone is killed by the kernel instead of reporting a heap limit.
+ */
+export function availableMemoryBytes(
+  readFile: (path: string) => string | null = readCgroupFile,
+  physicalBytes = totalmem(),
+): number {
+  const limits = [readFile('/sys/fs/cgroup/memory.max'), readFile('/sys/fs/cgroup/memory/memory.limit_in_bytes')]
+    .map((raw) => (raw === null ? Number.NaN : Number.parseInt(raw.trim(), 10)))
+    // "max" (v2) parses to NaN; the v1 unlimited sentinel is far above any real machine.
+    .filter((value) => Number.isFinite(value) && value > 0 && value < physicalBytes);
+  return limits.length > 0 ? Math.min(...limits) : physicalBytes;
+}
+
+function readCgroupFile(path: string): string | null {
+  try {
+    return readTextFileWithinLimit(path, { maxBytes: SMALL_ARTIFACT_MAX_BYTES, inputKind: 'cgroup memory limit' });
+  } catch {
+    return null;
+  }
 }
 
 function typescriptWorkerSoftMemoryMb(configuredHeapMb?: number): number {

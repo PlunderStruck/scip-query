@@ -46,6 +46,11 @@ export interface TypeScriptSemanticServiceStatus {
   sessionsRefreshed: number;
   sessionsReplaced: number;
   projectsCreated: number;
+  heapUsedBytes?: number;
+  heapLimitBytes?: number;
+  softMemoryLimitBytes?: number;
+  /** The worker asks to be retired after this response so its compiler programs are released. */
+  retireRequested?: boolean;
   mailbox?: BoundedMailboxStatus;
 }
 

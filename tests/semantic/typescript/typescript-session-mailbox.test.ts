@@ -514,6 +514,32 @@ function symbolicLinkTo(target: string, prefix: string): string {
   return alias;
 }
 
+describe('semantic service soft memory mark', () => {
+  it('asks to be retired after a response once the heap passes the soft mark', () => {
+    const fixture = serviceFixture();
+    let heapUsedBytes = 0;
+    const service = new TypeScriptSemanticServiceHost({
+      openDb: fixture.openDb,
+      generationIdentity: () => 'current',
+      readSnapshot: () => projectSnapshot('current'),
+      createHost: fakeSemanticHost,
+      softMemoryLimitMb: 1,
+      memoryUsage: () => ({ heapUsedBytes, heapLimitBytes: 8 * 1024 * 1024 }),
+    });
+    try {
+      service.handle('current', { kind: 'availability' });
+      expect(service.status()).toEqual(
+        expect.objectContaining({ retireRequested: false, softMemoryLimitBytes: 1024 * 1024, heapUsedBytes: 0 }),
+      );
+      heapUsedBytes = 2 * 1024 * 1024;
+      service.handle('current', { kind: 'availability' });
+      expect(service.status()).toEqual(expect.objectContaining({ retireRequested: true, heapUsedBytes }));
+    } finally {
+      service.closeTypeScriptService();
+    }
+  });
+});
+
 function fakeSemanticHost(db: ScipDatabase): TypeScriptSemanticHost {
   return new TypeScriptSemanticHost(db, {
     loadModule: () => loadTsMorph(),

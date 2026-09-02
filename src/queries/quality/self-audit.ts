@@ -6,6 +6,7 @@ import {
   semanticEvidenceProduct,
   semanticReferences,
   semanticCalleeCoverage,
+  semanticCompilerVisibleFiles,
 } from '../../semantic/shared-primitives.js';
 import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 import { referenceSitesForSymbol } from '../../symbols/references/reference-sites.js';
@@ -41,6 +42,8 @@ export interface AuditQuestionScore {
   skippedOraclePartial: number;
   /** Compared symbols whose oracle accounted for every call site; precision is measured over these only. */
   completeOracleSymbols: number;
+  /** Cheap-path answers in files outside every compiler project; the oracle cannot see them, so they are neither confirmed nor wrong. */
+  outsideOracleCoverage: number;
   /** Cheap-path rows over the whole sample by evidence source; empty for the references question. */
   cheapSources: Record<string, number>;
 }
@@ -105,6 +108,7 @@ export function selfAudit(
   // none of those has a complete callee oracle, so cheap-only files there
   // are false positives rather than unverified answers.
   const semanticCoverage = oracleKind === 'semantic' ? semanticCalleeCoverage(db, sampled) : new Map();
+  const compilerSees = (oracleKind === 'semantic' ? semanticCompilerVisibleFiles(db) : null) ?? (() => true);
   const sourceOracle = oracleKind === 'source' ? buildClojureSourceOracle(db, index, sampled) : null;
   for (const definition of sampled) {
     const oracleRefs = crossFileSet(
@@ -163,9 +167,28 @@ export function selfAudit(
       oracleRefs,
       referencesComplete,
       disagreements,
+      compilerSees,
     );
-    scoreQuestion(tallies.callees, definition, 'callees', cheapCals, oracleCals, calleesComplete, disagreements);
-    scoreQuestion(tallies.renders, definition, 'renders', cheapRenders, oracleRenders, rendersComplete, disagreements);
+    scoreQuestion(
+      tallies.callees,
+      definition,
+      'callees',
+      cheapCals,
+      oracleCals,
+      calleesComplete,
+      disagreements,
+      compilerSees,
+    );
+    scoreQuestion(
+      tallies.renders,
+      definition,
+      'renders',
+      cheapRenders,
+      oracleRenders,
+      rendersComplete,
+      disagreements,
+      compilerSees,
+    );
   }
 
   disagreements.sort(
@@ -195,6 +218,7 @@ interface QuestionTally {
   completeSymbols: number;
   completeCheapTotal: number;
   completeAgreed: number;
+  outsideCoverage: number;
   sources: Record<string, number>;
 }
 
@@ -208,6 +232,7 @@ function emptyTally(): QuestionTally {
     completeSymbols: 0,
     completeCheapTotal: 0,
     completeAgreed: 0,
+    outsideCoverage: 0,
     sources: {},
   };
 }
@@ -252,17 +277,23 @@ function scoreQuestion(
   oracle: Set<string>,
   oracleComplete: boolean,
   disagreements: AuditDisagreement[],
+  oracleSees: (file: string) => boolean = () => true,
 ): void {
   if (!oracleComplete && oracle.size === 0) {
     tally.skippedOraclePartial += 1;
     return;
   }
+  // A cheap answer in a file the oracle cannot see is outside the comparison:
+  // it is counted, but never as agreement or as a false positive.
+  const outside = [...cheap].filter((file) => !oracle.has(file) && !oracleSees(file));
+  tally.outsideCoverage += outside.length;
+  const comparable = cheap.size - outside.length;
   tally.comparedSymbols += 1;
-  tally.cheapTotal += cheap.size;
+  tally.cheapTotal += comparable;
   tally.oracleTotal += oracle.size;
   if (oracleComplete) {
     tally.completeSymbols += 1;
-    tally.completeCheapTotal += cheap.size;
+    tally.completeCheapTotal += comparable;
   }
   const cheapOnly: string[] = [];
   const oracleOnly: string[] = [];
@@ -270,7 +301,7 @@ function scoreQuestion(
     if (oracle.has(file)) {
       tally.agreed += 1;
       if (oracleComplete) tally.completeAgreed += 1;
-    } else cheapOnly.push(file);
+    } else if (oracleSees(file)) cheapOnly.push(file);
   }
   for (const file of oracle) {
     if (!cheap.has(file)) oracleOnly.push(file);
@@ -321,6 +352,7 @@ function finalizeScore(question: AuditQuestion, tally: QuestionTally, oracleKind
     unverified,
     skippedOraclePartial: tally.skippedOraclePartial,
     completeOracleSymbols: tally.completeSymbols,
+    outsideOracleCoverage: tally.outsideCoverage,
     cheapSources: tally.sources,
   };
 }

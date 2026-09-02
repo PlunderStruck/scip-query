@@ -97,8 +97,8 @@ state. A checked box does not upgrade an `insufficient` state to `certified`.
 
 - [x] `unused-imports` — certified
 - [x] `unused-params` — insufficient population evidence
-- [x] `cycles` — insufficient population evidence
-- [x] `duplicate-bodies` — certified
+- [x] `cycles` — insufficient population evidence (2026-09-02: consistent across generations; the Launchpoint change was the repository removing its cycles)
+- [x] `duplicate-bodies` — certified (2026-09-02: constructors, test bodies, route verb exports, and UI-kit bodies removed before grouping)
 - [x] `complexity` — certified
 - [x] `isolated` — insufficient population evidence
 - [x] `redundant-reexports` — certified
@@ -151,8 +151,8 @@ certificate:
 - [x] `similar-files` — certified relationship
 - [x] `similar-chains` — qualified within a bounded candidate frame
 - [x] `similar-signatures` — certified relationship
-- [x] `twin-drift` — qualified; 37/40 valid
-- [x] `react-component-duplicates` — certified relationship
+- [x] `twin-drift` — qualified; 37/40 valid (2026-09-02: route-convention and CRUD/lifecycle member names excluded; no reviewed precision sample yet)
+- [x] `react-component-duplicates` — certified relationship (2026-09-02: test-file, UI-kit, route-scaffolding, and hook-versus-component policies; Launchpoint label set precision 1.0 / recall 1.0)
 - [x] `vue-component-duplicates` — certified relationship
 - [x] `convergence` alias parity with `similar --plan`
 - [x] `twin-ab` — certified generated-scaffold correctness for importable named
@@ -164,18 +164,18 @@ consolidation would improve the code.
 
 ## Architecture and Refactoring Signals
 
-- [x] `wrapper-candidates` — certified production single-caller relationship
-- [x] `passthrough-candidates` — certified literal-forwarding relationship
+- [x] `wrapper-candidates` — certified production single-caller relationship (2026-09-02: constructors excluded, body shape distinguishes forwarders from helpers; no reviewed precision sample yet)
+- [x] `passthrough-candidates` — certified literal-forwarding relationship (2026-09-02: facade files (three or more forwards to one collaborator) become boundary signals; no reviewed precision sample yet)
 - [x] `stale-abstractions` — certified relationship
 - [x] `extract-candidates` — certified measurement; extraction remains contextual. Rebuilt 2026-09-02 around exclusive line regions with compiler-known locals; the Python row above predates the rebuild, and the current reviewed sample is `docs/validation/labels/launchpoint-backend/extract-candidates.json`
 - [x] `locality-candidates` — certified relationship; movement remains contextual
 - [x] `drift` — qualified; subtype breadth incomplete
-- [x] `co-change` — certified relationship
+- [x] `co-change` — certified relationship (2026-09-02: doc-code and generated-artifact partners weight zero)
 - [x] `doc-drift` — certified relationship
 - [x] `coupling` — certified graph fact
 - [x] `bottlenecks` — certified disclosed graph fact; utility remains contextual
 - [x] `deep-chains` — certified condensed-component path
-- [x] `complexity-hotspots` — certified measurement
+- [x] `complexity-hotspots` — certified measurement (2026-09-02: rendered children count as fan-out; extreme requires ten branches; pressure threshold scales with file count)
 - [x] `hotspots` — certified graph fact
 - [x] `fan-in` — certified exact-symbol graph fact
 - [x] `fan-out` — certified graph fact
@@ -185,9 +185,9 @@ action. A real relationship can still be an unhelpful recommendation.
 
 ## React and Vue Signals
 
-- [x] `react-component-duplicates` — 48/48, certified relationship
-- [x] `react-hook-candidates` — 48/48, certified relationship
-- [x] `react-large-component-pressure` — 48/48, certified measurement
+- [x] `react-component-duplicates` — 48/48, certified relationship (2026-09-02: test-file, UI-kit, route-scaffolding, and hook-versus-component policies; Launchpoint label set precision 1.0 / recall 1.0)
+- [x] `react-hook-candidates` — 48/48, certified relationship (2026-09-02: generic-mechanics and shared-hook policies; Launchpoint label set precision 1.0 / recall 1.0)
+- [x] `react-large-component-pressure` — 48/48, certified measurement (2026-09-02: UI-kit directories excluded; token axes gated by size)
 - [x] `vue-component-duplicates` — 41/41, certified relationship
 - [x] `vue-composable-candidates` — 48/48, certified relationship
 - [x] `vue-large-view-pressure` — 64/64, certified measurement
@@ -218,7 +218,7 @@ was not independently actionable without local design context.
   - [x] `new-dead` — qualified candidate with unconfirmed tier
   - [x] `baseline` — qualified exact set difference
 - [x] `health` — experimental composite; private shadow only
-- [x] `self-audit` — qualified; partial oracles withhold precision
+- [x] `self-audit` — qualified; partial oracles withhold precision (2026-09-02: renders question, per-symbol complete oracle, callee precision measured (Vega 1.0 / Launchpoint 0.988))
 - [x] `effectiveness` — qualified ledger-transition facts
 - [x] `affected` — qualified indexed closure
 - [x] `change-surface` — qualified indexed consumer counts
