@@ -212,3 +212,24 @@ Label sets live under `docs/validation/labels/<repository>/`.
 Two findings were about output, not detectors: `duplicate-bodies --json`
 wrote its policy-exclusion lines into the JSON document, and `health --full`
 redirected to a file wrote one page and a cursor. Both are fixed.
+
+## Full health after the second review (release build r6)
+
+Cold report cache, `health --full`, checkout `3ca18e944` with 29 uncommitted
+paths, generation `abcb93f04a80`: score 67 / 100 (risk 83, hygiene 67),
+66.6 s with a warm semantic cache at 2.6 GB resident.
+
+| Axis               | This run            | Morning run               | Why it moved                                                                                                                         |
+| ------------------ | ------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Dead code          | 64                  | 65                        | the `next.config.js` image loader is a configuration-referenced entry surface                                                        |
+| Circular deps      | 1                   | 0 (5 on the other branch) | the 725-file symbol-reference component still cycles after barrels, tests, and entries are removed; classification is by content now |
+| Drifted twins      | 508                 | 536                       | layered members, stubs over peers, overrides, key-qualified lookups, near-name suffix words                                          |
+| Extract candidates | 519 signal          | 417                       | the candidate's region is the largest extractable one, not the largest one                                                           |
+| Wrapper functions  | 56 (29.75 weighted) | 43 (28.75)                | concise arrow wrappers are read correctly now; copy-catalog facades are signal tier                                                  |
+| Passthroughs       | 127                 | 128                       | a curried handler is not a literal forward                                                                                           |
+| Hidden coupling    | direct tier only    | all pairs                 | sweep-only, stale, and configuration pairs are signal tier                                                                           |
+
+The risk score fell four points on the cycle. That component is real
+coupling in the symbol-reference graph (types included); on the imports-only
+basis (`cycles --edge-basis imports`) it does not cycle. Both are true and
+the report names the basis.
