@@ -10,6 +10,14 @@ export const BUILTIN_SKILLS = [
   'scip-plan',
   'scip-setup',
   'scip-integrity-audit',
+  'principal-maintainability-review',
+  'scip-system-compression',
+  'scip-root-cause',
+  'scip-claim-audit',
+  'scip-probe-reachability',
+  'scip-twin-drift',
+  'scip-calibrate',
+  'conductor',
 ] as const;
 export const COMPATIBILITY_SKILLS = ['concrete-plan'] as const;
 export const INSTALLABLE_SKILLS = [
@@ -18,6 +26,14 @@ export const INSTALLABLE_SKILLS = [
   'scip-setup',
   'scip-integrity-audit',
   'scip-explore',
+  'principal-maintainability-review',
+  'scip-system-compression',
+  'scip-root-cause',
+  'scip-claim-audit',
+  'scip-probe-reachability',
+  'scip-twin-drift',
+  'scip-calibrate',
+  'conductor',
   'concrete-plan',
 ] as const;
 // ── Skills Installation ────────────────────────────────────

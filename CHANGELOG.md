@@ -4,6 +4,21 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+### Eight judgment skills restored to the bundled suite
+
+- `install-skills` and `setup` now also link `principal-maintainability-review`,
+  `scip-system-compression`, `scip-root-cause`, `scip-claim-audit`,
+  `scip-probe-reachability`, `scip-twin-drift`, `scip-calibrate`, and
+  `conductor` into Claude Code, Codex, and the shared agent root. Each is the
+  last full version from this repository's history, ported to the current
+  command surface: retired `diff-gate`, `cleanup-apply`, `plan-context`,
+  `effectiveness`, and `symbols` references are replaced with `diff-impact`,
+  `architecture`, `outline`, and the standalone detectors, and every
+  `metadata.commands` template validates against the live descriptors.
+- The repo-local `.agents/skills/principal-maintainability-review` and
+  `.agents/skills/scip-system-compression` stubs are removed; the bundled
+  skills supersede them.
+
 ## [0.23.0]
 
 ### Fresh installs work without Go or the scip binary

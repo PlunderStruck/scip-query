@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Conductor'
+  short_description: 'Plan and conduct multi-phase engineering programs with verified handoffs'
+  default_prompt: 'Use $conductor to plan and conduct this multi-phase program end to end: pre-register benchmarks, write executor-ready steps, reproduce the evidence at every handoff, and close with the self-report.'

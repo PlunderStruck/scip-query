@@ -41,11 +41,19 @@ describe('skill installation', () => {
   it('keeps the builtin skill list in lockstep with the shipped directories', async () => {
     const { module } = await loadSetup();
     expect([...module.BUILTIN_SKILLS].sort()).toEqual([
+      'conductor',
+      'principal-maintainability-review',
+      'scip-calibrate',
+      'scip-claim-audit',
       'scip-explore',
       'scip-integrity-audit',
       'scip-plan',
+      'scip-probe-reachability',
       'scip-query',
+      'scip-root-cause',
       'scip-setup',
+      'scip-system-compression',
+      'scip-twin-drift',
     ]);
     expect([...module.INSTALLABLE_SKILLS].sort()).toEqual(
       [...module.BUILTIN_SKILLS, ...module.COMPATIBILITY_SKILLS].sort(),
@@ -61,6 +69,14 @@ describe('skill installation', () => {
       'scip-plan',
       'scip-setup',
       'scip-integrity-audit',
+      'principal-maintainability-review',
+      'scip-system-compression',
+      'scip-root-cause',
+      'scip-claim-audit',
+      'scip-probe-reachability',
+      'scip-twin-drift',
+      'scip-calibrate',
+      'conductor',
     ]);
   });
 
@@ -74,6 +90,14 @@ describe('skill installation', () => {
       'scip-setup',
       'scip-integrity-audit',
       'scip-explore',
+      'principal-maintainability-review',
+      'scip-system-compression',
+      'scip-root-cause',
+      'scip-claim-audit',
+      'scip-probe-reachability',
+      'scip-twin-drift',
+      'scip-calibrate',
+      'conductor',
       'concrete-plan',
     ]) {
       expect(result.installed).toEqual(
