@@ -1,0 +1,109 @@
+{
+  "detector": "extract-candidates",
+  "repository": "suplierscout",
+  "identity": "symbol",
+  "reviewed": "2026-09-03",
+  "note": "Sampled ten signal-tier and ten support-tier candidates (seed 11). True means a coherent unit a reviewer would extract; false means a nested function that is already a unit, or most of a component.",
+  "labels": [
+    {
+      "id": "src/client/App.tsx#src:client:App:App()",
+      "verdict": "true",
+      "reason": "the router's route table as a child component"
+    },
+    {
+      "id": "src/server/services/organizationAdmin.ts#src:server:services:organizationAdmin:updateOrganizationMemberRole()",
+      "verdict": "true",
+      "reason": "the demotion guard and update block"
+    },
+    {
+      "id": "src/server/services/engagementResponses.ts#src:server:services:engagementResponses:recordEngagementResponseEvidence()",
+      "verdict": "true",
+      "reason": "the update-or-create ternary"
+    },
+    {
+      "id": "src/client/features/build-breakdown/BuildBreakdownPage.tsx#src:client:features:build-breakdown:BuildBreakdownPage:BuildBreakdownPage()",
+      "verdict": "false",
+      "reason": "the region is a nested function declaration; it is already a unit"
+    },
+    {
+      "id": "src/shared/scoring.ts#src:shared:scoring:scoreSourceQuality()",
+      "verdict": "true",
+      "reason": "the provenance scoring block"
+    },
+    {
+      "id": "src/server/services/supplierExtraction.ts#src:server:services:supplierExtraction:extractSupplierProfileFromWebsite()",
+      "verdict": "true",
+      "reason": "fetch with failure recording and extraction"
+    },
+    {
+      "id": "src/client/components/AppShell.tsx#src:client:components:AppShell:AppShell()",
+      "verdict": "true",
+      "reason": "the immersive controls header subtree"
+    },
+    {
+      "id": "src/server/services/copilot/maya/conceptSynthesisService.ts#src:server:services:copilot:maya:conceptSynthesisService:synthesizeMayaSpec()",
+      "verdict": "true",
+      "reason": "the failed-invocation recording block, duplicated in the sibling service"
+    },
+    {
+      "id": "src/server/services/copilot/maya/conceptSynthesisService.ts#src:server:services:copilot:maya:conceptSynthesisService:nextQuestion()",
+      "verdict": "true",
+      "reason": "the failed-invocation recording block"
+    },
+    {
+      "id": "src/client/features/build-breakdown/BuildBreakdownPage.tsx#src:client:features:build-breakdown:BuildBreakdownPage:BreakdownResults()",
+      "verdict": "true",
+      "reason": "the export actions subtree"
+    },
+    {
+      "id": "src/server/services/usaspending.ts#src:server:services:usaspending:refreshUsaspendingEnrichment()",
+      "verdict": "true",
+      "reason": "the enrichment refresh try block"
+    },
+    {
+      "id": "src/server/services/rfiDelivery.ts#src:server:services:rfiDelivery:sendApprovedRfi()",
+      "verdict": "true",
+      "reason": "the send block"
+    },
+    {
+      "id": "src/server/services/scoreRecalculation.ts#src:server:services:scoreRecalculation:recalculateScoreForProjectManufacturer()",
+      "verdict": "true",
+      "reason": "the parallel loads"
+    },
+    {
+      "id": "src/client/features/copilot/maya/MayaChatPage.tsx#src:client:features:copilot:maya:MayaChatPage:MayaChatPage()",
+      "verdict": "uncertain",
+      "reason": "a callback body covering most of the component"
+    },
+    {
+      "id": "src/client/features/catalog/CatalogPage.tsx#src:client:features:catalog:CatalogPage:CatalogPage()",
+      "verdict": "false",
+      "reason": "half the component"
+    },
+    {
+      "id": "src/server/services/samGov.ts#src:server:services:samGov:refreshSamGovRegistration()",
+      "verdict": "true",
+      "reason": "the verification try block"
+    },
+    {
+      "id": "src/server/services/copilot/bomProposerService.ts#src:server:services:copilot:bomProposerService:proposeBom()",
+      "verdict": "uncertain",
+      "reason": "a long error-handling block"
+    },
+    {
+      "id": "src/client/features/exports/DocumentExportsPage.tsx#src:client:features:exports:DocumentExportsPage:DocumentExportsPage()",
+      "verdict": "false",
+      "reason": "the whole render"
+    },
+    {
+      "id": "src/client/features/shortlist/ShortlistPage.tsx#src:client:features:shortlist:ShortlistPage:ShortlistPage()",
+      "verdict": "false",
+      "reason": "the component's hooks and handlers"
+    },
+    {
+      "id": "src/server/services/dataPortability.ts#src:server:services:dataPortability:createOrganizationDataExport()",
+      "verdict": "true",
+      "reason": "the bundle build and upload"
+    }
+  ]
+}

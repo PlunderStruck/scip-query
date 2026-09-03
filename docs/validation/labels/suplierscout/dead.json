@@ -1,0 +1,94 @@
+{
+  "detector": "dead",
+  "repository": "suplierscout",
+  "identity": "symbol",
+  "reviewed": "2026-09-03",
+  "note": "Sampled 17 of the dead-code rows (seed 11); every symbol checked with a repository-wide word search outside its defining file. True means nothing but documentation references it.",
+  "labels": [
+    {
+      "id": "src/shared/dataProvenance.ts#src:shared:dataProvenance:dataProvenanceHumanReviewStatusValues",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/shared/dataProvenance.ts#src:shared:dataProvenance:dataProvenanceVerificationOutcomeValues",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/shared/constants.ts#src:shared:constants:APP_NAME",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/shared/constants.ts#src:shared:constants:SESSION_TIMEOUT_HOURS",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/shared/copilot/copilotState.ts#src:shared:copilot:copilotState:copilotStageSchema",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/server/services/stripe.ts#src:server:services:stripe:resolveOrganizationFromCheckoutSession()",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/shared/supplierCredentials.ts#src:shared:supplierCredentials:credentialWarning()",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/shared/dataProvenance.ts#src:shared:dataProvenance:dataProvenanceTermsCategoryValues",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/shared/dataProvenance.ts#src:shared:dataProvenance:dataProvenanceCollectionOutcomeValues",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/shared/dataProvenance.ts#src:shared:dataProvenance:dataProvenanceSourceTypeValues",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/server/services/copilot/copilotArtifactStore.ts#src:server:services:copilot:copilotArtifactStore:getLatestArtifact()",
+      "verdict": "true",
+      "reason": "only a plan document mentions it"
+    },
+    {
+      "id": "src/shared/dataProvenance.ts#src:shared:dataProvenance:dataProvenanceCollectionMethodValues",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/shared/dataProvenance.ts#src:shared:dataProvenance:dataProvenanceClaimCategoryValues",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/server/services/copilot/copilotArtifactStore.ts#src:server:services:copilot:copilotArtifactStore:listArtifactVersions()",
+      "verdict": "true",
+      "reason": "only a plan document mentions it"
+    },
+    {
+      "id": "src/client/features/copilot/useStreamingArtifact.ts#src:client:features:copilot:useStreamingArtifact:STREAM_EVENT_LINES",
+      "verdict": "true",
+      "reason": "only an ADR mentions the name"
+    },
+    {
+      "id": "src/server/services/provenanceFreshness.ts#src:server:services:provenanceFreshness:resolvePreferredFreshnessClaim()",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/shared/sourceGovernance.ts#src:shared:sourceGovernance:retentionHintForTerms()",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    }
+  ]
+}

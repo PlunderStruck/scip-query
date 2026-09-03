@@ -49,6 +49,14 @@ function withPassthroughFixture(run: (db: ScipDatabase) => void): void {
         'export function handler(req: string, res: string, next: string) {',
         '  return jsonHandler(async () => deleteHorseImpl(req))(req, res, next);',
         '}',
+        '',
+        'export function reveal(progress: number, start: number, end = start + 6) {',
+        '  return smoothstep(progress, start, end);',
+        '}',
+        '',
+        'function smoothstep(progress: number, start: number, end: number) {',
+        '  return progress + start + end;',
+        '}',
       ],
       'src/auth/rates.ts': [
         'export function toBaseRate(raw: string) {',
@@ -80,6 +88,8 @@ function withPassthroughFixture(run: (db: ScipDatabase) => void): void {
       .symbol(8, 'scip-typescript npm fixture 1.0.0 src/auth/`rates.ts`/toBaseRate().', 'toBaseRate', 6)
       .symbol(9, 'scip-typescript npm fixture 1.0.0 src/auth/`rates.ts`/parseBaseRate().', 'parseBaseRate', 6)
       .symbol(10, 'scip-typescript npm fixture 1.0.0 src/`contracts.ts`/handler().', 'handler', 6)
+      .symbol(11, 'scip-typescript npm fixture 1.0.0 src/`contracts.ts`/reveal().', 'reveal', 6)
+      .symbol(12, 'scip-typescript npm fixture 1.0.0 src/`contracts.ts`/smoothstep().', 'smoothstep', 6)
       .definition(1, 1, 1, 0, 0, 2, 1)
       .definition(2, 1, 2, 4, 0, 6, 1)
       .definition(3, 1, 3, 8, 0, 10, 1)
@@ -90,6 +100,8 @@ function withPassthroughFixture(run: (db: ScipDatabase) => void): void {
       .definition(8, 3, 8, 0, 0, 2, 1)
       .definition(9, 3, 9, 4, 0, 6, 1)
       .definition(10, 2, 10, 12, 0, 14, 1)
+      .definition(11, 2, 11, 16, 0, 18, 1)
+      .definition(12, 2, 12, 20, 0, 22, 1)
       .chunk(1, 1, 0, 2)
       .chunk(2, 1, 4, 6, 1)
       .chunk(3, 1, 8, 10, 2)
@@ -100,6 +112,8 @@ function withPassthroughFixture(run: (db: ScipDatabase) => void): void {
       .chunk(8, 3, 0, 2)
       .chunk(9, 3, 4, 6, 1)
       .chunk(10, 2, 12, 14, 3)
+      .chunk(11, 2, 16, 18, 4)
+      .chunk(12, 2, 20, 22, 5)
       .mention(1, 1, 1)
       .mention(1, 2, 0)
       .mention(2, 2, 1)
@@ -116,6 +130,9 @@ function withPassthroughFixture(run: (db: ScipDatabase) => void): void {
       .mention(9, 9, 1)
       .mention(10, 10, 1)
       .mention(10, 6, 0)
+      .mention(11, 11, 1)
+      .mention(11, 12, 0)
+      .mention(12, 12, 1)
       .write();
 
     const config: ScipQueryConfig = {
@@ -197,6 +214,8 @@ describe('passthroughCandidates output classification', () => {
       // `handler` returns `jsonHandler(async () => ...)(req, res, next)`: the
       // matching outer arguments do not make a curried handler a forward.
       expect(results.find((result) => result.shortName.endsWith('handler()'))).toBeUndefined();
+      // `reveal` adds a parameter default before forwarding; that default is behavior.
+      expect(results.find((result) => result.shortName.endsWith('reveal()'))).toBeUndefined();
 
       const report = health(db);
       const passthroughScore = report.scoreBreakdown.find((deduction) => deduction.axis === 'passthroughs');

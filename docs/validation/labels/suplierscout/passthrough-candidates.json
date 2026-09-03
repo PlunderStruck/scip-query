@@ -1,0 +1,29 @@
+{
+  "detector": "passthrough-candidates",
+  "repository": "suplierscout",
+  "identity": "symbol",
+  "reviewed": "2026-09-03",
+  "note": "All four rows. True means a rename a reviewer would inline; the defaulted-parameter forward is now excluded by the literal-forward check.",
+  "labels": [
+    {
+      "id": "src/server/services/provenanceFreshness.ts#src:server:services:provenanceFreshness:reviewStatusForRawTextHash()",
+      "verdict": "true",
+      "reason": "server rename of a shared drift detector"
+    },
+    {
+      "id": "src/server/services/provenanceFreshness.ts#src:server:services:provenanceFreshness:resolvePreferredFreshnessClaim()",
+      "verdict": "true",
+      "reason": "server rename of a shared claim resolver; also unused"
+    },
+    {
+      "id": "src/server/services/documentExportRenderers.ts#src:server:services:documentExportRenderers:renderZipArchive()",
+      "verdict": "true",
+      "reason": "same-file rename of zipStore"
+    },
+    {
+      "id": "src/client/features/landing/HowItWorks.tsx#src:client:features:landing:HowItWorks:reveal()",
+      "verdict": "uncertain",
+      "reason": "forwards with a defaulted parameter; the default is behavior the wrapper adds"
+    }
+  ]
+}

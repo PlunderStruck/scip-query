@@ -1,0 +1,74 @@
+{
+  "detector": "similar",
+  "repository": "suplierscout",
+  "identity": "pair",
+  "reviewed": "2026-09-03",
+  "note": "All 13 pairs. The four AI workspace consoles share one boot, project, fetch, and activity shell with identical callee sets; a reviewer would extract that shell.",
+  "labels": [
+    {
+      "id": "src/server/services/manufacturers.ts#scip-typescript npm spec2mfg 0.1.0 src/server/services/`manufacturers.ts`/mapManufacturerRow().|src/server/services/manufacturers.ts#scip-typescript npm spec2mfg 0.1.0 src/server/services/`manufacturers.ts`/toManufacturerUpdate().",
+      "verdict": "true",
+      "reason": "both apply SAM.gov enrichment to a manufacturer update"
+    },
+    {
+      "id": "src/server/services/manufacturers.ts#scip-typescript npm spec2mfg 0.1.0 src/server/services/`manufacturers.ts`/toManufacturerUpdate().|src/server/services/scoreRecalculation.ts#scip-typescript npm spec2mfg 0.1.0 src/server/services/`scoreRecalculation.ts`/mapManufacturerRow().",
+      "verdict": "true",
+      "reason": "both apply SAM.gov enrichment to a manufacturer row"
+    },
+    {
+      "id": "src/server/services/copilot/maya/conceptSynthesisService.ts#scip-typescript npm spec2mfg 0.1.0 src/server/services/copilot/maya/`conceptSynthesisService.ts`/nextQuestion().|src/server/services/copilot/maya/conceptSynthesisService.ts#scip-typescript npm spec2mfg 0.1.0 src/server/services/copilot/maya/`conceptSynthesisService.ts`/synthesizeMayaSpec().",
+      "verdict": "uncertain",
+      "reason": "two Maya services that load the same concept and diverge"
+    },
+    {
+      "id": "src/client/features/ai-workspace/panels/OutreachConsole.tsx#scip-typescript npm spec2mfg 0.1.0 src/client/features/ai-workspace/panels/`OutreachConsole.tsx`/OutreachConsole().|src/client/features/ai-workspace/panels/SuppliersConsole.tsx#scip-typescript npm spec2mfg 0.1.0 src/client/features/ai-workspace/panels/`SuppliersConsole.tsx`/SuppliersConsole().",
+      "verdict": "true",
+      "reason": "two AI workspace consoles built on the same boot and fetch shell"
+    },
+    {
+      "id": "src/client/features/ai-workspace/panels/ShortlistConsole.tsx#scip-typescript npm spec2mfg 0.1.0 src/client/features/ai-workspace/panels/`ShortlistConsole.tsx`/ShortlistConsole().|src/client/features/ai-workspace/panels/SuppliersConsole.tsx#scip-typescript npm spec2mfg 0.1.0 src/client/features/ai-workspace/panels/`SuppliersConsole.tsx`/SuppliersConsole().",
+      "verdict": "true",
+      "reason": "two consoles on the same shell"
+    },
+    {
+      "id": "src/client/features/ai-workspace/panels/ExportConsole.tsx#scip-typescript npm spec2mfg 0.1.0 src/client/features/ai-workspace/panels/`ExportConsole.tsx`/ExportConsole().|src/client/features/ai-workspace/panels/OutreachConsole.tsx#scip-typescript npm spec2mfg 0.1.0 src/client/features/ai-workspace/panels/`OutreachConsole.tsx`/OutreachConsole().",
+      "verdict": "true",
+      "reason": "two consoles on the same shell; identical callee sets"
+    },
+    {
+      "id": "src/client/features/ai-workspace/panels/OutreachConsole.tsx#scip-typescript npm spec2mfg 0.1.0 src/client/features/ai-workspace/panels/`OutreachConsole.tsx`/OutreachConsole().|src/client/features/ai-workspace/panels/ShortlistConsole.tsx#scip-typescript npm spec2mfg 0.1.0 src/client/features/ai-workspace/panels/`ShortlistConsole.tsx`/ShortlistConsole().",
+      "verdict": "true",
+      "reason": "two consoles on the same shell; identical callee sets"
+    },
+    {
+      "id": "src/shared/scoring.ts#scip-typescript npm spec2mfg 0.1.0 src/shared/`scoring.ts`/scoreEvidenceCoverage().|src/shared/scoring.ts#scip-typescript npm spec2mfg 0.1.0 src/shared/`scoring.ts`/scoreSourceQuality().",
+      "verdict": "uncertain",
+      "reason": "two scoring components sharing clamp helpers"
+    },
+    {
+      "id": "src/client/features/ai-workspace/panels/ExportConsole.tsx#scip-typescript npm spec2mfg 0.1.0 src/client/features/ai-workspace/panels/`ExportConsole.tsx`/ExportConsole().|src/client/features/ai-workspace/panels/SuppliersConsole.tsx#scip-typescript npm spec2mfg 0.1.0 src/client/features/ai-workspace/panels/`SuppliersConsole.tsx`/SuppliersConsole().",
+      "verdict": "true",
+      "reason": "two consoles on the same shell"
+    },
+    {
+      "id": "src/server/services/copilot/bomProposerService.ts#scip-typescript npm spec2mfg 0.1.0 src/server/services/copilot/`bomProposerService.ts`/proposeBom().|src/server/services/copilot/bomProposerService.ts#scip-typescript npm spec2mfg 0.1.0 src/server/services/copilot/`bomProposerService.ts`/reproposeBomLine().",
+      "verdict": "uncertain",
+      "reason": "a proposer and its single-line reproposer"
+    },
+    {
+      "id": "src/client/features/ai-workspace/panels/ExportConsole.tsx#scip-typescript npm spec2mfg 0.1.0 src/client/features/ai-workspace/panels/`ExportConsole.tsx`/ExportConsole().|src/client/features/ai-workspace/panels/ShortlistConsole.tsx#scip-typescript npm spec2mfg 0.1.0 src/client/features/ai-workspace/panels/`ShortlistConsole.tsx`/ShortlistConsole().",
+      "verdict": "true",
+      "reason": "two consoles on the same shell; identical callee sets"
+    },
+    {
+      "id": "src/server/services/organizationAdmin.ts#scip-typescript npm spec2mfg 0.1.0 src/server/services/`organizationAdmin.ts`/removeOrganizationMember().|src/server/services/organizationAdmin.ts#scip-typescript npm spec2mfg 0.1.0 src/server/services/`organizationAdmin.ts`/updateOrganizationMemberRole().",
+      "verdict": "uncertain",
+      "reason": "two admin operations sharing guards"
+    },
+    {
+      "id": "src/server/services/manufacturers.ts#scip-typescript npm spec2mfg 0.1.0 src/server/services/`manufacturers.ts`/mapManufacturerRow().|src/server/services/scoreRecalculation.ts#scip-typescript npm spec2mfg 0.1.0 src/server/services/`scoreRecalculation.ts`/mapManufacturerRow().",
+      "verdict": "true",
+      "reason": "two identical manufacturer row mappers"
+    }
+  ]
+}

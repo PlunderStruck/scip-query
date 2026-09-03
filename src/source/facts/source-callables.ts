@@ -217,6 +217,11 @@ function isPassthroughBody(fnNode: SyntaxNode, language: AstLanguage): boolean {
 
   const paramNames: string[] = [];
   for (const param of paramsNode.namedChildren) {
+    // `reveal(progress, start, end = start + 0.06)`: a parameter default is
+    // behavior the wrapper adds, so forwarding it is not a literal forward.
+    if (param.childForFieldName('value') || param.type === 'assignment_pattern' || param.type === 'default_parameter') {
+      return false;
+    }
     if (param.type === 'identifier') {
       paramNames.push(param.text);
       continue;

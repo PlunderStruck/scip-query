@@ -1,0 +1,39 @@
+{
+  "detector": "wrapper-candidates",
+  "repository": "suplierscout",
+  "identity": "symbol",
+  "reviewed": "2026-09-03",
+  "note": "All six rows. Every one is a helper-shaped signal row; none is a forward a reviewer would inline.",
+  "labels": [
+    {
+      "id": "src/client/features/auth/sessionPolicy.ts#src:client:features:auth:sessionPolicy:hoursToMilliseconds()",
+      "verdict": "false",
+      "reason": "arithmetic helper"
+    },
+    {
+      "id": "src/shared/capabilityTaxonomy.ts#src:shared:capabilityTaxonomy:canonicalCapabilityCodes()",
+      "verdict": "false",
+      "reason": "normalize and dedupe computation"
+    },
+    {
+      "id": "src/shared/scoring.ts#src:shared:scoring:calculateCompositeScore()",
+      "verdict": "false",
+      "reason": "score computation"
+    },
+    {
+      "id": "src/client/features/auth/sessionPolicy.ts#src:client:features:auth:sessionPolicy:hasExceededInactivityWindow()",
+      "verdict": "false",
+      "reason": "branching predicate"
+    },
+    {
+      "id": "src/shared/rbac.ts#src:shared:rbac:listPermissions()",
+      "verdict": "false",
+      "reason": "builds a copy of a lookup"
+    },
+    {
+      "id": "src/client/features/auth/sessionPolicy.ts#src:client:features:auth:sessionPolicy:parseInactivityTimeoutHours()",
+      "verdict": "false",
+      "reason": "parse with defaults"
+    }
+  ]
+}
