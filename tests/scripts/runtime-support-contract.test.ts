@@ -39,7 +39,7 @@ describe('runtime support contract', () => {
     const rootLock = packageLock.packages?.[''];
     const addonLock = packageLock.packages?.['node_modules/better-sqlite3'];
 
-    expect(packageJson.version).toBe('0.24.0');
+    expect(packageJson.version).toBe('0.24.1');
     expect(packageJson.scripts?.test).toBe('vitest run --maxWorkers=2');
     expect(packageJson.engines?.node).toBe('>=22.0.0');
     expect(packageJson.dependencies?.['better-sqlite3']).toBe('^13.0.2');
@@ -49,7 +49,7 @@ describe('runtime support contract', () => {
     expect(buildConfig).toContain("entry: { 'query-service-fastpath': 'src/runtime/query-service-fastpath.ts' }");
     expect(buildConfig).not.toContain("target: 'node18'");
 
-    expect(rootLock?.version).toBe('0.24.0');
+    expect(rootLock?.version).toBe('0.24.1');
     expect(rootLock?.engines?.node).toBe('>=22.0.0');
     expect(rootLock?.dependencies?.['better-sqlite3']).toBe('^13.0.2');
     expect(addonLock?.version).toBe('13.0.2');
