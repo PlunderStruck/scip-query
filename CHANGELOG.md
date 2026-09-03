@@ -2,7 +2,7 @@
 
 All notable changes to `scip-query` are documented here. This file starts at 0.11.0; everything below covers behavior changes made since the 0.10.12 release.
 
-## [Unreleased]
+## [0.24.1]
 
 ### Solution-style tsconfigs and a live type checker
 

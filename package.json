@@ -1,6 +1,6 @@
 {
   "name": "scip-query",
-  "version": "0.24.0",
+  "version": "0.24.1",
   "description": "Evidence and verification for AI coding agents: map code, reuse concepts, finish migrations, and gate diffs.",
   "type": "module",
   "main": "dist/index.js",
