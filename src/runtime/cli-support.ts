@@ -1228,7 +1228,7 @@ export function deferredHealthPhaseResult(
     case 'isolated':
       return { phase, isolated: { count: 0, loc: 0, files: [] }, ...meta };
     case 'cycles':
-      return { phase, realCycleCount: 0, ...meta };
+      return { phase, realCycleCount: 0, cycleExclusions: [], ...meta };
     case 'similar':
       return { phase, similarCount: 0, ...meta };
     case 'duplicate-bodies':

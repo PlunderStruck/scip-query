@@ -18,7 +18,10 @@ export interface HealthAnalyses {
   detectorEvidence: DetectorEvidenceAssessment[];
   dead: CountLocSummary;
   isolated: CountLocSummary;
+  /** Real cycles on the import graph; symbol-reference-only components are disclosed in `cycleExclusions`. */
   realCycleCount: number;
+  /** Components that cycle through type or symbol references but not through imports; not counted. */
+  cycleExclusions: PolicyExclusionSummary[];
   similarCount: number;
   duplicateBodies: CountLocSummary;
   /** Same-name-family (or near-name) twins with divergent or identical bodies (Q1). */

@@ -39,11 +39,11 @@ Everything below is open as of the 0.24.0 release. Closed items live in
   cheap paths. On a machine whose heap fits the project nothing changes.
   The self-audit's references question reports the oracle unavailable in
   that mode rather than measuring against a partial scan.
-- **The 732-file symbol-reference cycle component on Launchpoint** is
-  classified module-hierarchy because its witness passes through barrels
-  and tests. On the imports-only basis it shrinks to 57 files with no cycle
-  after removing barrels and tests, so the dismissal is right, but the
-  classification is by witness path rather than by component content.
+- **Health counts cycles on the import graph.** The 725-file Launchpoint
+  component cycles through type and symbol references but not through
+  imports; it is disclosed as a policy exclusion with its file count, and
+  `cycles` (default basis) still lists it. `cycles --imports-only` is the
+  health basis.
 - **Launchpoint's checked-in `docs/scip-query/health-full-report.md`** was
   produced by the pre-calibration build. It lives in another team's working
   tree and was left alone.

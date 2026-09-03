@@ -246,6 +246,7 @@ function collectPolicyExclusions(analyses: HealthAnalyses): HealthPolicyExclusio
     }
   };
   for (const [detector, pick] of POLICY_EXCLUSION_SOURCES) push(detector, pick(analyses).exclusions);
+  push('cycles', analyses.cycleExclusions);
   push('extract-candidates', analyses.extractExclusions);
   push('complexity-hotspots', analyses.complexity.exclusions);
   push('co-change', analyses.gitEvidence?.hiddenCoupling.exclusions);
@@ -421,7 +422,7 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
     actions.push({
       category: 'Circular dependencies',
       evidence: 'graph-fact',
-      description: `${analyses.realCycleCount} indexed dependency cycle(s) — inspect ownership and runtime order before choosing whether or how to break them`,
+      description: `${analyses.realCycleCount} import cycle(s) — inspect ownership and runtime order before choosing whether or how to break them`,
       effort: 'medium',
       impact: 'high',
       count: analyses.realCycleCount,

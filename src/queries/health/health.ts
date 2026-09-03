@@ -2,7 +2,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
 import { dead } from '../cleanup/dead.js';
 import { isolated } from '../cleanup/isolated.js';
-import { cycles } from '../graph/cycles.js';
+import { cycles, dependencyCycles, type CycleResult } from '../graph/cycles.js';
 import { similarAllCount } from '../cleanup/similar.js';
 import { duplicateBodyScan } from '../cleanup/duplicate-bodies.js';
 import { allTwinGroups } from '../cleanup/twin-drift.js';
@@ -95,7 +95,7 @@ type HealthPhaseResult =
   | { phase: 'overview'; statsResult: ReturnType<typeof stats>; warnings: string[] }
   | { phase: 'dead'; dead: CountLocSummary }
   | { phase: 'isolated'; isolated: CountLocSummary }
-  | { phase: 'cycles'; realCycleCount: number }
+  | { phase: 'cycles'; realCycleCount: number; cycleExclusions: PolicyExclusionSummary[] }
   | { phase: 'similar'; similarCount: number }
   | { phase: 'duplicate-bodies'; duplicateBodies: CountLocSummary }
   | { phase: 'twin-drift'; twinDrift: CountLocSummary }
@@ -138,7 +138,7 @@ const HEALTH_PHASE_RUNNERS: Record<HealthPhaseName, HealthPhaseRunner> = {
   }),
   cycles: (db, scope, budget) => ({
     phase: 'cycles',
-    realCycleCount: countRealHealthCycles(db, scope, budget),
+    ...countRealHealthCycles(db, scope, budget),
   }),
   similar: (db, scope, budget) => ({
     phase: 'similar',
@@ -299,6 +299,8 @@ function healthAnalysesFromPhases(phaseResults: readonly HealthPhaseResult[]): H
     isolated: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'isolated' }>>(phaseResults, 'isolated').isolated,
     realCycleCount: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'cycles' }>>(phaseResults, 'cycles')
       .realCycleCount,
+    cycleExclusions: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'cycles' }>>(phaseResults, 'cycles')
+      .cycleExclusions,
     similarCount: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'similar' }>>(phaseResults, 'similar')
       .similarCount,
     duplicateBodies: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'duplicate-bodies' }>>(
@@ -435,10 +437,38 @@ function summarizeHealthIsolated(db: ScipDatabase, scope: string | undefined, bu
   });
 }
 
-function countRealHealthCycles(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): number {
+/**
+ * Health counts cycles on the import graph: a file that imports a file that
+ * imports it back is a runtime dependency cycle a reader can break. The
+ * default `cycles` command keeps the wider symbol-reference basis, where
+ * type references also form components; a component that cycles only there
+ * is disclosed as a policy exclusion instead of counted against the score.
+ */
+function countRealHealthCycles(
+  db: ScipDatabase,
+  scope: string | undefined,
+  budget: HealthBudget,
+): { realCycleCount: number; cycleExclusions: PolicyExclusionSummary[] } {
   return runHealthPhase(db, budget, 'cycles', () => {
-    const cycleResult = cycles(db, { scope });
-    return cycleResult.filter((cycle) => cycle.kind === 'real').length;
+    const importCycles = dependencyCycles(db, { scope, edgeBasis: 'imports' }).filter((cycle) => cycle.kind === 'real');
+    const referenceCycles = cycles(db, { scope }).filter((cycle) => cycle.kind === 'real');
+    const importFiles = new Set(importCycles.flatMap((cycle) => cycle.component ?? cycle.path));
+    const referenceOnly = referenceCycles.filter(
+      (cycle: CycleResult) => !(cycle.component ?? cycle.path).some((file) => importFiles.has(file)),
+    );
+    return {
+      realCycleCount: importCycles.length,
+      cycleExclusions:
+        referenceOnly.length > 0
+          ? [
+              {
+                reason: 'symbol-reference-only-cycles',
+                detail: `component(s) that cycle through type or symbol references but not through imports (${referenceOnly.reduce((sum, cycle) => sum + (cycle.component?.length ?? cycle.path.length - 1), 0)} files); listed by cycles on its default basis`,
+                count: referenceOnly.length,
+              },
+            ]
+          : [],
+    };
   });
 }
 

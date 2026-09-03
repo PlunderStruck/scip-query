@@ -231,5 +231,5 @@ paths, generation `abcb93f04a80`: score 67 / 100 (risk 83, hygiene 67),
 
 The risk score fell four points on the cycle. That component is real
 coupling in the symbol-reference graph (types included); on the imports-only
-basis (`cycles --edge-basis imports`) it does not cycle. Both are true and
+basis (`cycles --imports-only`) it does not cycle. Both are true and
 the report names the basis.

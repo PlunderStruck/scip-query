@@ -4,6 +4,16 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+### Health counts cycles on the import graph
+
+- The health report's circular-dependency axis counts real cycles on the
+  import graph, where a cycle is a runtime dependency a reader can break.
+  A component that cycles only through type or symbol references (the
+  `cycles` command's default basis) is disclosed as a policy exclusion with
+  its file count instead of being scored. On Launchpoint this turns one
+  725-file symbol-reference component into a disclosure and no counted
+  cycle.
+
 ## [0.24.0]
 
 ### Oversized compiler projects are served from file closures
