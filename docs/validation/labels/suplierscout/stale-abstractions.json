@@ -1,0 +1,73 @@
+{
+  "detector": "stale-abstractions",
+  "repository": "suplierscout",
+  "identity": "symbol",
+  "countedTiers": [
+    "direct",
+    "signal"
+  ],
+  "reviewed": "2026-09-03",
+  "note": "Sampled every direct-tier row and ten signal-tier rows; consumers checked with a repository-wide word search. Misplaced-type rows are colocated feature type modules whose single consumer is the feature page; the count is right and moving is the reviewer's call.",
+  "labels": [
+    {
+      "id": "src/shared/types.ts#src:shared:types:ApiHealth",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/shared/types.ts#src:shared:types:ProjectIntakeSummary",
+      "verdict": "true",
+      "reason": "no references outside the defining file"
+    },
+    {
+      "id": "src/server/services/recommendationMemoPromptTemplates.ts#src:server:services:recommendationMemoPromptTemplates:VersionedRecommendationMemoPrompt",
+      "verdict": "true",
+      "reason": "one consumer file"
+    },
+    {
+      "id": "src/client/features/catalog/catalogTypes.ts#src:client:features:catalog:catalogTypes:CopyCatalogManufacturerResponse",
+      "verdict": "true",
+      "reason": "one consumer file"
+    },
+    {
+      "id": "src/server/services/documentExportRenderers.ts#src:server:services:documentExportRenderers:RenderedDocumentFile",
+      "verdict": "true",
+      "reason": "one consumer file"
+    },
+    {
+      "id": "src/shared/documentExports.ts#src:shared:documentExports:DocumentExportListResponse",
+      "verdict": "true",
+      "reason": "one consumer file"
+    },
+    {
+      "id": "src/client/features/catalog/catalogTypes.ts#src:client:features:catalog:catalogTypes:CatalogListResponse",
+      "verdict": "true",
+      "reason": "one consumer file"
+    },
+    {
+      "id": "src/client/features/catalog/catalogTypes.ts#src:client:features:catalog:catalogTypes:CatalogManufacturerDetail",
+      "verdict": "true",
+      "reason": "one consumer file"
+    },
+    {
+      "id": "src/shared/scoring.ts#src:shared:scoring:ConfidenceSourceInput",
+      "verdict": "true",
+      "reason": "one consumer file"
+    },
+    {
+      "id": "src/client/features/families/FamilyVendorConsolidation.tsx#src:client:features:families:FamilyVendorConsolidation:ConsolidatedNeed",
+      "verdict": "true",
+      "reason": "one consumer file"
+    },
+    {
+      "id": "src/client/features/catalog/catalogTypes.ts#src:client:features:catalog:catalogTypes:CatalogCopyConflictPayload",
+      "verdict": "true",
+      "reason": "one consumer file"
+    },
+    {
+      "id": "src/server/services/documentExportRenderers.ts#src:server:services:documentExportRenderers:DocumentSection",
+      "verdict": "true",
+      "reason": "one consumer file"
+    }
+  ]
+}

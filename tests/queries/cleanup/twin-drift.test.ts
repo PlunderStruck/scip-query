@@ -868,6 +868,16 @@ describe('isSingleForwardingCallBody', () => {
     expect(isThinForwarderBody(client)).toBe(true);
   });
 
+  it('reads a declaration body past an object type literal in its return type', () => {
+    const client = [
+      'export async function createPortalSession(args: Args): Promise<{ url: string }> {',
+      '  return fetchJson<{ url: string }>(`/api/${args.organizationId}/portal`, { method: "POST" });',
+      '}',
+    ].join('\n');
+    expect(isThinForwarderBody(client)).toBe(true);
+    expect(isSingleForwardingCallBody(client)).toBe(false);
+  });
+
   it('rejects preparatory statements, callbacks, nested calls, and built literals', () => {
     expect(isSingleForwardingCallBody(body('  const key = raw.trim();', '  return inner(key);'))).toBe(false);
     expect(isSingleForwardingCallBody(body('  return items.reduce((sum, n) => sum + n, 0);'))).toBe(false);

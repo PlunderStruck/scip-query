@@ -1,0 +1,59 @@
+{
+  "detector": "duplicate-bodies",
+  "repository": "suplierscout",
+  "identity": "group",
+  "reviewed": "2026-09-03",
+  "note": "The first ten of sixteen groups, canonical body read for each. True means byte-identical product bodies.",
+  "labels": [
+    {
+      "id": "fc904b18a4d23423|src/server/services/complianceDashboard.ts,src/server/services/scoreRecalculation.ts,src/shared/catalogQaReport.ts,src/shared/certificationRiskFlags.ts,src/shared/coverageGapReport.ts,src/shared/manufacturerSegments.ts,src/shared/scoring.ts",
+      "verdict": "true",
+      "reason": "seven identical normalizers under three names"
+    },
+    {
+      "id": "bf861f4b844f6f09|src/server/services/copilot/bomProposerService.ts,src/server/services/copilot/makeBuyClassifierService.ts,src/server/services/copilot/maya/conceptSynthesisService.ts,src/server/services/copilot/specDistillationService.ts,src/server/services/copilot/undecidedClarifierService.ts",
+      "verdict": "true",
+      "reason": "identical usage cost helper in five copilot services"
+    },
+    {
+      "id": "73d0a912ea7df599|src/server/services/copilot/bomProposerService.ts,src/server/services/copilot/makeBuyClassifierService.ts,src/server/services/copilot/maya/conceptSynthesisService.ts,src/server/services/copilot/specDistillationService.ts,src/server/services/copilot/undecidedClarifierService.ts",
+      "verdict": "true",
+      "reason": "identical token count helper in five copilot services"
+    },
+    {
+      "id": "f18adfd1ad44db14|src/client/features/compliance/ComplianceDashboardPage.tsx,src/client/features/engagement/EngagementPipelineBoard.tsx,src/client/features/recommendations/RecommendationMemoPage.tsx,src/client/features/rfi/RfiDraftEditor.tsx",
+      "verdict": "true",
+      "reason": "identical timestamp formatter in four pages"
+    },
+    {
+      "id": "2244a29dd684e41f|src/client/features/billing/BillingPanel.tsx,src/client/features/settings/MembersPanel.tsx,src/client/features/settings/WorkspaceProfilePanel.tsx",
+      "verdict": "true",
+      "reason": "identical stat component under three names"
+    },
+    {
+      "id": "00a3c766a595e54f|src/client/features/billing/BillingPanel.tsx,src/client/features/settings/MembersPanel.tsx,src/client/features/settings/WorkspaceProfilePanel.tsx",
+      "verdict": "true",
+      "reason": "identical date formatter in three panels"
+    },
+    {
+      "id": "93e75127050286cd|src/server/services/copilot/specDistillationService.ts,src/server/services/copilot/undecidedClarifierService.ts",
+      "verdict": "true",
+      "reason": "identical response parser under two names"
+    },
+    {
+      "id": "9a5bb60e3f5b1c8a|src/shared/catalogQaReport.ts,src/shared/coverageGapReport.ts",
+      "verdict": "true",
+      "reason": "identical groupBy helper"
+    },
+    {
+      "id": "f611541dad51837b|src/server/services/recommendationMemos.ts,src/server/services/rfiDrafts.ts",
+      "verdict": "true",
+      "reason": "identical model metadata builder"
+    },
+    {
+      "id": "83863ad8e35cbf4e|src/shared/certificationRiskFlags.ts,src/shared/scoring.ts",
+      "verdict": "true",
+      "reason": "identical reference date parser"
+    }
+  ]
+}

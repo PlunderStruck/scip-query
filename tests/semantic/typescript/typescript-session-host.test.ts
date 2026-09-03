@@ -149,6 +149,36 @@ describe('persistent TypeScript semantic host', () => {
   });
 });
 
+describe('solution-style tsconfigs', () => {
+  it('replaces a references-only root config with the projects it references', () => {
+    const fixture = semanticFixture();
+    // The root becomes a solution: no files of its own, one referenced project.
+    mkdirSync(join(fixture.projectRoot, 'app'), { recursive: true });
+    writeFileSync(
+      join(fixture.projectRoot, 'app/tsconfig.json'),
+      JSON.stringify({
+        compilerOptions: { module: 'ESNext', moduleResolution: 'Node', strict: true, composite: true },
+        include: ['../src/**/*.ts'],
+      }),
+    );
+    writeFileSync(
+      join(fixture.projectRoot, 'tsconfig.json'),
+      JSON.stringify({ files: [], references: [{ path: './app' }] }),
+    );
+    const tsMorph = loadTsMorph()!;
+    const bundles = createTsMorphProjectBundles(tsMorph, [join(fixture.projectRoot, 'tsconfig.json')]);
+    expect(bundles.map((bundle) => bundle.tsconfigPath)).toEqual([join(fixture.projectRoot, 'app/tsconfig.json')]);
+    expect(bundles[0]!.fileNames?.has(join(fixture.projectRoot, 'src/consumer.ts'))).toBe(true);
+
+    const sourceFiles = createTypeScriptSourceFiles(fixture.db, bundles);
+    const consumer = sourceFiles.sourceFile('src/consumer.ts');
+    expect(consumer).not.toBeNull();
+    // Loaded whole from the referenced project, not attached ad hoc.
+    expect(bundles[0]!.project.getSourceFiles().length).toBe(2);
+    fixture.db.close();
+  });
+});
+
 describe('file-scoped compiler projects', () => {
   it('serves a tsconfig above the file budget from file closures and still resolves imports', () => {
     const fixture = semanticFixture();

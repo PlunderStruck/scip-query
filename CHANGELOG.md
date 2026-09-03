@@ -4,6 +4,20 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 
 ## [Unreleased]
 
+### Solution-style tsconfigs and a live type checker
+
+- A repository whose root `tsconfig.json` only references other projects
+  (`files: []` plus `references`) crashed every compiler-backed command in
+  0.24.0 (`Cannot read properties of undefined (reading 'flags')`): the
+  root's empty program received each file as an ad hoc addition and the
+  provider kept using a checker from the program before the addition. The
+  root is now replaced by the projects it references, and the provider reads
+  the current program's checker on every use.
+- A function whose return type holds an object type literal
+  (`): Promise<{ url: string }> {`) had its body read from the wrong brace;
+  thin-forwarder, wrapper, twin, and duplicate-body checks now skip type and
+  value literals when locating a body.
+
 ### Health counts cycles on the import graph
 
 - The health report's circular-dependency axis counts real cycles on the

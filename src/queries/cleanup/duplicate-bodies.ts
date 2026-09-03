@@ -272,9 +272,12 @@ export function definitionSourceSnippet(db: ScipDatabase, definition: IndexedDef
  * drift" defect class this file's sibling detector hunts.
  */
 export function extractImplementationBody(source: string): string {
-  // The body starts at the first brace or arrow outside every parenthesis:
-  // a destructured parameter, a parameter type, or a type argument
-  // (`patchData<{ success: boolean }>(...)`) can hold braces before it.
+  // The body starts at the first brace or arrow outside every parenthesis
+  // and outside every type literal: a destructured parameter, a parameter
+  // type, a type argument (`patchData<{ success: boolean }>(...)`), or a
+  // return type (`): Promise<{ url: string }> {`) can hold braces before it.
+  // A brace that follows `:`, `<`, `|`, `&`, `,`, `(`, or `=` opens a type or
+  // value literal; the body brace follows `)`, `>`, `]`, or a type name.
   let depth = 0;
   for (let index = 0; index < source.length; index += 1) {
     const char = source[index]!;
@@ -283,7 +286,7 @@ export function extractImplementationBody(source: string): string {
     } else if (char === ')' || char === ']') {
       depth = Math.max(0, depth - 1);
     } else if (char === '{') {
-      if (depth === 0) return sliceBlockBody(source, index);
+      if (depth === 0 && !opensLiteral(source, index)) return sliceBlockBody(source, index);
       depth += 1;
     } else if (char === '}') {
       depth = Math.max(0, depth - 1);
@@ -294,6 +297,14 @@ export function extractImplementationBody(source: string): string {
     }
   }
   return source;
+}
+
+const LITERAL_OPENER_PREDECESSORS = new Set([':', '<', '|', '&', ',', '(', '=']);
+
+function opensLiteral(source: string, braceIndex: number): boolean {
+  let index = braceIndex - 1;
+  while (index >= 0 && /\s/.test(source[index]!)) index -= 1;
+  return index >= 0 && LITERAL_OPENER_PREDECESSORS.has(source[index]!);
 }
 
 function sliceBlockBody(source: string, openBrace: number): string {

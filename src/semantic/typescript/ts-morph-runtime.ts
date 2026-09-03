@@ -69,7 +69,52 @@ export function createTsMorphProjectBundles(
   tsconfigPaths: readonly string[],
   options: ProjectBundleOptions = {},
 ): ProjectBundle[] {
-  return tsconfigPaths.map((tsconfigPath) => createLazyProjectBundle(tsMorph, tsconfigPath, options));
+  return expandSolutionTsconfigs(tsMorph, tsconfigPaths).map((tsconfigPath) =>
+    createLazyProjectBundle(tsMorph, tsconfigPath, options),
+  );
+}
+
+const SOLUTION_REFERENCE_DEPTH = 3;
+
+/**
+ * A solution-style tsconfig (`files: []` plus `references`) lists no source
+ * of its own; a program built from it is empty and every file reaches the
+ * checker as an ad hoc addition under the root's options. Replace such a
+ * config with the projects it references, so each file loads whole in the
+ * project whose options it was written for.
+ */
+export function expandSolutionTsconfigs(tsMorph: TsMorphModule, tsconfigPaths: readonly string[]): string[] {
+  const expanded: string[] = [];
+  const seen = new Set<string>();
+  const visit = (tsconfigPath: string, depth: number): void => {
+    const resolvedPath = resolve(tsconfigPath);
+    if (seen.has(resolvedPath)) return;
+    seen.add(resolvedPath);
+    const references = depth < SOLUTION_REFERENCE_DEPTH ? solutionReferences(tsMorph, resolvedPath) : [];
+    if (references.length === 0) {
+      expanded.push(resolvedPath);
+      return;
+    }
+    for (const reference of references) visit(reference, depth + 1);
+  };
+  for (const tsconfigPath of tsconfigPaths) visit(tsconfigPath, 0);
+  return expanded;
+}
+
+/** Referenced tsconfig paths when the config lists no files of its own; empty otherwise. */
+function solutionReferences(tsMorph: TsMorphModule, tsconfigPath: string): string[] {
+  try {
+    const ts = tsMorph.ts;
+    const read = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
+    if (read.error || !read.config) return [];
+    const parsed = ts.parseJsonConfigFileContent(read.config, ts.sys, dirname(tsconfigPath), undefined, tsconfigPath);
+    if (parsed.fileNames.length > 0 || !parsed.projectReferences?.length) return [];
+    return parsed.projectReferences
+      .map((reference) => ts.resolveProjectReferencePath(reference))
+      .filter((path) => ts.sys.fileExists(path));
+  } catch {
+    return [];
+  }
 }
 
 /**

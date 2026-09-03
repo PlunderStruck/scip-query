@@ -1,0 +1,109 @@
+{
+  "detector": "twin-drift",
+  "repository": "suplierscout",
+  "identity": "group",
+  "reviewed": "2026-09-03",
+  "note": "Sampled 20 of 26 divergent groups (seed 11) and read every member. SuplierScout keeps per-page copies of formatters and per-service copies of loaders, so most groups are genuine drift; the false groups are one provider contract and client HTTP wrappers named after their server services.",
+  "labels": [
+    {
+      "id": "formatBytes|src/client/features/build-breakdown/BuildBreakdownPage.tsx,src/client/features/exports/DocumentExportsPage.tsx",
+      "verdict": "true",
+      "reason": "two byte formatters with drifted rounding"
+    },
+    {
+      "id": "normalizeCountry|src/server/services/complianceDashboard.ts,src/shared/compliance.ts",
+      "verdict": "true",
+      "reason": "server and shared normalizers with drifted character classes"
+    },
+    {
+      "id": "mapManufacturerRow|src/server/services/manufacturers.ts,src/server/services/scoreRecalculation.ts",
+      "verdict": "true",
+      "reason": "two near-identical manufacturer row mappers"
+    },
+    {
+      "id": "loadManufacturerName|src/server/services/documentExports.ts,src/server/services/engagements.ts",
+      "verdict": "true",
+      "reason": "two near-identical manufacturer name loaders"
+    },
+    {
+      "id": "formatCurrency|src/client/features/manufacturers/ManufacturerWorkspace.tsx,src/client/lib/billing.ts",
+      "verdict": "true",
+      "reason": "two currency formatters with drifted signatures"
+    },
+    {
+      "id": "findContainedAlias|src/shared/capabilityTaxonomy.ts,src/shared/supplierCredentialAliases.ts",
+      "verdict": "true",
+      "reason": "two alias finders with a drifted length guard"
+    },
+    {
+      "id": "searchCandidates|src/server/services/catalogSearch.ts,src/server/services/usaspendingSearch.ts",
+      "verdict": "false",
+      "reason": "searchCandidates implementations of one search-provider contract"
+    },
+    {
+      "id": "formatLabel|src/client/features/manufacturers/CredentialPanel.tsx,src/client/features/manufacturers/ManufacturerWorkspace.tsx",
+      "verdict": "true",
+      "reason": "two label formatters"
+    },
+    {
+      "id": "phraseMatches|src/shared/certificationRiskFlags.ts,src/shared/scoring.ts",
+      "verdict": "true",
+      "reason": "two phrase matchers with a drifted equality rule"
+    },
+    {
+      "id": "mapProjectRow|src/server/services/projects.ts,src/server/services/scoreRecalculation.ts",
+      "verdict": "true",
+      "reason": "two project row mappers with drifted defaults"
+    },
+    {
+      "id": "isDomestic|src/server/services/complianceDashboard.ts,src/shared/manufacturerSegments.ts",
+      "verdict": "true",
+      "reason": "two isDomestic checks with drifted normalizers"
+    },
+    {
+      "id": "formatTimestamp|src/client/features/compliance/ComplianceDashboardPage.tsx,src/client/features/dashboard/Dashboard.tsx,src/client/features/engagement/EngagementPipelineBoard.tsx,src/client/features/recommendations/RecommendationMemoPage.tsx,src/client/features/rfi/RfiDraftEditor.tsx",
+      "verdict": "true",
+      "reason": "five timestamp formatters, one drifted"
+    },
+    {
+      "id": "formatRole|src/client/features/dashboard/Dashboard.tsx,src/client/features/settings/WorkspaceProfilePanel.tsx",
+      "verdict": "uncertain",
+      "reason": "a role label map and a capitalizer share the name"
+    },
+    {
+      "id": "listOrganizationMembers|src/client/lib/organization.ts,src/server/services/organizationAdmin.ts",
+      "verdict": "false",
+      "reason": "a client HTTP wrapper and the server service behind it; layering across the HTTP boundary"
+    },
+    {
+      "id": "dedupe|src/shared/copilot/bom.ts,src/shared/copilot/collapseBomToProjectIntake.ts,src/shared/manufacturerProfile.ts,src/shared/projectIntake.ts",
+      "verdict": "true",
+      "reason": "four dedupe helpers with drifted trimming"
+    },
+    {
+      "id": "loadEngagementState|src/server/services/engagements.ts,src/server/services/scoreRecalculation.ts",
+      "verdict": "true",
+      "reason": "two engagement state loaders"
+    },
+    {
+      "id": "createPortalSession|src/client/lib/billing.ts,src/server/services/stripe.ts",
+      "verdict": "false",
+      "reason": "a client HTTP wrapper and the server Stripe service; layering across the HTTP boundary"
+    },
+    {
+      "id": "formatDate|src/client/features/billing/BillingPanel.tsx,src/client/features/exports/DocumentExportsPage.tsx,src/client/features/manufacturers/CredentialPanel.tsx,src/client/features/manufacturers/ManufacturerWorkspace.tsx,src/client/features/projects/ProjectManagePage.tsx,src/client/features/quotes/QuoteComparisonPage.tsx,src/client/features/settings/MembersPanel.tsx,src/client/features/settings/WorkspaceProfilePanel.tsx",
+      "verdict": "true",
+      "reason": "seven date formatters with drifted locales"
+    },
+    {
+      "id": "verificationStatusClass|src/client/features/manufacturers/CredentialPanel.tsx,src/client/features/manufacturers/ManufacturerWorkspace.tsx",
+      "verdict": "uncertain",
+      "reason": "two status class mappers over different status enums"
+    },
+    {
+      "id": "loadProjectContext|src/server/services/documentExports.ts,src/server/services/recommendationMemos.ts,src/server/services/rfiDrafts.ts",
+      "verdict": "true",
+      "reason": "three project context loaders with drifted shapes"
+    }
+  ]
+}

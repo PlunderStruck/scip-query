@@ -1,0 +1,89 @@
+{
+  "detector": "co-change",
+  "repository": "suplierscout",
+  "identity": "file-pair",
+  "reviewed": "2026-09-03",
+  "note": "All 16 findings without documentation or generated partners. A global stylesheet co-changing with the pages that own its classes is real coupling; a stylesheet paired with a server route, or pairs whose commits were only sweeps, are not.",
+  "labels": [
+    {
+      "id": "src/client/components/AppShell.tsx|src/client/styles.css",
+      "verdict": "true",
+      "reason": "app shell and the global stylesheet; five focused co-changes"
+    },
+    {
+      "id": "src/client/features/dashboard/Dashboard.tsx|src/client/styles.css",
+      "verdict": "true",
+      "reason": "dashboard page and the global stylesheet"
+    },
+    {
+      "id": "src/client/features/ai-workspace/AiCommandWorkspacePage.tsx|src/client/styles-copilot.css",
+      "verdict": "true",
+      "reason": "copilot workspace page and its stylesheet"
+    },
+    {
+      "id": "src/client/styles.css|src/server/routes/projectRoutes.ts",
+      "verdict": "false",
+      "reason": "the global stylesheet and a server route file; sweeps only"
+    },
+    {
+      "id": "src/client/features/shortlist/ShortlistPage.tsx|src/client/styles.css",
+      "verdict": "uncertain",
+      "reason": "shortlist page and the global stylesheet; one focused change"
+    },
+    {
+      "id": "src/client/features/landing/ValueProps.tsx|src/client/features/landing/landing.css",
+      "verdict": "true",
+      "reason": "landing section and its stylesheet; four focused changes"
+    },
+    {
+      "id": "src/client/features/landing/FinalCTA.tsx|src/client/features/landing/Hero.tsx",
+      "verdict": "uncertain",
+      "reason": "two landing sections; one focused change"
+    },
+    {
+      "id": "src/client/features/ai-workspace/panels/ExportConsole.tsx|src/client/features/ai-workspace/panels/ShortlistConsole.tsx",
+      "verdict": "false",
+      "reason": "two console panels changed together only in sweeps"
+    },
+    {
+      "id": "src/client/features/engagement/EngagementPage.tsx|src/client/styles.css",
+      "verdict": "false",
+      "reason": "sweeps only"
+    },
+    {
+      "id": "src/client/features/families/FamilyWorkspacePage.tsx|src/client/styles-copilot.css",
+      "verdict": "false",
+      "reason": "sweeps only"
+    },
+    {
+      "id": "src/client/features/shortlist/ShortlistPage.tsx|src/server/services/shortlist.ts",
+      "verdict": "false",
+      "reason": "a page and a server service changed together only in sweeps"
+    },
+    {
+      "id": "src/client/features/ai-workspace/panels/ExportConsole.tsx|src/client/features/ai-workspace/panels/OutreachConsole.tsx",
+      "verdict": "false",
+      "reason": "sweeps only"
+    },
+    {
+      "id": "src/client/features/ai-workspace/panels/OutreachConsole.tsx|src/client/features/ai-workspace/panels/ShortlistConsole.tsx",
+      "verdict": "false",
+      "reason": "sweeps only"
+    },
+    {
+      "id": "src/client/features/copilot/MakeBuyClassifier.tsx|src/client/styles-copilot.css",
+      "verdict": "false",
+      "reason": "sweeps only"
+    },
+    {
+      "id": "src/client/features/copilot/CopilotWorkspacePage.tsx|src/client/styles-copilot.css",
+      "verdict": "false",
+      "reason": "sweeps only"
+    },
+    {
+      "id": "src/client/features/exports/DocumentExportsPage.tsx|src/client/styles.css",
+      "verdict": "uncertain",
+      "reason": "exports page and the global stylesheet; one focused change"
+    }
+  ]
+}

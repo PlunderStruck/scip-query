@@ -178,7 +178,6 @@ class TsMorphSemanticProvider implements SemanticProvider {
   private readonly definitionNodeCache = new Map<number, Node | null>();
   private readonly fileDefinitionNodeCache = new Map<string, Map<number, Node>>();
   private readonly indexedDefinitionLeafCache = new Map<string, Map<string, IndexedDefinition>>();
-  private readonly compilerCheckerCache = new WeakMap<Project, TypeScriptTypeChecker>();
   private packageImportReferenceIndex: Map<number, SemanticReference[]> | null = null;
   private packageExportIndex: PackageExportIndex | null = null;
   private readonly workspacePackages: WorkspacePackage[];
@@ -1386,14 +1385,14 @@ class TsMorphSemanticProvider implements SemanticProvider {
     return typeSymbol;
   }
 
+  /**
+   * Always the current program's checker: a raw checker held across a source
+   * file being added to the project (a file no config listed, a file-closure
+   * attach) belongs to the previous program and fails inside the compiler on
+   * nodes it never bound. ts-morph's wrapper resolves to the live checker.
+   */
   private compilerCheckerForSourceFile(sourceFile: SourceFile): TypeScriptTypeChecker {
-    const project = sourceFile.getProject();
-    let checker = this.compilerCheckerCache.get(project);
-    if (!checker) {
-      checker = project.getTypeChecker().compilerObject;
-      this.compilerCheckerCache.set(project, checker);
-    }
-    return checker;
+    return sourceFile.getProject().getTypeChecker().compilerObject;
   }
 }
 

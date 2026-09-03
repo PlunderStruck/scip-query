@@ -1,0 +1,109 @@
+{
+  "detector": "react-large-component-pressure",
+  "repository": "suplierscout",
+  "identity": "symbol",
+  "reviewed": "2026-09-03",
+  "note": "Sampled 20 of 28 components (seed 11). Pages between 156 and 684 lines with 95 to 327 JSX tokens; every one carries real decomposition pressure.",
+  "labels": [
+    {
+      "id": "src/client/features/ai-workspace/panels/ShortlistConsole.tsx#ShortlistConsole",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/projects/ProjectManagePage.tsx#ProjectManagePage",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/families/FamilyVendorConsolidation.tsx#FamilyVendorConsolidation",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/library/BomLineLibraryPage.tsx#BomLineLibraryPage",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/components/AppShell.tsx#AppShell",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/ai-workspace/panels/OutreachConsole.tsx#OutreachConsole",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/copilot/MakeBuyClassifier.tsx#MakeBuyClassifier",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/rfi/RfiReviewPage.tsx#RfiReviewPage",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/engagement/EngagementPage.tsx#EngagementPage",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/billing/BillingPanel.tsx#BillingPanel",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/settings/MembersPanel.tsx#MembersPanel",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/ai-workspace/panels/BreakdownConsole.tsx#BreakdownConsole",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/quotes/QuoteComparisonPage.tsx#QuoteComparisonPage",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/projects/ProjectIntakePage.tsx#ProjectIntakePage",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/shortlist/ShortlistPage.tsx#ShortlistPage",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/exports/DocumentExportsPage.tsx#DocumentExportsPage",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/catalog/CatalogPage.tsx#CatalogPage",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/recommendations/RecommendationMemoPage.tsx#RecommendationMemoPage",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/manufacturers/ManufacturerWorkspace.tsx#ManufacturerWorkspace",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    },
+    {
+      "id": "src/client/features/ai-workspace/panels/OutreachConsole.tsx#OutreachRow",
+      "verdict": "true",
+      "reason": "component over 150 lines with heavy JSX"
+    }
+  ]
+}
