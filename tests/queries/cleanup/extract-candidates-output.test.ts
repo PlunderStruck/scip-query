@@ -250,7 +250,7 @@ describe('extractCandidates regions', () => {
           '12 callees placed on call lines across 23 lines',
           '1 ambient callee(s) used across the body: src:orchestrator:trace()',
           'lines 11-18 (8 lines) use 6 callees exclusively; 3 local(s) in, 1 out',
-          '5 callee(s) stay outside the largest region',
+          expect.stringMatching(/stay outside the region at lines \d+-\d+/),
         ]),
       );
 

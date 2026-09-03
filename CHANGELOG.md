@@ -28,6 +28,37 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
   725-file symbol-reference component into a disclosure and no counted
   cycle.
 
+### Detector calibration on a third and fourth repository
+
+Label sets for SuplierScout (Express + React, solution-style tsconfig) and
+Stable_Management (workspace monorepo, five tsconfigs) under
+`docs/validation/labels/`. Only the rules those labels measured as an
+improvement shipped.
+
+- `similar`: two functions in one file sharing four or more callees at
+  similarity 0.5 or more are direct findings whatever the vocabulary class
+  (create/update/delete workflows, archive/restore pairs), because the file's
+  own imports are the scaffolding vocabulary. A cross-file pair whose shared
+  evidence mixes domain behavior with scaffolding is direct from similarity
+  0.6. Precision holds at 1.0 on Launchpoint (recall 0.43 to 0.71) and on
+  Stable_Management (recall 0.33 to 0.92); no labeled false row is promoted
+  on any of the four repositories.
+- `co-change`: a `<Name>.script.ts` companion is a single-file component's
+  script block, so a view script changing with its model is model-view
+  coupling rather than a schema-with-script sweep. Stable_Management recall
+  0.82 to 1.0 at precision 1.0.
+- `extract-candidates`: a selected region that is one statement (an awaited
+  call with callback arguments, a resource or form declaration, a nested
+  function) is support tier, because extracting it would only wrap that
+  statement. SuplierScout precision 0.9 to 1.0 with recall unchanged; Vega
+  unchanged.
+- `extract-candidates`: every tier reason now names the line range it was
+  decided on. The reason said "the largest region" while describing the most
+  actionable region, which is often a different one.
+- `passthrough-candidates`: a body whose parameter carries a default value
+  reshapes its input and is not a literal passthrough (source-facts payload
+  version 10).
+
 ## [0.24.0]
 
 ### Oversized compiler projects are served from file closures

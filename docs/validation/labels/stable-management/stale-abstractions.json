@@ -1,0 +1,113 @@
+{
+  "detector": "stale-abstractions",
+  "repository": "stable-management",
+  "identity": "symbol",
+  "reviewed": "2026-09-02",
+  "note": "Verified with git grep -w: nine shared contract types with no consumer anywhere (ServiceTaskCompletionRecordType is only referenced by SQL migrations), and single-consumer types whose only other reference is a spec file or one workflow.",
+  "countedTiers": [
+    "direct",
+    "signal"
+  ],
+  "labels": [
+    {
+      "id": "shared/src/contracts/farrierVisits.ts#src:contracts:farrierVisits:FarrierUserSummary",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "shared/src/contracts/maintenance.ts#src:contracts:maintenance:MaintenanceIncidentSummary",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "shared/src/contracts/vetRecords.ts#src:contracts:vetRecords:VetRecordLinkedNoteInput",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "shared/src/contracts/maintenance.ts#src:contracts:maintenance:MaintenancePlanSummary",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "shared/src/contracts/maintenance.ts#src:contracts:maintenance:MaintenanceFacilitySummary",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "shared/src/contracts/ridingLessons.ts#src:contracts:ridingLessons:RidingLessonTemplateFields",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "shared/src/contracts/ridingLessons.ts#src:contracts:ridingLessons:RidingLessonServiceTaskOccurrenceSummary",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "shared/src/contracts/ridingLessons.ts#src:contracts:ridingLessons:RidingLessonFacilityBookingSummary",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "shared/src/contracts/maintenance.ts#src:contracts:maintenance:MaintenanceAssetSummary",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "shared/src/contracts/servicePlans.ts#src:contracts:servicePlans:ServiceTaskCompletionRecordType",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "frontend/src/features/platform/admin/platformAdminModel.ts#src:features:platform:admin:platformAdminModel:SubscriptionDraft",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "backend/src/workflows/serviceTasks/selects.ts#src:workflows:serviceTasks:selects:ServiceTaskTemplateRow",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "backend/src/access/horseAccess.ts#src:access:horseAccess:HorseAccessUser",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "backend/src/workflows/horseCarePlanInputs.ts#src:workflows:horseCarePlanInputs:FeedRationNormalizationContext",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "frontend/src/features/horse-care/shared/horse-intake/horseDraftValidation.ts#src:features:horse-care:shared:horse-intake:horseDraftValidation:HorseDraftInput",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "backend/src/schemas/conversations.ts#src:schemas:conversations:ListConversationMessagesQuery",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "backend/src/workflows/platformAdminAudit.ts#src:workflows:platformAdminAudit:AuditLogListItem",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "frontend/src/features/templates/service-templates/serviceTemplatesModel.ts#src:features:templates:service-templates:serviceTemplatesModel:PendingTemplateAction",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "frontend/src/navigation/appNavigation.ts#src:navigation:appNavigation:NavigationGroup",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "backend/src/workflows/orgShared.ts#src:workflows:orgShared:StoredPermissionProfile",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    }
+  ]
+}

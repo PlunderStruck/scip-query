@@ -264,7 +264,11 @@ export function comparePair(
   const { similarity, significantShared, trivialShared } = cosine;
 
   const displayShared = significantShared.length > 0 ? significantShared : trivialShared;
-  const classification = classifySimilarityEvidence(displayShared, 'callees');
+  const classification = promoteSiblingSimilarity(classifySimilarityEvidence(displayShared, 'callees'), {
+    similarity,
+    sharedCount: displayShared.length,
+    sameFile: a.file === b.file,
+  });
 
   return {
     symbolA: a.symbol,
@@ -1257,6 +1261,41 @@ export function classifySimilarityEvidence(
     actionTier,
     evidenceClassReasons: reasons,
     recommendation: similarityRecommendation(evidenceClass, actionTier),
+  };
+}
+
+/** Same-file siblings share at least this much of their callee vocabulary before scaffolding vocabulary stops mattering. */
+export const SIBLING_SIMILARITY_DIRECT_THRESHOLD = 0.5;
+/** Cross-file pairs whose shared callees mix domain behavior with scaffolding are direct from this similarity. */
+export const MIXED_SIMILARITY_DIRECT_THRESHOLD = 0.6;
+
+/**
+ * Scaffolding vocabulary explains why two functions in different files look
+ * alike; it cannot explain two functions in one file that share half their
+ * callees, because the file's own imports are that vocabulary. Those siblings
+ * (create/update/delete workflows, archive/restore pairs) are the classic
+ * shared-step extraction and are reported as direct. A cross-file pair whose
+ * shared evidence already carries domain behavior next to the scaffolding is
+ * direct once the overlap is large.
+ */
+export function promoteSiblingSimilarity(
+  classification: SimilarEvidenceClassification,
+  pair: { similarity: number; sharedCount: number; sameFile: boolean },
+): SimilarEvidenceClassification {
+  if (classification.actionTier === 'direct' || pair.sharedCount < 4) return classification;
+  const siblings = pair.sameFile && pair.similarity >= SIBLING_SIMILARITY_DIRECT_THRESHOLD;
+  const mixed = classification.evidenceClass === 'mixed' && pair.similarity >= MIXED_SIMILARITY_DIRECT_THRESHOLD;
+  if (!siblings && !mixed) return classification;
+  const reason = siblings
+    ? `same-file siblings share ${pair.sharedCount} callees at similarity ${pair.similarity.toFixed(2)}`
+    : `mixed domain and scaffolding evidence at similarity ${pair.similarity.toFixed(2)} across ${pair.sharedCount} shared callees`;
+  return {
+    ...classification,
+    actionTier: 'direct',
+    evidenceClassReasons: [...classification.evidenceClassReasons, reason],
+    recommendation: siblings
+      ? 'Sibling functions in one file share most of their callees; review for a shared step to extract.'
+      : 'Shared evidence carries domain behavior alongside scaffolding at high overlap; review for an extract/reuse opportunity.',
   };
 }
 

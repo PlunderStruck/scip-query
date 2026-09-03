@@ -25,7 +25,7 @@ import {
   toRelative,
   toSemanticLocation,
 } from './semantic-locations.js';
-import type { Identifier, ImportDeclaration, Node, Project, SourceFile, ts } from 'ts-morph';
+import type { Identifier, ImportDeclaration, Node, SourceFile, ts } from 'ts-morph';
 import type {
   SemanticAvailability,
   SemanticCallee,

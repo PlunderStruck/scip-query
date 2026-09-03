@@ -1,0 +1,109 @@
+{
+  "detector": "extract-candidates",
+  "repository": "stable-management",
+  "identity": "symbol",
+  "reviewed": "2026-09-02",
+  "note": "Ten signal and ten support rows (seed 11). Re-read after the tier reason began naming the region it was decided on: the first pass judged each row by its largest region, which is not always the region the tier came from. Most false rows are fragments that cross a block boundary (they close an enclosing loop, branch, or sibling function) or single statements such as one `await runRequest({...})`.",
+  "labels": [
+    {
+      "id": "frontend/src/features/horse-care/training-lesson-records/shared/composables/useTrainingLessonRecordActions.ts#src:features:horse-care:training-lesson-records:shared:composables:useTrainingLessonRecordActions:useTrainingLessonRecordActions",
+      "verdict": "uncertain",
+      "reason": "two sibling arrow helpers differing only by record kind; a dedup rather than an extraction"
+    },
+    {
+      "id": "frontend/src/features/templates/configuration/setup/useSetupInterviewWorkTemplates.ts#src:features:templates:configuration:setup:useSetupInterviewWorkTemplates:useSetupInterviewWorkTemplates",
+      "verdict": "false",
+      "reason": "straddles the end of one arrow and the start of the next"
+    },
+    {
+      "id": "frontend/src/features/templates/service-plans/useServicePlansTemplateViewController.ts#src:features:templates:service-plans:useServicePlansTemplateViewController:useServicePlansTemplateViewController",
+      "verdict": "false",
+      "reason": "starts at the arrow's own `) => {`; the nested function body itself"
+    },
+    {
+      "id": "frontend/src/features/templates/configuration/composables/useStableBasicsSetup.ts#src:features:templates:configuration:composables:useStableBasicsSetup:useStableBasicsSetup",
+      "verdict": "false",
+      "reason": "two resource declarations; not a unit"
+    },
+    {
+      "id": "backend/src/workflows/serviceTasks/scheduleConflicts.ts#src:workflows:serviceTasks:scheduleConflicts:assertBookedScheduleNoConflict",
+      "verdict": "true",
+      "reason": "one coherent per-date conflict-check loop with its own throws"
+    },
+    {
+      "id": "backend/src/workflows/serviceTasks.ts#src:workflows:serviceTasks:seedDefaultCareSetup",
+      "verdict": "false",
+      "reason": "ends by closing the enclosing seed loop; a fragment"
+    },
+    {
+      "id": "frontend/src/features/templates/service-templates/useServiceTemplateInteractions.ts#src:features:templates:service-templates:useServiceTemplateInteractions:useServiceTemplateInteractions",
+      "verdict": "false",
+      "reason": "starts inside an `if` block and ends mid-statement; spans a block boundary"
+    },
+    {
+      "id": "frontend/src/features/organization/owners/useOwnersViewController.ts#src:features:organization:owners:useOwnersViewController:useOwnersViewController",
+      "verdict": "false",
+      "reason": "spans the middle of openHorsesDialog through closeHorsesDialog and toggleHorseAssignment into saveHorseAssignments"
+    },
+    {
+      "id": "frontend/src/features/templates/configuration/components/useDailyRoutinePanelController.ts#src:features:templates:configuration:components:useDailyRoutinePanelController:useDailyRoutinePanelController",
+      "verdict": "false",
+      "reason": "several computed declarations; closes an enclosing arrow"
+    },
+    {
+      "id": "frontend/src/features/horse-care/horse-profile/notes/useHorseProfileNotes.ts#src:features:horse-care:horse-profile:notes:useHorseProfileNotes:useHorseProfileNotes",
+      "verdict": "false",
+      "reason": "one awaited request statement plus following declarations"
+    },
+    {
+      "id": "frontend/src/features/horse-care/plan-change/usePlanChange.ts#src:features:horse-care:plan-change:usePlanChange:usePlanChange",
+      "verdict": "false",
+      "reason": "the nested `load` arrow itself"
+    },
+    {
+      "id": "frontend/src/features/templates/facilities/useFacilitySetupInteractions.ts#src:features:templates:facilities:useFacilitySetupInteractions:useFacilitySetupInteractions",
+      "verdict": "false",
+      "reason": "three separate form controllers in one range"
+    },
+    {
+      "id": "frontend/src/features/platform/admin/usePlatformAdmin.ts#src:features:platform:admin:usePlatformAdmin:usePlatformAdmin",
+      "verdict": "false",
+      "reason": "resource declarations at the top of the composable"
+    },
+    {
+      "id": "frontend/src/features/horse-care/farrier-care/visit-log/useFarrierVisits.ts#src:features:horse-care:farrier-care:visit-log:useFarrierVisits:useFarrierVisits",
+      "verdict": "false",
+      "reason": "one awaited request statement plus the declarations that follow it"
+    },
+    {
+      "id": "frontend/src/features/operations/inventory/useInventoryDemandPlanning.ts#src:features:operations:inventory:useInventoryDemandPlanning:useInventoryDemandPlanning",
+      "verdict": "false",
+      "reason": "a form controller plus a dozen computed declarations"
+    },
+    {
+      "id": "frontend/src/features/horse-care/horse-profile/record-entry/useHorseProfileRecordFeeds.ts#src:features:horse-care:horse-profile:record-entry:useHorseProfileRecordFeeds:useHorseProfileRecordFeeds",
+      "verdict": "false",
+      "reason": "starts inside a destructuring assignment (`} = usePaginatedResource({`)"
+    },
+    {
+      "id": "frontend/src/features/account/messages/useMessagesViewController.ts#src:features:account:messages:useMessagesViewController:useMessagesViewController",
+      "verdict": "uncertain",
+      "reason": "one useResource declaration with a moderate interface; marginal"
+    },
+    {
+      "id": "frontend/src/features/onboarding/join-code/useJoinInvitation.ts#src:features:onboarding:join-code:useJoinInvitation:useJoinInvitation",
+      "verdict": "false",
+      "reason": "one awaited request statement"
+    },
+    {
+      "id": "backend/src/workflows/inventory/itemCatalog.ts#src:workflows:inventory:itemCatalog:resolveInventoryHierarchy",
+      "verdict": "uncertain",
+      "reason": "resolving type, template, and location references; plausible with a wide interface"
+    },
+    {
+      "id": "frontend/src/features/auth/login/useLogin.ts#src:features:auth:login:useLogin:useLogin",
+      "verdict": "uncertain",
+      "reason": "the login request block; plausible but it writes several refs"
+    }
+  ]
+}

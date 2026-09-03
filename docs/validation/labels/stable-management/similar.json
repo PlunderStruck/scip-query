@@ -1,0 +1,109 @@
+{
+  "detector": "similar",
+  "repository": "stable-management",
+  "identity": "pair",
+  "reviewed": "2026-09-02",
+  "note": "Create/update/delete/archive siblings in one workflow file share their lookup, permission, and publish steps (true even when the class is mixed or scaffolding: archive/restoreStable at 0.94). Cross-file composable pairs sharing only useResource/list scaffolding are false. useStableProfileSettings ~ useStableBasicsSetup both load and save the same profile form (true).",
+  "labels": [
+    {
+      "id": "backend/src/workflows/ridingLessons.ts#scip-typescript npm backend 1.0.0 src/workflows/`ridingLessons.ts`/createRidingLesson.|backend/src/workflows/ridingLessons.ts#scip-typescript npm backend 1.0.0 src/workflows/`ridingLessons.ts`/updateRidingLesson.",
+      "verdict": "true",
+      "reason": "create/update riding lesson share validation and publish steps"
+    },
+    {
+      "id": "backend/src/effect/appErrorTranslation.ts#scip-typescript npm backend 1.0.0 src/effect/`appErrorTranslation.ts`/translateAppErrorToWorkflowError.|backend/src/workflows/stables.ts#scip-typescript npm backend 1.0.0 src/workflows/`stables.ts`/archiveStable.",
+      "verdict": "false",
+      "reason": "error translation vs archive workflow; scaffolding only"
+    },
+    {
+      "id": "backend/src/workflows/templateOptions.ts#scip-typescript npm backend 1.0.0 src/workflows/`templateOptions.ts`/createTemplateOptionWorkflow.|backend/src/workflows/templateOptions.ts#scip-typescript npm backend 1.0.0 src/workflows/`templateOptions.ts`/updateTemplateOptionWorkflow.",
+      "verdict": "true",
+      "reason": "create/update template option share parent resolution and publish"
+    },
+    {
+      "id": "frontend/src/features/horse-care/incidents/useIncidentFollowUps.ts#scip-typescript npm frontend 0.0.0 src/features/horse-care/incidents/`useIncidentFollowUps.ts`/useIncidentFollowUps.|frontend/src/features/operations/maintenance/useMaintenanceWorkOrders.ts#scip-typescript npm frontend 0.0.0 src/features/operations/maintenance/`useMaintenanceWorkOrders.ts`/useMaintenanceWorkOrders.",
+      "verdict": "uncertain",
+      "reason": "follow-ups vs work orders share form-option builders; plausible"
+    },
+    {
+      "id": "frontend/src/features/templates/facilities/useFacilitySetup.ts#scip-typescript npm frontend 0.0.0 src/features/templates/facilities/`useFacilitySetup.ts`/useFacilitySetup().|frontend/src/features/templates/service-templates/useServiceTemplates.ts#scip-typescript npm frontend 0.0.0 src/features/templates/service-templates/`useServiceTemplates.ts`/useServiceTemplates.",
+      "verdict": "false",
+      "reason": "two composables sharing useResource/list scaffolding"
+    },
+    {
+      "id": "backend/src/utils/serviceTasks.ts#scip-typescript npm backend 1.0.0 src/utils/`serviceTasks.ts`/generateServiceTasksForHorse.|backend/src/workflows/serviceTasks/scheduleConflicts.ts#scip-typescript npm backend 1.0.0 src/workflows/serviceTasks/`scheduleConflicts.ts`/assertBookedScheduleNoConflict.",
+      "verdict": "false",
+      "reason": "task generation vs conflict assertion share time helpers only"
+    },
+    {
+      "id": "backend/src/workflows/emergencyBroadcasts.ts#scip-typescript npm backend 1.0.0 src/workflows/`emergencyBroadcasts.ts`/createEmergencyBroadcast.|backend/src/workflows/emergencyBroadcasts.ts#scip-typescript npm backend 1.0.0 src/workflows/`emergencyBroadcasts.ts`/updateEmergencyBroadcast.",
+      "verdict": "true",
+      "reason": "create/update emergency broadcast share notification rows"
+    },
+    {
+      "id": "backend/src/workflows/trainingBehavior.ts#scip-typescript npm backend 1.0.0 src/workflows/`trainingBehavior.ts`/createTrainingSession.|backend/src/workflows/trainingBehavior.ts#scip-typescript npm backend 1.0.0 src/workflows/`trainingBehavior.ts`/updateTrainingSession.",
+      "verdict": "true",
+      "reason": "create/update training session share lookup, permission, and publish steps"
+    },
+    {
+      "id": "frontend/src/features/horse-care/incidents/useIncidents.ts#scip-typescript npm frontend 0.0.0 src/features/horse-care/incidents/`useIncidents.ts`/useIncidents().|frontend/src/features/horse-care/training-lesson-records/useTrainingBehavior.ts#scip-typescript npm frontend 0.0.0 src/features/horse-care/training-lesson-records/`useTrainingBehavior.ts`/useTrainingBehavior.",
+      "verdict": "false",
+      "reason": "two composables sharing resource scaffolding"
+    },
+    {
+      "id": "frontend/src/features/organization/organization/composables/useStableProfileSettings.ts#scip-typescript npm frontend 0.0.0 src/features/organization/organization/composables/`useStableProfileSettings.ts`/useStableProfileSettings.|frontend/src/features/templates/configuration/composables/useStableBasicsSetup.ts#scip-typescript npm frontend 0.0.0 src/features/templates/configuration/composables/`useStableBasicsSetup.ts`/useStableBasicsSetup.",
+      "verdict": "true",
+      "reason": "both load and save the stable profile form"
+    },
+    {
+      "id": "frontend/src/features/templates/service-plans/useServicePlans.ts#scip-typescript npm frontend 0.0.0 src/features/templates/service-plans/`useServicePlans.ts`/useServicePlans().|frontend/src/features/templates/service-templates/useServiceTemplates.ts#scip-typescript npm frontend 0.0.0 src/features/templates/service-templates/`useServiceTemplates.ts`/useServiceTemplates.",
+      "verdict": "false",
+      "reason": "two composables sharing resource scaffolding"
+    },
+    {
+      "id": "backend/src/workflows/inventory/supplierPreferences.ts#scip-typescript npm backend 1.0.0 src/workflows/inventory/`supplierPreferences.ts`/deleteSupplierPreference.|backend/src/workflows/inventory/supplierPreferences.ts#scip-typescript npm backend 1.0.0 src/workflows/inventory/`supplierPreferences.ts`/updateSupplierPreference.",
+      "verdict": "true",
+      "reason": "update/delete supplier preference share the ownership lookup"
+    },
+    {
+      "id": "backend/src/workflows/incidents.ts#scip-typescript npm backend 1.0.0 src/workflows/`incidents.ts`/createIncident.|backend/src/workflows/trainingBehavior.ts#scip-typescript npm backend 1.0.0 src/workflows/`trainingBehavior.ts`/createTrainingSession.",
+      "verdict": "uncertain",
+      "reason": "create incident vs create training session; different domains"
+    },
+    {
+      "id": "backend/src/workflows/customerWorkRequests.ts#scip-typescript npm backend 1.0.0 src/workflows/`customerWorkRequests.ts`/approveCustomerWorkRequest.|backend/src/workflows/customerWorkRequests.ts#scip-typescript npm backend 1.0.0 src/workflows/`customerWorkRequests.ts`/createCustomerWorkRequest.",
+      "verdict": "true",
+      "reason": "create/approve work request share ownership and notification steps"
+    },
+    {
+      "id": "backend/src/workflows/inventory/suppliers.ts#scip-typescript npm backend 1.0.0 src/workflows/inventory/`suppliers.ts`/setSupplierActiveState.|backend/src/workflows/inventory/suppliers.ts#scip-typescript npm backend 1.0.0 src/workflows/inventory/`suppliers.ts`/updateSupplier.",
+      "verdict": "true",
+      "reason": "update/setSupplierActiveState share the supplier lookup"
+    },
+    {
+      "id": "backend/src/workflows/stables.ts#scip-typescript npm backend 1.0.0 src/workflows/`stables.ts`/archiveStable.|backend/src/workflows/stables.ts#scip-typescript npm backend 1.0.0 src/workflows/`stables.ts`/restoreStable.",
+      "verdict": "true",
+      "reason": "archive/restore stable are near-identical (0.94)"
+    },
+    {
+      "id": "backend/src/workflows/inventory/supplierPreferences.ts#scip-typescript npm backend 1.0.0 src/workflows/inventory/`supplierPreferences.ts`/createSupplierPreference.|backend/src/workflows/inventory/supplierPreferences.ts#scip-typescript npm backend 1.0.0 src/workflows/inventory/`supplierPreferences.ts`/updateSupplierPreference.",
+      "verdict": "true",
+      "reason": "create/update supplier preference share the lookup"
+    },
+    {
+      "id": "backend/src/workflows/incidents.ts#scip-typescript npm backend 1.0.0 src/workflows/`incidents.ts`/createIncident.|backend/src/workflows/incidents.ts#scip-typescript npm backend 1.0.0 src/workflows/`incidents.ts`/updateIncident.",
+      "verdict": "true",
+      "reason": "create/update incident share permission and publish steps"
+    },
+    {
+      "id": "backend/src/workflows/farrierCare.ts#scip-typescript npm backend 1.0.0 src/workflows/`farrierCare.ts`/listFarrierVisits.|backend/src/workflows/ridingLessons.ts#scip-typescript npm backend 1.0.0 src/workflows/`ridingLessons.ts`/listRidingLessons.",
+      "verdict": "false",
+      "reason": "two list workflows sharing timing and where scaffolding"
+    },
+    {
+      "id": "backend/src/workflows/emergencyBroadcasts.ts#scip-typescript npm backend 1.0.0 src/workflows/`emergencyBroadcasts.ts`/createEmergencyBroadcast.|backend/src/workflows/emergencyBroadcasts.ts#scip-typescript npm backend 1.0.0 src/workflows/`emergencyBroadcasts.ts`/resolveEmergencyBroadcast.",
+      "verdict": "true",
+      "reason": "create/resolve broadcast share notification rows"
+    }
+  ]
+}

@@ -388,8 +388,10 @@ const CONFIG_FILE_PATTERN =
   /(?:^|\/)(?:\.[a-z0-9-]+rc|config|configs|settings|\.github)(?:\/|$)|(?:^|\/)(?:package\.json|tsconfig(?:\.[^.]+)?\.json|vite\.config\.[cm]?[jt]s|rollup\.config\.[cm]?[jt]s|eslint\.config\.[cm]?[jt]s)$|\.(?:json|ya?ml|toml|ini|env)$/i;
 const SCHEMA_FILE_PATTERN =
   /(?:^|\/)(?:schemas?|contracts?|migrations?|models?|types?)(?:\/|$)|(?:^|\/)[^/]*(?:schema|contract|migration|model|types?)[^/]*|(?:\.schema)?\.(?:graphql|gql|proto|prisma)$/i;
+// A `<Name>.script.ts` companion is a single-file component's script block
+// (Vue and Svelte conventions), not a build or maintenance script.
 const SCRIPT_FILE_PATTERN =
-  /(?:^|\/)(?:scripts?|bin|tools?|tasks?|generators?|codegen|migrations?|seeds?)(?:\/|$)|(?:^|\/)[^/]*(?:generate|codegen|migrate|seed|script)[^/]*\.[cm]?[jt]s$/i;
+  /(?:^|\/)(?:scripts?|bin|tools?|tasks?|generators?|codegen|migrations?|seeds?)(?:\/|$)|(?:^|\/)(?![^/]*\.script\.[cm]?[jt]sx?$)[^/]*(?:generate|codegen|migrate|seed|script)[^/]*\.[cm]?[jt]s$/i;
 const MODEL_FILE_PATTERN =
   /(?:^|\/)(?:models?|entities|domain|state|stores?|reducers?)(?:\/|$)|(?:^|\/)[^/]*(?:model|entity|state|store|reducer|viewmodel)[^/]*\.[^.]+$/i;
 const VIEW_FILE_PATTERN =

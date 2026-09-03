@@ -1,0 +1,89 @@
+{
+  "detector": "co-change",
+  "repository": "stable-management",
+  "identity": "file-pair",
+  "reviewed": "2026-09-02",
+  "note": "Eligible pairs after doc and generated partners (16). View script companions (`*View.script.ts`) with their model file are real model-view coupling; they were classified schema-script because the script pattern matched the companion suffix. Schema-with-script, CI-with-package, and .env.example-with-env.ts pairs are expected pairings.",
+  "labels": [
+    {
+      "id": "backend/src/routes/onboarding/horses.ts|backend/src/routes/onboarding/payment.ts",
+      "verdict": "true",
+      "reason": "onboarding horses and payment routes change together (2 focused)"
+    },
+    {
+      "id": "backend/prisma/schema.prisma|scripts/stable-scope-inventory.mjs",
+      "verdict": "false",
+      "reason": "schema with an inventory script; sweep only"
+    },
+    {
+      "id": "frontend/src/features/operations/daily-checklist/DailyChecklistView.script.ts|frontend/src/features/operations/daily-checklist/operationsModel.ts",
+      "verdict": "true",
+      "reason": "view script companion with its model; real coupling"
+    },
+    {
+      "id": "frontend/src/features/operations/daily-checklist/DailyChecklistView.vue|frontend/src/features/operations/daily-checklist/operationsModel.ts",
+      "verdict": "true",
+      "reason": "view with its model"
+    },
+    {
+      "id": "frontend/src/features/templates/configuration/setup/SetupInterviewPanel.vue|frontend/src/shared/ui/UiTimePicker.vue",
+      "verdict": "true",
+      "reason": "setup panel with the shared time picker (3 focused)"
+    },
+    {
+      "id": "backend/src/routes/horses.ts|backend/src/routes/onboarding/horses.ts",
+      "verdict": "false",
+      "reason": "stale pairing"
+    },
+    {
+      "id": "backend/src/routes/onboarding/account.ts|backend/src/routes/onboarding/horses.ts",
+      "verdict": "true",
+      "reason": "onboarding account and horses routes (2 focused)"
+    },
+    {
+      "id": "backend/src/schemas/onboarding.ts|frontend/src/stores/onboarding.ts",
+      "verdict": "uncertain",
+      "reason": "backend schema with frontend store; contract coupling but sweep only"
+    },
+    {
+      "id": "backend/src/workflows/ridingLessons.ts|backend/src/workflows/trainingBehavior.ts",
+      "verdict": "true",
+      "reason": "riding lessons and training behavior workflows"
+    },
+    {
+      "id": ".github/workflows/ci.yml|package.json",
+      "verdict": "false",
+      "reason": "CI with package.json; expected pairing"
+    },
+    {
+      "id": "backend/src/routes/incidents/read.ts|backend/src/routes/incidents/write.ts",
+      "verdict": "true",
+      "reason": "incident read and write routes (2 focused)"
+    },
+    {
+      "id": "backend/src/workflows/onboardingAccount.ts|frontend/src/stores/onboarding.ts",
+      "verdict": "true",
+      "reason": "onboarding workflow with the frontend store"
+    },
+    {
+      "id": "frontend/src/features/templates/configuration/ConfigurationHomeView.script.ts|frontend/src/features/templates/configuration/setup/setupInterviewModel.ts",
+      "verdict": "true",
+      "reason": "view script companion with its model; real coupling"
+    },
+    {
+      "id": "frontend/src/features/templates/configuration/ConfigurationHomeView.vue|frontend/src/features/templates/configuration/setup/setupInterviewModel.ts",
+      "verdict": "true",
+      "reason": "view with its model"
+    },
+    {
+      "id": "backend/.env.example|backend/src/config/env.ts",
+      "verdict": "false",
+      "reason": ".env.example with env.ts; expected pairing"
+    },
+    {
+      "id": "backend/src/workflows/inventory/feedPlanning.ts|backend/src/workflows/inventory/itemCatalog.ts",
+      "verdict": "true",
+      "reason": "feed planning with item catalog (2 focused)"
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "detector": "wrapper-candidates",
+  "repository": "stable-management",
+  "identity": "symbol",
+  "reviewed": "2026-09-02",
+  "note": "All 50 candidates sit at signal tier; the 20 sampled are helper-shaped forwards (formatting, time-zone, callback, predicate helpers). Two access-policy forwards (isWorkspaceResourceCritical, callerCanViewHorseIncident) are plausible renames.",
+  "labels": [
+    {
+      "id": "frontend/src/shared/composables/workspace/workspaceResourceHandle.ts#src:shared:composables:workspace:workspaceResourceHandle:isWorkspaceResourceCritical",
+      "verdict": "uncertain",
+      "reason": "plausible"
+    },
+    {
+      "id": "backend/src/workflows/serviceTasks/scheduleConflicts.ts#src:workflows:serviceTasks:scheduleConflicts:assertBookedScheduleNoConflictEffect",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "backend/src/workflows/incidents.ts#src:workflows:incidents:callerCanViewHorseIncident",
+      "verdict": "uncertain",
+      "reason": "plausible"
+    },
+    {
+      "id": "frontend/src/features/horse-care/horse-profile/horseProfileModel.ts#src:features:horse-care:horse-profile:horseProfileModel:noteCategoryLabel",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "backend/src/middleware/stableContext.ts#src:middleware:stableContext:requireStableContext",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "backend/src/workflows/notifications.ts#src:workflows:notifications:createStableNotifications",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "backend/src/errors/prismaErrors.ts#src:errors:prismaErrors:translatePrismaUniqueConflict",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "backend/src/utils/respond.ts#src:utils:respond:isCookieResponse",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "frontend/src/shared/composables/stable/stableEventFrame.ts#src:shared:composables:stable:stableEventFrame:shouldReconnectAfterFailure",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "backend/src/middleware/auth.ts#src:middleware:auth:requireStablePermission",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "backend/src/workflows/serviceTasks/historySnapshots.ts#src:workflows:serviceTasks:historySnapshots:historyRowWithPreservedSchedule",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "backend/src/workflows/serviceTasks/templateRules.ts#src:workflows:serviceTasks:templateRules:codeCandidate",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "backend/src/middleware/validate.ts#src:middleware:validate:validateBody",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "frontend/src/shared/composables/stable/stableEventFrame.ts#src:shared:composables:stable:stableEventFrame:shouldRefreshAfterReconnect",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "frontend/src/features/horse-care/horse-profile/horseProfileModel.ts#src:features:horse-care:horse-profile:horseProfileModel:horseOwnerLabel",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "backend/src/utils/respond.ts#src:utils:respond:isBinaryResponse",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "backend/src/middleware/validate.ts#src:middleware:validate:validateQuery",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "backend/src/effect/routeRegistry.ts#src:effect:routeRegistry:assignRouterMount",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "backend/src/utils/stableTime.ts#src:utils:stableTime:instantFromStableDateAndTime",
+      "verdict": "false",
+      "reason": "helper shape"
+    },
+    {
+      "id": "backend/src/workflows/serviceTasks/occurrenceStatus.ts#src:workflows:serviceTasks:occurrenceStatus:isInventoryTransactionUniqueConflict",
+      "verdict": "false",
+      "reason": "helper shape"
+    }
+  ]
+}

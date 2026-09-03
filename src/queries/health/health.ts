@@ -510,7 +510,7 @@ function summarizeExtractionCandidates(
               {
                 reason: 'wide-interface-regions',
                 detail:
-                  'largest region would take more than five locals in or hand more than two back; listed by extract-candidates at support tier',
+                  'selected region would take more than five locals in or hand more than two back; listed by extract-candidates at support tier',
                 count: support,
               },
             ]

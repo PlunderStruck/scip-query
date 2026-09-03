@@ -1,0 +1,84 @@
+{
+  "detector": "twin-drift",
+  "repository": "stable-management",
+  "identity": "group",
+  "reviewed": "2026-09-02",
+  "note": "Every sampled group is the same concept implemented twice or more (helpers such as toIso, clamp, optionalText, writeAuditEntry x18, hasAnyRole x4, collectNormalizedHorseNames with drifted error handling, catalogName with drifted fallbacks).",
+  "labels": [
+    {
+      "id": "inventoryItemTypeName|frontend/src/features/horse-care/horse-profile/nutrition/feedingModel.ts,frontend/src/features/operations/inventory/inventoryPlanningModel.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "optionalText|backend/src/schemas/horses.ts,backend/src/schemas/stableClientInvoicing.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "parseOptionalDate|backend/src/workflows/maintenanceAssets.ts,backend/src/workflows/maintenanceWorkOrders.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "toIso|frontend/src/features/operations/maintenance/maintenanceOperationsModel.ts,frontend/src/features/operations/shared/models/workOrderFormModel.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "cleanNullableText|backend/src/workflows/inventory/supplierPreferences.ts,backend/src/workflows/inventory/suppliers.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "clamp|frontend/src/motion/presets.ts,frontend/src/shared/composables/workspace/useRecordSkeletonCount.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "findOrCreateLinkedOwnerProfile|backend/src/workflows/horses.ts,backend/src/workflows/onboardingCompletion.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "isFutureDate|backend/src/utils/horseProfile.ts,frontend/src/features/horse-care/shared/horse-intake/addHorseFormValidation.ts,frontend/src/features/horse-care/shared/horse-intake/horseDraftValidation.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "isFresh|frontend/src/shared/composables/requests/usePaginatedResource.ts,frontend/src/shared/composables/requests/useResource.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "inventoryItemCategoryName|frontend/src/features/horse-care/horse-profile/nutrition/feedingModel.ts,frontend/src/features/operations/inventory/inventoryPlanningModel.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "serializeResourceKey|frontend/src/shared/composables/requests/usePaginatedResource.ts,frontend/src/shared/composables/requests/useResource.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "hasAnyRole|backend/src/access/horseAccess.ts,backend/src/workflows/notes.ts,backend/src/workflows/ridingLessons.ts,backend/src/workflows/trainingBehavior.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "writeAuditEntry|backend/src/workflows/adminConfig.ts,backend/src/workflows/auditEffects.ts,backend/src/workflows/facilities.ts,backend/src/workflows/join.ts,backend/src/workflows/notes.ts,backend/src/workflows/orgAssignments.ts,backend/src/workflows/orgInvites.ts,backend/src/workflows/orgMembers.ts,backend/src/workflows/orgProfiles.ts,backend/src/workflows/platformAdminAnnouncements.ts,backend/src/workflows/platformAdminFlags.ts,backend/src/workflows/platformAdminImpersonation.ts,backend/src/workflows/platformAdminStables.ts,backend/src/workflows/platformAdminUsers.ts,backend/src/workflows/serviceTasks/sideEffects.ts,backend/src/workflows/stableProfileConfig.ts,backend/src/workflows/storefrontConfig.ts,backend/src/workflows/waitlist.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "collectNormalizedHorseNames|backend/src/workflows/onboardingHorses.ts,backend/src/workflows/onboardingPayment.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "catalogName|frontend/src/features/horse-care/horse-profile/nutrition/feedingModel.ts,frontend/src/features/operations/inventory/inventoryPlanningModel.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    }
+  ]
+}

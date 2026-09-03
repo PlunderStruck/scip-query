@@ -1,0 +1,14 @@
+{
+  "detector": "dead",
+  "repository": "stable-management",
+  "identity": "symbol",
+  "reviewed": "2026-09-02",
+  "note": "listOperationsWorkItems in the frontend API module has no frontend reference; the backend function of the same name is a different symbol.",
+  "labels": [
+    {
+      "id": "frontend/src/features/operations/shared/api/operationsWork.ts#src:features:operations:shared:api:operationsWork:listOperationsWorkItems",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    }
+  ]
+}

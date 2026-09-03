@@ -1,0 +1,59 @@
+{
+  "detector": "duplicate-bodies",
+  "repository": "stable-management",
+  "identity": "group",
+  "reviewed": "2026-09-02",
+  "note": "Every sampled group is byte-similar bodies under different names or files (normalizeNullableDate, parseToken in auth and optionalAuth, two identical DELETE endpoint wrappers, readPositiveInteger in two vitest configs, lockInvoice/lockPlatformInvoice, three ration-amount helpers, writeAuditEntry, two query builders, translateWorkflowError).",
+  "labels": [
+    {
+      "id": "df3a9620fcf10180|backend/src/workflows/horseCarePlanInputs.ts,backend/src/workflows/horses.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "1433be7e42c6840a|backend/src/middleware/auth.ts,backend/src/middleware/optionalAuth.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "c505f154f579fb75|frontend/src/features/operations/shared/api/facilities.ts,frontend/src/features/templates/shared/api/configuration.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "500c02a9c10952b7|backend/src/workflows/facilities.ts,backend/src/workflows/serviceTasks.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "f9c5fbfca10432b8|backend/vitestWorkers.ts,frontend/vitest.config.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "5bc812371b44eee9|backend/src/workflows/platformSubscriptionBilling.ts,backend/src/workflows/stableClientInvoicing.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "5b3a16070ab11f04|frontend/src/features/horse-care/horse-profile/schedule/scheduleModel.ts,frontend/src/features/operations/daily-checklist/operationsModel.ts,frontend/src/features/operations/daily-checklist/operationsModel.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "d6d06a4b1a4e4619|backend/src/workflows/facilities.ts,backend/src/workflows/notes.ts,backend/src/workflows/serviceTasks/sideEffects.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "a05cc9c40da08fb3|frontend/src/features/horse-care/shared/api/ridingLessons.ts,frontend/src/features/horse-care/shared/api/trainingSessions.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    },
+    {
+      "id": "748394038575da4c|backend/src/workflows/platformSubscriptionBilling.ts,backend/src/workflows/stableClientInvoicing.ts",
+      "verdict": "true",
+      "reason": "duplicate concept"
+    }
+  ]
+}

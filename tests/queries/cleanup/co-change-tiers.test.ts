@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coChangeActionTier } from '../../../src/queries/cleanup/co-change.js';
+import { classifyCoChangePartner, coChangeActionTier } from '../../../src/queries/cleanup/co-change.js';
 
 describe('coChangeActionTier', () => {
   it('keeps pairs with focused co-changes as direct findings', () => {
@@ -19,5 +19,19 @@ describe('coChangeActionTier', () => {
     expect(coChangeActionTier({ focusedTogether: 2, recency: 'stale' }, 'same-feature').actionTier).toBe('signal');
     expect(coChangeActionTier({ focusedTogether: 4, recency: 'recent' }, 'config-code').actionTier).toBe('signal');
     expect(coChangeActionTier({ focusedTogether: 4, recency: 'recent' }, 'doc-code').actionTier).toBe('signal');
+  });
+});
+
+describe('classifyCoChangePartner', () => {
+  it('reads a component script companion as a view, not a maintenance script', () => {
+    expect(
+      classifyCoChangePartner(
+        'frontend/src/features/operations/daily-checklist/DailyChecklistView.script.ts',
+        'frontend/src/features/operations/daily-checklist/operationsModel.ts',
+      ).partnerClass,
+    ).toBe('model-view');
+    expect(
+      classifyCoChangePartner('backend/prisma/schema.prisma', 'scripts/stable-scope-inventory.mjs').partnerClass,
+    ).toBe('schema-script');
   });
 });

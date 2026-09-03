@@ -10,7 +10,7 @@ import { runCandidateAnalysis } from '../internal/candidate-scan.js';
 import { definitionLoc } from '../query-utils.js';
 
 export type ExtractCandidateKind = 'call-region' | 'render-region';
-/** `support` when the largest region's interface is wide: it would take more locals in or hand more back than a helper should. */
+/** `support` when the selected region's interface is wide: it would take more locals in or hand more back than a helper should. */
 export type ExtractCandidateActionTier = 'signal' | 'support';
 
 /** One contiguous line range whose callees are used nowhere else in the function. */
@@ -46,14 +46,14 @@ export interface ExtractCandidate {
   ambientCallees: string[];
   /** False when the indexer emitted no local-symbol occurrences for the file, so data flow is unknown. */
   localsAvailable: boolean;
-  /** Kind of the largest region. */
+  /** Kind of the selected region. */
   extractionKind: ExtractCandidateKind;
   /** Extraction candidates are contextual signals, not direct repair mandates; `support` marks a wide interface. */
   actionTier: ExtractCandidateActionTier;
   /** Why the candidate sits at its tier. */
   tierReason: string;
   /**
-   * Return statements of the function itself inside the largest region: a
+   * Return statements of the function itself inside the selected region: a
    * region that returns for the function is its control flow, not a helper.
    */
   ownReturnsInRegion: number;
@@ -225,8 +225,12 @@ function extractionCandidateForSymbol(
   // flow, and a smaller extractable region beside it is the better advice.
   const allCallLines = new Set(uses.flatMap((use) => use.lines));
   const best = [...regions].sort((a, b) => {
-    const rankA = tierRank(tierFor(a, locals.available, ownReturnStatements(locals.lines, a, allCallLines)).tier);
-    const rankB = tierRank(tierFor(b, locals.available, ownReturnStatements(locals.lines, b, allCallLines)).tier);
+    const rankA = tierRank(
+      tierFor(a, locals.available, ownReturnStatements(locals.lines, a, allCallLines), locals.lines).tier,
+    );
+    const rankB = tierRank(
+      tierFor(b, locals.available, ownReturnStatements(locals.lines, b, allCallLines), locals.lines).tier,
+    );
     return rankA - rankB || b.lines - a.lines || a.startLine - b.startLine;
   })[0]!;
   const reasons = [
@@ -246,9 +250,11 @@ function extractionCandidateForSymbol(
           : '; local data flow unknown'),
     );
   }
-  reasons.push(`${intervals.length - regionMemberCount(spans, best)} callee(s) stay outside the largest region`);
+  reasons.push(
+    `${intervals.length - regionMemberCount(spans, best)} callee(s) stay outside the region at lines ${best.startLine + 1}-${best.endLine + 1}`,
+  );
   const ownReturns = ownReturnStatements(locals.lines, best, allCallLines);
-  const tier = tierFor(best, locals.available, ownReturns);
+  const tier = tierFor(best, locals.available, ownReturns, locals.lines);
   reasons.push(tier.reason);
 
   return {
@@ -537,15 +543,59 @@ function localName(lines: readonly string[], occurrence: LocalOccurrence): strin
  * A region is a signal when moving it needs a narrow interface. With no
  * local-symbol data the cost is unknown and the region stays a signal.
  */
+/**
+ * A region that is one statement (a call, an `await`, a declaration, or a
+ * nested function) is not an extraction seam: moving it into a function of
+ * its own only wraps that statement. Control-flow statements and rendered
+ * element subtrees keep their standing because a loop body or a JSX subtree
+ * is a unit a reviewer would name.
+ */
+export function singleStatementRegion(
+  lines: readonly string[],
+  region: { startLine: number; endLine: number },
+): string | null {
+  const first = lines[region.startLine] ?? '';
+  const trimmed = first.trim();
+  if (trimmed.length === 0 || region.endLine <= region.startLine) return null;
+  if (/^(?:for|while|if|switch|try|do|else)\b/.test(trimmed) || /^[<{]/.test(trimmed)) return null;
+  if (/^[)\]}]/.test(trimmed)) return 'a fragment that starts inside an enclosing expression';
+  const base = indentation(first);
+  for (let line = region.startLine + 1; line <= region.endLine; line += 1) {
+    const text = lines[line] ?? '';
+    if (text.trim().length === 0) continue;
+    if (indentation(text) > base) continue;
+    if (line === region.endLine && /^[)\]}]+[;,]?$/.test(text.trim())) break;
+    return null;
+  }
+  if (
+    /^(?:export\s+)?(?:async\s+)?function\b/.test(trimmed) ||
+    /=>\s*[{(]?$/.test(trimmed) ||
+    /=\s*(?:async\s*)?\([^)]*\)\s*=>/.test(trimmed)
+  ) {
+    return 'one nested function declaration';
+  }
+  if (/^(?:const|let|var)\b/.test(trimmed)) return 'one declaration';
+  if (/^return\b/.test(trimmed)) return 'the return statement';
+  return 'one call or expression statement';
+}
+
 function tierFor(
   region: ExtractRegion,
   localsAvailable: boolean,
   ownReturns: number,
+  lines: readonly string[],
 ): { tier: ExtractCandidateActionTier; reason: string } {
   if (ownReturns > 0) {
     return {
       tier: 'support',
-      reason: `support tier: the largest region holds ${ownReturns} return statement(s) of the function itself, so it is the function's control flow rather than a helper`,
+      reason: `support tier: the region at lines ${region.startLine + 1}-${region.endLine + 1} holds ${ownReturns} return statement(s) of the function itself, so it is the function's control flow rather than a helper`,
+    };
+  }
+  const singleStatement = singleStatementRegion(lines, region);
+  if (singleStatement) {
+    return {
+      tier: 'support',
+      reason: `support tier: the region at lines ${region.startLine + 1}-${region.endLine + 1} is ${singleStatement}; extracting it would only wrap that statement`,
     };
   }
   if (!localsAvailable)
@@ -555,12 +605,12 @@ function tierFor(
   if (inbound <= MAX_SIGNAL_INBOUND_LOCALS && outbound <= MAX_SIGNAL_OUTBOUND_LOCALS) {
     return {
       tier: 'signal',
-      reason: `signal tier: the largest region takes ${inbound} local(s) in and hands ${outbound} back`,
+      reason: `signal tier: the region at lines ${region.startLine + 1}-${region.endLine + 1} takes ${inbound} local(s) in and hands ${outbound} back`,
     };
   }
   return {
     tier: 'support',
-    reason: `support tier: the largest region would take ${inbound} local(s) in and hand ${outbound} back, more than ${MAX_SIGNAL_INBOUND_LOCALS} in or ${MAX_SIGNAL_OUTBOUND_LOCALS} out`,
+    reason: `support tier: the region at lines ${region.startLine + 1}-${region.endLine + 1} would take ${inbound} local(s) in and hand ${outbound} back, more than ${MAX_SIGNAL_INBOUND_LOCALS} in or ${MAX_SIGNAL_OUTBOUND_LOCALS} out`,
   };
 }
 

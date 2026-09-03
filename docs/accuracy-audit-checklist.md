@@ -42,6 +42,40 @@ The certification thresholds and publication rules live in
 Program closure and the private-shadow decision live in
 [`2026-07-11-accuracy-program-closure.md`](./validation/2026-07-11-accuracy-program-closure.md).
 
+## 2026-09-03 third and fourth repository label review
+
+SuplierScout (Express + React, solution-style tsconfig, 17.8k symbols) and
+Stable_Management (workspace monorepo, five tsconfigs, 109k symbols). Sample
+seed 11; every row read in source. Precision is over labeled signal-tier rows,
+recall over labeled true rows.
+
+| Detector                         | Repository        | Sample | Precision | Recall | Note                                                                             |
+| -------------------------------- | ----------------- | ------ | --------- | ------ | -------------------------------------------------------------------------------- |
+| `twin-drift`                     | Stable_Management | 15     | 1.0       | 1.0    | writeAuditEntry in 18 copies, hasAnyRole in 4, drifted normalization helpers.    |
+| `duplicate-bodies`               | Stable_Management | 10     | 1.0       | 1.0    | Identical bodies under different names or workspaces.                            |
+| `stale-abstractions`             | Stable_Management | 20     | 1.0       | 1.0    | Verified with `git grep -w`; nine contract types with no consumer anywhere.      |
+| `co-change`                      | Stable_Management | 16     | 1.0       | 1.0    | Was 0.82 recall; view script companions were read as maintenance scripts.        |
+| `similar`                        | Stable_Management | 20     | 1.0       | 0.92   | Was 0.33 recall; same-file workflow siblings were held at signal by vocabulary.  |
+| `wrapper-candidates`             | Stable_Management | 20     | n/a       | n/a    | All 50 rows are signal tier; the sample holds no direct-tier row to score.       |
+| `dead`                           | Stable_Management | 1      | 1.0       | 1.0    | One frontend API export with no frontend reference.                              |
+| `extract-candidates`             | Stable_Management | 20     | 0.25      | 1.0    | Three signal rows are fragments crossing a block boundary; see the known gap.    |
+| `similar`                        | SuplierScout      | 13     | 1.0       | 0.67   | Console panels sharing a boot-and-fetch shell stay at signal.                    |
+| `extract-candidates`             | SuplierScout      | 20     | 1.0       | 0.64   | Was 0.9 precision; misses are wide-interface rows disclosed at support tier.     |
+| `dead`                           | SuplierScout      | 17     | 1.0       | 1.0    |                                                                                  |
+| `twin-drift`                     | SuplierScout      | 12     | 0.83      | 1.0    | Provider-contract implementations and client HTTP wrappers over server services. |
+| `co-change`                      | SuplierScout      | 16     | 0.8       | 1.0    | One global stylesheet paired with a server route.                                |
+| `duplicate-bodies`               | SuplierScout      | 10     | 1.0       | 1.0    |                                                                                  |
+| `stale-abstractions`             | SuplierScout      | 20     | 1.0       | 1.0    |                                                                                  |
+| `passthrough-candidates`         | SuplierScout      | 4      | 1.0       | 1.0    | The defaulted-parameter row is excluded now.                                     |
+| `wrapper-candidates`             | SuplierScout      | 6      | n/a       | n/a    | All signal tier.                                                                 |
+| `react-large-component-pressure` | SuplierScout      | 4      | 1.0       | 1.0    |                                                                                  |
+
+Known gap: `extract-candidates` reports regions built from callee line
+intervals, so a region can begin inside an enclosing branch or end by closing
+one. Demoting every region whose braces do not balance fixes the three
+Stable_Management rows but fires on 50 to 75 percent of all rows and costs
+recall on Vega and SuplierScout, so it is not shipped.
+
 ## 2026-09-02 TypeScript label review
 
 The matrix below is the 2026-07-10 snapshot. On 2026-09-02 the TypeScript

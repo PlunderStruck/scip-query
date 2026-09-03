@@ -1,0 +1,43 @@
+{
+  "acceptedAt": "2026-09-03T01:50:21.821Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "8dad56a5bd7ca627572fbf82d03ec88ebddbc1f9e70c4ace31a81bccc54d0990",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export singleStatementRegion.",
+      "target": "./queries/extract-candidates:singleStatementRegion"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export MIXED_SIMILARITY_DIRECT_THRESHOLD.",
+      "target": "./queries/similar:MIXED_SIMILARITY_DIRECT_THRESHOLD"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SIBLING_SIMILARITY_DIRECT_THRESHOLD.",
+      "target": "./queries/similar:SIBLING_SIMILARITY_DIRECT_THRESHOLD"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export promoteSiblingSimilarity.",
+      "target": "./queries/similar:promoteSiblingSimilarity"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-changed",
+      "message": "Non-exported declarations changed in referenced module health-<hash>.d.ts.",
+      "target": "health-<hash>.d.ts"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.24.0",
+  "previousDigest": "ee565e59aa4f10ce8bdfa0f96a5be7bcfe49f20db469b87c736cd62e45759128",
+  "reason": "Additive test seams for the sibling similarity promotion and the single-statement extraction rule; the health module change is an exclusion-reason wording fix (largest region to selected region)",
+  "schemaVersion": 1
+}
