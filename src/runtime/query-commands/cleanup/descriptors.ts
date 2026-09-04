@@ -30,6 +30,7 @@ import {
   handlePassthroughCandidates,
   handleStaleAbstractions,
   handleComplexityHotspots,
+  handleSliceCohesion,
   handleConvergence,
   handleSimilarSignatures,
   handleDuplicateBodies,
@@ -629,6 +630,39 @@ export const cleanupQueryCommandDescriptors: CommandDescriptor[] = [
     budget: 'candidate-scan',
     renderShape: 'table',
     handler: handleComplexityHotspots,
+  }),
+  heuristicCleanupCommand({
+    id: 'slice-cohesion',
+    command: 'slice-cohesion [symbol]',
+    agent: {
+      ...analysisAgentContract(
+        'Which functions compute several independent results in one body, and where are the local slices disjoint?',
+        'per-function backward-slice partitions: disjoint statement clusters with the outputs each produces, the parameters an extraction would take, and the analysis gaps',
+        ['symbol'],
+        'bounded',
+        'repository',
+      ),
+      resultUnits: { kind: 'rows' },
+    },
+    description:
+      'Find low-cohesion candidates from backward slices: outputs whose statements never meet are separate local computations',
+    options: withJsonOption([
+      option('-s, --scope <path>', 'Limit to files matching path'),
+      option('--min-loc <n>', 'Minimum function LOC to scan', parseInteger, 12),
+      option('--min-statements <n>', 'Minimum counted statements before a partition is reported', parseInteger, 10),
+      option('--min-cluster <n>', 'Minimum statements in an extractable cluster', parseInteger, 4),
+      option('-n, --limit <n>', 'Number of results to print (cannot be combined with --full)', parseInteger, 20),
+      option(
+        '--scan-limit <n>',
+        'Maximum candidates to analyze, largest first; bounds the work, unlike --limit',
+        parseInteger,
+      ),
+      option('--full', 'Analyze every candidate on large indexes (cannot be combined with --limit)'),
+    ]),
+    heuristicLabel: 'slice-cohesion candidates',
+    budget: 'candidate-scan',
+    renderShape: 'custom',
+    handler: handleSliceCohesion,
   }),
   cleanupCommand({
     id: 'convergence',

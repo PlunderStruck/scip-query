@@ -59,6 +59,18 @@ interface MutableFlowPoint extends TypeScriptLocalFlowPoint {
 interface FlowDefinition {
   point: MutableFlowPoint;
   rhsUseIds: string[];
+  /** A partial write (element access) adds a definition without killing earlier ones. */
+  partial: boolean;
+}
+
+interface AccessTargetInfo {
+  node: TypeScript.Node;
+  symbolKey: string;
+  name: string;
+}
+
+interface AssignmentTargetInfo extends AccessTargetInfo {
+  partial: boolean;
 }
 
 interface FlowUse {
@@ -90,6 +102,10 @@ interface CallableAnalysis {
 interface BuildContext {
   breakTarget: string | null;
   continueTarget: string | null;
+  /** Where a thrown or implicitly raised exception lands: the nearest enclosing catch or finally entry. */
+  throwTarget: string | null;
+  /** The callable's single exit node. */
+  exitId: string;
 }
 
 interface AnalysisState {
@@ -104,11 +120,20 @@ interface AnalysisState {
 
 const require = createRequire(import.meta.url);
 let typescriptModule: TypeScriptModule | null | undefined;
+/**
+ * Default library declaration files parsed once per process. Every in-memory
+ * program shares them, as the language service shares files through its
+ * document registry: the binder skips a file whose locals already exist, and
+ * the checker clones a symbol before merging a second declaration into it.
+ */
+const libSourceFiles = new Map<string, TypeScript.SourceFile>();
 
 /**
  * Compute structured intraprocedural reaching definitions and postdominator-
- * based control dependence over TypeScript compiler nodes. Heap aliases,
- * exceptional control flow, and closure invocation order stay explicit gaps.
+ * based control dependence over TypeScript compiler nodes. Try, catch, and
+ * finally regions are modeled with a conservative raise edge from every
+ * try-block node. Heap aliases, closure invocation order, and a finally
+ * block after an abrupt completion stay explicit gaps.
  */
 export function analyzeTypeScriptLocalFlow(
   sourceText: string,
@@ -117,7 +142,7 @@ export function analyzeTypeScriptLocalFlow(
 ): TypeScriptLocalFlowResult {
   const ts = loadTypeScript();
   if (!ts) return unsupportedResult('The TypeScript compiler runtime is unavailable.');
-  const program = inMemoryProgram(ts, sourceText, fileName);
+  const program = inMemoryProgram(ts, parseTypeScriptSourceFile(ts, sourceText, fileName));
   const sourceFile = program.getSourceFile(resolve(fileName)) ?? program.getSourceFile(fileName);
   if (!sourceFile) return unsupportedResult(`The TypeScript compiler did not materialize ${fileName}.`);
   const state: AnalysisState = {
@@ -154,6 +179,11 @@ export function analyzeTypeScriptLocalFlow(
   };
 }
 
+/** The TypeScript compiler module shared by compiler-backed analyses, or null when it is unavailable. */
+export function loadTypeScriptModule(): TypeScriptModule | null {
+  return loadTypeScript();
+}
+
 function loadTypeScript(): TypeScriptModule | null {
   if (typescriptModule !== undefined) return typescriptModule;
   try {
@@ -164,27 +194,156 @@ function loadTypeScript(): TypeScriptModule | null {
   return typescriptModule;
 }
 
-function inMemoryProgram(ts: TypeScriptModule, sourceText: string, fileName: string): TypeScript.Program {
+/**
+ * Compiler options shared by every in-memory program. One object identity
+ * keeps the type-reference resolution cache valid across programs.
+ */
+let sharedCompilerOptions: TypeScript.CompilerOptions | null = null;
+let moduleResolutionCache: TypeScript.ModuleResolutionCache | null = null;
+let typeReferenceResolutionCache: TypeScript.TypeReferenceDirectiveResolutionCache | null = null;
+
+function compilerOptionsFor(ts: TypeScriptModule): TypeScript.CompilerOptions {
+  if (!sharedCompilerOptions) {
+    sharedCompilerOptions = {
+      target: ts.ScriptTarget.ESNext,
+      // Bundler resolution never consults package scopes for the module
+      // format of the analyzed file; NodeNext would read package.json files
+      // up the tree for every program.
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      skipLibCheck: true,
+      noResolve: true,
+      // Without this, every program looks for `@typescript/lib-*`
+      // replacement packages in node_modules before using the bundled libs.
+      libReplacement: false,
+    };
+  }
+  return sharedCompilerOptions;
+}
+
+/** Parsed source files most recently analyzed, so a consumer that models the same file does not parse it again. */
+const PARSED_SOURCE_FILES = new Map<string, { text: string; sourceFile: TypeScript.SourceFile }>();
+const PARSED_SOURCE_FILE_LIMIT = 8;
+
+/**
+ * Parse a file the way the local-flow program will see it: an absolute
+ * file name, parent pointers set, and the script kind from the extension.
+ * The last few parses are retained so that the analyzer and a consumer
+ * modelling the same file share one tree.
+ */
+export function parseTypeScriptSourceFile(
+  ts: TypeScriptModule,
+  sourceText: string,
+  fileName: string,
+): TypeScript.SourceFile {
   const absolute = resolve(fileName);
-  const options: TypeScript.CompilerOptions = {
-    target: ts.ScriptTarget.ESNext,
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    skipLibCheck: true,
-    noResolve: true,
-  };
-  const sourceFile = ts.createSourceFile(absolute, sourceText, options.target!, true, scriptKind(ts, absolute));
+  const cached = PARSED_SOURCE_FILES.get(absolute);
+  if (cached && cached.text === sourceText) {
+    PARSED_SOURCE_FILES.delete(absolute);
+    PARSED_SOURCE_FILES.set(absolute, cached);
+    return cached.sourceFile;
+  }
+  const sourceFile = ts.createSourceFile(
+    absolute,
+    sourceText,
+    compilerOptionsFor(ts).target!,
+    true,
+    scriptKind(ts, absolute),
+  );
+  PARSED_SOURCE_FILES.set(absolute, { text: sourceText, sourceFile });
+  while (PARSED_SOURCE_FILES.size > PARSED_SOURCE_FILE_LIMIT) {
+    const oldest = PARSED_SOURCE_FILES.keys().next().value;
+    if (oldest === undefined) break;
+    PARSED_SOURCE_FILES.delete(oldest);
+  }
+  return sourceFile;
+}
+
+function inMemoryProgram(ts: TypeScriptModule, sourceFile: TypeScript.SourceFile): TypeScript.Program {
+  const absolute = sourceFile.fileName;
+  const sourceText = sourceFile.text;
+  const options = compilerOptionsFor(ts);
   const host = ts.createCompilerHost(options, true);
   const originalGetSourceFile = host.getSourceFile.bind(host);
   const originalReadFile = host.readFile.bind(host);
   const originalFileExists = host.fileExists.bind(host);
-  host.getSourceFile = (candidate, languageVersion, onError, shouldCreateNewSourceFile) =>
-    resolve(candidate) === absolute
-      ? sourceFile
-      : originalGetSourceFile(candidate, languageVersion, onError, shouldCreateNewSourceFile);
+  // Automatic `@types` packages give imports such as `react` a declaration
+  // file inside the program, which is what lets a property write on a typed
+  // value (`ref.current = x`) keep a compiler symbol. `noResolve` keeps every
+  // other import out of the program but still resolves it through
+  // node_modules, so both resolvers share process-wide caches: each package
+  // is located once, and package manifests are parsed once.
+  if (!moduleResolutionCache || !typeReferenceResolutionCache) {
+    const currentDirectory = host.getCurrentDirectory();
+    const getCanonicalFileName = host.getCanonicalFileName.bind(host);
+    moduleResolutionCache = ts.createModuleResolutionCache(currentDirectory, getCanonicalFileName, options);
+    typeReferenceResolutionCache = ts.createTypeReferenceDirectiveResolutionCache(
+      currentDirectory,
+      getCanonicalFileName,
+      options,
+      moduleResolutionCache.getPackageJsonInfoCache(),
+    );
+  }
+  const moduleCache = moduleResolutionCache;
+  const typeCache = typeReferenceResolutionCache;
+  // Enumerating the automatic type directives reads every `@types` package
+  // manifest; pin the list on the shared options after the first program.
+  if (options.types === undefined) options.types = ts.getAutomaticTypeDirectiveNames(options, host);
+  host.getModuleResolutionCache = () => moduleCache;
+  // Only a package whose declarations arrived through `@types` can resolve
+  // to a file that is in the program; every other import stays unresolved
+  // without walking node_modules for it.
+  const typedPackages = new Set(options.types ?? []);
+  host.resolveModuleNameLiterals = (
+    literals,
+    containingFile,
+    redirectedReference,
+    resolveOptions,
+    containingSourceFile,
+  ) =>
+    literals.map((literal) =>
+      typedPackages.has(typesPackageName(literal.text))
+        ? ts.resolveModuleName(
+            literal.text,
+            containingFile,
+            resolveOptions,
+            host,
+            moduleCache,
+            redirectedReference,
+            ts.getModeForUsageLocation(containingSourceFile, literal, resolveOptions),
+          )
+        : { resolvedModule: undefined },
+    );
+  host.resolveTypeReferenceDirectiveReferences = (references, containingFile, redirectedReference, resolveOptions) =>
+    references.map((reference) =>
+      ts.resolveTypeReferenceDirective(
+        typeof reference === 'string' ? reference : reference.fileName,
+        containingFile,
+        resolveOptions,
+        host,
+        redirectedReference,
+        typeCache,
+      ),
+    );
+  host.getSourceFile = (candidate, languageVersion, onError, shouldCreateNewSourceFile) => {
+    if (resolve(candidate) === absolute) return sourceFile;
+    const cached = libSourceFiles.get(candidate);
+    if (cached) return cached;
+    const created = originalGetSourceFile(candidate, languageVersion, onError, shouldCreateNewSourceFile);
+    if (created) libSourceFiles.set(candidate, created);
+    return created;
+  };
   host.readFile = (candidate) => (resolve(candidate) === absolute ? sourceText : originalReadFile(candidate));
   host.fileExists = (candidate) => resolve(candidate) === absolute || originalFileExists(candidate);
   return ts.createProgram([absolute], options, host);
+}
+
+/** The `@types` directive name a module specifier would be declared under: `@babel/core/x` is `babel__core`. */
+function typesPackageName(specifier: string): string {
+  if (specifier.startsWith('.') || specifier.startsWith('/')) return '';
+  const segments = specifier.split('/');
+  if (specifier.startsWith('@')) return segments.length >= 2 ? `${segments[0]!.slice(1)}__${segments[1]!}` : '';
+  return segments[0] ?? '';
 }
 
 function scriptKind(ts: TypeScriptModule, fileName: string): TypeScript.ScriptKind {
@@ -242,7 +401,12 @@ function buildCallableAnalysis(
   const body = callable.body;
   let first = exit.id;
   if (body && state.ts.isBlock(body)) {
-    first = buildStatements(state, cfg, [...body.statements], exit.id, { breakTarget: null, continueTarget: null });
+    first = buildStatements(state, cfg, [...body.statements], exit.id, {
+      breakTarget: null,
+      continueTarget: null,
+      throwTarget: null,
+      exitId: exit.id,
+    });
   } else if (body) {
     const expression = cfgNode(state, cfg, 'statement', body);
     connect(cfg, expression.id, exit.id);
@@ -289,6 +453,7 @@ function buildStatement(
   if (ts.isWhileStatement(statement)) {
     const predicate = cfgNode(state, cfg, 'predicate', statement.expression);
     const body = buildStatement(state, cfg, statement.statement, predicate.id, {
+      ...context,
       breakTarget: next,
       continueTarget: predicate.id,
     });
@@ -299,6 +464,7 @@ function buildStatement(
   if (ts.isDoStatement(statement)) {
     const predicate = cfgNode(state, cfg, 'predicate', statement.expression);
     const body = buildStatement(state, cfg, statement.statement, predicate.id, {
+      ...context,
       breakTarget: next,
       continueTarget: predicate.id,
     });
@@ -312,6 +478,7 @@ function buildStatement(
     if (increment) connect(cfg, increment.id, predicate.id);
     const continueTarget = increment?.id ?? predicate.id;
     const body = buildStatement(state, cfg, statement.statement, continueTarget, {
+      ...context,
       breakTarget: next,
       continueTarget,
     });
@@ -324,11 +491,12 @@ function buildStatement(
   }
   if (ts.isForInStatement(statement) || ts.isForOfStatement(statement)) {
     state.unsupported.add(
-      'for-in/for-of iterator assignment is conservatively represented without iterable element flow.',
+      'for-in/for-of loop variables are drawn from the iterable as a whole; per-element flow is not modeled.',
     );
     const predicate = cfgNode(state, cfg, 'predicate', statement.expression);
     const initializer = cfgNode(state, cfg, 'statement', statement.initializer);
     const body = buildStatement(state, cfg, statement.statement, predicate.id, {
+      ...context,
       breakTarget: next,
       continueTarget: predicate.id,
     });
@@ -358,8 +526,8 @@ function buildStatement(
   }
   if (ts.isReturnStatement(statement) || ts.isThrowStatement(statement)) {
     const terminal = cfgNode(state, cfg, 'statement', statement);
-    const exit = [...cfg.values()].find((node) => node.kind === 'exit')!;
-    connect(cfg, terminal.id, exit.id);
+    const target = ts.isThrowStatement(statement) ? (context.throwTarget ?? context.exitId) : context.exitId;
+    connect(cfg, terminal.id, target);
     return terminal.id;
   }
   if (ts.isBreakStatement(statement)) {
@@ -375,18 +543,92 @@ function buildStatement(
     connect(cfg, node.id, context.continueTarget ?? next);
     return node.id;
   }
-  if (ts.isTryStatement(statement)) {
-    state.unsupported.add(
-      'Exceptional control-flow and finally completion are not included in the local compiler CFG.',
-    );
-    const node = cfgNode(state, cfg, 'statement', statement);
-    node.invalidatesAllDefinitions = true;
-    connect(cfg, node.id, next);
-    return node.id;
-  }
+  if (ts.isTryStatement(statement)) return buildTryStatement(state, cfg, statement, next, context);
   const node = cfgNode(state, cfg, 'statement', statement);
   connect(cfg, node.id, next);
   return node.id;
+}
+
+/**
+ * A try statement is built as three regions. Any node inside the try block
+ * may raise, so the state before each of them (the try entry and every
+ * try-block node) flows to the catch entry, and a `throw` inside the block
+ * lands there instead of at the exit. The catch block may raise into the
+ * finally block the same way. Normal completion of either block continues
+ * through the finally block, when present, to the next statement. A return,
+ * break, or continue inside the try or catch skips the finally block in
+ * this graph; that gap is disclosed.
+ */
+function buildTryStatement(
+  state: AnalysisState,
+  cfg: Map<string, CfgNode>,
+  statement: TypeScript.TryStatement,
+  next: string,
+  context: BuildContext,
+): string {
+  const ts = state.ts;
+  const finallyEntry = statement.finallyBlock
+    ? buildStatements(state, cfg, [...statement.finallyBlock.statements], next, context)
+    : null;
+  const after = finallyEntry ?? next;
+  let catchEntry: string | null = null;
+  let catchNodes: string[] = [];
+  if (statement.catchClause) {
+    const before = new Set(cfg.keys());
+    const catchContext: BuildContext = { ...context, throwTarget: finallyEntry ?? context.throwTarget };
+    const catchBody = buildStatements(state, cfg, [...statement.catchClause.block.statements], after, catchContext);
+    catchEntry = catchBody;
+    if (statement.catchClause.variableDeclaration) {
+      const binding = cfgNode(state, cfg, 'statement', statement.catchClause.variableDeclaration);
+      connect(cfg, binding.id, catchBody);
+      catchEntry = binding.id;
+    }
+    catchNodes = [...cfg.keys()].filter((id) => !before.has(id));
+  }
+  const raiseTarget = catchEntry ?? finallyEntry ?? context.throwTarget;
+  const before = new Set(cfg.keys());
+  const tryEntry = buildStatements(state, cfg, [...statement.tryBlock.statements], after, {
+    ...context,
+    throwTarget: raiseTarget,
+  });
+  const tryNodes = [...cfg.keys()].filter((id) => !before.has(id));
+  const entry = cfgNode(state, cfg, 'statement', null);
+  connect(cfg, entry.id, tryEntry);
+  if (raiseTarget) {
+    connect(cfg, entry.id, raiseTarget);
+    for (const id of tryNodes) if (mayRaiseInto(state, cfg.get(id)!)) connect(cfg, id, raiseTarget);
+  }
+  if (finallyEntry && catchEntry) {
+    for (const id of catchNodes) if (mayRaiseInto(state, cfg.get(id)!)) connect(cfg, id, finallyEntry);
+  }
+  if (statement.finallyBlock && hasAbruptCompletion(ts, statement.tryBlock, statement.catchClause?.block)) {
+    state.unsupported.add(
+      'A finally block after return, break, or continue inside its try or catch is not sequenced in the local compiler CFG.',
+    );
+  }
+  return entry.id;
+}
+
+/** Nodes whose completion could still be followed by a raise before the handler; terminal jumps have already left. */
+function mayRaiseInto(state: AnalysisState, node: CfgNode): boolean {
+  const ast = node.ast;
+  if (!ast || node.kind === 'exit' || node.kind === 'entry') return false;
+  const ts = state.ts;
+  return !(ts.isReturnStatement(ast) || ts.isThrowStatement(ast) || ts.isBreakOrContinueStatement(ast));
+}
+
+function hasAbruptCompletion(ts: TypeScriptModule, ...blocks: (TypeScript.Block | undefined)[]): boolean {
+  let found = false;
+  const visit = (node: TypeScript.Node): void => {
+    if (found || ts.isFunctionLike(node)) return;
+    if (ts.isReturnStatement(node) || ts.isBreakOrContinueStatement(node)) {
+      found = true;
+      return;
+    }
+    node.forEachChild(visit);
+  };
+  for (const block of blocks) if (block) visit(block);
+  return found;
 }
 
 function cfgNode(
@@ -418,15 +660,18 @@ function connect(cfg: Map<string, CfgNode>, from: string, to: string): void {
 function extractAccesses(state: AnalysisState, analysis: CallableAnalysis): void {
   const entry = analysis.cfg.get(analysis.entryId)!;
   for (const parameter of analysis.node.parameters) {
-    const target = accessTarget(state, parameter.name);
-    if (!target) {
-      state.unsupported.add('Destructured parameter definition-use is not implemented.');
+    const targets = bindingTargets(state, parameter.name);
+    if (targets.length === 0 && state.ts.isIdentifier(parameter.name)) {
+      state.unsupported.add('A parameter binding could not be resolved to a compiler symbol.');
       continue;
     }
-    entry.definitions.push({
-      point: point(state, target.node, 'parameter-definition', target.symbolKey, target.name, analysis.id),
-      rhsUseIds: [],
-    });
+    for (const target of targets) {
+      entry.definitions.push({
+        point: point(state, target.node, 'parameter-definition', target.symbolKey, target.name, analysis.id),
+        rhsUseIds: [],
+        partial: false,
+      });
+    }
   }
   for (const cfgNodeValue of analysis.cfg.values()) {
     if (!cfgNodeValue.ast || cfgNodeValue.kind === 'entry' || cfgNodeValue.kind === 'exit') continue;
@@ -454,21 +699,27 @@ function collectNodeAccesses(
   root: TypeScript.Node,
 ): void {
   const ts = state.ts;
-  if (ts.isTryStatement(root)) return;
   const visit = (node: TypeScript.Node): void => {
     if (node !== root && ts.isFunctionLike(node)) return;
     if (ts.isVariableDeclaration(node)) {
-      const uses = node.initializer ? collectUses(state, analysis.id, node.initializer, cfg) : [];
+      const source = node.initializer ?? iterationSource(ts, node);
+      const uses = source ? collectUses(state, analysis.id, source, cfg) : [];
+      const targets = bindingTargets(state, node.name, (fallback) =>
+        uses.push(...collectUses(state, analysis.id, fallback, cfg)),
+      );
       cfg.uses.push(...uses);
-      const target = accessTarget(state, node.name);
-      if (target) {
+      if (targets.length === 0 && ts.isIdentifier(node.name)) {
+        cfg.invalidatesAllDefinitions = true;
+        state.unsupported.add('A variable declaration could not be resolved to a compiler symbol.');
+        return;
+      }
+      const rhsUseIds = uses.map((use) => use.point.id);
+      for (const target of targets) {
         cfg.definitions.push({
           point: point(state, target.node, 'definition', target.symbolKey, target.name, analysis.id),
-          rhsUseIds: uses.map((use) => use.point.id),
+          rhsUseIds,
+          partial: false,
         });
-      } else {
-        cfg.invalidatesAllDefinitions = true;
-        state.unsupported.add('Destructured variable reaching definitions are not implemented.');
       }
       return;
     }
@@ -476,28 +727,34 @@ function collectNodeAccesses(
       const rhsUses = collectUses(state, analysis.id, node.right, cfg);
       if (node.operatorToken.kind !== ts.SyntaxKind.EqualsToken)
         rhsUses.push(...collectUses(state, analysis.id, node.left, cfg));
+      const targets = assignmentTargets(state, analysis.id, node.left, cfg, rhsUses);
       cfg.uses.push(...rhsUses);
-      const target = accessTarget(state, node.left);
-      if (target) {
+      if (!targets) {
+        cfg.invalidatesAllDefinitions = true;
+        state.unsupported.add('Dynamic assignment targets are not included in reaching definitions.');
+        return;
+      }
+      const rhsUseIds = rhsUses.map((use) => use.point.id);
+      for (const target of targets) {
         cfg.definitions.push({
           point: point(state, target.node, 'definition', target.symbolKey, target.name, analysis.id),
-          rhsUseIds: rhsUses.map((use) => use.point.id),
+          rhsUseIds,
+          partial: target.partial,
         });
-      } else {
-        cfg.invalidatesAllDefinitions = true;
-        state.unsupported.add('Dynamic or destructured assignment targets are not included in reaching definitions.');
       }
       return;
     }
     if (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) {
       if (node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken) {
         const uses = collectUses(state, analysis.id, node.operand, cfg);
+        const targets = assignmentTargets(state, analysis.id, node.operand, cfg, uses) ?? [];
         cfg.uses.push(...uses);
-        const target = accessTarget(state, node.operand);
-        if (target) {
+        const rhsUseIds = uses.map((use) => use.point.id);
+        for (const target of targets) {
           cfg.definitions.push({
             point: point(state, target.node, 'definition', target.symbolKey, target.name, analysis.id),
-            rhsUseIds: uses.map((use) => use.point.id),
+            rhsUseIds,
+            partial: target.partial,
           });
         }
         return;
@@ -589,19 +846,135 @@ function useForNode(state: AnalysisState, callableIdValue: string, node: TypeScr
   };
 }
 
-function accessTarget(
+/**
+ * Every identifier a binding name introduces: one for a plain identifier, one
+ * per leaf of an object or array pattern. Default-value expressions inside
+ * the pattern are reported through `onDefault` so their reads join the
+ * definition's right-hand side.
+ */
+function bindingTargets(
   state: AnalysisState,
-  node: TypeScript.Node,
-): { node: TypeScript.Node; symbolKey: string; name: string } | null {
+  name: TypeScript.BindingName,
+  onDefault?: (initializer: TypeScript.Expression) => void,
+): AccessTargetInfo[] {
+  const ts = state.ts;
+  if (ts.isIdentifier(name)) {
+    const target = accessTarget(state, name);
+    return target ? [target] : [];
+  }
+  const targets: AccessTargetInfo[] = [];
+  for (const element of name.elements) {
+    if (ts.isOmittedExpression(element)) continue;
+    if (element.initializer && onDefault) onDefault(element.initializer);
+    targets.push(...bindingTargets(state, element.name, onDefault));
+  }
+  return targets;
+}
+
+/**
+ * Every storage location an assignment expression writes. An element write
+ * (`items[index] = value`) is a partial definition of its container; object
+ * and array destructuring assignments write each nested target. Null means
+ * the target cannot be named, so reaching definitions are invalidated.
+ */
+function assignmentTargets(
+  state: AnalysisState,
+  callableIdValue: string,
+  expression: TypeScript.Expression,
+  cfg: CfgNode,
+  rhsUses: FlowUse[],
+): AssignmentTargetInfo[] | null {
+  const ts = state.ts;
+  if (ts.isParenthesizedExpression(expression)) {
+    return assignmentTargets(state, callableIdValue, expression.expression, cfg, rhsUses);
+  }
+  if (ts.isAsExpression(expression) || ts.isTypeAssertionExpression(expression) || ts.isNonNullExpression(expression)) {
+    return assignmentTargets(state, callableIdValue, expression.expression, cfg, rhsUses);
+  }
+  if (ts.isIdentifier(expression) || ts.isPropertyAccessExpression(expression)) {
+    const target = accessTarget(state, expression);
+    return target ? [{ ...target, partial: false }] : null;
+  }
+  if (ts.isElementAccessExpression(expression)) {
+    const base = accessTarget(state, expression.expression);
+    if (!base) return null;
+    rhsUses.push(...collectUses(state, callableIdValue, expression.expression, cfg));
+    rhsUses.push(...collectUses(state, callableIdValue, expression.argumentExpression, cfg));
+    return [{ node: expression, symbolKey: base.symbolKey, name: `${base.name}[…]`, partial: true }];
+  }
+  if (ts.isObjectLiteralExpression(expression)) {
+    const targets: AssignmentTargetInfo[] = [];
+    for (const property of expression.properties) {
+      let nested: AssignmentTargetInfo[] | null = null;
+      if (ts.isShorthandPropertyAssignment(property)) {
+        const symbol = state.checker.getShorthandAssignmentValueSymbol(property);
+        const key = symbol ? symbolKeyFor(state, symbol) : null;
+        nested = key ? [{ node: property.name, symbolKey: key, name: property.name.text, partial: false }] : null;
+        if (property.objectAssignmentInitializer)
+          rhsUses.push(...collectUses(state, callableIdValue, property.objectAssignmentInitializer, cfg));
+      } else if (ts.isPropertyAssignment(property)) {
+        nested = assignmentTargets(state, callableIdValue, property.initializer, cfg, rhsUses);
+      } else if (ts.isSpreadAssignment(property)) {
+        nested = assignmentTargets(state, callableIdValue, property.expression, cfg, rhsUses);
+      }
+      if (!nested) return null;
+      targets.push(...nested);
+    }
+    return targets;
+  }
+  if (ts.isArrayLiteralExpression(expression)) {
+    const targets: AssignmentTargetInfo[] = [];
+    for (const element of expression.elements) {
+      if (ts.isOmittedExpression(element)) continue;
+      let nested: AssignmentTargetInfo[] | null;
+      if (ts.isSpreadElement(element)) {
+        nested = assignmentTargets(state, callableIdValue, element.expression, cfg, rhsUses);
+      } else if (ts.isBinaryExpression(element) && element.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        rhsUses.push(...collectUses(state, callableIdValue, element.right, cfg));
+        nested = assignmentTargets(state, callableIdValue, element.left, cfg, rhsUses);
+      } else {
+        nested = assignmentTargets(state, callableIdValue, element, cfg, rhsUses);
+      }
+      if (!nested) return null;
+      targets.push(...nested);
+    }
+    return targets;
+  }
+  return null;
+}
+
+/** The iterable a `for...of` or `for...in` loop variable is drawn from, when this declaration is that variable. */
+function iterationSource(ts: TypeScriptModule, node: TypeScript.VariableDeclaration): TypeScript.Expression | null {
+  const list = node.parent;
+  if (!list || !ts.isVariableDeclarationList(list)) return null;
+  const loop = list.parent;
+  if (loop && (ts.isForOfStatement(loop) || ts.isForInStatement(loop)) && loop.initializer === list) {
+    return loop.expression;
+  }
+  return null;
+}
+
+/**
+ * The storage location an access names. An identifier is keyed by its
+ * compiler symbol. A property access is keyed by its receiver's location
+ * plus the member name, so `ref.current` on two different refs are two
+ * locations and no receiver type has to be inferred; a receiver that is
+ * not itself a location (a call result) makes the access unnamed. `this`
+ * is one location per class or object literal, or per free function.
+ */
+function accessTarget(state: AnalysisState, node: TypeScript.Node): AccessTargetInfo | null {
   const ts = state.ts;
   if (ts.isIdentifier(node)) {
     const key = compilerSymbolKey(state, node);
     return key ? { node, symbolKey: key, name: node.text } : null;
   }
   if (ts.isPropertyAccessExpression(node)) {
-    const key = compilerSymbolKey(state, node.name);
-    return key ? { node, symbolKey: key, name: node.getText(state.sourceFile) } : null;
+    const receiver = receiverTarget(state, node.expression);
+    return receiver
+      ? { node, symbolKey: `${receiver.symbolKey}.${node.name.text}`, name: node.getText(state.sourceFile) }
+      : null;
   }
+  if (node.kind === ts.SyntaxKind.ThisKeyword) return { node, symbolKey: thisSymbolKey(state, node), name: 'this' };
   if (ts.isParenthesizedExpression(node)) return accessTarget(state, node.expression);
   if (ts.isAsExpression(node) || ts.isTypeAssertionExpression(node) || ts.isNonNullExpression(node)) {
     return accessTarget(state, node.expression);
@@ -614,9 +987,53 @@ function accessTarget(
   return null;
 }
 
+/**
+ * The location a property access reads through, when its receiver is one:
+ * a binding, `this`, or another named location. A call result or a literal
+ * receiver is a value, not a location, and is not a gap in the model.
+ */
+function receiverTarget(state: AnalysisState, node: TypeScript.Node): AccessTargetInfo | null {
+  const ts = state.ts;
+  if (ts.isIdentifier(node) || ts.isPropertyAccessExpression(node) || node.kind === ts.SyntaxKind.ThisKeyword) {
+    return accessTarget(state, node);
+  }
+  if (ts.isParenthesizedExpression(node) || ts.isNonNullExpression(node)) return receiverTarget(state, node.expression);
+  if (ts.isAsExpression(node) || ts.isTypeAssertionExpression(node) || ts.isSatisfiesExpression(node)) {
+    return receiverTarget(state, node.expression);
+  }
+  return null;
+}
+
+/** `this` names the instance of the nearest class or object literal, or the receiver of the nearest free function. */
+function thisSymbolKey(state: AnalysisState, node: TypeScript.Node): string {
+  const ts = state.ts;
+  const file = encodeURIComponent(state.sourceFile.fileName);
+  for (let current = node.parent; current; current = current.parent) {
+    if (ts.isArrowFunction(current)) continue;
+    if (ts.isClassLike(current)) return `symbol:${file}:${current.getStart(state.sourceFile)}:this`;
+    if (ts.isFunctionLike(current)) {
+      const owner = current.parent;
+      if (owner && (ts.isClassLike(owner) || ts.isObjectLiteralExpression(owner))) {
+        return `symbol:${file}:${owner.getStart(state.sourceFile)}:this`;
+      }
+      return `symbol:${file}:${current.getStart(state.sourceFile)}:this`;
+    }
+  }
+  return `symbol:${file}:0:this`;
+}
+
 function compilerSymbolKey(state: AnalysisState, node: TypeScript.Node): string | null {
-  let symbol = state.checker.getSymbolAtLocation(node);
-  if (!symbol) return null;
+  const parent = node.parent;
+  // `{ value }` in an object literal names the local binding, not the property it creates.
+  const symbol =
+    parent && state.ts.isShorthandPropertyAssignment(parent) && parent.name === node
+      ? (state.checker.getShorthandAssignmentValueSymbol(parent) ?? state.checker.getSymbolAtLocation(node))
+      : state.checker.getSymbolAtLocation(node);
+  return symbol ? symbolKeyFor(state, symbol) : null;
+}
+
+function symbolKeyFor(state: AnalysisState, resolved: TypeScript.Symbol): string {
+  let symbol = resolved;
   if ((symbol.flags & state.ts.SymbolFlags.Alias) !== 0) {
     try {
       symbol = state.checker.getAliasedSymbol(symbol);
@@ -659,41 +1076,135 @@ function point(
   return created;
 }
 
+/** Dense bit set over definition or node indices. */
+type BitSet = Uint32Array;
+
+function bitSet(bits: number): BitSet {
+  return new Uint32Array((bits + 31) >>> 5);
+}
+
+function bitSetHas(set: BitSet, index: number): boolean {
+  return (set[index >>> 5]! & (1 << (index & 31))) !== 0;
+}
+
+function bitSetAdd(set: BitSet, index: number): void {
+  set[index >>> 5]! |= 1 << (index & 31);
+}
+
+function bitSetForEach(set: BitSet, visit: (index: number) => void): void {
+  for (let word = 0; word < set.length; word += 1) {
+    let bits = set[word]!;
+    while (bits !== 0) {
+      const lowest = bits & -bits;
+      visit((word << 5) + (31 - Math.clz32(lowest)));
+      bits ^= lowest;
+    }
+  }
+}
+
+/** Node ids in reverse postorder from `root` over `next`; unreachable nodes follow in insertion order. */
+function reversePostorder(
+  cfg: ReadonlyMap<string, CfgNode>,
+  root: string,
+  next: (node: CfgNode) => ReadonlySet<string>,
+): string[] {
+  const visited = new Set<string>();
+  const postorder: string[] = [];
+  const stack: { id: string; successors: string[]; cursor: number }[] = [];
+  const push = (id: string): void => {
+    visited.add(id);
+    stack.push({ id, successors: [...next(cfg.get(id)!)], cursor: 0 });
+  };
+  push(root);
+  while (stack.length > 0) {
+    const frame = stack[stack.length - 1]!;
+    if (frame.cursor < frame.successors.length) {
+      const successor = frame.successors[frame.cursor]!;
+      frame.cursor += 1;
+      if (!visited.has(successor)) push(successor);
+    } else {
+      postorder.push(frame.id);
+      stack.pop();
+    }
+  }
+  const order = postorder.reverse();
+  for (const id of cfg.keys()) if (!visited.has(id)) order.push(id);
+  return order;
+}
+
+/**
+ * Iterative reaching definitions over dense bit sets. Nodes are visited in
+ * reverse postorder from the entry with a worklist, so straight-line code
+ * converges in one pass and loops in a few, regardless of the order in
+ * which the CFG builder created the nodes.
+ */
 function addReachingDefinitionEdges(state: AnalysisState, analysis: CallableAnalysis): void {
   const definitions = [...analysis.cfg.values()].flatMap((node) => node.definitions);
-  const definitionById = new Map(definitions.map((definition) => [definition.point.id, definition]));
+  const definitionIndex = new Map<string, number>();
+  definitions.forEach((definition, index) => definitionIndex.set(definition.point.id, index));
   const definitionsBySymbol = groupDefinitionsBySymbol(definitions);
-  const input = new Map<string, Set<string>>();
-  const output = new Map<string, Set<string>>();
-  for (const node of analysis.cfg.values()) {
-    input.set(node.id, new Set());
-    output.set(node.id, new Set());
+  const bySymbolIndices = new Map<string, number[]>();
+  for (const [symbolKey, rows] of definitionsBySymbol) {
+    bySymbolIndices.set(
+      symbolKey,
+      rows.map((definition) => definitionIndex.get(definition.point.id)!),
+    );
   }
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const node of analysis.cfg.values()) {
-      const nextInput = union([...node.predecessors].map((id) => output.get(id)!));
-      const nextOutput = new Set(nextInput);
-      if (node.invalidatesAllDefinitions) nextOutput.clear();
-      const generated = lastDefinitionPerSymbol(node.definitions);
-      for (const definition of generated) {
-        for (const killed of definitionsBySymbol.get(definition.point.symbolKey!) ?? [])
-          nextOutput.delete(killed.point.id);
-        nextOutput.add(definition.point.id);
+  const order = reversePostorder(analysis.cfg, analysis.entryId, (node) => node.successors);
+  const nodeIndex = new Map<string, number>();
+  order.forEach((id, index) => nodeIndex.set(id, index));
+  const nodes = order.map((id) => analysis.cfg.get(id)!);
+  const width = definitions.length;
+  const gen = nodes.map(() => bitSet(width));
+  const kill = nodes.map(() => bitSet(width));
+  nodes.forEach((node, index) => {
+    for (const definition of lastDefinitionPerSymbol(node.definitions)) {
+      if (!definition.partial) {
+        for (const killed of bySymbolIndices.get(definition.point.symbolKey!) ?? []) bitSetAdd(kill[index]!, killed);
       }
-      if (!sameSet(input.get(node.id)!, nextInput)) {
-        input.set(node.id, nextInput);
-        changed = true;
-      }
-      if (!sameSet(output.get(node.id)!, nextOutput)) {
-        output.set(node.id, nextOutput);
+      bitSetAdd(gen[index]!, definitionIndex.get(definition.point.id)!);
+    }
+  });
+  const input = nodes.map(() => bitSet(width));
+  const output = nodes.map(() => bitSet(width));
+  const queued = new Uint8Array(nodes.length).fill(1);
+  const worklist: number[] = nodes.map((_node, index) => index);
+  let head = 0;
+  while (head < worklist.length) {
+    const index = worklist[head]!;
+    head += 1;
+    queued[index] = 0;
+    const node = nodes[index]!;
+    const nextInput = input[index]!;
+    nextInput.fill(0);
+    for (const predecessor of node.predecessors) {
+      const from = output[nodeIndex.get(predecessor)!]!;
+      for (let word = 0; word < from.length; word += 1) nextInput[word]! |= from[word]!;
+    }
+    const nextOutput = output[index]!;
+    const genSet = gen[index]!;
+    const killSet = kill[index]!;
+    let changed = false;
+    for (let word = 0; word < nextOutput.length; word += 1) {
+      // Bitwise operators yield signed 32-bit values; normalize before comparing with the stored unsigned word.
+      const value =
+        (node.invalidatesAllDefinitions ? genSet[word]! : (nextInput[word]! & ~killSet[word]!) | genSet[word]!) >>> 0;
+      if (value !== nextOutput[word]) {
+        nextOutput[word] = value;
         changed = true;
       }
     }
+    if (!changed) continue;
+    for (const successor of node.successors) {
+      const successorIndex = nodeIndex.get(successor)!;
+      if (queued[successorIndex] === 0) {
+        queued[successorIndex] = 1;
+        worklist.push(successorIndex);
+      }
+    }
   }
-  for (const node of analysis.cfg.values()) {
-    const reaching = input.get(node.id)!;
+  nodes.forEach((node, index) => {
+    const reaching = input[index]!;
     for (const use of node.uses) {
       const preceding = node.definitions
         .filter(
@@ -703,10 +1214,12 @@ function addReachingDefinitionEdges(state: AnalysisState, analysis: CallableAnal
             !definition.rhsUseIds.includes(use.point.id),
         )
         .sort((left, right) => right.point.start - left.point.start)[0];
-      const candidateDefinitionIds = preceding ? [preceding.point.id] : reaching;
-      for (const definitionId of candidateDefinitionIds) {
-        const definition = definitionById.get(definitionId)!;
-        if (definition.point.symbolKey !== use.point.symbolKey) continue;
+      const candidateDefinitions = preceding
+        ? [preceding]
+        : (bySymbolIndices.get(use.point.symbolKey ?? '') ?? [])
+            .filter((definitionIndexValue) => bitSetHas(reaching, definitionIndexValue))
+            .map((definitionIndexValue) => definitions[definitionIndexValue]!);
+      for (const definition of candidateDefinitions) {
         addEdge(
           state,
           'reaching-definition',
@@ -729,7 +1242,7 @@ function addReachingDefinitionEdges(state: AnalysisState, analysis: CallableAnal
         );
       }
     }
-  }
+  });
 }
 
 function groupDefinitionsBySymbol(definitions: readonly FlowDefinition[]): Map<string, FlowDefinition[]> {
@@ -752,14 +1265,17 @@ function lastDefinitionPerSymbol(definitions: readonly FlowDefinition[]): FlowDe
 }
 
 function addControlDependenceEdges(state: AnalysisState, analysis: CallableAnalysis): void {
-  const postdominators = computePostdominators(analysis);
+  const { order, sets } = computePostdominators(analysis);
+  const nodeIndex = new Map<string, number>();
+  order.forEach((id, index) => nodeIndex.set(id, index));
+  const exitIndex = nodeIndex.get(analysis.exitId)!;
   for (const branch of analysis.cfg.values()) {
-    if (branch.successors.size < 2 || !branch.displayPoint) continue;
-    const branchPostdominators = postdominators.get(branch.id)!;
+    if (branch.kind !== 'predicate' || branch.successors.size < 2 || !branch.displayPoint) continue;
+    const branchPostdominators = sets[nodeIndex.get(branch.id)!]!;
     for (const successor of branch.successors) {
-      for (const dependentId of postdominators.get(successor) ?? []) {
-        if (branchPostdominators.has(dependentId) || dependentId === analysis.exitId) continue;
-        const dependent = analysis.cfg.get(dependentId)!;
+      bitSetForEach(sets[nodeIndex.get(successor)!]!, (dependentIndex) => {
+        if (dependentIndex === exitIndex || bitSetHas(branchPostdominators, dependentIndex)) return;
+        const dependent = analysis.cfg.get(order[dependentIndex]!)!;
         const targets = [
           ...dependent.definitions.map((definition) => definition.point),
           ...dependent.uses.map((use) => use.point),
@@ -769,36 +1285,75 @@ function addControlDependenceEdges(state: AnalysisState, analysis: CallableAnaly
           addEdge(
             state,
             'control-dependence',
-            branch.displayPoint.id,
+            branch.displayPoint!.id,
             target.id,
             'exact',
             'The target postdominates a branch successor but does not postdominate the predicate.',
           );
         }
-      }
+      });
     }
   }
 }
 
-function computePostdominators(analysis: CallableAnalysis): Map<string, Set<string>> {
-  const ids = [...analysis.cfg.keys()];
-  const all = new Set(ids);
-  const result = new Map<string, Set<string>>();
-  for (const id of ids) result.set(id, id === analysis.exitId ? new Set([id]) : new Set(all));
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const node of analysis.cfg.values()) {
-      if (node.id === analysis.exitId) continue;
-      const successorSets = [...node.successors].map((id) => result.get(id)!);
-      const next = new Set([node.id, ...intersection(successorSets)]);
-      if (!sameSet(result.get(node.id)!, next)) {
-        result.set(node.id, next);
+/**
+ * Postdominator sets as bit sets indexed by the returned node order, which
+ * is reverse postorder over predecessors from the exit so that information
+ * flows from the exit outward in as few passes as possible.
+ */
+function computePostdominators(analysis: CallableAnalysis): { order: string[]; sets: BitSet[] } {
+  const order = reversePostorder(analysis.cfg, analysis.exitId, (node) => node.predecessors);
+  const nodeIndex = new Map<string, number>();
+  order.forEach((id, index) => nodeIndex.set(id, index));
+  const count = order.length;
+  const exitIndex = nodeIndex.get(analysis.exitId)!;
+  const sets = order.map((_id, index) => {
+    const set = bitSet(count);
+    if (index === exitIndex) {
+      bitSetAdd(set, index);
+    } else {
+      set.fill(0xffffffff);
+      const spare = set.length * 32 - count;
+      if (spare > 0) set[set.length - 1] = 0xffffffff >>> spare;
+    }
+    return set;
+  });
+  const nodes = order.map((id) => analysis.cfg.get(id)!);
+  const queued = new Uint8Array(count).fill(1);
+  const worklist: number[] = nodes.map((_node, index) => index);
+  let head = 0;
+  const scratch = bitSet(count);
+  while (head < worklist.length) {
+    const index = worklist[head]!;
+    head += 1;
+    queued[index] = 0;
+    if (index === exitIndex) continue;
+    const node = nodes[index]!;
+    if (node.successors.size === 0) continue;
+    scratch.fill(0xffffffff);
+    for (const successor of node.successors) {
+      const from = sets[nodeIndex.get(successor)!]!;
+      for (let word = 0; word < scratch.length; word += 1) scratch[word]! &= from[word]!;
+    }
+    bitSetAdd(scratch, index);
+    const current = sets[index]!;
+    let changed = false;
+    for (let word = 0; word < current.length; word += 1) {
+      if (scratch[word] !== current[word]) {
+        current[word] = scratch[word]!;
         changed = true;
       }
     }
+    if (!changed) continue;
+    for (const predecessor of node.predecessors) {
+      const predecessorIndex = nodeIndex.get(predecessor)!;
+      if (queued[predecessorIndex] === 0) {
+        queued[predecessorIndex] = 1;
+        worklist.push(predecessorIndex);
+      }
+    }
   }
-  return result;
+  return { order, sets };
 }
 
 function addCrossCallableCandidates(state: AnalysisState, analyses: readonly CallableAnalysis[]): void {
@@ -830,7 +1385,7 @@ function addCrossCallableCandidates(state: AnalysisState, analyses: readonly Cal
             'candidate',
             'Compiler identity proves the captured binding, but invocation order can select among outer definitions.',
           );
-        } else if (use.property) {
+        } else if (use.property && definition.callableId !== use.point.callableId) {
           addEdge(
             state,
             'field-definition-to-use',
@@ -891,19 +1446,6 @@ function uniqueUses(uses: readonly FlowUse[]): FlowUse[] {
 
 function uniquePoints(points: readonly MutableFlowPoint[]): MutableFlowPoint[] {
   return [...new Map(points.map((entry) => [entry.id, entry])).values()];
-}
-
-function union(sets: readonly ReadonlySet<string>[]): Set<string> {
-  return new Set(sets.flatMap((set) => [...set]));
-}
-
-function intersection(sets: readonly ReadonlySet<string>[]): Set<string> {
-  if (sets.length === 0) return new Set();
-  return new Set([...sets[0]!].filter((value) => sets.slice(1).every((set) => set.has(value))));
-}
-
-function sameSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
-  return left.size === right.size && [...left].every((value) => right.has(value));
 }
 
 function comparePoints(left: TypeScriptLocalFlowPoint, right: TypeScriptLocalFlowPoint): number {

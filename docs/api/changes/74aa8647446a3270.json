@@ -1,0 +1,49 @@
+{
+  "acceptedAt": "2026-09-04T02:47:26.774Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "74aa8647446a3270910f56520baa55b91440d317c3b6a3c8e61397f8ef77e3b5",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionCoverage changed from interface SliceCohesionCoverage { status: 'complete' | 'partial'; basis: 'typescript-local-flow-backward-slices'; unsupported: string[]; candidateEdges: number; opaqueUnits: num... to interface SliceCohesionCoverage { status: 'complete' | 'partial'; basis: 'typescript-local-flow-backward-slices'; unsupported: string[]; candidateEdges: number; }.",
+      "target": "./queries:SliceCohesionCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionUnitKind changed from type SliceCohesionUnitKind = 'statement' | 'predicate' | 'return' | 'throw' | 'jump' | 'declaration' | 'opaque'; to type SliceCohesionUnitKind = 'statement' | 'predicate' | 'return' | 'throw' | 'jump' | 'declaration';.",
+      "target": "./queries:SliceCohesionUnitKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionCoverage changed from interface SliceCohesionCoverage { status: 'complete' | 'partial'; basis: 'typescript-local-flow-backward-slices'; unsupported: string[]; candidateEdges: number; opaqueUnits: num... to interface SliceCohesionCoverage { status: 'complete' | 'partial'; basis: 'typescript-local-flow-backward-slices'; unsupported: string[]; candidateEdges: number; }.",
+      "target": "./queries/index:SliceCohesionCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionUnitKind changed from type SliceCohesionUnitKind = 'statement' | 'predicate' | 'return' | 'throw' | 'jump' | 'declaration' | 'opaque'; to type SliceCohesionUnitKind = 'statement' | 'predicate' | 'return' | 'throw' | 'jump' | 'declaration';.",
+      "target": "./queries/index:SliceCohesionUnitKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionCoverage changed from interface SliceCohesionCoverage { status: 'complete' | 'partial'; basis: 'typescript-local-flow-backward-slices'; unsupported: string[]; candidateEdges: number; opaqueUnits: num... to interface SliceCohesionCoverage { status: 'complete' | 'partial'; basis: 'typescript-local-flow-backward-slices'; unsupported: string[]; candidateEdges: number; }.",
+      "target": "./queries/slice-cohesion:SliceCohesionCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionUnitKind changed from type SliceCohesionUnitKind = 'statement' | 'predicate' | 'return' | 'throw' | 'jump' | 'declaration' | 'opaque'; to type SliceCohesionUnitKind = 'statement' | 'predicate' | 'return' | 'throw' | 'jump' | 'declaration';.",
+      "target": "./queries/slice-cohesion:SliceCohesionUnitKind"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.24.1",
+  "previousDigest": "e4dc66b5835845d8cddf3b6a763c1345c0dbf6897a4a852bb485b48ebbf1c733",
+  "reason": "Slice-cohesion no longer reports opaque try units because the local flow CFG now models try, catch, and finally regions; the removed field and unit kind were unreleased.",
+  "schemaVersion": 1
+}

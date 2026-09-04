@@ -73,6 +73,7 @@ const queryCommandOrder = [
   'passthrough-candidates',
   'stale-abstractions',
   'complexity-hotspots',
+  'slice-cohesion',
   'self-audit',
   'convergence',
   'code',

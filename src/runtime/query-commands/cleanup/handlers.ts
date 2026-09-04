@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, relative } from 'node:path';
 import type { DeadOptions } from '../../../domain/types.js';
+import type { InvocationCoverage } from '../../command-kit/command-descriptor-types.js';
 import * as queries from '../../../queries/index.js';
 import { resolveProjectPath } from '../../../tla/model-contract.js';
 import { resolveProjectRoot } from '../../cli-context.js';
@@ -332,6 +333,130 @@ export const handleComplexityHotspots = budgetedTableCommand('complexity-hotspot
   emptyMessage: () => 'No complexity hotspots found.',
   heuristicLabel: 'complexity hotspot candidates',
   dashWidths: [5, 4, 6, 7, 7, 6],
+});
+
+/**
+ * Stderr progress for long candidate scans. A terminal sees a line every few
+ * seconds; a captured stream sees one every half minute, so a long run is
+ * never silent but a machine consumer is not flooded.
+ */
+function candidateScanProgressReporter(label: string): {
+  report: (progress: { evaluated: number; scanned: number; matched: number }) => void;
+  finish: () => void;
+} {
+  const intervalMs = process.stderr.isTTY ? 2_000 : 30_000;
+  const started = Date.now();
+  let last = started;
+  let reported = false;
+  return {
+    report: (progress) => {
+      const now = Date.now();
+      if (now - last < intervalMs || progress.evaluated >= progress.scanned) return;
+      last = now;
+      reported = true;
+      console.error(
+        `${label}: ${progress.evaluated}/${progress.scanned} candidates scanned, ${progress.matched} finding(s), ${Math.round((now - started) / 1000)}s elapsed`,
+      );
+    },
+    finish: () => {
+      if (reported) console.error(`${label}: scan complete in ${Math.round((Date.now() - started) / 1000)}s`);
+    },
+  };
+}
+
+export const handleSliceCohesion = budgetedDbCommand('slice-cohesion', ({ db, args, opts, budget }) => {
+  const symbol = optionalStringArg(args, 0) || undefined;
+  const explicitScanLimit = numberOptionValue(opts, 'scanLimit');
+  const progress = candidateScanProgressReporter('slice-cohesion');
+  let counters: { scanLimitApplied: boolean; resultLimitApplied: boolean; matchedResults: number } | null = null;
+  const results = queries.sliceCohesion(db, {
+    symbol,
+    scope: stringOptionValue(opts, 'scope'),
+    minLoc: definedNumberOption(opts, 'minLoc', 12),
+    minStatements: definedNumberOption(opts, 'minStatements', 10),
+    minClusterUnits: definedNumberOption(opts, 'minCluster', 4),
+    limit: definedLimitOption(opts, 'limit', 20),
+    scanLimit: explicitScanLimit ?? budget.scanLimit,
+    onProgress: progress.report,
+    onProfile: (scan) => {
+      counters = scan;
+    },
+  });
+  progress.finish();
+  if (booleanOptionValue(opts, 'json')) {
+    // A targeted symbol is resolved completely. A scan is complete when every
+    // candidate was analyzed and every finding printed; a capped scan cannot
+    // know its total, and a capped report knows what it omitted.
+    const scan = counters as { scanLimitApplied: boolean; resultLimitApplied: boolean; matchedResults: number } | null;
+    const returned = results.length;
+    const coverage: InvocationCoverage =
+      symbol || !scan
+        ? { complete: true, totalKnown: true, returned, total: returned, omitted: 0 }
+        : scan.scanLimitApplied
+          ? { complete: false, totalKnown: false, returned }
+          : scan.resultLimitApplied
+            ? {
+                complete: false,
+                totalKnown: true,
+                returned,
+                total: scan.matchedResults,
+                omitted: scan.matchedResults - returned,
+              }
+            : { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
+    printJsonEnvelope('slice-cohesion', args, opts, results, {
+      coverage,
+      ...(symbol ? {} : { analysisBudget: budget.analysisBudget }),
+    });
+    return;
+  }
+  if (results.length === 0) {
+    return render.empty(
+      symbol ? `No sliceable TypeScript function matched ${symbol}.` : 'No low-cohesion functions found.',
+    );
+  }
+  renderHeuristicNotice('slice-cohesion candidates');
+  if (!symbol && budget.analysisBudget) {
+    console.log(
+      `Bounded scan: at most ${budget.analysisBudget.scanLimit} candidates, largest first; the count below is not repository-wide.\n`,
+    );
+  }
+  for (const r of results) {
+    const extractions = r.clusters.filter((cluster) => cluster.role === 'extraction');
+    console.log(
+      `\n${displayPathRange(r.relativePath, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC, ${r.statementCount} statements, ${r.archetype}${r.operational ? ', operational' : ''})`,
+    );
+    console.log(
+      `  ${r.actionTier}; local model ${r.coverage.status}; ${extractions.length} extraction(s), ${extractions.filter((cluster) => cluster.narrow).length} narrow; ${r.tierReason}`,
+    );
+    console.log(`  Recommendation: ${displaySnippet(r.recommendation, 600)}`);
+    for (const reason of r.evidenceReasons) console.log(`  - ${displaySnippet(reason, 300)}`);
+    if (symbol) {
+      console.log('  Outputs:');
+      for (const output of r.outputs) {
+        console.log(
+          `    ${output.id}  [${output.kind}${output.guard ? ', guard' : ''}${output.hook ? ', hook' : ''}]  slice ${output.sliceSize} statement(s)`,
+        );
+      }
+      console.log('  Clusters:');
+      r.clusters.forEach((cluster, index) => {
+        const interfaceNote =
+          cluster.role === 'remainder'
+            ? ' (stays in place)'
+            : cluster.inputs.length > 0
+              ? `; parameters${cluster.narrow ? '' : ' (wide)'} ${cluster.inputs.join(', ')}`
+              : '; no parameters';
+        console.log(
+          `    ${index + 1}. ${cluster.kind}, ${cluster.role}: ${cluster.units.length} statement(s) producing ${cluster.outputs.join(', ')}${interfaceNote}`,
+        );
+      });
+      console.log('  Statements:');
+      for (const unit of r.units ?? [])
+        console.log(
+          `    ${String(unit.index).padStart(3)}  ${unit.kind.padEnd(11)} ${displayRange(unit.startLine, unit.endLine)}  ${displaySnippet(unit.label, 100)}`,
+        );
+    }
+  }
+  console.log(`\n${results.length} slice-cohesion candidate(s).`);
 });
 
 export const handleSimilar = budgetedReportCommand('similar', {

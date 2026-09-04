@@ -69,3 +69,42 @@ export class CrossCallableHolder {
     return this.value;
   }
 }
+
+export function destructured({ left, right }: { left: number; right: number }, [head]: number[]): number {
+  const { sum, product } = { sum: left + right, product: left * right };
+  const [first, second = head] = [sum, product];
+  return first + second;
+}
+
+export function elementWrites(values: number[], index: number): number {
+  const copy = values;
+  copy[index] = 1;
+  return copy[0];
+}
+
+export function iterates(items: number[]): number {
+  let total = 0;
+  for (const item of items) {
+    total += item;
+  }
+  return total;
+}
+
+export function shorthand(value: number): { doubled: number } {
+  const doubled = value * 2;
+  return { doubled };
+}
+
+export function guarded(risky: () => string): string {
+  let status = 'start';
+  let finished = '';
+  try {
+    risky();
+    status = 'done';
+  } catch (error) {
+    status = String(error);
+  } finally {
+    finished = status;
+  }
+  return finished;
+}

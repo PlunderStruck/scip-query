@@ -289,6 +289,10 @@
       "import": "./dist/queries/slice.js",
       "types": "./dist/queries/slice.d.ts"
     },
+    "./queries/slice-cohesion": {
+      "import": "./dist/queries/slice-cohesion.js",
+      "types": "./dist/queries/slice-cohesion.d.ts"
+    },
     "./queries/source-inspection": {
       "import": "./dist/queries/source-inspection.js",
       "types": "./dist/queries/source-inspection.d.ts"

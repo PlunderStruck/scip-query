@@ -2,7 +2,7 @@ import { totalmem } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import { Worker } from 'node:worker_threads';
-import { readTextFileWithinLimit, SMALL_ARTIFACT_MAX_BYTES } from '../filesystem/bounded-file.js';
+import { readTextFileWithinLimit, SMALL_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
 import { readProcessIdentity } from '../platform/process-identity.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
 import {

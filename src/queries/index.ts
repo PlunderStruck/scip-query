@@ -79,6 +79,7 @@ export { passthroughCandidates } from './cleanup/passthrough-candidates.js';
 export { staleAbstractions } from './cleanup/stale-abstractions.js';
 export { unusedParams } from './cleanup/unused-params.js';
 export { complexityHotspots } from './quality/complexity-hotspots.js';
+export { sliceCohesion, sliceCohesionForDefinition } from './quality/slice-cohesion.js';
 export { HEALTH_PHASES, health, healthPhase, healthProvenance, healthReportFromPhases } from './health/health.js';
 export { convergence } from './cleanup/convergence.js';
 export { code, codeBatch } from './navigation/code.js';
@@ -283,6 +284,18 @@ export type { PassthroughCandidate } from './cleanup/passthrough-candidates.js';
 export type { StaleAbstraction, StaleAbstractionActionTier, StalenessKind } from './cleanup/stale-abstractions.js';
 export type { UnusedParamsFinding } from './cleanup/unused-params.js';
 export type { ComplexityHotspot } from './quality/complexity-hotspots.js';
+export type {
+  SliceCohesionActionTier,
+  SliceCohesionCandidate,
+  SliceCohesionCluster,
+  SliceCohesionCoverage,
+  SliceCohesionLineRange,
+  SliceCohesionMetrics,
+  SliceCohesionOutput,
+  SliceCohesionOutputKind,
+  SliceCohesionUnit,
+  SliceCohesionUnitKind,
+} from './quality/slice-cohesion.js';
 export type {
   SimilarActionTier,
   SimilarConsolidationPlan,

@@ -1,0 +1,163 @@
+{
+  "acceptedAt": "2026-09-04T02:29:46.364Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "e4dc66b5835845d8cddf3b6a763c1345c0dbf6897a4a852bb485b48ebbf1c733",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionActionTier.",
+      "target": "./queries:SliceCohesionActionTier"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionCandidate.",
+      "target": "./queries:SliceCohesionCandidate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionCluster.",
+      "target": "./queries:SliceCohesionCluster"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionCoverage.",
+      "target": "./queries:SliceCohesionCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionLineRange.",
+      "target": "./queries:SliceCohesionLineRange"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionMetrics.",
+      "target": "./queries:SliceCohesionMetrics"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionOutput.",
+      "target": "./queries:SliceCohesionOutput"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionOutputKind.",
+      "target": "./queries:SliceCohesionOutputKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionUnit.",
+      "target": "./queries:SliceCohesionUnit"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionUnitKind.",
+      "target": "./queries:SliceCohesionUnitKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export sliceCohesion.",
+      "target": "./queries:sliceCohesion"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export sliceCohesionForDefinition.",
+      "target": "./queries:sliceCohesionForDefinition"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionActionTier.",
+      "target": "./queries/index:SliceCohesionActionTier"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionCandidate.",
+      "target": "./queries/index:SliceCohesionCandidate"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionCluster.",
+      "target": "./queries/index:SliceCohesionCluster"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionCoverage.",
+      "target": "./queries/index:SliceCohesionCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionLineRange.",
+      "target": "./queries/index:SliceCohesionLineRange"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionMetrics.",
+      "target": "./queries/index:SliceCohesionMetrics"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionOutput.",
+      "target": "./queries/index:SliceCohesionOutput"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionOutputKind.",
+      "target": "./queries/index:SliceCohesionOutputKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionUnit.",
+      "target": "./queries/index:SliceCohesionUnit"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionUnitKind.",
+      "target": "./queries/index:SliceCohesionUnitKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export sliceCohesion.",
+      "target": "./queries/index:sliceCohesion"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export sliceCohesionForDefinition.",
+      "target": "./queries/index:sliceCohesionForDefinition"
+    },
+    {
+      "classification": "additive",
+      "kind": "entry-added",
+      "message": "Added public declaration path ./queries/slice-cohesion.",
+      "target": "./queries/slice-cohesion"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.24.1",
+  "previousDigest": "8dad56a5bd7ca627572fbf82d03ec88ebddbc1f9e70c4ace31a81bccc54d0990",
+  "reason": "Add the slice-cohesion query and its result types; export the shared TypeScript compiler loader from local-flow for compiler-backed analyzers.",
+  "schemaVersion": 1
+}

@@ -22,10 +22,22 @@ export interface CandidatePipelineCounters {
   resultLimitApplied: boolean;
 }
 
+export interface CandidateScanProgress {
+  evaluated: number;
+  scanned: number;
+  matched: number;
+}
+
 interface CandidateAnalysis<TCandidate, TContext, TResult> {
   candidates: () => TCandidate[];
   scanLimit?: number;
   orderCandidates?: (left: TCandidate, right: TCandidate) => number;
+  /**
+   * Evaluation order of the candidates that survived the scan limit. Selection
+   * still follows `orderCandidates`; this only changes the order work is done,
+   * so a detector can keep per-file evidence hot across neighbouring candidates.
+   */
+  orderScanned?: (left: TCandidate, right: TCandidate) => number;
   filterCandidate?: (candidate: TCandidate) => boolean;
   prepare?: (candidates: readonly TCandidate[]) => TContext;
   evaluate: (candidate: TCandidate, context: TContext) => TResult | null;
@@ -33,6 +45,8 @@ interface CandidateAnalysis<TCandidate, TContext, TResult> {
   limit?: number;
   profile?: CandidatePipelineProfile;
   onProfile?: (counters: CandidatePipelineCounters) => void;
+  /** Called after every evaluation; the receiver throttles its own reporting. */
+  onProgress?: (progress: CandidateScanProgress) => void;
 }
 
 /**
@@ -50,7 +64,8 @@ export function runCandidateAnalysis<TCandidate, TContext = undefined, TResult =
     const loaded = opts.candidates();
     const filtered = opts.filterCandidate ? loaded.filter(opts.filterCandidate) : loaded;
     const ordered = opts.orderCandidates ? [...filtered].sort(opts.orderCandidates) : filtered;
-    const candidates = applyScanLimit(ordered, opts.scanLimit);
+    const scanned = applyScanLimit(ordered, opts.scanLimit);
+    const candidates = opts.orderScanned ? [...scanned].sort(opts.orderScanned) : scanned;
     counters = {
       pipeline: opts.profile?.name,
       loadedCandidates: loaded.length,
@@ -70,6 +85,11 @@ export function runCandidateAnalysis<TCandidate, TContext = undefined, TResult =
       counters.evaluatedCandidates += 1;
       const result = opts.evaluate(candidate, context);
       if (result) results.push(result);
+      opts.onProgress?.({
+        evaluated: counters.evaluatedCandidates,
+        scanned: candidates.length,
+        matched: results.length,
+      });
     }
 
     counters.matchedResults = results.length;

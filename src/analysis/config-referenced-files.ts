@@ -4,7 +4,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { normalizePathSeparators as normalizePath } from '../domain/path-normalization.js';
-import { isMissingProjectFileError, readProjectFileText } from '../platform/project-files.js';
+import { isMissingProjectFileError, readProjectFileText } from '../source/primitives/project-file-boundary.js';
 
 /**
  * Source files a root configuration file names by path: `next.config.js`

@@ -2,6 +2,96 @@
 
 All notable changes to `scip-query` are documented here. This file starts at 0.11.0; everything below covers behavior changes made since the 0.10.12 release.
 
+## [Unreleased]
+
+### Slice-based cohesion
+
+- New `slice-cohesion [symbol]` command. For every value a TypeScript
+  function hands out (its return value, each property of a returned object
+  literal, an effect call, a write to a parameter or field, a throw) it
+  takes the backward slice over the compiler-owned local flow graph and
+  partitions the body by which outputs share statements. Outputs whose
+  slices never meet are separate local computations; the largest cluster
+  stays in place and every other qualifying cluster is reported as an
+  extraction with its line ranges, the outputs it produces, and the
+  parameters it would take. Exit-only guards (including branches that only
+  log before leaving), shared setup derived only from inputs, and writes
+  that reach a parameter through an alias (`bucket = map.get(k)`,
+  `map.set(k, bucket)`) are modeled so that one-computation functions stay
+  whole.
+- The model keeps failure handling with the operation it protects: every
+  statement in a `catch` or `finally` block depends on the try block it
+  handles. A function's return value is one output no matter how many
+  return statements produce it, and the same field on several returned
+  object literals is one output, so alternate returns and guard clauses
+  are not seams.
+- React bodies are modeled by state ownership. A tuple state hook
+  (`const [x, setX] = useState()`) makes `setX(...)` a write to `x` when it
+  runs at render time or inside an effect callback (directly, through
+  promise continuations and timers, or through a `useCallback` closure the
+  effect calls), so later reads of `x` depend on it. Event handlers declared
+  and passed away write nothing until invoked. Candidates carry an
+  archetype (`calculation`, `react-component`, `react-hook`,
+  `orchestration`), clusters carry a kind (`calculation`, `hook`,
+  `effects`) and a role (`remainder`, `extraction`, `below-threshold`), and
+  the recommendation names a pure calculation, custom hook, or effect
+  sequence candidate rather than a generic function split.
+- Extraction interfaces count only what would become a parameter:
+  function parameters, `this`, shared-setup bindings, and locals of an
+  enclosing function. Imports, module-level names, globals, and JSX tags
+  stay what they are. The `signal` tier requires a complete local model
+  and at least one extraction within five parameters; the remainder never
+  needs an interface. Orchestration roots (bodies whose value outputs are
+  all calls) and code under scripts, tools, bin, or migration directories
+  are reported at support tier and ranked last.
+- Coverage names its scope: `coverage.model` is `function-local-flow`,
+  `coverage.candidateEdgeEffect` records that candidate flow edges were
+  treated as dependencies and can only merge clusters, and a partial model
+  turns the recommendation into an inspection request. The JSON envelope
+  reports one row per finding, a targeted symbol reports complete
+  coverage, a scan without a cap reports complete coverage, and a capped
+  scan reports what it omitted. Scan results omit per-unit listings and
+  slice arrays (a targeted symbol keeps them), `--scan-limit <n>` bounds
+  the analysis work independently of `-n`, help states that `--full` and
+  `--limit` cannot be combined, and long scans report progress on stderr.
+- Performance: the analyzer builds one in-memory compiler program per file
+  and previously re-parsed the standard library, re-resolved every import
+  and `@types` package, and looked for `@typescript/lib-*` replacements on
+  each of them. Library and `@types` declaration files are now parsed once
+  per process, imports resolve only when an `@types` package can back
+  them, lib replacement lookup is off, property accesses are keyed by
+  their receiver and member name instead of an inferred property symbol,
+  reaching definitions and postdominators run as bit-set worklists in
+  reverse postorder, and a scan evaluates a file's callables together so
+  its flow graph and parse are shared. On a 7,900-file Next.js repository
+  the `.tsx`-scoped scan went from 177 s to 8 s and the unbounded scan from
+  more than 30 minutes to 33 s.
+
+### Local flow models try, catch, and finally
+
+- The TypeScript local flow CFG now builds try, catch, and finally regions
+  instead of treating a try statement as one opaque node that invalidated
+  every reaching definition. Any node inside a try block may raise, so the
+  state before each of them flows to the catch entry; a `throw` inside the
+  block lands in the catch; the catch binding is a definition; normal
+  completion of either block continues through the finally block. A finally
+  block after a return, break, or continue inside its try or catch is the
+  one remaining disclosed gap. Control dependence is derived from predicate
+  nodes only, so raise edges do not become spurious branches.
+
+### Local flow covers destructuring, element writes, and loop variables
+
+- The TypeScript local definition-use analysis now binds every leaf of an
+  object or array pattern in parameters and declarations, feeds pattern
+  defaults into the definition, records `container[index] = value` as a
+  partial definition that does not kill earlier definitions of the
+  container, draws a `for...of` or `for...in` variable from its iterable,
+  and resolves a shorthand property (`{ value }`) to the local binding
+  rather than the property it creates. Previously a destructuring statement
+  or element write invalidated every reaching definition after it, which
+  truncated `dependence-slice`, `value-flow`, and every consumer of the flow
+  graph.
+
 ## [0.24.1]
 
 ### Solution-style tsconfigs and a live type checker

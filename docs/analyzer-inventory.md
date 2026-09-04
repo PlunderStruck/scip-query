@@ -31,8 +31,8 @@ These commands report direct findings or bounded maintenance leads:
   `similar-chains`, `duplicate-bodies`, `recent-duplicates`, `twin-drift`;
 - unnecessary indirection: `wrapper-candidates`, `passthrough-candidates`,
   `decorative-checkers`, `not-implemented`;
-- extraction and locality: `extract-candidates`, `locality-candidates`,
-  `complexity-hotspots`;
+- extraction and locality: `extract-candidates`, `slice-cohesion`,
+  `locality-candidates`, `complexity-hotspots`;
 - migration and documentation: `incomplete-migration`, `doc-drift`,
   `redundant-reexports`;
 - history and coordination: `co-change`, `change-surface`.

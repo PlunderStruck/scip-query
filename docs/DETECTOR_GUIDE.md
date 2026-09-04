@@ -28,7 +28,7 @@ numbers.
 | Parallel implementations    | `twin-drift`, `incomplete-migration`, `drift`                                               |
 | Unused or disconnected code | `dead`, `isolated`, `unused-params`                                                         |
 | Excess indirection          | `wrapper-candidates`, `passthrough-candidates`, `stale-abstractions`, `redundant-reexports` |
-| Extraction seams            | `extract-candidates`                                                                        |
+| Extraction seams            | `extract-candidates`, `slice-cohesion`                                                      |
 | Change pressure             | `complexity-hotspots`, `co-change`, `cycles`                                                |
 | Documentation               | `doc-drift`                                                                                 |
 | React                       | `react-component-duplicates`, `react-hook-candidates`, `react-large-component-pressure`     |

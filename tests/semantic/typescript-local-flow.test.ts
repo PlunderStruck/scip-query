@@ -103,26 +103,44 @@ describe('TypeScript local definition-use and control dependence', () => {
     );
   });
 
-  it('does not project exact reaching definitions through unsupported exceptional flow', () => {
+  it('routes exceptional flow through the catch block so both handlers reach the return', () => {
     const result = analyzeTypeScriptLocalFlow(source, fixturePath);
-    const selectedDefinition = result.points.find(
-      (point) => point.kind === 'definition' && point.name === 'selected' && point.line > 47,
-    );
-    const selectedUse = result.points.find(
-      (point) => point.kind === 'use' && point.name === 'selected' && point.line > 55,
-    );
-    expect(selectedDefinition).toBeDefined();
-    expect(selectedUse).toBeDefined();
+    const lines = source.split('\n');
+    const start = lines.findIndex((candidate) => candidate.includes('export function exceptional('));
+    const line = (text: string) => lines.findIndex((candidate, index) => index >= start && candidate.includes(text));
+    const initial = pointAt(result.points, 'selected', 'definition', line('let selected = input;'));
+    const inTry = pointAt(result.points, 'selected', 'definition', line('    selected = 1;'));
+    const inCatch = pointAt(result.points, 'selected', 'definition', line('    selected = 2;'));
+    const returned = pointAt(result.points, 'selected', 'use', line('  return selected;'));
+
+    expectEdge(result.edges, 'reaching-definition', inTry, returned);
+    expectEdge(result.edges, 'reaching-definition', inCatch, returned);
+    // Every path redefines `selected` before the return: the try path assigns 1 and any raise lands in the catch.
     expect(result.edges).not.toContainEqual(
-      expect.objectContaining({
-        kind: 'reaching-definition',
-        fromPointId: selectedDefinition!.id,
-        toPointId: selectedUse!.id,
-      }),
+      expect.objectContaining({ kind: 'reaching-definition', fromPointId: initial.id, toPointId: returned.id }),
     );
-    expect(result.coverage.unsupported).toContain(
-      'Exceptional control-flow and finally completion are not included in the local compiler CFG.',
-    );
+    expect(result.coverage.unsupported).not.toContainEqual(expect.stringMatching(/exceptional/iu));
+  });
+
+  it('binds the catch variable, lets a raise skip the rest of the try block, and sequences finally', () => {
+    const result = analyzeTypeScriptLocalFlow(source, fixturePath);
+    const line = (text: string) => source.split('\n').findIndex((candidate) => candidate.includes(text));
+    const before = pointAt(result.points, 'status', 'definition', line("let status = 'start';"));
+    const inTry = pointAt(result.points, 'status', 'definition', line("    status = 'done';"));
+    const error = pointAt(result.points, 'error', 'definition', line('  } catch (error) {'));
+    const errorUse = pointAt(result.points, 'error', 'use', line('    status = String(error);'));
+    const inCatch = pointAt(result.points, 'status', 'definition', line('    status = String(error);'));
+    const statusInFinally = pointAt(result.points, 'status', 'use', line('    finished = status;'));
+    const finished = pointAt(result.points, 'finished', 'definition', line('    finished = status;'));
+    const finishedUse = pointAt(result.points, 'finished', 'use', line('  return finished;'));
+
+    expectEdge(result.edges, 'reaching-definition', error, errorUse);
+    // `risky()` may raise before `status = 'done'`, so the initial value reaches the catch and the finally.
+    expectEdge(result.edges, 'reaching-definition', before, statusInFinally);
+    expectEdge(result.edges, 'reaching-definition', inTry, statusInFinally);
+    expectEdge(result.edges, 'reaching-definition', inCatch, statusInFinally);
+    expectEdge(result.edges, 'reaching-definition', finished, finishedUse);
+    expect(result.coverage.unsupported).not.toContainEqual(expect.stringMatching(/finally/iu));
   });
 
   it('reports cross-callable field flow as a candidate instead of an exact local fact', () => {
