@@ -519,6 +519,7 @@ function compareCandidates(left: SliceCohesionCandidate, right: SliceCohesionCan
     tierRank(left.actionTier) - tierRank(right.actionTier) ||
     Number(left.operational) - Number(right.operational) ||
     archetypeRank(left.archetype) - archetypeRank(right.archetype) ||
+    extractionKindRank(left) - extractionKindRank(right) ||
     narrowExtractionStatements(right) - narrowExtractionStatements(left) ||
     right.separableStatements - left.separableStatements ||
     right.loc - left.loc
@@ -540,6 +541,16 @@ function archetypeRank(archetype: SliceCohesionArchetype): number {
     case 'orchestration':
       return 3;
   }
+}
+
+/** Calculations first, then operations and hooks, then bodies whose only extractions are effect sequences. */
+function extractionKindRank(candidate: SliceCohesionCandidate): number {
+  const kinds = new Set(
+    candidate.clusters.filter((cluster) => cluster.role === 'extraction').map((cluster) => cluster.kind),
+  );
+  if (kinds.has('calculation')) return 0;
+  if (kinds.has('operation') || kinds.has('hook')) return 1;
+  return 2;
 }
 
 function narrowExtractionStatements(candidate: SliceCohesionCandidate): number {
@@ -2312,7 +2323,37 @@ function recommendation(
   if (!splitCandidate) {
     if (outputs.length === 0) return 'No value output was found; the body has nothing to slice.';
     if (outputs.length === 1) return 'One value output; cohesion is trivially complete.';
-    return `The ${outputs.length} value outputs share ${metrics.superglue} statement(s); keep the function whole.`;
+    const clustered = new Set(clusters.flatMap((cluster) => cluster.outputs));
+    const setupOnly = outputs.filter((output) => !clustered.has(output.id)).length;
+    const below = clusters.filter((cluster) => cluster.role === 'below-threshold' && !cluster.guardOnly);
+    const parts: string[] = [];
+    if (clusters.length === 0) {
+      parts.push(
+        `The ${outputs.length} value outputs read only shared setup derived from the inputs (${context.preamble.length} statement(s)); nothing separates them`,
+      );
+    } else {
+      parts.push(
+        `The ${outputs.length} value outputs form ${clusters.length} cluster(s)` +
+          (setupOnly > 0 ? `, and ${setupOnly} of them read only shared setup` : ''),
+      );
+      const whole = clusters.length === 1 ? clusters[0]! : null;
+      if (whole && whole.outputs.length > 1) {
+        parts.push(
+          `${metrics.superglue} statement(s) feed every output and ${metrics.glue} feed more than one` +
+            (metrics.superglue === 0
+              ? '; the outputs are chained through shared statements, branch predicates, or state writes rather than one common root'
+              : ''),
+        );
+      }
+      if (below.length > 0) {
+        parts.push(
+          `${below.length} cluster(s) stay below --min-cluster ${context.thresholds.minClusterUnits}: ${below
+            .map((cluster) => describeRanges(cluster.lineRanges, 2))
+            .join('; ')}`,
+        );
+      }
+    }
+    return `${parts.join('; ')}; keep the function whole.`;
   }
   const extractions = clusters.filter((cluster) => cluster.role === 'extraction');
   const remainder = clusters.find((cluster) => cluster.role === 'remainder');
@@ -2329,7 +2370,10 @@ function recommendation(
   if (archetype === 'orchestration') {
     return `${name} sequences ${extractions.length + 1} independent operations (${seams}); treat it as an orchestration root, not a cohesion defect, unless the steps serve unrelated purposes.`;
   }
-  return `Extract from ${name}: ${seams}. ${stays}`.trim();
+  const advisory = extractions.every((cluster) => cluster.kind === 'effects')
+    ? ' Advisory: an effect sequence may be intentional orchestration; confirm the steps serve a separate purpose before moving them.'
+    : '';
+  return `Extract from ${name}: ${seams}. ${stays}${advisory}`.trim();
 }
 
 function outputNames(ids: readonly string[], limit = 4): string {

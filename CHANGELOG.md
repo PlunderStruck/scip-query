@@ -46,6 +46,12 @@ suppress(params)` do not form clusters. Every unit also depends on the
   judged against the partition: a unit read by outputs of one cluster only
   returns to that cluster. Clusters that compute a result while awaiting or
   producing effects are `operation` candidates, not pure calculations.
+- A keep-whole verdict explains what joins the outputs (statements feeding
+  every output, statements feeding several, chaining through predicates or
+  state writes, or setup-only reads) instead of a bare shared count, and
+  bodies whose only extractions are effect sequences rank after
+  calculations, operations, and hooks with an advisory note that
+  orchestration may be intentional.
 - Extraction interfaces count only what would become a parameter:
   function parameters, `this`, shared-setup bindings, and locals of an
   enclosing function. Imports, module-level names, globals, and JSX tags
