@@ -109,6 +109,51 @@ const HANDLERS = [
   '  return line;',
   '}',
   '',
+  'export async function copyText(text: string): Promise<boolean> {',
+  '  if (navigator?.clipboard?.writeText) {',
+  '    try {',
+  '      await navigator.clipboard.writeText(text);',
+  '      return true;',
+  '    } catch (error) {',
+  '      logger.warn("modern clipboard failed", error);',
+  '    }',
+  '  }',
+  '  try {',
+  '    const area = document.createElement("textarea");',
+  '    area.value = text;',
+  '    area.style.position = "fixed";',
+  '    document.body.appendChild(area);',
+  '    area.select();',
+  '    const successful = document.execCommand("copy");',
+  '    document.body.removeChild(area);',
+  '    return successful;',
+  '  } catch (error) {',
+  '    logger.error("fallback copy failed", error);',
+  '    return false;',
+  '  }',
+  '}',
+  '',
+  'export async function notifyUser(userId: string, event: string) {',
+  '  const empty = { status: "skipped", logId: null };',
+  '  const pending = await client.reserve(userId, event);',
+  '  if (!pending) return empty;',
+  '  const logId = pending.id;',
+  '  const recipient = await client.getRecipient(userId);',
+  '  if (!recipient) {',
+  '    logger.warn("suppressed", logId);',
+  '    return audit.suppress(logId, "missing");',
+  '  }',
+  '  if (recipient.optedOut) {',
+  '    logger.warn("suppressed", logId);',
+  '    return audit.suppress(logId, "opted-out");',
+  '  }',
+  '  const message = `${event} for ${recipient.name}`;',
+  '  const delivery = await client.send(recipient.address, message);',
+  '  const status = delivery.ok ? "sent" : "failed";',
+  '  await audit.record(logId, status);',
+  '  return { status, logId };',
+  '}',
+  '',
   'export async function runAll(region: string) {',
   '  const users = await client.get(`/regions/${region}/users`);',
   '  const activeUsers = users.filter((user) => user.active);',
@@ -242,16 +287,20 @@ function openFixture(): { db: ScipDatabase; root: string } {
     .symbol(8, sym('components.tsx', 'Campaigns'), 'Campaigns', SymbolInformation_Kind.Function)
     .symbol(9, sym('run.ts', 'runAll'), 'runAll', SymbolInformation_Kind.Function)
     .symbol(10, sym('components.tsx', 'Loader'), 'Loader', SymbolInformation_Kind.Function)
+    .symbol(11, sym('handlers.ts', 'copyText'), 'copyText', SymbolInformation_Kind.Function)
+    .symbol(12, sym('handlers.ts', 'notifyUser'), 'notifyUser', SymbolInformation_Kind.Function)
     .definition(1, 1, 1, 2, 0, 13, 1)
     .definition(2, 1, 2, 15, 0, 26, 1)
     .definition(3, 1, 3, 28, 0, 40, 1)
     .definition(4, 2, 4, 3, 0, 23, 1)
     .definition(5, 2, 5, 25, 0, 38, 1)
-    .definition(6, 2, 6, 40, 0, 53, 1)
+    .definition(6, 2, 6, 84, 0, 97, 1)
     .definition(7, 3, 7, 6, 0, 26, 1)
     .definition(8, 3, 8, 28, 0, 57, 1)
-    .definition(9, 4, 9, 40, 0, 53, 1)
+    .definition(9, 4, 9, 84, 0, 97, 1)
     .definition(10, 3, 10, 59, 0, 84, 1)
+    .definition(11, 2, 11, 40, 0, 62, 1)
+    .definition(12, 2, 12, 64, 0, 82, 1)
     .chunk(1, 1, 0, ORDERS.length)
     .chunk(2, 2, 0, HANDLERS.length)
     .chunk(3, 3, 0, COMPONENTS.length)
@@ -266,6 +315,8 @@ function openFixture(): { db: ScipDatabase; root: string } {
     .mention(3, 8, 1)
     .mention(4, 9, 1)
     .mention(3, 10, 1)
+    .mention(2, 11, 1)
+    .mention(2, 12, 1)
     .write();
   const config: ScipQueryConfig = { projectRoot: root, dbPath, indexPath: join(root, 'index.scip') };
   return { db: new ScipDatabase(config), root };
@@ -387,6 +438,28 @@ describe('slice-cohesion', () => {
       expect(merged).toMatchObject({ id: 'return@33', units: expect.arrayContaining([]) });
       expect(merged!.units).toHaveLength(2);
       expect(describe!.splitCandidate).toBe(false);
+
+      // Two strategies for one result share the return value, so the modern
+      // attempt and the fallback are one computation.
+      const [copy] = sliceCohesion(db, { symbol: 'copyText' });
+      expect(copy).toMatchObject({ splitCandidate: false });
+      expect(copy!.clusters).toHaveLength(1);
+      expect(copy!.outputs.filter((output) => output.kind === 'return' && !output.guard)).toHaveLength(1);
+
+      // `return empty`, log-then-return, and delegation before an exit are
+      // guards, not computations to extract.
+      const [notify] = sliceCohesion(db, { symbol: 'notifyUser' });
+      expect(notify!.outputs.filter((output) => output.guard).map((output) => output.id)).toEqual([
+        'return@68',
+        'call:logger.warn@72',
+        'return@73',
+        'call:logger.warn@76',
+        'return@77',
+      ]);
+      expect(notify).toMatchObject({ splitCandidate: false });
+      expect(notify!.clusters.filter((cluster) => cluster.role === 'extraction')).toHaveLength(0);
+      // The delivery computes a result while awaiting the client: not pure.
+      expect(notify!.clusters[0]!.kind).toBe('operation');
 
       const [runAll] = sliceCohesion(db, { symbol: sym('handlers.ts', 'runAll') });
       expect(runAll).toMatchObject({ archetype: 'orchestration', actionTier: 'support', operational: false });

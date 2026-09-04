@@ -37,8 +37,12 @@ export type SliceCohesionActionTier = 'signal' | 'support';
  * design, so each is read differently from a plain calculation.
  */
 export type SliceCohesionArchetype = 'calculation' | 'react-component' | 'react-hook' | 'orchestration';
-/** What an extracted cluster would be: a pure calculation, a custom hook, or a sequence of effects. */
-export type SliceCohesionClusterKind = 'calculation' | 'hook' | 'effects';
+/**
+ * What an extracted cluster would be: a pure calculation, an operation that
+ * computes a result while awaiting or affecting the outside, a custom hook,
+ * or a sequence of effects.
+ */
+export type SliceCohesionClusterKind = 'calculation' | 'operation' | 'hook' | 'effects';
 /** The largest qualifying cluster stays in place; the others are the extractions; the rest are below threshold. */
 export type SliceCohesionClusterRole = 'remainder' | 'extraction' | 'below-threshold';
 
@@ -244,6 +248,16 @@ interface BodyModel {
   localNames: Set<string>;
   /** Predicates whose only consequence is leaving the function: `if (!x) return;`. */
   guardPredicates: Set<number>;
+  /** Units inside an exit-only branch: the exit itself and the calls that report it. */
+  guardUnits: Set<number>;
+  /**
+   * Predicates that syntactically enclose each unit (if, loop, and switch
+   * conditions). The compiler's control dependence drops a branch statement
+   * that a may-raise edge can skip, so structure supplies the dependence.
+   */
+  enclosingPredicates: number[][];
+  /** Counted units that await outside their nested functions. */
+  awaitUnits: Set<number>;
   /** `start:end` of every callee expression, so reads of a called name are not reported as inputs. */
   calleeSpans: Set<string>;
   closures: Map<string, ClosureSummary>;
@@ -614,10 +628,13 @@ export function sliceCohesionForDefinition(
     const seedUnitList = seedUnits(seed, flowModel);
     const slice = [...backwardSlice(seedUnitList, computationDeps)].filter((unit) => countedSet.has(unit));
     const fullSlice = [...backwardSlice(seedUnitList, fullDeps)].filter((unit) => countedSet.has(unit));
+    // An output inside an exit-only branch is a guard, as is an unconditional
+    // exit that reads nothing computed here.
     const guard =
-      (seed.kind === 'throw' || seed.kind === 'return') &&
-      seed.seedPoints === null &&
-      slice.every((unit) => unit === seed.unit || body.units[unit]!.kind === 'predicate');
+      body.guardUnits.has(seed.unit) ||
+      ((seed.kind === 'throw' || seed.kind === 'return') &&
+        seed.seedPoints === null &&
+        slice.every((unit) => unit === seed.unit));
     return { seed, guard, slice: new Set(slice), fullSlice: new Set(fullSlice) };
   });
   const sliced = mergeOutputs(slicedSeeds);
@@ -625,9 +642,27 @@ export function sliceCohesionForDefinition(
   const valueOutputs = sliced.filter((output) => !output.guard);
   const metrics = cohesionMetrics(valueOutputs, counted.length);
   const outputUnits = new Set(sliced.flatMap((output) => output.units));
-  const preamble = sharedPreamble(valueOutputs, outputUnits, body, flowModel);
-  const preambleSet = new Set(preamble);
-  const clusters = clusterOutputs(valueOutputs, preambleSet, body, flowModel, thresholds);
+  // Setup is shared only when outputs from different clusters read it. A
+  // unit that every reader consumes within one cluster is that cluster's
+  // computation, so it returns to the cluster and the partition is redrawn.
+  const preambleSet = new Set(sharedPreamble(valueOutputs, outputUnits, body, flowModel));
+  let clusters = clusterOutputs(valueOutputs, preambleSet, body, flowModel, thresholds);
+  for (;;) {
+    const clusterOf = new Map<string, number>();
+    clusters.forEach((cluster, index) => cluster.outputs.forEach((id) => clusterOf.set(id, index)));
+    const unshared = [...preambleSet].filter((unit) => {
+      const readers = new Set<number>();
+      for (const output of valueOutputs) {
+        const cluster = clusterOf.get(output.id);
+        if (cluster !== undefined && sliceOf(output).includes(unit)) readers.add(cluster);
+      }
+      return readers.size <= 1;
+    });
+    if (unshared.length === 0) break;
+    for (const unit of unshared) preambleSet.delete(unit);
+    clusters = clusterOutputs(valueOutputs, preambleSet, body, flowModel, thresholds);
+  }
+  const preamble = [...preambleSet].sort(ascending);
   const clustered = new Set(clusters.flatMap((cluster) => cluster.outputs));
   const preambleOnlyOutputs = valueOutputs.filter((output) => !clustered.has(output.id)).map((output) => output.id);
   const reached = new Set(sliced.flatMap((output) => output.fullSlice ?? []));
@@ -747,6 +782,9 @@ function modelBody(
 ): BodyModel {
   const units: Unit[] = [];
   const guardNodes = new Set<TypeScript.Node>();
+  const guardBranchNodes = new Set<TypeScript.Node>();
+  const predicateStack: TypeScript.Node[] = [];
+  const enclosingByNode = new Map<TypeScript.Node, TypeScript.Node[]>();
   const tryRegions: { tryNodes: TypeScript.Node[]; handlerNodes: TypeScript.Node[] }[] = [];
   const callableBody = callable.body!;
   const addUnit = (kind: SliceCohesionUnitKind, node: TypeScript.Node): void => {
@@ -762,30 +800,49 @@ function modelBody(
       endLine: sourceFile.getLineAndCharacterOfPosition(end).line,
       label: unitLabel(sourceFile, node),
     });
+    enclosingByNode.set(node, [...predicateStack]);
+  };
+  const underPredicate = (predicate: TypeScript.Node, visit: () => void): void => {
+    predicateStack.push(predicate);
+    visit();
+    predicateStack.pop();
   };
   const visitStatement = (statement: TypeScript.Statement): void => {
     if (ts.isBlock(statement)) {
       for (const inner of statement.statements) visitStatement(inner);
     } else if (ts.isIfStatement(statement)) {
       addUnit('predicate', statement.expression);
-      if (!statement.elseStatement && isExitOnly(ts, statement.thenStatement)) guardNodes.add(statement.expression);
-      visitStatement(statement.thenStatement);
-      if (statement.elseStatement) visitStatement(statement.elseStatement);
+      const exitOnly =
+        !statement.elseStatement && isExitOnly(ts, statement.thenStatement, loopDeclaredNames(ts, statement));
+      if (exitOnly) guardNodes.add(statement.expression);
+      const branchStart = units.length;
+      underPredicate(statement.expression, () => {
+        visitStatement(statement.thenStatement);
+        if (exitOnly) for (const unit of units.slice(branchStart)) guardBranchNodes.add(unit.node);
+        if (statement.elseStatement) visitStatement(statement.elseStatement);
+      });
     } else if (ts.isWhileStatement(statement) || ts.isDoStatement(statement)) {
       addUnit('predicate', statement.expression);
-      visitStatement(statement.statement);
+      underPredicate(statement.expression, () => visitStatement(statement.statement));
     } else if (ts.isForStatement(statement)) {
       if (statement.initializer) addUnit('statement', statement.initializer);
       if (statement.condition) addUnit('predicate', statement.condition);
-      if (statement.incrementor) addUnit('statement', statement.incrementor);
-      visitStatement(statement.statement);
+      const predicate = statement.condition ?? statement;
+      underPredicate(predicate, () => {
+        if (statement.incrementor) addUnit('statement', statement.incrementor);
+        visitStatement(statement.statement);
+      });
     } else if (ts.isForInStatement(statement) || ts.isForOfStatement(statement)) {
       addUnit('predicate', statement.expression);
-      addUnit('statement', statement.initializer);
-      visitStatement(statement.statement);
+      underPredicate(statement.expression, () => {
+        addUnit('statement', statement.initializer);
+        visitStatement(statement.statement);
+      });
     } else if (ts.isSwitchStatement(statement)) {
       addUnit('predicate', statement.expression);
-      for (const clause of statement.caseBlock.clauses) for (const inner of clause.statements) visitStatement(inner);
+      underPredicate(statement.expression, () => {
+        for (const clause of statement.caseBlock.clauses) for (const inner of clause.statements) visitStatement(inner);
+      });
     } else if (ts.isTryStatement(statement)) {
       const tryStart = units.length;
       visitStatement(statement.tryBlock);
@@ -831,6 +888,15 @@ function modelBody(
     indexOfNode.set(unit.node, index);
   });
   const guardPredicates = new Set(units.filter((unit) => guardNodes.has(unit.node)).map((unit) => unit.index));
+  const guardUnits = new Set(units.filter((unit) => guardBranchNodes.has(unit.node)).map((unit) => unit.index));
+  const enclosingPredicates = units.map((unit) =>
+    (enclosingByNode.get(unit.node) ?? [])
+      .map((predicate) => indexOfNode.get(predicate))
+      .filter((index): index is number => index !== undefined),
+  );
+  const awaitUnits = new Set(
+    units.filter((unit) => COUNTED_KINDS.has(unit.kind) && containsAwait(ts, unit.node)).map((unit) => unit.index),
+  );
   const handlerDeps = new Map<number, number[]>();
   for (const region of tryRegions) {
     const tryUnits = region.tryNodes
@@ -943,6 +1009,9 @@ function modelBody(
     paramNames,
     localNames,
     guardPredicates,
+    guardUnits,
+    enclosingPredicates,
+    awaitUnits,
     calleeSpans,
     closures: new Map(),
     containers,
@@ -1090,19 +1159,72 @@ function resolveBases(body: BodyModel, base: string): Set<string> {
 }
 
 /**
- * A then-branch that only leaves the function: a return or throw, possibly
- * after calls that report the exit (`logger.warn(...)`). A `continue` or
- * `break` guard inside a loop filters the elements a computation sees, so
- * it stays an ordinary predicate.
+ * A then-branch that only leaves the function: statements that prepare or
+ * report the exit (calls, local bindings) followed by a return or throw
+ * whose value is not computed in the branch or in an enclosing loop. A
+ * `return empty` after `const empty = ...` at the top, a log line before
+ * `return null`, or a delegation such as `return suppress(params)` is an
+ * exit; `const detail = ...; return detail;` is an alternate result, and a
+ * `return item` from inside a search loop is the loop's result. A
+ * `continue` or `break` guard inside a loop filters the elements a
+ * computation sees, so it stays an ordinary predicate.
  */
-function isExitOnly(ts: TypeScriptModule, statement: TypeScript.Statement): boolean {
+function isExitOnly(
+  ts: TypeScriptModule,
+  statement: TypeScript.Statement,
+  outerDeclared: ReadonlySet<string>,
+): boolean {
   const statements = ts.isBlock(statement) ? statement.statements : [statement];
   if (statements.length === 0) return false;
   const last = statements[statements.length - 1]!;
   if (!ts.isReturnStatement(last) && !ts.isThrowStatement(last)) return false;
-  return statements
-    .slice(0, -1)
-    .every((inner) => ts.isExpressionStatement(inner) && ts.isCallExpression(unwrapExpression(ts, inner.expression)));
+  const declared = new Set(outerDeclared);
+  for (const inner of statements.slice(0, -1)) {
+    if (ts.isVariableStatement(inner)) {
+      for (const declaration of inner.declarationList.declarations)
+        for (const name of bindingNames(ts, declaration.name)) declared.add(name);
+    } else if (!ts.isExpressionStatement(inner)) {
+      return false;
+    }
+  }
+  if (!ts.isReturnStatement(last) || !last.expression) return true;
+  let computedHere = false;
+  const visit = (node: TypeScript.Node): void => {
+    if (computedHere) return;
+    if (ts.isIdentifier(node) && isReadIdentifier(ts, node) && declared.has(node.text)) computedHere = true;
+    else node.forEachChild(visit);
+  };
+  visit(last.expression);
+  return !computedHere;
+}
+
+/** Names bound inside the loops that enclose a statement: a value from one of them is the loop's result, not a guard's. */
+function loopDeclaredNames(ts: TypeScriptModule, statement: TypeScript.Statement): Set<string> {
+  const names = new Set<string>();
+  for (let current = statement.parent; current && !ts.isFunctionLike(current); current = current.parent) {
+    if (!ts.isIterationStatement(current, false)) continue;
+    const visit = (node: TypeScript.Node): void => {
+      if (ts.isVariableDeclaration(node)) for (const name of bindingNames(ts, node.name)) names.add(name);
+      node.forEachChild(visit);
+    };
+    visit(current);
+  }
+  return names;
+}
+
+/** Whether a unit awaits outside any nested function: it waits on the outside world rather than computing. */
+function containsAwait(ts: TypeScriptModule, node: TypeScript.Node): boolean {
+  let found = false;
+  const visit = (inner: TypeScript.Node): void => {
+    if (found || (ts.isFunctionLike(inner) && inner !== node)) return;
+    if (ts.isAwaitExpression(inner) || (ts.isForOfStatement(inner) && inner.awaitModifier !== undefined)) {
+      found = true;
+      return;
+    }
+    inner.forEachChild(visit);
+  };
+  visit(node);
+  return found;
 }
 
 function bindingNames(ts: TypeScriptModule, name: TypeScript.BindingName): string[] {
@@ -1260,6 +1382,10 @@ function projectFlow(body: BodyModel, flow: TypeScriptLocalFlowResult, relativeP
       addPointDep(to.id, fromUnit);
     }
   }
+
+  body.enclosingPredicates.forEach((predicates, unit) => {
+    for (const predicate of predicates) if (predicate !== unit) controlDeps[unit]!.add(predicate);
+  });
 
   const definitionsByUnitName = new Map<string, TypeScriptLocalFlowPoint>();
   for (const point of pointById.values()) {
@@ -1990,7 +2116,11 @@ function clusterOutputs(
       units,
       lineRanges: lineRangeList,
       inputs: [...inputs].sort(),
-      kind: clusterKind(clusterOutputRows, hooks),
+      kind: clusterKind(
+        clusterOutputRows,
+        hooks,
+        units.some((unit) => body.awaitUnits.has(unit)),
+      ),
       role: qualifying ? 'extraction' : 'below-threshold',
       narrow: inputs.size <= MAX_SIGNAL_CLUSTER_INPUTS,
       hooks,
@@ -2003,10 +2133,16 @@ function clusterOutputs(
   return clusters;
 }
 
-function clusterKind(outputs: readonly SliceCohesionOutput[], hooks: readonly string[]): SliceCohesionClusterKind {
+function clusterKind(
+  outputs: readonly SliceCohesionOutput[],
+  hooks: readonly string[],
+  awaits: boolean,
+): SliceCohesionClusterKind {
   if (hooks.length > 0 || outputs.some((output) => output.hook)) return 'hook';
-  if (outputs.some((output) => output.kind !== 'effect-call' && output.kind !== 'throw')) return 'calculation';
-  return 'effects';
+  const value = outputs.some((output) => output.kind === 'return' || output.kind === 'return-property');
+  const effects = awaits || outputs.some((output) => output.kind === 'effect-call' || output.kind === 'mutation');
+  if (!value) return 'effects';
+  return effects ? 'operation' : 'calculation';
 }
 
 function compareFirstLine(left: SliceCohesionCluster, right: SliceCohesionCluster): number {
@@ -2224,6 +2360,8 @@ function clusterKindLabel(cluster: SliceCohesionCluster): string {
   switch (cluster.kind) {
     case 'calculation':
       return 'pure calculation candidate';
+    case 'operation':
+      return 'operation candidate (awaits or effects inside; not pure)';
     case 'hook':
       return 'custom hook candidate (hooks stay unconditional and in order)';
     case 'effects':

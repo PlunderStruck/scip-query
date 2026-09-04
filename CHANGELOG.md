@@ -36,6 +36,16 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
   `effects`) and a role (`remainder`, `extraction`, `below-threshold`), and
   the recommendation names a pure calculation, custom hook, or effect
   sequence candidate rather than a generic function split.
+- Guards are structural: a then-branch that only prepares or reports an exit
+  (calls, local bindings, then a return or throw whose value is not computed
+  in the branch or an enclosing loop) is an exit, so `return empty` after a
+  shared constant, a log line before `return null`, and `return
+suppress(params)` do not form clusters. Every unit also depends on the
+  predicates that syntactically enclose it, so a strategy branch inside a
+  `try` shares its branch with the fallback that follows. Shared setup is
+  judged against the partition: a unit read by outputs of one cluster only
+  returns to that cluster. Clusters that compute a result while awaiting or
+  producing effects are `operation` candidates, not pure calculations.
 - Extraction interfaces count only what would become a parameter:
   function parameters, `this`, shared-setup bindings, and locals of an
   enclosing function. Imports, module-level names, globals, and JSX tags
