@@ -7,6 +7,8 @@ description: Evaluate architecture and maintainability for coding agents. Find a
 
 Load `$scip-query` for mechanics. This workflow covers first-use assessment, later design reassessment, and the structural consequences of changes. Use `$scip-integrity-audit` when the issue is whether a feature fulfills its promise.
 
+Choose from the shared guide's [architecture and dependency commands](../scip-query/references/command-guide.md#architecture-and-dependencies), [simplification and cleanup commands](../scip-query/references/command-guide.md#simplification-and-cleanup), or [framework investigations](../scip-query/references/command-guide.md#framework-investigations) when a concrete concern calls for that analysis. Each row explains its question, index requirement and limits.
+
 A module assigns responsibility to a group of code, such as storing documents or calculating eligibility. Its interface is the operations and rules consumers must understand: inputs, results, errors, effects, and ordering. A dependency exists when one implementation relies on another's behavior or representation.
 
 Maintainability is the ability to change required behavior correctly without unnecessary discovery, duplicated decisions, or coordinated edits. Evaluate mistakes the structure would invite an agent to make and the facts it must discover to avoid them. File size, folder names, interface counts, and clean dependency rules do not establish design quality.

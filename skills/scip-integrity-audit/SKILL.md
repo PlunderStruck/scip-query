@@ -7,6 +7,8 @@ description: Investigate whether a feature fulfills its promised behavior throug
 
 Load `$scip-query` for mechanics and `$scip-explore` when the live path is unknown. Ask “is this real?”: does the implementation produce the outcome its user or consumer relies on?
 
+Use the [implementation-integrity command guide](../scip-query/references/command-guide.md#implementation-integrity) to select a detector for a named concern. Its rows describe what each pattern can miss or misclassify; no detector replaces the live-path investigation below.
+
 An integrity defect is a mismatch between promised behavior and the behavior the live implementation provides. Establish the promise from the task, public contract, consumers, and relevant tests—not a function name alone. A fallback is an alternative selected when another implementation fails or is unavailable; its use cannot support a stronger guarantee than it provides.
 
 Do not attribute intentions such as cheating to an agent or author. Report the concrete shortcut, missing operation, unsupported claim, and consequence.

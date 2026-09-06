@@ -19,6 +19,8 @@ Architecture review absorbs principal-maintainability-review, scip-system-compre
 
 Upgrade removes links into this package for retired skills. It preserves unrelated links and user-owned files. Existing prompts naming retired workflows must use the canonical names above. Historical audit documents retain their original skill names as records of those runs.
 
+All six skills link the relevant sections of the [shared command decision guide](../skills/scip-query/references/command-guide.md). Every public command has a question, selector/mode, index prerequisite and interpretation limit. The guide separates internal transport/workers and explains which overlapping-looking controls answer different questions. Agents load the needed section, not an all-command checklist.
+
 ## One module evidence view
 
 ```sh

@@ -4,7 +4,7 @@ The current registry contains **86 commands: 81 public controls and 5 internal t
 
 A command is a named CLI operation that accepts selectors or options and returns repository observations or performs a defined maintenance action. An observed relationship records evidence connecting concrete files or symbols. A candidate is a possible cleanup or design issue inferred from a stated pattern; its existence does not prove that refactoring will preserve behavior or improve the design.
 
-For ordinary work, start with `health`, use `search`/`outline`/`code`/`inspect`/`evidence` to establish the required facts, and use `review`, `diff-impact` and `architecture` after changes. The specialist controls below remain useful for narrower questions. Full flags and examples are in [COMMAND_REFERENCE.md](COMMAND_REFERENCE.md); per-command decisions and test scope are in the [audit ledger](../benchmarks/command-contracts/2026-09-05/ledger.json).
+For first-use architecture assessment, use `system --source`; for current-source issue scanning, use `health`. Use `search`/`outline`/`code`/`inspect`/`evidence` for the facts a task needs, and `review`, `diff-impact` and applicable architecture checks after changes. The [command decision guide](../skills/scip-query/references/command-guide.md) maps every public control to a question, index requirement and limit. Full flags and examples are in [COMMAND_REFERENCE.md](COMMAND_REFERENCE.md); per-command decisions and test scope are in the [audit ledger](../benchmarks/command-contracts/2026-09-05/ledger.json).
 
 The audit reviews contracts and tests known counterexamples. It does not establish universal accuracy across every language, framework or runtime convention. In particular, directory proximity and shared names do not prove conceptual ownership, candidate duplication does not prove interchangeability, and static relationships do not prove runtime reachability. CRAP requires source-matched test coverage; absent coverage is reported as unavailable.
 
@@ -81,7 +81,7 @@ The audit reviews contracts and tests known counterexamples. It does not establi
 | `similar-signatures` | Group functions by normalized signature text; shared type identity or responsibility is not established |
 | `diff-impact` | Map changed symbols and downstream consumers from the current git diff |
 | `health` | Find concrete TS/JS complexity, duplication, and dependency issues without an index |
-| `install-skills` | Install core exploration skills into Claude Code, Codex, and shared agent roots |
+| `install-skills` | Install the six agent workflows into Claude Code, Codex, and shared agent roots |
 | `check-deps` | Check whether scip-query and the detected language indexers are runnable |
 | `capabilities` | Report which mapping and analysis capabilities are available in this project |
 | `init` | Create a .scipquery.json configuration file for this project |

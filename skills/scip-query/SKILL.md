@@ -21,6 +21,8 @@ A finding identifies concrete code and evidence of a possible problem. A candida
 
 Load only the workflow needed. For authorized implementation, investigate, write a concise plan when needed, implement, and review. A workflow does not create another approval gate. Review-only requests remain review-only.
 
+When a task needs a command beyond the controls below, use the relevant section of the [command decision guide](references/command-guide.md). It maps every public command to a question, selector, index requirement and interpretation limit, and explains overlapping controls. Read that section rather than treating the complete inventory as a sequence to execute.
+
 ## Choose evidence
 
 - `scip-query system --source` inventories current TS/JS module groups, including groups without findings. Add an exact path or printed group ID to investigate a group. It does not infer business responsibilities.

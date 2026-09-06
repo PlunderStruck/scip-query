@@ -7,6 +7,8 @@ description: Understand the live repository behavior needed to explain, plan, ch
 
 Load `$scip-query` for shared mechanics. Use this workflow when the answer crosses symbols or files; skip the ceremony for an exact lookup whose answer is already local.
 
+Use the [exploration commands](../scip-query/references/command-guide.md#exploration) to choose a locator, relationship or source read, and [dependency commands](../scip-query/references/command-guide.md#architecture-and-dependencies) for module connections. Check their index requirements; current-text output does not imply an index-free invocation.
+
 A repository system is cooperating code and resources whose behavior turns an initiating input into observable results. An evidence ledger connects each material claim to source or execution evidence. A material claim is a fact whose truth could change the requested answer or edit.
 
 ## Establish the question

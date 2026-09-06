@@ -5,6 +5,8 @@ description: Install, diagnose, index, watch, repair, or clean up scip-query for
 
 # SCIP Setup
 
+Load `$scip-query` for shared mechanics. The [tool-operations command guide](../scip-query/references/command-guide.md#tool-operations) distinguishes configuration, indexing, augmentation, watcher control, skill installation, suppression records and removal. Use its prerequisites and effects to select the specific operation needed.
+
 Use this skill when the exploration surface itself is unavailable, stale, slow, or consuming unexpected disk or CPU. An operational diagnosis identifies the concrete state transition that prevented a checkout-local index from becoming or remaining fresh; it does not infer failure from elapsed time alone.
 
 1. Run `scip-query status` to inspect the active checkout, index generation, freshness, watcher, and cache ownership.

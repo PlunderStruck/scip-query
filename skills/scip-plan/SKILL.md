@@ -7,6 +7,8 @@ description: Turn verified repository behavior into an executable change plan wi
 
 Load `$scip-query` for mechanics and `$scip-explore` when live behavior is not established. A plan is an ordered set of concrete changes and checks another agent can execute without rediscovering the system.
 
+The [planning and change-review commands](../scip-query/references/command-guide.md#orientation-and-change-review) distinguish a pre-change briefing, proposed symbol impact, actual diff metrics and downstream consumers. Choose the one that settles the current planning question; do not run them all for the same fact.
+
 Plan changes spanning owners, consumers, dependencies, migrations, or several implementation steps. Skip a document for one obvious edit. Persist substantial plans in the project's normal location, usually `docs/plans/YYYY-MM-DD-<change>.md`, when they must survive a context reset.
 
 ## Establish the implementation
