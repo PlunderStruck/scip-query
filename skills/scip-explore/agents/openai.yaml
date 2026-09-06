@@ -1,4 +1,4 @@
 interface:
-  display_name: 'SCIP Explore'
-  short_description: 'Understand repository systems end to end'
-  default_prompt: 'Use $scip-explore to understand this repository system end to end before explaining or changing it.'
+  display_name: "SCIP Explore"
+  short_description: "Trace live code behavior and consumers."
+  default_prompt: "Use $scip-explore to establish the live implementation and the facts needed for this task."

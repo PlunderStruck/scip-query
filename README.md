@@ -1,6 +1,6 @@
 # scip-query
 
-For the normal **explore → plan → implement → review** workflow, start with `scip-query health` and use `scip-query review --base HEAD` after edits. Both inspect current TS/JS source without an index. See [review and coverage](docs/REVIEW.md) and the [product vision](docs/PRODUCT_VISION.md).
+For the normal **explore → plan → implement → review** workflow, use `scip-query system --source` for a module inventory, `scip-query health` for cleanup candidates, and `scip-query review --base HEAD` after edits. These inspect current TS/JS source without an index. See [agent workflows and module evidence](docs/SKILLS.md), [review and coverage](docs/REVIEW.md), and the [product vision](docs/PRODUCT_VISION.md).
 
 scip-query helps coding agents inspect code relationships and review changes.
 It uses compiler-produced symbol identities to distinguish definitions that happen
@@ -49,7 +49,7 @@ allow-scripts=... --location=user` command npm prints; `--allow-scripts` is
 rejected inside a project directory by design.
 
 Setup detects supported languages, installs or checks their indexers, builds
-the local index, installs the core exploration skills, and writes concise agent guidance.
+the local index, installs the six agent workflows, and writes concise agent guidance.
 When the repository declares valid architecture rules, setup also installs one
 checkout-local Stop hook that checks those rules after indexed source changes.
 It does not install a completion gate, pre-commit gate, or CI enforcement.

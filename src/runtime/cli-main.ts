@@ -32,6 +32,18 @@ import { parseOutputPageSize } from './output-pagination.js';
 import { runCliWithErrorBoundary } from './cli-error-boundary.js';
 
 const cliEntrypoint = isCliEntrypoint();
+function commandPreparation(
+  commandName: string,
+  options: Readonly<Record<string, unknown>>,
+): { prepareSharedCache: boolean; startWatchService: boolean } {
+  if (commandName === 'system' && options.source === true)
+    return { prepareSharedCache: false, startWatchService: false };
+  return {
+    prepareSharedCache: sharedCachePreparationEligible(commandName),
+    startWatchService: watchServiceAutoStartEligible(commandName),
+  };
+}
+
 if (cliEntrypoint) {
   installTerminalConsoleSanitizer();
   program.configureOutput({
@@ -71,8 +83,7 @@ program.hook('preAction', async (_thisCommand, actionCommand) => {
     initializeProfileContext();
     return;
   }
-  const prepareSharedCache = sharedCachePreparationEligible(commandName);
-  const startWatchService = watchServiceAutoStartEligible(commandName);
+  const { prepareSharedCache, startWatchService } = commandPreparation(commandName, actionCommand.opts());
   if (prepareSharedCache) releaseProjectFileListingCache = enterProjectFileListingCache();
   if (!prepareSharedCache && !startWatchService) {
     initializeProfileContext();

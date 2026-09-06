@@ -19,13 +19,29 @@ export interface SourceModuleSubject {
   interpretation: string;
 }
 
-/** Group findings for planning; directory membership is location evidence, not a discovered responsibility. */
+export type SourceModuleInventory = Omit<SourceModuleSubject, 'highestPriority'> & {
+  highestPriority?: SourceFinding['rule'];
+};
+
+/** Preserve the health/review contract: subjects always carry at least one finding. */
 export function sourceModuleSubjects(
   files: readonly string[],
   imports: readonly SourceImport[],
   findings: readonly SourceFinding[],
   config?: ArchitectureConfig,
 ): SourceModuleSubject[] {
+  return sourceModuleInventory(files, imports, findings, config).filter(
+    (group): group is SourceModuleSubject => group.highestPriority !== undefined,
+  );
+}
+
+/** Inventory every captured group; location alone does not establish a business responsibility. */
+export function sourceModuleInventory(
+  files: readonly string[],
+  imports: readonly SourceImport[],
+  findings: readonly SourceFinding[],
+  config?: ArchitectureConfig,
+): SourceModuleInventory[] {
   const { groups, owners } = moduleOwnership(files, config);
   const { outgoing, incoming } = moduleRelationships(imports, owners, config);
   const sorted = [...findings]
@@ -34,7 +50,6 @@ export function sourceModuleSubjects(
   const rank = new Map(sorted.map((finding, index) => [finding.id, index]));
   assignModuleFindings(sorted, groups, owners);
   return [...groups.values()]
-    .filter((group) => group.findingIds.length)
     .map((group) => ({
       ...group,
       files: group.files.sort(),
@@ -49,7 +64,7 @@ export function sourceModuleSubjects(
 }
 
 function moduleOwnership(files: readonly string[], config?: ArchitectureConfig) {
-  const groups = new Map<string, SourceModuleSubject>();
+  const groups = new Map<string, SourceModuleInventory>();
   const owners = new Map<string, string>();
   for (const file of files) {
     const boundary = architectureBoundaryForFile(config, file);
@@ -64,7 +79,6 @@ function moduleOwnership(files: readonly string[], config?: ArchitectureConfig) 
         dependencies: [],
         findingIds: [],
         primaryFindingIds: [],
-        highestPriority: 'complexity',
         interpretation:
           'Grouping identifies declared membership or a shared directory. Review the observed contracts before changing ownership.',
       });
@@ -97,7 +111,7 @@ function moduleRelationships(
 
 function assignModuleFindings(
   sorted: readonly SourceFinding[],
-  groups: Map<string, SourceModuleSubject>,
+  groups: Map<string, SourceModuleInventory>,
   owners: ReadonlyMap<string, string>,
 ): void {
   for (const finding of sorted) {

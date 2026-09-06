@@ -1,4 +1,0 @@
-interface:
-  display_name: 'SCIP Calibrate'
-  short_description: "Measure scip-query's detector precision on a repository before trusting its scores"
-  default_prompt: 'Run the $scip-calibrate protocol against this repository: inventory evidence tiers, sweep the detector battery, sample and classify each detector from the code, then tune repo knobs and file detector bugs.'

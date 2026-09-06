@@ -1,4 +1,4 @@
 interface:
-  display_name: 'SCIP Setup'
-  short_description: 'Set up and diagnose SCIP Query indexing'
-  default_prompt: 'Use $scip-setup to install or diagnose scip-query for this repository.'
+  display_name: "SCIP Setup"
+  short_description: "Install, diagnose, and repair scip-query."
+  default_prompt: "Use $scip-setup to identify and repair the concrete tool lifecycle problem."

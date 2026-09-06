@@ -1,4 +1,0 @@
-interface:
-  display_name: 'Concrete Plan (compatibility)'
-  short_description: 'Forward old planning prompts to SCIP Plan'
-  default_prompt: 'Use $scip-plan for this repository plan. $concrete-plan is only a compatibility alias.'

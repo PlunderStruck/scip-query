@@ -1,4 +1,0 @@
-interface:
-  display_name: 'Principal Maintainability Review'
-  short_description: 'Find the maintainability smells a principal engineer would flag, with evidence'
-  default_prompt: 'Use $principal-maintainability-review to find the highest-value maintainability smells in this codebase: scattered concepts, hidden policies, unnamed lifecycles, and false compression, each tied to files and symbols.'

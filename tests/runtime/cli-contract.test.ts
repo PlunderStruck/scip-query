@@ -52,6 +52,7 @@ const PRIVATE_QUERY_MODULES = [
   'source-dependencies',
   'source-modules',
   'source-suppressions',
+  'source-system',
   'source-inspection-selection',
   'source-search-batch',
   'source-snippet',
@@ -70,6 +71,7 @@ const PRIVATE_QUERY_SOURCE_PATHS = {
   'source-dependencies': 'src/queries/health/source-dependencies.ts',
   'source-modules': 'src/queries/health/source-modules.ts',
   'source-suppressions': 'src/queries/health/source-suppressions.ts',
+  'source-system': 'src/queries/health/source-system.ts',
   'binding-closure': 'src/queries/navigation/binding-closure.ts',
   'boundary-evidence': 'src/queries/cleanup/boundary-evidence.ts',
   'graph-evidence': 'src/queries/graph/graph-evidence.ts',
@@ -479,6 +481,7 @@ describe('CLI contract', () => {
       'diff-impact',
       'health',
       'review',
+      'system',
     ]);
     expect(mixed.every((entry) => (entry.claims.families?.length ?? 0) > 0)).toBe(true);
   });
@@ -521,51 +524,17 @@ describe('CLI contract', () => {
     ).toEqual([]);
   });
 
-  it('keeps sensing separate from end-to-end exploration, workflow, and integrity guidance', () => {
+  it('routes only to shipped workflows and supplies the module source view', () => {
     const readSkill = (name: string) => readFileSync(join(process.cwd(), 'skills', name, 'SKILL.md'), 'utf8');
-    const exploration = readSkill('scip-query');
-    const systemExploration = readSkill('scip-explore');
-    const planning = readSkill('scip-plan');
-
-    expect(exploration).toContain('scip-query search');
-    expect(exploration).toContain('scip-query inspect');
-    expect(exploration).toContain('scip-query evidence');
-    expect(exploration).toContain('scip-query context');
-    expect(exploration).toContain('scip-query review --base');
-    expect(exploration).toContain('health --indexed');
-    expect(exploration).toContain('write a concise plan');
-    expect(exploration).toContain('does not create another approval gate');
-    expect(exploration).toContain('Respect disabled watching');
-    expect(exploration).toContain('unavailable, never zero');
-    expect(exploration).toContain('Load `$scip-explore`');
-    expect(exploration).not.toMatch(/Stop hook|Gherkin/i);
-    expect(planning).toContain('scip-query evidence');
-    expect(planning).toContain('Treat its commands as controls, not a checklist');
-    expect(planning).toContain('When several implementations match');
-    expect(planning).toContain('exact symbol and file/line references');
-    expect(planning).toMatch(/\| Step\s+\| Code reference\s+\| Change\s+\| Preserve or retire\s+\| Verify\s+\|/);
-    expect(planning).not.toMatch(/evidence ledger|progress bookkeeping/i);
-    expect(readSkill('scip-setup')).toContain('scip-query doctor');
-    expect(readSkill('scip-setup')).toContain('scip-query status');
-    expect(readSkill('scip-integrity-audit')).toContain('is this real');
-    expect(readSkill('scip-integrity-audit')).toContain('decorative-checkers');
-    expect(readSkill('scip-integrity-audit')).toContain('not-implemented');
-    expect(readSkill('scip-integrity-audit')).toContain('test-quality');
-    expect(systemExploration).toContain('private evidence ledger');
-    expect(systemExploration).toContain('causal spine');
-    expect(systemExploration).toContain('origin and ownership');
-    expect(systemExploration).toContain('failure and recovery');
-    expect(systemExploration).toContain('`established`, `unsupported`, or `excluded`');
-    expect(systemExploration).toContain('make authoritative scope the first ledger row');
-    expect(systemExploration).toContain('If two consecutive packets');
-    expect(systemExploration).toContain('Do not load it for routine end-to-end exploration');
-    expect(systemExploration).toContain('references/information-model.md');
-    expect(systemExploration).toContain('references/delegated-exploration.md');
-    expect(systemExploration).not.toContain('compatibility alias');
-    expect(readSkill('concrete-plan')).toContain('compatibility alias');
-    expect(`${exploration}\n${planning}\n${readSkill('scip-setup')}\n${readSkill('scip-integrity-audit')}`).not.toMatch(
-      /diff-gate|Gherkin/i,
+    const primary = readSkill('scip-query');
+    const routed = [...primary.matchAll(/\$([a-z][a-z-]+)/g)].map((match) => match[1]!);
+    expect(new Set(routed)).toEqual(
+      new Set(['scip-explore', 'scip-plan', 'scip-architecture-review', 'scip-integrity-audit', 'scip-setup']),
     );
+    for (const name of routed) expect(readSkill(name)).toContain(`name: ${name}`);
+    const system = commandDescriptors.find((descriptor) => descriptor.id === 'system')!;
+    expect(system.options?.some((option) => option.flags === '--source')).toBe(true);
+    expect(primary).toContain('scip-query system --source');
   });
 
   it('keeps command reference syntax generated from descriptors', () => {

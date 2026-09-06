@@ -1,0 +1,4 @@
+interface:
+  display_name: "Architecture and Maintainability"
+  short_description: "Review owners, interfaces, and dependencies."
+  default_prompt: "Use $scip-architecture-review to identify concrete maintenance mistakes this design invites and assess changes using behavior and consumers."

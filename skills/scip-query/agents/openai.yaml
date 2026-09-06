@@ -1,4 +1,4 @@
 interface:
   display_name: "SCIP Query"
-  short_description: "Explore code through exact identities and relationships"
-  default_prompt: "Use $scip-query as the primary repository exploration surface. Treat commands as controls rather than a checklist, reuse locator results as graph roots, distinguish competing implementations by their entry surfaces and callers, and use exact identities, relationships, behavior, source, coverage, and recovery to understand the requested system accurately."
+  short_description: "Locate code and review actual changes."
+  default_prompt: "Use $scip-query to choose evidence and the workflow needed for this task."

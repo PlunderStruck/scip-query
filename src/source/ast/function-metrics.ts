@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ts } from '@ts-morph/common';
+import { bindingNames } from './maintenance-bindings.js';
 
 export interface ComplexityContribution {
   line: number;
@@ -29,7 +30,18 @@ export interface FunctionAnalysis {
   sourceFile: ts.SourceFile;
   checker: ts.TypeChecker;
   functions: SourceFunction[];
+  exports: SourceExportDeclaration[];
   errors: string[];
+}
+
+/** Source-level export statements, not resolved public API or observed invocation coverage. */
+export interface SourceExportDeclaration {
+  file: string;
+  startLine: number;
+  endLine: number;
+  names: string[];
+  syntax: string;
+  from?: string;
 }
 
 export const FUNCTION_METRIC_RULES = 'typescript-function-local-v1';
@@ -68,7 +80,49 @@ export function analyzeSourceFunctions(file: string, source: string): FunctionAn
     ts.forEachChild(node, (child) => visit(child, owner ? [...owners, owner] : owners));
   }
   if (errors.length === 0) visit(sourceFile, []);
-  return { sourceFile, checker, functions, errors };
+  return { sourceFile, checker, functions, exports: errors.length ? [] : sourceExports(sourceFile), errors };
+}
+
+function sourceExports(source: ts.SourceFile): SourceExportDeclaration[] {
+  const exports: SourceExportDeclaration[] = [];
+  for (const statement of source.statements) {
+    const names = exportedNames(statement, source);
+    if (!names) continue;
+    exports.push({
+      file: source.fileName,
+      startLine: source.getLineAndCharacterOfPosition(statement.getStart(source)).line + 1,
+      endLine: source.getLineAndCharacterOfPosition(statement.getEnd() - 1).line + 1,
+      names,
+      syntax: ts.isVariableStatement(statement) ? 'VariableStatement' : ts.SyntaxKind[statement.kind],
+      ...(ts.isExportDeclaration(statement) && statement.moduleSpecifier
+        ? {
+            from: ts.isStringLiteralLike(statement.moduleSpecifier)
+              ? statement.moduleSpecifier.text
+              : statement.moduleSpecifier.getText(source),
+          }
+        : {}),
+    });
+  }
+  return exports;
+}
+
+function exportedNames(statement: ts.Statement, source: ts.SourceFile): string[] | undefined {
+  if (ts.isExportDeclaration(statement)) {
+    const clause = statement.exportClause;
+    if (!clause) return ['*'];
+    return ts.isNamedExports(clause) ? clause.elements.map((item) => item.name.text) : [clause.name.text];
+  }
+  if (ts.isExportAssignment(statement)) return [statement.isExportEquals ? 'export=' : 'default'];
+  return declarationExportNames(statement, source);
+}
+
+function declarationExportNames(statement: ts.Statement, source: ts.SourceFile): string[] | undefined {
+  const modifiers = ts.canHaveModifiers(statement) ? ts.getModifiers(statement) : undefined;
+  if (!modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)) return undefined;
+  if (modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)) return ['default'];
+  if (ts.isVariableStatement(statement))
+    return statement.declarationList.declarations.flatMap((declaration) => bindingNames(declaration.name));
+  return 'name' in statement && statement.name ? [(statement.name as ts.Node).getText(source)] : [];
 }
 
 type ImplementedFunction = ts.FunctionLikeDeclaration & { body: ts.ConciseBody };

@@ -8,36 +8,14 @@ export const BUILTIN_SKILLS = [
   'scip-query',
   'scip-explore',
   'scip-plan',
-  'scip-setup',
+  'scip-architecture-review',
   'scip-integrity-audit',
-  'principal-maintainability-review',
-  'scip-system-compression',
-  'scip-root-cause',
-  'scip-claim-audit',
-  'scip-probe-reachability',
-  'scip-twin-drift',
-  'scip-calibrate',
-  'conductor',
+  'scip-setup',
 ] as const;
-export const DEFAULT_SKILLS = ['scip-query', 'scip-explore'] as const;
+export const DEFAULT_SKILLS = BUILTIN_SKILLS;
 
-export const COMPATIBILITY_SKILLS = ['concrete-plan'] as const;
-export const INSTALLABLE_SKILLS = [
-  'scip-query',
-  'scip-plan',
-  'scip-setup',
-  'scip-integrity-audit',
-  'scip-explore',
-  'principal-maintainability-review',
-  'scip-system-compression',
-  'scip-root-cause',
-  'scip-claim-audit',
-  'scip-probe-reachability',
-  'scip-twin-drift',
-  'scip-calibrate',
-  'conductor',
-  'concrete-plan',
-] as const;
+export const COMPATIBILITY_SKILLS = [] as const;
+export const INSTALLABLE_SKILLS = BUILTIN_SKILLS;
 // ── Skills Installation ────────────────────────────────────
 
 export interface InstallSkillsResult {

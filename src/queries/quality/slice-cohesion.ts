@@ -1,4 +1,5 @@
 import type * as TypeScript from 'typescript';
+import { bindingNames } from '../../source/ast/maintenance-bindings.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import {
@@ -929,8 +930,7 @@ function modelBody(
   }
 
   const paramNames = new Set<string>();
-  for (const parameter of callable.parameters)
-    for (const name of bindingNames(ts, parameter.name)) paramNames.add(name);
+  for (const parameter of callable.parameters) for (const name of bindingNames(parameter.name)) paramNames.add(name);
   const localNames = new Set<string>();
   const calleeSpans = new Set<string>();
   const closureNodes = new Map<string, TypeScript.FunctionLikeDeclaration>();
@@ -953,7 +953,7 @@ function modelBody(
   };
   const visit = (node: TypeScript.Node): void => {
     if (ts.isVariableDeclaration(node)) {
-      const names = bindingNames(ts, node.name);
+      const names = bindingNames(node.name);
       for (const name of names) localNames.add(name);
       const initializer = node.initializer ? unwrapExpression(ts, node.initializer) : null;
       const closure = initializer ? closureExpression(ts, initializer) : null;
@@ -991,14 +991,14 @@ function modelBody(
         }
       }
     } else if (ts.isParameter(node) && node.parent !== callable) {
-      for (const name of bindingNames(ts, node.name)) localNames.add(name);
+      for (const name of bindingNames(node.name)) localNames.add(name);
     } else if (ts.isFunctionDeclaration(node) && node.name) {
       localNames.add(node.name.text);
       if (node.body) closureNodes.set(node.name.text, node);
     } else if (ts.isClassDeclaration(node) && node.name) {
       localNames.add(node.name.text);
     } else if (ts.isCatchClause(node) && node.variableDeclaration) {
-      for (const name of bindingNames(ts, node.variableDeclaration.name)) localNames.add(name);
+      for (const name of bindingNames(node.variableDeclaration.name)) localNames.add(name);
     }
     if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
       calleeSpans.add(`${node.expression.getStart(sourceFile)}:${node.expression.getEnd()}`);
@@ -1202,7 +1202,7 @@ function isExitOnly(
   for (const inner of statements.slice(0, -1)) {
     if (ts.isVariableStatement(inner)) {
       for (const declaration of inner.declarationList.declarations)
-        for (const name of bindingNames(ts, declaration.name)) declared.add(name);
+        for (const name of bindingNames(declaration.name)) declared.add(name);
     } else if (!ts.isExpressionStatement(inner)) {
       return false;
     }
@@ -1224,7 +1224,7 @@ function loopDeclaredNames(ts: TypeScriptModule, statement: TypeScript.Statement
   for (let current = statement.parent; current && !ts.isFunctionLike(current); current = current.parent) {
     if (!ts.isIterationStatement(current, false)) continue;
     const visit = (node: TypeScript.Node): void => {
-      if (ts.isVariableDeclaration(node)) for (const name of bindingNames(ts, node.name)) names.add(name);
+      if (ts.isVariableDeclaration(node)) for (const name of bindingNames(node.name)) names.add(name);
       node.forEachChild(visit);
     };
     visit(current);
@@ -1245,16 +1245,6 @@ function containsAwait(ts: TypeScriptModule, node: TypeScript.Node): boolean {
   };
   visit(node);
   return found;
-}
-
-function bindingNames(ts: TypeScriptModule, name: TypeScript.BindingName): string[] {
-  if (ts.isIdentifier(name)) return [name.text];
-  const names: string[] = [];
-  for (const element of name.elements) {
-    if (ts.isOmittedExpression(element)) continue;
-    names.push(...bindingNames(ts, element.name));
-  }
-  return names;
 }
 
 function unitLabel(sourceFile: TypeScript.SourceFile, node: TypeScript.Node): string {
@@ -1278,10 +1268,10 @@ function summarizeClosures(
   for (const [name, node] of closureNodes) {
     const declared = new Set<string>();
     const summary: ClosureSummary = { reads: new Set(), writes: new Set(), stateWrites: new Set(), calls: new Set() };
-    for (const parameter of node.parameters) for (const bound of bindingNames(ts, parameter.name)) declared.add(bound);
+    for (const parameter of node.parameters) for (const bound of bindingNames(parameter.name)) declared.add(bound);
     const declare = (inner: TypeScript.Node): void => {
-      if (ts.isVariableDeclaration(inner)) for (const bound of bindingNames(ts, inner.name)) declared.add(bound);
-      else if (ts.isParameter(inner)) for (const bound of bindingNames(ts, inner.name)) declared.add(bound);
+      if (ts.isVariableDeclaration(inner)) for (const bound of bindingNames(inner.name)) declared.add(bound);
+      else if (ts.isParameter(inner)) for (const bound of bindingNames(inner.name)) declared.add(bound);
       else if ((ts.isFunctionDeclaration(inner) || ts.isClassDeclaration(inner)) && inner.name)
         declared.add(inner.name.text);
       inner.forEachChild(declare);

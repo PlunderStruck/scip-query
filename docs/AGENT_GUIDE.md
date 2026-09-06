@@ -3,6 +3,10 @@
 scip-query supplies repository evidence. The agent owns the goal, plan, code,
 tests, and final decision.
 
+The [six bundled skills](SKILLS.md) separate exploration, planning, architecture/maintainability review, integrity investigation, and tool operations around one shared tool guide. Load only the workflow needed by the task.
+
+For a first-use module inventory, run `scip-query system --source`. It includes current TS/JS groups with no health findings and reports source export declarations, imports, consumers, policy context, and coverage. Select a printed group ID or an exact path with the same command to investigate it. Directory membership does not establish business responsibility, and source exports do not establish a complete resolved public API.
+
 ## Before a nonlocal edit
 
 Use one evidence ladder: locate exact text; orient it by compiler identity and
@@ -80,7 +84,7 @@ For cleanup, drift, React, or Vue work, run the relevant health or focused
 detector command. Confirm heuristic candidates in source before editing them.
 
 ```bash
-scip-query health --full
+scip-query health --indexed
 scip-query react-hook-candidates --full
 scip-query vue-composable-candidates --full
 ```

@@ -38,85 +38,37 @@ afterEach(() => {
 });
 
 describe('skill installation', () => {
-  it('installs only the exploration pair by default', async () => {
-    const { module } = await loadSetup();
+  const expectedSkills = [
+    'scip-query',
+    'scip-explore',
+    'scip-plan',
+    'scip-architecture-review',
+    'scip-integrity-audit',
+    'scip-setup',
+  ];
+
+  it('installs the six distinct workflows by default', async () => {
+    const { module, symlinkSync } = await loadSetup();
     const result = module.installSkills();
-    expect(result.installed).toEqual([
-      'Claude/scip-query',
-      'Claude/scip-explore',
-      'Codex/scip-query',
-      'Codex/scip-explore',
-      'Agents/scip-query',
-      'Agents/scip-explore',
-    ]);
-  });
-  it('keeps the builtin skill list in lockstep with the shipped directories', async () => {
-    const { module } = await loadSetup();
-    expect([...module.BUILTIN_SKILLS].sort()).toEqual([
-      'conductor',
-      'principal-maintainability-review',
-      'scip-calibrate',
-      'scip-claim-audit',
-      'scip-explore',
-      'scip-integrity-audit',
-      'scip-plan',
-      'scip-probe-reachability',
-      'scip-query',
-      'scip-root-cause',
-      'scip-setup',
-      'scip-system-compression',
-      'scip-twin-drift',
-    ]);
-    expect([...module.INSTALLABLE_SKILLS].sort()).toEqual(
-      [...module.BUILTIN_SKILLS, ...module.COMPATIBILITY_SKILLS].sort(),
+    expect(result.installed).toEqual(
+      ['Claude', 'Codex', 'Agents'].flatMap((tool) => expectedSkills.map((skill) => `${tool}/${skill}`)),
     );
+    for (const skill of expectedSkills)
+      expect(symlinkSync).toHaveBeenCalledWith(`/pkg/skills/${skill}`, `/home/test/.codex/skills/${skill}`, 'dir');
+  });
+
+  it('ships exactly the canonical workflows without retired aliases', async () => {
+    const { module } = await loadSetup();
+    expect([...module.BUILTIN_SKILLS]).toEqual(expectedSkills);
+    expect(module.COMPATIBILITY_SKILLS).toEqual([]);
     expect([...module.INSTALLABLE_SKILLS].sort()).toEqual(readdirSync(join(process.cwd(), 'skills')).sort());
   });
 
-  it('ships the primary router, workflow skills, and integrity audit', async () => {
+  it('preserves the all option for existing installation scripts', async () => {
     const { module } = await loadSetup();
-    expect(module.BUILTIN_SKILLS).toEqual([
-      'scip-query',
-      'scip-explore',
-      'scip-plan',
-      'scip-setup',
-      'scip-integrity-audit',
-      'principal-maintainability-review',
-      'scip-system-compression',
-      'scip-root-cause',
-      'scip-claim-audit',
-      'scip-probe-reachability',
-      'scip-twin-drift',
-      'scip-calibrate',
-      'conductor',
-    ]);
-  });
-
-  it('installs every bundled skill when explicitly requested', async () => {
-    const { module, symlinkSync } = await loadSetup();
-    const result = module.installSkills({ quiet: true, all: true });
-
-    for (const skill of [
-      'scip-query',
-      'scip-plan',
-      'scip-setup',
-      'scip-integrity-audit',
-      'scip-explore',
-      'principal-maintainability-review',
-      'scip-system-compression',
-      'scip-root-cause',
-      'scip-claim-audit',
-      'scip-probe-reachability',
-      'scip-twin-drift',
-      'scip-calibrate',
-      'conductor',
-      'concrete-plan',
-    ]) {
-      expect(result.installed).toEqual(
-        expect.arrayContaining([`Claude/${skill}`, `Codex/${skill}`, `Agents/${skill}`]),
-      );
-      expect(symlinkSync).toHaveBeenCalledWith(`/pkg/skills/${skill}`, `/home/test/.codex/skills/${skill}`, 'dir');
-    }
+    expect(module.installSkills({ quiet: true, all: true }).installed).toEqual(
+      ['Claude', 'Codex', 'Agents'].flatMap((tool) => expectedSkills.map((skill) => `${tool}/${skill}`)),
+    );
   });
 
   it('can install into an isolated home for a clean smoke test', async () => {
@@ -157,6 +109,33 @@ describe('skill installation', () => {
     const result = module.installSkills({ quiet: true });
     expect(result.skipped).toContain('Codex/scip-query');
     expect(unlinkSync).not.toHaveBeenCalledWith('/home/test/.codex/skills/scip-query');
+  });
+
+  it('removes retired workflow links on upgrade and preserves user-owned replacements', async () => {
+    const { module, readlinkSync, readdirSync, unlinkSync } = await loadSetup();
+    const retired = [
+      'principal-maintainability-review',
+      'scip-system-compression',
+      'scip-root-cause',
+      'scip-claim-audit',
+      'scip-probe-reachability',
+      'scip-twin-drift',
+      'scip-calibrate',
+      'conductor',
+      'concrete-plan',
+    ];
+    readdirSync.mockImplementation((target: string) =>
+      target === '/home/test/.codex/skills' ? [...retired, 'custom'] : [],
+    );
+    readlinkSync.mockImplementation((target: string) => {
+      const name = target.split('/').at(-1)!;
+      if (name === 'custom') return '/user/skills/custom';
+      if (retired.includes(name)) return `/pkg/skills/${name}`;
+      throw new Error('not-a-link');
+    });
+    const result = module.installSkills({ quiet: true });
+    expect(result.pruned.sort()).toEqual(retired.map((skill) => `Codex/${skill}`).sort());
+    expect(unlinkSync).not.toHaveBeenCalledWith('/home/test/.codex/skills/custom');
   });
 
   it('prunes stale scip-query skill links without touching unrelated links', async () => {

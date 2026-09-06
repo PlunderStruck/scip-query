@@ -1,4 +1,0 @@
-interface:
-  display_name: 'SCIP Claim Audit'
-  short_description: 'Classify output-facing status claims as derived, hedged, or asserted'
-  default_prompt: 'Use $scip-claim-audit to inventory output-facing status words in the target scope, classify each producer as derived, hedged, or asserted, and file findings for asserted trust-bearing claims.'

@@ -3,7 +3,11 @@ export { compareFindings, type MeasuredFunction, type SourceFinding } from './so
 import { maintenanceBindings, type MaintenanceBindingFacts } from '../../source/ast/maintenance-bindings.js';
 import { responsibilityFindings } from './source-modules.js';
 import type { ArchitectureConfig } from '../../domain/types.js';
-import { analyzeSourceFunctions, FUNCTION_METRIC_RULES } from '../../source/ast/function-metrics.js';
+import {
+  analyzeSourceFunctions,
+  FUNCTION_METRIC_RULES,
+  type SourceExportDeclaration,
+} from '../../source/ast/function-metrics.js';
 import { maintenanceImports, type SourceImport } from '../../source/ast/maintenance-imports.js';
 import { functionCoverage, type ReviewCoverage } from '../../source/maintenance-coverage.js';
 import type { SourceSnapshot } from '../../source/maintenance-snapshot.js';
@@ -19,6 +23,7 @@ import {
 
 export interface SourceAnalysis {
   functions: MeasuredFunction[];
+  exports: SourceExportDeclaration[];
   findings: SourceFinding[];
   imports: SourceImport[];
   graph: Map<string, Set<string>>;
@@ -40,6 +45,7 @@ export function analyzeSourceSnapshot(
 ): SourceAnalysis {
   architecture ??= snapshot.project.architecture;
   const functions: MeasuredFunction[] = [];
+  const exports: SourceExportDeclaration[] = [];
   const imports: SourceImport[] = [];
   const bindingFacts: MaintenanceBindingFacts[] = [];
   const problems = [...snapshot.problems];
@@ -47,6 +53,7 @@ export function analyzeSourceSnapshot(
     const analysis = analyzeSourceFunctions(file, source);
     problems.push(...analysis.errors);
     if (analysis.errors.length > 0) continue;
+    exports.push(...analysis.exports);
     functions.push(
       ...analysis.functions.map((fn) => ({
         ...fn,
@@ -69,7 +76,15 @@ export function analyzeSourceSnapshot(
     ...unresolvedImportFindings(imports),
     ...responsibilityFindings(bindingFacts),
   ];
-  return { functions, findings: findings.sort(compareFindings), imports, graph, problems, architecture: policy.rules };
+  return {
+    functions,
+    exports,
+    findings: findings.sort(compareFindings),
+    imports,
+    graph,
+    problems,
+    architecture: policy.rules,
+  };
 }
 
 function complexityFindings(functions: readonly MeasuredFunction[]): SourceFinding[] {

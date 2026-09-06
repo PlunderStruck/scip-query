@@ -97,7 +97,8 @@ describe('setupAgent', () => {
     expect(agentsMd).toContain('scip-query diff-impact');
     expect(agentsMd).toContain('scip-query review --base HEAD');
     expect(agentsMd).toContain('scip-query architecture');
-    expect(agentsMd).toContain('scip-query health --indexed` for specialist drift and cleanup questions');
+    expect(agentsMd).toContain('health --indexed');
+    expect(agentsMd).toContain('scip-query system --source');
     expect(agentsMd).toContain('specific unsupported gap reported by scip-query');
     expect(agentsMd).toContain('not a parallel exploration workflow');
     expect(agentsMd).not.toContain('stop-ready');

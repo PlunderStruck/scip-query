@@ -1,4 +1,0 @@
-interface:
-  display_name: 'SCIP System Compression'
-  short_description: 'Map and order conceptual simplifications across a whole subsystem'
-  default_prompt: 'Use $scip-system-compression to build a compression atlas for this scope: climb from files and symbols to roles and principles, inventory every simplification opportunity with a disposition, order clusters by dependency, and propose or execute the smaller mechanisms.'

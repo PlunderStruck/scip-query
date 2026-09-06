@@ -26,7 +26,7 @@ The audit reviews contracts and tests known counterexamples. It does not establi
 | `evidence` | Traverse selected typed relationships around exact referents; recover source separately when needed |
 | `deps` | Files this file depends on (internal) |
 | `rdeps` | Files that depend on this file/module |
-| `system` | One-hop module summary: matched files, documented symbols, and file reference dependencies |
+| `system` | Indexed module summary; `--source` adds a current TS/JS module inventory, export declarations, imports, consumers, policy and findings without an index |
 | `surface` | What symbols consumers actually use from this module |
 | `dead` | Find repository-dead code, file-internal symbols, and implicit-usage signals |
 | `hotspots` | Rank symbols by referencing chunks, or incoming evidence rows when SCIP mentions are unavailable |

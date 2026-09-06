@@ -1,4 +1,4 @@
 interface:
-  display_name: 'scip integrity audit'
-  short_description: 'Interrogate whether implementations are real: falsify checkers, diff adapters against reality, autopsy fallbacks.'
-  default_prompt: 'Run the scip-integrity-audit drills over this codebase and report every decorative checker, dead-behind-fallback feature, and lying metric.'
+  display_name: "SCIP Integrity Audit"
+  short_description: "Check whether features fulfill their promises."
+  default_prompt: "Use $scip-integrity-audit to trace promised behavior through live consumers and test for partial implementations or misleading results."

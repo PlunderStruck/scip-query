@@ -612,11 +612,11 @@
   ],
   "coverageContracts": [
     {
-      "name": "INSTALLABLE_SKILLS covers skills dirs",
+      "name": "BUILTIN_SKILLS covers skills dirs",
       "file": "src/runtime/setup.ts",
       "keys": {
         "type": "string-array",
-        "identifier": "INSTALLABLE_SKILLS"
+        "identifier": "BUILTIN_SKILLS"
       },
       "mustEqual": {
         "type": "top-level-dirs",

@@ -50,6 +50,7 @@ import {
 import { trySearchSourceWithQueryService } from '../query-service.js';
 import { resolveProjectRoot } from '../cli-context.js';
 import type { SourceSearchOptions } from '../../queries/navigation/source-search.js';
+import { withSourceSystem } from './source-system.js';
 
 export function inspectSearchLimitOption(opts: Readonly<Record<string, unknown>>): number | undefined {
   const full = booleanOptionValue(opts, 'full');
@@ -1666,74 +1667,76 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     query: ({ db, args }) => queries.rdeps(db, stringArg(args, 0)),
     format: (r) => r.relativePath,
   }),
-  sectionedQueryCommand({
-    id: 'system',
-    command: 'system <module>',
-    description: 'One-hop module summary: matched files, documented symbols, and file reference dependencies',
-    options: [compactOption()],
-    agent: {
-      operation: REPOSITORY_OBSERVATION_OPERATION,
-      answers: [
-        'Which files and documented symbols match this module selector?',
-        'What one-hop file reference dependencies cross the selected module?',
-      ],
-      returns: [
-        'module file paths',
-        'documented indexed symbols with line ranges',
-        'internal dependencies',
-        'reverse dependencies',
-      ],
-      inputs: ['module'],
-      // No budget and no row cap: every section is the whole set.
-      coverage: 'complete',
-      semantic: analysisSemanticContract(
-        'Summarize files, documented symbols, and one-hop file reference dependencies for a module selector.',
-        'Matched files, documented indexed symbols, dependencies, and reverse dependencies.',
-        ['A one-hop module summary does not establish runtime execution or complete transitive behavior.'],
-      ),
-      contrasts: [
-        {
-          command: 'surface',
-          distinction:
-            'system lists documented indexed symbols; surface lists callable symbols that external consumers actually use.',
-        },
-        { command: 'outline', distinction: 'system is module-scoped; outline covers a single file.' },
-      ],
-    },
-    docs: doc('Navigation', ['scip-query system queries']),
-    query: ({ db, args }) => queries.system(db, stringArg(args, 0)),
-    coverage: (result) => {
-      const returned =
-        result.files.length + result.symbols.length + result.dependsOn.length + result.dependedOnBy.length;
-      return { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
-    },
-    agentResult: (result) => ({
-      counts: {
-        files: result.files.length,
-        symbols: result.symbols.length,
-        dependencies: result.dependsOn.length,
-        consumers: result.dependedOnBy.length,
-      },
-      files: result.files,
-      dependsOn: result.dependsOn,
-      dependedOnBy: result.dependedOnBy,
-      detail: {
-        location: 'result',
-        symbolUnits: 'result.symbols contains documented indexed symbols with their line ranges',
-      },
-    }),
-    sections: (result) => [
-      { title: 'FILES', rows: result.files },
-      {
-        title: 'DOCUMENTED INDEXED SYMBOLS',
-        rows: result.symbols.map(
-          (s) => `  ${displayPathRange(s.relativePath, s.startLine, s.endLine)}  ${s.shortName}`,
+  withSourceSystem(
+    sectionedQueryCommand({
+      id: 'system',
+      command: 'system <module>',
+      description: 'One-hop module summary: matched files, documented symbols, and file reference dependencies',
+      options: [compactOption()],
+      agent: {
+        operation: REPOSITORY_OBSERVATION_OPERATION,
+        answers: [
+          'Which files and documented symbols match this module selector?',
+          'What one-hop file reference dependencies cross the selected module?',
+        ],
+        returns: [
+          'module file paths',
+          'documented indexed symbols with line ranges',
+          'internal dependencies',
+          'reverse dependencies',
+        ],
+        inputs: ['module'],
+        // No budget and no row cap: every section is the whole set.
+        coverage: 'complete',
+        semantic: analysisSemanticContract(
+          'Summarize files, documented symbols, and one-hop file reference dependencies for a module selector.',
+          'Matched files, documented indexed symbols, dependencies, and reverse dependencies.',
+          ['A one-hop module summary does not establish runtime execution or complete transitive behavior.'],
         ),
+        contrasts: [
+          {
+            command: 'surface',
+            distinction:
+              'system lists documented indexed symbols; surface lists callable symbols that external consumers actually use.',
+          },
+          { command: 'outline', distinction: 'system is module-scoped; outline covers a single file.' },
+        ],
       },
-      { title: 'DEPENDS ON (internal)', rows: result.dependsOn.map((d) => `  ${d}`) },
-      { title: 'DEPENDED ON BY', rows: result.dependedOnBy.map((d) => `  ${d}`) },
-    ],
-  }),
+      docs: doc('Navigation', ['scip-query system queries']),
+      query: ({ db, args }) => queries.system(db, stringArg(args, 0)),
+      coverage: (result) => {
+        const returned =
+          result.files.length + result.symbols.length + result.dependsOn.length + result.dependedOnBy.length;
+        return { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
+      },
+      agentResult: (result) => ({
+        counts: {
+          files: result.files.length,
+          symbols: result.symbols.length,
+          dependencies: result.dependsOn.length,
+          consumers: result.dependedOnBy.length,
+        },
+        files: result.files,
+        dependsOn: result.dependsOn,
+        dependedOnBy: result.dependedOnBy,
+        detail: {
+          location: 'result',
+          symbolUnits: 'result.symbols contains documented indexed symbols with their line ranges',
+        },
+      }),
+      sections: (result) => [
+        { title: 'FILES', rows: result.files },
+        {
+          title: 'DOCUMENTED INDEXED SYMBOLS',
+          rows: result.symbols.map(
+            (s) => `  ${displayPathRange(s.relativePath, s.startLine, s.endLine)}  ${s.shortName}`,
+          ),
+        },
+        { title: 'DEPENDS ON (internal)', rows: result.dependsOn.map((d) => `  ${d}`) },
+        { title: 'DEPENDED ON BY', rows: result.dependedOnBy.map((d) => `  ${d}`) },
+      ],
+    }),
+  ),
   listQueryCommand({
     id: 'surface',
     command: 'surface <module>',
