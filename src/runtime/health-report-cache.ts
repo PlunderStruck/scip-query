@@ -18,7 +18,10 @@ import { readSmallArtifactText } from '../platform/bounded-file.js';
 // interchangeable.
 // Q3: bumped 3 -> 4 when the report envelope changed.
 // Q4: bumped 4 -> 5 when typed detector evidence contracts became required.
-const HEALTH_REPORT_CACHE_VERSION = 5;
+// Version 6 removes aggregate grades and deduction pressure from the report.
+// Version 7 removes retired heuristic and legacy reference products.
+// Version 12 rejects malformed suppression evidence and refreshes maintenance-analysis semantics.
+const HEALTH_REPORT_CACHE_VERSION = 13;
 const HEALTH_REPORT_CACHE_FILE = 'health-report-cache.json';
 
 export interface HealthReportCacheOptions {
@@ -168,15 +171,9 @@ function isHealthReport(value: unknown): value is HealthReport {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<HealthReport>;
   return (
-    typeof candidate.score === 'number' &&
-    typeof candidate.riskScore === 'number' &&
-    typeof candidate.hygieneScore === 'number' &&
     typeof candidate.overview === 'object' &&
     typeof candidate.findings === 'object' &&
-    Array.isArray(candidate.scoreBreakdown) &&
     Array.isArray(candidate.actions) &&
-    Array.isArray(candidate.pressure) &&
-    Array.isArray(candidate.topComplexity) &&
     Array.isArray(candidate.detectorEvidence)
   );
 }

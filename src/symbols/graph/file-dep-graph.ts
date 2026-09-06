@@ -96,7 +96,7 @@ export function buildFileDepGraph(
   } = {},
 ): Map<string, Set<string>> {
   const scipEdges = opts.scipEdges ?? 'all-references';
-  const sourceEdges = opts.sourceEdges ?? 'imports-only';
+  const sourceEdges = opts.sourceEdges ?? 'imports-and-reexports';
   const cacheKey = fileDependencyGraphCacheKey(scope, scipEdges, sourceEdges);
   return FILE_DEP_GRAPH_CACHE.get(db, cacheKey, () => {
     const indexedFiles = new Set(indexedDocumentPaths(db, { includeIgnored: false }));
@@ -197,7 +197,7 @@ export function buildFileDepGraph(
  * replace only the outgoing edges of documents it re-emitted.
  */
 export function captureFileDependencyGraph(db: ScipDatabase): FileDependencyGraphSnapshot {
-  return captureFileDependencyGraphWithSourceEdges(db, 'imports-only');
+  return captureFileDependencyGraphWithSourceEdges(db, 'imports-and-reexports');
 }
 
 /** Captures the compiler-reference graph used to bound TypeScript document emission without reparsing the repository. */
@@ -208,7 +208,7 @@ export function captureTypeScriptPlanningDependencyGraph(db: ScipDatabase): File
 /** Reads the complete graph already owned by this immutable generation without rebuilding on a miss. */
 export function readPersistedFileDependencyGraph(
   db: ScipDatabase,
-  sourceEdges: SourceDependencyEdgeMode = 'imports-only',
+  sourceEdges: SourceDependencyEdgeMode = 'imports-and-reexports',
 ): FileDependencyGraphSnapshot | null {
   const cacheKey = fileDependencyGraphCacheKey(undefined, 'all-references', sourceEdges);
   const projectFingerprint = projectEvidenceFingerprint(db);

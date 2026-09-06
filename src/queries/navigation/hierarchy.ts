@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
-import { parseSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
+import { isAncestorSymbol, parseSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
+import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 
 export interface HierarchyNode {
   symbol: string;
@@ -12,8 +13,8 @@ export interface HierarchyNode {
  * Walk the enclosing_symbol chain upward to show a symbol's ancestry.
  * e.g., method → class → module → file
  *
- * Falls back to parsing the SCIP symbol descriptor chain when
- * enclosing_symbol is not populated by the indexer.
+ * Falls back to indexed owners in the SCIP descriptor chain. Unindexed
+ * descriptor prefixes are omitted; display labels are never symbol identities.
  */
 export function hierarchy(db: ScipDatabase, symbolPattern: string): HierarchyNode[] {
   const match = findFirstSymbolMatch(db, symbolPattern);
@@ -33,7 +34,7 @@ export function hierarchy(db: ScipDatabase, symbolPattern: string): HierarchyNod
   let depth = 1;
   const seen = new Set<string>([sym.symbol]);
 
-  while (current && !seen.has(current) && depth < 20) {
+  while (current && !seen.has(current)) {
     seen.add(current);
     const parent = db.get<{ symbol: string; enclosing_symbol: string | null }>(
       `SELECT symbol, enclosing_symbol FROM global_symbols WHERE symbol = ?`,
@@ -64,27 +65,17 @@ export function hierarchy(db: ScipDatabase, symbolPattern: string): HierarchyNod
     return chain;
   }
 
-  const syntheticChain = [chain[0]!];
-  for (let i = descriptors.length - 2, syntheticDepth = 1; i >= 0; i--, syntheticDepth++) {
-    const partial = descriptors.slice(0, i + 1);
-    const shortName = partial
-      .map((descriptor) =>
-        descriptor.suffix === 'method'
-          ? `${descriptor.name}()`
-          : descriptor.name.replace(
-              /\.(ts|tsx|js|jsx|mjs|cjs|py|pyi|rs|java|scala|kt|kts|rb|go|cs|vb|dart|php|c|cc|cpp|cxx|h|hpp)$/,
-              '',
-            ),
-      )
-      .join(':');
-    syntheticChain.push({
-      symbol: shortName,
-      shortName,
-      depth: syntheticDepth,
-    });
-  }
-
-  return syntheticChain;
+  const owners = getDefinitionsForFile(db, match.relativePath)
+    .filter((definition) => sym.symbol.startsWith(definition.symbol) && isAncestorSymbol(definition.symbol, sym.symbol))
+    .sort((left, right) => right.symbol.length - left.symbol.length);
+  return [
+    ...chain,
+    ...owners.map((owner, index) => ({
+      symbol: owner.symbol,
+      shortName: shortenSymbol(owner.symbol),
+      depth: index + 1,
+    })),
+  ];
 }
 
 /** Name-preserving projection of lexical/compiler ownership, not type inheritance. */

@@ -5,6 +5,7 @@ import { getSourceText } from '../../source/primitives/source-text.js';
 import { stripCommentsAndStringsTsSafe } from '../../source/primitives/source-stripper.js';
 import { runGit } from '../../analysis/git-history.js';
 import { applyScanLimit } from '../query-utils.js';
+import { ts } from '@ts-morph/common';
 
 /**
  * test-quality (D3): the biggest uncovered surface — test files are not
@@ -12,7 +13,7 @@ import { applyScanLimit } from '../query-utils.js';
  * source-facts layer (raw source text + `classifyFile`'s test-file
  * classification), never the graph. Three independently reportable
  * sub-checks:
- *  - assertion-free: `it`/`test` bodies with no reachable assertion call.
+ *  - assertion-free: `it`/`test` bodies without recognized assertion syntax (not a reachability proof).
  *  - skipped: `it.skip`/`describe.skip`/`xit`/`.todo` inventory with
  *    git-blame age on the skip line.
  *  - mock-echo: a test asserting the same literal it stubbed into a mock.
@@ -96,7 +97,7 @@ export function testQuality(db: ScipDatabase, opts: TestQualityOptions = {}): Te
     // — without this, every test using it looked assertion-free.
     for (const helperName of localAssertionHelperNames(masked, vocabulary)) vocabulary.add(helperName);
 
-    const blocks = findTestBlocks(masked);
+    const blocks = findTestBlocks(source, file);
     for (const block of blocks) {
       if (block.skip) {
         skipped.push(skippedFinding(db, file, block, rotDays));
@@ -152,41 +153,52 @@ interface TestBlock {
   callEnd: number;
 }
 
-// `it(`/`test(`, `it.skip(`/`test.only(`/`describe.skip(`, `xit(`/`xdescribe(`, `it.todo(`.
-// Excludes a preceding `.` (negative lookbehind): external calibration
-// (2026-07-03, against Vega_2.0) found this matching `.test(` on a REGEXP
-// or STRING method call (`/pattern/i.test(sql)`, extremely common in test
-// files that assert against regex-matched content) as if it were a vitest
-// `test(...)` block declaration — vitest/jest test-block globals are always
-// called bare (`it(...)`, `test(...)`) or as `it.skip(...)`-style chains off
-// the BARE name, never as a method on some other value.
-const BLOCK_PATTERN =
-  /(?<!\.)\b(?:x(it|test|describe)|(it|test|describe)(?:\.\s*(skip|only|todo|each\s*\([^)]*\)))?)\s*\(/g;
-
-function findTestBlocks(masked: string): TestBlock[] {
+function findTestBlocks(source: string, file: string): TestBlock[] {
   const blocks: TestBlock[] = [];
-  BLOCK_PATTERN.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = BLOCK_PATTERN.exec(masked))) {
-    const xPrefixed = match[1];
-    const kind = (xPrefixed ?? match[2]) as BlockKind | undefined;
-    if (!kind) continue;
-    const modifier = match[3]?.split(/\s*\(/)[0]; // 'skip' | 'only' | 'todo' | 'each' | undefined
-    const callStart = match.index;
-    const openParenIndex = match.index + match[0].length - 1;
-    const callEnd = findMatchingParenEnd(masked, openParenIndex);
-    BLOCK_PATTERN.lastIndex = openParenIndex + 1;
-    if (modifier === 'each') continue; // table-driven — title/body shape differs too much to judge generically
-    blocks.push({
-      kind,
-      skip: xPrefixed !== undefined || modifier === 'skip' || modifier === 'todo',
-      skipKind: modifier === 'todo' ? 'todo' : 'skip',
-      callStart,
-      argsStart: openParenIndex + 1,
-      callEnd: callEnd + 1,
-    });
+  const parsed = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  function visit(node: ts.Node): void {
+    if (ts.isCallExpression(node)) {
+      const block = testBlock(node, parsed);
+      if (block) blocks.push(block);
+    }
+    ts.forEachChild(node, visit);
   }
+  visit(parsed);
   return blocks;
+}
+
+function testBlock(node: ts.CallExpression, parsed: ts.SourceFile): TestBlock | undefined {
+  const invocation = testInvocation(node.expression);
+  if (!invocation) return undefined;
+  const { kind, skip, skipKind } = invocation;
+  const callback = node.arguments.at(-1);
+  if (!skip && !testCallback(callback)) return undefined;
+  return {
+    kind,
+    skip,
+    skipKind,
+    callStart: node.getStart(parsed),
+    argsStart: node.arguments.pos,
+    callEnd: node.end,
+  };
+}
+
+function testInvocation(callee: ts.Expression): Pick<TestBlock, 'kind' | 'skip' | 'skipKind'> | undefined {
+  let base = callee;
+  let modifier: string | undefined;
+  if (ts.isPropertyAccessExpression(callee)) {
+    base = callee.expression;
+    modifier = callee.name.text;
+  }
+  if (!ts.isIdentifier(base)) return undefined;
+  const match = /^(x?)(it|test|describe)$/.exec(base.text);
+  if (!match || (modifier !== undefined && !['skip', 'only', 'todo'].includes(modifier))) return undefined;
+  const skip = Boolean(match[1]) || modifier === 'skip' || modifier === 'todo';
+  return { kind: match[2] as BlockKind, skip, skipKind: modifier === 'todo' ? 'todo' : 'skip' };
+}
+
+function testCallback(node: ts.Expression | undefined): boolean {
+  return node !== undefined && (ts.isArrowFunction(node) || ts.isFunctionExpression(node));
 }
 
 function findMatchingParenEnd(masked: string, openParenIndex: number): number {
@@ -232,33 +244,46 @@ const ASSERTION_MODULES = new Set([
   'chai-as-promised',
 ]);
 
-const IMPORT_PATTERN = /import\s+(?:\*\s+as\s+(\w+)|\{([^}]*)\}|(\w+))\s+from\s+['"]([^'"]+)['"]/g;
+const RUNNER_ASSERTIONS = new Set(['expect', 'assert', 'expectTypeOf', 'assertType', 'should']);
+const RUNNER_MODULES = new Set(['vitest', 'jest', '@jest/globals', 'chai', 'chai-as-promised']);
 
-/**
- * Assertion vocabulary detected from this file's own imports, floored by the
- * two names that need no import to work (Jest/Mocha-style globals, and the
- * common `assert` convention) — "detect the repo's assertion vocabulary from
- * imports" per the drill design, without hardcoding every matcher library.
- */
+/** Syntactic assertion vocabulary; importing a test runner or mocking utility is not an assertion. */
 function assertionVocabulary(source: string): Set<string> {
   const vocabulary = new Set<string>(['expect', 'assert']);
-  IMPORT_PATTERN.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = IMPORT_PATTERN.exec(source))) {
-    const [, namespaceAlias, namedList, defaultName, moduleSpecifier] = match;
-    if (!moduleSpecifier || !ASSERTION_MODULES.has(moduleSpecifier)) continue;
-    if (namespaceAlias) vocabulary.add(namespaceAlias);
-    if (defaultName) vocabulary.add(defaultName);
-    if (namedList) {
-      for (const entry of namedList.split(',')) {
-        const trimmed = entry.trim().replace(/^type\s+/, '');
-        if (!trimmed) continue;
-        const asMatch = /^(\w+)\s+as\s+(\w+)$/.exec(trimmed);
-        vocabulary.add(asMatch ? asMatch[2]! : trimmed);
-      }
-    }
+  const parsed = ts.createSourceFile('assertion-vocabulary.ts', source, ts.ScriptTarget.Latest, true);
+  for (const statement of parsed.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+    const module = statement.moduleSpecifier.text;
+    const clause = statement.importClause;
+    if (!ASSERTION_MODULES.has(module) || !clause || clause.isTypeOnly) continue;
+    for (const name of assertionImportNames(clause, RUNNER_MODULES.has(module))) vocabulary.add(name);
   }
   return vocabulary;
+}
+
+function assertionImportNames(clause: ts.ImportClause, runner: boolean): string[] {
+  const names: string[] = [];
+  const addNamespace = (alias: string): void => {
+    if (runner) {
+      for (const name of RUNNER_ASSERTIONS) names.push(`${alias}.${name}`);
+    } else names.push(alias);
+  };
+  if (clause.name) addNamespace(clause.name.text);
+  const bindings = clause.namedBindings;
+  if (!bindings) return names;
+  if (ts.isNamespaceImport(bindings)) {
+    addNamespace(bindings.name.text);
+    return names;
+  }
+  for (const element of bindings.elements) {
+    if (element.isTypeOnly) continue;
+    const imported = (element.propertyName ?? element.name).text;
+    if (runner && !RUNNER_ASSERTIONS.has(imported)) continue;
+    if (['AssertionError', 'CallTracker'].includes(imported)) continue;
+    names.push(element.name.text);
+  }
+
+  return names;
 }
 
 function hasAssertionCall(maskedBody: string, vocabulary: ReadonlySet<string>): boolean {
@@ -280,7 +305,7 @@ function hasAssertionCall(maskedBody: string, vocabulary: ReadonlySet<string>): 
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // Optional TS generic type argument between the name and the call, e.g.
     // vitest's `expectTypeOf<T>()` — also found in the same calibration pass.
-    const pattern = new RegExp(`\\b${escaped}\\s*(?:<[^<>]*>)?\\s*[.(]`);
+    const pattern = new RegExp(`(?<![\\w$.])${escaped}\\s*(?:<[^<>]*>)?\\s*[.(]`);
     if (pattern.test(maskedBody)) return true;
   }
   return false;
@@ -352,7 +377,7 @@ const SIMPLE_LITERAL_PATTERN = /^(?:-?\d+(?:\.\d+)?|(['"`]).+\1)$/;
  * Syntactic same-literal case only: a value stubbed via `mockReturnValue`/
  * `mockResolvedValue` and then asserted with `toBe`/`toEqual` in the SAME
  * test body, where the two argument texts are byte-identical simple
- * literals. High precision, low recall by design — no dataflow tracing.
+ * literals. This is a repeated-literal candidate; it does not establish value flow or an ineffective test.
  */
 function findMockEcho(maskedBody: string, rawBody: string): string | null {
   const mockValues = literalArgs(maskedBody, rawBody, MOCK_RETURN_PATTERN);

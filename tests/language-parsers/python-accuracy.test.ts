@@ -529,7 +529,8 @@ describe('python repo accuracy regressions', () => {
         expect(runGraph?.callees.map((callee) => callee.shortName)).not.toContain('db_helpers:exists()');
 
         const result = complexity(callDb, 'advance_cycle');
-        expect(result?.calleeCount).toBe(3);
+        expect(result?.calleeCount).toBe(0);
+        expect(result?.candidateCalleeCount).toBe(3);
       } finally {
         callDb.close();
       }

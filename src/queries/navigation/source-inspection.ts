@@ -1095,7 +1095,7 @@ function addRelatedSymbolCandidate(
       unitEndLine: related.endLine + related.omittedLines,
     },
     role,
-    `${role}:${target.shortName}`,
+    `${related.evidenceStrength === 'exact' ? role : `candidate-${role}`}:${target.shortName}`,
     related.symbol,
     related.shortName,
     priority,

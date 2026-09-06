@@ -1,3 +1,4 @@
+import { trace } from '../../../src/queries/navigation/trace.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Database from 'better-sqlite3';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -372,9 +373,9 @@ describe('query engine', () => {
     });
   });
 
-  describe('trace', () => {
+  describe('internal symbol source bundle', () => {
     it('returns definitions and references', () => {
-      const result = queries.trace(db, 'login');
+      const result = trace(db, 'login');
       expect(result.definitions.length).toBeGreaterThan(0);
       expect(result.definitions[0]!.relativePath).toBe('src/services/auth.service.ts');
       expect(result.referencedBy.length).toBeGreaterThan(0);

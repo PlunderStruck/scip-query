@@ -1,5 +1,5 @@
 import type { ScipDatabase } from '../storage/db.js';
-import { refs, type RefResult } from '../queries/navigation/refs.js';
+import { refs, referenceLocation, type RefResult } from '../queries/navigation/refs.js';
 import { getResolvedReferenceSites } from '../symbols/references/reference-sites.js';
 import { getSourceFiles } from '../source/primitives/source-fileset.js';
 import { findFirstSymbolMatch } from '../symbols/symbol-lookup.js';
@@ -33,7 +33,7 @@ export interface RefPage {
  * The normal limited path walks source files from the prior `(path, line)`
  * frontier and stops after `limit + 1` eligible rows. Providers that cannot
  * resume without complete materialization (explicit semantic enrichment,
- * Ruby's supplemental token rules, and SCIP chunk fallback) are preserved,
+ * SCIP chunk fallback) are preserved,
  * but labeled `complete-only` so callers never mistake their cost for a
  * producer-bounded page.
  */
@@ -52,8 +52,7 @@ export function referencePage(db: ScipDatabase, symbolPattern: string, request: 
     };
   }
 
-  const requiresCompleteProvider =
-    request.producer === 'complete-only' || request.semantic === true || match.relativePath.endsWith('.rb');
+  const requiresCompleteProvider = request.producer === 'complete-only' || request.semantic === true;
   if (requiresCompleteProvider) {
     return completeReferencePage(db, symbolPattern, request);
   }
@@ -62,6 +61,19 @@ export function referencePage(db: ScipDatabase, symbolPattern: string, request: 
   if (!target) return completeReferencePage(db, symbolPattern, request);
 
   const definition = definitionReference(db, match);
+  return (
+    sourceReferencePage(db, match, target, definition, request) ??
+    completeReferencePage(db, symbolPattern, request, definition)
+  );
+}
+
+function sourceReferencePage(
+  db: ScipDatabase,
+  match: NonNullable<ReturnType<typeof findFirstSymbolMatch>>,
+  target: NonNullable<ReturnType<typeof sourceReferenceTarget>>,
+  definition: ReturnType<typeof definitionReference>,
+  request: RefPageRequest,
+): RefPage | undefined {
   const paths = sourcePathsWithDefinition(db, definition);
   const accepted: RefResult[] = [];
   let sourceReferenceFound = request.producer === 'source-keyset';
@@ -74,9 +86,7 @@ export function referencePage(db: ScipDatabase, symbolPattern: string, request: 
 
     const lines = new Set(sourceLines);
     if (definition?.relativePath === relativePath) lines.add(definition.line);
-    for (const line of [...lines].sort((left, right) => left - right)) {
-      const row = { relativePath, line };
-      if (request.after && compareReferenceKey(row, request.after) <= 0) continue;
+    for (const row of referenceFileRows(db, match.symbol, relativePath, lines, definition, request.after)) {
       accepted.push(row);
       request.instrumentation?.rowAccepted?.(row);
       if (sourceReferenceFound && accepted.length > request.limit) {
@@ -86,7 +96,26 @@ export function referencePage(db: ScipDatabase, symbolPattern: string, request: 
   }
 
   if (sourceReferenceFound) return boundedPage(accepted, request.limit);
-  return completeReferencePage(db, symbolPattern, request, definition);
+  return undefined;
+}
+
+/** Construct source rows only as the requested page consumes them. */
+function* referenceFileRows(
+  db: ScipDatabase,
+  symbol: string,
+  relativePath: string,
+  lines: ReadonlySet<number>,
+  definition: ReturnType<typeof definitionReference>,
+  after: RefPageRequest['after'],
+): Generator<RefResult> {
+  for (const line of [...lines].sort((left, right) => left - right)) {
+    const row =
+      definition?.relativePath === relativePath && definition.line === line
+        ? definition
+        : referenceLocation(db, symbol, relativePath, line);
+    if (after && compareReferenceKey(row, after) <= 0) continue;
+    yield row;
+  }
 }
 
 export function compareReferenceKey(
@@ -112,9 +141,8 @@ function completeReferencePage(
   request: RefPageRequest,
   knownDefinition?: RefResult | null,
 ): RefPage {
-  const match = findFirstSymbolMatch(db, symbolPattern);
   const allRows =
-    request.semantic === true || match?.relativePath.endsWith('.rb')
+    request.semantic === true
       ? refs(db, symbolPattern, { semantic: request.semantic })
       : completeFallbackRows(db, symbolPattern, knownDefinition);
   const remaining = dedupeAndSort(allRows).filter(
@@ -137,10 +165,9 @@ function completeFallbackRows(
   const match = findFirstSymbolMatch(db, symbolPattern);
   if (!match) return [];
   const definition = knownDefinition === undefined ? definitionReference(db, match) : knownDefinition;
-  const fallback = getResolvedReferenceSites(db, match).map((site) => ({
-    relativePath: site.file,
-    line: site.line,
-  }));
+  const fallback = getResolvedReferenceSites(db, match).map((site) =>
+    referenceLocation(db, match.symbol, site.file, site.line),
+  );
   return definition ? [definition, ...fallback] : fallback;
 }
 
@@ -149,7 +176,7 @@ function definitionReference(
   match: NonNullable<ReturnType<typeof findFirstSymbolMatch>>,
 ): RefResult | null {
   return !isFunctionLikeSymbol(match.symbol) && !db.isIgnored(match.relativePath)
-    ? { relativePath: match.relativePath, line: match.startLine }
+    ? { relativePath: match.relativePath, line: match.startLine, evidence: 'indexed-definition' }
     : null;
 }
 

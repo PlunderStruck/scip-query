@@ -1,0 +1,49 @@
+Usage: scip-query [options] [command]
+
+Language-agnostic code intelligence CLI powered by SCIP indexes
+
+Options:
+  -V, --version                    output the version number
+  --output-page-size <characters>  Return bounded output pages with an exact continuation command
+  --output-cursor <cursor>         Continue a bounded output page
+  --agent-output                   Emit a bounded JSON projection for model-facing clients (requires --json)
+  --json-output <path>             Atomically write the complete JSON result and print a small receipt
+  --raw-json                       Explicitly retain the legacy unpaged JSON stream (requires --json)
+  --no-session                     Disable the explicit exploration evidence ledger
+  --reemit                         Recovery only: render source and graph evidence again instead of citing session receipts
+  --help-all                       Display every command, including compatibility and deprecated controls
+  -h, --help                       Display this grouped command help
+
+Primary exploration:
+  Locate exact referents, project chosen relationships, and read only named implementation gaps.
+  search <exact-text>  Count current project text matches and preview a bounded, recoverable identity and source manifest
+  outline <file>       Tree view of symbols in a file, with line ranges
+  entrypoints [text]   Find callables where control may enter from outside the indexed call graph
+  evidence             Traverse selected typed relationships around exact referents; recover source separately when needed
+  inspect              Batch related searches, symbols, and source locations into one deduplicated source packet
+  code <selectors...>  Read exact definitions, line ranges, or file export surfaces
+
+Maintenance:
+  Scan current source, plan changes, review diffs, and maintain the index and local integrations.
+  review            Review current TS/JS changes against a Git commit, including new and untracked functions
+  reindex           Index the codebase and convert to SQLite
+  augment-sources   Add source files skipped by upstream SCIP indexers to the SQLite documents table
+  augment-vue       Add compiler-resolved Vue SFC references to the SQLite index using Volar
+  stats             Show index statistics
+  context <target>  Compiler-backed context for a symbol, file, or module
+  health            Find concrete TS/JS complexity, duplication, and dependency issues without an index
+  install-skills    Install core exploration skills into Claude Code, Codex, and shared agent roots
+  check-deps        Check whether scip-query and the detected language indexers are runnable
+  capabilities      Report which mapping and analysis capabilities are available in this project
+  init              Create a .scipquery.json configuration file for this project
+  config-validate   Validate .scipquery.json, structured suppressions, architecture, and coupling groups
+  suppress <id>     Record an accepted finding under .scipquery/suppressions with a required reason
+  doctor            Diagnose configuration, index freshness, dependencies, and project capabilities
+  setup             Install skills, write agent guidance, refresh the index, and report readiness
+  setup-agent       Write concise scip-query mapping and cleanup guidance to AGENTS.md and CLAUDE.md
+  uninstall         Remove selected scip-query-owned skills or project guidance
+  watch             Watch in the foreground or manage the project refresh service
+  status            Show index status for this project
+
+Run `scip-query --help-all` to include advanced, compatibility, and deprecated controls.
+Run `scip-query <command> --help` for one control's options and examples.

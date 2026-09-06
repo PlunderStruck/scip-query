@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { cleanSignature, extractSignature, findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
+import { cleanSignature, extractSignature, resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { referenceEvidenceForSymbol } from '../../symbols/references/reference-sites.js';
-import { getSourceText } from '../../source/primitives/source-text.js';
+import { readRepositoryTextFile } from '../../source/primitives/repository-text.js';
 import { isFunctionLikeSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../../domain/source-inspection-limits.js';
@@ -102,7 +102,9 @@ export function qualifiedTraceEvidence(
   symbolPattern: string,
   opts: { semantic?: boolean; referenceContext?: number } = {},
 ): QualifiedTraceEvidenceResult {
-  const match = findFirstSymbolMatch(db, symbolPattern);
+  const resolution = resolveSymbol(db, symbolPattern);
+  if (resolution.total > 1) throw new Error(`Ambiguous symbol: ${symbolPattern}. Use an exact symbol.`);
+  const match = resolution.match;
   if (!match) {
     return { definitions: [], referencedBy: [], referenceEvidence: [], claimSupport: null };
   }
@@ -176,31 +178,19 @@ function stripReferenceQualification(reference: QualifiedReference): TraceEviden
 }
 
 function claimSupportFor(references: readonly QualifiedReference[]): TraceClaimSupport {
-  const referenceScope = 'resolved source-attributed or SCIP-indexed references to this exact symbol';
-  const limitations = ['Dynamic dispatch, reflection, generated calls, and unindexed source are outside this scope.'];
-  const uncertain = references.filter(
-    (reference) => reference.sourceKind !== 'complete-call-expression' && reference.sourceKind !== 'non-call-reference',
-  );
-  const callsiteScope = 'direct, statically visible call expressions among the resolved reference sites';
   return {
     referenceAbsence: {
-      status: 'eligible',
-      scope: referenceScope,
-      limitations,
+      status: 'ineligible',
+      scope: 'observed reference sites',
+      reason: 'This source bundle does not establish complete compiler-binding or freshness coverage.',
+      followup: null,
     },
-    callsitePredicates:
-      uncertain.length === 0
-        ? {
-            status: 'eligible',
-            scope: callsiteScope,
-            limitations,
-          }
-        : {
-            status: 'ineligible',
-            scope: callsiteScope,
-            reason: `${uncertain.length} reference site(s) lack one unambiguous complete call expression.`,
-            followup: callsiteFollowup(uncertain),
-          },
+    callsitePredicates: {
+      status: 'ineligible',
+      scope: 'source windows around observed references',
+      reason: 'Line and name matching does not establish the referenced callee binding for every invocation.',
+      followup: callsiteFollowup(references),
+    },
   };
 }
 
@@ -215,16 +205,10 @@ function shellArgument(value: string): string {
 }
 
 function definitionSource(db: ScipDatabase, relativePath: string, startLine: number, endLine: number): string | null {
-  const source = getSourceText(db, relativePath);
-  if (!source) {
-    return null;
-  }
-
-  const lines = source.split('\n');
-  const slice = lines
-    .slice(startLine, endLine + 1)
-    .join('\n')
-    .trimEnd();
+  const observed = readRepositoryTextFile(db, relativePath);
+  if (!observed || observed.freshness.semantic.state === 'stale') return null;
+  const lines = observed.text.split('\n');
+  const slice = lines.slice(startLine, endLine + 1).join('\n');
   return slice.length > 0 ? slice : null;
 }
 

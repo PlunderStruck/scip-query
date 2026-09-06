@@ -1,0 +1,1 @@
+{"kind":"scip-query-json-export","schemaVersion":1,"producer":{"name":"scip-query","version":"0.25.0"},"command":"call-graph","path":"/private/tmp/scip-followup-cli/calls-nestedOwner.json","bytes":4534,"sha256":"fecc2fb079afc3a2bec03840d148df938fcbae3b95f9e6d20c6aedbfe93ebd4a"}

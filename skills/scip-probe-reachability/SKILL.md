@@ -7,8 +7,8 @@ metadata:
       when: 'Enumerate branches: symbol tree with signatures for the target file.'
     - template: 'scip-query code <selector>'
       when: "Enumerate branches: read each branch condition's exact node-type check."
-    - template: 'scip-query trace <symbol>'
-      when: "Enumerate branches: confirm the function's callers and entry point."
+    - template: 'scip-query refs <symbol>'
+      when: "Enumerate branches: locate reference sites for follow-up execution evidence."
 ---
 
 # scip-probe-reachability
@@ -20,7 +20,7 @@ metadata:
 | --- | --- |
 | `scip-query outline <file> --signatures` | Enumerate branches: symbol tree with signatures for the target file. |
 | `scip-query code <selector>` | Enumerate branches: read each branch condition's exact node-type check. |
-| `scip-query trace <symbol>` | Enumerate branches: confirm the function's callers and entry point. |
+| `scip-query refs <symbol>` | Enumerate branches: locate reference sites for follow-up execution evidence. |
 
 These commands are controls, not a checklist. Use every capability needed by the task, but make each query answer a distinct question. There is no required sequence or query limit. Run a command's `--help` when you need a flag not shown in its template.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -42,7 +42,7 @@ Use this skill for code that branches on a parser or AST node's type or shape (`
 ```bash
 scip-query outline <target-file> --signatures
 scip-query code <target-function>
-scip-query trace <target-function>
+scip-query refs <target-function>
 ```
 
 List every conditional that tests a node's `type`, tag name, or shape (an `if` or `else if` chain over `node.type === '...'`, a `switch` on a grammar tag, or a regex matched against node text standing in for a type check). Record the exact string or pattern each branch expects.

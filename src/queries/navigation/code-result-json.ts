@@ -44,6 +44,18 @@ export function symbolResolutionJson(db: ScipDatabase, query: string): SymbolRes
   };
 }
 
+export function withSymbolResolutionJson<T>(
+  db: ScipDatabase,
+  query: string,
+  payload: T,
+  payloadKey: string,
+): SymbolResolutionJson & Record<string, unknown> {
+  return {
+    ...symbolResolutionJson(db, query),
+    [payloadKey]: payload,
+  };
+}
+
 export function singleExactCodeResult(result: CodeBatchResult): CodeResult | null {
   const entry = result.entries[0];
   return result.requested === 1 &&

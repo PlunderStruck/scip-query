@@ -1,0 +1,212 @@
+[
+  {
+    "name": "bounded slice discloses omissions",
+    "originalPassed": true,
+    "assessment": "passing-behavior-control",
+    "note": "Supports only the bounded behavior exercised by this assertion."
+  },
+  {
+    "name": "straight: executed behavior oracle",
+    "originalPassed": true,
+    "assessment": "passing-behavior-control",
+    "note": "Supports only the bounded behavior exercised by this assertion."
+  },
+  {
+    "name": "shortCircuit: complete slice retains conditional fallback",
+    "originalPassed": false,
+    "assessment": "reproduced-behavioral-defect",
+    "note": "Retained within the witness scope; multiple assertions can describe one finding."
+  },
+  {
+    "name": "shortCircuit: executed behavior oracle",
+    "originalPassed": true,
+    "assessment": "passing-behavior-control",
+    "note": "Supports only the bounded behavior exercised by this assertion."
+  },
+  {
+    "name": "ternaryWrite: complete slice retains conditional fallback",
+    "originalPassed": false,
+    "assessment": "reproduced-behavioral-defect",
+    "note": "Retained within the witness scope; multiple assertions can describe one finding."
+  },
+  {
+    "name": "ternaryWrite: executed behavior oracle",
+    "originalPassed": true,
+    "assessment": "passing-behavior-control",
+    "note": "Supports only the bounded behavior exercised by this assertion."
+  },
+  {
+    "name": "alias: complete slice retains input written through alias",
+    "originalPassed": false,
+    "assessment": "reproduced-behavioral-defect",
+    "note": "Retained within the witness scope; multiple assertions can describe one finding."
+  },
+  {
+    "name": "alias: executed behavior oracle",
+    "originalPassed": true,
+    "assessment": "passing-behavior-control",
+    "note": "Supports only the bounded behavior exercised by this assertion."
+  },
+  {
+    "name": "nested increment: complete slice retains mutation",
+    "originalPassed": false,
+    "assessment": "reproduced-behavioral-defect",
+    "note": "Retained within the witness scope; multiple assertions can describe one finding."
+  },
+  {
+    "name": "nestedIncrement: executed behavior oracle",
+    "originalPassed": true,
+    "assessment": "passing-behavior-control",
+    "note": "Supports only the bounded behavior exercised by this assertion."
+  },
+  {
+    "name": "files excludes tracked deletion",
+    "originalPassed": false,
+    "assessment": "reproduced-behavioral-defect",
+    "note": "Retained within the witness scope; multiple assertions can describe one finding."
+  },
+  {
+    "name": "missing file cannot become an unrelated symbol",
+    "originalPassed": false,
+    "assessment": "reproduced-behavioral-defect",
+    "note": "Retained within the witness scope; multiple assertions can describe one finding."
+  },
+  {
+    "name": "nested: source and indexed cyclomatic measurements agree",
+    "originalPassed": false,
+    "assessment": "metric-contract-comparison",
+    "note": "Observed equality or divergence; equality becomes mandatory where a shared metric contract is adopted."
+  },
+  {
+    "name": "nullish: source and indexed cyclomatic measurements agree",
+    "originalPassed": false,
+    "assessment": "metric-contract-comparison",
+    "note": "Observed equality or divergence; equality becomes mandatory where a shared metric contract is adopted."
+  },
+  {
+    "name": "branch: source and indexed cyclomatic measurements agree",
+    "originalPassed": true,
+    "assessment": "metric-contract-comparison",
+    "note": "Observed equality or divergence; equality becomes mandatory where a shared metric contract is adopted."
+  },
+  {
+    "name": "malformed source cannot produce complete dependence coverage",
+    "originalPassed": false,
+    "assessment": "reproduced-behavioral-defect",
+    "note": "Retained within the witness scope; multiple assertions can describe one finding."
+  },
+  {
+    "name": "source finding suppression survives write/read round trip",
+    "originalPassed": false,
+    "assessment": "reproduced-behavioral-defect",
+    "note": "Retained within the witness scope; multiple assertions can describe one finding."
+  },
+  {
+    "name": "suppression ID cannot escape its storage directory",
+    "originalPassed": false,
+    "assessment": "reproduced-behavioral-defect",
+    "note": "Retained within the witness scope; multiple assertions can describe one finding."
+  },
+  {
+    "name": "F05: call-free choose has zero callees",
+    "originalPassed": false,
+    "assessment": "reproduced-behavioral-defect",
+    "note": "Retained within the witness scope; multiple assertions can describe one finding."
+  },
+  {
+    "name": "F08: declaration is not a test invocation",
+    "originalPassed": false,
+    "assessment": "reproduced-behavioral-defect",
+    "note": "Retained within the witness scope; multiple assertions can describe one finding."
+  },
+  {
+    "name": "F04: mapping-declared missing trace fails",
+    "originalPassed": false,
+    "assessment": "reproduced-behavioral-defect",
+    "note": "Retained within the witness scope; multiple assertions can describe one finding."
+  },
+  {
+    "name": "TLA explicit missing trace fails",
+    "originalPassed": true,
+    "assessment": "passing-behavior-control",
+    "note": "Supports only the bounded behavior exercised by this assertion."
+  },
+  {
+    "name": "F03: nonexistent command is not marked passed",
+    "originalPassed": false,
+    "assessment": "reproduced-behavioral-defect",
+    "note": "Retained within the witness scope; multiple assertions can describe one finding."
+  },
+  {
+    "name": "F07: suppressions are acknowledged by source health",
+    "originalPassed": false,
+    "assessment": "inadequate-acceptance-test",
+    "note": "A literal property name is not the policy contract; assert an explicit decision outcome and its gate effect."
+  },
+  {
+    "name": "F07: accepted suppression does not remain an undisclosed gate blocker",
+    "originalPassed": false,
+    "assessment": "inadequate-acceptance-test",
+    "note": "Writing and config-validating a record did not establish acceptance; raw findings may legitimately remain visible."
+  },
+  {
+    "name": "F10: ordinary help shows current-source health",
+    "originalPassed": false,
+    "assessment": "desired-product-workflow",
+    "note": "Desired help discoverability under the stated product vision, not an analysis-correctness failure."
+  },
+  {
+    "name": "F10: ordinary help shows change review",
+    "originalPassed": false,
+    "assessment": "desired-product-workflow",
+    "note": "Desired help discoverability under the stated product vision, not an analysis-correctness failure."
+  },
+  {
+    "name": "coverage-full: recomputed CRAP",
+    "originalPassed": true,
+    "assessment": "passing-behavior-control",
+    "note": "Supports only the bounded behavior exercised by this assertion."
+  },
+  {
+    "name": "coverage-half: recomputed CRAP",
+    "originalPassed": true,
+    "assessment": "passing-behavior-control",
+    "note": "Supports only the bounded behavior exercised by this assertion."
+  },
+  {
+    "name": "coverage-none: recomputed CRAP",
+    "originalPassed": true,
+    "assessment": "passing-behavior-control",
+    "note": "Supports only the bounded behavior exercised by this assertion."
+  },
+  {
+    "name": "coverage-malformed: unavailable rather than invented score",
+    "originalPassed": true,
+    "assessment": "passing-behavior-control",
+    "note": "Supports only the bounded behavior exercised by this assertion."
+  },
+  {
+    "name": "coverage-stale: unavailable rather than invented score",
+    "originalPassed": true,
+    "assessment": "passing-behavior-control",
+    "note": "Supports only the bounded behavior exercised by this assertion."
+  },
+  {
+    "name": "compiler entry map has one actual call edge",
+    "originalPassed": true,
+    "assessment": "passing-behavior-control",
+    "note": "Supports only the bounded behavior exercised by this assertion."
+  },
+  {
+    "name": "actual stub detected",
+    "originalPassed": true,
+    "assessment": "passing-behavior-control",
+    "note": "Supports only the bounded behavior exercised by this assertion."
+  },
+  {
+    "name": "always-true checker detected",
+    "originalPassed": true,
+    "assessment": "passing-behavior-control",
+    "note": "Supports only the bounded behavior exercised by this assertion."
+  }
+]

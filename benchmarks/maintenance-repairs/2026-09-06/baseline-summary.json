@@ -1,0 +1,8 @@
+{
+  "scope": "67 changed-function complexity findings plus 47 existing architecture findings; 636 other existing complexity findings are outside this requested follow-up.",
+  "fullSuitePassed": 2870,
+  "affectedSuitePassed": 629,
+  "findings": 114,
+  "sourceReview": "../..//command-contracts/2026-09-05/self-review-findings.json",
+  "commitAuthorized": true
+}

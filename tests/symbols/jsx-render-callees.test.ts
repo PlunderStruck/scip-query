@@ -7,7 +7,6 @@ import { ScipDatabase } from '../../src/storage/db.js';
 import { buildCalleeMap } from '../../src/symbols/graph/call-graph-evidence.js';
 import { crossFileCallerEvidenceMap } from '../../src/symbols/references/caller-evidence.js';
 import { findFirstSymbolMatch } from '../../src/symbols/symbol-lookup.js';
-import { complexityHotspots } from '../../src/queries/quality/complexity-hotspots.js';
 import { callGraph } from '../../src/queries/navigation/call-graph.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
 
@@ -54,6 +53,8 @@ describe('JSX render edges in the call graph', () => {
       .mention(2, 2, 1)
       .mention(2, 3, 1)
       .mention(2, 1, 0)
+      .occurrence(2, sym('Child.tsx', 'Child'), 4, 0, 7, 12)
+      .occurrence(2, sym('Parent.tsx', 'Local'), 5, 0, 7, 12)
       .write();
 
     const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
@@ -69,7 +70,7 @@ describe('JSX render edges in the call graph', () => {
           expect.objectContaining({
             symbol: child!.symbol,
             kind: 'jsx-render',
-            source: 'ast-callsite',
+            source: 'scip-occurrence',
             callsiteLine: 4,
           }),
           expect.objectContaining({ symbol: sym('Parent.tsx', 'Local'), kind: 'jsx-render', callsiteLine: 5 }),
@@ -78,12 +79,6 @@ describe('JSX render edges in the call graph', () => {
 
       const callers = crossFileCallerEvidenceMap(db, [child!], { semantic: false });
       expect([...(callers.get(child!.symbolId) ?? [])]).toEqual(['src/Parent.tsx']);
-
-      const hotspot = complexityHotspots(db, { minLoc: 1, limit: 5, semantic: false }).find((entry) =>
-        entry.shortName.includes('Parent'),
-      );
-      expect(hotspot?.fanOut).toBe(1);
-      expect(hotspot?.calleeCount).toBe(2);
 
       const graph = callGraph(db, 'Parent', { semantic: false });
       expect(graph?.callees.map((row) => row.shortName)).toEqual(

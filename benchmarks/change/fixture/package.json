@@ -1,0 +1,9 @@
+{
+  "name": "dispatch-desk",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node node_modules/typescript/bin/tsc -p tsconfig.json && node --test test/*.test.mjs"
+  }
+}

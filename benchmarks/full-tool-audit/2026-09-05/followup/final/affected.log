@@ -1,0 +1,1 @@
+{"kind":"scip-query-json-export","schemaVersion":1,"producer":{"name":"scip-query","version":"0.25.0"},"command":"affected","path":"/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/full-tool-audit/2026-09-05/followup/final/affected.json","bytes":4260,"sha256":"9c43f95fe3bd32b0f1ec65d9dd527d2cbe7c67b16903fafd8db49e144ff6e459"}

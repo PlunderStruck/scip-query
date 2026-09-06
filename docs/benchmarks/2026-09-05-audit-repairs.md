@@ -1,0 +1,44 @@
+# Audit repair verification
+
+All ten assessed findings have repairs and passing verification. The final suite passes **2,936 tests across 339 files**. This report covers the [assessed findings](../plans/2026-09-05-full-tool-audit-assessment.md), not every possible defect in the tool. Historical audit captures remain unchanged. The [repair checklist](../plans/2026-09-05-audit-repairs.md) records work and intermediate failures; [repair artifacts](../../benchmarks/full-tool-audit/2026-09-05/repairs/validation.json) record final verification.
+
+## Repairs and evidence
+
+| Finding | Result | Verification |
+| --- | --- | --- |
+| F01 — slice completeness | Conditional expression statements have separate control-flow paths, preserving a value on the path that does not overwrite it. Object aliases created by declarations or assignments, nested increments/decrements, and malformed syntax disclose unsupported analysis. Cohesion uses each callable's own coverage. | Branch, overwrite, alias, increment, parse-error, and downstream cohesion regressions. |
+| F02 — exact file lookup | Explicit paths cannot fall through to unrelated fuzzy symbols in either code API. | Exact-file/range, extensionless, Windows-style, qualified/full-symbol regressions; CLI missing-path probe returns zero matches and no source bodies. |
+| F03 — setup evidence | Setup names valid commands, labels readiness separately from operation results, and accurately names its optional indexed health scan. | 21 setup tests, including failed/skipped operations and mode selection. |
+| F04 — declared trace errors | Mapping-declared errors survive even without a CLI trace flag. Equivalent paths deduplicate without losing failures. | Live CLI missing, explicit, duplicate, malformed and unreadable trace cases. |
+| F05 — complexity and callees | Matched TS/JS functions use the same versioned source metric as review. Compiler-supported call targets and source candidates have separate counts. | Real compiler-indexed call-free/actual-call fixture; nested/nullish metric tests; Python and TypeScript fallback tests retain candidate targets. |
+| F06 — current files | Current-file enumeration filters tracked deletions while historical Git inventories remain available. | Deleted-file and lossless navigation regressions. |
+| F07 — suppression storage and policy | Logical IDs are independent of safe filenames. Legacy nested records remain readable and revisable. Conflicts and symlinks are explicit. Source health/review evaluate evidence, expiry, scope and policy without requiring an index; accepted findings remain in raw output. Conflicting configured/stored records require review. | 27 storage tests; source report and no-index CLI regressions, including changed evidence reopening the gate. |
+| F08 — test recognition | Parsed test invocations replace textual declaration matching. | 17 test-quality cases and the real-index declaration witness. |
+| F09 — checker installation | Default download uses stable upstream v1.7.4, pinned after checking the published release checksum and manifest commit. Checksum enforcement remains enabled. | Actual production fetch/cache, altered-byte rejection, real SANY parsing, and TLC accepting a valid invariant and rejecting an invalid one. |
+| F10 — ordinary workflow | Default help exposes health, review and context. Setup's indexed option is explicit. Cold semantic-consumer recovery names the verified watcher command. | Help/CLI tests; first-use scanner/review tests; fresh impact run after starting the watcher. |
+
+The optional model checker is a program that explores the states allowed by a mathematical specification and reports whether a stated property holds in that model. These tests establish that the supported checker adapter works; they do not establish that a model faithfully represents arbitrary application code. Release provenance is recorded from the [official v1.7.4 release](https://github.com/tlaplus/tlaplus/releases/tag/v1.7.4).
+
+## Validation record
+
+- All 18 independent library assertions pass (27 captured probes).
+- All 15 live integration checks pass, including actual compiler indexing and checker execution. Reproduce with `vite-node benchmarks/full-tool-audit/2026-09-05/repair-probes.ts <indexed-audit-fixture> <new-output-directory>` after building.
+- The first full-suite run found two old call-count expectations and an omitted private-module registry entry. Corrected expectations assert both confirmed and candidate counts; no checks were deleted. The affected seven files then passed all 143 tests.
+- Final frozen-source suite: **2,936/2,936 tests across 339 files**, 299.32 seconds. The last alias-assignment regression was also validated in a separate 81-test downstream flow/consumer run. An earlier overlapping run had loaded old code before that regression was added; it is not used as final evidence.
+- Typecheck, lint (including formatting, build, public API and skill-link checks), and `git diff --check` pass. Both Sol medium editing stages pass the independent evaluator.
+
+The API change is recorded as breaking for TypeScript clients that construct result objects: complexity results now require `candidateCalleeCount`, and source reports require `suppressionDecisions` and `blockingFindingIds`. Ordinary readers retain existing fields. See the [API acceptance record](../api/changes/e21229a83e22e4b4.json). Code that counts established call targets must use `calleeCount`; candidate targets do not provide the same evidence. A source report's raw findings describe observations, while `blockingFindingIds` identifies the findings that remain subject to its gate after policy decisions.
+
+## Review and remaining limits
+
+Source review found two new imports that bypassed the existing source-access module; both were corrected. The subsequent report had no introduced or worsened architecture-rule violations. Shared increment recognition and parsed test-call handling were simplified during review. Remaining complexity signals describe explicit parser dispatch, validation, metric fallbacks and output decisions. They are retained without suppressions; this repair is not a claim that the repository's existing complexity debt is eliminated.
+
+Slices remain a bounded analysis of local definitions, uses and control conditions. They do not provide general object-alias or interprocedural flow. Unsupported cases must be treated as missing evidence. Test-quality recognition covers the documented invocation shapes, not every possible test framework wrapper. Scanner results do not establish business ownership or provide an architectural grade.
+
+Starting the checkout-local watcher allowed both semantic-consumer and source-fallback impact methods to complete. A standalone indexed health run did not warm the required consumer fragments in this experiment, so that ineffective recovery alternative was removed. The final explicit TypeScript/Rust/Python rebuild succeeded and status reported fresh. The impact result accounts for 94 changed files, 289 changed symbols and 15 affected files across the entire uncommitted worktree, including earlier work. It still discloses 78 unattributed changed ranges; completed consumer methods do not prove exhaustive effects for those ranges. The watcher was stopped after verification and the disposable audit fixture was removed.
+
+The GPT-5.6 Sol medium treatment trial passed all independent acceptance checks for both the dependency-direction repair and its maintenance follow-up. Editing sessions took 146.281 and 124.774 seconds. It used source review in both stages. The initial agent refreshed the index explicitly; the follow-up did not, and disclosed missing new-symbol coverage. Thus this trial does not establish a reliably refreshed maintenance workflow. The runner retains its existing initial-index protocol; it did not automatically repair that limitation during this experiment.
+
+The [trial, checks and submitted patches](../../benchmarks/full-tool-audit/2026-09-05/repairs/sol-medium-trial.json) preserve the build digest. That build includes the ten original repairs; the later alias-assignment regression and consumer-recovery wording changes were separately tested. Both temporary trial checkouts were cleaned up. A single small treatment run cannot demonstrate that the tool improves agents or generalizes to a large backend. No new LaunchPoint run or live Apalache run is claimed.
+
+The final mixed-language watcher experiment also encountered a documented operational limit: it could refresh TypeScript but refused publication when other detected languages required a full rebuild. The accepted index was preserved. Manual rebuild with `--allow-expensive-rebuild` is the explicit recovery; watcher startup alone is not a guarantee of whole-repository freshness. This limit remains visible and is not counted as a successful automatic-refresh test.

@@ -1,3 +1,4 @@
+import { calleeEvidenceStrength as staticCallEvidenceStrength } from '../../symbols/graph/call-graph-evidence.js';
 import { normalizedCallableLeaf } from '../query-utils.js';
 import { behaviorSignalsByLine, type BehaviorSignal } from '../../source/facts/behavior-skeleton.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
@@ -1065,7 +1066,7 @@ function countResolvedTargetsByLeaf(targets: readonly ResolvedCalleeTarget[]): M
 }
 
 function calleeRowEvidenceStrength(source: CalleeEvidenceSource): ExplorationEvidenceStrength {
-  return source === 'semantic-callee' || source === 'scip-chunk' || source === 'scip-occurrence' ? 'exact' : 'derived';
+  return staticCallEvidenceStrength(source);
 }
 
 function calleeRowEvidenceRank(source: CalleeEvidenceSource): number {

@@ -1,0 +1,172 @@
+{
+  "numTotalTests": 38,
+  "numPassedTests": 38,
+  "numFailedTests": 0,
+  "success": true,
+  "files": [
+    {
+      "file": "tests/domain/suppression-adjudication.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "automatic suppression adjudication accepts one exact, evidenced, content-invalidating decision without human approval",
+          "status": "passed"
+        },
+        {
+          "name": "automatic suppression adjudication routes prose-only legacy and broad decisions to policy escalation",
+          "status": "passed"
+        },
+        {
+          "name": "automatic suppression adjudication reopens a decision when its cited source content changes",
+          "status": "passed"
+        },
+        {
+          "name": "automatic suppression adjudication requires and invalidates evidence for every file in a multi-site finding",
+          "status": "passed"
+        },
+        {
+          "name": "automatic suppression adjudication rejects expired decisions and graph facts without direct counterevidence",
+          "status": "passed"
+        },
+        {
+          "name": "automatic suppression adjudication routes only suppression bursts and high-volume near-total waivers to calibration",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "file": "tests/queries/health/source-review.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "source health and diff review keeps a finding open when counterevidence does not bind its target bytes",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review adjudicates a source exception without an index, retains raw findings, and invalidates changed evidence",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review keeps a finding blocking when its decision is expired",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review keeps a finding blocking when its decision is legacy",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review keeps a finding blocking when its decision is wrong-scope",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review handles stored/configured suppression duplicates (conflicting=false)",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review handles stored/configured suppression duplicates (conflicting=true)",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review flags an increased complexity measure even when the ranking score is unchanged",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review finds added functions in old files and untracked files, including same-file copies",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review compares actual base and current bytes, avoiding staged changes reverted in the worktree",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review reports deleted functions and before/after complexity without assigning zero coverage",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review works on first adoption without an index and identifies relative import cycles",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review discloses bounded and broken scans instead of claiming a clean repository",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review retains different literals as distinct implementations",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review refuses nonexistent Git bases instead of treating everything as new",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review reports consumers left importing a removed file",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review does not call a function removed when its current file failed to parse",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review reviews forbidden dependencies when only the imported target changes",
+          "status": "passed"
+        },
+        {
+          "name": "source health and diff review makes explicitly supplied but unavailable coverage visible in health",
+          "status": "passed"
+        },
+        {
+          "name": "source-matched coverage calculates CRAP only from matching measured execution counts",
+          "status": "passed"
+        },
+        {
+          "name": "first-use project and dependency evidence reviews alias configuration changes without inventing changed functions",
+          "status": "passed"
+        },
+        {
+          "name": "first-use project and dependency evidence compares each revision against its own architecture policy",
+          "status": "passed"
+        },
+        {
+          "name": "first-use project and dependency evidence retains exact complexity deltas when external compiler configuration is unavailable",
+          "status": "passed"
+        },
+        {
+          "name": "first-use project and dependency evidence separates tests, type imports, and dynamic imports from production file cycles",
+          "status": "passed"
+        },
+        {
+          "name": "first-use project and dependency evidence does not turn a cycle between declared groups into a file-cycle claim",
+          "status": "passed"
+        },
+        {
+          "name": "first-use project and dependency evidence excludes copied reference and generated source and documents explicit inclusion",
+          "status": "passed"
+        },
+        {
+          "name": "first-use project and dependency evidence separates external imports from missing internal dependencies",
+          "status": "passed"
+        },
+        {
+          "name": "first-use project and dependency evidence rejects invalid resource bounds at the API boundary",
+          "status": "passed"
+        },
+        {
+          "name": "retains observed asset targets without treating CSS as missing TypeScript or an executable import",
+          "status": "passed"
+        },
+        {
+          "name": "does not label uncertain configuration-dependent findings as introduced",
+          "status": "passed"
+        },
+        {
+          "name": "discloses imports of managed build output without claiming a missing project implementation",
+          "status": "passed"
+        },
+        {
+          "name": "keeps component identities compact when many modules share a policy finding",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

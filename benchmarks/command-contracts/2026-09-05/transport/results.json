@@ -1,0 +1,285 @@
+[
+  {
+    "case": "cursor-first",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-1",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-2",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-3",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-4",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-5",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-6",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-7",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-8",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-9",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-10",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-11",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-12",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-13",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-14",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-15",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-16",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-17",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-18",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-19",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-20",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-21",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-22",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-23",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-24",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-25",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-26",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-27",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-28",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-29",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-30",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-31",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-32",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-33",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-34",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-35",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-36",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-37",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-38",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-39",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-40",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-41",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-42",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-43",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "cursor-44",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "oversized source emits a continuation",
+    "passed": true
+  },
+  {
+    "claim": "continuation drains immutable original output",
+    "passed": true
+  },
+  {
+    "claim": "last page has no remaining cursor",
+    "passed": true
+  },
+  {
+    "case": "session-reset",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "source-first",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "source-second",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "session",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "session reports delivered source",
+    "passed": true
+  },
+  {
+    "claim": "first source invocation emits actual function",
+    "passed": true
+  },
+  {
+    "claim": "repeated source emits a receipt",
+    "passed": true
+  },
+  {
+    "case": "session-reset-again",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "source-after-reset",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "session reset restores source emission",
+    "passed": true
+  }
+]

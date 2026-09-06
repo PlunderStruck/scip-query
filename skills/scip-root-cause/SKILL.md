@@ -3,8 +3,8 @@ name: scip-root-cause
 description: Diagnose the design flaw behind a family of related bugs with scip-query evidence. Use when similar bugs keep recurring, the same subsystem keeps needing patches, or the user lists fixed or observed bugs and asks what is really wrong; produces a falsifiable flaw diagnosis, a latent-instance hunt, and the least invasive remedy that kills the class.
 metadata:
   commands:
-    - template: 'scip-query trace <symbol>'
-      when: 'Trace one bug mechanism: definition plus every reference of the symbol that broke the invariant.'
+    - template: 'scip-query refs <symbol>'
+      when: 'Trace one bug mechanism: observed references within reported coverage of the symbol that broke the invariant.'
     - template: 'scip-query code <selector>'
       when: 'Read the exact body at a fix site or a suspected latent instance.'
     - template: 'scip-query evidence --symbol <symbol> --edge dataflow --direction both --depth <n> --max-edges <n>'
@@ -30,7 +30,7 @@ metadata:
 
 | Command syntax | Question it answers |
 | --- | --- |
-| `scip-query trace <symbol>` | Trace one bug mechanism: definition plus every reference of the symbol that broke the invariant. |
+| `scip-query refs <symbol>` | Trace one bug mechanism: observed references within reported coverage of the symbol that broke the invariant. |
 | `scip-query code <selector>` | Read the exact body at a fix site or a suspected latent instance. |
 | `scip-query evidence --symbol <symbol> --edge dataflow --direction both --depth <n> --max-edges <n>` | Follow where a violated value comes from and where it goes. |
 | `scip-query co-change <file>` | Find fix-site partners from git history that the user may have forgotten. |
@@ -59,7 +59,7 @@ The remedy ladder is the ordered set of interventions from least to most invasiv
 
 ## Rules
 
-1. Every bug in the family gets a mechanism traced to source, not a symptom description: which invariant broke, where, and what the fix did. Sources: fix commits (`git log`, `git show`) plus `trace`, `code`, and `evidence` dataflow.
+1. Every bug in the family gets a mechanism traced to source, not a symptom description: which invariant broke, where, and what the fix did. Sources: fix commits (`git log`, `git show`) plus `refs`, `code`, and `evidence` dataflow.
 2. The flaw hypothesis must be falsifiable and stated as a design claim: "the design assumes X, but the system's responsibilities include Y." Never a narrative about unlucky bugs.
 3. State at least two rivals and kill them with evidence: unrelated coincidences, caller misuse rather than design, one missed edge case rather than a structural flaw.
 4. The hypothesis must retrodict every family member and predict at least one latent instance, and the latent-instance hunt must be executed with `similar`, `refs` over the invariant's carriers, or a constructed probe. It is never argued.
@@ -78,7 +78,7 @@ For each reported or fixed bug, fill one row:
 | --- | ------- | ----------------------- | ------------------ | ----------- | ------ |
 ```
 
-Evidence: the user's description, fix commits (`git log --follow`, `git show`), `scip-query trace` and `scip-query code` on the mechanism symbols, `scip-query co-change` on fix sites to find members the user forgot.
+Evidence: the user's description, fix commits (`git log --follow`, `git show`), `scip-query refs` and `scip-query code` on the mechanism symbols, `scip-query co-change` on fix sites to find members the user forgot.
 
 This step is complete only when every row has a source-traced mechanism and a named invariant. A bug whose mechanism cannot be traced is listed as `unconfirmed member`, not silently included.
 
@@ -135,7 +135,7 @@ The remedy ladder, in order:
 3. **Redesign the core behind its existing interface** with consumers untouched.
 4. **Redesign the interfaces** as a last resort; consumers migrate.
 
-For the chosen rung, run the attack: construct a family member, retrodicted or latent, that survives the rung. If one survives, keep the counterexample in the record and climb one rung. Check blast radius with `scip-query affected` before proposing any rung above 1. For protocol- or lifecycle-shaped flaws whose remedy must hold across interleavings, note the escalation path to a formal model with `scip-query tla`.
+For the chosen rung, run the attack: construct a family member, retrodicted or latent, that survives the rung. If one survives, keep the counterexample in the record and climb one rung. Check blast radius with `scip-query affected` before proposing any rung above 1. For protocol- or lifecycle-shaped flaws, exercise the relevant interruption and concurrency cases directly.
 
 This step is complete only when the chosen rung has an attack record showing no family member survives it, and every rejected lower rung keeps its surviving counterexample.
 

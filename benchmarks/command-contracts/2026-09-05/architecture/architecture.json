@@ -1,0 +1,275 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "architecture",
+  "operationRole": "repository-observation",
+  "evidence": "mixed",
+  "args": [],
+  "options": {
+    "json": true,
+    "session": true,
+    "jsonOutput": "/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/command-contracts/2026-09-05/architecture/architecture.json"
+  },
+  "result": {
+    "configured": true,
+    "dependencyRoles": {
+      "excludedTestEdges": 0,
+      "basis": "production-imports-including-types",
+      "cycleMeaning": "Boundary cycles concern declared groups. File cycle members, when present, concern static imports including types; neither establishes a runtime initialization failure."
+    },
+    "testEdges": [],
+    "testForbiddenEdges": [],
+    "boundaries": [
+      {
+        "name": "core",
+        "paths": [
+          "src/core/**"
+        ],
+        "fileCount": 1,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "ui",
+        "paths": [
+          "src/ui/**"
+        ],
+        "fileCount": 1,
+        "dependencyPolicyDeclared": true
+      }
+    ],
+    "edges": [
+      {
+        "from": "ui",
+        "to": "core",
+        "policyStatus": "forbidden",
+        "fileEdgeCount": 1,
+        "importerCount": 1,
+        "importedFileCount": 1,
+        "examples": [
+          {
+            "fromFile": "src/ui/Café\".ts",
+            "toFile": "src/core/math.ts"
+          }
+        ],
+        "fragile": true
+      }
+    ],
+    "forbiddenEdges": [
+      {
+        "from": "ui",
+        "to": "core",
+        "policyStatus": "forbidden",
+        "fileEdgeCount": 1,
+        "importerCount": 1,
+        "importedFileCount": 1,
+        "examples": [
+          {
+            "fromFile": "src/ui/Café\".ts",
+            "toFile": "src/core/math.ts"
+          }
+        ],
+        "fragile": true
+      }
+    ],
+    "reciprocalPairs": [],
+    "cycles": [],
+    "staleAllowances": [],
+    "boundaryLimits": [],
+    "fragileEdges": [
+      {
+        "from": "ui",
+        "to": "core",
+        "policyStatus": "forbidden",
+        "fileEdgeCount": 1,
+        "importerCount": 1,
+        "importedFileCount": 1,
+        "examples": [
+          {
+            "fromFile": "src/ui/Café\".ts",
+            "toFile": "src/core/math.ts"
+          }
+        ],
+        "fragile": true
+      }
+    ],
+    "testBoundaryViolations": [],
+    "coarseBoundaries": [],
+    "coverage": {
+      "totalFiles": 2,
+      "mappedFiles": 2,
+      "unmappedFiles": [],
+      "ambiguousFiles": []
+    },
+    "policyCoverage": {
+      "declaredRows": 2,
+      "totalBoundaries": 2,
+      "missingRows": [],
+      "requiresCompletePolicy": false,
+      "requiresCompleteCoverage": false,
+      "requiresMinimalPolicy": false
+    }
+  },
+  "coverage": {
+    "complete": true,
+    "totalKnown": true,
+    "returned": 1,
+    "total": 1,
+    "omitted": 0
+  },
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "operationRole": "repository-observation",
+    "receipt": {
+      "schemaVersion": 2,
+      "observedAt": "2026-09-06T07:14:58.067Z",
+      "facts": {
+        "workspaceInstance": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:workspace-instance",
+            "version": 1
+          },
+          "digest": "89f21372ac2b1ea401cda6d8fdd0ad972d594096b5fc81a255f2d2ef8cc16275"
+        },
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "15329c916677086ca6b819c72fc32a96e077bcae2fa8952561f638a8f52d4854"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "15329c916677086ca6b819c72fc32a96e077bcae2fa8952561f638a8f52d4854"
+          }
+        },
+        {
+          "kind": "live-workspace",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:workspace-instance",
+              "version": 1
+            },
+            "digest": "89f21372ac2b1ea401cda6d8fdd0ad972d594096b5fc81a255f2d2ef8cc16275"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        },
+        {
+          "source": "live-workspace",
+          "kind": "not-established"
+        }
+      ],
+      "diagnostics": {
+        "clean": false,
+        "headCommit": "26e5c21e4e15a9ffb4c4937f9e6e67e22f17d0d1",
+        "treeOid": "d2cd9155fb0ee276e6475487c0a7f4c6f45ec5bf"
+      }
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "mixed",
+      "coverage": {
+        "complete": true,
+        "totalKnown": true,
+        "returned": 1,
+        "total": 1,
+        "omitted": 0
+      },
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "mixed",
+        "coverage": {
+          "state": "complete",
+          "returned": 1,
+          "totalKnown": true,
+          "total": 1,
+          "omitted": 0
+        },
+        "producerValidation": {
+          "status": "not-evaluated"
+        },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": [
+            "collaborationDomain",
+            "wholeContent",
+            "observationStability"
+          ],
+          "reasons": [
+            "collaborationDomain:unknown",
+            "wholeContent:unknown",
+            "observationStability:unknown",
+            "leftIndexAlignment:unknown",
+            "rightIndexAlignment:unknown"
+          ]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": [
+            "No repository action policy was supplied for this claim."
+          ]
+        },
+        "families": [
+          {
+            "id": "declared-policy",
+            "selector": "boundaries",
+            "origin": {
+              "kind": "fixed",
+              "origin": "repository-source"
+            }
+          },
+          {
+            "id": "dependency-observations",
+            "selector": "edges",
+            "origin": {
+              "kind": "fixed",
+              "origin": "compiler-graph"
+            }
+          },
+          {
+            "id": "policy-findings",
+            "selector": "forbiddenEdges",
+            "origin": {
+              "kind": "fixed",
+              "origin": "compiler-graph"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

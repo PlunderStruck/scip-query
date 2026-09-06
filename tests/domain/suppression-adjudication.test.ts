@@ -55,6 +55,29 @@ describe('automatic suppression adjudication', () => {
     });
   });
 
+  it('requires and invalidates evidence for every file in a multi-site finding', () => {
+    const multiSite = { ...finding, targetFiles: ['src/example.ts', 'src/other.ts'] };
+    const suppression = automatedSuppression();
+    expect(evaluateSuppressionAdjudication(suppression, multiSite, runtime())).toMatchObject({
+      kind: 'escalated',
+      reasons: expect.arrayContaining(['target-content-evidence-required:src/other.ts']),
+    });
+
+    suppression.decision!.evidence.push({
+      kind: 'source',
+      referent: 'src/other.ts',
+      claim: 'The second target also implements the reviewed compatibility contract.',
+      contentHash: 'hash-a',
+    });
+    expect(evaluateSuppressionAdjudication(suppression, multiSite, runtime())).toEqual({ kind: 'accepted' });
+    expect(
+      evaluateSuppressionAdjudication(suppression, multiSite, {
+        ...runtime(),
+        contentHash: (file) => (file === 'src/other.ts' ? 'hash-b' : 'hash-a'),
+      }),
+    ).toEqual({ kind: 'invalidated', reasons: ['counterevidence-content-changed:src/other.ts'] });
+  });
+
   it('rejects expired decisions and graph facts without direct counterevidence', () => {
     expect(
       evaluateSuppressionAdjudication(
@@ -85,6 +108,36 @@ describe('automatic suppression adjudication', () => {
     ).toMatchObject({
       kind: 'escalated',
       reasons: expect.arrayContaining(['direct-counterevidence-required']),
+    });
+  });
+
+  it('checks expiry before reading evidence and reports changed content before policy escalation', () => {
+    const invalidPolicy = automatedSuppression({ id: 'different-finding' });
+    invalidPolicy.decision!.policyVersion = 2 as 1;
+    const changedRuntime = { ...runtime(), contentHash: () => 'hash-b' };
+    expect(evaluateSuppressionAdjudication(invalidPolicy, finding, changedRuntime)).toEqual({
+      kind: 'invalidated',
+      reasons: ['counterevidence-content-changed:src/example.ts'],
+    });
+    expect(
+      evaluateSuppressionAdjudication({ ...invalidPolicy, expiresAt: '2026-07-27T00:00:00.000Z' }, finding, {
+        ...runtime(),
+        contentHash: () => {
+          throw new Error('Expired evidence must not be read.');
+        },
+      }),
+    ).toEqual({ kind: 'expired', reasons: ['suppression-expired'] });
+  });
+
+  it('keeps missing target coverage and missing evidence hashes as separate diagnostics', () => {
+    const suppression = automatedSuppression();
+    delete suppression.decision!.evidence[0]!.contentHash;
+    expect(evaluateSuppressionAdjudication(suppression, finding, runtime())).toEqual({
+      kind: 'escalated',
+      reasons: [
+        'target-content-evidence-required:src/example.ts',
+        'counterevidence-content-hash-required:src/example.ts',
+      ],
     });
   });
 

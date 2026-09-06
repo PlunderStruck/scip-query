@@ -15,13 +15,61 @@ import {
   withJsonOption,
 } from '../command-kit/command-spec-builders.js';
 import { DIFF_IMPACT_BATCH_COMMAND, HEALTH_PHASE_COMMAND, HEALTH_SEMANTIC_PREWARM_COMMAND } from '../cli-support.js';
-import { BUILTIN_SKILLS } from '../setup.js';
 import * as handlers from './command-handlers.js';
 import { outputContinuationCommandDescriptor } from './output-continuation-command.js';
 import { orderedQueryCommandDescriptors } from './query-command-specs.js';
+import { handleSourceReview } from '../query-commands/maintenance.js';
 
 export const commandDescriptors: CommandDescriptor[] = [
   outputContinuationCommandDescriptor,
+  {
+    id: 'review',
+    command: 'review',
+    agent: analysisAgentContract(
+      'What did this diff change in function complexity, duplication, dependencies, and declared architecture?',
+      'all changed source functions, before/after metrics, exact finding sites, source freshness and coverage limits',
+      [],
+      'bounded',
+      'diff',
+    ),
+    description: 'Review current TS/JS changes against a Git commit, including new and untracked functions',
+    options: withJsonOption([
+      option('--base <ref>', 'Git commit to compare with current files (default HEAD)'),
+      option('--coverage <path>', 'Source-matched Istanbul coverage artifact from record-review-coverage.mjs'),
+      option(
+        '-s, --scope <path>',
+        'Show changes under this exact file or directory; comparison still scans repository peers',
+      ),
+      option('--include-tests', 'Also analyze tests, fixtures and benchmarks'),
+      option('--include-references', 'Also analyze reference source and vendored copies'),
+      option('--include-generated', 'Also analyze generated source'),
+      option('--max-files <n>', 'Maximum eligible source files per snapshot (default 10000)', parsePositiveInteger),
+      option(
+        '--limit <n>',
+        'Maximum displayed findings (default 20; function changes are always listed)',
+        parsePositiveInteger,
+      ),
+      option('--full', 'Display every finding in the analyzed source snapshots'),
+      option(
+        '--check',
+        'Exit 1 for introduced/worsened derived findings, 2 for incomplete source coverage; candidates require review',
+      ),
+    ]),
+    claims: mixedClaimContract(
+      ['live-workspace'],
+      [
+        fieldClaimFamily('findings', 'findings[]', 'evidence', {
+          derived: 'repository-source',
+          candidate: 'heuristic',
+        }),
+        fixedClaimFamily('changed-functions', 'functions[]', 'repository-source'),
+        fixedClaimFamily('coverage-notes', 'coverage', 'repository-source'),
+      ],
+    ),
+    renderShape: 'custom',
+    docs: doc('Health', ['scip-query review --base HEAD', 'scip-query review --include-tests']),
+    handler: handleSourceReview,
+  },
   {
     id: 'hook-architecture-stop',
     command: 'hook-architecture-stop',
@@ -52,7 +100,6 @@ export const commandDescriptors: CommandDescriptor[] = [
     description: 'Index the codebase and convert to SQLite',
     options: withJsonOption([
       option('-l, --language <lang>', 'Index only this language (can be repeated)', collectValues, []),
-      option('--pnpm-workspaces', 'Enable pnpm workspace support (TypeScript)'),
       option('--force', 'Rebuild even if source inputs are unchanged'),
       option('--allow-partial', 'Write an incomplete index when one or more detected languages fail'),
       option(
@@ -171,7 +218,7 @@ export const commandDescriptors: CommandDescriptor[] = [
     command: 'health',
     agent: maintenanceAgentContract(
       'Where has this repository accumulated drift, duplication, complexity, or cleanup pressure?',
-      'health score, findings, priorities, baselines, and coverage notes',
+      'concrete source findings and coverage limits; optional indexed specialist findings and baselines',
       [],
       'bounded',
       'repository',
@@ -179,10 +226,22 @@ export const commandDescriptors: CommandDescriptor[] = [
         { when: { kind: 'option', name: 'writeBaseline', equals: true }, role: 'composite' },
       ]),
     ),
-    description: 'Composite repository health report with React, Vue, and general cleanup findings',
+    description: 'Find concrete TS/JS complexity, duplication, and dependency issues without an index',
     options: withJsonOption([
       option('-s, --scope <path>', 'Limit to files matching path'),
-      option('--full', 'Run unbounded candidate analyses on large indexes'),
+      option('--full', 'Display all source findings; with --indexed, run unbounded candidate analyses'),
+      option('--indexed', 'Run the specialist indexed report including React, Vue, drift and cleanup candidates'),
+      option('--coverage <path>', 'Source-matched Istanbul coverage artifact'),
+      option('--include-tests', 'Also analyze tests, fixtures and benchmarks'),
+      option('--include-references', 'Also analyze reference source and vendored copies'),
+      option('--include-generated', 'Also analyze generated source'),
+      option('--max-files <n>', 'Maximum eligible source files (default 10000)', parsePositiveInteger),
+      option(
+        '--limit <n>',
+        'Maximum displayed source groups (default 5; --full shows every finding)',
+        parsePositiveInteger,
+      ),
+      option('--check', 'Exit 1 for derived source findings, 2 for incomplete source coverage'),
       option('--baseline', 'Compare findings against the committed baseline; exit 1 on new findings'),
       option('--write-baseline', 'Snapshot current finding identities to the baseline file'),
     ]),
@@ -193,6 +252,10 @@ export const commandDescriptors: CommandDescriptor[] = [
           'graph-fact': 'compiler-graph',
           heuristic: 'heuristic',
           'change-graph': 'change-history',
+        }),
+        fieldClaimFamily('source-findings', 'findings[]', 'evidence', {
+          derived: 'repository-source',
+          candidate: 'heuristic',
         }),
         fixedClaimFamily('coverage-notes', 'coverage', 'repository-source'),
       ],
@@ -212,7 +275,8 @@ export const commandDescriptors: CommandDescriptor[] = [
       'repository',
       commandOperation('mutation'),
     ),
-    description: `Install skills (${BUILTIN_SKILLS.join(', ')}) into Claude Code, Codex, and shared agent roots`,
+    description: 'Install core exploration skills into Claude Code, Codex, and shared agent roots',
+    options: [{ flags: '--all', description: 'Include every shipped specialist skill' }],
     renderShape: 'custom',
     docs: doc('Maintenance'),
     handler: handlers.handleInstallSkills,
@@ -343,7 +407,10 @@ export const commandDescriptors: CommandDescriptor[] = [
       option('--no-skills', 'Skip user-level agent skill installation'),
       option('--no-parsers', 'Skip Tree-sitter AST parser installation and repair'),
       option('--install-missing', 'Install missing global tools at reviewed immutable versions'),
-      option('--health', 'Run the optional full health report and write its dossier'),
+      option(
+        '--health',
+        'Run optional indexed health specialists and write their dossier; use health for an index-free source scan',
+      ),
       { flags: '--no-health', description: 'Compatibility inverse of --health', hidden: true },
       option('--dossier-dir <path>', 'Directory for generated setup health dossier files'),
     ]),

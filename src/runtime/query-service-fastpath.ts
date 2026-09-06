@@ -5,7 +5,6 @@ import { cliVersion } from '../platform/cli-version.js';
 import { CLIENT_SAFE_OUTPUT_BYTES, writeSerializedJson } from '../platform/terminal-output.js';
 import { resolveProjectRoot } from './cli-context.js';
 import { cliInvocationPrefix } from './cli-invocation.js';
-import { assertNavigationDetailAllowed } from './navigation-session.js';
 import {
   tryCodeWithQueryService,
   tryByKindWithQueryService,
@@ -26,9 +25,7 @@ import {
   tryStatsWithQueryService,
   trySystemWithQueryService,
   trySurfaceWithQueryService,
-  tryTraceWithQueryService,
   tryUnusedImportsWithQueryService,
-  tryValueFlowWithQueryService,
   trySemanticNeighborhoodWithQueryService,
 } from './query-service.js';
 
@@ -107,27 +104,12 @@ interface RefsFastPathInvocation {
   symbolPattern: string;
 }
 
-interface TraceFastPathInvocation {
-  kind: 'trace';
-  symbolPattern: string;
-}
-
-interface ValueFlowFastPathInvocation {
-  kind: 'value-flow';
-  symbolPattern: string;
-}
-
 interface DependenceSliceFastPathInvocation {
   kind: 'dependence-slice';
   criterion: string;
 }
 
-type SemanticNeighborhoodFastPathInvocation =
-  | { kind: 'call-graph'; symbolPattern: string }
-  | { kind: 'reference-neighborhood'; symbolPattern: string }
-  | { kind: 'reference-reachability'; symbolPattern: string }
-  | { kind: 'slice'; symbolPattern: string }
-  | { kind: 'dataflow'; symbolPattern: string };
+type SemanticNeighborhoodFastPathInvocation = { kind: 'call-graph'; symbolPattern: string };
 
 interface ImportsFastPathInvocation {
   kind: 'imports';
@@ -164,8 +146,6 @@ type FastPathInvocation =
   | ByKindFastPathInvocation
   | KindCountsFastPathInvocation
   | RefsFastPathInvocation
-  | TraceFastPathInvocation
-  | ValueFlowFastPathInvocation
   | DependenceSliceFastPathInvocation
   | SemanticNeighborhoodFastPathInvocation
   | ImportsFastPathInvocation
@@ -184,11 +164,6 @@ export async function tryRunQueryServiceFastPath(argv: readonly string[]): Promi
   if (!invocation) return false;
   const projectRoot = resolveProjectRoot();
   if (invocation.kind === 'code') {
-    try {
-      assertNavigationDetailAllowed(projectRoot, 'code', invocation.session);
-    } catch {
-      return false;
-    }
     const response = tryCodeWithQueryService(projectRoot, invocation.selectors, invocation.options, {
       allowDefault: true,
     });
@@ -250,31 +225,16 @@ export async function tryRunQueryServiceFastPath(argv: readonly string[]): Promi
     await writeSerializedJsonResult(JSON.stringify(response.result), invocation.kind, argv);
     return true;
   }
-  if (invocation.kind === 'trace') {
-    const response = tryTraceWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true });
-    if (!response) return false;
-    await writeSerializedJsonResult(response.result.serializedJson, invocation.kind, argv);
-    return true;
-  }
-  if (invocation.kind === 'value-flow') {
-    const response = tryValueFlowWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true });
-    if (!response) return false;
-    await writeSerializedJsonResult(response.result.serializedJson, invocation.kind, argv);
-    return true;
-  }
+
   if (invocation.kind === 'dependence-slice') {
     const response = tryDependenceSliceWithQueryService(projectRoot, invocation.criterion, { allowDefault: true });
     if (!response) return false;
+    const result = JSON.parse(response.result.serializedJson) as { resolution: string };
+    if (result.resolution !== 'matched') process.exitCode = 1;
     await writeSerializedJsonResult(response.result.serializedJson, invocation.kind, argv);
     return true;
   }
-  if (
-    invocation.kind === 'call-graph' ||
-    invocation.kind === 'reference-neighborhood' ||
-    invocation.kind === 'reference-reachability' ||
-    invocation.kind === 'slice' ||
-    invocation.kind === 'dataflow'
-  ) {
+  if (invocation.kind === 'call-graph') {
     const response = trySemanticNeighborhoodWithQueryService(projectRoot, invocation.kind, invocation.symbolPattern, {
       allowDefault: true,
     });
@@ -341,16 +301,9 @@ export function parseFastPathInvocation(argv: readonly string[]): FastPathInvoca
   if (argv[0] === 'hierarchy') return parseHierarchyInvocation(argv);
   if (argv[0] === 'by-kind') return parseByKindInvocation(argv);
   if (argv[0] === 'refs') return parseRefsInvocation(argv);
-  if (argv[0] === 'trace') return parseTraceInvocation(argv);
-  if (argv[0] === 'value-flow') return parseValueFlowInvocation(argv);
+
   if (argv[0] === 'dependence-slice') return parseDependenceSliceInvocation(argv);
-  if (
-    argv[0] === 'call-graph' ||
-    argv[0] === 'reference-neighborhood' ||
-    argv[0] === 'reference-reachability' ||
-    argv[0] === 'slice' ||
-    argv[0] === 'dataflow'
-  ) {
+  if (argv[0] === 'call-graph') {
     return parseSemanticNeighborhoodInvocation(argv);
   }
   if (argv[0] === 'imports') return parseImportsInvocation(argv);
@@ -397,16 +350,6 @@ function parseRefsInvocation(argv: readonly string[]): RefsFastPathInvocation | 
   return symbolPattern === null ? null : { kind: 'refs', symbolPattern };
 }
 
-function parseTraceInvocation(argv: readonly string[]): TraceFastPathInvocation | null {
-  const symbolPattern = parseExactCompactOperand(argv);
-  return symbolPattern === null ? null : { kind: 'trace', symbolPattern };
-}
-
-function parseValueFlowInvocation(argv: readonly string[]): ValueFlowFastPathInvocation | null {
-  const symbolPattern = parseExactCompactOperand(argv);
-  return symbolPattern === null ? null : { kind: 'value-flow', symbolPattern };
-}
-
 function parseDependenceSliceInvocation(argv: readonly string[]): DependenceSliceFastPathInvocation | null {
   const criterion = parseExactCompactOperand(argv);
   return criterion === null ? null : { kind: 'dependence-slice', criterion };
@@ -414,13 +357,7 @@ function parseDependenceSliceInvocation(argv: readonly string[]): DependenceSlic
 
 function parseSemanticNeighborhoodInvocation(argv: readonly string[]): SemanticNeighborhoodFastPathInvocation | null {
   const kind = argv[0];
-  if (
-    kind !== 'call-graph' &&
-    kind !== 'reference-neighborhood' &&
-    kind !== 'reference-reachability' &&
-    kind !== 'slice' &&
-    kind !== 'dataflow'
-  ) {
+  if (kind !== 'call-graph') {
     return null;
   }
   const symbolPattern = parseExactCompactOperand(argv);

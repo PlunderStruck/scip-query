@@ -41,6 +41,7 @@ describe('not-implemented', () => {
         "import { Base } from './base.js';",
         'export class SubA extends Base {',
         '  process(): void {',
+        '    super.process();',
         "    console.log('a');",
         '  }',
         '}',
@@ -68,11 +69,18 @@ describe('not-implemented', () => {
       .document(3, 'typescript', 'src/base.ts')
       .document(4, 'typescript', 'src/sub-a.ts')
       .document(5, 'typescript', 'src/sub-b.ts')
+      .document(6, 'typescript', 'src/base-caller.ts')
       .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`reachable-stub.ts`/reachableStub().', 'reachableStub', 12)
       .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`dead-stub.ts`/deadStub().', 'deadStub', 12)
       .symbol(3, 'scip-typescript npm fixture 1.0.0 src/`base.ts`/Base#process().', 'process', 6)
       .symbol(4, 'scip-typescript npm fixture 1.0.0 src/`sub-a.ts`/SubA#process().', 'process', 6)
       .symbol(5, 'scip-typescript npm fixture 1.0.0 src/`sub-b.ts`/SubB#process().', 'process', 6)
+      .symbol(6, 'scip-typescript npm fixture 1.0.0 src/`base-caller.ts`/run().', 'run', 6)
+      .definition(6, 6, 6, 1, 0, 3, 1)
+      .chunk(6, 6, 0, 3)
+      .mention(6, 6, 1)
+      .mention(6, 3, 0)
+      .occurrence(6, 'scip-typescript npm fixture 1.0.0 src/`base.ts`/Base#process().', 0, 2, 11, 18)
       .definition(1, 1, 1, 0, 0, 2, 1)
       .definition(2, 2, 2, 0, 0, 2, 1)
       .definition(3, 3, 3, 1, 2, 3, 3)
@@ -102,9 +110,9 @@ describe('not-implemented', () => {
     expect(findings.some((f) => f.shortName.includes('deadStub'))).toBe(false);
   });
 
-  it('does not flag an abstract-method throw overridden by every concrete subclass', () => {
+  it('does not hide a base stub reached through super just because subclasses override it', () => {
     const findings = notImplemented(db, { semantic: false });
-    expect(findings.some((f) => f.file === 'src/base.ts')).toBe(false);
+    expect(findings.some((f) => f.file === 'src/base.ts')).toBe(true);
   });
 });
 

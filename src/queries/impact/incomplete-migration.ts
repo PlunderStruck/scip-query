@@ -1,5 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
+import { analyzeSourceFunctions } from '../../source/ast/function-metrics.js';
 import { containment } from '../../analysis/similarity.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { escapeRegex } from '../../source/primitives/regex-utils.js';
@@ -29,7 +30,7 @@ export interface IncompleteMigrationLeftover {
 }
 
 export type IncompleteMigrationHelperShape = 'specific-callee-cluster';
-export type IncompleteMigrationScope = 'same-scope' | 'possible-subtype' | 'unknown';
+export type IncompleteMigrationScope = 'shared-vocabulary' | 'distinct-vocabulary' | 'unknown';
 
 export interface IncompleteMigrationFinding {
   helperSymbol: string;
@@ -38,7 +39,7 @@ export interface IncompleteMigrationFinding {
   helperShape: IncompleteMigrationHelperShape;
   helperCalleeCount: number;
   specificHelperCalleeCount: number;
-  /** Files referencing the helper. The helper is new, so every one of these references landed in this diff. */
+  /** Files with indexed non-definition references to the helper; references need not be calls or newly added. */
   migratedFiles: string[];
   /** Un-migrated sites: contain the helper's callee set inline, don't call it. */
   leftovers: IncompleteMigrationLeftover[];
@@ -63,8 +64,6 @@ export interface IncompleteMigrationResult {
   note?: string;
 }
 
-const MAX_LEFTOVERS_PER_HELPER = 5;
-
 /**
  * Incomplete extractions: an agent adds a helper, rewires a site or two into
  * it, and misses the remaining sites that still hold the same logic inline.
@@ -73,7 +72,7 @@ const MAX_LEFTOVERS_PER_HELPER = 5;
  * helper's callee set (plus its own surrounding logic), so symmetric cosine
  * (`similar`) under-scores exactly the sites we're after. This detector:
  *
- * 1. finds production callables in the diff whose name is absent at `base`
+ * 1. finds production callables in the diff whose callable name is absent at `base`
  *    (the new helpers),
  * 2. keeps those with at least one reference — the wired-in evidence
  *    (zero-reference helpers belong to the dead-code detector family),
@@ -227,7 +226,7 @@ export function incompleteMigration(
       helperCalleeCount: callees.size,
       specificHelperCalleeCount,
       migratedFiles: migratedFiles.sort(),
-      leftovers: leftovers.slice(0, MAX_LEFTOVERS_PER_HELPER),
+      leftovers,
     });
   }
 
@@ -289,7 +288,7 @@ function collectLeftoversForHelper(opts: {
 }
 
 function migrationScopeRank(scope: IncompleteMigrationScope): number {
-  if (scope === 'same-scope') return 2;
+  if (scope === 'shared-vocabulary') return 2;
   if (scope === 'unknown') return 1;
   return 0;
 }
@@ -318,20 +317,20 @@ function migrationScopeForLeftover(
   if (migrationScopeTokens.size === 0 || leftoverTokens.size === 0) {
     return {
       migrationScope: 'unknown',
-      migrationScopeReasons: ['insufficient path/name tokens to infer migration scope'],
+      migrationScopeReasons: ['insufficient path/name tokens to compare vocabulary'],
     };
   }
 
   const sharedTokens = [...leftoverTokens].filter((token) => migrationScopeTokens.has(token)).sort();
   if (sharedTokens.length > 0) {
     return {
-      migrationScope: 'same-scope',
-      migrationScopeReasons: [`shares migration-scope token(s): ${sharedTokens.slice(0, 5).join(', ')}`],
+      migrationScope: 'shared-vocabulary',
+      migrationScopeReasons: [`shares path/name token(s): ${sharedTokens.join(', ')}`],
     };
   }
 
   return {
-    migrationScope: 'possible-subtype',
+    migrationScope: 'distinct-vocabulary',
     migrationScopeReasons: ['no path/name tokens shared with the helper or already migrated files'],
   };
 }
@@ -384,8 +383,9 @@ function specificCalleeCount(callees: ReadonlySet<string>, candidateIndex: Calle
 }
 
 /**
- * Production callables in changed files whose leaf name does not occur in
- * the file's content at `base` — extraction always mints a new name. A file
+ * Production callables in changed files with no same-name historical callable
+ * in TS/JS. Other languages use conservative name absence in historical text.
+ * This identifies extraction candidates; renames and new class owners need review. A file
  * that doesn't exist at base (untracked or added) makes all its callables new.
  */
 function newCallablesInDiff(
@@ -395,16 +395,50 @@ function newCallablesInDiff(
   baseContentAt: BaseContentResultReader,
 ): { definitions: IndexedDefinition[]; unavailable?: Extract<BaseContentResult, { state: 'unavailable' }> } {
   const definitions: IndexedDefinition[] = [];
+  const historicalNames = new Map<string, Set<string>>();
   for (const def of index.productionCallableDefinitions({ files: [...changed], requireFunctionLikeSymbol: true })) {
     if (!changed.has(def.relativePath)) continue;
     const basePath = renamedFromByFile.get(def.relativePath) ?? def.relativePath;
     const result = baseContentAt(basePath);
     if (result.state === 'unavailable') return { definitions: [], unavailable: result };
-    if (result.state === 'absent' || !new RegExp(`\\b${escapeRegex(def.leaf)}\\b`).test(result.content)) {
+    if (result.state === 'absent') {
       definitions.push(def);
+      continue;
     }
+    const historical = historicalCallablePresence(def.leaf, basePath, result.content, historicalNames);
+    if ('unavailable' in historical) return { definitions: [], unavailable: historical.unavailable };
+    if (!historical.exists) definitions.push(def);
   }
   return { definitions };
+}
+
+/** TS/JS declaration identities come from syntax; other languages retain the weaker historical-name check. */
+function historicalCallablePresence(
+  leaf: string,
+  file: string,
+  content: string,
+  cache: Map<string, Set<string>>,
+): { exists: boolean } | { unavailable: Extract<BaseContentResult, { state: 'unavailable' }> } {
+  if (!/\.[cm]?[jt]sx?$/i.test(file)) return { exists: new RegExp(`\\b${escapeRegex(leaf)}\\b`).test(content) };
+  const historical = historicalCallableNames(file, content, cache);
+  if ('unavailable' in historical) return historical;
+  return { exists: historical.names.has(leaf) };
+}
+
+function historicalCallableNames(
+  file: string,
+  content: string,
+  cache: Map<string, Set<string>>,
+): { names: Set<string> } | { unavailable: Extract<BaseContentResult, { state: 'unavailable' }> } {
+  let names = cache.get(file);
+  if (!names) {
+    const analysis = analyzeSourceFunctions(file, content);
+    if (analysis.errors.length > 0)
+      return { unavailable: { state: 'unavailable', reason: analysis.errors.join('; ') } };
+    names = new Set(analysis.functions.map((fn) => fn.name.split('.').at(-1)!));
+    cache.set(file, names);
+  }
+  return { names };
 }
 
 function legacyBaseContentResultReader(reader: BaseContentReader): BaseContentResultReader {

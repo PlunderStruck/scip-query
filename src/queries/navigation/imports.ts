@@ -1,5 +1,6 @@
+import { ts } from '@ts-morph/common';
 import type { ScipDatabase } from '../../storage/db.js';
-import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
+import { resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { resolveIndexedFile } from '../internal/file-resolution.js';
 import { getSourceImports } from '../../language-parsers/index.js';
 import { semanticImportUsage } from '../../semantic/shared-primitives.js';
@@ -14,6 +15,7 @@ export interface ImportResult {
   symbol: string;
   shortName: string;
   fromFile: string;
+  evidence: 'indexed-import' | 'semantic-import' | 'source-import-candidate';
 }
 
 export interface UnusedImportResult {
@@ -32,6 +34,7 @@ export function imports(db: ScipDatabase, filePattern: string, opts: { semantic?
       symbol: entry.symbol,
       shortName: entry.shortName,
       fromFile: entry.fromFile,
+      evidence: entry.evidence,
     })) ?? []
   );
 }
@@ -40,9 +43,11 @@ export function imports(db: ScipDatabase, filePattern: string, opts: { semantic?
  * Which files import this symbol?
  */
 export function importedBy(db: ScipDatabase, symbolPattern: string): ImportResult[] {
-  const target = findFirstSymbolMatch(db, symbolPattern);
-  const indexedResults = indexedImporters(db, symbolPattern);
-  if (indexedResults.length > 0 && !isClojureTarget(target)) return indexedResults;
+  const resolution = resolveSymbol(db, symbolPattern);
+  if (resolution.candidates.length > 0) throw new Error(`Ambiguous symbol: ${symbolPattern}. Use an exact symbol.`);
+  const target = resolution.match;
+  const indexedResults = target ? indexedImporters(db, target.symbol) : [];
+  if (!target && !looksLikeNamespacePattern(symbolPattern)) return [];
   const sourceResults = sourceImportersForSymbol(db, symbolPattern, target);
   if (looksLikeNamespacePattern(symbolPattern) && sourceResults.length > 0) return sourceResults;
   return dedupeImportResults([...indexedResults, ...sourceResults]);
@@ -100,6 +105,8 @@ interface ImportEntry {
   fromFile: string;
   importer: string;
   used: boolean;
+  importedName?: string;
+  evidence: ImportResult['evidence'];
 }
 
 function indexedImporters(db: ScipDatabase, symbolPattern: string): ImportResult[] {
@@ -112,10 +119,10 @@ function indexedImporters(db: ScipDatabase, symbolPattern: string): ImportResult
     JOIN chunks c ON m.chunk_id = c.id
     JOIN documents d ON c.document_id = d.id
     JOIN global_symbols gs ON m.symbol_id = gs.id
-    WHERE gs.symbol LIKE ?
+    WHERE gs.symbol = ?
       AND m.role = 2
     ORDER BY d.relative_path`,
-    `%${symbolPattern}%`,
+    symbolPattern,
   );
 
   return rows
@@ -124,6 +131,7 @@ function indexedImporters(db: ScipDatabase, symbolPattern: string): ImportResult
       symbol: r.symbol,
       shortName: shortenSymbol(r.symbol),
       fromFile: r.importer,
+      evidence: 'indexed-import' as const,
     }));
 }
 
@@ -133,11 +141,12 @@ function indexedImporters(db: ScipDatabase, symbolPattern: string): ImportResult
 function sourceImportersForSymbol(
   db: ScipDatabase,
   symbolPattern: string,
-  target: ReturnType<typeof findFirstSymbolMatch> = findFirstSymbolMatch(db, symbolPattern),
+  target: ReturnType<typeof resolveSymbol>['match'],
 ): ImportResult[] {
   const targetFile = target?.relativePath ?? null;
   const targetLeaf = target ? leafName(target.symbol) : symbolPattern.replace(/\(\)$/, '');
   const targetIsModule = target ? isModuleLikeSymbol(target.symbol) : false;
+  const exportNames = targetFile ? localExportNames(db, targetFile, targetLeaf) : new Set([targetLeaf]);
 
   const importers = new Set<string>();
   for (const relativePath of indexedDocumentPaths(db, { includeIgnored: false })) {
@@ -146,6 +155,7 @@ function sourceImportersForSymbol(
         sourceImportMatchesTarget(entry, relativePath, {
           targetFile,
           targetLeaf,
+          exportNames,
           targetIsModule,
           targetPattern: symbolPattern,
         })
@@ -160,13 +170,8 @@ function sourceImportersForSymbol(
     symbol: namespacePattern ?? target?.symbol ?? targetLeaf,
     shortName: namespacePattern ?? (target ? shortenSymbol(target.symbol) : targetLeaf),
     fromFile: importer,
+    evidence: 'source-import-candidate' as const,
   }));
-}
-
-function isClojureTarget(target: ReturnType<typeof findFirstSymbolMatch>): boolean {
-  return Boolean(
-    target && (target.symbol.startsWith('scip-clojure ') || detectAstLanguage(target.relativePath) === 'clojure'),
-  );
 }
 
 function dedupeImportResults(results: ImportResult[]): ImportResult[] {
@@ -184,18 +189,67 @@ function dedupeImportResults(results: ImportResult[]): ImportResult[] {
 function sourceImportMatchesTarget(
   entry: ParsedSourceImport,
   importerPath: string,
-  target: { targetFile: string | null; targetLeaf: string; targetIsModule: boolean; targetPattern: string },
+  target: {
+    targetFile: string | null;
+    targetLeaf: string;
+    exportNames: ReadonlySet<string>;
+    targetIsModule: boolean;
+    targetPattern: string;
+  },
 ): boolean {
   if (!entry.sourcePath) return false;
   if (target.targetFile && normalizePath(entry.sourcePath) !== normalizePath(target.targetFile)) {
     return false;
   }
-  if (entry.kind === 'side-effect') return true;
+  if (entry.kind === 'side-effect') return Boolean(target.targetFile && target.targetIsModule);
   if (target.targetFile && isCLikeImporter(importerPath)) return true;
+  return sourceImportMatchesExport(entry, target);
+}
+
+function sourceImportMatchesExport(
+  entry: ParsedSourceImport,
+  target: Parameters<typeof sourceImportMatchesTarget>[2],
+): boolean {
   if (entry.kind === 'namespace' && namespaceImportMatchesPattern(entry, target.targetPattern)) return true;
   if (target.targetIsModule) return true;
-  if (entry.kind === 'named' && entry.importedName === target.targetLeaf) return true;
-  return entry.kind === 'namespace' && entry.usedMembers.includes(target.targetLeaf);
+  if (entry.kind === 'default') return target.exportNames.has('default');
+  if (entry.kind === 'named' && target.exportNames.has(entry.importedName)) return true;
+  return entry.kind === 'namespace' && entry.usedMembers.some((name) => target.exportNames.has(name));
+}
+
+// Resolve direct JS/TS export spellings without guessing that the default export
+// is whichever declaration happens to be selected in the target file.
+function localExportNames(db: ScipDatabase, file: string, localName: string): Set<string> {
+  const names = new Set([localName]);
+  if (!/\.[cm]?[jt]sx?$/.test(file)) return names;
+  const source = getSourceText(db, file);
+  const parsed = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  for (const statement of parsed.statements) {
+    if (defaultExportLocalName(statement) === localName) names.add('default');
+    if (ts.isExportDeclaration(statement)) {
+      for (const entry of localNamedExports(statement)) {
+        if ((entry.propertyName ?? entry.name).text === localName) names.add(entry.name.text);
+      }
+    }
+  }
+  return names;
+}
+
+function defaultExportLocalName(statement: ts.Statement): string | undefined {
+  if (ts.isExportAssignment(statement)) {
+    return !statement.isExportEquals && ts.isIdentifier(statement.expression) ? statement.expression.text : undefined;
+  }
+  if (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) {
+    return statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)
+      ? statement.name?.text
+      : undefined;
+  }
+  return undefined;
+}
+
+function localNamedExports(statement: ts.ExportDeclaration): readonly ts.ExportSpecifier[] {
+  if (statement.moduleSpecifier || !statement.exportClause || !ts.isNamedExports(statement.exportClause)) return [];
+  return statement.exportClause.elements;
 }
 
 function namespaceImportMatchesPattern(entry: ParsedSourceImport, targetPattern: string): boolean {
@@ -217,11 +271,21 @@ function loadFileImportEntries(
   const importer = resolveIndexedFile(db, filePattern);
   if (!importer) return null;
 
-  return (
-    indexedFileImportEntries(db, importer, opts) ??
-    (opts.semantic === false ? null : semanticFileImportEntries(db, importer)) ??
-    sourceFileImportEntries(db, importer)
-  );
+  const indexed = indexedFileImportEntries(db, importer, opts) ?? [];
+  const source = sourceFileImportEntries(db, importer);
+  const semantic = opts.semantic === false ? null : semanticFileImportEntries(db, importer);
+  const bindings = semantic ? mergeImportUsageEntries(semantic, source) : source;
+  // A nonempty compiler result can still represent only part of the file.
+  // Keep uncovered source bindings instead of treating nonempty as complete.
+  return [
+    ...indexed,
+    ...bindings.filter(
+      (binding) =>
+        !indexed.some(
+          (entry) => entry.fromFile === binding.fromFile && leafName(entry.symbol) === binding.importedName,
+        ),
+    ),
+  ];
 }
 
 function indexedFileImportEntries(
@@ -274,6 +338,7 @@ function indexedFileImportEntries(
       fromFile: r.from_file ?? '(external)',
       importer: r.importer,
       used: r.used !== 0 || semantic.some((entry) => entry.isUsed && entry.sourcePath === r.from_file),
+      evidence: 'indexed-import' as const,
     }));
   }
 
@@ -291,6 +356,8 @@ function semanticFileImportEntries(db: ScipDatabase, importer: string): ImportEn
         fromFile: entry.sourcePath ?? '(external)',
         importer,
         used: entry.kind === 'side-effect' ? true : entry.isUsed,
+        importedName: entry.importedName,
+        evidence: 'semantic-import' as const,
       };
     });
   }
@@ -317,6 +384,8 @@ function sourceFileImportEntries(db: ScipDatabase, importer: string): ImportEntr
       fromFile: entry.sourcePath ?? '(external)',
       importer,
       used,
+      importedName: entry.importedName,
+      evidence: 'source-import-candidate' as const,
     };
   });
 }

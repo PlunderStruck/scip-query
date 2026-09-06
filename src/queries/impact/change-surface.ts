@@ -26,6 +26,7 @@ export interface ChangeSurfaceEntry {
 export interface ChangeSurfaceResult {
   file: string;
   symbols: ChangeSurfaceEntry[];
+  /** Distinct consumer files across all selected symbols, not a sum of per-symbol counts. */
   totalExternalConsumers: number;
   fileRisk?: FileChangeRiskMetadata;
 }
@@ -52,20 +53,16 @@ export function changeSurface(
   if (!doc || db.isIgnored(doc.relative_path)) return null;
 
   const symbols: ChangeSurfaceEntry[] = [];
-  let totalExternalConsumers = 0;
+  const consumerFiles = new Set<string>();
   const definitions = sortedChangeSurfaceDefinitions(db, doc.relative_path);
   const fileRisk = inspectFileChangeRiskMetadata(db, doc.relative_path);
   const semanticConsumers =
     opts.semantic === false ? new Map<number, Set<string>>() : semanticCallerMap(db, definitions);
 
   for (const def of definitions) {
-    const externalConsumers = externalConsumerCount(
-      db,
-      doc,
-      def,
-      semanticConsumers.get(def.symbolId) ?? new Set<string>(),
-    );
-    totalExternalConsumers += externalConsumers;
+    const consumers = externalConsumerFiles(db, doc, def, semanticConsumers.get(def.symbolId) ?? new Set<string>());
+    for (const file of consumers) consumerFiles.add(file);
+    const externalConsumers = consumers.size;
     const externalConsumerRiskLevel = riskLevelForConsumers(externalConsumers);
     const riskReasons: ChangeSurfaceRiskReason[] = [
       ...fileRisk.reasons,
@@ -94,7 +91,7 @@ export function changeSurface(
   return {
     file: doc.relative_path,
     symbols,
-    totalExternalConsumers,
+    totalExternalConsumers: consumerFiles.size,
     fileRisk,
   };
 }
@@ -120,12 +117,12 @@ function sortedChangeSurfaceDefinitions(db: ScipDatabase, relativePath: string) 
     .sort((a, b) => a.startLine - b.startLine || a.endLine - b.endLine);
 }
 
-function externalConsumerCount(
+function externalConsumerFiles(
   db: ScipDatabase,
   doc: { id: number; relative_path: string },
   def: IndexedDefinition,
   semanticConsumers: ReadonlySet<string>,
-): number {
+): Set<string> {
   const consumerRows = db.all<{ relative_path: string }>(
     `SELECT DISTINCT consumer_d.relative_path
     FROM mentions m
@@ -139,9 +136,9 @@ function externalConsumerCount(
   );
 
   return new Set([
-    ...consumerRows.map((row) => row.relative_path),
-    ...[...semanticConsumers].filter((file) => file !== doc.relative_path),
-  ]).size;
+    ...consumerRows.map((row) => row.relative_path).filter((file) => !db.isIgnored(file)),
+    ...[...semanticConsumers].filter((file) => file !== doc.relative_path && !db.isIgnored(file)),
+  ]);
 }
 
 function riskLevelForConsumers(externalConsumers: number): 'low' | 'medium' | 'high' {

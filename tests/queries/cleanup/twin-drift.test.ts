@@ -593,6 +593,47 @@ describe('twinDrift (db-backed)', () => {
     expect(groups.every((group) => group.members.every((member) => member.file !== 'src/c.ts'))).toBe(true);
   });
 
+  it('retains different string literals when comparing twin bodies', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-twin-literals-'));
+    try {
+      writeFixtureFiles(root, {
+        'src/a.ts': [
+          'export function formatPolicy(value: string) {',
+          "  const mode = 'read write';",
+          '  return value + mode;',
+          '}',
+        ],
+        'src/b.ts': [
+          'export function formatPolicy(value: string) {',
+          "  const mode = 'readwrite';",
+          '  return value + mode;',
+          '}',
+        ],
+      });
+      const dbPath = join(root, 'index.db');
+      evidenceFixtureDb(dbPath)
+        .document(1, 'typescript', 'src/a.ts')
+        .document(2, 'typescript', 'src/b.ts')
+        .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`a.ts`/formatPolicy().', 'formatPolicy', 12)
+        .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`b.ts`/formatPolicy().', 'formatPolicy', 12)
+        .definition(1, 1, 1, 0, 0, 3, 1)
+        .definition(2, 2, 2, 0, 0, 3, 1)
+        .write();
+      const fixture = new ScipDatabase({ dbPath, projectRoot: root });
+      try {
+        const groups = twinDrift(fixture);
+        expect(groups).toHaveLength(1);
+        expect(groups[0]!.relationship).toBe('divergent');
+        expect(groups[0]!.firstDivergentTokens).toContain('read write');
+        expect(groups[0]!.firstDivergentTokens).toContain('readwrite');
+      } finally {
+        fixture.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('does not treat rust static variables as callable twins', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-query-twin-drift-rust-'));
     try {

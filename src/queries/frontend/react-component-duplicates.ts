@@ -195,8 +195,8 @@ function compareReactComponentProfiles(
     evidenceClassReasons: [...reasons, ...evidence.reasons],
     recommendation: verdict.recommendation,
     pairContext,
-    uniqueToA: sortedTokens(difference(a.tokens, b.tokens)).slice(0, 25),
-    uniqueToB: sortedTokens(difference(b.tokens, a.tokens)).slice(0, 25),
+    uniqueToA: sortedTokens(difference(a.tokens, b.tokens)),
+    uniqueToB: sortedTokens(difference(b.tokens, a.tokens)),
     locA: a.profile.loc,
     locB: b.profile.loc,
   };

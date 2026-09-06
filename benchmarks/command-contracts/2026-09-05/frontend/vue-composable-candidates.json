@@ -1,0 +1,195 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "vue-composable-candidates",
+  "operationRole": "repository-observation",
+  "evidence": "heuristic",
+  "args": [],
+  "options": {
+    "minSimilarity": 0.45,
+    "minSharedBehaviors": 6,
+    "limit": 20,
+    "scope": "src/frontend",
+    "json": true,
+    "session": true,
+    "jsonOutput": "/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/command-contracts/2026-09-05/frontend/vue-composable-candidates.json"
+  },
+  "result": [
+    {
+      "fileA": "src/frontend/Alpha.vue",
+      "fileB": "src/frontend/Beta.vue",
+      "similarity": 1,
+      "tokenCountA": 14,
+      "tokenCountB": 14,
+      "sharedTokens": [
+        "function-verb:save",
+        "function-verb:submit",
+        "function-verb:update",
+        "function:saveInvoice",
+        "function:submitOrder",
+        "function:updateCustomer",
+        "lifecycle:onMounted",
+        "reactivity:ref",
+        "request:fetch",
+        "template-binding:invoice",
+        "template-binding:saveInvoice",
+        "template-binding:submitOrder",
+        "template-event:change",
+        "template-event:click"
+      ],
+      "sharedComposables": [],
+      "sharedStores": [],
+      "sharedReactivity": [
+        "ref"
+      ],
+      "sharedLifecycle": [
+        "onMounted"
+      ],
+      "sharedRequests": [
+        "fetch"
+      ],
+      "sharedFunctions": [
+        "saveInvoice",
+        "submitOrder",
+        "updateCustomer"
+      ],
+      "sharedFunctionVerbs": [
+        "save",
+        "submit",
+        "update"
+      ],
+      "sharedBindings": [
+        "invoice",
+        "saveInvoice",
+        "submitOrder"
+      ],
+      "sharedTemplateEvents": [
+        "change",
+        "click"
+      ],
+      "evidenceClass": "mixed",
+      "actionTier": "signal",
+      "evidenceClassReasons": [
+        "shared function has name(s) outside the generic vocabulary: saveInvoice, submitOrder, updateCustomer",
+        "shared binding has name(s) outside the generic vocabulary: invoice, saveInvoice, submitOrder",
+        "shared template event has name(s) outside the generic vocabulary: click",
+        "shared reactivity primitive: ref",
+        "shared lifecycle primitive: onMounted",
+        "shared request matches the generic-name vocabulary: fetch"
+      ],
+      "recommendation": "Separate generic Vue mechanics from domain-specific behavior before extracting a composable.",
+      "uniqueToA": [],
+      "uniqueToB": [],
+      "reason": "shared request helpers: fetch; shared lifecycle: onMounted; shared functions: saveInvoice, submitOrder, updateCustomer; shared action verbs: save, submit, update; shared template bindings: invoice, saveInvoice, submitOrder",
+      "locA": 836,
+      "locB": 836
+    }
+  ],
+  "coverage": {
+    "complete": null,
+    "totalKnown": false,
+    "returned": 1
+  },
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "operationRole": "repository-observation",
+    "receipt": {
+      "schemaVersion": 2,
+      "observedAt": "2026-09-06T07:19:02.820Z",
+      "facts": {
+        "collaborationDomain": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:collaboration-domain",
+            "version": 1
+          },
+          "digest": "12b3d23d2bb3429c31aff20478764eb784d8f792f1d99fd05b8c3f595352050f"
+        },
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "050446cf722ece59bcdf455aec02944e1025b9368d62ea8201c3fa71a0d5ad3a"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "050446cf722ece59bcdf455aec02944e1025b9368d62ea8201c3fa71a0d5ad3a"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        }
+      ]
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "heuristic",
+      "coverage": {
+        "complete": null,
+        "totalKnown": false,
+        "returned": 1
+      },
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "heuristic",
+        "coverage": {
+          "state": "unknown",
+          "returned": 1,
+          "totalKnown": false
+        },
+        "producerValidation": {
+          "status": "not-evaluated"
+        },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": [
+            "collaborationDomain",
+            "wholeContent",
+            "observationStability"
+          ],
+          "reasons": [
+            "wholeContent:unknown",
+            "leftIndexAlignment:unknown",
+            "rightIndexAlignment:unknown"
+          ]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": [
+            "No repository action policy was supplied for this claim."
+          ]
+        }
+      }
+    }
+  }
+}

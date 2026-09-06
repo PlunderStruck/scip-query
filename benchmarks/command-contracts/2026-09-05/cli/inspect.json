@@ -1,0 +1,787 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "inspect",
+  "operationRole": "repository-observation",
+  "evidence": "graph-fact",
+  "args": [],
+  "options": {
+    "search": [],
+    "symbol": [
+      "runJob",
+      "sum"
+    ],
+    "at": [],
+    "context": 6,
+    "include": [],
+    "evidenceBudget": [],
+    "view": "behavior",
+    "json": true,
+    "session": true,
+    "jsonOutput": "/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/command-contracts/2026-09-05/cli/inspect.json"
+  },
+  "result": {
+    "searches": [],
+    "evidence": [
+      {
+        "kind": "matched",
+        "query": "runJob",
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+        "shortName": "src:service:runner:runJob()",
+        "file": "src/service/runner.ts",
+        "parts": [
+          "definition",
+          "callers",
+          "callees"
+        ],
+        "definition": {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+          "shortName": "src:service:runner:runJob()",
+          "relativePath": "src/service/runner.ts",
+          "startLine": 2,
+          "endLine": 7,
+          "language": "typescript",
+          "source": "export function runJob() {\n  const store = new Store();\n  const total = sum(1, 2);\n  store.write(total);\n  return total > 0 ? total : 0;\n}",
+          "freshness": {
+            "exactText": {
+              "state": "current",
+              "basis": "working-tree-read",
+              "sha256": "47ff65875a88ee0640a1149ae2edb3d8e56a31de61cdebedfdb5d10b8f1f43f8"
+            },
+            "semantic": {
+              "state": "aligned",
+              "basis": "indexed-input-fingerprint"
+            }
+          },
+          "bindingClosure": {
+            "coverage": "indexed-project-literal-values",
+            "inline": []
+          }
+        },
+        "referenceWindows": [],
+        "callers": [
+          {
+            "relativePath": "src/consumer.ts",
+            "startLine": 1,
+            "endLine": 1,
+            "focusLine": 1,
+            "source": "export function main() { return runJob(); }",
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`consumer.ts`/main().",
+            "shortName": "src:consumer:main()",
+            "evidenceStrength": "exact",
+            "omittedLines": 0
+          }
+        ],
+        "callees": [
+          {
+            "relativePath": "src/core/store.ts",
+            "startLine": 0,
+            "endLine": 4,
+            "focusLine": 0,
+            "source": "export class Store {\n  value = 0;\n  read() { return this.value; }\n  write(value: number) { this.value = value; }\n}",
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#",
+            "shortName": "src:core:store:Store",
+            "evidenceStrength": "exact",
+            "omittedLines": 0
+          },
+          {
+            "relativePath": "src/core/math.ts",
+            "startLine": 0,
+            "endLine": 0,
+            "focusLine": 0,
+            "source": "export function sum(left: number, right: number) { return left + right; }",
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`math.ts`/sum().",
+            "shortName": "src:core:math:sum()",
+            "evidenceStrength": "exact",
+            "omittedLines": 0
+          },
+          {
+            "relativePath": "src/core/store.ts",
+            "startLine": 3,
+            "endLine": 3,
+            "focusLine": 3,
+            "source": "  write(value: number) { this.value = value; }",
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#write().",
+            "shortName": "src:core:store:Store:write()",
+            "evidenceStrength": "exact",
+            "omittedLines": 0
+          }
+        ],
+        "dependencies": [],
+        "consumers": []
+      },
+      {
+        "kind": "matched",
+        "query": "sum",
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`math.ts`/sum().",
+        "shortName": "src:core:math:sum()",
+        "file": "src/core/math.ts",
+        "parts": [
+          "definition",
+          "callers",
+          "callees"
+        ],
+        "definition": {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`math.ts`/sum().",
+          "shortName": "src:core:math:sum()",
+          "relativePath": "src/core/math.ts",
+          "startLine": 0,
+          "endLine": 0,
+          "language": "typescript",
+          "source": "export function sum(left: number, right: number) { return left + right; }",
+          "freshness": {
+            "exactText": {
+              "state": "current",
+              "basis": "working-tree-read",
+              "sha256": "ece2bcf5670ca593c94c21c3ee02d4440a540f6eaa0a753af6d77c22095f39e5"
+            },
+            "semantic": {
+              "state": "aligned",
+              "basis": "indexed-input-fingerprint"
+            }
+          },
+          "bindingClosure": {
+            "coverage": "indexed-project-literal-values",
+            "inline": []
+          }
+        },
+        "referenceWindows": [],
+        "callers": [
+          {
+            "relativePath": "src/service/runner.ts",
+            "startLine": 2,
+            "endLine": 7,
+            "focusLine": 2,
+            "source": "export function runJob() {\n  const store = new Store();\n  const total = sum(1, 2);\n  store.write(total);\n  return total > 0 ? total : 0;\n}",
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+            "shortName": "src:service:runner:runJob()",
+            "evidenceStrength": "exact",
+            "omittedLines": 0
+          }
+        ],
+        "callees": [],
+        "dependencies": [],
+        "consumers": []
+      }
+    ],
+    "locations": [],
+    "slices": [],
+    "candidateSlices": 0,
+    "omittedSlices": 0,
+    "maxSlices": 0,
+    "maxTotalLines": 13,
+    "units": [
+      {
+        "kind": "source",
+        "relativePath": "src/service/runner.ts",
+        "startLine": 2,
+        "endLine": 7,
+        "focusLine": 2,
+        "source": "export function runJob() {\n  const store = new Store();\n  const total = sum(1, 2);\n  store.write(total);\n  return total > 0 ? total : 0;\n}",
+        "unitType": "function_declaration",
+        "unitStartLine": 2,
+        "unitEndLine": 7,
+        "omittedLines": 0,
+        "reasons": [
+          "definition:src:service:runner:runJob()",
+          "caller:src:core:math:sum()"
+        ],
+        "focusLines": [
+          2
+        ],
+        "ownerSymbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+        "ownerShort": "src:service:runner:runJob()",
+        "roles": [
+          "definition",
+          "caller"
+        ],
+        "symbols": [
+          "scip-typescript npm accuracy-followup 1.0.0 src/core/`math.ts`/sum()."
+        ],
+        "id": "da91e7aedd1fbbd0",
+        "omittedCharacters": 0
+      },
+      {
+        "kind": "source",
+        "relativePath": "src/core/math.ts",
+        "startLine": 0,
+        "endLine": 0,
+        "focusLine": 0,
+        "source": "export function sum(left: number, right: number) { return left + right; }",
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`math.ts`/sum().",
+        "shortName": "src:core:math:sum()",
+        "evidenceStrength": "exact",
+        "omittedLines": 0,
+        "unitType": null,
+        "unitStartLine": 0,
+        "unitEndLine": 0,
+        "reasons": [
+          "callee:src:service:runner:runJob()",
+          "definition:src:core:math:sum()"
+        ],
+        "focusLines": [
+          0
+        ],
+        "ownerSymbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`math.ts`/sum().",
+        "ownerShort": "src:core:math:sum()",
+        "roles": [
+          "callee",
+          "definition"
+        ],
+        "symbols": [
+          "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob()."
+        ],
+        "id": "eece01b53d190d57",
+        "omittedCharacters": 0
+      },
+      {
+        "kind": "source",
+        "relativePath": "src/consumer.ts",
+        "startLine": 1,
+        "endLine": 1,
+        "focusLine": 1,
+        "source": "export function main() { return runJob(); }",
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`consumer.ts`/main().",
+        "shortName": "src:consumer:main()",
+        "evidenceStrength": "exact",
+        "omittedLines": 0,
+        "unitType": null,
+        "unitStartLine": 1,
+        "unitEndLine": 1,
+        "reasons": [
+          "caller:src:service:runner:runJob()"
+        ],
+        "focusLines": [
+          1
+        ],
+        "ownerSymbol": "scip-typescript npm accuracy-followup 1.0.0 src/`consumer.ts`/main().",
+        "ownerShort": "src:consumer:main()",
+        "roles": [
+          "caller"
+        ],
+        "symbols": [
+          "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob()."
+        ],
+        "id": "fd0a4645a64353cd",
+        "omittedCharacters": 0
+      },
+      {
+        "kind": "source",
+        "relativePath": "src/core/store.ts",
+        "startLine": 0,
+        "endLine": 4,
+        "focusLine": 0,
+        "source": "export class Store {\n  value = 0;\n  read() { return this.value; }\n  write(value: number) { this.value = value; }\n}",
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#",
+        "shortName": "src:core:store:Store",
+        "evidenceStrength": "exact",
+        "omittedLines": 0,
+        "unitType": null,
+        "unitStartLine": 0,
+        "unitEndLine": 4,
+        "reasons": [
+          "callee:src:service:runner:runJob()"
+        ],
+        "focusLines": [
+          0,
+          3
+        ],
+        "ownerSymbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#",
+        "ownerShort": "src:core:store:Store",
+        "roles": [
+          "callee"
+        ],
+        "symbols": [
+          "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob()."
+        ],
+        "id": "374ec6edbdf75790",
+        "omittedCharacters": 0
+      }
+    ],
+    "candidateUnits": 4,
+    "omittedUnits": 0,
+    "maxUnits": 48,
+    "maxCharacters": 20000,
+    "returnedLines": 13,
+    "returnedCharacters": 368,
+    "returnedViewCharacters": 368,
+    "view": "behavior",
+    "omissionGroups": [],
+    "packetCoverage": {
+      "mode": "complete",
+      "candidateUnits": 4,
+      "returnedUnits": 4,
+      "omittedUnits": 0,
+      "omittedByRole": {},
+      "exactSelectorsComplete": true,
+      "maxUnits": 48,
+      "maxCharacters": 20000,
+      "channels": {
+        "search": {
+          "candidateUnits": 0,
+          "returnedUnits": 0,
+          "omittedUnits": 0,
+          "maxUnits": 12
+        },
+        "exact-source": {
+          "candidateUnits": 0,
+          "returnedUnits": 0,
+          "omittedUnits": 0,
+          "maxUnits": 24
+        },
+        "definition": {
+          "candidateUnits": 2,
+          "returnedUnits": 2,
+          "omittedUnits": 0,
+          "maxUnits": 24
+        },
+        "caller": {
+          "candidateUnits": 1,
+          "returnedUnits": 1,
+          "omittedUnits": 0,
+          "maxUnits": 8
+        },
+        "callee": {
+          "candidateUnits": 1,
+          "returnedUnits": 1,
+          "omittedUnits": 0,
+          "maxUnits": 8
+        },
+        "production-reference": {
+          "candidateUnits": 0,
+          "returnedUnits": 0,
+          "omittedUnits": 0,
+          "maxUnits": 6
+        },
+        "test-reference": {
+          "candidateUnits": 0,
+          "returnedUnits": 0,
+          "omittedUnits": 0,
+          "maxUnits": 2
+        },
+        "dependency": {
+          "candidateUnits": 0,
+          "returnedUnits": 0,
+          "omittedUnits": 0,
+          "maxUnits": 6
+        },
+        "consumer": {
+          "candidateUnits": 0,
+          "returnedUnits": 0,
+          "omittedUnits": 0,
+          "maxUnits": 6
+        }
+      }
+    },
+    "stoppingSummary": {
+      "queryStatus": "selection-complete",
+      "status": "stop-ready",
+      "openEvidence": 0,
+      "guidance": "All evidence requested by this inspect query was materialized.",
+      "drillCommands": []
+    },
+    "causalFrontier": {
+      "anchors": [
+        {
+          "id": "next-anchor:inspect%3Asrc%2Fservice%2Frunner.ts%3A2-7:3:scip-typescript%20npm%20accuracy-followup%201.0.0%20src%2Fcore%2F%60store.ts%60%2FStore%23",
+          "status": "exact",
+          "source": "graph-call",
+          "direction": "downstream",
+          "causalRole": "callee",
+          "relationKind": "call",
+          "fromStepId": "inspect:src/service/runner.ts:2-7",
+          "fromLabel": "src:service:runner:runJob()",
+          "callsite": {
+            "file": "src/service/runner.ts",
+            "line": 3,
+            "endLine": 3,
+            "text": "const store = new Store();",
+            "signals": [
+              "binding",
+              "call"
+            ],
+            "calleeLeaf": "Store"
+          },
+          "alternatives": [
+            {
+              "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#",
+              "label": "Store",
+              "file": "src/core/store.ts",
+              "line": 0,
+              "endLine": 4
+            }
+          ],
+          "alternativeCount": 1,
+          "evidence": [
+            {
+              "method": "scip-occurrence-callsite",
+              "strength": "exact",
+              "identity": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#",
+              "location": {
+                "file": "src/service/runner.ts",
+                "line": 3
+              }
+            }
+          ]
+        },
+        {
+          "id": "next-anchor:inspect%3Asrc%2Fservice%2Frunner.ts%3A2-7:5:scip-typescript%20npm%20accuracy-followup%201.0.0%20src%2Fcore%2F%60store.ts%60%2FStore%23write().",
+          "status": "exact",
+          "source": "graph-call",
+          "direction": "downstream",
+          "causalRole": "callee",
+          "relationKind": "call",
+          "fromStepId": "inspect:src/service/runner.ts:2-7",
+          "fromLabel": "src:service:runner:runJob()",
+          "callsite": {
+            "file": "src/service/runner.ts",
+            "line": 5,
+            "endLine": 5,
+            "text": "store.write(total);",
+            "signals": [
+              "call"
+            ],
+            "calleeLeaf": "write"
+          },
+          "alternatives": [
+            {
+              "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#write().",
+              "label": "write",
+              "file": "src/core/store.ts",
+              "line": 3,
+              "endLine": 3
+            }
+          ],
+          "alternativeCount": 1,
+          "evidence": [
+            {
+              "method": "scip-occurrence-callsite",
+              "strength": "exact",
+              "identity": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#write().",
+              "location": {
+                "file": "src/service/runner.ts",
+                "line": 5
+              }
+            }
+          ]
+        }
+      ],
+      "withheldAnchors": [],
+      "candidateAnchors": 2,
+      "omittedAnchors": 0,
+      "scannedBehaviorSteps": 2,
+      "visibleCallsites": 3,
+      "graphEvidencedCallsites": 3,
+      "identityCandidateCallsites": 0,
+      "ambiguousCallsites": 0,
+      "unresolvedCallsites": 1,
+      "upstreamCandidates": 0,
+      "resultCandidates": 0,
+      "runtimeCandidates": 0,
+      "inspectCommand": "scip-query inspect --at 'src/core/store.ts:1' --at 'src/core/store.ts:4' --view behavior",
+      "remainingInspectCommands": []
+    },
+    "bindingClosure": {
+      "coverage": "indexed-project-literal-values",
+      "inline": []
+    },
+    "continuation": null
+  },
+  "coverage": {
+    "complete": true,
+    "totalKnown": true,
+    "returned": 4,
+    "total": 4,
+    "omitted": 0
+  },
+  "agentResult": {
+    "searches": [],
+    "evidence": [
+      {
+        "query": "runJob",
+        "kind": "matched"
+      },
+      {
+        "query": "sum",
+        "kind": "matched"
+      }
+    ],
+    "locations": [],
+    "returnedUnits": 4,
+    "candidateUnits": 4,
+    "omittedUnits": 0,
+    "view": "behavior",
+    "omissionGroups": [],
+    "causalFrontier": {
+      "anchors": [
+        {
+          "id": "next-anchor:inspect%3Asrc%2Fservice%2Frunner.ts%3A2-7:3:scip-typescript%20npm%20accuracy-followup%201.0.0%20src%2Fcore%2F%60store.ts%60%2FStore%23",
+          "status": "exact",
+          "source": "graph-call",
+          "direction": "downstream",
+          "causalRole": "callee",
+          "relationKind": "call",
+          "fromStepId": "inspect:src/service/runner.ts:2-7",
+          "fromLabel": "src:service:runner:runJob()",
+          "callsite": {
+            "file": "src/service/runner.ts",
+            "line": 3,
+            "endLine": 3,
+            "text": "const store = new Store();",
+            "signals": [
+              "binding",
+              "call"
+            ],
+            "calleeLeaf": "Store"
+          },
+          "alternatives": [
+            {
+              "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#",
+              "label": "Store",
+              "file": "src/core/store.ts",
+              "line": 0,
+              "endLine": 4
+            }
+          ],
+          "alternativeCount": 1,
+          "evidence": [
+            {
+              "method": "scip-occurrence-callsite",
+              "strength": "exact",
+              "identity": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#",
+              "location": {
+                "file": "src/service/runner.ts",
+                "line": 3
+              }
+            }
+          ]
+        },
+        {
+          "id": "next-anchor:inspect%3Asrc%2Fservice%2Frunner.ts%3A2-7:5:scip-typescript%20npm%20accuracy-followup%201.0.0%20src%2Fcore%2F%60store.ts%60%2FStore%23write().",
+          "status": "exact",
+          "source": "graph-call",
+          "direction": "downstream",
+          "causalRole": "callee",
+          "relationKind": "call",
+          "fromStepId": "inspect:src/service/runner.ts:2-7",
+          "fromLabel": "src:service:runner:runJob()",
+          "callsite": {
+            "file": "src/service/runner.ts",
+            "line": 5,
+            "endLine": 5,
+            "text": "store.write(total);",
+            "signals": [
+              "call"
+            ],
+            "calleeLeaf": "write"
+          },
+          "alternatives": [
+            {
+              "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#write().",
+              "label": "write",
+              "file": "src/core/store.ts",
+              "line": 3,
+              "endLine": 3
+            }
+          ],
+          "alternativeCount": 1,
+          "evidence": [
+            {
+              "method": "scip-occurrence-callsite",
+              "strength": "exact",
+              "identity": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#write().",
+              "location": {
+                "file": "src/service/runner.ts",
+                "line": 5
+              }
+            }
+          ]
+        }
+      ],
+      "withheldAnchors": [],
+      "candidateAnchors": 2,
+      "omittedAnchors": 0,
+      "scannedBehaviorSteps": 2,
+      "visibleCallsites": 3,
+      "graphEvidencedCallsites": 3,
+      "identityCandidateCallsites": 0,
+      "ambiguousCallsites": 0,
+      "unresolvedCallsites": 1,
+      "upstreamCandidates": 0,
+      "resultCandidates": 0,
+      "runtimeCandidates": 0,
+      "inspectCommand": "scip-query inspect --at 'src/core/store.ts:1' --at 'src/core/store.ts:4' --view behavior",
+      "remainingInspectCommands": []
+    },
+    "packetCoverage": {
+      "mode": "complete",
+      "candidateUnits": 4,
+      "returnedUnits": 4,
+      "omittedUnits": 0,
+      "omittedByRole": {},
+      "exactSelectorsComplete": true,
+      "maxUnits": 48,
+      "maxCharacters": 20000,
+      "channels": {
+        "search": {
+          "candidateUnits": 0,
+          "returnedUnits": 0,
+          "omittedUnits": 0,
+          "maxUnits": 12
+        },
+        "exact-source": {
+          "candidateUnits": 0,
+          "returnedUnits": 0,
+          "omittedUnits": 0,
+          "maxUnits": 24
+        },
+        "definition": {
+          "candidateUnits": 2,
+          "returnedUnits": 2,
+          "omittedUnits": 0,
+          "maxUnits": 24
+        },
+        "caller": {
+          "candidateUnits": 1,
+          "returnedUnits": 1,
+          "omittedUnits": 0,
+          "maxUnits": 8
+        },
+        "callee": {
+          "candidateUnits": 1,
+          "returnedUnits": 1,
+          "omittedUnits": 0,
+          "maxUnits": 8
+        },
+        "production-reference": {
+          "candidateUnits": 0,
+          "returnedUnits": 0,
+          "omittedUnits": 0,
+          "maxUnits": 6
+        },
+        "test-reference": {
+          "candidateUnits": 0,
+          "returnedUnits": 0,
+          "omittedUnits": 0,
+          "maxUnits": 2
+        },
+        "dependency": {
+          "candidateUnits": 0,
+          "returnedUnits": 0,
+          "omittedUnits": 0,
+          "maxUnits": 6
+        },
+        "consumer": {
+          "candidateUnits": 0,
+          "returnedUnits": 0,
+          "omittedUnits": 0,
+          "maxUnits": 6
+        }
+      }
+    },
+    "stoppingSummary": {
+      "queryStatus": "selection-complete",
+      "status": "stop-ready",
+      "openEvidence": 0,
+      "guidance": "All evidence requested by this inspect query was materialized.",
+      "drillCommands": []
+    }
+  },
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "operationRole": "repository-observation",
+    "receipt": {
+      "schemaVersion": 2,
+      "observedAt": "2026-09-06T07:47:53.050Z",
+      "facts": {
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        }
+      ]
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "graph-fact",
+      "coverage": {
+        "complete": true,
+        "totalKnown": true,
+        "returned": 4,
+        "total": 4,
+        "omitted": 0
+      },
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "compiler-graph",
+        "coverage": {
+          "state": "complete",
+          "returned": 4,
+          "totalKnown": true,
+          "total": 4,
+          "omitted": 0
+        },
+        "producerValidation": {
+          "status": "not-evaluated"
+        },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": [
+            "collaborationDomain",
+            "wholeContent",
+            "observationStability"
+          ],
+          "reasons": [
+            "collaborationDomain:unknown",
+            "wholeContent:unknown",
+            "leftIndexAlignment:unknown",
+            "rightIndexAlignment:unknown"
+          ]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": [
+            "No repository action policy was supplied for this claim."
+          ]
+        }
+      }
+    }
+  }
+}

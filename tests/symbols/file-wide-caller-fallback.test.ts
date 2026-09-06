@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { callGraph } from '../../src/queries/navigation/call-graph.js';
-import { wrapperCandidates } from '../../src/queries/cleanup/wrapper-candidates.js';
 import type { ScipQueryConfig } from '../../src/domain/types.js';
 
 function createSchema(sqliteDb: Database.Database): void {
@@ -227,41 +226,6 @@ describe('file-wide caller fallback', () => {
         'fixture:StatusDigestReporter:renderDigestStatus()',
         'fixture:StatusPreviewReporter:renderPreviewStatus()',
       ]),
-    );
-  });
-
-  it('finds wrapper candidates when the sole caller is discovered from source', () => {
-    const candidate = wrapperCandidates(db).find(
-      (row) => row.shortName === 'fixture:StatusBadgeRelay:normalizeBadgeStatus()',
-    );
-
-    expect(candidate).toEqual(
-      expect.objectContaining({
-        singleCallerShort: 'fixture:AnalysisStatusPresenter:renderStatusBadge()',
-        callerFanIn: 4,
-        actionTier: 'signal',
-        boundaryEvidence: expect.arrayContaining([
-          'wrapper name has relay term: relay',
-          'wrapper name has normalization term: normalize',
-          'caller name has presenter term: presenter',
-        ]),
-      }),
-    );
-  });
-
-  it('classifies domain action wrappers as signal instead of direct inline debt', () => {
-    const candidate = wrapperCandidates(db).find((row) => row.shortName === 'fixture:JumpActionRelay:tryStartJump()');
-
-    expect(candidate).toEqual(
-      expect.objectContaining({
-        singleCallerShort: 'fixture:AnalysisStatusPresenter:renderStatusBadge()',
-        callerFanIn: 4,
-        actionTier: 'signal',
-        boundaryEvidence: expect.arrayContaining([
-          'wrapper name has fallible action term: try',
-          'wrapper name has gameplay action term: jump',
-        ]),
-      }),
     );
   });
 });

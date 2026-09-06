@@ -25,7 +25,7 @@ const KLASS = (name: string) => [
   `export class ${name} extends Error {`,
   '  constructor(message: string) {',
   '    super(message);',
-  `    this.name = '${name}';`,
+  "    this.name = 'SharedError';", // Identical bodies exercise constructor exclusion.
   '    Object.setPrototypeOf(this, new.target.prototype);',
   '  }',
   '}',

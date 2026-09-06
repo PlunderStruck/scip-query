@@ -13,8 +13,9 @@ function emptyAnalyses(overrides: Partial<HealthAnalyses> = {}): HealthAnalyses 
       lastBuilt: null,
     },
     warnings: [],
+    detectorEvidence: [],
+    cycleExclusions: [],
     dead: { count: 0, loc: 0 },
-    isolated: { count: 0, loc: 0 },
     realCycleCount: 0,
     similarCount: 0,
     duplicateBodies: { count: 0, loc: 0 },
@@ -25,10 +26,7 @@ function emptyAnalyses(overrides: Partial<HealthAnalyses> = {}): HealthAnalyses 
     vueComponentDuplicates: { count: 0, loc: 0 },
     vueComposableCandidates: { count: 0, loc: 0 },
     vueLargeViewPressure: { count: 0, loc: 0 },
-    extractCount: 0,
-    wrappers: { count: 0, loc: 0 },
     passthroughs: { count: 0, loc: 0 },
-    stale: { count: 0, loc: 0, unused: 0, singleUse: 0 },
     drift: {
       count: 0,
       unusedImports: 0,
@@ -37,7 +35,6 @@ function emptyAnalyses(overrides: Partial<HealthAnalyses> = {}): HealthAnalyses 
       direct: 0,
       signal: 0,
     },
-    complexity: { top: [], extremeCount: 0 },
     gitEvidence: null,
     suppressions: null,
     coverageContracts: { count: 0, loc: 0 },
@@ -45,14 +42,24 @@ function emptyAnalyses(overrides: Partial<HealthAnalyses> = {}): HealthAnalyses 
   };
 }
 
-describe('health report scoring', () => {
-  it('starts from a perfect score when no findings exist', () => {
-    const report = buildHealthReport(emptyAnalyses());
-
-    expect(report.score).toBe(100);
+describe('health report findings', () => {
+  it('counts each no-observed-reference candidate once in cleanup totals', () => {
+    const report = buildHealthReport(emptyAnalyses({ dead: { count: 2, loc: 7 } }));
+    expect(report.axes.deletable).toEqual({ symbols: 2, loc: 7 });
+    expect(report.findings).not.toHaveProperty('isolatedSymbols');
+    expect(report.actions.filter((action) => action.category === 'Dead code')).toHaveLength(1);
   });
 
-  it('scores broad or stale hidden coupling by weighted history strength', () => {
+  it('reports empty findings without an architectural grade', () => {
+    const report = buildHealthReport(emptyAnalyses());
+
+    expect(report.actions).toEqual([]);
+    for (const key of ['score', 'riskScore', 'hygieneScore', 'scoreBreakdown', 'pressure']) {
+      expect(report).not.toHaveProperty(key);
+    }
+  });
+
+  it('discloses broad or stale hidden coupling with weighted history strength', () => {
     const report = buildHealthReport(
       emptyAnalyses({
         gitEvidence: {
@@ -91,18 +98,6 @@ describe('health report scoring', () => {
 
     expect(report.findings.hiddenCouplingPairs).toBe(60);
     expect(report.findings.hiddenCouplingScoreCount).toBe(15);
-    expect(report.scoreBreakdown).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          axis: 'hidden-coupling',
-          points: 2,
-          detail: '60 co-changing pair(s) without a structural link (15 score-weighted)',
-        }),
-      ]),
-    );
-    expect(report.pressure).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ axis: 'hidden-coupling-pressure' })]),
-    );
     expect(report.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -137,28 +132,7 @@ describe('health report scoring', () => {
 });
 
 describe('health report policy calibration', () => {
-  it('scales the extreme-complexity pressure threshold with repository size', () => {
-    const small = buildHealthReport(emptyAnalyses({ complexity: { top: [], extremeCount: 12 } }));
-    const large = buildHealthReport(
-      emptyAnalyses({
-        statsResult: {
-          documents: 8_000,
-          symbols: 400_000,
-          definitions: 400_000,
-          references: 0,
-          indexSizeBytes: 0,
-          lastBuilt: null,
-        },
-        complexity: { top: [], extremeCount: 12 },
-      }),
-    );
-    const smallPressure = small.pressure.find((entry) => entry.axis === 'complexity-pressure');
-    const largePressure = large.pressure.find((entry) => entry.axis === 'complexity-pressure');
-    expect(smallPressure).toEqual(expect.objectContaining({ threshold: 3, extraPenalty: 4 }));
-    expect(largePressure).toBeUndefined();
-  });
-
-  it('discloses detector policy exclusions and scores component duplicates by weighted count', () => {
+  it('discloses detector policy exclusions and component duplicate counts', () => {
     const report = buildHealthReport(
       emptyAnalyses({
         reactComponentDuplicates: {
@@ -166,11 +140,6 @@ describe('health report policy calibration', () => {
           scoreCount: 4,
           loc: 0,
           exclusions: [{ reason: 'ui-kit-pairs', detail: 'kit primitive pairs', count: 3 }],
-        },
-        complexity: {
-          top: [],
-          extremeCount: 0,
-          exclusions: [{ reason: 'popular-low-branch-callables', detail: 'fan-in only', count: 1 }],
         },
         gitEvidence: {
           amplification: null,
@@ -187,12 +156,7 @@ describe('health report policy calibration', () => {
     );
     expect(report.policyExclusions).toEqual([
       expect.objectContaining({ detector: 'react-component-duplicates', reason: 'ui-kit-pairs', count: 3 }),
-      expect.objectContaining({ detector: 'complexity-hotspots', reason: 'popular-low-branch-callables', count: 1 }),
       expect.objectContaining({ detector: 'co-change', reason: 'doc-sync-pairs', count: 5 }),
     ]);
-    const deduction = report.scoreBreakdown.find((entry) => entry.axis === 'react-component-duplicates');
-    expect(deduction).toEqual(
-      expect.objectContaining({ points: 10, detail: expect.stringContaining('4 score-weighted') }),
-    );
   });
 });

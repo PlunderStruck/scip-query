@@ -1,0 +1,452 @@
+[
+  {
+    "case": "init",
+    "args": [
+      "init"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true
+  },
+  {
+    "case": "init-repeat",
+    "args": [
+      "init"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true
+  },
+  {
+    "claim": "init preserves existing configuration bytes",
+    "passed": true
+  },
+  {
+    "case": "setup-agent",
+    "args": [
+      "setup-agent"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true
+  },
+  {
+    "case": "setup-agent-repeat",
+    "args": [
+      "setup-agent"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true
+  },
+  {
+    "claim": "setup-agent preserves user text and is idempotent",
+    "passed": true
+  },
+  {
+    "case": "skills",
+    "args": [
+      "install-skills",
+      "--all"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true
+  },
+  {
+    "claim": "install-skills preserves foreign symlinks",
+    "passed": true
+  },
+  {
+    "claim": "install-skills installs owned links",
+    "passed": true
+  },
+  {
+    "case": "uninstall-conflict",
+    "args": [
+      "uninstall",
+      "--global",
+      "--project"
+    ],
+    "exit": 1,
+    "expectedExit": 1,
+    "passed": true
+  },
+  {
+    "case": "uninstall-global-dry",
+    "args": [
+      "uninstall",
+      "--global",
+      "--dry-run",
+      "--json"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  },
+  {
+    "case": "uninstall-project-dry",
+    "args": [
+      "uninstall",
+      "--project",
+      "--dry-run",
+      "--json"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  },
+  {
+    "claim": "uninstall dry-run does not remove integration",
+    "passed": true
+  },
+  {
+    "case": "reindex-invalid-language",
+    "args": [
+      "reindex",
+      "--language",
+      "typecript"
+    ],
+    "exit": 1,
+    "expectedExit": 1,
+    "passed": true
+  },
+  {
+    "case": "reindex",
+    "args": [
+      "reindex",
+      "--language",
+      "typescript",
+      "--force",
+      "--trust-project-tools",
+      "--json"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  },
+  {
+    "case": "worker-phase",
+    "args": [
+      "__health-phase",
+      "overview"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  },
+  {
+    "case": "worker-invalid-phase",
+    "args": [
+      "__health-phase",
+      "bogus"
+    ],
+    "exit": 1,
+    "expectedExit": 1,
+    "passed": true
+  },
+  {
+    "case": "worker-empty-phase",
+    "args": [
+      "__health-phase",
+      ""
+    ],
+    "exit": 1,
+    "expectedExit": 1,
+    "passed": true
+  },
+  {
+    "case": "worker-diff-wrong-shape",
+    "args": [
+      "__diff-impact-batch"
+    ],
+    "exit": 1,
+    "expectedExit": 1,
+    "passed": true
+  },
+  {
+    "case": "worker-diff",
+    "args": [
+      "__diff-impact-batch"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  },
+  {
+    "case": "worker-prewarm",
+    "args": [
+      "__health-semantic-prewarm",
+      "--shard-index",
+      "0",
+      "--shard-count",
+      "1"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  },
+  {
+    "case": "worker-invalid-shard",
+    "args": [
+      "__health-semantic-prewarm",
+      "--shard-index",
+      "0junk",
+      "--shard-count",
+      "1"
+    ],
+    "exit": 1,
+    "expectedExit": 1,
+    "passed": true
+  },
+  {
+    "case": "worker-incomplete-shard",
+    "args": [
+      "__health-semantic-prewarm",
+      "--shard-count",
+      "2"
+    ],
+    "exit": 1,
+    "expectedExit": 1,
+    "passed": true
+  },
+  {
+    "case": "baseline-write",
+    "args": [
+      "health",
+      "--write-baseline",
+      "--json"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  },
+  {
+    "case": "baseline-compare",
+    "args": [
+      "health",
+      "--baseline",
+      "--json"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  },
+  {
+    "case": "baseline-conflict",
+    "args": [
+      "health",
+      "--baseline",
+      "--write-baseline"
+    ],
+    "exit": 1,
+    "expectedExit": 1,
+    "passed": true
+  },
+  {
+    "case": "augment-sources",
+    "args": [
+      "augment-sources"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true
+  },
+  {
+    "claim": "augment-sources inserts exact auxiliary file bytes",
+    "passed": true
+  },
+  {
+    "case": "augment-vue-unavailable",
+    "args": [
+      "augment-vue",
+      "--project",
+      "tsconfig.json"
+    ],
+    "exit": 1,
+    "expectedExit": 1,
+    "passed": true
+  },
+  {
+    "claim": "augment-vue states missing provider dependency",
+    "passed": true
+  },
+  {
+    "case": "suppress-invalid",
+    "args": [
+      "suppress",
+      "fixture-finding"
+    ],
+    "exit": 1,
+    "expectedExit": 1,
+    "passed": true
+  },
+  {
+    "case": "suppress",
+    "args": [
+      "suppress",
+      "fixture-finding",
+      "--reason",
+      "This forwarding function maintains the public compatibility contract.",
+      "--reason-code",
+      "compatibility-shim",
+      "--evidence",
+      "source:src/math.ts",
+      "--json"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  },
+  {
+    "claim": "suppress writes a decision record",
+    "passed": true
+  },
+  {
+    "case": "hook",
+    "args": [
+      "hook-architecture-stop"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true
+  },
+  {
+    "case": "setup",
+    "args": [
+      "setup",
+      "--yes",
+      "--no-skills",
+      "--no-parsers",
+      "--json"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  },
+  {
+    "case": "watch-start",
+    "args": [
+      "watch",
+      "--daemon",
+      "--json"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  },
+  {
+    "case": "watch-status",
+    "args": [
+      "watch",
+      "--status",
+      "--json"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  },
+  {
+    "claim": "watch status observes running daemon",
+    "passed": true
+  },
+  {
+    "case": "watch-conflict",
+    "args": [
+      "watch",
+      "--status",
+      "--stop"
+    ],
+    "exit": 1,
+    "expectedExit": 1,
+    "passed": true
+  },
+  {
+    "case": "watch-stop",
+    "args": [
+      "watch",
+      "--stop",
+      "--json"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  },
+  {
+    "case": "watch-stopped-status",
+    "args": [
+      "watch",
+      "--status",
+      "--json"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  },
+  {
+    "claim": "watch stop terminates daemon",
+    "passed": true
+  },
+  {
+    "case": "uninstall-global",
+    "args": [
+      "uninstall",
+      "--global",
+      "--json"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  },
+  {
+    "case": "uninstall-project",
+    "args": [
+      "uninstall",
+      "--project",
+      "--json"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  },
+  {
+    "claim": "uninstall preserves user instructions",
+    "passed": true
+  },
+  {
+    "claim": "uninstall removes managed guidance",
+    "passed": true
+  },
+  {
+    "claim": "uninstall removes only owned skill links",
+    "passed": true
+  },
+  {
+    "case": "cleanup-watch",
+    "args": [
+      "watch",
+      "--stop",
+      "--json"
+    ],
+    "exit": 0,
+    "expectedExit": 0,
+    "passed": true,
+    "validJson": true
+  }
+]

@@ -1,0 +1,55 @@
+{
+  "acceptedAt": "2026-09-06T02:18:06.396Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "e21229a83e22e4b43862402fa734f73e45a2f99a1e2952fa6db29c01fbdc875d",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ComplexityResult changed from interface ComplexityResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; branches: number; estimateBasis: BranchEst... to interface ComplexityResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; branches: number; estimateBasis: BranchEst....",
+      "target": "./queries:ComplexityResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SourceMaintenanceReport changed from interface SourceMaintenanceReport { mode: 'health' | 'review'; base?: string; current: string; metricRules: string; changedFiles: string[]; configurationChanges: string[]; relat... to interface SourceMaintenanceReport { mode: 'health' | 'review'; base?: string; current: string; metricRules: string; changedFiles: string[]; configurationChanges: string[]; relat....",
+      "target": "./queries:SourceMaintenanceReport"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "BranchEstimate changed from interface BranchEstimate { branches: number; estimateBasis: BranchEstimateBasis; } to interface BranchEstimate { branches: number; estimateBasis: BranchEstimateBasis; metricRules?: string; }.",
+      "target": "./queries/complexity:BranchEstimate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ComplexityResult changed from interface ComplexityResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; branches: number; estimateBasis: BranchEst... to interface ComplexityResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; branches: number; estimateBasis: BranchEst....",
+      "target": "./queries/complexity:ComplexityResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ComplexityResult changed from interface ComplexityResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; branches: number; estimateBasis: BranchEst... to interface ComplexityResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; branches: number; estimateBasis: BranchEst....",
+      "target": "./queries/index:ComplexityResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SourceMaintenanceReport changed from interface SourceMaintenanceReport { mode: 'health' | 'review'; base?: string; current: string; metricRules: string; changedFiles: string[]; configurationChanges: string[]; relat... to interface SourceMaintenanceReport { mode: 'health' | 'review'; base?: string; current: string; metricRules: string; changedFiles: string[]; configurationChanges: string[]; relat....",
+      "target": "./queries/index:SourceMaintenanceReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SourceMaintenanceReport changed from interface SourceMaintenanceReport { mode: 'health' | 'review'; base?: string; current: string; metricRules: string; changedFiles: string[]; configurationChanges: string[]; relat... to interface SourceMaintenanceReport { mode: 'health' | 'review'; base?: string; current: string; metricRules: string; changedFiles: string[]; configurationChanges: string[]; relat....",
+      "target": "./queries/review:SourceMaintenanceReport"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.25.0",
+  "previousDigest": "7ac25cc3fa75d96fb5d87e8f92541306a31d9f3119cb22e5bc67073ee8449a1e",
+  "reason": "Audit repairs require candidateCalleeCount on complexity results and suppressionDecisions/blockingFindingIds on source reports. Consumers constructing these records must supply the fields; ordinary readers retain existing fields. Resolved call counts now exclude candidate targets and TS/JS branch metrics use the shared versioned source contract.",
+  "schemaVersion": 1
+}

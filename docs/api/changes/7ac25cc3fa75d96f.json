@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-09-05T22:57:27.274Z",
+  "automaticClassification": "uncertain",
+  "baselineDigest": "7ac25cc3fa75d96fb5d87e8f92541306a31d9f3119cb22e5bc67073ee8449a1e",
+  "changes": [
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/review; review their variance and runtime meaning.",
+      "target": "./queries/review"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.25.0",
+  "previousDigest": "db0fa1367950a015cc5a53e342d8fd27294be519b6d2cd3dd0697b42cf435bab",
+  "reason": "Keep large source reports transportable with compact component identities and policy context; disclose managed build-output imports without claiming existence; isolate shared finding contracts and preserve test-policy enforcement.",
+  "schemaVersion": 1
+}

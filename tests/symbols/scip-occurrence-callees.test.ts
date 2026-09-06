@@ -61,7 +61,7 @@ function buildFixture(withOccurrences: boolean): { root: string; db: ScipDatabas
     .chunk(3, 3, 0, 3)
     .chunk(4, 4, 0, 3)
     .chunk(5, 5, 0, 3);
-  if (withOccurrences) fixture.occurrence(2, EXECUTE, 4).occurrence(4, LIBRARY_STRINGIFY, 1);
+  if (withOccurrences) fixture.occurrence(2, EXECUTE, 4, 0, 24, 31).occurrence(4, LIBRARY_STRINGIFY, 1, 0, 9, 18);
   fixture.write();
   return { root, db: new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') }) };
 }

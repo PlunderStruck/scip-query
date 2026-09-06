@@ -37,6 +37,35 @@ describe('architecture graph analysis', () => {
       },
     });
     expect(report.coverage).toMatchObject({ totalFiles: 2, mappedFiles: 0 });
+    expect(report.coverage.unmappedFiles).toEqual(['src/domain/model.ts', 'src/runtime/start.ts']);
+  });
+
+  it('does not label allowances unused from a scoped projection', () => {
+    const report = analyzeArchitectureGraph(
+      graph([['src/domain/a.ts', ['src/runtime/a.ts']]]),
+      ['src/domain/a.ts', 'src/runtime/a.ts'],
+      { ...baseConfig, allowedDependencies: { domain: ['runtime'], runtime: ['domain'] }, requireMinimalPolicy: true },
+      { scope: 'src/domain' },
+    );
+    expect(report.staleAllowances).toEqual([]);
+    expect(report.coverage.scope).toBe('src/domain');
+    expect(report.coverage.limitations).toEqual(expect.arrayContaining([expect.stringContaining('repository-wide')]));
+  });
+
+  it('reports every file cycle represented by one boundary cycle', () => {
+    const edges: Array<[string, string[]]> = [
+      ['src/domain/a.ts', ['src/runtime/a.ts']],
+      ['src/runtime/a.ts', ['src/domain/a.ts']],
+      ['src/domain/b.ts', ['src/runtime/b.ts']],
+      ['src/runtime/b.ts', ['src/domain/b.ts']],
+    ];
+    const report = analyzeArchitectureGraph(
+      graph(edges),
+      edges.map(([file]) => file),
+      baseConfig,
+    );
+    expect(report.cycles).toHaveLength(1);
+    expect(report.cycles[0]!.fileCycleMembers).toEqual(edges.map(([file]) => file).sort());
   });
 
   it('groups file dependencies by boundary and applies only declared closed rows', () => {
@@ -359,6 +388,17 @@ describe('policy minimality, limits, and edge fragility', () => {
     expect(report.staleAllowances).toEqual([]);
   });
 
+  it('does not infer an unused allowance for a boundary with no observed source files', () => {
+    const report = analyzeArchitectureGraph(oneEdge, files, {
+      boundaries: [...twoBoundaries.boundaries, { name: 'tools', paths: ['scripts/**'] }],
+      allowedDependencies: { app: ['lib'], lib: ['app'], tools: ['lib'] },
+      requireMinimalPolicy: true,
+    });
+
+    expect(report.staleAllowances).toEqual([{ from: 'lib', to: 'app' }]);
+    expect(architectureFindingIdentities(report)).not.toContain('architecture:stale-allowance:tools:lib');
+  });
+
   it('keeps stale allowances out of the baseline until the rule is enabled', () => {
     const report = analyzeArchitectureGraph(oneEdge, files, {
       ...twoBoundaries,
@@ -486,4 +526,73 @@ describe('coarse-boundary baseline identity stability', () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]!.subUnits).toEqual(['src/app', 'src/app/child']);
   });
+});
+
+describe('architecture dependency provenance', () => {
+  const config: ArchitectureConfig = {
+    boundaries: [
+      { name: 'core', paths: ['core/**'] },
+      { name: 'infra', paths: ['infra/**'] },
+    ],
+  };
+  it('does not let test imports manufacture a production boundary cycle', () => {
+    const input = new Map([
+      ['core/run.test.ts', new Set(['infra/db.ts'])],
+      ['infra/db.ts', new Set(['core/run.ts'])],
+      ['core/run.ts', new Set<string>()],
+    ]);
+    const report = analyzeArchitectureGraph(input, [...input.keys()], config);
+    expect(report.cycles).toEqual([]);
+    expect(report.edges.map((edge) => [edge.from, edge.to])).toEqual([['infra', 'core']]);
+    expect(report.coverage.mappedFiles).toBe(3);
+    expect(report.dependencyRoles?.excludedTestEdges).toBe(1);
+  });
+  it('identifies cycles caused only by grouping independent files', () => {
+    const input = new Map([
+      ['core/one.ts', new Set(['infra/one.ts'])],
+      ['infra/two.ts', new Set(['core/two.ts'])],
+    ]);
+    const report = analyzeArchitectureGraph(
+      input,
+      ['core/one.ts', 'core/two.ts', 'infra/one.ts', 'infra/two.ts'],
+      config,
+    );
+    expect(report.cycles[0]).toMatchObject({ origin: 'grouping-only', fileCycleMembers: [] });
+  });
+  it('retains a concrete file component when a boundary cycle contains one', () => {
+    const input = new Map([
+      ['core/one.ts', new Set(['infra/one.ts'])],
+      ['infra/one.ts', new Set(['core/one.ts'])],
+    ]);
+    const report = analyzeArchitectureGraph(input, [...input.keys()], config);
+    expect(report.cycles[0]).toMatchObject({
+      origin: 'contains-file-cycle',
+      fileCycleMembers: ['core/one.ts', 'infra/one.ts'],
+    });
+  });
+});
+
+it('preserves explicit test dependency rules and their observed usage outside the production graph', () => {
+  const graph = new Map([
+    ['tests/run.test.ts', new Set(['src/run.ts'])],
+    ['src/run.ts', new Set<string>()],
+  ]);
+  const config: ArchitectureConfig = {
+    boundaries: [
+      { name: 'source', paths: ['src/**'] },
+      { name: 'tests', paths: ['tests/**'] },
+    ],
+    allowedDependencies: { source: ['tests'], tests: ['source'] },
+    requireMinimalPolicy: true,
+  };
+  const allowed = analyzeArchitectureGraph(graph, [...graph.keys()], config);
+  expect(allowed.edges).toEqual([]);
+  expect(allowed.testEdges).toHaveLength(1);
+  expect(allowed.staleAllowances).toEqual([{ from: 'source', to: 'tests' }]);
+  const forbidden = analyzeArchitectureGraph(graph, [...graph.keys()], {
+    ...config,
+    allowedDependencies: { source: [], tests: [] },
+  });
+  expect(forbidden.testForbiddenEdges).toHaveLength(1);
+  expect(architectureFindingIdentities(forbidden)).toContain('architecture:forbidden-edge:tests:source');
 });

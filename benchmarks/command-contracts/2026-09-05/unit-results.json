@@ -1,0 +1,1698 @@
+{
+  "run": "full suite before final shared-code relocation; affected suites rerun afterward",
+  "passed": 2870,
+  "failed": 0,
+  "skipped": 0,
+  "suites": [
+    {
+      "file": "tests/analysis/config-referenced-files.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/analysis/framework-entrypoints.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/analysis/framework-patterns.test.ts",
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "file": "tests/analysis/framework-task-surface.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/analysis/frontend-route-conventions.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/analysis/git-history.test.ts",
+      "passed": 18,
+      "total": 18
+    },
+    {
+      "file": "tests/analysis/glob-match.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/analysis/package-surface.test.ts",
+      "passed": 9,
+      "total": 9
+    },
+    {
+      "file": "tests/analysis/runtime-boundaries.test.ts",
+      "passed": 30,
+      "total": 30
+    },
+    {
+      "file": "tests/analysis/runtime-boundary-object-members.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/analysis/rust-package-surface.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/analysis/similarity.test.ts",
+      "passed": 23,
+      "total": 23
+    },
+    {
+      "file": "tests/analysis/strongly-connected-components.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/analysis/suppression-inventory.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/filesystem/bounded-file.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/filesystem/durable-file.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/filesystem/durable-path.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/domain/graph-relation-providers.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/domain/native-gc.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/domain/observation-receipt.test.ts",
+      "passed": 13,
+      "total": 13
+    },
+    {
+      "file": "tests/domain/project-config.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/domain/project-input-change-journal.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/domain/project-input.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/domain/record-compatibility.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/domain/record-validation.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/domain/reindex-metadata.test.ts",
+      "passed": 25,
+      "total": 25
+    },
+    {
+      "file": "tests/domain/residue.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/domain/stable-json.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/domain/suppression-adjudication.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/domain/time.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/language-parsers/clojure-accuracy.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/language-parsers/multilanguage-smoke.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/language-parsers/python-accuracy.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/platform/abort-signal.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/platform/artifact-budget-contract.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/platform/bounded-process.test.ts",
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "file": "tests/platform/bounded-regexp.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/platform/cache-ownership.test.ts",
+      "passed": 15,
+      "total": 15
+    },
+    {
+      "file": "tests/platform/file-clone.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/platform/fingerprint-stat-cache.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/platform/git-worktree.test.ts",
+      "passed": 20,
+      "total": 20
+    },
+    {
+      "file": "tests/platform/indexer-toolchain.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/platform/node-options.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/platform/parent-process-monitor.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/platform/process-file-lock.test.ts",
+      "passed": 14,
+      "total": 14
+    },
+    {
+      "file": "tests/platform/process-identity.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/platform/process-liveness.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/platform/process-tree.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/platform/project-file-inventory-context.test.ts",
+      "passed": 9,
+      "total": 9
+    },
+    {
+      "file": "tests/platform/project-files.test.ts",
+      "passed": 37,
+      "total": 37
+    },
+    {
+      "file": "tests/platform/project-observation-snapshot.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/platform/project-tool-trust.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/platform/scip-cli.test.ts",
+      "passed": 15,
+      "total": 15
+    },
+    {
+      "file": "tests/platform/shell-arguments.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/platform/source-import-cycle-contract.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/platform/structured-concurrency.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/platform/subprocess-budget-contract.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/platform/terminal-output.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/platform/typescript-projects.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/platform/typescript-semantic-hash.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/platform/verified-binary-fetch.test.ts",
+      "passed": 18,
+      "total": 18
+    },
+    {
+      "file": "tests/platform/watch-service-state.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/platform/worktree-liveness.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/native/symbol-leaf-kernel.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/resolution/case-sensitive-resolution.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/resolution/symbol-resolution.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/semantic/semantic-availability-contract.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/semantic/session-manager.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/semantic/typescript-local-flow.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/reindex/affected-set.test.ts",
+      "passed": 36,
+      "total": 36
+    },
+    {
+      "file": "tests/reindex/affected-shadow.test.ts",
+      "passed": 22,
+      "total": 22
+    },
+    {
+      "file": "tests/reindex/augment-sources.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/reindex/augment-vue-reference-task.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/reindex/augment-vue-workers.test.ts",
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "file": "tests/reindex/incremental-sqlite-publication.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/reindex/index-artifacts.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/reindex/index-coverage.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/reindex/indexer-runner-cancellation.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/reindex/indexer-runner-temporary-config.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/reindex/install.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/reindex/post-index-augmentation.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/reindex/project-shards.test.ts",
+      "passed": 21,
+      "total": 21
+    },
+    {
+      "file": "tests/reindex/project-tool-execution.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/reindex/reindex-activity.test.ts",
+      "passed": 21,
+      "total": 21
+    },
+    {
+      "file": "tests/reindex/reindex-detect.test.ts",
+      "passed": 8,
+      "total": 8
+    },
+    {
+      "file": "tests/reindex/reindex-indexers.test.ts",
+      "passed": 13,
+      "total": 13
+    },
+    {
+      "file": "tests/reindex/reindex-merge.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/reindex/reindex-metadata-identities.test.ts",
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "file": "tests/reindex/reindex-reliability.test.ts",
+      "passed": 46,
+      "total": 46
+    },
+    {
+      "file": "tests/reindex/reindex-sanitize.test.ts",
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "file": "tests/reindex/rotating-jsonl.test.ts",
+      "passed": 13,
+      "total": 13
+    },
+    {
+      "file": "tests/reindex/scip-sqlite-converter.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/reindex/shared-generation-store.test.ts",
+      "passed": 28,
+      "total": 28
+    },
+    {
+      "file": "tests/reindex/shared-worktree-cache.integration.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/reindex/sqlite-generation-store.test.ts",
+      "passed": 29,
+      "total": 29
+    },
+    {
+      "file": "tests/reindex/sqlite-index-maintenance.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/reindex/typescript-compiler-shards.test.ts",
+      "passed": 18,
+      "total": 18
+    },
+    {
+      "file": "tests/reindex/typescript-document-emitter.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/reindex/typescript-fragment-store.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/reindex/typescript-incremental-index.test.ts",
+      "passed": 18,
+      "total": 18
+    },
+    {
+      "file": "tests/reindex/typescript-index-mailbox.test.ts",
+      "passed": 13,
+      "total": 13
+    },
+    {
+      "file": "tests/reindex/typescript-projects.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/source/ast-node-index.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/source/ast-parser-fallback.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/source/clojure-reader-primitives.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/source/function-metrics.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/source/gitignore-filter.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/source/import-path-alias-resolver.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/source/maintenance-project.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/source/maintenance-snapshot.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/source/project-source-boundary.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/source/source-backed-accuracy.test.ts",
+      "passed": 14,
+      "total": 14
+    },
+    {
+      "file": "tests/source/source-evidence.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/source/source-facts.test.ts",
+      "passed": 12,
+      "total": 12
+    },
+    {
+      "file": "tests/source/source-fileset.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/source/source-identifier-prefilter.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/source/vue-profile.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/source/workspace-package-import-resolver.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/scripts/accuracy-calibration-core.test.ts",
+      "passed": 20,
+      "total": 20
+    },
+    {
+      "file": "tests/scripts/api-surface-contract.test.ts",
+      "passed": 14,
+      "total": 14
+    },
+    {
+      "file": "tests/scripts/change-benchmark-core.test.ts",
+      "passed": 14,
+      "total": 14
+    },
+    {
+      "file": "tests/scripts/check-evidence-manifest-doc.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/scripts/codex-change-trial.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/scripts/codex-exploration-sandbox.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/scripts/codex-exploration-trial-core.test.ts",
+      "passed": 12,
+      "total": 12
+    },
+    {
+      "file": "tests/scripts/dependency-security.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/scripts/exploration-benchmark-core.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/scripts/npm-release-state.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/scripts/npm-release.test.ts",
+      "passed": 34,
+      "total": 34
+    },
+    {
+      "file": "tests/scripts/profile-scoreboard.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/scripts/record-review-coverage.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/scripts/render-command-reference.test.ts",
+      "passed": 12,
+      "total": 12
+    },
+    {
+      "file": "tests/scripts/runtime-support-contract.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/scripts/scip-explore-capture-evidence.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/scripts/scip-windows-provenance.test.ts",
+      "passed": 13,
+      "total": 13
+    },
+    {
+      "file": "tests/scripts/scip-windows-registry-identity.test.ts",
+      "passed": 21,
+      "total": 21
+    },
+    {
+      "file": "tests/scripts/score-detector-labels.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/scripts/windows-sidecar-doc.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/runtime/agent-setup.test.ts",
+      "passed": 8,
+      "total": 8
+    },
+    {
+      "file": "tests/runtime/architecture-cli-contract.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/runtime/architecture-hook-setup.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/runtime/architecture-stop-hook.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/runtime/ast-parser-setup.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/runtime/binary.test.ts",
+      "passed": 9,
+      "total": 9
+    },
+    {
+      "file": "tests/runtime/claim-qualification.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/runtime/cli-context.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/runtime/cli-contract.test.ts",
+      "passed": 43,
+      "total": 43
+    },
+    {
+      "file": "tests/runtime/cli-error-boundary.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/runtime/cli-invocation.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/runtime/cli-json-envelope.test.ts",
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "file": "tests/runtime/cli-support.test.ts",
+      "passed": 46,
+      "total": 46
+    },
+    {
+      "file": "tests/runtime/code-cli-contract.test.ts",
+      "passed": 20,
+      "total": 20
+    },
+    {
+      "file": "tests/runtime/command-operation.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/runtime/command-panels.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/runtime/command-spec-builders.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/runtime/context-decision-packet.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/runtime/evidence-command-freshness.test.ts",
+      "passed": 12,
+      "total": 12
+    },
+    {
+      "file": "tests/runtime/exploration-manual.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/runtime/git-worktree-context-cache.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/runtime/health-capability-disclosure.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/runtime/health-dossier.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/runtime/health-report-cache.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/runtime/index-freshness.test.ts",
+      "passed": 12,
+      "total": 12
+    },
+    {
+      "file": "tests/runtime/invocation-command-descriptors.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/runtime/isolated-analysis-runner.test.ts",
+      "passed": 8,
+      "total": 8
+    },
+    {
+      "file": "tests/runtime/methods-cli-contract.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/runtime/output-pagination.test.ts",
+      "passed": 30,
+      "total": 30
+    },
+    {
+      "file": "tests/runtime/precomputed-command.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/runtime/profile.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/runtime/project-readiness.test.ts",
+      "passed": 8,
+      "total": 8
+    },
+    {
+      "file": "tests/runtime/project-setup.test.ts",
+      "passed": 21,
+      "total": 21
+    },
+    {
+      "file": "tests/runtime/query-service.test.ts",
+      "passed": 80,
+      "total": 80
+    },
+    {
+      "file": "tests/runtime/refs-pagination.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/runtime/reindex-json.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/runtime/render-security.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/runtime/repository-cache-lifecycle.test.ts",
+      "passed": 15,
+      "total": 15
+    },
+    {
+      "file": "tests/runtime/result-pagination.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/runtime/revisioned-file.test.ts",
+      "passed": 9,
+      "total": 9
+    },
+    {
+      "file": "tests/runtime/runtime-config.test.ts",
+      "passed": 64,
+      "total": 64
+    },
+    {
+      "file": "tests/runtime/search-cli-contract.test.ts",
+      "passed": 13,
+      "total": 13
+    },
+    {
+      "file": "tests/runtime/setup-wizard.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/runtime/setup.test.ts",
+      "passed": 9,
+      "total": 9
+    },
+    {
+      "file": "tests/runtime/source-emission-session.test.ts",
+      "passed": 8,
+      "total": 8
+    },
+    {
+      "file": "tests/runtime/source-review-cli.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/runtime/typescript-worker-heap.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/runtime/uninstall.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/runtime/update-notice.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/runtime/watch-refresh-coordinator.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/runtime/watch-reindex-runner.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/runtime/watch-server.test.ts",
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "file": "tests/runtime/watch-service-prune.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/runtime/watch-service.test.ts",
+      "passed": 27,
+      "total": 27
+    },
+    {
+      "file": "tests/runtime/watch-test-contract.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/runtime/watch.test.ts",
+      "passed": 47,
+      "total": 47
+    },
+    {
+      "file": "tests/runtime/worker-request-lane.test.ts",
+      "passed": 11,
+      "total": 11
+    },
+    {
+      "file": "tests/runtime/worktree-watch-service.integration.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/storage/atomic-file-crash.test.ts",
+      "passed": 16,
+      "total": 16
+    },
+    {
+      "file": "tests/storage/atomic-file.test.ts",
+      "passed": 11,
+      "total": 11
+    },
+    {
+      "file": "tests/storage/bounded-mailbox.test.ts",
+      "passed": 18,
+      "total": 18
+    },
+    {
+      "file": "tests/storage/cache-registry.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/storage/db-lifecycle.test.ts",
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "file": "tests/storage/db-path-exclusions.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/storage/evidence-cache.test.ts",
+      "passed": 26,
+      "total": 26
+    },
+    {
+      "file": "tests/storage/evidence-products.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/storage/scip-documents.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/storage/scip-mentions.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/storage/suppression-store.test.ts",
+      "passed": 27,
+      "total": 27
+    },
+    {
+      "file": "tests/storage/watch-refresh-requests.test.ts",
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "file": "tests/symbols/call-occurrence-contract.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/symbols/definition-catalog.test.ts",
+      "passed": 8,
+      "total": 8
+    },
+    {
+      "file": "tests/symbols/file-dep-graph.test.ts",
+      "passed": 9,
+      "total": 9
+    },
+    {
+      "file": "tests/symbols/file-wide-caller-fallback.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/symbols/identifier-attribution.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/symbols/jsx-render-callees.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/symbols/member-call-targets.test.ts",
+      "passed": 12,
+      "total": 12
+    },
+    {
+      "file": "tests/symbols/scip-occurrence-call-targets.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/symbols/scip-occurrence-callees.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/symbols/source-reference-scan.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/symbols/symbol-parser.test.ts",
+      "passed": 22,
+      "total": 22
+    },
+    {
+      "file": "tests/queries/frontend/frontend-command-contracts.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/queries/frontend/frontend-recent-duplicates.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/queries/frontend/react-frontend-rich-internals.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/queries/frontend/react-profile-policy.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/queries/frontend/vue-large-view-pressure-delegation.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/queries/frontend/vue-template-rich-internals.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/queries/graph/architecture.test.ts",
+      "passed": 31,
+      "total": 31
+    },
+    {
+      "file": "tests/queries/graph/cycles.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/queries/graph/dependence-slice.test.ts",
+      "passed": 24,
+      "total": 24
+    },
+    {
+      "file": "tests/queries/graph/entry-map.test.ts",
+      "passed": 8,
+      "total": 8
+    },
+    {
+      "file": "tests/queries/graph/evidence-rejection-contract.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/graph/graph-provider-calibration.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/queries/graph/graph-risk-output.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/queries/graph/program-data-edges.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/queries/graph/system-map-edge-semantics.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/queries/graph/system-map.test.ts",
+      "passed": 58,
+      "total": 58
+    },
+    {
+      "file": "tests/queries/health/baseline-completeness-contract.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/health/debloat-health.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/queries/health/detector-evidence-contracts.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/queries/health/health-cycle-basis.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/health/health-full.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/queries/health/health-provenance.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/queries/health/health-report.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/queries/health/health-twin-drift.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/queries/health/import-cycle-contract.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/queries/health/seeded-defect-recall.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/health/source-modules.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/queries/health/source-review.test.ts",
+      "passed": 32,
+      "total": 32
+    },
+    {
+      "file": "tests/queries/cleanup/cleanup-cascade-contract.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/cleanup/cleanup-identity-contracts.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/queries/cleanup/cleanup-plan.test.ts",
+      "passed": 20,
+      "total": 20
+    },
+    {
+      "file": "tests/queries/cleanup/co-change-tiers.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/queries/cleanup/coverage-contracts.test.ts",
+      "passed": 14,
+      "total": 14
+    },
+    {
+      "file": "tests/queries/cleanup/dead-output.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/queries/cleanup/dead-vue-script-setup.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/cleanup/decorative-checkers.test.ts",
+      "passed": 17,
+      "total": 17
+    },
+    {
+      "file": "tests/queries/cleanup/doc-citation-context.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/queries/cleanup/doc-drift.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/queries/cleanup/doc-terms.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/cleanup/drift-accuracy.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/queries/cleanup/duplicate-bodies-policy.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/cleanup/duplicate-bodies.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/queries/cleanup/locality-candidates.test.ts",
+      "passed": 13,
+      "total": 13
+    },
+    {
+      "file": "tests/queries/cleanup/not-implemented.test.ts",
+      "passed": 8,
+      "total": 8
+    },
+    {
+      "file": "tests/queries/cleanup/passthrough-candidates-output.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/queries/cleanup/recent-duplicates-pruning.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/queries/cleanup/redundant-reexports-fallback.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/queries/cleanup/similar-files-contract.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/queries/cleanup/similar-sibling-promotion.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/queries/cleanup/similar-sibling-saturation.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/queries/cleanup/similar-signatures-fallback.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/queries/cleanup/similar-topk.test.ts",
+      "passed": 9,
+      "total": 9
+    },
+    {
+      "file": "tests/queries/cleanup/similarity-fingerprint-product.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/cleanup/source-fingerprint-cache.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/queries/cleanup/test-quality.test.ts",
+      "passed": 18,
+      "total": 18
+    },
+    {
+      "file": "tests/queries/cleanup/twin-drift.test.ts",
+      "passed": 41,
+      "total": 41
+    },
+    {
+      "file": "tests/queries/cleanup/unused-params.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/queries/internal/candidate-scan.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/queries/internal/consumer-evidence.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/internal/dead-candidate-gate.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/queries/internal/file-resolution.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/queries/internal/frontend-behavior-evidence.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/queries/internal/next-anchor-candidates.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/queries/internal/pairwise-profiles.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/queries/internal/plan-source-candidates.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/navigation/causal-corridor.test.ts",
+      "passed": 12,
+      "total": 12
+    },
+    {
+      "file": "tests/queries/navigation/command-accuracy.test.ts",
+      "passed": 23,
+      "total": 23
+    },
+    {
+      "file": "tests/queries/navigation/command-identity-regressions.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/navigation/definition-fallback.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/queries/navigation/exact-file-intent.test.ts",
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "file": "tests/queries/navigation/exploration-topology.test.ts",
+      "passed": 20,
+      "total": 20
+    },
+    {
+      "file": "tests/queries/navigation/hierarchy.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/navigation/import-fallbacks.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/queries/navigation/lossless-source-sensor.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/queries/navigation/metric-contracts.test.ts",
+      "passed": 9,
+      "total": 9
+    },
+    {
+      "file": "tests/queries/navigation/navigation-contracts.test.ts",
+      "passed": 9,
+      "total": 9
+    },
+    {
+      "file": "tests/queries/navigation/outline.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/navigation/queries-advanced.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/queries/navigation/queries.test.ts",
+      "passed": 20,
+      "total": 20
+    },
+    {
+      "file": "tests/queries/navigation/reference-binding-contract.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/navigation/source-evidence.test.ts",
+      "passed": 35,
+      "total": 35
+    },
+    {
+      "file": "tests/queries/quality/complexity.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/quality/function-complexity-contract.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/queries/quality/slice-cohesion-coverage.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/queries/quality/slice-cohesion.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/queries/impact/change-surface-risk.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/queries/impact/co-change-generated-artifacts.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/queries/impact/co-change-locale-exemption.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/impact/co-change-partner-labels.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/queries/impact/context-consumer-reuse.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/queries/impact/coverage-contract-check.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/queries/impact/diff-impact-accuracy.test.ts",
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "file": "tests/queries/impact/incomplete-migration.test.ts",
+      "passed": 15,
+      "total": 15
+    },
+    {
+      "file": "tests/queries/impact/newly-unreferenced-residue.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/semantic/rust/durable-session-protocol.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/semantic/rust/rust-callee-symbol-resolution.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/semantic/rust/rust-default-impl-references.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/semantic/rust/rust-durable-session.test.ts",
+      "passed": 28,
+      "total": 28
+    },
+    {
+      "file": "tests/semantic/rust/rust-engine-identity.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/semantic/rust/rust-lsp-batch-worker.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/semantic/rust/rust-lsp-client.test.ts",
+      "passed": 39,
+      "total": 39
+    },
+    {
+      "file": "tests/semantic/rust/rust-lsp-session-readiness.test.ts",
+      "passed": 34,
+      "total": 34
+    },
+    {
+      "file": "tests/semantic/rust/rust-lsp-session.test.ts",
+      "passed": 22,
+      "total": 22
+    },
+    {
+      "file": "tests/semantic/rust/rust-process-ownership.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/semantic/rust/rust-reference-mapping.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/semantic/rust/rust-scip-occurrence-callees.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/semantic/rust/rust-scip-occurrence-references.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/semantic/rust/rust-semantic-cache-gate.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/semantic/rust/rust-semantic-callee-cache-gate.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/semantic/rust/rust-semantic-provider.test.ts",
+      "passed": 19,
+      "total": 19
+    },
+    {
+      "file": "tests/semantic/rust/rust-session-registry.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/semantic/typescript/remote-provider-policy.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/semantic/typescript/semantic-locations.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/semantic/typescript/typescript-indexed-definitions.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/semantic/typescript/typescript-reference-fragments.test.ts",
+      "passed": 9,
+      "total": 9
+    },
+    {
+      "file": "tests/semantic/typescript/typescript-semantic-identity.test.ts",
+      "passed": 11,
+      "total": 11
+    },
+    {
+      "file": "tests/semantic/typescript/typescript-semantic-provider.test.ts",
+      "passed": 9,
+      "total": 9
+    },
+    {
+      "file": "tests/semantic/typescript/typescript-session-host.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/semantic/typescript/typescript-session-mailbox.test.ts",
+      "passed": 11,
+      "total": 11
+    }
+  ]
+}

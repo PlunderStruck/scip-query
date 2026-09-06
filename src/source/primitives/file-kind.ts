@@ -7,6 +7,11 @@ import { normalizePathSeparators as normalizePath } from '../../domain/path-norm
  */
 export type FileKind = 'entry' | 'barrel' | 'worker' | 'test' | 'source';
 
+/** Paths reserved for installed dependencies, build products and local tool state. Existence is not implied. */
+export function isManagedOutputPath(file: string): boolean {
+  return /(^|\/)(node_modules|dist|build|coverage|\.git|\.scipquery|\.next|\.nuxt|\.turbo|\.cache)(\/|$)/.test(file);
+}
+
 /** Rank file kinds for search and inspection presentation: implementation first, tests last. */
 export function fileKindRank(kind: FileKind): number {
   switch (kind) {
@@ -31,23 +36,27 @@ export function classifyFile(file: string): FileKind {
   return 'source';
 }
 
+const TEST_PATH_PATTERNS = [
+  /(?:^|\/)(?:e2e|cypress|playwright)\//i,
+  /\.(?:test|spec)\.[a-z0-9]+$/i,
+  /(?:^|\/)(?:_)?test_[^/]+$/i,
+  /(?:^|\/)spec_[^/]+$/i,
+  /(?:^|\/)[^/]+_test\.[a-z0-9]+$/i,
+  /(?:^|\/)[^/]+_tests\.rs$/i,
+  /(?:^|\/)tests\.rs$/i,
+  /(?:^|\/)[^/]+_spec\.[a-z0-9]+$/i,
+  /(?:^|\/)__tests__\//i,
+  /(?:^|\/)test\//i,
+  /(?:^|\/)tests\//i,
+  /(?:^|\/)__fixtures__\//i,
+  /(?:^|\/)__mocks__\//i,
+  /(?:^|\/)test-support\//i,
+  /(?:^|\/)test-utils\//i,
+  /(?:^|\/)testing\//i,
+];
+
 function matchesTestPattern(normalized: string): boolean {
-  if (/\.(?:test|spec)\.[a-z0-9]+$/i.test(normalized)) return true;
-  if (/(?:^|\/)(?:_)?test_[^/]+$/i.test(normalized)) return true;
-  if (/(?:^|\/)spec_[^/]+$/i.test(normalized)) return true;
-  if (/(?:^|\/)[^/]+_test\.[a-z0-9]+$/i.test(normalized)) return true;
-  if (/(?:^|\/)[^/]+_tests\.rs$/i.test(normalized)) return true;
-  if (/(?:^|\/)tests\.rs$/i.test(normalized)) return true;
-  if (/(?:^|\/)[^/]+_spec\.[a-z0-9]+$/i.test(normalized)) return true;
-  if (/(?:^|\/)__tests__\//i.test(normalized)) return true;
-  if (/(?:^|\/)test\//i.test(normalized)) return true;
-  if (/(?:^|\/)tests\//i.test(normalized)) return true;
-  if (/(?:^|\/)__fixtures__\//i.test(normalized)) return true;
-  if (/(?:^|\/)__mocks__\//i.test(normalized)) return true;
-  if (/(?:^|\/)test-support\//i.test(normalized)) return true;
-  if (/(?:^|\/)test-utils\//i.test(normalized)) return true;
-  if (/(?:^|\/)testing\//i.test(normalized)) return true;
-  return false;
+  return TEST_PATH_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
 function isWorkerPath(normalized: string): boolean {

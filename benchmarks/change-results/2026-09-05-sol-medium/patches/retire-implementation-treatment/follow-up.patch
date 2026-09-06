@@ -1,0 +1,61 @@
+diff --git a/src/notifications/receipt.ts b/src/notifications/receipt.ts
+index fdd58e6..b9f766c 100644
+--- a/src/notifications/receipt.ts
++++ b/src/notifications/receipt.ts
+@@ -1,5 +1,9 @@
+ import type { Order, ReceiptStore } from '../domain/types.js';
+ 
+ export function sendReceipt(order: Order, store: ReceiptStore): void {
++  if (store.events.some((event) => event.orderId === order.id)) {
++    return;
++  }
++
+   store.events.push({ kind: 'receipt.sent', orderId: order.id, to: order.email, transport: 'v2' });
+ }
+diff --git a/test/receipt-transport.test.mjs b/test/receipt-transport.test.mjs
+index f974fd0..9d7949c 100644
+--- a/test/receipt-transport.test.mjs
++++ b/test/receipt-transport.test.mjs
+@@ -25,6 +25,42 @@ test('receipt entry points use the current transport with caller-owned stores',
+   assert.notEqual(routeStore.events, jobStore.events);
+ });
+ 
++test('receipt delivery is idempotent by order within each caller-owned store', () => {
++  const firstOrder = { id: 'order-17', email: 'buyer@example.com' };
++  const sameOrderRedelivered = { id: 'order-17', email: 'updated@example.com' };
++  const secondOrder = { id: 'order-18', email: 'another@example.com' };
++  const sharedStore = { events: [] };
++  const independentStore = { events: [] };
++
++  receiptRoutes.receipt(firstOrder, sharedStore);
++  receiptJobs.receipt(sameOrderRedelivered, sharedStore);
++  receiptJobs.receipt(secondOrder, sharedStore);
++  receiptRoutes.receipt(firstOrder, independentStore);
++
++  assert.deepEqual(sharedStore.events, [
++    {
++      kind: 'receipt.sent',
++      orderId: firstOrder.id,
++      to: firstOrder.email,
++      transport: 'v2',
++    },
++    {
++      kind: 'receipt.sent',
++      orderId: secondOrder.id,
++      to: secondOrder.email,
++      transport: 'v2',
++    },
++  ]);
++  assert.deepEqual(independentStore.events, [
++    {
++      kind: 'receipt.sent',
++      orderId: firstOrder.id,
++      to: firstOrder.email,
++      transport: 'v2',
++    },
++  ]);
++});
++
+ test('receipt settings retain only the current retry limit', () => {
+   assert.deepEqual(settings, { receiptRetryLimit: 3 });
+ });

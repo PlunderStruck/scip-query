@@ -1,0 +1,607 @@
+{
+  "acceptedAt": "2026-09-06T04:51:03.803Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "b72691cf58032be066a66c5e0f9acee10fd748e564ec9f000c8c80415ecc060c",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AuditDisagreement.",
+      "target": "./queries:AuditDisagreement"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AuditQuestionScore.",
+      "target": "./queries:AuditQuestionScore"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ComplexityHotspot.",
+      "target": "./queries:ComplexityHotspot"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ExtractCandidate.",
+      "target": "./queries:ExtractCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ExtractCandidateActionTier.",
+      "target": "./queries:ExtractCandidateActionTier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ExtractCandidateKind.",
+      "target": "./queries:ExtractCandidateKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HEALTH_PHASES changed from declare const HEALTH_PHASES: readonly [ \"overview\", \"dead\", \"isolated\", \"cycles\", \"similar\", \"duplicate-bodies\", \"twin-drift\", \"react-component-duplicates\", \"react-hook-candidat... to declare const HEALTH_PHASES: readonly [ \"overview\", \"dead\", \"isolated\", \"cycles\", \"similar\", \"duplicate-bodies\", \"twin-drift\", \"react-component-duplicates\", \"react-hook-candidat....",
+      "target": "./queries:HEALTH_PHASES"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HealthReport changed from interface HealthReport { overview: { documents: number; symbols: number; indexSizeBytes: number; }; provenance?: HealthProvenance; findings: { deadSymbols: number; deadLoc: numb... to interface HealthReport { overview: { documents: number; symbols: number; indexSizeBytes: number; }; provenance?: HealthProvenance; findings: { deadSymbols: number; deadLoc: numb....",
+      "target": "./queries:HealthReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HotspotResult changed from interface HotspotResult { symbol: string; shortName: string; refCount: number; fileCount: number; definedIn: string; basis?: 'scip-cross-file-mentions' | 'source-backed-incoming... to interface HotspotResult { symbol: string; shortName: string; refCount: number; fileCount: number; definedIn: string; basis?: 'scip-cross-file-mentions' | 'source-backed-incoming....",
+      "target": "./queries:HotspotResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "RefResult changed from interface RefResult { relativePath: string; line: number; } to interface RefResult { relativePath: string; line: number; evidence?: 'indexed-occurrence' | 'indexed-definition' | 'source-or-chunk-candidate'; }.",
+      "target": "./queries:RefResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ReferenceNeighborhoodResult.",
+      "target": "./queries:ReferenceNeighborhoodResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ReferenceReachabilityResult.",
+      "target": "./queries:ReferenceReachabilityResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "RepositoryContextOptions changed from interface RepositoryContextOptions { semantic?: boolean; impactDepth?: number; referenceDepth?: number; scope?: string; gitHead?: string; } to interface RepositoryContextOptions { semantic?: boolean; impactDepth?: number; scope?: string; gitHead?: string; }.",
+      "target": "./queries:RepositoryContextOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "RepositoryContextResult changed from interface RepositoryContextResult { target: string; primaryCallable?: RepositoryContextPrimaryCallable; matched: { symbol: boolean; file: boolean; module: boolean; }; history: R... to interface RepositoryContextResult { target: string; primaryCallable?: RepositoryContextPrimaryCallable; matched: { symbol: boolean; file: boolean; module: boolean; }; history: R....",
+      "target": "./queries:RepositoryContextResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SelfAuditResult.",
+      "target": "./queries:SelfAuditResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SimilarChainResult.",
+      "target": "./queries:SimilarChainResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export StaleAbstraction.",
+      "target": "./queries:StaleAbstraction"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export StaleAbstractionActionTier.",
+      "target": "./queries:StaleAbstractionActionTier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export StalenessKind.",
+      "target": "./queries:StalenessKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemResult changed from interface SystemResult { files: string[]; symbols: SymbolResult[]; dependsOn: string[]; dependedOnBy: string[]; } to interface SystemResult { files: string[]; symbols: Array<SymbolResult & { relativePath: string; }>; dependsOn: string[]; dependedOnBy: string[]; }.",
+      "target": "./queries:SystemResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ValueFlowCoverage.",
+      "target": "./queries:ValueFlowCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ValueFlowResult.",
+      "target": "./queries:ValueFlowResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export WrapperActionTier.",
+      "target": "./queries:WrapperActionTier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export WrapperCandidate.",
+      "target": "./queries:WrapperCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export complexityHotspots.",
+      "target": "./queries:complexityHotspots"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export extractCandidates.",
+      "target": "./queries:extractCandidates"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export referenceNeighborhood.",
+      "target": "./queries:referenceNeighborhood"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export referenceReachability.",
+      "target": "./queries:referenceReachability"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export selfAudit.",
+      "target": "./queries:selfAudit"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export similarChains.",
+      "target": "./queries:similarChains"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export staleAbstractions.",
+      "target": "./queries:staleAbstractions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export valueFlow.",
+      "target": "./queries:valueFlow"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export wrapperCandidates.",
+      "target": "./queries:wrapperCandidates"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/complexity-hotspots.",
+      "target": "./queries/complexity-hotspots"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "RepositoryContextOptions changed from interface RepositoryContextOptions { semantic?: boolean; impactDepth?: number; referenceDepth?: number; scope?: string; gitHead?: string; } to interface RepositoryContextOptions { semantic?: boolean; impactDepth?: number; scope?: string; gitHead?: string; }.",
+      "target": "./queries/context:RepositoryContextOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "RepositoryContextResult changed from interface RepositoryContextResult { target: string; primaryCallable?: RepositoryContextPrimaryCallable; matched: { symbol: boolean; file: boolean; module: boolean; }; history: R... to interface RepositoryContextResult { target: string; primaryCallable?: RepositoryContextPrimaryCallable; matched: { symbol: boolean; file: boolean; module: boolean; }; history: R....",
+      "target": "./queries/context:RepositoryContextResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/extract-candidates.",
+      "target": "./queries/extract-candidates"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HEALTH_PHASES changed from declare const HEALTH_PHASES: readonly [ \"overview\", \"dead\", \"isolated\", \"cycles\", \"similar\", \"duplicate-bodies\", \"twin-drift\", \"react-component-duplicates\", \"react-hook-candidat... to declare const HEALTH_PHASES: readonly [ \"overview\", \"dead\", \"isolated\", \"cycles\", \"similar\", \"duplicate-bodies\", \"twin-drift\", \"react-component-duplicates\", \"react-hook-candidat....",
+      "target": "./queries/health:HEALTH_PHASES"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HotspotResult changed from interface HotspotResult { symbol: string; shortName: string; refCount: number; fileCount: number; definedIn: string; basis?: 'scip-cross-file-mentions' | 'source-backed-incoming... to interface HotspotResult { symbol: string; shortName: string; refCount: number; fileCount: number; definedIn: string; basis?: 'scip-cross-file-mentions' | 'source-backed-incoming....",
+      "target": "./queries/hotspots:HotspotResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AuditDisagreement.",
+      "target": "./queries/index:AuditDisagreement"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AuditQuestionScore.",
+      "target": "./queries/index:AuditQuestionScore"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ComplexityHotspot.",
+      "target": "./queries/index:ComplexityHotspot"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ExtractCandidate.",
+      "target": "./queries/index:ExtractCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ExtractCandidateActionTier.",
+      "target": "./queries/index:ExtractCandidateActionTier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ExtractCandidateKind.",
+      "target": "./queries/index:ExtractCandidateKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HEALTH_PHASES changed from declare const HEALTH_PHASES: readonly [ \"overview\", \"dead\", \"isolated\", \"cycles\", \"similar\", \"duplicate-bodies\", \"twin-drift\", \"react-component-duplicates\", \"react-hook-candidat... to declare const HEALTH_PHASES: readonly [ \"overview\", \"dead\", \"isolated\", \"cycles\", \"similar\", \"duplicate-bodies\", \"twin-drift\", \"react-component-duplicates\", \"react-hook-candidat....",
+      "target": "./queries/index:HEALTH_PHASES"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HealthReport changed from interface HealthReport { overview: { documents: number; symbols: number; indexSizeBytes: number; }; provenance?: HealthProvenance; findings: { deadSymbols: number; deadLoc: numb... to interface HealthReport { overview: { documents: number; symbols: number; indexSizeBytes: number; }; provenance?: HealthProvenance; findings: { deadSymbols: number; deadLoc: numb....",
+      "target": "./queries/index:HealthReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HotspotResult changed from interface HotspotResult { symbol: string; shortName: string; refCount: number; fileCount: number; definedIn: string; basis?: 'scip-cross-file-mentions' | 'source-backed-incoming... to interface HotspotResult { symbol: string; shortName: string; refCount: number; fileCount: number; definedIn: string; basis?: 'scip-cross-file-mentions' | 'source-backed-incoming....",
+      "target": "./queries/index:HotspotResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "RefResult changed from interface RefResult { relativePath: string; line: number; } to interface RefResult { relativePath: string; line: number; evidence?: 'indexed-occurrence' | 'indexed-definition' | 'source-or-chunk-candidate'; }.",
+      "target": "./queries/index:RefResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ReferenceNeighborhoodResult.",
+      "target": "./queries/index:ReferenceNeighborhoodResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ReferenceReachabilityResult.",
+      "target": "./queries/index:ReferenceReachabilityResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "RepositoryContextOptions changed from interface RepositoryContextOptions { semantic?: boolean; impactDepth?: number; referenceDepth?: number; scope?: string; gitHead?: string; } to interface RepositoryContextOptions { semantic?: boolean; impactDepth?: number; scope?: string; gitHead?: string; }.",
+      "target": "./queries/index:RepositoryContextOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "RepositoryContextResult changed from interface RepositoryContextResult { target: string; primaryCallable?: RepositoryContextPrimaryCallable; matched: { symbol: boolean; file: boolean; module: boolean; }; history: R... to interface RepositoryContextResult { target: string; primaryCallable?: RepositoryContextPrimaryCallable; matched: { symbol: boolean; file: boolean; module: boolean; }; history: R....",
+      "target": "./queries/index:RepositoryContextResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SelfAuditResult.",
+      "target": "./queries/index:SelfAuditResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SimilarChainResult.",
+      "target": "./queries/index:SimilarChainResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export StaleAbstraction.",
+      "target": "./queries/index:StaleAbstraction"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export StaleAbstractionActionTier.",
+      "target": "./queries/index:StaleAbstractionActionTier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export StalenessKind.",
+      "target": "./queries/index:StalenessKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemResult changed from interface SystemResult { files: string[]; symbols: SymbolResult[]; dependsOn: string[]; dependedOnBy: string[]; } to interface SystemResult { files: string[]; symbols: Array<SymbolResult & { relativePath: string; }>; dependsOn: string[]; dependedOnBy: string[]; }.",
+      "target": "./queries/index:SystemResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ValueFlowCoverage.",
+      "target": "./queries/index:ValueFlowCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ValueFlowResult.",
+      "target": "./queries/index:ValueFlowResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export WrapperActionTier.",
+      "target": "./queries/index:WrapperActionTier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export WrapperCandidate.",
+      "target": "./queries/index:WrapperCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export complexityHotspots.",
+      "target": "./queries/index:complexityHotspots"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export extractCandidates.",
+      "target": "./queries/index:extractCandidates"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export referenceNeighborhood.",
+      "target": "./queries/index:referenceNeighborhood"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export referenceReachability.",
+      "target": "./queries/index:referenceReachability"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export selfAudit.",
+      "target": "./queries/index:selfAudit"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export similarChains.",
+      "target": "./queries/index:similarChains"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export staleAbstractions.",
+      "target": "./queries/index:staleAbstractions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export valueFlow.",
+      "target": "./queries/index:valueFlow"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export wrapperCandidates.",
+      "target": "./queries/index:wrapperCandidates"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/reference-neighborhood.",
+      "target": "./queries/reference-neighborhood"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/reference-reachability.",
+      "target": "./queries/reference-reachability"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "RefResult changed from interface RefResult { relativePath: string; line: number; } to interface RefResult { relativePath: string; line: number; evidence?: 'indexed-occurrence' | 'indexed-definition' | 'source-or-chunk-candidate'; }.",
+      "target": "./queries/refs:RefResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export referenceLocation.",
+      "target": "./queries/refs:referenceLocation"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/self-audit.",
+      "target": "./queries/self-audit"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/similar-chains.",
+      "target": "./queries/similar-chains"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/source-inspection; review their variance and runtime meaning.",
+      "target": "./queries/source-inspection"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/stale-abstractions.",
+      "target": "./queries/stale-abstractions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SystemResult changed from interface SystemResult { files: string[]; symbols: SymbolResult[]; dependsOn: string[]; dependedOnBy: string[]; } to interface SystemResult { files: string[]; symbols: Array<SymbolResult & { relativePath: string; }>; dependsOn: string[]; dependedOnBy: string[]; }.",
+      "target": "./queries/system:SystemResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/value-flow.",
+      "target": "./queries/value-flow"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/wrapper-candidates.",
+      "target": "./queries/wrapper-candidates"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module exploration-topology-<hash>.d.ts was removed or renamed.",
+      "target": "exploration-topology-<hash>.d.ts"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module graph-exploration-contract-<hash>.d.ts was removed or renamed.",
+      "target": "graph-exploration-contract-<hash>.d.ts"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration G.",
+      "target": "health-<hash>.d.ts:G"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "H changed from declare const HEALTH_PHASES: readonly [ \"overview\", \"dead\", \"isolated\", \"cycles\", \"similar\", \"duplicate-bodies\", \"twin-drift\", \"react-component-duplicates\", \"react-hook-candidat... to declare const HEALTH_PHASES: readonly [ \"overview\", \"dead\", \"isolated\", \"cycles\", \"similar\", \"duplicate-bodies\", \"twin-drift\", \"react-component-duplicates\", \"react-hook-candidat....",
+      "target": "health-<hash>.d.ts:H"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "a changed from interface HealthAction { category: string; description: string; effort: 'low' | 'medium' | 'high'; impact: 'low' | 'medium' | 'high'; count: number; locRecoverable: number; evid... to type GraphProjectionDirection = (typeof GRAPH_PROJECTION_DIRECTIONS)[number];.",
+      "target": "health-<hash>.d.ts:a"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from interface HealthProvenance { computedAt: string; generation: { identity: string; publishedAt: string | null; mode: 'incremental' | 'full' | null; }; git: { head: string; branch:... to declare const GRAPH_EVIDENCE_FAMILIES: readonly [ \"execution\", \"runtime\", \"dataflow\", \"state\", \"temporal\", \"contract\", \"identity\", \"ownership\", \"dependencies\" ];.",
+      "target": "health-<hash>.d.ts:b"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "c changed from interface HealthReport { overview: { documents: number; symbols: number; indexSizeBytes: number; }; provenance?: HealthProvenance; findings: { deadSymbols: number; deadLoc: numb... to interface HealthAction { category: string; description: string; effort: 'low' | 'medium' | 'high'; impact: 'low' | 'medium' | 'high'; count: number; locRecoverable: number; evid....",
+      "target": "health-<hash>.d.ts:c"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "d changed from declare function healthPhase(db: ScipDatabase, phase: HealthPhaseName, opts?: { scope?: string; full?: boolean; }): HealthPhaseResult; to interface HealthProvenance { computedAt: string; generation: { identity: string; publishedAt: string | null; mode: 'incremental' | 'full' | null; }; git: { head: string; branch:....",
+      "target": "health-<hash>.d.ts:d"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "e changed from declare function healthProvenance(db: ScipDatabase): HealthProvenance; to interface HealthReport { overview: { documents: number; symbols: number; indexSizeBytes: number; }; provenance?: HealthProvenance; findings: { deadSymbols: number; deadLoc: numb....",
+      "target": "health-<hash>.d.ts:e"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "f changed from declare function healthReportFromPhases(phaseResults: HealthPhaseResult[], db?: ScipDatabase): HealthReport; to declare function healthPhase(db: ScipDatabase, phase: HealthPhaseName, opts?: { scope?: string; full?: boolean; }): HealthPhaseResult;.",
+      "target": "health-<hash>.d.ts:f"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "g changed from type HealthPhaseName = (typeof HEALTH_PHASES)[number]; to declare function healthProvenance(db: ScipDatabase): HealthProvenance;.",
+      "target": "health-<hash>.d.ts:g"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "i changed from declare function healthPhases(db: ScipDatabase, phases: readonly HealthPhaseName[], opts?: { scope?: string; full?: boolean; }): HealthPhaseResult[]; to declare function healthReportFromPhases(phaseResults: HealthPhaseResult[], db?: ScipDatabase): HealthReport;.",
+      "target": "health-<hash>.d.ts:i"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration j.",
+      "target": "health-<hash>.d.ts:j"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration k.",
+      "target": "health-<hash>.d.ts:k"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module source-inspection-<hash>.d.ts was added or renamed.",
+      "target": "source-inspection-<hash>.d.ts"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module value-flow-<hash>.d.ts was removed or renamed.",
+      "target": "value-flow-<hash>.d.ts"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.25.0",
+  "previousDigest": "e21229a83e22e4b43862402fa734f73e45a2f99a1e2952fa6db29c01fbdc875d",
+  "reason": "Command audit pruning and corrected metric/reference/system contracts; migration details in docs/api/compatibility/2026-09-05-command-contract-pruning.md",
+  "schemaVersion": 1
+}

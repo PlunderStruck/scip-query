@@ -1,0 +1,608 @@
+[
+  {
+    "name": "continue",
+    "hidden": true,
+    "description": "Continue an immutable output snapshot",
+    "arguments": [
+      "cursor"
+    ]
+  },
+  {
+    "name": "review",
+    "hidden": false,
+    "description": "Review current TS/JS changes against a Git commit, including new and untracked functions",
+    "arguments": []
+  },
+  {
+    "name": "hook-architecture-stop",
+    "hidden": true,
+    "description": "Internal architecture-only Stop hook",
+    "arguments": []
+  },
+  {
+    "name": "reindex",
+    "hidden": false,
+    "description": "Index the codebase and convert to SQLite",
+    "arguments": []
+  },
+  {
+    "name": "augment-sources",
+    "hidden": false,
+    "description": "Add source files skipped by upstream SCIP indexers to the SQLite documents table",
+    "arguments": []
+  },
+  {
+    "name": "augment-vue",
+    "hidden": false,
+    "description": "Add compiler-resolved Vue SFC references to the SQLite index using Volar",
+    "arguments": []
+  },
+  {
+    "name": "stats",
+    "hidden": false,
+    "description": "Show index statistics",
+    "arguments": []
+  },
+  {
+    "name": "files",
+    "hidden": false,
+    "description": "Find current project files matching a path pattern",
+    "arguments": [
+      "pattern"
+    ]
+  },
+  {
+    "name": "session",
+    "hidden": false,
+    "description": "Show evidence already delivered in this agent exploration session",
+    "arguments": []
+  },
+  {
+    "name": "inspect",
+    "hidden": false,
+    "description": "Batch related searches, symbols, and source locations into one deduplicated source packet",
+    "arguments": []
+  },
+  {
+    "name": "search",
+    "hidden": false,
+    "description": "Count current project text matches and preview a bounded, recoverable identity and source manifest",
+    "arguments": [
+      "exact-text"
+    ]
+  },
+  {
+    "name": "methods",
+    "hidden": false,
+    "description": "List methods of one exactly resolved class; ambiguity and missing targets fail explicitly",
+    "arguments": [
+      "className"
+    ]
+  },
+  {
+    "name": "refs",
+    "hidden": false,
+    "description": "Find all files referencing a symbol",
+    "arguments": [
+      "symbol"
+    ]
+  },
+  {
+    "name": "evidence",
+    "hidden": false,
+    "description": "Traverse selected typed relationships around exact referents; recover source separately when needed",
+    "arguments": []
+  },
+  {
+    "name": "deps",
+    "hidden": false,
+    "description": "Files this file depends on (internal)",
+    "arguments": [
+      "file"
+    ]
+  },
+  {
+    "name": "rdeps",
+    "hidden": false,
+    "description": "Files that depend on this file/module",
+    "arguments": [
+      "file"
+    ]
+  },
+  {
+    "name": "system",
+    "hidden": false,
+    "description": "One-hop module summary: matched files, documented symbols, and file reference dependencies",
+    "arguments": [
+      "module"
+    ]
+  },
+  {
+    "name": "surface",
+    "hidden": false,
+    "description": "What symbols consumers actually use from this module",
+    "arguments": [
+      "module"
+    ]
+  },
+  {
+    "name": "dead",
+    "hidden": false,
+    "description": "Find repository-dead code, file-internal symbols, and implicit-usage signals",
+    "arguments": [
+      "scope"
+    ]
+  },
+  {
+    "name": "hotspots",
+    "hidden": false,
+    "description": "Rank symbols by referencing chunks, or incoming evidence rows when SCIP mentions are unavailable",
+    "arguments": []
+  },
+  {
+    "name": "imports",
+    "hidden": false,
+    "description": "What symbols does this file import?",
+    "arguments": [
+      "file"
+    ]
+  },
+  {
+    "name": "imported-by",
+    "hidden": false,
+    "description": "Which files import this symbol?",
+    "arguments": [
+      "symbol"
+    ]
+  },
+  {
+    "name": "unused-imports",
+    "hidden": false,
+    "description": "Find imports not referenced in the same file",
+    "arguments": [
+      "file"
+    ]
+  },
+  {
+    "name": "outline",
+    "hidden": false,
+    "description": "Tree view of symbols in a file, with line ranges",
+    "arguments": [
+      "file"
+    ]
+  },
+  {
+    "name": "members",
+    "hidden": false,
+    "description": "All children of a symbol (methods, fields, nested types)",
+    "arguments": [
+      "symbol"
+    ]
+  },
+  {
+    "name": "fan-in",
+    "hidden": false,
+    "description": "Count files referencing an exact symbol; top JSON rows include exact symbol identity",
+    "arguments": [
+      "symbol"
+    ]
+  },
+  {
+    "name": "fan-out",
+    "hidden": false,
+    "description": "How many external symbols a file uses (or top fan-out across codebase)",
+    "arguments": [
+      "file"
+    ]
+  },
+  {
+    "name": "coupling",
+    "hidden": false,
+    "description": "Count shared-symbol coupling between two files, or rank file pairs by that metric",
+    "arguments": [
+      "file1",
+      "file2"
+    ]
+  },
+  {
+    "name": "cycles",
+    "hidden": false,
+    "description": "Find every cyclic file-dependency component and show one deterministic witness for each",
+    "arguments": []
+  },
+  {
+    "name": "architecture",
+    "hidden": false,
+    "description": "Evaluate project-owned architectural boundaries and dependency rules",
+    "arguments": []
+  },
+  {
+    "name": "bottlenecks",
+    "hidden": false,
+    "description": "Rank coordination hubs by incoming evidence files × outgoing cross-file callable targets",
+    "arguments": []
+  },
+  {
+    "name": "by-kind",
+    "hidden": false,
+    "description": "Find symbols by SCIP kind (class, interface, enum, function, etc.)",
+    "arguments": [
+      "kind"
+    ]
+  },
+  {
+    "name": "kind-counts",
+    "hidden": false,
+    "description": "Histogram of symbol kinds in the codebase",
+    "arguments": []
+  },
+  {
+    "name": "dependency-depth",
+    "hidden": false,
+    "description": "Find longest paths through the SCC-condensed file dependency graph",
+    "arguments": []
+  },
+  {
+    "name": "hierarchy",
+    "hidden": false,
+    "description": "Show indexed lexical owners of a symbol (method → class → module)",
+    "arguments": [
+      "symbol"
+    ]
+  },
+  {
+    "name": "entrypoints",
+    "hidden": false,
+    "description": "Find callables where control may enter from outside the indexed call graph",
+    "arguments": [
+      "text"
+    ]
+  },
+  {
+    "name": "entry-map",
+    "hidden": false,
+    "description": "Map the complete indexed call graph from one detected entry point, collapsed by file",
+    "arguments": [
+      "entry"
+    ]
+  },
+  {
+    "name": "call-graph",
+    "hidden": false,
+    "description": "Show static may-call edges with exact/candidate evidence and explicit blind spots",
+    "arguments": [
+      "symbol"
+    ]
+  },
+  {
+    "name": "similar",
+    "hidden": false,
+    "description": "Find heuristic function similarity candidates from callee fingerprints",
+    "arguments": [
+      "symbol",
+      "other"
+    ]
+  },
+  {
+    "name": "similar-files",
+    "hidden": false,
+    "description": "Find heuristic similar-file candidates from dependency profiles",
+    "arguments": [
+      "file"
+    ]
+  },
+  {
+    "name": "react-component-duplicates",
+    "hidden": false,
+    "description": "Find heuristic duplicated React component structure candidates from JSX tags, props, events, and bindings",
+    "arguments": [
+      "file"
+    ]
+  },
+  {
+    "name": "react-hook-candidates",
+    "hidden": false,
+    "description": "Find heuristic React hook extraction candidates from shared state, effects, requests, and handlers",
+    "arguments": [
+      "file"
+    ]
+  },
+  {
+    "name": "react-large-component-pressure",
+    "hidden": false,
+    "description": "Find heuristic large React component pressure candidates from component lines, JSX structure, and hook behavior",
+    "arguments": [
+      "file"
+    ]
+  },
+  {
+    "name": "vue-component-duplicates",
+    "hidden": false,
+    "description": "Find heuristic duplicated Vue component structure candidates from template tags, bindings, slots, and directives",
+    "arguments": [
+      "file"
+    ]
+  },
+  {
+    "name": "vue-composable-candidates",
+    "hidden": false,
+    "description": "Find heuristic Vue composable extraction candidates from shared state, effects, requests, and template bindings",
+    "arguments": [
+      "file"
+    ]
+  },
+  {
+    "name": "vue-large-view-pressure",
+    "hidden": false,
+    "description": "Find heuristic large Vue view pressure candidates from template, script, style, and external script line counts",
+    "arguments": [
+      "file"
+    ]
+  },
+  {
+    "name": "locality-candidates",
+    "hidden": false,
+    "description": "Find directory-locality and ancestry candidates from consumer ownership",
+    "arguments": [
+      "symbol-or-file"
+    ]
+  },
+  {
+    "name": "affected",
+    "hidden": false,
+    "description": "Conservative reverse caller/reference closure of symbols that may be impacted by a change",
+    "arguments": [
+      "symbol"
+    ]
+  },
+  {
+    "name": "change-surface",
+    "hidden": false,
+    "description": "Pre-change briefing: consumers, published API, operational roots, and explained change risk",
+    "arguments": [
+      "file"
+    ]
+  },
+  {
+    "name": "cleanup-plan",
+    "hidden": false,
+    "description": "Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks",
+    "arguments": []
+  },
+  {
+    "name": "co-change",
+    "hidden": false,
+    "description": "Files that change together in git history without a dependency edge — hidden coupling candidates",
+    "arguments": [
+      "file"
+    ]
+  },
+  {
+    "name": "recent-duplicates",
+    "hidden": false,
+    "description": "Similarity candidates in recently added files, oriented by file age; function creation time is not known",
+    "arguments": []
+  },
+  {
+    "name": "doc-drift",
+    "hidden": false,
+    "description": "Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped",
+    "arguments": [
+      "doc"
+    ]
+  },
+  {
+    "name": "unused-params",
+    "hidden": false,
+    "description": "Speculative-generality candidates: trailing parameters no body ever uses (TS/JS)",
+    "arguments": []
+  },
+  {
+    "name": "incomplete-migration",
+    "hidden": false,
+    "description": "Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain",
+    "arguments": []
+  },
+  {
+    "name": "context",
+    "hidden": false,
+    "description": "Compiler-backed context for a symbol, file, or module",
+    "arguments": [
+      "target"
+    ]
+  },
+  {
+    "name": "drift",
+    "hidden": false,
+    "description": "Detect drift candidates: unused imports and declared architecture violations; pass --architecture for boundary context",
+    "arguments": [
+      "module"
+    ]
+  },
+  {
+    "name": "passthrough-candidates",
+    "hidden": false,
+    "description": "Find heuristic passthrough candidates that forward to one callee",
+    "arguments": []
+  },
+  {
+    "name": "slice-cohesion",
+    "hidden": false,
+    "description": "Find low-cohesion candidates from backward slices: outputs whose statements never meet are separate local computations",
+    "arguments": [
+      "symbol"
+    ]
+  },
+  {
+    "name": "code",
+    "hidden": false,
+    "description": "Read exact definitions, line ranges, or file export surfaces",
+    "arguments": [
+      "selectors"
+    ]
+  },
+  {
+    "name": "complexity",
+    "hidden": false,
+    "description": "Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees",
+    "arguments": [
+      "symbol"
+    ]
+  },
+  {
+    "name": "dependence-slice",
+    "hidden": false,
+    "description": "Slice one variable occurrence through function-local value and control dependencies",
+    "arguments": [
+      "file:line"
+    ]
+  },
+  {
+    "name": "redundant-reexports",
+    "hidden": false,
+    "description": "Find re-export candidates with no resolved local source imports or re-exports; external use is unknown",
+    "arguments": []
+  },
+  {
+    "name": "duplicate-bodies",
+    "hidden": false,
+    "description": "Find exact duplicate small-body candidates across files",
+    "arguments": []
+  },
+  {
+    "name": "twin-drift",
+    "hidden": false,
+    "description": "Twin drift candidates: same-name (or near-name) functions across files with diverged bodies",
+    "arguments": []
+  },
+  {
+    "name": "not-implemented",
+    "hidden": false,
+    "description": "Placeholder candidates with observed consumer or entry-surface evidence: throw-stub, TODO plus default return, or empty body",
+    "arguments": []
+  },
+  {
+    "name": "decorative-checkers",
+    "hidden": false,
+    "description": "Checker candidates lacking detected explicit failure syntax; implicit exceptions and property effects are not proved absent",
+    "arguments": []
+  },
+  {
+    "name": "test-quality",
+    "hidden": false,
+    "description": "Test-quality candidates: assertion-free it/test bodies, a skipped-test ledger with git-blame age, and mock-echo tests that assert the same literal they stubbed into a mock",
+    "arguments": []
+  },
+  {
+    "name": "similar-signatures",
+    "hidden": false,
+    "description": "Group functions by normalized signature text; shared type identity or responsibility is not established",
+    "arguments": []
+  },
+  {
+    "name": "__diff-impact-batch",
+    "hidden": true,
+    "description": "Internal diff-impact batch worker",
+    "arguments": []
+  },
+  {
+    "name": "diff-impact",
+    "hidden": false,
+    "description": "Map changed symbols and downstream consumers from the current git diff",
+    "arguments": []
+  },
+  {
+    "name": "__health-phase",
+    "hidden": true,
+    "description": "Internal health phase worker",
+    "arguments": [
+      "phase"
+    ]
+  },
+  {
+    "name": "__health-semantic-prewarm",
+    "hidden": true,
+    "description": "Internal health semantic prewarm worker",
+    "arguments": []
+  },
+  {
+    "name": "health",
+    "hidden": false,
+    "description": "Find concrete TS/JS complexity, duplication, and dependency issues without an index",
+    "arguments": []
+  },
+  {
+    "name": "install-skills",
+    "hidden": false,
+    "description": "Install core exploration skills into Claude Code, Codex, and shared agent roots",
+    "arguments": []
+  },
+  {
+    "name": "check-deps",
+    "hidden": false,
+    "description": "Check whether scip-query and the detected language indexers are runnable",
+    "arguments": []
+  },
+  {
+    "name": "capabilities",
+    "hidden": false,
+    "description": "Report which mapping and analysis capabilities are available in this project",
+    "arguments": []
+  },
+  {
+    "name": "init",
+    "hidden": false,
+    "description": "Create a .scipquery.json configuration file for this project",
+    "arguments": []
+  },
+  {
+    "name": "config-validate",
+    "hidden": false,
+    "description": "Validate .scipquery.json, structured suppressions, architecture, and coupling groups",
+    "arguments": []
+  },
+  {
+    "name": "suppress",
+    "hidden": false,
+    "description": "Record an accepted finding under .scipquery/suppressions with a required reason",
+    "arguments": [
+      "id"
+    ]
+  },
+  {
+    "name": "doctor",
+    "hidden": false,
+    "description": "Diagnose configuration, index freshness, dependencies, and project capabilities",
+    "arguments": []
+  },
+  {
+    "name": "setup",
+    "hidden": false,
+    "description": "Install skills, write agent guidance, refresh the index, and report readiness",
+    "arguments": []
+  },
+  {
+    "name": "setup-agent",
+    "hidden": false,
+    "description": "Write concise scip-query mapping and cleanup guidance to AGENTS.md and CLAUDE.md",
+    "arguments": []
+  },
+  {
+    "name": "uninstall",
+    "hidden": false,
+    "description": "Remove selected scip-query-owned skills or project guidance",
+    "arguments": []
+  },
+  {
+    "name": "watch",
+    "hidden": false,
+    "description": "Watch in the foreground or manage the project refresh service",
+    "arguments": []
+  },
+  {
+    "name": "status",
+    "hidden": false,
+    "description": "Show index status for this project",
+    "arguments": []
+  }
+]

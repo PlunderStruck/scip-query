@@ -212,8 +212,8 @@ function compareReactHookProfiles(
     recommendation: verdict.recommendation,
     unitKind: a.profile.kind === 'hook' && b.profile.kind === 'hook' ? 'hook' : 'component',
     pairContext,
-    uniqueToA: sortedTokens(difference(a.tokens, b.tokens)).slice(0, 25),
-    uniqueToB: sortedTokens(difference(b.tokens, a.tokens)).slice(0, 25),
+    uniqueToA: sortedTokens(difference(a.tokens, b.tokens)),
+    uniqueToB: sortedTokens(difference(b.tokens, a.tokens)),
     reason: reactBehaviorReason({
       sharedHooks,
       sharedReactHooks,

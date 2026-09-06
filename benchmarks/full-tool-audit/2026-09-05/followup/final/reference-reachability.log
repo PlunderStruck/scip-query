@@ -1,0 +1,1 @@
+{"kind":"scip-query-json-export","schemaVersion":1,"producer":{"name":"scip-query","version":"0.25.0"},"command":"reference-reachability","path":"/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/full-tool-audit/2026-09-05/followup/final/reference-reachability.json","bytes":4605,"sha256":"12d7f21df66617bbd7d14926dc30e987aca6a91cbf67ce8bcd6c78d84281b70c"}

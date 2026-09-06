@@ -50,7 +50,7 @@ describe('producer-bounded refs pagination', () => {
 
     expect(page.producer).toBe('complete-only');
     expect(page.semanticEnrichment).toBe(false);
-    expect(page.rows).toEqual([{ relativePath: 'src/consumer.ts', line: 2 }]);
+    expect(page.rows).toEqual([{ relativePath: 'src/consumer.ts', line: 2, evidence: 'source-or-chunk-candidate' }]);
     fixture.db.close();
   });
 });

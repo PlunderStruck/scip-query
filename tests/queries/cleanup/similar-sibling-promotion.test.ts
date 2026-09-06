@@ -18,7 +18,7 @@ describe('promoteSiblingSimilarity', () => {
     expect(promoted.actionTier).toBe('direct');
     expect(promoted.evidenceClass).toBe('access-query-scaffolding');
     expect(promoted.evidenceClassReasons.at(-1)).toBe('same-file siblings share 6 callees at similarity 0.94');
-    expect(promoted.recommendation).toContain('Sibling functions in one file');
+    expect(promoted.recommendation).toContain('Sibling functions have overlapping weighted callee sets');
     expect(
       promoteSiblingSimilarity(signal('mixed'), { similarity: 0.55, sharedCount: 4, sameFile: true }).actionTier,
     ).toBe('direct');

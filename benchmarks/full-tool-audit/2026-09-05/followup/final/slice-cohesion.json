@@ -1,0 +1,250 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "slice-cohesion",
+  "operationRole": "repository-observation",
+  "evidence": "heuristic",
+  "args": [
+    "runJob"
+  ],
+  "options": {
+    "minLoc": 12,
+    "minStatements": 10,
+    "minCluster": 4,
+    "limit": 20,
+    "json": true,
+    "session": true,
+    "jsonOutput": "/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/full-tool-audit/2026-09-05/followup/final/slice-cohesion.json"
+  },
+  "result": [
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+      "shortName": "src:service:runner:runJob()",
+      "relativePath": "src/service/runner.ts",
+      "startLine": 2,
+      "endLine": 7,
+      "loc": 6,
+      "archetype": "calculation",
+      "operational": false,
+      "units": [
+        {
+          "index": 0,
+          "kind": "statement",
+          "startLine": 3,
+          "endLine": 3,
+          "label": "const store = new Store();"
+        },
+        {
+          "index": 1,
+          "kind": "statement",
+          "startLine": 4,
+          "endLine": 4,
+          "label": "const total = sum(1, 2);"
+        },
+        {
+          "index": 2,
+          "kind": "statement",
+          "startLine": 5,
+          "endLine": 5,
+          "label": "store.write(total);"
+        },
+        {
+          "index": 3,
+          "kind": "return",
+          "startLine": 6,
+          "endLine": 6,
+          "label": "return total > 0 ? total : 0;"
+        }
+      ],
+      "statementCount": 4,
+      "outputs": [
+        {
+          "id": "return@7",
+          "kind": "return",
+          "label": "return",
+          "line": 6,
+          "units": [
+            3
+          ],
+          "guard": false,
+          "hook": false,
+          "sliceSize": 2,
+          "fullSliceSize": 2,
+          "slice": [
+            1,
+            3
+          ],
+          "fullSlice": [
+            1,
+            3
+          ]
+        }
+      ],
+      "metrics": {
+        "tightness": 0.5,
+        "fullTightness": 0.5,
+        "sliceShare": 0.5,
+        "fullSliceShare": 0.5,
+        "overlap": 1,
+        "superglue": 2,
+        "glue": 0
+      },
+      "clusters": [
+        {
+          "outputs": [
+            "return@7"
+          ],
+          "units": [
+            1,
+            3
+          ],
+          "lineRanges": [
+            {
+              "startLine": 4,
+              "endLine": 4
+            },
+            {
+              "startLine": 6,
+              "endLine": 6
+            }
+          ],
+          "inputs": [],
+          "kind": "calculation",
+          "role": "below-threshold",
+          "narrow": true,
+          "hooks": [],
+          "guardOnly": false
+        }
+      ],
+      "preambleOnlyOutputs": [],
+      "preamble": [],
+      "orphans": [
+        0,
+        2
+      ],
+      "separableStatements": 0,
+      "splitCandidate": false,
+      "actionTier": "support",
+      "tierReason": "The value outputs share one computation; no split is indicated.",
+      "evidenceReasons": [
+        "4 statements, 1 value output(s), 0 guard exit(s); calculation",
+        "tightness 0.50 (with guards 0.50); overlap 1.00; local model only",
+        "1 cluster(s) below --min-cluster 4 stay in place: line 5, line 7 (return@7)",
+        "2 statement(s) reach no output: line 4, line 6"
+      ],
+      "recommendation": "One value output; cohesion is trivially complete.",
+      "coverage": {
+        "status": "complete",
+        "model": "function-local-flow",
+        "basis": "typescript-local-flow-backward-slices",
+        "unsupported": [],
+        "candidateEdges": 0,
+        "candidateEdgeEffect": "merge-only"
+      }
+    }
+  ],
+  "coverage": {
+    "complete": true,
+    "totalKnown": true,
+    "returned": 1,
+    "total": 1,
+    "omitted": 0
+  },
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "operationRole": "repository-observation",
+    "receipt": {
+      "schemaVersion": 2,
+      "observedAt": "2026-09-06T03:43:12.091Z",
+      "facts": {
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        }
+      ]
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "heuristic",
+      "coverage": {
+        "complete": true,
+        "totalKnown": true,
+        "returned": 1,
+        "total": 1,
+        "omitted": 0
+      },
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "heuristic",
+        "coverage": {
+          "state": "complete",
+          "returned": 1,
+          "totalKnown": true,
+          "total": 1,
+          "omitted": 0
+        },
+        "producerValidation": {
+          "status": "not-evaluated"
+        },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": [
+            "collaborationDomain",
+            "wholeContent",
+            "observationStability"
+          ],
+          "reasons": [
+            "collaborationDomain:unknown",
+            "wholeContent:unknown",
+            "leftIndexAlignment:unknown",
+            "rightIndexAlignment:unknown"
+          ]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": [
+            "No repository action policy was supplied for this claim."
+          ]
+        }
+      }
+    }
+  }
+}

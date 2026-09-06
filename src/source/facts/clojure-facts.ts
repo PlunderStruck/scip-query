@@ -51,6 +51,7 @@ interface FormFrame {
 interface ClojureToken {
   text: string;
   line: number;
+  column: number;
 }
 
 type ClojureForm = FormFrame;
@@ -121,7 +122,7 @@ export function buildClojureSourceFacts(source: string): SourceFacts {
     }
     const text = source.slice(tokenStart, index);
     if (!text) continue;
-    const token = { text, line: tokenStartLine };
+    const token = { text, line: tokenStartLine, column: tokenStart - source.lastIndexOf('\n', tokenStart - 1) - 1 };
     recordFrameToken(stack[stack.length - 1], token);
     recordIdentifier(clojureLeaf(text), tokenStartLine);
   }
@@ -180,6 +181,12 @@ function recordCompletedFrame(
     calleeText: call.text,
     memberAccess: false,
     line: head.line,
+    targetRange: {
+      startLine: head.line,
+      startColumn: head.column,
+      endLine: head.line,
+      endColumn: head.column + head.text.length,
+    },
   });
 }
 
@@ -302,7 +309,7 @@ function clojureCallParts(symbol: string): { leaf: string; qualifier?: string; t
 // allowed, the reverse is not).
 //
 // twin-consolidation T2: these three functions used to be duplicated in
-// both files and had drifted (verified with `scip-query twin-ab`):
+// both files and had drifted (verified with behavioral comparison tests):
 //   - isReaderMacroPrefix was missing '#' in the parser's copy. '#' starts
 //     Clojure's dispatch macros (`#{...}` sets, `#(...)` anonymous fns,
 //     `#'sym` var quotes, `#"..."` regexes) — without it, the parser's

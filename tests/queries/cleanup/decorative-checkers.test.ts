@@ -148,6 +148,12 @@ describe('decorative-checkers — delegate resolves to a decorative implementati
     const projectRoot = join(tempDir, 'project');
     writeFixtureFiles(projectRoot, {
       'src/decorative-impl.ts': ['export function validateImpl(input: unknown): boolean {', '  return true;', '}'],
+      'src/external.ts': [
+        "import { validateImpl } from 'external-policy';",
+        'export function validateExternal(input: unknown): boolean {',
+        '  return validateImpl(input);',
+        '}',
+      ],
       'src/wrapper.ts': [
         "import { validateImpl } from './decorative-impl.js';",
         'export function validateWrapper(input: unknown): boolean {',
@@ -160,10 +166,13 @@ describe('decorative-checkers — delegate resolves to a decorative implementati
     evidenceFixtureDb(dbPath)
       .document(1, 'typescript', 'src/decorative-impl.ts')
       .document(2, 'typescript', 'src/wrapper.ts')
+      .document(3, 'typescript', 'src/external.ts')
       .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`decorative-impl.ts`/validateImpl().', 'validateImpl', 12)
       .symbol(2, 'scip-typescript npm fixture 1.0.0 src/`wrapper.ts`/validateWrapper().', 'validateWrapper', 12)
       .definition(1, 1, 1, 0, 0, 2, 1)
       .definition(2, 2, 2, 1, 0, 3, 1)
+      .symbol(3, 'scip-typescript npm fixture 1.0.0 src/`external.ts`/validateExternal().', 'validateExternal', 12)
+      .definition(3, 3, 3, 1, 0, 3, 1)
       .write();
 
     db = new ScipDatabase({ dbPath, projectRoot, indexPath: join(tempDir, 'index.scip') });
@@ -172,6 +181,10 @@ describe('decorative-checkers — delegate resolves to a decorative implementati
   afterAll(() => {
     db.close();
     rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('does not borrow a same-name local delegate for an external import', () => {
+    expect(decorativeCheckers(db).some((finding) => finding.shortName.includes('validateExternal'))).toBe(false);
   });
 
   it('fires on the wrapper, resolved via its one-hop decorative delegate', () => {

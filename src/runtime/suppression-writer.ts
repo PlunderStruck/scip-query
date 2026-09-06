@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { basename, join } from 'node:path';
+import { relative } from 'node:path';
 import {
   SUPPRESSION_REASON_CODES,
   type FindingSuppression,
@@ -15,11 +15,12 @@ import { readProjectFileText } from '../platform/project-files.js';
 import { cliVersion } from '../platform/cli-version.js';
 import {
   decodeSuppressionFile,
+  assertSuppressionPath,
   LEGACY_SUPPRESSION_FILE_SCHEMA_VERSION,
   SUPPRESSION_FILE_KIND,
   SUPPRESSION_FILE_SCHEMA_VERSION,
   suppressionDirPath,
-  suppressionFileName,
+  suppressionWritePath,
   suppressionIdentity,
   type SuppressionFileRecord,
 } from '../storage/suppression-store.js';
@@ -123,7 +124,7 @@ export function writeSuppressionFile(
   const options: WriteSuppressionOptions = nowOrOptions instanceof Date ? { now: nowOrOptions } : nowOrOptions;
   const normalized = normalizeSuppression(suppression);
   const expectedRevision = normalizeExpectedRevision(options.expectedRevision);
-  const path = join(suppressionDirPath(projectRoot), suppressionFileName(normalized));
+  const path = suppressionWritePath(projectRoot, normalized);
   const now = options.now ?? new Date();
   let disposition: WriteSuppressionResult['disposition'] = 'unchanged';
   const mutation = mutateTextFileRevisionAware(
@@ -142,7 +143,7 @@ export function writeSuppressionFile(
           text: serializeSuppressionRecord(createRecord(normalized, undefined, now, options.toolVersion)),
         };
       }
-      const existing = parseExistingSuppression(snapshot);
+      const existing = parseExistingSuppression(snapshot, projectRoot);
       if (sameSuppressionPolicy(existing.suppression, normalized)) {
         disposition = 'unchanged';
         return { kind: 'unchanged' };
@@ -169,7 +170,10 @@ export function writeSuppressionFile(
     },
     {
       maxRetries: 0,
-      onBeforeCommit: options.onBeforeCommit,
+      onBeforeCommit: (context) => {
+        options.onBeforeCommit?.(context);
+        assertSuppressionPath(projectRoot, path);
+      },
     },
   );
   return {
@@ -179,7 +183,7 @@ export function writeSuppressionFile(
   };
 }
 
-function parseExistingSuppression(snapshot: RevisionedTextSnapshot) {
+function parseExistingSuppression(snapshot: RevisionedTextSnapshot, projectRoot: string) {
   let parsed: unknown;
   try {
     parsed = JSON.parse(snapshot.text) as unknown;
@@ -188,7 +192,10 @@ function parseExistingSuppression(snapshot: RevisionedTextSnapshot) {
       cause: error,
     });
   }
-  const decoded = decodeSuppressionFile(parsed, suppressionIdentityFromPath(snapshot.path));
+  const identity = relative(suppressionDirPath(projectRoot), snapshot.path)
+    .replaceAll('\\', '/')
+    .slice(0, -'.json'.length);
+  const decoded = decodeSuppressionFile(parsed, identity);
   if ('error' in decoded) {
     throw new Error(`Cannot update ${snapshot.path}: ${decoded.error}.`);
   }
@@ -252,11 +259,6 @@ function sameSuppressionPolicy(left: FindingSuppression, right: FindingSuppressi
 function policyFields(suppression: FindingSuppression): Omit<FindingSuppression, 'createdAt'> {
   const { createdAt: _createdAt, ...policy } = suppression;
   return policy;
-}
-
-function suppressionIdentityFromPath(path: string): string {
-  const name = basename(path);
-  return name.endsWith('.json') ? name.slice(0, -'.json'.length) : name;
 }
 
 function serializeSuppressionRecord(record: SuppressionFileRecord): string {

@@ -1,0 +1,39 @@
+[
+  {
+    "case": "index-clean",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "hook-clean",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "clean committed architecture allows stop",
+    "passed": true
+  },
+  {
+    "case": "index-violation",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "hook-forbidden-edge",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "quoted Unicode changed path triggers declared forbidden-edge enforcement",
+    "passed": true
+  },
+  {
+    "case": "architecture",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "architecture reports actual ui to core policy violation",
+    "passed": true
+  }
+]

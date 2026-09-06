@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 describe('writeProjectHealthDossier', () => {
-  it('writes Markdown and JSON dossiers with score, issues, blocked checks, and smoke tests', () => {
+  it('writes Markdown and JSON dossiers with availability, issues, blocked checks, and smoke tests', () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-health-dossier-'));
     tempRoots.push(projectRoot);
 
@@ -28,7 +28,7 @@ describe('writeProjectHealthDossier', () => {
       configuredDbPath: join(homedir(), '.cache', 'scip-query', 'projects', 'example', 'index.db'),
       scipCliInstalled: true,
       languages: ['typescript'],
-      steps: [{ id: 'health', label: 'Health audit', status: 'ok', message: 'Health score 82.' }],
+      steps: [{ id: 'health', label: 'Health audit', status: 'ok', message: 'Health report available.' }],
       skills: { installed: [], alreadyLinked: ['Codex/scip-query'], pruned: [], skipped: [] },
       initialReadiness: {
         languages: ['typescript'],
@@ -63,9 +63,7 @@ describe('writeProjectHealthDossier', () => {
       },
       reindex: null,
       health: {
-        score: 82,
-        riskScore: 90,
-        hygieneScore: 82,
+        available: true,
         issuesNeedAttention: [
           {
             category: 'Duplication',
@@ -106,7 +104,7 @@ describe('writeProjectHealthDossier', () => {
     const markdown = readFileSync(result.markdownPath, 'utf-8');
     expect(markdown).not.toContain('Generated:');
     expect(markdown).not.toContain(projectRoot);
-    expect(markdown).toContain('Health score: 82 (risk 90, hygiene 82)');
+    expect(markdown).toContain('Health report: available; findings require source confirmation');
     expect(markdown).toContain('## Items That Need Attention');
     expect(markdown).toContain('Duplication: Merge repeated setup logic');
     expect(markdown).toContain('confirmation unconfirmed; safe to start no');
@@ -114,7 +112,7 @@ describe('writeProjectHealthDossier', () => {
     expect(markdown).toContain('BLOCKED java');
 
     const json = JSON.parse(readFileSync(result.jsonPath, 'utf-8')) as ProjectSetupReport;
-    expect(json.health.score).toBe(82);
+    expect(json.health.available).toBe(true);
     expect(json.projectRoot).toBe('.');
     expect(json.dbPath).toBe('~/.cache/scip-query/projects/example/index.db');
     expect(json.healthDossier?.markdownPath).toBe('docs/scip-query/health-dossier.md');

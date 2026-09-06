@@ -1,0 +1,660 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "context",
+  "operationRole": "repository-observation",
+  "evidence": "mixed",
+  "args": [
+    "runJob"
+  ],
+  "options": {
+    "impactDepth": 3,
+    "referenceDepth": 3,
+    "limit": 20,
+    "json": true,
+    "session": true,
+    "jsonOutput": "/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/full-tool-audit/2026-09-05/followup/final/context.json"
+  },
+  "result": {
+    "matched": {
+      "symbol": true,
+      "file": true,
+      "module": true
+    },
+    "resolved": {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+      "shortName": "src:service:runner:runJob()",
+      "relativePath": "src/service/runner.ts"
+    },
+    "otherMatches": [],
+    "totalMatches": 1,
+    "target": "runJob",
+    "history": {
+      "available": true,
+      "file": "src/service/runner.ts",
+      "churn": {
+        "changes": 1,
+        "fixChanges": 0,
+        "lastChangedAt": 1788664439
+      },
+      "coChangePartners": [],
+      "suppressionsInFile": 0
+    },
+    "trace": {
+      "definitions": [
+        {
+          "relativePath": "src/service/runner.ts",
+          "startLine": 2,
+          "endLine": 7,
+          "signature": "function runJob(): number",
+          "source": "export function runJob() {\n  const store = new Store();\n  const total = sum(1, 2);\n  store.write(total);\n  return total > 0 ? total : 0;\n}"
+        }
+      ],
+      "referencedBy": [
+        {
+          "relativePath": "src/consumer.ts",
+          "line": 0,
+          "enclosingSymbol": "scip-typescript npm accuracy-followup 1.0.0 src/`consumer.ts`/",
+          "enclosingShort": "src:consumer"
+        },
+        {
+          "relativePath": "src/consumer.ts",
+          "line": 1,
+          "enclosingSymbol": "scip-typescript npm accuracy-followup 1.0.0 src/`consumer.ts`/main().",
+          "enclosingShort": "src:consumer:main()"
+        }
+      ]
+    },
+    "callGraph": {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+      "shortName": "src:service:runner:runJob()",
+      "callers": [
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`consumer.ts`/main().",
+          "shortName": "src:consumer:main()",
+          "file": "src/consumer.ts"
+        }
+      ],
+      "callees": [
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#",
+          "shortName": "src:core:store:Store",
+          "file": "src/core/store.ts"
+        },
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`math.ts`/sum().",
+          "shortName": "src:core:math:sum()",
+          "file": "src/core/math.ts"
+        },
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#write().",
+          "shortName": "src:core:store:Store:write()",
+          "file": "src/core/store.ts"
+        }
+      ],
+      "callerEvidence": [
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`consumer.ts`/main().",
+          "shortName": "src:consumer:main()",
+          "file": "src/consumer.ts",
+          "relationship": "resolved-call",
+          "evidenceStrength": "exact",
+          "evidenceSource": "scip-occurrence"
+        }
+      ],
+      "calleeEvidence": [
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#",
+          "shortName": "src:core:store:Store",
+          "file": "src/core/store.ts",
+          "relationship": "resolved-call",
+          "evidenceStrength": "exact",
+          "evidenceSource": "scip-occurrence"
+        },
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`math.ts`/sum().",
+          "shortName": "src:core:math:sum()",
+          "file": "src/core/math.ts",
+          "relationship": "resolved-call",
+          "evidenceStrength": "exact",
+          "evidenceSource": "scip-occurrence"
+        },
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#write().",
+          "shortName": "src:core:store:Store:write()",
+          "file": "src/core/store.ts",
+          "relationship": "resolved-call",
+          "evidenceStrength": "exact",
+          "evidenceSource": "scip-occurrence"
+        }
+      ],
+      "coverage": {
+        "scope": "indexed-static-call-graph",
+        "blindSpots": [
+          "unresolved dynamic dispatch and reflection",
+          "external or unindexed callees without a resolved symbol identity",
+          "SCIP chunk co-occurrence is retained only as candidate call evidence"
+        ]
+      }
+    },
+    "complexity": {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+      "shortName": "src:service:runner:runJob()",
+      "relativePath": "src/service/runner.ts",
+      "startLine": 2,
+      "endLine": 7,
+      "loc": 6,
+      "branches": 1,
+      "estimateBasis": "ast",
+      "metricRules": "typescript-function-local-v1",
+      "cyclomaticEstimate": 2,
+      "calleeCount": 3,
+      "candidateCalleeCount": 0,
+      "fanIn": 1,
+      "fanOut": 3
+    },
+    "referenceNeighborhood": {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+      "shortName": "src:service:runner:runJob()",
+      "relativePath": "src/service/runner.ts",
+      "definitionSites": [
+        {
+          "file": "src/service/runner.ts",
+          "line": 2
+        }
+      ],
+      "referenceSites": [
+        {
+          "file": "src/consumer.ts",
+          "line": 0,
+          "enclosingSymbol": "scip-typescript npm accuracy-followup 1.0.0 src/`consumer.ts`/",
+          "enclosingShort": "src:consumer"
+        },
+        {
+          "file": "src/consumer.ts",
+          "line": 1,
+          "enclosingSymbol": "scip-typescript npm accuracy-followup 1.0.0 src/`consumer.ts`/main().",
+          "enclosingShort": "src:consumer:main()"
+        }
+      ],
+      "outgoingCalls": [
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#",
+          "shortName": "src:core:store:Store",
+          "file": "src/core/store.ts"
+        },
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`math.ts`/sum().",
+          "shortName": "src:core:math:sum()",
+          "file": "src/core/math.ts"
+        },
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#write().",
+          "shortName": "src:core:store:Store:write()",
+          "file": "src/core/store.ts"
+        }
+      ],
+      "incomingCalls": [
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`consumer.ts`/main().",
+          "shortName": "src:consumer:main()",
+          "file": "src/consumer.ts"
+        }
+      ]
+    },
+    "calleeReachability": {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+      "shortName": "src:service:runner:runJob()",
+      "direction": "backward",
+      "connectedSymbols": [
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#",
+          "shortName": "src:core:store:Store",
+          "file": "src/core/store.ts",
+          "relationship": "referenced within definition (callee)"
+        },
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`math.ts`/sum().",
+          "shortName": "src:core:math:sum()",
+          "file": "src/core/math.ts",
+          "relationship": "referenced within definition (callee)"
+        },
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#write().",
+          "shortName": "src:core:store:Store:write()",
+          "file": "src/core/store.ts",
+          "relationship": "referenced within definition (callee)"
+        }
+      ]
+    },
+    "referenceOwners": {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+      "shortName": "src:service:runner:runJob()",
+      "direction": "forward",
+      "connectedSymbols": [
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`consumer.ts`/",
+          "shortName": "src:consumer",
+          "file": "src/consumer.ts",
+          "relationship": "references target at src/consumer.ts:1"
+        },
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`consumer.ts`/main().",
+          "shortName": "src:consumer:main()",
+          "file": "src/consumer.ts",
+          "relationship": "references target at src/consumer.ts:2"
+        }
+      ]
+    },
+    "affected": [
+      {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`consumer.ts`/main().",
+        "shortName": "src:consumer:main()",
+        "file": "src/consumer.ts",
+        "depth": 1
+      }
+    ],
+    "changeSurface": {
+      "file": "src/service/runner.ts",
+      "symbols": [
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/",
+          "shortName": "src:service:runner",
+          "startLine": 0,
+          "endLine": 8,
+          "externalConsumers": 1,
+          "externalConsumerRiskLevel": "medium",
+          "riskLevel": "medium",
+          "riskReasons": [
+            {
+              "kind": "external-consumers",
+              "detail": "1 external consumer"
+            }
+          ]
+        },
+        {
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+          "shortName": "src:service:runner:runJob()",
+          "startLine": 2,
+          "endLine": 7,
+          "externalConsumers": 1,
+          "externalConsumerRiskLevel": "medium",
+          "riskLevel": "medium",
+          "riskReasons": [
+            {
+              "kind": "external-consumers",
+              "detail": "1 external consumer"
+            }
+          ]
+        }
+      ],
+      "totalExternalConsumers": 2,
+      "fileRisk": {
+        "operationalRoot": false,
+        "publishedApi": false,
+        "coverage": "complete",
+        "reasons": []
+      }
+    },
+    "deps": [
+      {
+        "relativePath": "src/core/math.ts",
+        "edgeBasis": "symbol-references",
+        "evidence": "cross-file SCIP references plus resolved source imports"
+      },
+      {
+        "relativePath": "src/core/store.ts",
+        "edgeBasis": "symbol-references",
+        "evidence": "cross-file SCIP references plus resolved source imports"
+      }
+    ],
+    "rdeps": [
+      {
+        "relativePath": "src/consumer.ts",
+        "edgeBasis": "symbol-references",
+        "evidence": "cross-file SCIP references plus resolved source imports"
+      }
+    ],
+    "system": {
+      "files": [
+        "src/service/runner.ts"
+      ],
+      "symbols": [
+        {
+          "startLine": 0,
+          "endLine": 8,
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/",
+          "shortName": "src:service:runner",
+          "signature": "module \"runner.ts\"",
+          "enclosingSymbol": null
+        },
+        {
+          "startLine": 2,
+          "endLine": 7,
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+          "shortName": "src:service:runner:runJob()",
+          "signature": "function runJob(): number",
+          "enclosingSymbol": null
+        }
+      ],
+      "dependsOn": [
+        "src/core/math.ts",
+        "src/core/store.ts"
+      ],
+      "dependedOnBy": [
+        "src/consumer.ts"
+      ]
+    },
+    "surface": [
+      {
+        "consumer": "src/consumer.ts",
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/",
+        "shortName": "src:service:runner"
+      },
+      {
+        "consumer": "src/consumer.ts",
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+        "shortName": "src:service:runner:runJob()"
+      },
+      {
+        "consumer": "src/service/runner.ts",
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+        "shortName": "src:service:runner:runJob()"
+      }
+    ],
+    "reuseCandidates": [],
+    "affectedConsumerReuse": {
+      "candidates": [],
+      "coverage": {
+        "totalConsumers": 2,
+        "analyzedConsumers": 2,
+        "omittedConsumers": 0,
+        "perConsumerSearchLimit": 10,
+        "perConsumerCandidateLimit": 3,
+        "candidateLimit": 8,
+        "returnedCandidates": 0
+      }
+    },
+    "sourcePacket": {
+      "slices": [
+        {
+          "role": "target",
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+          "shortName": "runJob",
+          "file": "src/service/runner.ts",
+          "startLine": 2,
+          "endLine": 7,
+          "source": "export function runJob() {\n  const store = new Store();\n  const total = sum(1, 2);\n  store.write(total);\n  return total > 0 ? total : 0;\n}",
+          "omittedLines": 0
+        },
+        {
+          "role": "consumer",
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`consumer.ts`/",
+          "shortName": "src:consumer",
+          "file": "src/consumer.ts",
+          "startLine": 0,
+          "endLine": 2,
+          "source": "import { runJob } from './service/runner';\nexport function main() { return runJob(); }\n",
+          "omittedLines": 0,
+          "focusLines": [
+            0
+          ]
+        },
+        {
+          "role": "consumer",
+          "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`consumer.ts`/main().",
+          "shortName": "src:consumer:main()",
+          "file": "src/consumer.ts",
+          "startLine": 1,
+          "endLine": 1,
+          "source": "export function main() { return runJob(); }",
+          "omittedLines": 0,
+          "focusLines": [
+            1
+          ]
+        }
+      ],
+      "candidateSlices": 3,
+      "omittedSlices": 0,
+      "maxSlices": 24,
+      "maxLinesPerSlice": 200,
+      "maxTotalLines": 600,
+      "targetLineLimit": 200,
+      "consumerContextLines": 12,
+      "reuseLineLimit": 80
+    },
+    "warnings": []
+  },
+  "coverage": {
+    "complete": false,
+    "totalKnown": false,
+    "returned": 36
+  },
+  "agentResult": {
+    "target": "runJob",
+    "matched": {
+      "symbol": true,
+      "file": true,
+      "module": true
+    },
+    "counts": {
+      "definitions": 1,
+      "references": 2,
+      "callers": 1,
+      "callees": 3,
+      "outgoingCalls": 3,
+      "incomingCalls": 1,
+      "calleeReachability": 3,
+      "referenceOwners": 2,
+      "affected": 1,
+      "dependencies": 2,
+      "reverseDependencies": 1,
+      "moduleFiles": 1,
+      "reuseCandidates": 0,
+      "affectedConsumersAnalyzed": 2,
+      "consumerReuseCandidates": 0,
+      "externalSurfaceUses": 3,
+      "coChangePartners": 0,
+      "sourceSlices": 3
+    },
+    "warnings": [],
+    "changeSurface": {
+      "file": "src/service/runner.ts",
+      "totalExternalConsumers": 2,
+      "fileRisk": {
+        "operationalRoot": false,
+        "publishedApi": false,
+        "coverage": "complete",
+        "reasons": []
+      },
+      "riskCounts": {
+        "high": 0,
+        "medium": 2,
+        "low": 0
+      }
+    },
+    "history": {
+      "available": true,
+      "file": "src/service/runner.ts",
+      "churn": {
+        "changes": 1,
+        "fixChanges": 0,
+        "lastChangedAt": 1788664439
+      },
+      "coChangePartners": [],
+      "suppressionsInFile": 0
+    },
+    "affectedConsumerReuse": {
+      "candidates": [],
+      "coverage": {
+        "totalConsumers": 2,
+        "analyzedConsumers": 2,
+        "omittedConsumers": 0,
+        "perConsumerSearchLimit": 10,
+        "perConsumerCandidateLimit": 3,
+        "candidateLimit": 8,
+        "returnedCandidates": 0
+      }
+    }
+  },
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "operationRole": "repository-observation",
+    "receipt": {
+      "schemaVersion": 2,
+      "observedAt": "2026-09-06T03:43:16.710Z",
+      "facts": {
+        "workspaceInstance": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:workspace-instance",
+            "version": 1
+          },
+          "digest": "79bdf8eb98bfe2ced4a15e01f73803092ffaad71c553be86cf075a087d708ce9"
+        },
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          }
+        },
+        {
+          "kind": "live-workspace",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:workspace-instance",
+              "version": 1
+            },
+            "digest": "79bdf8eb98bfe2ced4a15e01f73803092ffaad71c553be86cf075a087d708ce9"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        },
+        {
+          "source": "live-workspace",
+          "kind": "not-established"
+        }
+      ],
+      "diagnostics": {
+        "clean": false,
+        "headCommit": "f28ecc119966b2ef4c341a7acd97c330973a92c9",
+        "treeOid": "d8f0952781eb5a5d17b19994295902cf0e015410"
+      }
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "mixed",
+      "coverage": {
+        "complete": false,
+        "totalKnown": false,
+        "returned": 36
+      },
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "mixed",
+        "coverage": {
+          "state": "unknown",
+          "returned": 36,
+          "totalKnown": false
+        },
+        "producerValidation": {
+          "status": "not-evaluated"
+        },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": [
+            "collaborationDomain",
+            "wholeContent",
+            "observationStability"
+          ],
+          "reasons": [
+            "collaborationDomain:unknown",
+            "wholeContent:unknown",
+            "observationStability:unknown",
+            "leftIndexAlignment:unknown",
+            "rightIndexAlignment:unknown"
+          ]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": [
+            "No repository action policy was supplied for this claim."
+          ]
+        },
+        "families": [
+          {
+            "id": "compiler-graph",
+            "selector": "trace",
+            "origin": {
+              "kind": "fixed",
+              "origin": "compiler-graph"
+            }
+          },
+          {
+            "id": "reference-neighborhood",
+            "selector": "referenceNeighborhood",
+            "origin": {
+              "kind": "fixed",
+              "origin": "semantic-analysis"
+            }
+          },
+          {
+            "id": "change-history",
+            "selector": "history",
+            "origin": {
+              "kind": "fixed",
+              "origin": "change-history"
+            }
+          },
+          {
+            "id": "planning-notes",
+            "selector": "warnings[]",
+            "origin": {
+              "kind": "fixed",
+              "origin": "heuristic"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

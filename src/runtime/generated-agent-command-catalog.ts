@@ -59,8 +59,8 @@ export const GENERATED_EXPLORATION_CONTROLS = [
     "command": "entrypoints [text]",
     "question": "Which detected external roots or entry-surface candidates match this text?",
     "requiredInput": "Optional exact text to filter candidates; otherwise the current indexed repository.",
-    "returnedFact": "entry symbols with files, confidence, evidence, and indexed caller counts",
-    "evidenceCeiling": "Source/compiler-grounded entry evidence and indexed caller counts; exported-only candidates remain candidates.",
+    "returnedFact": "entry symbols with files, confidence, evidence, and observed static caller counts",
+    "evidenceCeiling": "Source/compiler-grounded entry evidence and observed static caller counts; exported-only candidates remain candidates.",
     "nonClaim": "A package-public export or zero indexed callers is an entry candidate, not proof of runtime ingress. Entry classification does not establish that the callable executes.",
     "outputCost": "bounded",
     "contrasts": [
@@ -86,7 +86,6 @@ export const GENERATED_EXPLORATION_CONTROLS = [
     "contrasts": [
       "refs: refs enumerates direct reference sites; evidence traverses explicitly selected typed relationships.",
       "call-graph: call-graph specializes in static calls; evidence can combine execution with other selected families.",
-      "value-flow: value-flow specializes in proved transfers; evidence projects bounded dataflow alongside other families.",
       "dependence-slice: dependence-slice computes a program-dependence slice; evidence performs bounded graph projection."
     ],
     "gapClosingCommands": [
@@ -116,7 +115,7 @@ export const GENERATED_EXPLORATION_CONTROLS = [
     "command": "code <selectors...>",
     "question": "What exact source defines these symbols, ranges, or file surfaces?",
     "requiredInput": "One or more exact symbols, file:line ranges, or file paths.",
-    "returnedFact": "per-selector resolution, complete definition source, exact ranges with statically attributed same-file call closure, file export surfaces, omitted-local ledgers, and line ranges",
+    "returnedFact": "per-selector resolution, complete definition source, exact ranges, optional same-file call closure, file export surfaces, and omitted-local ledgers",
     "evidenceCeiling": "Exact current source bytes for every resolved selector, with omitted file-local constructs disclosed.",
     "nonClaim": "Source materialization does not establish callers, runtime reachability, or task relevance by itself.",
     "outputCost": "potentially-large",

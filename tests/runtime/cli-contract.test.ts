@@ -27,12 +27,14 @@ import {
 import { inspectSearchLimitOption, inspectViewOption } from '../../src/runtime/query-commands/navigation.js';
 
 const PRIVATE_QUERY_MODULES = [
+  'trace',
+  'legacy-source-evidence',
   'binding-closure',
   'boundary-evidence',
   'callable-contracts',
   'code-result-json',
   'coverage-contracts',
-  'outcome-events',
+  'system-map',
   'dead-exclusions',
   'documentation-policy',
   'doc-citation-context',
@@ -43,7 +45,13 @@ const PRIVATE_QUERY_MODULES = [
   'health-types',
   'newly-unreferenced-residue',
   'public-query-entries',
+  'service-queries',
   'query-utils',
+  'source-findings',
+  'source-finding-contract',
+  'source-dependencies',
+  'source-modules',
+  'source-suppressions',
   'source-inspection-selection',
   'source-search-batch',
   'source-snippet',
@@ -55,6 +63,13 @@ const PRIVATE_QUERY_MODULES = [
 ] as const;
 
 const PRIVATE_QUERY_SOURCE_PATHS = {
+  trace: 'src/queries/navigation/trace.ts',
+  'legacy-source-evidence': 'src/queries/navigation/evidence.ts',
+  'source-findings': 'src/queries/health/source-findings.ts',
+  'source-finding-contract': 'src/queries/health/source-finding-contract.ts',
+  'source-dependencies': 'src/queries/health/source-dependencies.ts',
+  'source-modules': 'src/queries/health/source-modules.ts',
+  'source-suppressions': 'src/queries/health/source-suppressions.ts',
   'binding-closure': 'src/queries/navigation/binding-closure.ts',
   'boundary-evidence': 'src/queries/cleanup/boundary-evidence.ts',
   'graph-evidence': 'src/queries/graph/graph-evidence.ts',
@@ -71,8 +86,9 @@ const PRIVATE_QUERY_SOURCE_PATHS = {
   'health-report': 'src/queries/health/health-report.ts',
   'health-types': 'src/queries/health/health-types.ts',
   'newly-unreferenced-residue': 'src/queries/impact/newly-unreferenced-residue.ts',
-  'outcome-events': 'src/queries/compatibility/outcome-events.ts',
+  'system-map': 'src/queries/graph/system-map.ts',
   'public-query-entries': 'src/queries/public-query-entries.ts',
+  'service-queries': 'src/queries/service-queries.ts',
   'query-utils': 'src/queries/query-utils.ts',
   'source-inspection-selection': 'src/queries/navigation/source-inspection-selection.ts',
   'source-search-batch': 'src/queries/navigation/source-search-batch.ts',
@@ -111,13 +127,13 @@ describe('CLI contract', () => {
 
   it('keeps passive registered commands out of demand-started watcher policy', () => {
     const commandIds = new Set(commandDescriptors.map((descriptor) => descriptor.id));
-    const passiveCommands = ['doctor', 'install-skills', 'status'];
+    const passiveCommands = ['doctor', 'install-skills', 'status', 'health', 'review'];
 
     expect(passiveCommands.every((commandName) => commandIds.has(commandName))).toBe(true);
     for (const commandName of passiveCommands) {
       expect(watchServiceAutoStartEligible(commandName, {}), commandName).toBe(false);
     }
-    for (const commandName of ['refs', 'health', 'context']) {
+    for (const commandName of ['refs', 'context']) {
       expect(commandIds.has(commandName), commandName).toBe(true);
       expect(watchServiceAutoStartEligible(commandName, {}), commandName).toBe(true);
     }
@@ -144,7 +160,7 @@ describe('CLI contract', () => {
     );
   });
 
-  it('presents evidence as one graph-only control and hides compatibility commands', () => {
+  it('presents evidence as one graph-only control and removes retired compatibility commands', () => {
     const evidenceHelp = command('evidence').helpInformation();
     expect(evidenceHelp).toContain('--edge <family>');
     expect(evidenceHelp).toContain('--direction <direction>');
@@ -162,9 +178,15 @@ describe('CLI contract', () => {
       'deep-chains',
       'convergence',
       'evidence-source',
+      'tla',
+      'wrapper-candidates',
+      'stale-abstractions',
+      'complexity-hotspots',
+      'reference-neighborhood',
+      'reference-reachability',
     ]) {
       expect(defaultHelp).not.toMatch(new RegExp(`^\\s+${compatibilityCommand}(?:\\s|$)`, 'mu'));
-      expect(commandDescriptors.find((descriptor) => descriptor.id === compatibilityCommand)?.hidden).toBe(true);
+      expect(commandDescriptors.find((descriptor) => descriptor.id === compatibilityCommand)).toBeUndefined();
     }
   });
 
@@ -324,10 +346,6 @@ describe('CLI contract', () => {
     expect(descriptorSemanticContract(commandDescriptors.find((entry) => entry.id === 'code')!)).toMatchObject({
       kind: 'source-read',
     });
-    expect(descriptorSemanticContract(commandDescriptors.find((entry) => entry.id === 'anchors')!)).toMatchObject({
-      kind: 'locator',
-      compatibility: 'deprecated',
-    });
   });
 
   it('declares contrasts for each canonical exploration control', () => {
@@ -341,16 +359,11 @@ describe('CLI contract', () => {
     const health = commandDescriptors.find((descriptor) => descriptor.id === 'health')!.agent!.operation;
     const setup = commandDescriptors.find((descriptor) => descriptor.id === 'setup')!.agent!.operation;
     const suppress = commandDescriptors.find((descriptor) => descriptor.id === 'suppress')!.agent!.operation;
-    const tla = commandDescriptors.find((descriptor) => descriptor.id === 'tla')!.agent!.operation;
 
     expect(resolveCommandOperationRole(health, { args: [], options: {} })).toBe('repository-observation');
     expect(resolveCommandOperationRole(health, { args: [], options: { writeBaseline: true } })).toBe('composite');
     expect(resolveCommandOperationRole(setup, { args: [], options: {} })).toBe('composite');
     expect(resolveCommandOperationRole(suppress, { args: ['finding-id'], options: {} })).toBe('mutation');
-    expect(resolveCommandOperationRole(tla, { args: ['scaffold', 'src/a.ts'], options: {} })).toBe('mutation');
-    expect(resolveCommandOperationRole(tla, { args: ['verify', 'specs/A.tla'], options: {} })).toBe(
-      'repository-observation',
-    );
   });
 
   it('rejects a role that changes between pre-execution selection and result rendering', () => {
@@ -392,6 +405,14 @@ describe('CLI contract', () => {
     expect(docs.find((entry) => entry.id === 'health')?.options).toEqual([
       '-s, --scope <path>',
       '--full',
+      '--indexed',
+      '--coverage <path>',
+      '--include-tests',
+      '--include-references',
+      '--include-generated',
+      '--max-files <n>',
+      '--limit <n>',
+      '--check',
       '--baseline',
       '--write-baseline',
       '--json',
@@ -457,6 +478,7 @@ describe('CLI contract', () => {
       'context',
       'diff-impact',
       'health',
+      'review',
     ]);
     expect(mixed.every((entry) => (entry.claims.families?.length ?? 0) > 0)).toBe(true);
   });
@@ -508,17 +530,15 @@ describe('CLI contract', () => {
     expect(exploration).toContain('scip-query search');
     expect(exploration).toContain('scip-query inspect');
     expect(exploration).toContain('scip-query evidence');
-    expect(exploration).not.toContain('scip-query context');
-    expect(exploration).toContain('scip-query health --full');
-    expect(exploration).not.toMatch(/diff-gate|Stop hook|Gherkin/i);
-    expect(exploration).toContain('primary exploration surface for tracked repository text');
-    expect(exploration).toContain('Treat its commands as controls, not a checklist');
-    expect(exploration).toContain('make each query answer a distinct repository question');
-    expect(exploration).toContain('Thoroughness means understanding the relevant system end to end');
-    expect(exploration).toContain('do not select one by path, naming, apparent recency, or result order');
-    expect(exploration).toContain('Native text and file tools expose matches and slices');
-    expect(exploration).toContain('load `$scip-explore` alongside this skill');
-    expect(exploration).not.toMatch(/evidence ledger|final-audit|proof obligation/i);
+    expect(exploration).toContain('scip-query context');
+    expect(exploration).toContain('scip-query review --base');
+    expect(exploration).toContain('health --indexed');
+    expect(exploration).toContain('write a concise plan');
+    expect(exploration).toContain('does not create another approval gate');
+    expect(exploration).toContain('Respect disabled watching');
+    expect(exploration).toContain('unavailable, never zero');
+    expect(exploration).toContain('Load `$scip-explore`');
+    expect(exploration).not.toMatch(/Stop hook|Gherkin/i);
     expect(planning).toContain('scip-query evidence');
     expect(planning).toContain('Treat its commands as controls, not a checklist');
     expect(planning).toContain('When several implementations match');

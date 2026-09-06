@@ -1,0 +1,25 @@
+{
+  "head": "f28ecc119966b2ef4c341a7acd97c330973a92c9",
+  "files": {
+    "src/calls.ts": "export function helper(value: number) { return value + 1; }\nexport function returnedReference() { return helper; }\nexport function arrayReference() { return [helper]; }\nexport function actualCall() { return helper(2); }\nexport function nestedOwner() {\n  function nested() { return helper(3); }\n  return nested;\n}\nexport function nullish(value: number | null) { return value ?? 0; }\nexport function nestedMetric(value: number) {\n  function nested(x: number) { if (x) return 1; return 0; }\n  return nested;\n}\nexport function sameLineBranches(x: boolean) { if (x) return 1; return 0; }\n",
+    "src/new.ts": "export function newFunction(value: number) { return value > 0 ? value : 0; }\n",
+    "src/first.ts": "export function sharedName(value: number) { return value; }\n",
+    "src/consumer.ts": "import { runJob } from './service/runner';\nexport function main() { return runJob(); }\n",
+    "src/flow.ts": "export function aggregateAlias(state: { value: number }, input: number) {\n  const holder = { ref: state };\n  holder.ref.value = input;\n  return state.value;\n}\nexport function arrayAlias(state: { value: number }, input: number) {\n  const holder = [state];\n  holder[0].value = input;\n  return state.value;\n}\nexport function deleteMutation(state: { value?: number }, input: number) {\n  state.value = input;\n  delete state.value;\n  return state.value;\n}\nexport function compoundLogical(state: { value: number }, input: number) {\n  let value = state.value;\n  value ||= input;\n  return value;\n}\nexport function mutate(state: { value: number }, input: number) { state.value = input; }\nexport function callMutation(state: { value: number }, input: number) {\n  mutate(state, input);\n  return state.value;\n}\n",
+    "src/second.ts": "export function sharedName(value: number) { if (value) return 1; return 0; }\n",
+    "src/core/math.ts": "export function sum(left: number, right: number) { return left + right; }\n",
+    "src/core/store.ts": "export class Store {\n  value = 0;\n  read() { return this.value; }\n  write(value: number) { this.value = value; }\n}\n",
+    "src/cycle/b.ts": "import { readA } from './a';\nexport function readB(depth: number): number { return depth > 0 ? readA(depth - 1) : 0; }\n",
+    "src/cycle/a.ts": "import { readB } from './b';\nexport function readA(depth: number): number { return depth > 0 ? readB(depth - 1) : 0; }\n",
+    "src/duplicate/b.ts": "export function formatTwo(value: number) {\n  const rounded = Math.round(value);\n  const label = rounded.toString();\n  return label.padStart(4, \"0\");\n}\n",
+    "src/duplicate/a.ts": "export function formatOne(value: number) {\n  const rounded = Math.round(value);\n  const label = rounded.toString();\n  return label.padStart(4, \"0\");\n}\n",
+    "src/service/runner.ts": "import { sum } from '../core/math';\nimport { Store } from '../core/store';\nexport function runJob() {\n  const store = new Store();\n  const total = sum(1, 2);\n  store.write(total);\n  return total > 0 ? total : 0;\n}\n",
+    "package.json": "{\"name\": \"accuracy-followup\", \"version\": \"1.0.0\", \"private\": true}",
+    "tsconfig.json": "{\"compilerOptions\": {\"target\": \"ES2022\", \"module\": \"CommonJS\", \"strict\": true}, \"include\": [\"src/**/*.ts\"]}",
+    ".scipquery.json": "{\n  \"watch\": {\n    \"enabled\": false\n  },\n  \"architecture\": {\n    \"boundaries\": [\n      {\n        \"name\": \"core\",\n        \"paths\": [\n          \"src/core/**\"\n        ]\n      },\n      {\n        \"name\": \"service\",\n        \"paths\": [\n          \"src/service/**\"\n        ]\n      },\n      {\n        \"name\": \"cycle\",\n        \"paths\": [\n          \"src/cycle/**\"\n        ]\n      }\n    ],\n    \"allowedDependencies\": {\n      \"core\": [],\n      \"service\": [\n        \"core\"\n      ],\n      \"cycle\": []\n    }\n  }\n}\n"
+  },
+  "baselineRunner": "import { sum } from '../core/math';\nimport { Store } from '../core/store';\nexport function runJob() {\n  const store = new Store();\n  const total = sum(1, 2);\n  store.write(total);\n  return total;\n}\n",
+  "untracked": [
+    "src/new.ts"
+  ]
+}

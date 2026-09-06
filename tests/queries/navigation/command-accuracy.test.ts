@@ -11,12 +11,9 @@ import { byKind } from '../../../src/queries/navigation/by-kind.js';
 import { callGraph } from '../../../src/queries/navigation/call-graph.js';
 import { changeSurface } from '../../../src/queries/impact/change-surface.js';
 import { code } from '../../../src/queries/navigation/code.js';
-import { convergence } from '../../../src/queries/cleanup/convergence.js';
 import { complexity } from '../../../src/queries/quality/complexity.js';
-import { dataflow } from '../../../src/queries/navigation/dataflow.js';
 import { dead } from '../../../src/queries/cleanup/dead.js';
 import { fanIn } from '../../../src/queries/graph/fan.js';
-import { health } from '../../../src/queries/health/health.js';
 import { importedBy, imports, unusedImports } from '../../../src/queries/navigation/imports.js';
 import { members } from '../../../src/queries/navigation/members.js';
 import { outline } from '../../../src/queries/navigation/outline.js';
@@ -27,7 +24,6 @@ import {
   similarAllCount,
   similarConsolidationPlan,
 } from '../../../src/queries/cleanup/similar.js';
-import { staleAbstractions } from '../../../src/queries/cleanup/stale-abstractions.js';
 import { symbols } from '../../../src/queries/navigation/symbols.js';
 import { system } from '../../../src/queries/navigation/system.js';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
@@ -214,7 +210,7 @@ describe('command accuracy fixes', () => {
     ]);
   });
 
-  it('keeps similar/convergence focused on functions and accepts short names from similar output', () => {
+  it('keeps similar consolidation focused on functions and accepts short names from similar output', () => {
     const similarOptions = {
       minSimilarity: 0.3,
       minCallees: 2,
@@ -223,16 +219,12 @@ describe('command accuracy fixes', () => {
     const similarResults = similarAll(db, similarOptions);
     const similarCount = similarAllCount(db, similarOptions);
     const plan = similarConsolidationPlan(db, 'src:flow:alpha()', 'src:flow:beta()');
-    const convergenceResult = convergence(db, 'src:flow:alpha()', 'src:flow:beta()');
 
     expect(similarCount).toBe(similarResults.length);
     expect(similarResults.some((result) => result.shortNameA === 'src:flow' || result.shortNameB === 'src:flow')).toBe(
       false,
     );
-    expect(convergenceResult).not.toBeNull();
     expect(plan).not.toBeNull();
-    expect(convergenceResult!.similarity).toBe(plan!.similarity);
-    expect(convergenceResult!.sharedCallees).toEqual(plan!.sharedEvidence);
     expect(plan!.similarityBasis).toMatch(/^(callees|source-tokens)$/);
   });
 
@@ -483,35 +475,11 @@ describe('command accuracy fixes', () => {
   });
 
   it('keeps the similar plan conservative when identical evidence does not prove equivalence', () => {
-    const convergenceResult = convergence(db, 'isWorkerEntrySurface', 'isBarrelFile');
     const plan = similarConsolidationPlan(db, 'isWorkerEntrySurface', 'isBarrelFile');
 
-    expect(convergenceResult).not.toBeNull();
     expect(plan).not.toBeNull();
-    expect(convergenceResult!.similarity).toBe(plan!.similarity);
-    expect(convergenceResult!.sharedCallees).toEqual(plan!.sharedEvidence);
-    expect(convergenceResult!.consolidationStrategy).toContain('verify signatures');
-    expect(convergenceResult!.consolidationStrategy).not.toContain('replace the other directly');
-  });
-
-  it('keeps stale-abstractions aligned with health filtering', () => {
-    const stale = staleAbstractions(db, { minLoc: 1, limit: 20 });
-    const report = health(db);
-    const staleAction = report.actions.find((action) => action.category === 'Stale abstractions');
-
-    // PathFilter lives in a contracts file: contract modules define types for
-    // other modules by design, so single-consumer is their normal state — only
-    // UNUSED contract types are stale. InstallMethod (0 consumers) stays.
-    expect(stale.map((result) => result.shortName)).toEqual(['src:types:InstallMethod']);
-    expect(stale.map((result) => result.shortName)).not.toContain('src:contracts:PathFilter');
-    expect(report.findings.staleTypes).toBe(stale.length);
-    expect(staleAction?.count).toBe(stale.length);
-    expect(staleAction?.description).toContain('1 unused');
-    expect(staleAction?.description).toContain('review public, runtime-registration, and ownership evidence');
-    expect(report.scoreBreakdown.find((deduction) => deduction.axis === 'stale-abstractions')).toMatchObject({
-      points: 1,
-      detail: expect.stringContaining('1 unused stale abstraction(s); 0 single-consumer signal(s)'),
-    });
+    expect(plan!.consolidationStrategy).toContain('verify signatures');
+    expect(plan!.consolidationStrategy).not.toContain('replace the other directly');
   });
 
   it('does not call data members dead code unless member analysis is explicitly requested', () => {
@@ -649,7 +617,8 @@ describe('command accuracy fixes', () => {
         expect(graph?.callers).toEqual([]);
 
         const result = complexity(callDb, 'collect');
-        expect(result?.calleeCount).toBe(1);
+        expect(result?.calleeCount).toBe(0);
+        expect(result?.candidateCalleeCount).toBe(1);
 
         const bottleneckResults = bottlenecks(callDb, { minFanIn: 0, minFanOut: 1, limit: 20 });
         expect(bottleneckResults.map((row) => row.shortName)).toContain('src:query:collect()');
@@ -657,12 +626,9 @@ describe('command accuracy fixes', () => {
         expect(bottleneckResults.map((row) => row.shortName)).not.toContain('src:db:Store');
 
         expect(refs(callDb, 'collect')).toEqual([
-          { relativePath: 'src/consumer.ts', line: 0 },
-          { relativePath: 'src/consumer.ts', line: 4 },
+          { relativePath: 'src/consumer.ts', line: 0, evidence: 'source-or-chunk-candidate' },
+          { relativePath: 'src/consumer.ts', line: 4, evidence: 'source-or-chunk-candidate' },
         ]);
-
-        const flow = dataflow(callDb, 'collect');
-        expect(flow?.definitionSites).toEqual([{ file: 'src/query.ts', line: 2 }]);
       } finally {
         callDb.close();
       }

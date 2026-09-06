@@ -1,9 +1,6 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, relative } from 'node:path';
 import type { DeadOptions } from '../../../domain/types.js';
 import type { InvocationCoverage } from '../../command-kit/command-descriptor-types.js';
 import * as queries from '../../../queries/index.js';
-import { resolveProjectPath } from '../../../tla/model-contract.js';
 import { resolveProjectRoot } from '../../cli-context.js';
 import {
   cleanupVerificationFailures,
@@ -15,10 +12,8 @@ import { renderHeuristicNotice } from '../../cli-support.js';
 import {
   booleanOptionValue,
   budgetedDbCommand,
-  budgetedGroupedByFileCommand,
   budgetedListCommand,
   budgetedReportCommand,
-  budgetedTableCommand,
   dbCommand,
   definedLimitOption,
   definedNumberOption,
@@ -165,55 +160,6 @@ export const handleUnusedImports = budgetedListCommand('unused-imports', {
   after: (rows) => console.log(`\n${rows.length} unused import(s)`),
 });
 
-export const handleIsolated = budgetedGroupedByFileCommand('isolated', {
-  query: ({ db, opts, budget }) =>
-    queries.isolated(db, {
-      scope: stringOptionValue(opts, 'scope'),
-      minLoc: definedNumberOption(opts, 'minLoc', 3),
-      scanLimit: budget.scanLimit,
-      semantic: budget.semantic,
-    }),
-  format: (r) => `  ${displayRange(r.startLine, r.endLine)}  (${r.loc} LOC)  ${r.shortName}`,
-  emptyMessage: () => 'No isolated symbols found.',
-  after: (rows) => console.log(`\n${rows.length} isolated symbol(s)`),
-});
-
-export const handleExtractCandidates = budgetedDbCommand('extract-candidates', ({ db, args, opts, budget }) => {
-  const results = queries.extractCandidates(db, {
-    scope: stringOptionValue(opts, 'scope'),
-    minLoc: definedNumberOption(opts, 'minLoc', 10),
-    minCallees: definedNumberOption(opts, 'minCallees', 6),
-    limit: definedLimitOption(opts, 'limit', 20),
-    scanLimit: budget.scanLimit,
-    semantic: budget.semantic,
-  });
-  if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('extract-candidates', args, opts, results, { analysisBudget: budget.analysisBudget });
-    return;
-  }
-  if (results.length === 0) return render.empty('No extraction candidates found.');
-  renderHeuristicNotice('extraction candidates');
-  for (const r of results) {
-    console.log(
-      `\n${displayPathRange(r.relativePath, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC, ${r.totalCallees} callees)`,
-    );
-    console.log(`  Kind: ${r.extractionKind}; tier: ${r.actionTier}`);
-    console.log(`  Recommendation: ${r.recommendation}`);
-    for (const reason of r.evidenceReasons) console.log(`  - ${reason}`);
-    for (let i = 0; i < r.regions.length; i++) {
-      const region = r.regions[i]!;
-      console.log(
-        `  Region ${i + 1} ${displayRange(region.startLine, region.endLine)} (${region.lines} lines, ${region.kind}, ${region.callees.length} exclusive callees):`,
-      );
-      for (const callee of region.callees) console.log(`    ${callee}`);
-      if (region.inboundLocals.length > 0) console.log(`    needs: ${region.inboundLocals.join(', ')}`);
-      if (region.outboundLocals.length > 0) console.log(`    returns: ${region.outboundLocals.join(', ')}`);
-      if (region.ambientCallees.length > 0) console.log(`    also uses ambient: ${region.ambientCallees.join(', ')}`);
-    }
-  }
-  console.log(`\n${results.length} extraction candidate(s) found.`);
-});
-
 export const handleLocalityCandidates = budgetedDbCommand('locality-candidates', ({ db, args, opts, budget }) => {
   const results = queries.localityCandidates(db, {
     target: optionalStringArg(args, 0) || undefined,
@@ -238,7 +184,7 @@ export const handleLocalityCandidates = budgetedDbCommand('locality-candidates',
     console.log(`\n${location}  ${r.sourceUnit.shortName}`);
     console.log(`  Current directory: ${r.currentDirectory}; tier: ${r.recommendedTier}; action: ${r.actionTier}`);
     console.log(`  Consumer coverage: ${r.consumerCoverage}; consumers: ${r.consumerFiles.length}`);
-    if (r.nearestCommonOwner) console.log(`  Nearest common owner: ${r.nearestCommonOwner}`);
+    if (r.nearestCommonDirectory) console.log(`  Nearest common directory: ${r.nearestCommonDirectory}`);
     if (r.suggestedHome) console.log(`  Suggested home: ${r.suggestedHome}`);
     if (r.whyNoSuggestedHome) console.log(`  Suggested home withheld: ${r.whyNoSuggestedHome}`);
     if (r.boundaryMarkers.length > 0) console.log(`  Boundary markers: ${r.boundaryMarkers.join('; ')}`);
@@ -250,24 +196,6 @@ export const handleLocalityCandidates = budgetedDbCommand('locality-candidates',
     for (const counter of r.counterevidence) console.log(`  - counterevidence: ${counter}`);
   }
   console.log(`\n${results.length} locality candidate(s) found.`);
-});
-
-export const handleWrapperCandidates = budgetedListCommand('wrapper-candidates', {
-  query: ({ db, opts, budget }) =>
-    queries.wrapperCandidates(db, {
-      scope: stringOptionValue(opts, 'scope'),
-      maxLoc: definedNumberOption(opts, 'maxLoc', 15),
-      limit: definedLimitOption(opts, 'limit', 30),
-      scanLimit: budget.scanLimit,
-      semantic: budget.semantic,
-    }),
-  format: (r) =>
-    `  ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC)\n` +
-    `    Only called by: ${r.singleCallerShort}  (fan-in: ${r.callerFanIn}, body: ${r.bodyShape}, tier: ${r.actionTier})` +
-    (r.boundaryEvidence.length > 0 ? `\n    Boundary evidence: ${r.boundaryEvidence.join('; ')}` : ''),
-  emptyMessage: () => 'No wrapper candidates found.',
-  heuristicLabel: 'wrapper candidates',
-  after: (rows) => console.log(`\n${rows.length} wrapper candidate(s).`),
 });
 
 export const handlePassthroughCandidates = budgetedListCommand('passthrough-candidates', {
@@ -288,51 +216,6 @@ export const handlePassthroughCandidates = budgetedListCommand('passthrough-cand
   emptyMessage: () => 'No passthrough candidates found.',
   heuristicLabel: 'passthrough candidates',
   after: (rows) => console.log(`\n${rows.length} passthrough candidate(s).`),
-});
-
-export const handleStaleAbstractions = budgetedListCommand('stale-abstractions', {
-  query: ({ db, opts, budget }) =>
-    queries.staleAbstractions(db, {
-      scope: stringOptionValue(opts, 'scope'),
-      minLoc: definedNumberOption(opts, 'minLoc', 3),
-      limit: definedLimitOption(opts, 'limit', 30),
-      includeLowConfidence: booleanOptionValue(opts, 'includeLowConfidence'),
-      scanLimit: budget.scanLimit,
-      semantic: budget.semantic,
-    }),
-  format: (r) => {
-    const consumerLabel = r.consumers === 0 ? 'unused' : `${r.consumers} consumer`;
-    const barrelLabel = r.barrelConsumers > 0 ? `, +${r.barrelConsumers} barrel` : '';
-    return (
-      `  [${r.confidence}] ${displayPathRange(r.file, r.startLine, r.endLine)}  ${r.shortName}  ` +
-      `(${r.kind}, ${r.loc} LOC, ${consumerLabel}${barrelLabel})\n` +
-      `           ${r.reason}\n` +
-      `           Kind: ${r.stalenessKind}; tier: ${r.actionTier}\n` +
-      `           Recommendation: ${r.recommendation}`
-    );
-  },
-  emptyMessage: () => 'No stale abstractions found.',
-  heuristicLabel: 'stale abstraction candidates',
-  after: (rows) => console.log(`\n${rows.length} stale abstraction(s).`),
-});
-
-export const handleComplexityHotspots = budgetedTableCommand('complexity-hotspots', {
-  headers: ['score', ' LOC', 'fan-in', 'fan-out', 'callees', 'symbol'],
-  query: ({ db, opts, budget }) =>
-    queries.complexityHotspots(db, {
-      scope: stringOptionValue(opts, 'scope'),
-      minLoc: definedNumberOption(opts, 'minLoc', 10),
-      limit: definedLimitOption(opts, 'limit', 20),
-      scanLimit: budget.scanLimit,
-      semantic: budget.semantic,
-    }),
-  format: (r) =>
-    `  ${r.score.toFixed(1).padStart(5)}  ${String(r.loc).padStart(4)}  ` +
-    `${String(r.fanIn).padStart(6)}  ${String(r.fanOut).padStart(7)}  ` +
-    `${String(r.calleeCount).padStart(7)}  ${r.shortName}`,
-  emptyMessage: () => 'No complexity hotspots found.',
-  heuristicLabel: 'complexity hotspot candidates',
-  dashWidths: [5, 4, 6, 7, 7, 6],
 });
 
 /**
@@ -596,35 +479,6 @@ export const handleSimilarFiles = reportCommand({
   },
 });
 
-export const handleSimilarChains = reportCommand({
-  commandName: 'similar-chains',
-  query: ({ db, opts }) =>
-    queries.similarChains(db, {
-      minSimilarity: definedNumberOption(opts, 'minSimilarity', 0.5),
-      limit: definedLimitOption(opts, 'limit', 15),
-      scope: stringOptionValue(opts, 'scope'),
-      minChainLength: definedNumberOption(opts, 'minLength', 3),
-      maxChainLength: definedNumberOption(opts, 'maxLength', 8),
-    }),
-  emptyMessage: (results) => (results.length === 0 ? 'No similar chains found.' : undefined),
-  heuristicLabel: 'similar chain candidates',
-  render: (results) => {
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i]!;
-      console.log(
-        `\n── Chain pair ${i + 1} (${Math.round(r.similarity * 100)}% similar, ${r.divergencePoints.length} divergence point(s)) ──`,
-      );
-      console.log(`  Chain A: ${r.chainA.join(' → ')}`);
-      console.log(`  Chain B: ${r.chainB.join(' → ')}`);
-      if (r.commonPrefix.length) console.log(`  Common prefix: ${r.commonPrefix.join(' → ')}`);
-      if (r.commonSuffix.length) console.log(`  Common suffix: ${r.commonSuffix.join(' → ')}`);
-      console.log('  Divergence points (consolidation targets):');
-      for (const d of r.divergencePoints) console.log(`    [${d.index}] ${d.nodeA}  ↔  ${d.nodeB}`);
-    }
-    console.log(`\n${results.length} similar chain pair(s) found.`);
-  },
-});
-
 export const handleDrift = budgetedReportCommand('drift', {
   query: ({ db, args, opts, budget }) =>
     queries.drift(db, {
@@ -685,33 +539,6 @@ export const handleDrift = budgetedReportCommand('drift', {
     console.log(
       `\n${summary.unusedImports} unused import(s), ${summary.architectureViolations} declared architecture violation(s), ${summary.patternDeviations} pattern deviation(s)${summary.totalResults ? ` — showing ${summary.results.length} of ${summary.totalResults} (use -n to change)` : ''}`,
     );
-  },
-});
-
-export const handleConvergence = budgetedReportCommand('convergence', {
-  query: ({ db, args, budget }) =>
-    queries.convergence(db, stringArg(args, 0), stringArg(args, 1), { semantic: budget.semantic }),
-  emptyMessage: (result) =>
-    result
-      ? undefined
-      : 'One or both symbols did not resolve, or the pair has no fingerprint evidence (small helpers with few callees fall below the similarity threshold; try --min-callees 1).',
-  render: (result) => {
-    if (!result) return;
-    console.log('\nDeprecated: use `similar <symbol1> <symbol2> --plan` for the same weighted similarity basis.');
-    console.log(`\n${Math.round(result.similarity * 100)}% callee overlap\n`);
-    console.log(`  A: ${result.symbolA.shortName}  (${result.symbolA.file}, ${result.symbolA.loc} LOC)`);
-    console.log(`  B: ${result.symbolB.shortName}  (${result.symbolB.file}, ${result.symbolB.loc} LOC)\n`);
-    console.log(`  Shared callees (${result.sharedCallees.length}):`);
-    for (const c of result.sharedCallees) console.log(`    ${c}`);
-    if (result.uniqueToA.length > 0) {
-      console.log(`\n  Unique to A (${result.uniqueToA.length}):`);
-      for (const c of result.uniqueToA) console.log(`    ${c}`);
-    }
-    if (result.uniqueToB.length > 0) {
-      console.log(`\n  Unique to B (${result.uniqueToB.length}):`);
-      for (const c of result.uniqueToB) console.log(`    ${c}`);
-    }
-    console.log(`\n  Strategy: ${result.consolidationStrategy}`);
   },
 });
 
@@ -876,42 +703,6 @@ export const handleTestQuality = budgetedDbCommand('test-quality', ({ db, args, 
   );
 });
 
-export const handleTwinAb = reportCommand<queries.TwinAbSuccess & { outPath: string }>({
-  commandName: 'twin-ab',
-  query: ({ db, args, opts }) => {
-    const refA = stringArg(args, 0);
-    const refB = stringArg(args, 1);
-    const outArg = stringOptionValue(opts, 'out') ?? queries.defaultTwinAbOutPath(refA, refB);
-    const outPath = resolveProjectPath(db.config.projectRoot, outArg);
-    if (!outPath) throw new Error(`twin-ab output path escapes the project root: ${outArg}`);
-
-    const outcome = queries.twinAb(db, { refA, refB, outFile: outPath });
-    if (!outcome.ok) throw new Error(`twin-ab refused: ${outcome.reason}`);
-
-    const displayPath = relative(db.config.projectRoot, outPath);
-    if (!booleanOptionValue(opts, 'force') && existsSync(outPath)) {
-      throw new Error(`refusing to overwrite ${displayPath} (pass --force to replace twin-ab output)`);
-    }
-    mkdirSync(dirname(outPath), { recursive: true });
-    writeFileSync(outPath, outcome.testSource);
-    return { ...outcome, outPath: displayPath };
-  },
-  render: (result) => {
-    console.log(`\nWrote behavioral A/B scaffold: ${result.outPath}`);
-    console.log(
-      `  A: ${result.a.shortName}  (${displayPathRange(result.a.file, result.a.startLine, result.a.startLine)})`,
-    );
-    console.log(
-      `  B: ${result.b.shortName}  (${displayPathRange(result.b.file, result.b.startLine, result.b.startLine)})`,
-    );
-    const compatLabel =
-      result.signatureCompatible === null ? 'unknown' : result.signatureCompatible ? 'compatible' : 'MISMATCH';
-    console.log(`  Signature compatibility: ${compatLabel}`);
-    console.log(`\nFill in the TODO input table, then run: npx vitest run ${result.outPath}`);
-  },
-  toJson: (result) => result,
-});
-
 export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, opts, budget }) => {
   const result = queries.cleanupPlan(db, {
     scope: stringOptionValue(opts, 'scope'),
@@ -964,12 +755,14 @@ export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, 
   console.log(
     `Cleanup plan: ${result.totalSymbols} symbol(s), ${result.totalLoc} LOC across ${result.batches.length} batch(es).`,
   );
-  console.log('Apply one batch at a time; run your typecheck between batches.\n');
+  console.log(
+    'Review external consumers, runtime effects, and tests before applying candidates. A checker pass only establishes checker compatibility.\n',
+  );
   for (const batch of result.batches) {
     const header =
       batch.depth === 0
-        ? `── Batch 0: deletable now (graph-fact, ${batch.loc} LOC) ──`
-        : `── Batch ${batch.depth}: dead once batch ${batch.depth - 1} lands (cascade, ${batch.loc} LOC) ──`;
+        ? `── Batch 0: initial no-observed-use candidates ( ${batch.loc} LOC) ──`
+        : `── Batch ${batch.depth}: candidate after batch ${batch.depth - 1} (cascade, ${batch.loc} LOC) ──`;
     console.log(header);
     for (const entry of batch.entries) {
       console.log(
@@ -977,7 +770,7 @@ export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, 
       );
     }
     if (batch.filesEmptied.length > 0) {
-      console.log(`  -> empties: ${batch.filesEmptied.join(', ')}`);
+      console.log(`  -> all indexed definitions selected: ${batch.filesEmptied.join(', ')}`);
     }
     console.log('');
   }

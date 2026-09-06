@@ -1,0 +1,100 @@
+{
+  "groups": {
+    "build-configuration": [
+      "eslint.config.js",
+      "tsup.config.ts",
+      "vitest.config.ts"
+    ],
+    "release-tooling": [
+      "scripts/build-scip-windows.mjs",
+      "scripts/npm-release-state.ts",
+      "scripts/npm-release.ts",
+      "scripts/publish-scip-windows.ts",
+      "scripts/release-npm-guard.ts",
+      "scripts/release-npm.ts",
+      "scripts/scip-windows-package-identity.ts",
+      "scripts/scip-windows-provenance.mjs",
+      "scripts/scip-windows-release.ts",
+      "scripts/verify-scip-windows-registry.ts",
+      "scripts/verify-scip-windows.mjs"
+    ],
+    "performance-tooling": [
+      "scripts/bench-native-symbol-leaf.mjs",
+      "scripts/benchmark-agent-output.ts",
+      "scripts/benchmark-cold-reindex.ts",
+      "scripts/benchmark-edit-latency.ts",
+      "scripts/benchmark-graph-literal.ts",
+      "scripts/benchmark-query-service.ts",
+      "scripts/benchmark-reindex-accounting.ts",
+      "scripts/benchmark-source-search.ts",
+      "scripts/cache-lifecycle-soak.ts",
+      "scripts/profile-scoreboard.mjs"
+    ],
+    "contract-tooling": [
+      "scripts/affected-set-shadow-contract.mjs",
+      "scripts/api-surface-contract.mjs",
+      "scripts/audit-production-dependencies.mjs",
+      "scripts/evidence-product-contract.mjs",
+      "scripts/incremental-freshness-contract.mjs",
+      "scripts/probe-rust-scip-boundary.mjs",
+      "scripts/verify-identity-collision-cli.mjs"
+    ],
+    "detector-calibration-tools": [
+      "scripts/accuracy-calibration-core.mjs",
+      "scripts/accuracy-calibration.mjs",
+      "scripts/score-detector-labels.ts",
+      "scripts/semantic-command-calibration.mjs",
+      "scripts/typescript-semantic-provider-comparison.mjs"
+    ],
+    "agent-exploration-evaluation": [
+      "scripts/codex-exploration-trial.mjs",
+      "scripts/compare-exploration-trials.mjs",
+      "scripts/exploration-benchmark-core.mjs",
+      "scripts/exploration-benchmark.mjs"
+    ],
+    "documentation-tooling": [
+      "scripts/check-evidence-manifest-doc.mjs",
+      "scripts/check-skill-links.mjs",
+      "scripts/render-command-reference.ts"
+    ],
+    "agent-evidence-capture": [
+      "skills/scip-explore/scripts/capture-evidence.mjs"
+    ],
+    "command-audit-tools": [
+      "benchmarks/command-contracts/**",
+      "benchmarks/full-tool-audit/**"
+    ]
+  },
+  "allowedDependencies": {
+    "build-configuration": [
+      "queries-facade"
+    ],
+    "release-tooling": [
+      "platform",
+      "storage"
+    ],
+    "performance-tooling": [
+      "domain",
+      "platform",
+      "queries-graph",
+      "queries-navigation",
+      "reindex",
+      "runtime-services",
+      "storage"
+    ],
+    "contract-tooling": [],
+    "detector-calibration-tools": [],
+    "agent-exploration-evaluation": [
+      "agent-evaluation-tools"
+    ],
+    "documentation-tooling": [
+      "queries-health",
+      "runtime-command-kit",
+      "runtime-commands",
+      "runtime-services"
+    ],
+    "agent-evidence-capture": [],
+    "command-audit-tools": []
+  },
+  "basis": "Current source import declarations and distinct build, release, performance, contract, calibration, agent evaluation, documentation, and evidence-capture responsibilities. Built dist imports and spawned commands remain outside the static source dependency graph."
+}

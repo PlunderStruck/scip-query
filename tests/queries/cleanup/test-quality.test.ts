@@ -23,6 +23,18 @@ describe('test-quality — assertion-free', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-query-test-quality-assertion-free-'));
     const projectRoot = join(tempDir, 'project');
     writeFixtureFiles(projectRoot, {
+      'tests/mock-only.test.ts': [
+        "import { it, vi, expect as verify } from 'vitest';",
+        "import * as runner from 'vitest';",
+        "it('only configures a mock', () => { vi.fn(); });",
+        "it('only configures a namespace mock', () => { runner.vi.fn(); });",
+        "it('uses an aliased assertion', () => { verify(2).toBe(2); });",
+        "it('uses a namespace assertion', () => { runner.expect(2).toBe(2); });",
+      ],
+      'tests/declaration.test.ts': [
+        'declare function test(name: string, run: () => void): void;',
+        "test('actual weak callback', () => { const value = 1 + 2; });",
+      ],
       'tests/sample.test.ts': [
         "import { describe, expect, it } from 'vitest';",
         '',
@@ -59,6 +71,20 @@ describe('test-quality — assertion-free', () => {
   afterAll(() => {
     db.close();
     rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('does not count a test function declaration as an invocation', () => {
+    const findings = testQuality(db).assertionFree.filter((finding) => finding.file === 'tests/declaration.test.ts');
+    expect(findings).toMatchObject([{ startLine: 1, title: 'actual weak callback' }]);
+    expect(findings).toHaveLength(1);
+  });
+
+  it('distinguishes runner mock utilities from assertion exports', () => {
+    const titles = testQuality(db).assertionFree.map((finding) => finding.title);
+    expect(titles).toContain('only configures a mock');
+    expect(titles).toContain('only configures a namespace mock');
+    expect(titles).not.toContain('uses an aliased assertion');
+    expect(titles).not.toContain('uses a namespace assertion');
   });
 
   it('flags an it block with no assertion call at high severity', () => {
@@ -115,6 +141,7 @@ describe('test-quality — regexp/string .test(...) method calls are not test bl
         '});',
       ],
     });
+
     const dbPath = join(tempDir, 'index.db');
     db = emptyFixtureDb(projectRoot, dbPath);
   });

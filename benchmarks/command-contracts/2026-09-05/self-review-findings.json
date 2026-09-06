@@ -1,0 +1,1818 @@
+{
+  "base": "HEAD",
+  "scope": "Entire uncommitted checkout, including work predating this command pass and relocated functions",
+  "newOrWorsenedArchitecture": 0,
+  "existingArchitecture": 47,
+  "complexityBacklog": [
+    {
+      "id": "complexity:src/domain/architecture-config.ts:validateArchitectureConfig",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "validateArchitectureConfig: cyclomatic 54, cognitive 81.",
+      "sites": [
+        {
+          "file": "src/domain/architecture-config.ts",
+          "line": 10,
+          "name": "validateArchitectureConfig"
+        }
+      ],
+      "score": 5.4,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/domain/architecture-config.ts:31:5 if: +2 cognitive",
+        "src/domain/architecture-config.ts:37:5 if: +2 cognitive",
+        "src/domain/architecture-config.ts:49:5 if: +2 cognitive",
+        "src/domain/architecture-config.ts:57:5 if: +2 cognitive",
+        "src/domain/architecture-config.ts:66:5 if: +2 cognitive",
+        "src/domain/architecture-config.ts:74:5 ForOfStatement: +2 cognitive",
+        "src/domain/architecture-config.ts:76:7 if: +3 cognitive",
+        "src/domain/architecture-config.ts:80:7 if: +3 cognitive",
+        "src/domain/architecture-config.ts:87:7 if: +3 cognitive",
+        "src/domain/architecture-config.ts:103:5 ForOfStatement: +2 cognitive",
+        "src/domain/architecture-config.ts:105:7 if: +3 cognitive",
+        "src/domain/architecture-config.ts:112:7 if: +3 cognitive",
+        "src/domain/architecture-config.ts:117:7 ForOfStatement: +3 cognitive",
+        "src/domain/architecture-config.ts:119:9 if: +4 cognitive",
+        "src/domain/architecture-config.ts:136:5 if: +2 cognitive",
+        "src/domain/architecture-config.ts:142:5 if: +2 cognitive",
+        "src/domain/architecture-config.ts:156:26 ConditionalExpression: +2 cognitive",
+        "src/domain/architecture-config.ts:157:5 ForOfStatement: +2 cognitive",
+        "src/domain/architecture-config.ts:158:7 if: +3 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/runtime/query-commands/graph.ts:handleArchitecture.render",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "handleArchitecture.render: cyclomatic 46, cognitive 79.",
+      "sites": [
+        {
+          "file": "src/runtime/query-commands/graph.ts",
+          "line": 175,
+          "name": "handleArchitecture.render"
+        }
+      ],
+      "score": 5.266666666666667,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/runtime/query-commands/graph.ts:185:9 ConditionalExpression: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:186:13 ConditionalExpression: +3 cognitive",
+        "src/runtime/query-commands/graph.ts:202:22 ConditionalExpression: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:206:22 ConditionalExpression: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:210:22 ConditionalExpression: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:212:7 ForOfStatement: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:219:7 ForOfStatement: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:224:9 ForOfStatement: +3 cognitive",
+        "src/runtime/query-commands/graph.ts:232:7 ForOfStatement: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:236:22 ConditionalExpression: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:241:7 ForOfStatement: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:246:7 ForOfStatement: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:256:7 ForOfStatement: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:260:7 if: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:271:7 ForOfStatement: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:273:52 ConditionalExpression: +3 cognitive",
+        "src/runtime/query-commands/graph.ts:275:7 if: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:284:7 ForOfStatement: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:286:9 ForOfStatement: +3 cognitive",
+        "src/runtime/query-commands/graph.ts:288:11 ForOfStatement: +4 cognitive",
+        "src/runtime/query-commands/graph.ts:297:7 ForOfStatement: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:306:7 ForOfStatement: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:316:7 ForOfStatement: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:317:24 ConditionalExpression: +3 cognitive",
+        "src/runtime/query-commands/graph.ts:319:9 if: +3 cognitive",
+        "src/runtime/query-commands/graph.ts:321:9 ForOfStatement: +3 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/graph/dependence-slice.ts:dependenceSlice",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "dependenceSlice: cyclomatic 41, cognitive 48.",
+      "sites": [
+        {
+          "file": "src/queries/graph/dependence-slice.ts",
+          "line": 41,
+          "name": "dependenceSlice"
+        }
+      ],
+      "score": 4.1,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/graph/dependence-slice.ts:65:5 if: +2 cognitive",
+        "src/queries/graph/dependence-slice.ts:65:50 ConditionalExpression: +2 cognitive",
+        "src/queries/graph/dependence-slice.ts:96:9 ConditionalExpression: +2 cognitive",
+        "src/queries/graph/dependence-slice.ts:98:11 ConditionalExpression: +3 cognitive",
+        "src/queries/graph/dependence-slice.ts:125:5 if: +2 cognitive",
+        "src/queries/graph/dependence-slice.ts:131:16 ConditionalExpression: +2 cognitive",
+        "src/queries/graph/dependence-slice.ts:142:5 ForOfStatement: +2 cognitive",
+        "src/queries/graph/dependence-slice.ts:143:7 if: +3 cognitive",
+        "src/queries/graph/dependence-slice.ts:147:7 if: +3 cognitive",
+        "src/queries/graph/dependence-slice.ts:148:20 ConditionalExpression: +3 cognitive",
+        "src/queries/graph/dependence-slice.ts:149:7 if: +3 cognitive",
+        "src/queries/graph/dependence-slice.ts:164:58 ConditionalExpression: +2 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/graph/graph-evidence.ts:graphEvidence",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "graphEvidence: cyclomatic 40, cognitive 37.",
+      "sites": [
+        {
+          "file": "src/queries/graph/graph-evidence.ts",
+          "line": 167,
+          "name": "graphEvidence"
+        }
+      ],
+      "score": 4,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/graph/graph-evidence.ts:237:58 ConditionalExpression: +2 cognitive",
+        "src/queries/graph/graph-evidence.ts:245:7 ConditionalExpression: +2 cognitive",
+        "src/queries/graph/graph-evidence.ts:260:9 ConditionalExpression: +2 cognitive",
+        "src/queries/graph/graph-evidence.ts:299:11 ConditionalExpression: +2 cognitive",
+        "src/queries/graph/graph-evidence.ts:301:13 ConditionalExpression: +3 cognitive",
+        "src/queries/graph/graph-evidence.ts:303:15 ConditionalExpression: +4 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/storage/suppression-store.ts:decodeSuppressionFile",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "decodeSuppressionFile: cyclomatic 38, cognitive 37.",
+      "sites": [
+        {
+          "file": "src/storage/suppression-store.ts",
+          "line": 135,
+          "name": "decodeSuppressionFile"
+        }
+      ],
+      "score": 3.8,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/storage/suppression-store.ts:150:5 if: +2 cognitive",
+        "src/storage/suppression-store.ts:153:5 if: +2 cognitive",
+        "src/storage/suppression-store.ts:158:16 ConditionalExpression: +3 cognitive",
+        "src/storage/suppression-store.ts:162:5 if: +2 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/health/source-review.ts:sourceMaintenanceReport",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "sourceMaintenanceReport: cyclomatic 35, cognitive 31.",
+      "sites": [
+        {
+          "file": "src/queries/health/source-review.ts",
+          "line": 65,
+          "name": "sourceMaintenanceReport"
+        }
+      ],
+      "score": 3.5,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/health/source-review.ts:98:22 ForOfStatement: +2 cognitive",
+        "src/queries/health/source-review.ts:117:5 ForOfStatement: +2 cognitive",
+        "src/queries/health/source-review.ts:124:7 if: +3 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/graph/affected.ts:computePossibleImpactClosure",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "computePossibleImpactClosure: cyclomatic 27, cognitive 45.",
+      "sites": [
+        {
+          "file": "src/queries/graph/affected.ts",
+          "line": 56,
+          "name": "computePossibleImpactClosure"
+        }
+      ],
+      "score": 3,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/graph/affected.ts:94:5 if: +2 cognitive",
+        "src/queries/graph/affected.ts:99:11 ConditionalExpression: +2 cognitive",
+        "src/queries/graph/affected.ts:103:5 ForOfStatement: +2 cognitive",
+        "src/queries/graph/affected.ts:105:7 if: +3 cognitive",
+        "src/queries/graph/affected.ts:108:24 ConditionalExpression: +3 cognitive",
+        "src/queries/graph/affected.ts:109:7 ForOfStatement: +3 cognitive",
+        "src/queries/graph/affected.ts:111:9 if: +4 cognitive",
+        "src/queries/graph/affected.ts:112:11 if: +5 cognitive",
+        "src/queries/graph/affected.ts:126:9 if: +4 cognitive",
+        "src/queries/graph/affected.ts:150:45 ConditionalExpression: +2 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/semantic/typescript/local-flow.ts:buildStatement",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "buildStatement: cyclomatic 30, cognitive 34.",
+      "sites": [
+        {
+          "file": "src/semantic/typescript/local-flow.ts",
+          "line": 445,
+          "name": "buildStatement"
+        }
+      ],
+      "score": 3,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/semantic/typescript/local-flow.ts:457:23 ConditionalExpression: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:488:23 ConditionalExpression: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:489:5 if: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:497:5 if: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:498:5 if: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:526:5 ForStatement: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:534:5 ForOfStatement: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:540:20 ConditionalExpression: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:546:5 if: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:552:5 if: +2 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/domain/scip-symbol.ts:parseDescriptors",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "parseDescriptors: cyclomatic 21, cognitive 42.",
+      "sites": [
+        {
+          "file": "src/domain/scip-symbol.ts",
+          "line": 133,
+          "name": "parseDescriptors"
+        }
+      ],
+      "score": 2.8,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/domain/scip-symbol.ts:139:5 if: +2 cognitive",
+        "src/domain/scip-symbol.ts:141:7 if: +3 cognitive",
+        "src/domain/scip-symbol.ts:151:5 if: +2 cognitive",
+        "src/domain/scip-symbol.ts:153:7 if: +3 cognitive",
+        "src/domain/scip-symbol.ts:164:5 if: +2 cognitive",
+        "src/domain/scip-symbol.ts:166:7 if: +3 cognitive",
+        "src/domain/scip-symbol.ts:176:7 WhileStatement: +3 cognitive",
+        "src/domain/scip-symbol.ts:183:5 if: +2 cognitive",
+        "src/domain/scip-symbol.ts:184:7 if: +3 cognitive",
+        "src/domain/scip-symbol.ts:191:5 if: +2 cognitive",
+        "src/domain/scip-symbol.ts:193:7 if: +3 cognitive",
+        "src/domain/scip-symbol.ts:206:7 if: +3 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/semantic/typescript/local-flow.ts:collectNodeAccesses.visit",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "collectNodeAccesses.visit: cyclomatic 28, cognitive 34.",
+      "sites": [
+        {
+          "file": "src/semantic/typescript/local-flow.ts",
+          "line": 748,
+          "name": "collectNodeAccesses.visit"
+        }
+      ],
+      "score": 2.8,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/semantic/typescript/local-flow.ts:753:20 ConditionalExpression: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:758:7 if: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:764:7 ForOfStatement: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:783:7 if: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:785:7 if: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:789:7 if: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:795:7 ForOfStatement: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:809:7 ForOfStatement: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:825:7 if: +2 cognitive",
+        "src/semantic/typescript/local-flow.ts:826:7 if: +2 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/symbols/graph/scip-chunk-occurrences.ts:decodeFileOccurrences",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "decodeFileOccurrences: cyclomatic 18, cognitive 40.",
+      "sites": [
+        {
+          "file": "src/symbols/graph/scip-chunk-occurrences.ts",
+          "line": 101,
+          "name": "decodeFileOccurrences"
+        }
+      ],
+      "score": 2.6666666666666665,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/symbols/graph/scip-chunk-occurrences.ts:112:12 ConditionalExpression: +2 cognitive",
+        "src/symbols/graph/scip-chunk-occurrences.ts:128:7 if: +2 cognitive",
+        "src/symbols/graph/scip-chunk-occurrences.ts:132:7 ForOfStatement: +2 cognitive",
+        "src/symbols/graph/scip-chunk-occurrences.ts:133:9 if: +3 cognitive",
+        "src/symbols/graph/scip-chunk-occurrences.ts:135:9 if: +3 cognitive",
+        "src/symbols/graph/scip-chunk-occurrences.ts:137:9 if: +3 cognitive",
+        "src/symbols/graph/scip-chunk-occurrences.ts:138:11 if: +4 cognitive",
+        "src/symbols/graph/scip-chunk-occurrences.ts:142:9 if: +3 cognitive",
+        "src/symbols/graph/scip-chunk-occurrences.ts:144:9 if: +3 cognitive",
+        "src/symbols/graph/scip-chunk-occurrences.ts:145:55 ConditionalExpression: +4 cognitive",
+        "src/symbols/graph/scip-chunk-occurrences.ts:148:9 if: +3 cognitive",
+        "src/symbols/graph/scip-chunk-occurrences.ts:150:9 if: +3 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/cleanup/co-change.ts:coChange",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "coChange: cyclomatic 26, cognitive 37.",
+      "sites": [
+        {
+          "file": "src/queries/cleanup/co-change.ts",
+          "line": 134,
+          "name": "coChange"
+        }
+      ],
+      "score": 2.6,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/cleanup/co-change.ts:182:5 if: +2 cognitive",
+        "src/queries/cleanup/co-change.ts:185:5 if: +2 cognitive",
+        "src/queries/cleanup/co-change.ts:186:5 if: +2 cognitive",
+        "src/queries/cleanup/co-change.ts:187:5 if: +2 cognitive",
+        "src/queries/cleanup/co-change.ts:190:7 if: +3 cognitive",
+        "src/queries/cleanup/co-change.ts:193:7 if: +3 cognitive",
+        "src/queries/cleanup/co-change.ts:201:7 if: +3 cognitive",
+        "src/queries/cleanup/co-change.ts:204:5 if: +2 cognitive",
+        "src/queries/cleanup/co-change.ts:213:11 ConditionalExpression: +2 cognitive",
+        "src/queries/cleanup/co-change.ts:215:5 if: +2 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/navigation/outline.ts:outline",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "outline: cyclomatic 22, cognitive 39.",
+      "sites": [
+        {
+          "file": "src/queries/navigation/outline.ts",
+          "line": 24,
+          "name": "outline"
+        }
+      ],
+      "score": 2.6,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/navigation/outline.ts:54:5 if: +2 cognitive",
+        "src/queries/navigation/outline.ts:69:5 ForOfStatement: +2 cognitive",
+        "src/queries/navigation/outline.ts:70:7 if: +3 cognitive",
+        "src/queries/navigation/outline.ts:71:7 if: +3 cognitive",
+        "src/queries/navigation/outline.ts:73:9 if: +4 cognitive",
+        "src/queries/navigation/outline.ts:75:9 if: +4 cognitive",
+        "src/queries/navigation/outline.ts:82:5 if: +2 cognitive",
+        "src/queries/navigation/outline.ts:94:5 WhileStatement: +2 cognitive",
+        "src/queries/navigation/outline.ts:95:7 if: +3 cognitive",
+        "src/queries/navigation/outline.ts:100:5 ForOfStatement: +2 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/domain/suppression-adjudication.ts:evaluateSuppressionAdjudication",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "evaluateSuppressionAdjudication: cyclomatic 24, cognitive 25.",
+      "sites": [
+        {
+          "file": "src/domain/suppression-adjudication.ts",
+          "line": 64,
+          "name": "evaluateSuppressionAdjudication"
+        }
+      ],
+      "score": 2.4,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/domain/suppression-adjudication.ts:89:5 if: +2 cognitive",
+        "src/domain/suppression-adjudication.ts:95:5 if: +2 cognitive",
+        "src/domain/suppression-adjudication.ts:100:5 if: +2 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/source/ast/function-metrics.ts:measureFunction.visit",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "measureFunction.visit: cyclomatic 24, cognitive 29.",
+      "sites": [
+        {
+          "file": "src/source/ast/function-metrics.ts",
+          "line": 107,
+          "name": "measureFunction.visit"
+        }
+      ],
+      "score": 2.4,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/source/ast/function-metrics.ts:111:20 ConditionalExpression: +2 cognitive",
+        "src/source/ast/function-metrics.ts:111:50 ConditionalExpression: +2 cognitive",
+        "src/source/ast/function-metrics.ts:114:7 if: +2 cognitive",
+        "src/source/ast/function-metrics.ts:115:9 if: +3 cognitive",
+        "src/source/ast/function-metrics.ts:116:38 ConditionalExpression: +3 cognitive",
+        "src/source/ast/function-metrics.ts:140:9 ConditionalExpression: +2 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/internal/pairwise-profiles.ts:rankedPairwiseProfileResults.run",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "rankedPairwiseProfileResults.run: cyclomatic 20, cognitive 35.",
+      "sites": [
+        {
+          "file": "src/queries/internal/pairwise-profiles.ts",
+          "line": 87,
+          "name": "rankedPairwiseProfileResults.run"
+        }
+      ],
+      "score": 2.3333333333333335,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/internal/pairwise-profiles.ts:102:7 ForStatement: +2 cognitive",
+        "src/queries/internal/pairwise-profiles.ts:104:9 if: +3 cognitive",
+        "src/queries/internal/pairwise-profiles.ts:105:9 ForOfStatement: +3 cognitive",
+        "src/queries/internal/pairwise-profiles.ts:107:11 if: +4 cognitive",
+        "src/queries/internal/pairwise-profiles.ts:109:11 if: +4 cognitive",
+        "src/queries/internal/pairwise-profiles.ts:116:9 ConditionalExpression: +2 cognitive",
+        "src/queries/internal/pairwise-profiles.ts:119:7 ForStatement: +2 cognitive",
+        "src/queries/internal/pairwise-profiles.ts:122:9 ForOfStatement: +3 cognitive",
+        "src/queries/internal/pairwise-profiles.ts:123:11 if: +4 cognitive",
+        "src/queries/internal/pairwise-profiles.ts:126:9 if: +3 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/symbols/graph/call-graph-evidence.ts:buildAstCalleeMap",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "buildAstCalleeMap: cyclomatic 19, cognitive 34.",
+      "sites": [
+        {
+          "file": "src/symbols/graph/call-graph-evidence.ts",
+          "line": 383,
+          "name": "buildAstCalleeMap"
+        }
+      ],
+      "score": 2.2666666666666666,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/symbols/graph/call-graph-evidence.ts:390:5 if: +2 cognitive",
+        "src/symbols/graph/call-graph-evidence.ts:395:5 ForOfStatement: +2 cognitive",
+        "src/symbols/graph/call-graph-evidence.ts:396:21 ConditionalExpression: +3 cognitive",
+        "src/symbols/graph/call-graph-evidence.ts:397:7 if: +3 cognitive",
+        "src/symbols/graph/call-graph-evidence.ts:401:25 ConditionalExpression: +3 cognitive",
+        "src/symbols/graph/call-graph-evidence.ts:402:30 ConditionalExpression: +3 cognitive",
+        "src/symbols/graph/call-graph-evidence.ts:410:10 ConditionalExpression: +3 cognitive",
+        "src/symbols/graph/call-graph-evidence.ts:413:7 if: +3 cognitive",
+        "src/symbols/graph/call-graph-evidence.ts:419:17 ConditionalExpression: +3 cognitive",
+        "src/symbols/graph/call-graph-evidence.ts:421:13 ConditionalExpression: +3 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/source/facts/source-calls.ts:callLeafNode",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "callLeafNode: cyclomatic 22, cognitive 7.",
+      "sites": [
+        {
+          "file": "src/source/facts/source-calls.ts",
+          "line": 132,
+          "name": "callLeafNode"
+        }
+      ],
+      "score": 2.2,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/source/facts/source-calls.ts:146:14 ConditionalExpression: +2 cognitive",
+        "src/source/facts/source-calls.ts:152:14 ConditionalExpression: +2 cognitive",
+        "src/source/facts/source-calls.ts:156:14 ConditionalExpression: +2 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/runtime/setup.ts:installSkills",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "installSkills: cyclomatic 16, cognitive 32.",
+      "sites": [
+        {
+          "file": "src/runtime/setup.ts",
+          "line": 63,
+          "name": "installSkills"
+        }
+      ],
+      "score": 2.1333333333333333,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/runtime/setup.ts:81:5 if: +2 cognitive",
+        "src/runtime/setup.ts:89:5 ForOfStatement: +2 cognitive",
+        "src/runtime/setup.ts:89:25 ConditionalExpression: +3 cognitive",
+        "src/runtime/setup.ts:93:7 if: +3 cognitive",
+        "src/runtime/setup.ts:102:9 CatchClause: +3 cognitive",
+        "src/runtime/setup.ts:103:9 if: +4 cognitive",
+        "src/runtime/setup.ts:109:7 if: +3 cognitive",
+        "src/runtime/setup.ts:114:7 if: +3 cognitive",
+        "src/runtime/setup.ts:119:7 if: +3 cognitive",
+        "src/runtime/setup.ts:122:35 ConditionalExpression: +3 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:scripts/codex-change-trial.mjs:runChangeTrial",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "runChangeTrial: cyclomatic 21, cognitive 14.",
+      "sites": [
+        {
+          "file": "scripts/codex-change-trial.mjs",
+          "line": 35,
+          "name": "runChangeTrial"
+        }
+      ],
+      "score": 2.1,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "scripts/codex-change-trial.mjs:144:7 if: +2 cognitive",
+        "scripts/codex-change-trial.mjs:146:7 if: +2 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/runtime/refs-pagination.ts:referencePage",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "referencePage: cyclomatic 21, cognitive 29.",
+      "sites": [
+        {
+          "file": "src/runtime/refs-pagination.ts",
+          "line": 40,
+          "name": "referencePage"
+        }
+      ],
+      "score": 2.1,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/runtime/refs-pagination.ts:69:5 if: +2 cognitive",
+        "src/runtime/refs-pagination.ts:72:5 if: +2 cognitive",
+        "src/runtime/refs-pagination.ts:75:5 if: +2 cognitive",
+        "src/runtime/refs-pagination.ts:76:5 ForOfStatement: +2 cognitive",
+        "src/runtime/refs-pagination.ts:78:9 ConditionalExpression: +3 cognitive",
+        "src/runtime/refs-pagination.ts:81:7 if: +3 cognitive",
+        "src/runtime/refs-pagination.ts:84:7 if: +3 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/quality/complexity.ts:branchEstimatesForDefinitions",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "branchEstimatesForDefinitions: cyclomatic 17, cognitive 31.",
+      "sites": [
+        {
+          "file": "src/queries/quality/complexity.ts",
+          "line": 130,
+          "name": "branchEstimatesForDefinitions"
+        }
+      ],
+      "score": 2.066666666666667,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/quality/complexity.ts:149:5 ForOfStatement: +2 cognitive",
+        "src/queries/quality/complexity.ts:150:7 if: +3 cognitive",
+        "src/queries/quality/complexity.ts:154:5 ForOfStatement: +2 cognitive",
+        "src/queries/quality/complexity.ts:156:7 if: +3 cognitive",
+        "src/queries/quality/complexity.ts:161:7 if: +3 cognitive",
+        "src/queries/quality/complexity.ts:164:5 if: +2 cognitive",
+        "src/queries/quality/complexity.ts:168:7 ConditionalExpression: +2 cognitive",
+        "src/queries/quality/complexity.ts:177:5 if: +2 cognitive",
+        "src/queries/quality/complexity.ts:178:7 ForOfStatement: +3 cognitive",
+        "src/queries/quality/complexity.ts:184:5 ForOfStatement: +2 cognitive",
+        "src/queries/quality/complexity.ts:185:7 if: +3 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:scripts/change-benchmark-core.mjs:evaluateChange",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "evaluateChange: cyclomatic 20, cognitive 16.",
+      "sites": [
+        {
+          "file": "scripts/change-benchmark-core.mjs",
+          "line": 76,
+          "name": "evaluateChange"
+        }
+      ],
+      "score": 2,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling."
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/cleanup/test-quality.ts:assertionVocabulary",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "assertionVocabulary: cyclomatic 16, cognitive 30.",
+      "sites": [
+        {
+          "file": "src/queries/cleanup/test-quality.ts",
+          "line": 241,
+          "name": "assertionVocabulary"
+        }
+      ],
+      "score": 2,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/cleanup/test-quality.ts:245:5 if: +2 cognitive",
+        "src/queries/cleanup/test-quality.ts:248:5 if: +2 cognitive",
+        "src/queries/cleanup/test-quality.ts:255:5 if: +2 cognitive",
+        "src/queries/cleanup/test-quality.ts:257:5 if: +2 cognitive",
+        "src/queries/cleanup/test-quality.ts:258:5 if: +2 cognitive",
+        "src/queries/cleanup/test-quality.ts:260:7 ForOfStatement: +3 cognitive",
+        "src/queries/cleanup/test-quality.ts:261:9 if: +4 cognitive",
+        "src/queries/cleanup/test-quality.ts:263:9 if: +4 cognitive",
+        "src/queries/cleanup/test-quality.ts:264:9 if: +4 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/quality/slice-cohesion.ts:recommendation",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "recommendation: cyclomatic 15, cognitive 30.",
+      "sites": [
+        {
+          "file": "src/queries/quality/slice-cohesion.ts",
+          "line": 2305,
+          "name": "recommendation"
+        }
+      ],
+      "score": 2,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/quality/slice-cohesion.ts:2314:5 if: +2 cognitive",
+        "src/queries/quality/slice-cohesion.ts:2315:5 if: +2 cognitive",
+        "src/queries/quality/slice-cohesion.ts:2320:5 if: +2 cognitive",
+        "src/queries/quality/slice-cohesion.ts:2327:12 ConditionalExpression: +3 cognitive",
+        "src/queries/quality/slice-cohesion.ts:2329:21 ConditionalExpression: +3 cognitive",
+        "src/queries/quality/slice-cohesion.ts:2330:7 if: +3 cognitive",
+        "src/queries/quality/slice-cohesion.ts:2333:14 ConditionalExpression: +4 cognitive",
+        "src/queries/quality/slice-cohesion.ts:2338:7 if: +3 cognitive",
+        "src/queries/quality/slice-cohesion.ts:2358:15 ConditionalExpression: +2 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/runtime/query-commands/maintenance.ts:renderModuleSubjects",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "renderModuleSubjects: cyclomatic 17, cognitive 30.",
+      "sites": [
+        {
+          "file": "src/runtime/query-commands/maintenance.ts",
+          "line": 139,
+          "name": "renderModuleSubjects"
+        }
+      ],
+      "score": 2,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/runtime/query-commands/maintenance.ts:149:42 ConditionalExpression: +2 cognitive",
+        "src/runtime/query-commands/maintenance.ts:149:90 ConditionalExpression: +2 cognitive",
+        "src/runtime/query-commands/maintenance.ts:152:50 ConditionalExpression: +2 cognitive",
+        "src/runtime/query-commands/maintenance.ts:152:117 ConditionalExpression: +2 cognitive",
+        "src/runtime/query-commands/maintenance.ts:155:56 ConditionalExpression: +2 cognitive",
+        "src/runtime/query-commands/maintenance.ts:155:123 ConditionalExpression: +2 cognitive",
+        "src/runtime/query-commands/maintenance.ts:157:5 ForOfStatement: +2 cognitive",
+        "src/runtime/query-commands/maintenance.ts:160:36 ConditionalExpression: +3 cognitive",
+        "src/runtime/query-commands/maintenance.ts:162:7 ForOfStatement: +3 cognitive",
+        "src/runtime/query-commands/maintenance.ts:163:55 ConditionalExpression: +4 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:scripts/codex-change-trial.mjs:main",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "main: cyclomatic 19, cognitive 23.",
+      "sites": [
+        {
+          "file": "scripts/codex-change-trial.mjs",
+          "line": 299,
+          "name": "main"
+        }
+      ],
+      "score": 1.9,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "scripts/codex-change-trial.mjs:314:5 if: +2 cognitive",
+        "scripts/codex-change-trial.mjs:341:5 if: +2 cognitive",
+        "scripts/codex-change-trial.mjs:349:5 ForOfStatement: +2 cognitive",
+        "scripts/codex-change-trial.mjs:349:24 ConditionalExpression: +3 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/source/maintenance-coverage.ts:functionCoverage",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "functionCoverage: cyclomatic 19, cognitive 18.",
+      "sites": [
+        {
+          "file": "src/source/maintenance-coverage.ts",
+          "line": 55,
+          "name": "functionCoverage"
+        }
+      ],
+      "score": 1.9,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/source/maintenance-coverage.ts:71:58 if: +2 cognitive",
+        "src/source/maintenance-coverage.ts:76:5 if: +2 cognitive",
+        "src/source/maintenance-coverage.ts:79:5 if: +2 cognitive",
+        "src/source/maintenance-coverage.ts:80:5 if: +2 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/runtime/query-commands/graph.ts:handleEntryMap.<callback:dbCommand:0>",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "handleEntryMap.<callback:dbCommand:0>: cyclomatic 18, cognitive 28.",
+      "sites": [
+        {
+          "file": "src/runtime/query-commands/graph.ts",
+          "line": 406,
+          "name": "handleEntryMap.<callback:dbCommand:0>"
+        }
+      ],
+      "score": 1.8666666666666667,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/runtime/query-commands/graph.ts:415:9 ConditionalExpression: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:434:5 ForOfStatement: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:449:23 ConditionalExpression: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:461:5 ForOfStatement: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:472:5 ForOfStatement: +2 cognitive",
+        "src/runtime/query-commands/graph.ts:474:7 ForOfStatement: +3 cognitive",
+        "src/runtime/query-commands/graph.ts:477:7 ForOfStatement: +3 cognitive",
+        "src/runtime/query-commands/graph.ts:480:7 ForOfStatement: +3 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/graph/architecture.ts:architectureFindingIdentities",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "architectureFindingIdentities: cyclomatic 18, cognitive 22.",
+      "sites": [
+        {
+          "file": "src/queries/graph/architecture.ts",
+          "line": 387,
+          "name": "architectureFindingIdentities"
+        }
+      ],
+      "score": 1.8,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/graph/architecture.ts:393:5 ForOfStatement: +2 cognitive",
+        "src/queries/graph/architecture.ts:398:5 ForOfStatement: +2 cognitive",
+        "src/queries/graph/architecture.ts:401:5 ForOfStatement: +2 cognitive",
+        "src/queries/graph/architecture.ts:411:5 ForOfStatement: +2 cognitive",
+        "src/queries/graph/architecture.ts:429:5 if: +2 cognitive",
+        "src/queries/graph/architecture.ts:438:5 ForStatement: +2 cognitive",
+        "src/queries/graph/architecture.ts:443:5 if: +2 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/health/source-review.ts:compareSourceFindings",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "compareSourceFindings: cyclomatic 18, cognitive 20.",
+      "sites": [
+        {
+          "file": "src/queries/health/source-review.ts",
+          "line": 258,
+          "name": "compareSourceFindings"
+        }
+      ],
+      "score": 1.8,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/health/source-review.ts:271:5 if: +2 cognitive",
+        "src/queries/health/source-review.ts:274:5 if: +2 cognitive",
+        "src/queries/health/source-review.ts:287:5 if: +2 cognitive",
+        "src/queries/health/source-review.ts:291:11 ConditionalExpression: +3 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/navigation/imports.ts:localExportNames",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "localExportNames: cyclomatic 18, cognitive 19.",
+      "sites": [
+        {
+          "file": "src/queries/navigation/imports.ts",
+          "line": 215,
+          "name": "localExportNames"
+        }
+      ],
+      "score": 1.8,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/navigation/imports.ts:221:5 if: +2 cognitive",
+        "src/queries/navigation/imports.ts:228:5 if: +2 cognitive",
+        "src/queries/navigation/imports.ts:234:7 ForOfStatement: +3 cognitive",
+        "src/queries/navigation/imports.ts:235:9 if: +4 cognitive",
+        "src/queries/navigation/imports.ts:238:5 if: +2 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/quality/slice-cohesion.ts:sliceCohesionForDefinition",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "sliceCohesionForDefinition: cyclomatic 18, cognitive 16.",
+      "sites": [
+        {
+          "file": "src/queries/quality/slice-cohesion.ts",
+          "line": 572,
+          "name": "sliceCohesionForDefinition"
+        }
+      ],
+      "score": 1.8,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/quality/slice-cohesion.ts:662:5 if: +2 cognitive",
+        "src/queries/quality/slice-cohesion.ts:663:5 ForOfStatement: +2 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/symbols/graph/scip-occurrence-call-targets.ts:loadScipOccurrenceCallTargetIndex",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "loadScipOccurrenceCallTargetIndex: cyclomatic 16, cognitive 26.",
+      "sites": [
+        {
+          "file": "src/symbols/graph/scip-occurrence-call-targets.ts",
+          "line": 174,
+          "name": "loadScipOccurrenceCallTargetIndex"
+        }
+      ],
+      "score": 1.7333333333333334,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/symbols/graph/scip-occurrence-call-targets.ts:190:7 if: +2 cognitive",
+        "src/symbols/graph/scip-occurrence-call-targets.ts:195:7 ForOfStatement: +2 cognitive",
+        "src/symbols/graph/scip-occurrence-call-targets.ts:196:9 if: +3 cognitive",
+        "src/symbols/graph/scip-occurrence-call-targets.ts:199:9 if: +3 cognitive",
+        "src/symbols/graph/scip-occurrence-call-targets.ts:201:9 if: +3 cognitive",
+        "src/symbols/graph/scip-occurrence-call-targets.ts:202:11 if: +4 cognitive",
+        "src/symbols/graph/scip-occurrence-call-targets.ts:205:40 ConditionalExpression: +3 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:scripts/record-review-coverage.mjs:recordReviewCoverage",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "recordReviewCoverage: cyclomatic 17, cognitive 15.",
+      "sites": [
+        {
+          "file": "scripts/record-review-coverage.mjs",
+          "line": 11,
+          "name": "recordReviewCoverage"
+        }
+      ],
+      "score": 1.7,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "scripts/record-review-coverage.mjs:35:5 if: +2 cognitive",
+        "scripts/record-review-coverage.mjs:36:5 if: +2 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/health/source-modules.ts:sourceModuleSubjects",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "sourceModuleSubjects: cyclomatic 17, cognitive 23.",
+      "sites": [
+        {
+          "file": "src/queries/health/source-modules.ts",
+          "line": 23,
+          "name": "sourceModuleSubjects"
+        }
+      ],
+      "score": 1.7,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/health/source-modules.ts:33:16 ConditionalExpression: +2 cognitive",
+        "src/queries/health/source-modules.ts:35:5 if: +2 cognitive",
+        "src/queries/health/source-modules.ts:38:16 ConditionalExpression: +3 cognitive",
+        "src/queries/health/source-modules.ts:53:5 if: +2 cognitive",
+        "src/queries/health/source-modules.ts:56:5 if: +2 cognitive",
+        "src/queries/health/source-modules.ts:70:5 if: +2 cognitive",
+        "src/queries/health/source-modules.ts:71:5 ForOfStatement: +2 cognitive",
+        "src/queries/health/source-modules.ts:75:7 if: +3 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/runtime/query-commands/maintenance.ts:renderSourceMaintenance",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "renderSourceMaintenance: cyclomatic 17, cognitive 15.",
+      "sites": [
+        {
+          "file": "src/runtime/query-commands/maintenance.ts",
+          "line": 42,
+          "name": "renderSourceMaintenance"
+        }
+      ],
+      "score": 1.7,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/runtime/query-commands/maintenance.ts:81:95 ConditionalExpression: +2 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/source/primitives/file-kind.ts:matchesTestPattern",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "matchesTestPattern: cyclomatic 17, cognitive 16.",
+      "sites": [
+        {
+          "file": "src/source/primitives/file-kind.ts",
+          "line": 39,
+          "name": "matchesTestPattern"
+        }
+      ],
+      "score": 1.7,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling."
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/graph/affected.ts:getDirectAffectedRows",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "getDirectAffectedRows: cyclomatic 16, cognitive 25.",
+      "sites": [
+        {
+          "file": "src/queries/graph/affected.ts",
+          "line": 164,
+          "name": "getDirectAffectedRows"
+        }
+      ],
+      "score": 1.6666666666666667,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/graph/affected.ts:190:5 ForOfStatement: +2 cognitive",
+        "src/queries/graph/affected.ts:192:7 if: +3 cognitive",
+        "src/queries/graph/affected.ts:194:5 ForOfStatement: +2 cognitive",
+        "src/queries/graph/affected.ts:198:5 if: +2 cognitive",
+        "src/queries/graph/affected.ts:213:5 if: +2 cognitive",
+        "src/queries/graph/affected.ts:215:7 if: +3 cognitive",
+        "src/queries/graph/affected.ts:227:5 if: +2 cognitive",
+        "src/queries/graph/affected.ts:230:5 if: +2 cognitive",
+        "src/queries/graph/affected.ts:235:5 if: +2 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/domain/scip-range.ts:occurrenceStringColumn",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "occurrenceStringColumn: cyclomatic 16, cognitive 19.",
+      "sites": [
+        {
+          "file": "src/domain/scip-range.ts",
+          "line": 24,
+          "name": "occurrenceStringColumn"
+        }
+      ],
+      "score": 1.6,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/domain/scip-range.ts:30:37 ConditionalExpression: +2 cognitive",
+        "src/domain/scip-range.ts:32:12 ConditionalExpression: +2 cognitive",
+        "src/domain/scip-range.ts:37:5 if: +2 cognitive",
+        "src/domain/scip-range.ts:38:14 ConditionalExpression: +2 cognitive",
+        "src/domain/scip-range.ts:40:5 if: +2 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/impact/diff-impact.ts:parseGitNameStatuses",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "parseGitNameStatuses: cyclomatic 10, cognitive 24.",
+      "sites": [
+        {
+          "file": "src/queries/impact/diff-impact.ts",
+          "line": 697,
+          "name": "parseGitNameStatuses"
+        }
+      ],
+      "score": 1.6,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/impact/diff-impact.ts:707:5 ForStatement: +2 cognitive",
+        "src/queries/impact/diff-impact.ts:710:7 if: +3 cognitive",
+        "src/queries/impact/diff-impact.ts:711:7 if: +3 cognitive",
+        "src/queries/impact/diff-impact.ts:713:9 if: +4 cognitive",
+        "src/queries/impact/diff-impact.ts:715:9 if: +4 cognitive",
+        "src/queries/impact/diff-impact.ts:723:9 if: +4 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/navigation/imports.ts:sourceImportMatchesTarget",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "sourceImportMatchesTarget: cyclomatic 15, cognitive 14.",
+      "sites": [
+        {
+          "file": "src/queries/navigation/imports.ts",
+          "line": 189,
+          "name": "sourceImportMatchesTarget"
+        }
+      ],
+      "score": 1.5,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling."
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/source/ast/function-metrics.ts:implementationTokens.visit",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "implementationTokens.visit: cyclomatic 15, cognitive 12.",
+      "sites": [
+        {
+          "file": "src/source/ast/function-metrics.ts",
+          "line": 215,
+          "name": "implementationTokens.visit"
+        }
+      ],
+      "score": 1.5,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/source/ast/function-metrics.ts:218:7 ForOfStatement: +2 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/source/ast/maintenance-imports.ts:resolveSourceImport",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "resolveSourceImport: cyclomatic 14, cognitive 15.",
+      "sites": [
+        {
+          "file": "src/source/ast/maintenance-imports.ts",
+          "line": 100,
+          "name": "resolveSourceImport"
+        }
+      ],
+      "score": 1.4,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/source/ast/maintenance-imports.ts:111:5 if: +2 cognitive",
+        "src/source/ast/maintenance-imports.ts:134:36 ConditionalExpression: +2 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/impact/incomplete-migration.ts:newCallablesInDiff",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "newCallablesInDiff: cyclomatic 11, cognitive 20.",
+      "sites": [
+        {
+          "file": "src/queries/impact/incomplete-migration.ts",
+          "line": 391,
+          "name": "newCallablesInDiff"
+        }
+      ],
+      "score": 1.3333333333333333,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/impact/incomplete-migration.ts:400:5 if: +2 cognitive",
+        "src/queries/impact/incomplete-migration.ts:403:5 if: +2 cognitive",
+        "src/queries/impact/incomplete-migration.ts:404:5 if: +2 cognitive",
+        "src/queries/impact/incomplete-migration.ts:408:5 if: +2 cognitive",
+        "src/queries/impact/incomplete-migration.ts:410:7 if: +3 cognitive",
+        "src/queries/impact/incomplete-migration.ts:412:9 if: +4 cognitive",
+        "src/queries/impact/incomplete-migration.ts:417:7 if: +3 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/cleanup/similar.ts:deserializeSourceFingerprintCache",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "deserializeSourceFingerprintCache: cyclomatic 13, cognitive 7.",
+      "sites": [
+        {
+          "file": "src/queries/cleanup/similar.ts",
+          "line": 1754,
+          "name": "deserializeSourceFingerprintCache"
+        }
+      ],
+      "score": 1.3,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/cleanup/similar.ts:1760:7 if: +2 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/internal/file-resolution.ts:resolveDocumentCandidates",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "resolveDocumentCandidates: cyclomatic 13, cognitive 17.",
+      "sites": [
+        {
+          "file": "src/queries/internal/file-resolution.ts",
+          "line": 77,
+          "name": "resolveDocumentCandidates"
+        }
+      ],
+      "score": 1.3,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/internal/file-resolution.ts:83:18 ConditionalExpression: +2 cognitive",
+        "src/queries/internal/file-resolution.ts:85:20 ConditionalExpression: +2 cognitive",
+        "src/queries/internal/file-resolution.ts:87:5 if: +2 cognitive",
+        "src/queries/internal/file-resolution.ts:103:5 if: +2 cognitive",
+        "src/queries/internal/file-resolution.ts:109:5 if: +2 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/runtime/commands/command-handlers.ts:handleHealthSemanticPrewarm",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "handleHealthSemanticPrewarm: cyclomatic 13, cognitive 5.",
+      "sites": [
+        {
+          "file": "src/runtime/commands/command-handlers.ts",
+          "line": 264,
+          "name": "handleHealthSemanticPrewarm"
+        }
+      ],
+      "score": 1.3,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling."
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/source/ast/maintenance-imports.ts:maintenanceImports.visit",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "maintenanceImports.visit: cyclomatic 13, cognitive 13.",
+      "sites": [
+        {
+          "file": "src/source/ast/maintenance-imports.ts",
+          "line": 54,
+          "name": "maintenanceImports.visit"
+        }
+      ],
+      "score": 1.3,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/source/ast/maintenance-imports.ts:58:44 ConditionalExpression: +2 cognitive",
+        "src/source/ast/maintenance-imports.ts:62:7 if: +2 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/storage/scip-rows.ts:referenceOccurrenceLines.bySymbol.<callback:REFERENCE_OCCURRENCE_LINES.get:2>",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "referenceOccurrenceLines.bySymbol.<callback:REFERENCE_OCCURRENCE_LINES.get:2>: cyclomatic 13, cognitive 16.",
+      "sites": [
+        {
+          "file": "src/storage/scip-rows.ts",
+          "line": 201,
+          "name": "referenceOccurrenceLines.bySymbol.<callback:REFERENCE_OCCURRENCE_LINES.get:2>"
+        }
+      ],
+      "score": 1.3,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/storage/scip-rows.ts:210:9 if: +2 cognitive",
+        "src/storage/scip-rows.ts:211:9 ForOfStatement: +2 cognitive",
+        "src/storage/scip-rows.ts:212:11 if: +3 cognitive",
+        "src/storage/scip-rows.ts:214:11 if: +3 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/cleanup/test-quality.ts:testBlock",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "testBlock: cyclomatic 12, cognitive 10.",
+      "sites": [
+        {
+          "file": "src/queries/cleanup/test-quality.ts",
+          "line": 170,
+          "name": "testBlock"
+        }
+      ],
+      "score": 1.2,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling."
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/health/source-review.ts:changedFunctions",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "changedFunctions: cyclomatic 12, cognitive 14.",
+      "sites": [
+        {
+          "file": "src/queries/health/source-review.ts",
+          "line": 221,
+          "name": "changedFunctions"
+        }
+      ],
+      "score": 1.2,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/health/source-review.ts:234:5 if: +2 cognitive",
+        "src/queries/health/source-review.ts:235:7 if: +3 cognitive",
+        "src/queries/health/source-review.ts:242:7 if: +3 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/navigation/code.ts:codeBatchEntry",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "codeBatchEntry: cyclomatic 12, cognitive 15.",
+      "sites": [
+        {
+          "file": "src/queries/navigation/code.ts",
+          "line": 175,
+          "name": "codeBatchEntry"
+        }
+      ],
+      "score": 1.2,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/navigation/code.ts:185:5 if: +2 cognitive",
+        "src/queries/navigation/code.ts:186:12 ConditionalExpression: +2 cognitive",
+        "src/queries/navigation/code.ts:204:16 ConditionalExpression: +2 cognitive",
+        "src/queries/navigation/code.ts:223:9 ConditionalExpression: +2 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/source/ast/maintenance-bindings.ts:maintenanceBindings.functions.<callback:nodes.flatMap:0>.visit",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "maintenanceBindings.functions.<callback:nodes.flatMap:0>.visit: cyclomatic 12, cognitive 15.",
+      "sites": [
+        {
+          "file": "src/source/ast/maintenance-bindings.ts",
+          "line": 49,
+          "name": "maintenanceBindings.functions.<callback:nodes.flatMap:0>.visit"
+        }
+      ],
+      "score": 1.2,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/source/ast/maintenance-bindings.ts:53:9 if: +2 cognitive",
+        "src/source/ast/maintenance-bindings.ts:54:9 ForOfStatement: +2 cognitive",
+        "src/source/ast/maintenance-bindings.ts:55:11 if: +3 cognitive",
+        "src/source/ast/maintenance-bindings.ts:57:11 if: +3 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/source/facts/source-callables.ts:callSiteOwner",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "callSiteOwner: cyclomatic 12, cognitive 14.",
+      "sites": [
+        {
+          "file": "src/source/facts/source-callables.ts",
+          "line": 83,
+          "name": "callSiteOwner"
+        }
+      ],
+      "score": 1.2,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/source/facts/source-callables.ts:87:5 if: +2 cognitive",
+        "src/source/facts/source-callables.ts:88:21 ConditionalExpression: +2 cognitive",
+        "src/source/facts/source-callables.ts:89:25 ConditionalExpression: +2 cognitive",
+        "src/source/facts/source-callables.ts:91:13 ConditionalExpression: +2 cognitive",
+        "src/source/facts/source-callables.ts:91:54 ConditionalExpression: +3 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/source/maintenance-snapshot.ts:baseSourceSnapshot",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "baseSourceSnapshot: cyclomatic 12, cognitive 14.",
+      "sites": [
+        {
+          "file": "src/source/maintenance-snapshot.ts",
+          "line": 66,
+          "name": "baseSourceSnapshot"
+        }
+      ],
+      "score": 1.2,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/source/maintenance-snapshot.ts:73:5 if: +2 cognitive",
+        "src/source/maintenance-snapshot.ts:95:5 if: +2 cognitive",
+        "src/source/maintenance-snapshot.ts:98:5 if: +2 cognitive",
+        "src/source/maintenance-snapshot.ts:100:5 ForOfStatement: +2 cognitive",
+        "src/source/maintenance-snapshot.ts:103:7 if: +3 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/source/maintenance-snapshot.ts:maintenanceExclusion",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "maintenanceExclusion: cyclomatic 12, cognitive 11.",
+      "sites": [
+        {
+          "file": "src/source/maintenance-snapshot.ts",
+          "line": 33,
+          "name": "maintenanceExclusion"
+        }
+      ],
+      "score": 1.2,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling."
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/symbols/identifier-attribution.ts:findReferences",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "findReferences: cyclomatic 11, cognitive 18.",
+      "sites": [
+        {
+          "file": "src/symbols/identifier-attribution.ts",
+          "line": 152,
+          "name": "findReferences"
+        }
+      ],
+      "score": 1.2,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/symbols/identifier-attribution.ts:172:5 if: +2 cognitive",
+        "src/symbols/identifier-attribution.ts:174:7 ForOfStatement: +3 cognitive",
+        "src/symbols/identifier-attribution.ts:181:7 ForOfStatement: +3 cognitive",
+        "src/symbols/identifier-attribution.ts:183:9 if: +4 cognitive",
+        "src/symbols/identifier-attribution.ts:192:5 if: +2 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/cleanup/similar.ts:sourceFingerprintsForDefinitions",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "sourceFingerprintsForDefinitions: cyclomatic 11, cognitive 17.",
+      "sites": [
+        {
+          "file": "src/queries/cleanup/similar.ts",
+          "line": 1692,
+          "name": "sourceFingerprintsForDefinitions"
+        }
+      ],
+      "score": 1.1333333333333333,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/cleanup/similar.ts:1706:5 if: +2 cognitive",
+        "src/queries/cleanup/similar.ts:1711:5 ForOfStatement: +2 cognitive",
+        "src/queries/cleanup/similar.ts:1714:20 ConditionalExpression: +3 cognitive",
+        "src/queries/cleanup/similar.ts:1715:7 if: +3 cognitive",
+        "src/queries/cleanup/similar.ts:1727:7 if: +3 cognitive",
+        "src/queries/cleanup/similar.ts:1736:5 if: +2 cognitive"
+      ],
+      "status": "worsened",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/runtime/query-commands/maintenance.ts:renderFindings",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "renderFindings: cyclomatic 8, cognitive 17.",
+      "sites": [
+        {
+          "file": "src/runtime/query-commands/maintenance.ts",
+          "line": 123,
+          "name": "renderFindings"
+        }
+      ],
+      "score": 1.1333333333333333,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/runtime/query-commands/maintenance.ts:127:13 ConditionalExpression: +2 cognitive",
+        "src/runtime/query-commands/maintenance.ts:129:5 ForOfStatement: +2 cognitive",
+        "src/runtime/query-commands/maintenance.ts:129:47 ConditionalExpression: +3 cognitive",
+        "src/runtime/query-commands/maintenance.ts:130:51 ConditionalExpression: +3 cognitive",
+        "src/runtime/query-commands/maintenance.ts:131:5 if: +2 cognitive",
+        "src/runtime/query-commands/maintenance.ts:131:29 ForOfStatement: +3 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/health/source-suppressions.ts:sourceSuppressionDecisions.decisions.<callback:suppressions.map:0>",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "sourceSuppressionDecisions.decisions.<callback:suppressions.map:0>: cyclomatic 11, cognitive 10.",
+      "sites": [
+        {
+          "file": "src/queries/health/source-suppressions.ts",
+          "line": 45,
+          "name": "sourceSuppressionDecisions.decisions.<callback:suppressions.map:0>"
+        }
+      ],
+      "score": 1.1,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling."
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/health/source-suppressions.ts:sourceSuppressionRecords",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "sourceSuppressionRecords: cyclomatic 11, cognitive 12.",
+      "sites": [
+        {
+          "file": "src/queries/health/source-suppressions.ts",
+          "line": 112,
+          "name": "sourceSuppressionRecords"
+        }
+      ],
+      "score": 1.1,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/health/source-suppressions.ts:123:55 ConditionalExpression: +2 cognitive",
+        "src/queries/health/source-suppressions.ts:136:5 if: +2 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/queries/navigation/code.ts:readSymbolRange",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "readSymbolRange: cyclomatic 11, cognitive 8.",
+      "sites": [
+        {
+          "file": "src/queries/navigation/code.ts",
+          "line": 623,
+          "name": "readSymbolRange"
+        }
+      ],
+      "score": 1.1,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling."
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/runtime/commands/command-handlers.ts:handleHealth",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "handleHealth: cyclomatic 11, cognitive 12.",
+      "sites": [
+        {
+          "file": "src/runtime/commands/command-handlers.ts",
+          "line": 296,
+          "name": "handleHealth"
+        }
+      ],
+      "score": 1.1,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/runtime/commands/command-handlers.ts:311:5 if: +2 cognitive",
+        "src/runtime/commands/command-handlers.ts:343:29 ConditionalExpression: +2 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/source/ast/maintenance-bindings.ts:importBindings",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "importBindings: cyclomatic 11, cognitive 12.",
+      "sites": [
+        {
+          "file": "src/source/ast/maintenance-bindings.ts",
+          "line": 101,
+          "name": "importBindings"
+        }
+      ],
+      "score": 1.1,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/source/ast/maintenance-bindings.ts:107:5 ForOfStatement: +2 cognitive",
+        "src/source/ast/maintenance-bindings.ts:108:7 if: +3 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/source/ast/maintenance-bindings.ts:maintenanceBindings",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "maintenanceBindings: cyclomatic 11, cognitive 16.",
+      "sites": [
+        {
+          "file": "src/source/ast/maintenance-bindings.ts",
+          "line": 20,
+          "name": "maintenanceBindings"
+        }
+      ],
+      "score": 1.1,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/source/ast/maintenance-bindings.ts:29:5 if: +2 cognitive",
+        "src/source/ast/maintenance-bindings.ts:35:5 if: +2 cognitive",
+        "src/source/ast/maintenance-bindings.ts:36:5 ForOfStatement: +2 cognitive",
+        "src/source/ast/maintenance-bindings.ts:38:7 if: +3 cognitive",
+        "src/source/ast/maintenance-bindings.ts:39:7 if: +3 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    },
+    {
+      "id": "complexity:src/source/primitives/maintenance-project.ts:readProjectConfigs",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "readProjectConfigs: cyclomatic 10, cognitive 16.",
+      "sites": [
+        {
+          "file": "src/source/primitives/maintenance-project.ts",
+          "line": 87,
+          "name": "readProjectConfigs"
+        }
+      ],
+      "score": 1.0666666666666667,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/source/primitives/maintenance-project.ts:101:5 if: +2 cognitive",
+        "src/source/primitives/maintenance-project.ts:105:5 if: +2 cognitive",
+        "src/source/primitives/maintenance-project.ts:116:5 ForOfStatement: +2 cognitive",
+        "src/source/primitives/maintenance-project.ts:118:7 if: +3 cognitive",
+        "src/source/primitives/maintenance-project.ts:127:5 ForOfStatement: +2 cognitive",
+        "src/source/primitives/maintenance-project.ts:128:22 ConditionalExpression: +3 cognitive"
+      ],
+      "status": "introduced",
+      "disposition": "open-maintainability-work",
+      "assessment": "The reported branch/nesting metric exceeds the configured threshold. This is a triage item, not a demonstrated command-result error or an accepted exemption. Preserve the command contract and its regression witnesses when simplifying this unit."
+    }
+  ],
+  "coverage": {
+    "status": "accounted",
+    "analyzedFiles": 557,
+    "eligibleFiles": 557,
+    "excludedFiles": 2476,
+    "exclusions": {
+      "unsupported-language": 2084,
+      "test": 392
+    },
+    "dependencies": {
+      "resolutions": {
+        "internal": 2964,
+        "external": 74,
+        "builtin": 575,
+        "excluded": 2,
+        "missing": 0,
+        "ambiguous": 0,
+        "dynamic": 1
+      },
+      "typeOnly": 791,
+      "test": 0,
+      "deferredOrCommonJs": 32,
+      "unresolved": [
+        {
+          "file": "scripts/bench-native-symbol-leaf.mjs",
+          "line": 19,
+          "specifier": "`file://${distIndex}`",
+          "kind": "value",
+          "role": "production",
+          "syntax": "dynamic-import",
+          "configs": [
+            "tsconfig.json"
+          ],
+          "resolution": "dynamic"
+        }
+      ],
+      "excluded": [
+        {
+          "file": "scripts/accuracy-calibration.mjs",
+          "line": 48,
+          "specifier": "../dist/queries/index.js",
+          "kind": "value",
+          "role": "production",
+          "syntax": "import",
+          "configs": [
+            "tsconfig.json"
+          ],
+          "resolution": "excluded",
+          "excludedReason": "Requested managed output dist/queries/index.js; build/install existence is not established by the source inventory."
+        },
+        {
+          "file": "scripts/accuracy-calibration.mjs",
+          "line": 49,
+          "specifier": "../dist/index.js",
+          "kind": "value",
+          "role": "production",
+          "syntax": "import",
+          "configs": [
+            "tsconfig.json"
+          ],
+          "resolution": "excluded",
+          "excludedReason": "Requested managed output dist/index.js; build/install existence is not established by the source inventory."
+        }
+      ]
+    },
+    "analyzedFunctions": 11945,
+    "unresolvedImports": 0,
+    "testCoverage": {
+      "requested": false,
+      "available": 0,
+      "unavailable": 1002,
+      "reasons": [
+        "No source-matched coverage artifact supplied."
+      ]
+    },
+    "problems": [],
+    "limits": [
+      "TS/JS implemented functions; metric rules typescript-function-local-v1. Cognitive counts structural nesting and logical sequences; recursion and interprocedural behavior are not measured.",
+      "Duplication compares whole function body tokens (at least 60 tokens), retaining literals and property names. Renamed local bindings are candidates; similarity does not prove interchangeable behavior or justify deletion.",
+      "Dependencies use compiler resolution over captured source and project configuration, including aliases, repository package exports, literal dynamic imports and unshadowed CommonJS calls. External packages, excluded targets and unresolved imports are distinguished. Production file cycles use static value imports; type/test/deferred relationships remain separate. Runtime handoffs and custom loaders are not inferred.",
+      "Ownership and mixed responsibilities require evidence about callers, state and business rules; this scan does not infer a correct owner or an architectural grade.",
+      "Default exclusions: tests/fixtures/benchmarks, reference/vendor copies, generated files, declarations and build output. Use --include-tests, --include-references or --include-generated for the corresponding source roles.",
+      "Diff is the selected Git commit versus current files, including untracked files; staged-only review and inferred rename/split identity are not claimed.",
+      "Coverage without matching source hashes is unavailable, never zero. Base CRAP is unavailable unless independently measured against that base.",
+      "Affected files are transitive importers in the covered source graph. Use fresh diff-impact/evidence for symbol consumers and runtime effects."
+    ]
+  }
+}

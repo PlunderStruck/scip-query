@@ -8,7 +8,6 @@ export const TYPESCRIPT_FACTUAL_DETECTORS = [
   'cycles',
   'duplicate-bodies',
   'complexity',
-  'isolated',
   'redundant-reexports',
   'not-implemented',
   'decorative-checkers',
@@ -18,25 +17,15 @@ export const TYPESCRIPT_SIMILARITY_DETECTORS = [
   'recent-duplicates',
   'similar',
   'similar-files',
-  'similar-chains',
   'similar-signatures',
   'twin-drift',
 ];
-export const TYPESCRIPT_ARCHITECTURE_DETECTORS = [
-  'co-change',
-  'doc-drift',
-  'drift',
-  'wrapper-candidates',
-  'passthrough-candidates',
-  'stale-abstractions',
-];
+export const TYPESCRIPT_ARCHITECTURE_DETECTORS = ['co-change', 'doc-drift', 'drift', 'passthrough-candidates'];
 export const TYPESCRIPT_GRAPH_RISK_DETECTORS = [
-  'extract-candidates',
   'locality-candidates',
   'coupling',
   'bottlenecks',
   'deep-chains',
-  'complexity-hotspots',
   'hotspots',
   'fan-in',
   'fan-out',

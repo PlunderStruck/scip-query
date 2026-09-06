@@ -1,0 +1,1 @@
+{"kind":"scip-query-json-export","schemaVersion":1,"producer":{"name":"scip-query","version":"0.25.0"},"command":"value-flow","path":"/private/tmp/scip-followup-cli/value-flow.json","bytes":10704,"sha256":"0f2ceca8e19e5e2dd651a9eaa07c6265701f0e08cfad1c845cc422da28dc7e91"}

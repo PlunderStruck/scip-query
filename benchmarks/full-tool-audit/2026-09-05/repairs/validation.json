@@ -1,0 +1,58 @@
+{
+  "completedAt": "2026-09-06T02:34:31.230017+00:00",
+  "fullSuite": {
+    "testsPassed": 2936,
+    "testFilesPassed": 339,
+    "durationSeconds": 299.32
+  },
+  "downstreamTestsPassed": 81,
+  "libraryAssertions": {
+    "passed": 18,
+    "failed": 0,
+    "capturedProbes": 27
+  },
+  "integrationChecks": {
+    "passed": 15,
+    "failed": 0
+  },
+  "cheaperModel": {
+    "model": "gpt-5.6-sol",
+    "reasoning": "medium",
+    "initialPassed": true,
+    "followUpPassed": true,
+    "comparativeBenefitEstablished": false
+  },
+  "checks": {
+    "full-tests": {
+      "exitCode": 0,
+      "log": "full-tests.log",
+      "sha256": "7e8582e5b1c55975b578a77aaaefc8f68023db0cb5670a1f922c391733091df1"
+    },
+    "downstream-flow-tests": {
+      "exitCode": 0,
+      "log": "downstream-flow-tests.log",
+      "sha256": "0a19a8f525e8ccfd62fb464241ad3136155a60a66880c40ecc1282d0e135b67c"
+    },
+    "lint": {
+      "exitCode": 0,
+      "log": "lint.log",
+      "sha256": "838f20ab0f3fabccab865bac4434b2ca459f99fa1a26a4fa2a11685466fb0087"
+    },
+    "typecheck": {
+      "exitCode": 0,
+      "log": "typecheck.log",
+      "sha256": "857420366791dfa99856c9322d05719b89aa1ee97f7338a59c08eb79473dcd62"
+    },
+    "full-reindex": {
+      "exitCode": 0,
+      "log": "full-reindex.log",
+      "sha256": "3973d5d794eea9e731d07d44f2295ad098a1a6d58934888cea2fa559e8be7fdd"
+    }
+  },
+  "cleanup": {
+    "auditFixtureRemoved": true,
+    "trialWorktreesRemoved": true,
+    "checkoutWatcherStopped": true
+  },
+  "commitCreated": false
+}

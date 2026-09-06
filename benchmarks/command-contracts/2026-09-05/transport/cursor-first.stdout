@@ -1,0 +1,76 @@
+[scip-query output page: characters 0-3958 of 177484]
+═══ REQUEST ═══
+  resolved-selector=large.txt:1-3000
+
+═══ OBSERVED FACTS ═══
+large.txt:1-3000  large.txt:1-3000  [unknown]
+
+     1  ORIGINAL_TOKEN_0000 immutable source content value
+     2  ORIGINAL_TOKEN_0001 immutable source content value
+     3  ORIGINAL_TOKEN_0002 immutable source content value
+     4  ORIGINAL_TOKEN_0003 immutable source content value
+     5  ORIGINAL_TOKEN_0004 immutable source content value
+     6  ORIGINAL_TOKEN_0005 immutable source content value
+     7  ORIGINAL_TOKEN_0006 immutable source content value
+     8  ORIGINAL_TOKEN_0007 immutable source content value
+     9  ORIGINAL_TOKEN_0008 immutable source content value
+    10  ORIGINAL_TOKEN_0009 immutable source content value
+    11  ORIGINAL_TOKEN_0010 immutable source content value
+    12  ORIGINAL_TOKEN_0011 immutable source content value
+    13  ORIGINAL_TOKEN_0012 immutable source content value
+    14  ORIGINAL_TOKEN_0013 immutable source content value
+    15  ORIGINAL_TOKEN_0014 immutable source content value
+    16  ORIGINAL_TOKEN_0015 immutable source content value
+    17  ORIGINAL_TOKEN_0016 immutable source content value
+    18  ORIGINAL_TOKEN_0017 immutable source content value
+    19  ORIGINAL_TOKEN_0018 immutable source content value
+    20  ORIGINAL_TOKEN_0019 immutable source content value
+    21  ORIGINAL_TOKEN_0020 immutable source content value
+    22  ORIGINAL_TOKEN_0021 immutable source content value
+    23  ORIGINAL_TOKEN_0022 immutable source content value
+    24  ORIGINAL_TOKEN_0023 immutable source content value
+    25  ORIGINAL_TOKEN_0024 immutable source content value
+    26  ORIGINAL_TOKEN_0025 immutable source content value
+    27  ORIGINAL_TOKEN_0026 immutable source content value
+    28  ORIGINAL_TOKEN_0027 immutable source content value
+    29  ORIGINAL_TOKEN_0028 immutable source content value
+    30  ORIGINAL_TOKEN_0029 immutable source content value
+    31  ORIGINAL_TOKEN_0030 immutable source content value
+    32  ORIGINAL_TOKEN_0031 immutable source content value
+    33  ORIGINAL_TOKEN_0032 immutable source content value
+    34  ORIGINAL_TOKEN_0033 immutable source content value
+    35  ORIGINAL_TOKEN_0034 immutable source content value
+    36  ORIGINAL_TOKEN_0035 immutable source content value
+    37  ORIGINAL_TOKEN_0036 immutable source content value
+    38  ORIGINAL_TOKEN_0037 immutable source content value
+    39  ORIGINAL_TOKEN_0038 immutable source content value
+    40  ORIGINAL_TOKEN_0039 immutable source content value
+    41  ORIGINAL_TOKEN_0040 immutable source content value
+    42  ORIGINAL_TOKEN_0041 immutable source content value
+    43  ORIGINAL_TOKEN_0042 immutable source content value
+    44  ORIGINAL_TOKEN_0043 immutable source content value
+    45  ORIGINAL_TOKEN_0044 immutable source content value
+    46  ORIGINAL_TOKEN_0045 immutable source content value
+    47  ORIGINAL_TOKEN_0046 immutable source content value
+    48  ORIGINAL_TOKEN_0047 immutable source content value
+    49  ORIGINAL_TOKEN_0048 immutable source content value
+    50  ORIGINAL_TOKEN_0049 immutable source content value
+    51  ORIGINAL_TOKEN_0050 immutable source content value
+    52  ORIGINAL_TOKEN_0051 immutable source content value
+    53  ORIGINAL_TOKEN_0052 immutable source content value
+    54  ORIGINAL_TOKEN_0053 immutable source content value
+    55  ORIGINAL_TOKEN_0054 immutable source content value
+    56  ORIGINAL_TOKEN_0055 immutable source content value
+    57  ORIGINAL_TOKEN_0056 immutable source content value
+    58  ORIGINAL_TOKEN_0057 immutable source content value
+    59  ORIGINAL_TOKEN_0058 immutable source content value
+    60  ORIGINAL_TOKEN_0059 immutable source content value
+    61  ORIGINAL_TOKEN_0060 immutable source content value
+    62  ORIGINAL_TOKEN_0061 immutable source content value
+    63  ORIGINAL_TOKEN_0062 immutable source content value
+    64  ORIGINAL_TOKEN_0063 immutable source content value
+    65  ORIGINAL_TOKEN_0064 immutable source content value
+
+[Incomplete: 173525 characters remain.]
+Continue exactly:
+/opt/homebrew/Cellar/node/26.8.1/bin/node /Users/aydansalois/Documents/GitHub/scip-query/dist/cli.js continue aRIShnEsoPQi

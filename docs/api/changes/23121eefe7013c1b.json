@@ -1,0 +1,817 @@
+{
+  "acceptedAt": "2026-09-06T06:12:10.569Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "23121eefe7013c1bde32b6408d381b49854f628c78a6cef35107813cef2737b7",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CallGraphEvidenceRow changed from interface CallGraphEvidenceRow { symbol: string; shortName: string; file: string; relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate'; evidenceStrength: 'e... to interface CallGraphEvidenceRow { symbol: string; shortName: string; file: string; relationship: 'resolved-call' | 'source-call-candidate' | 'reference-candidate' | 'chunk-candid....",
+      "target": "./queries:CallGraphEvidenceRow"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CodeBatchEntry changed from interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand... to interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand....",
+      "target": "./queries:CodeBatchEntry"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "EntryMapCoverage changed from interface EntryMapCoverage { completeWithinIndexedStaticCallEdges: true; completeWithinSelectedStaticEvidence?: true; candidateReachabilityIncluded?: boolean; dynamicDispatchRep... to interface EntryMapCoverage { completeWithinSelectedStaticEvidence?: true; candidateReachabilityIncluded?: boolean; dynamicDispatchRepresented: false; symbolCount: number; symbol....",
+      "target": "./queries:EntryMapCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "EntryPointResult changed from interface EntryPointResult { symbol: string; shortName: string; file: string; startLine: number; endLine: number; documentation: string | null; confidence: EntryPointConfidence;... to interface EntryPointResult { symbol: string; shortName: string; file: string; startLine: number; endLine: number; documentation: string | null; confidence: EntryPointConfidence;....",
+      "target": "./queries:EntryPointResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "EvidenceRelatedSymbol changed from interface EvidenceRelatedSymbol extends SourceSnippet { symbol: string; shortName: string; omittedLines: number; } to interface EvidenceRelatedSymbol extends SourceSnippet { symbol: string; shortName: string; omittedLines: number; evidenceStrength: 'exact' | 'candidate'; }.",
+      "target": "./queries:EvidenceRelatedSymbol"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceCoverage changed from interface GraphEvidenceCoverage { status: 'accounted' | 'bounded' | 'incomplete'; topologyStatus: 'accounted' | 'incomplete'; scope: string; maxDepth: number; maxEdges: number; ... to interface GraphEvidenceCoverage { status: 'accounted' | 'bounded' | 'incomplete'; topologyStatus: 'accounted' | 'incomplete'; scope: string; maxDepth: number; maxEdges: number; ....",
+      "target": "./queries:GraphEvidenceCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HEALTH_PHASES changed from declare const HEALTH_PHASES: readonly [ \"overview\", \"dead\", \"isolated\", \"cycles\", \"similar\", \"duplicate-bodies\", \"twin-drift\", \"react-component-duplicates\", \"react-hook-candidat... to declare const HEALTH_PHASES: readonly [ \"overview\", \"dead\", \"cycles\", \"similar\", \"duplicate-bodies\", \"twin-drift\", \"react-component-duplicates\", \"react-hook-candidates\", \"react-....",
+      "target": "./queries:HEALTH_PHASES"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HealthReport changed from interface HealthReport { overview: { documents: number; symbols: number; indexSizeBytes: number; }; provenance?: HealthProvenance; findings: { deadSymbols: number; deadLoc: numb... to interface HealthReport { overview: { documents: number; symbols: number; indexSizeBytes: number; }; provenance?: HealthProvenance; findings: { deadSymbols: number; deadLoc: numb....",
+      "target": "./queries:HealthReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ImportResult changed from interface ImportResult { symbol: string; shortName: string; fromFile: string; } to interface ImportResult { symbol: string; shortName: string; fromFile: string; evidence: 'indexed-import' | 'semantic-import' | 'source-import-candidate'; }.",
+      "target": "./queries:ImportResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export IsolatedResult.",
+      "target": "./queries:IsolatedResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export evidence.",
+      "target": "./queries:evidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export isolated.",
+      "target": "./queries:isolated"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export qualifiedEvidence.",
+      "target": "./queries:qualifiedEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export qualifiedTraceEvidence.",
+      "target": "./queries:qualifiedTraceEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export trace.",
+      "target": "./queries:trace"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export traceEvidence.",
+      "target": "./queries:traceEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CallGraphEvidenceRow changed from interface CallGraphEvidenceRow { symbol: string; shortName: string; file: string; relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate'; evidenceStrength: 'e... to interface CallGraphEvidenceRow { symbol: string; shortName: string; file: string; relationship: 'resolved-call' | 'source-call-candidate' | 'reference-candidate' | 'chunk-candid....",
+      "target": "./queries/call-graph:CallGraphEvidenceRow"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CodeBatchEntry changed from interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand... to interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand....",
+      "target": "./queries/code:CodeBatchEntry"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/context; review their variance and runtime meaning.",
+      "target": "./queries/context"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "EntryMapCoverage changed from interface EntryMapCoverage { completeWithinIndexedStaticCallEdges: true; completeWithinSelectedStaticEvidence?: true; candidateReachabilityIncluded?: boolean; dynamicDispatchRep... to interface EntryMapCoverage { completeWithinSelectedStaticEvidence?: true; candidateReachabilityIncluded?: boolean; dynamicDispatchRepresented: false; symbolCount: number; symbol....",
+      "target": "./queries/entry-map:EntryMapCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "EntryPointResult changed from interface EntryPointResult { symbol: string; shortName: string; file: string; startLine: number; endLine: number; documentation: string | null; confidence: EntryPointConfidence;... to interface EntryPointResult { symbol: string; shortName: string; file: string; startLine: number; endLine: number; documentation: string | null; confidence: EntryPointConfidence;....",
+      "target": "./queries/entry-map:EntryPointResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EvidenceOptions.",
+      "target": "./queries/evidence:EvidenceOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EvidencePart.",
+      "target": "./queries/evidence:EvidencePart"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EvidenceReferenceWindow.",
+      "target": "./queries/evidence:EvidenceReferenceWindow"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EvidenceRelatedSymbol.",
+      "target": "./queries/evidence:EvidenceRelatedSymbol"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export EvidenceResult.",
+      "target": "./queries/evidence:EvidenceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GRAPH_EVIDENCE_FAMILIES.",
+      "target": "./queries/evidence:GRAPH_EVIDENCE_FAMILIES"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GRAPH_EVIDENCE_VIEWS.",
+      "target": "./queries/evidence:GRAPH_EVIDENCE_VIEWS"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceCoverage.",
+      "target": "./queries/evidence:GraphEvidenceCoverage"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceEdge.",
+      "target": "./queries/evidence:GraphEvidenceEdge"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceFamily.",
+      "target": "./queries/evidence:GraphEvidenceFamily"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceFold.",
+      "target": "./queries/evidence:GraphEvidenceFold"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceInventoryRow.",
+      "target": "./queries/evidence:GraphEvidenceInventoryRow"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceNode.",
+      "target": "./queries/evidence:GraphEvidenceNode"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceOptions.",
+      "target": "./queries/evidence:GraphEvidenceOptions"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceResult.",
+      "target": "./queries/evidence:GraphEvidenceResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceSelection.",
+      "target": "./queries/evidence:GraphEvidenceSelection"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceSelectors.",
+      "target": "./queries/evidence:GraphEvidenceSelectors"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceTarget.",
+      "target": "./queries/evidence:GraphEvidenceTarget"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphEvidenceView.",
+      "target": "./queries/evidence:GraphEvidenceView"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export GraphProjectionDirection.",
+      "target": "./queries/evidence:GraphProjectionDirection"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export QualifiedEvidenceResult.",
+      "target": "./queries/evidence:QualifiedEvidenceResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export evidence.",
+      "target": "./queries/evidence:evidence"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export graphEvidence.",
+      "target": "./queries/evidence:graphEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export qualifiedEvidence.",
+      "target": "./queries/evidence:qualifiedEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HEALTH_PHASES changed from declare const HEALTH_PHASES: readonly [ \"overview\", \"dead\", \"isolated\", \"cycles\", \"similar\", \"duplicate-bodies\", \"twin-drift\", \"react-component-duplicates\", \"react-hook-candidat... to declare const HEALTH_PHASES: readonly [ \"overview\", \"dead\", \"cycles\", \"similar\", \"duplicate-bodies\", \"twin-drift\", \"react-component-duplicates\", \"react-hook-candidates\", \"react-....",
+      "target": "./queries/health:HEALTH_PHASES"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ImportResult changed from interface ImportResult { symbol: string; shortName: string; fromFile: string; } to interface ImportResult { symbol: string; shortName: string; fromFile: string; evidence: 'indexed-import' | 'semantic-import' | 'source-import-candidate'; }.",
+      "target": "./queries/imports:ImportResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CallGraphEvidenceRow changed from interface CallGraphEvidenceRow { symbol: string; shortName: string; file: string; relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate'; evidenceStrength: 'e... to interface CallGraphEvidenceRow { symbol: string; shortName: string; file: string; relationship: 'resolved-call' | 'source-call-candidate' | 'reference-candidate' | 'chunk-candid....",
+      "target": "./queries/index:CallGraphEvidenceRow"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "CodeBatchEntry changed from interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand... to interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand....",
+      "target": "./queries/index:CodeBatchEntry"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "EntryMapCoverage changed from interface EntryMapCoverage { completeWithinIndexedStaticCallEdges: true; completeWithinSelectedStaticEvidence?: true; candidateReachabilityIncluded?: boolean; dynamicDispatchRep... to interface EntryMapCoverage { completeWithinSelectedStaticEvidence?: true; candidateReachabilityIncluded?: boolean; dynamicDispatchRepresented: false; symbolCount: number; symbol....",
+      "target": "./queries/index:EntryMapCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "EntryPointResult changed from interface EntryPointResult { symbol: string; shortName: string; file: string; startLine: number; endLine: number; documentation: string | null; confidence: EntryPointConfidence;... to interface EntryPointResult { symbol: string; shortName: string; file: string; startLine: number; endLine: number; documentation: string | null; confidence: EntryPointConfidence;....",
+      "target": "./queries/index:EntryPointResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "EvidenceRelatedSymbol changed from interface EvidenceRelatedSymbol extends SourceSnippet { symbol: string; shortName: string; omittedLines: number; } to interface EvidenceRelatedSymbol extends SourceSnippet { symbol: string; shortName: string; omittedLines: number; evidenceStrength: 'exact' | 'candidate'; }.",
+      "target": "./queries/index:EvidenceRelatedSymbol"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "GraphEvidenceCoverage changed from interface GraphEvidenceCoverage { status: 'accounted' | 'bounded' | 'incomplete'; topologyStatus: 'accounted' | 'incomplete'; scope: string; maxDepth: number; maxEdges: number; ... to interface GraphEvidenceCoverage { status: 'accounted' | 'bounded' | 'incomplete'; topologyStatus: 'accounted' | 'incomplete'; scope: string; maxDepth: number; maxEdges: number; ....",
+      "target": "./queries/index:GraphEvidenceCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HEALTH_PHASES changed from declare const HEALTH_PHASES: readonly [ \"overview\", \"dead\", \"isolated\", \"cycles\", \"similar\", \"duplicate-bodies\", \"twin-drift\", \"react-component-duplicates\", \"react-hook-candidat... to declare const HEALTH_PHASES: readonly [ \"overview\", \"dead\", \"cycles\", \"similar\", \"duplicate-bodies\", \"twin-drift\", \"react-component-duplicates\", \"react-hook-candidates\", \"react-....",
+      "target": "./queries/index:HEALTH_PHASES"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HealthReport changed from interface HealthReport { overview: { documents: number; symbols: number; indexSizeBytes: number; }; provenance?: HealthProvenance; findings: { deadSymbols: number; deadLoc: numb... to interface HealthReport { overview: { documents: number; symbols: number; indexSizeBytes: number; }; provenance?: HealthProvenance; findings: { deadSymbols: number; deadLoc: numb....",
+      "target": "./queries/index:HealthReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ImportResult changed from interface ImportResult { symbol: string; shortName: string; fromFile: string; } to interface ImportResult { symbol: string; shortName: string; fromFile: string; evidence: 'indexed-import' | 'semantic-import' | 'source-import-candidate'; }.",
+      "target": "./queries/index:ImportResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export IsolatedResult.",
+      "target": "./queries/index:IsolatedResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export evidence.",
+      "target": "./queries/index:evidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export isolated.",
+      "target": "./queries/index:isolated"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export qualifiedEvidence.",
+      "target": "./queries/index:qualifiedEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export qualifiedTraceEvidence.",
+      "target": "./queries/index:qualifiedTraceEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export trace.",
+      "target": "./queries/index:trace"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export traceEvidence.",
+      "target": "./queries/index:traceEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/isolated.",
+      "target": "./queries/isolated"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/source-inspection; review their variance and runtime meaning.",
+      "target": "./queries/source-inspection"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/source-search; review their variance and runtime meaning.",
+      "target": "./queries/source-search"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/trace.",
+      "target": "./queries/trace"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ImportResult changed from interface ImportResult { symbol: string; shortName: string; fromFile: string; } to interface ImportResult { symbol: string; shortName: string; fromFile: string; evidence: 'indexed-import' | 'semantic-import' | 'source-import-candidate'; }.",
+      "target": "./queries/unused-imports:ImportResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "C changed from interface CodeResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; language: string | null; source: string; freshness?: SourceOb... to interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand....",
+      "target": "code-<hash>.d.ts:C"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from interface CodeBatchEntry { selector: string; status: CodeSelectorStatus; kind: CodeSelectorKind; totalCandidates: number; results: CodeResult[]; definitions: OutlineNode[]; cand... to interface CodeBatchResult { requested: number; matched: number; ambiguous: number; missing: number; entries: CodeBatchEntry[]; bindingClosure: BindingClosure; }.",
+      "target": "code-<hash>.d.ts:b"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "c changed from interface CodeBatchResult { requested: number; matched: number; ambiguous: number; missing: number; entries: CodeBatchEntry[]; bindingClosure: BindingClosure; } to interface CodeFileCoverage { members: CodeFileMemberMode; basis: 'explicit-exports-and-same-file-reference-closure' | 'top-level-and-same-file-reference-closure' | 'complete-fil....",
+      "target": "code-<hash>.d.ts:c"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "d changed from interface CodeFileCoverage { members: CodeFileMemberMode; basis: 'explicit-exports-and-same-file-reference-closure' | 'top-level-and-same-file-reference-closure' | 'complete-fil... to interface CodeFileDefinitionLedgerEntry extends CodeResolutionCandidate { signature: string | null; depth: number; nestedDefinitions: number; }.",
+      "target": "code-<hash>.d.ts:d"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "e changed from interface CodeFileDefinitionLedgerEntry extends CodeResolutionCandidate { signature: string | null; depth: number; nestedDefinitions: number; } to type CodeFileMemberMode = 'exported' | 'all';.",
+      "target": "code-<hash>.d.ts:e"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "f changed from type CodeFileMemberMode = 'exported' | 'all'; to interface CodeRangeCoverage { basis: 'requested-range-and-same-file-call-closure'; referencedDefinitions: number; returnedDefinitions: number; returnedBodies: number; omittedDef....",
+      "target": "code-<hash>.d.ts:f"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "g changed from interface CodeRangeCoverage { basis: 'requested-range-and-same-file-call-closure'; referencedDefinitions: number; returnedDefinitions: number; returnedBodies: number; omittedDef... to interface CodeResolutionCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; }.",
+      "target": "code-<hash>.d.ts:g"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "h changed from interface CodeResolutionCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; } to interface CodeResult { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; language: string | null; source: string; freshness?: SourceOb....",
+      "target": "code-<hash>.d.ts:h"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module exploration-topology-<hash>.d.ts was added or renamed.",
+      "target": "exploration-topology-<hash>.d.ts"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module graph-exploration-contract-<hash>.d.ts was added or renamed.",
+      "target": "graph-exploration-contract-<hash>.d.ts"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration G.",
+      "target": "health-<hash>.d.ts:G"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "H changed from declare const HEALTH_PHASES: readonly [ \"overview\", \"dead\", \"isolated\", \"cycles\", \"similar\", \"duplicate-bodies\", \"twin-drift\", \"react-component-duplicates\", \"react-hook-candidat... to declare const HEALTH_PHASES: readonly [ \"overview\", \"dead\", \"cycles\", \"similar\", \"duplicate-bodies\", \"twin-drift\", \"react-component-duplicates\", \"react-hook-candidates\", \"react-....",
+      "target": "health-<hash>.d.ts:H"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "a changed from type GraphProjectionDirection = (typeof GRAPH_PROJECTION_DIRECTIONS)[number]; to interface HealthAction { category: string; description: string; effort: 'low' | 'medium' | 'high'; impact: 'low' | 'medium' | 'high'; count: number; locRecoverable: number; evid....",
+      "target": "health-<hash>.d.ts:a"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from declare const GRAPH_EVIDENCE_FAMILIES: readonly [ \"execution\", \"runtime\", \"dataflow\", \"state\", \"temporal\", \"contract\", \"identity\", \"ownership\", \"dependencies\" ]; to interface HealthProvenance { computedAt: string; generation: { identity: string; publishedAt: string | null; mode: 'incremental' | 'full' | null; }; git: { head: string; branch:....",
+      "target": "health-<hash>.d.ts:b"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "c changed from interface HealthAction { category: string; description: string; effort: 'low' | 'medium' | 'high'; impact: 'low' | 'medium' | 'high'; count: number; locRecoverable: number; evid... to interface HealthReport { overview: { documents: number; symbols: number; indexSizeBytes: number; }; provenance?: HealthProvenance; findings: { deadSymbols: number; deadLoc: numb....",
+      "target": "health-<hash>.d.ts:c"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "d changed from interface HealthProvenance { computedAt: string; generation: { identity: string; publishedAt: string | null; mode: 'incremental' | 'full' | null; }; git: { head: string; branch:... to declare function healthPhase(db: ScipDatabase, phase: HealthPhaseName, opts?: { scope?: string; full?: boolean; }): HealthPhaseResult;.",
+      "target": "health-<hash>.d.ts:d"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "e changed from interface HealthReport { overview: { documents: number; symbols: number; indexSizeBytes: number; }; provenance?: HealthProvenance; findings: { deadSymbols: number; deadLoc: numb... to declare function healthProvenance(db: ScipDatabase): HealthProvenance;.",
+      "target": "health-<hash>.d.ts:e"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "f changed from declare function healthPhase(db: ScipDatabase, phase: HealthPhaseName, opts?: { scope?: string; full?: boolean; }): HealthPhaseResult; to declare function healthReportFromPhases(phaseResults: HealthPhaseResult[], db?: ScipDatabase): HealthReport;.",
+      "target": "health-<hash>.d.ts:f"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "g changed from declare function healthProvenance(db: ScipDatabase): HealthProvenance; to type HealthPhaseName = (typeof HEALTH_PHASES)[number];.",
+      "target": "health-<hash>.d.ts:g"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "i changed from declare function healthReportFromPhases(phaseResults: HealthPhaseResult[], db?: ScipDatabase): HealthReport; to declare function healthPhases(db: ScipDatabase, phases: readonly HealthPhaseName[], opts?: { scope?: string; full?: boolean; }): HealthPhaseResult[];.",
+      "target": "health-<hash>.d.ts:i"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration j.",
+      "target": "health-<hash>.d.ts:j"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration k.",
+      "target": "health-<hash>.d.ts:k"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration A.",
+      "target": "source-inspection-<hash>.d.ts:A"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration C.",
+      "target": "source-inspection-<hash>.d.ts:C"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration D.",
+      "target": "source-inspection-<hash>.d.ts:D"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "E changed from interface ExplorationSourceLocation { file: string; line: number; endLine?: number; } to interface EvidenceOptions { parts?: readonly EvidencePart[]; referenceContext?: number; relatedSourceLines?: number; semantic?: boolean; }.",
+      "target": "source-inspection-<hash>.d.ts:E"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration F.",
+      "target": "source-inspection-<hash>.d.ts:F"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration G.",
+      "target": "source-inspection-<hash>.d.ts:G"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration H.",
+      "target": "source-inspection-<hash>.d.ts:H"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration I.",
+      "target": "source-inspection-<hash>.d.ts:I"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration J.",
+      "target": "source-inspection-<hash>.d.ts:J"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration K.",
+      "target": "source-inspection-<hash>.d.ts:K"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration L.",
+      "target": "source-inspection-<hash>.d.ts:L"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration M.",
+      "target": "source-inspection-<hash>.d.ts:M"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-export-removed",
+      "message": "Removed referenced declaration P.",
+      "target": "source-inspection-<hash>.d.ts:P"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration Q.",
+      "target": "source-inspection-<hash>.d.ts:Q"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "a changed from type ExplorationEvidenceStrength = 'exact' | 'derived' | 'candidate' | 'mixed' | 'unknown'; to interface BehaviorSkeleton { callable?: { name: string; startLine: number; endLine: number; }; representation: 'outline'; constructKind: string; signature: string; lines: Behavi....",
+      "target": "source-inspection-<hash>.d.ts:a"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from interface BehaviorSkeleton { callable?: { name: string; startLine: number; endLine: number; }; representation: 'outline'; constructKind: string; signature: string; lines: Behavi... to type EvidencePart = 'definition' | 'references' | 'callers' | 'callees' | 'dependencies' | 'consumers';.",
+      "target": "source-inspection-<hash>.d.ts:b"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "c changed from type ExplorationAnchorStatus = 'matched' | 'ambiguous' | 'missing'; to interface EvidenceReferenceWindow { relativePath: string; startLine: number; endLine: number; source: string; references: Array<{ line: number; enclosingSymbol: string | null; e....",
+      "target": "source-inspection-<hash>.d.ts:c"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "d changed from interface ExplorationCompletion { status: ExplorationCompletionStatus; scope: string; explanation: string; } to interface EvidenceRelatedSymbol extends SourceSnippet { symbol: string; shortName: string; omittedLines: number; evidenceStrength: 'exact' | 'candidate'; }.",
+      "target": "source-inspection-<hash>.d.ts:d"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "e changed from type ExplorationCompletionStatus = 'selection-complete' | 'connector-complete' | 'frontier-accounted' | 'coverage-incomplete'; to type EvidenceResult = { kind: 'missing'; query: string; } | { kind: 'ambiguous'; query: string; total: number; candidates: SymbolResolutionCandidate[]; } | { kind: 'matched'; qu....",
+      "target": "source-inspection-<hash>.d.ts:e"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "f changed from type ExplorationDisposition = 'emitted' | 'folded' | 'excluded' | 'unsupported'; to interface SourceInspectionContinuation { cursor: string; command: string; indexGeneration: string; }.",
+      "target": "source-inspection-<hash>.d.ts:f"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "g changed from interface ExplorationDispositionCounts { total: number; emitted: number; folded: number; excluded: number; unsupported: number; } to type SourceInspectionEvidenceBudgets = Partial<Record<SourceInspectionEvidenceChannel, number>>;.",
+      "target": "source-inspection-<hash>.d.ts:g"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "h changed from interface ExplorationEvidenceSource { method: string; strength: ExplorationEvidenceStrength; identity: string | null; location: ExplorationSourceLocation | null; } to type SourceInspectionEvidenceChannel = 'search' | 'exact-source' | 'definition' | 'caller' | 'callee' | 'production-reference' | 'test-reference' | 'dependency' | 'consumer';.",
+      "target": "source-inspection-<hash>.d.ts:h"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "i changed from interface ExplorationFrontierGroup { id: string; kind: string; direction: 'incoming' | 'outgoing' | 'undirected' | 'unresolved'; fromNodeIds: string[]; edgeIds: string[]; member... to interface SourceInspectionLocation { target: string; matched: boolean; }.",
+      "target": "source-inspection-<hash>.d.ts:i"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "j changed from interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop... to interface SourceInspectionOmissionAnchor { relativePath: string; line: number; ownerShort: string | null; roles: SourceInspectionUnitRole[]; behaviorSignals: BehaviorSignal[]; }.",
+      "target": "source-inspection-<hash>.d.ts:j"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "k changed from interface ExplorationTopologyAnchor { id: string; kind: string; query: string; status: ExplorationAnchorStatus; nodeIds: string[]; candidateNodeIds: string[]; omittedCandidates:... to interface SourceInspectionOmissionGroup { id: string; scope: string; channel?: SourceInspectionEvidenceChannel; roles: SourceInspectionUnitRole[]; behaviorSignals: BehaviorSigna....",
+      "target": "source-inspection-<hash>.d.ts:k"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "l changed from interface ExplorationTopologyCoverage { status: 'accounted' | 'incomplete'; scope: string; nodes: ExplorationDispositionCounts; edges: ExplorationDispositionCounts; matchedAncho... to interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num....",
+      "target": "source-inspection-<hash>.d.ts:l"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "m changed from interface ExplorationTopologyEdge { id: string; kind: string; fromNodeId: string; toNodeId: string; directed: true; disposition: ExplorationDisposition; evidence: ExplorationEvi... to interface SourceInspectionPacketCoverage { mode: 'bounded' | 'complete'; candidateUnits: number; returnedUnits: number; omittedUnits: number; omittedByRole: Partial<Record<Sourc....",
+      "target": "source-inspection-<hash>.d.ts:m"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "n changed from interface ExplorationTopologyInput { anchors: readonly ExplorationTopologyAnchor[]; nodes: readonly ExplorationTopologyNode[]; edges: readonly ExplorationTopologyEdge[]; paths?:... to interface SourceInspectionPathUnit { kind: 'path'; id: string; roles: Array<'dependency' | 'consumer'>; relativePath: string; relationship: string; reasons: string[]; symbols: s....",
+      "target": "source-inspection-<hash>.d.ts:n"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "o changed from interface ExplorationTopologyNode { id: string; kind: string; label: string; disposition: ExplorationDisposition; location: ExplorationSourceLocation | null; anchorIds: string[]... to interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid....",
+      "target": "source-inspection-<hash>.d.ts:o"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "p changed from interface ExplorationTopologyPath { id: string; fromAnchorId: string; toAnchorId: string; status: 'connected' | 'partial' | 'candidate'; nodeIds: string[]; edgeIds: string[]; } to interface SourceInspectionRuntimeFact { observationId: string; protocol: string; action: string; role: string; strength: BoundaryEvidenceStrength; resolution: BoundaryResolution....",
+      "target": "source-inspection-<hash>.d.ts:p"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "q changed from interface SourceInspectionContinuation { cursor: string; command: string; indexGeneration: string; } to interface SourceInspectionSearch { pattern: string; matchingLines: number; returnedMatches: number; omittedMatches: number; matchingFiles?: number; returnedFiles?: number; omitt....",
+      "target": "source-inspection-<hash>.d.ts:q"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "r changed from type SourceInspectionEvidenceBudgets = Partial<Record<SourceInspectionEvidenceChannel, number>>; to interface SourceInspectionSearchScope { scope: string; matchingLines: number; returnedMatches: number; exactFollowup: string; }.",
+      "target": "source-inspection-<hash>.d.ts:r"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "s changed from type SourceInspectionEvidenceChannel = 'search' | 'exact-source' | 'definition' | 'caller' | 'callee' | 'production-reference' | 'test-reference' | 'dependency' | 'consumer'; to interface SourceInspectionSlice extends SourceUnitSnippet { reasons: string[]; focusLines: number[]; ownerSymbol: string | null; ownerShort: string | null; }.",
+      "target": "source-inspection-<hash>.d.ts:s"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "t changed from interface SourceInspectionLocation { target: string; matched: boolean; } to interface SourceInspectionSourceUnit extends SourceInspectionSlice { kind: 'source'; id: string; roles: SourceInspectionUnitRole[]; symbols: string[]; omittedCharacters: number;....",
+      "target": "source-inspection-<hash>.d.ts:t"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "u changed from interface SourceInspectionOmissionAnchor { relativePath: string; line: number; ownerShort: string | null; roles: SourceInspectionUnitRole[]; behaviorSignals: BehaviorSignal[]; } to type SourceInspectionStoppingStatus = 'stop-ready' | 'relevance-check-required' | 'exact-evidence-withheld';.",
+      "target": "source-inspection-<hash>.d.ts:u"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "v changed from interface SourceInspectionOmissionGroup { id: string; scope: string; channel?: SourceInspectionEvidenceChannel; roles: SourceInspectionUnitRole[]; behaviorSignals: BehaviorSigna... to interface SourceInspectionStoppingSummary { queryStatus?: ExplorationCompletionStatus; status: SourceInspectionStoppingStatus; openEvidence: number; guidance: string; drillComma....",
+      "target": "source-inspection-<hash>.d.ts:v"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "w changed from interface SourceInspectionOptions { searches?: readonly string[]; symbols?: readonly string[]; locations?: readonly string[]; scope?: string; context?: number; searchLimit?: num... to type SourceInspectionUnit = SourceInspectionSourceUnit | SourceInspectionPathUnit;.",
+      "target": "source-inspection-<hash>.d.ts:w"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "x changed from interface SourceInspectionPacketCoverage { mode: 'bounded' | 'complete'; candidateUnits: number; returnedUnits: number; omittedUnits: number; omittedByRole: Partial<Record<Sourc... to type SourceInspectionUnitRole = 'search' | 'location' | 'definition' | 'reference' | 'caller' | 'callee' | 'dependency' | 'consumer';.",
+      "target": "source-inspection-<hash>.d.ts:x"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "y changed from interface SourceInspectionPathUnit { kind: 'path'; id: string; roles: Array<'dependency' | 'consumer'>; relativePath: string; relationship: string; reasons: string[]; symbols: s... to type SourceInspectionView = 'source' | 'behavior';.",
+      "target": "source-inspection-<hash>.d.ts:y"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "z changed from interface SourceInspectionResult { searches: SourceInspectionSearch[]; evidence: EvidenceResult[]; locations: SourceInspectionLocation[]; slices: SourceInspectionSlice[]; candid... to declare function inspectSource(db: ScipDatabase, opts: SourceInspectionOptions): SourceInspectionResult;.",
+      "target": "source-inspection-<hash>.d.ts:z"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration h.",
+      "target": "source-search-types-<hash>.d.ts:h"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-export-added",
+      "message": "Added referenced declaration i.",
+      "target": "source-search-types-<hash>.d.ts:i"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module source-snippet-<hash>.d.ts was removed or renamed.",
+      "target": "source-snippet-<hash>.d.ts"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module trace-<hash>.d.ts was added or renamed.",
+      "target": "trace-<hash>.d.ts"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.25.0",
+  "previousDigest": "b72691cf58032be066a66c5e0f9acee10fd748e564ec9f000c8c80415ecc060c",
+  "reason": "Retire redundant trace and isolated command surfaces, align evidence subpath with typed graph producer, and correct candidate/freshness, import, entry and projection coverage contracts.",
+  "schemaVersion": 1
+}

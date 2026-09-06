@@ -272,7 +272,7 @@ export function HostPanel({ panelProps, user }: { panelProps: Record<string, unk
           evidenceClass: 'shared-abstraction',
           actionTier: 'support',
           evidenceClassReasons: expect.arrayContaining([
-            expect.stringContaining('shared hook is generic workflow: useResource'),
+            expect.stringContaining('shared hook matches the generic-name vocabulary: useResource'),
           ]),
           recommendation: expect.stringContaining('existing shared hook'),
           sharedHooks: expect.arrayContaining(['useResource']),
@@ -331,16 +331,6 @@ export function HostPanel({ panelProps, user }: { panelProps: Record<string, unk
       expect(report.findings.reactLargeComponentPressureFiles).toBeGreaterThanOrEqual(1);
       expect(report.actions.map((action) => action.category)).toEqual(
         expect.arrayContaining(['Duplicated React components', 'Duplicated React hook behavior']),
-      );
-      expect(report.scoreBreakdown).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ axis: 'react-component-duplicates', kind: 'hygiene' }),
-          expect.objectContaining({
-            axis: 'react-hook-candidates',
-            detail: expect.stringContaining('0.5 score-weighted'),
-            kind: 'hygiene',
-          }),
-        ]),
       );
     } finally {
       db.close();

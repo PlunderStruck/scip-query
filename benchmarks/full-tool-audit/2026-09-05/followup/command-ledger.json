@@ -1,0 +1,4964 @@
+[
+  {
+    "command": "search",
+    "syntax": "search <exact-text>",
+    "group": "Primary exploration",
+    "description": "Count current project text matches and preview a bounded, recoverable identity and source manifest",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/search.json"
+    ],
+    "purposeAndLimits": "Exact literal positions and symbol identity, with current-text/freshness coverage.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/search-cli-contract.test.ts",
+        "status": "passed",
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/lossless-source-sensor.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "search",
+      "args": [
+        "search",
+        "sum(1, 2)"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "search",
+        "claim": "literal match counts",
+        "passed": true,
+        "actual": [
+          1,
+          1
+        ],
+        "expected": [
+          1,
+          1
+        ]
+      },
+      {
+        "command": "search",
+        "claim": "literal occurrence position",
+        "passed": true,
+        "actual": [
+          [
+            "src/service/runner.ts",
+            4
+          ]
+        ],
+        "expected": [
+          [
+            "src/service/runner.ts",
+            4
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "command": "outline",
+    "syntax": "outline <file>",
+    "group": "Primary exploration",
+    "description": "Tree view of symbols in a file, with line ranges",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/outline.json"
+    ],
+    "purposeAndLimits": "Indexed nesting in one file; omitted/unindexed definitions depend on index coverage.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/navigation/command-accuracy.test.ts",
+        "status": "passed",
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/outline.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "outline",
+      "args": [
+        "outline",
+        "src/service/runner.ts"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "entrypoints",
+    "syntax": "entrypoints [text]",
+    "group": "Primary exploration",
+    "description": "Find callables where control may enter from outside the indexed call graph",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/entrypoints.json"
+    ],
+    "purposeAndLimits": "Detected external roots and entry-surface candidates; exported names alone do not establish ingress.",
+    "regressionEvidence": [
+      {
+        "file": "tests/analysis/framework-entrypoints.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/graph/entry-map.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/exploration-topology.test.ts",
+        "status": "passed",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "entrypoints",
+      "args": [
+        "entrypoints",
+        "main"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "entrypoints",
+        "claim": "export named main alone is not an external entrypoint",
+        "passed": true,
+        "actual": [],
+        "expected": []
+      }
+    ]
+  },
+  {
+    "command": "evidence",
+    "syntax": "evidence",
+    "group": "Primary exploration",
+    "description": "Traverse selected typed relationships around exact referents; recover source separately when needed",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/evidence.json"
+    ],
+    "purposeAndLimits": "Explicit typed graph projections; exact/candidate strengths and folds constrain every claim.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/evidence-command-freshness.test.ts",
+        "status": "passed",
+        "passed": 12,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/graph/graph-provider-calibration.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/graph/program-data-edges.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/causal-corridor.test.ts",
+        "status": "passed",
+        "passed": 12,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "evidence",
+      "args": [
+        "evidence",
+        "--at",
+        "src/service/runner.ts:3",
+        "--edge",
+        "execution",
+        "--direction",
+        "outgoing",
+        "--depth",
+        "1",
+        "--max-edges",
+        "20"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "evidence",
+        "claim": "requested family and direction",
+        "passed": true,
+        "actual": [
+          [
+            "execution"
+          ],
+          "outgoing"
+        ],
+        "expected": [
+          [
+            "execution"
+          ],
+          "outgoing"
+        ]
+      }
+    ]
+  },
+  {
+    "command": "inspect",
+    "syntax": "inspect",
+    "group": "Primary exploration",
+    "description": "Batch related searches, symbols, and source locations into one deduplicated source packet",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/inspect.json"
+    ],
+    "purposeAndLimits": "Batch source needed to explain behavior; source freshness and bounded units remain explicit.",
+    "regressionEvidence": [
+      {
+        "file": "tests/source/source-evidence.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/causal-corridor.test.ts",
+        "status": "passed",
+        "passed": 12,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/lossless-source-sensor.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/source-evidence.test.ts",
+        "status": "passed",
+        "passed": 35,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "inspect",
+      "args": [
+        "inspect",
+        "--symbol",
+        "runJob",
+        "--symbol",
+        "sum",
+        "--view",
+        "behavior"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "code",
+    "syntax": "code <selectors...>",
+    "group": "Primary exploration",
+    "description": "Read exact definitions, line ranges, or file export surfaces",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/code.json"
+    ],
+    "purposeAndLimits": "Exact source bytes and selectors; aligned compiler bindings are a separate fact.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/code-cli-contract.test.ts",
+        "status": "passed",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/exact-file-intent.test.ts",
+        "status": "passed",
+        "passed": 10,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/lossless-source-sensor.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "code",
+      "args": [
+        "code",
+        "src/service/runner.ts:1-8"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "code",
+        "claim": "exact current source bytes excluding terminal newline",
+        "passed": true,
+        "actual": "import { sum } from '../core/math';\nimport { Store } from '../core/store';\nexport function runJob() {\n  const store = new Store();\n  const total = sum(1, 2);\n  store.write(total);\n  return total > 0 ? total : 0;\n}",
+        "expected": "import { sum } from '../core/math';\nimport { Store } from '../core/store';\nexport function runJob() {\n  const store = new Store();\n  const total = sum(1, 2);\n  store.write(total);\n  return total > 0 ? total : 0;\n}"
+      }
+    ]
+  },
+  {
+    "command": "files",
+    "syntax": "files <pattern>",
+    "group": "Specialized analysis",
+    "description": "Find current project files matching a path pattern",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/files.json"
+    ],
+    "purposeAndLimits": "Current project file inventory, respecting declared exclusions; not just the index.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/navigation/command-accuracy.test.ts",
+        "status": "passed",
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/exact-file-intent.test.ts",
+        "status": "passed",
+        "passed": 10,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "files",
+      "args": [
+        "files",
+        "src/**/*.ts"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "files",
+        "claim": "complete TS file inventory",
+        "passed": true,
+        "actual": [
+          "src/calls.ts",
+          "src/consumer.ts",
+          "src/core/math.ts",
+          "src/core/store.ts",
+          "src/cycle/a.ts",
+          "src/cycle/b.ts",
+          "src/duplicate/a.ts",
+          "src/duplicate/b.ts",
+          "src/first.ts",
+          "src/flow.ts",
+          "src/new.ts",
+          "src/second.ts",
+          "src/service/runner.ts"
+        ],
+        "expected": [
+          "src/calls.ts",
+          "src/consumer.ts",
+          "src/core/math.ts",
+          "src/core/store.ts",
+          "src/cycle/a.ts",
+          "src/cycle/b.ts",
+          "src/duplicate/a.ts",
+          "src/duplicate/b.ts",
+          "src/first.ts",
+          "src/flow.ts",
+          "src/new.ts",
+          "src/second.ts",
+          "src/service/runner.ts"
+        ]
+      }
+    ]
+  },
+  {
+    "command": "session",
+    "syntax": "session",
+    "group": "Specialized analysis",
+    "description": "Show evidence already delivered in this agent exploration session",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/session.log"
+    ],
+    "purposeAndLimits": "Inspect session receipts; requires an explicit session for suppression of repeated evidence.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/source-emission-session.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "session",
+      "args": [
+        "session"
+      ],
+      "exitCode": 0,
+      "hasPacket": false,
+      "humanOnly": true
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "methods",
+    "syntax": "methods <className>",
+    "group": "Specialized analysis",
+    "description": "List methods of one exactly resolved class; ambiguity and missing targets fail explicitly",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/methods.json"
+    ],
+    "purposeAndLimits": "Exactly resolved class methods; ambiguous and missing targets fail explicitly.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/methods-cli-contract.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "methods",
+      "args": [
+        "methods",
+        "Store"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "methods",
+        "claim": "method names and lines exclude field",
+        "passed": true,
+        "actual": [
+          [
+            "read",
+            2
+          ],
+          [
+            "write",
+            3
+          ]
+        ],
+        "expected": [
+          [
+            "read",
+            2
+          ],
+          [
+            "write",
+            3
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "command": "refs",
+    "syntax": "refs <symbol>",
+    "group": "Specialized analysis",
+    "description": "Find all files referencing a symbol",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/refs.json"
+    ],
+    "purposeAndLimits": "Reference occurrences, not executable calls; output pages and index coverage matter.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/refs-pagination.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/command-accuracy.test.ts",
+        "status": "passed",
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/queries-advanced.test.ts",
+        "status": "passed",
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "refs",
+      "args": [
+        "refs",
+        "sum"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "refs",
+        "claim": "import and call references remain distinct",
+        "passed": true,
+        "actual": [
+          [
+            "src/service/runner.ts",
+            0
+          ],
+          [
+            "src/service/runner.ts",
+            4
+          ]
+        ],
+        "expected": [
+          [
+            "src/service/runner.ts",
+            0
+          ],
+          [
+            "src/service/runner.ts",
+            4
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "command": "trace",
+    "syntax": "trace <symbol>",
+    "group": "Specialized analysis",
+    "description": "Trace a symbol: definition + all references",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/trace.json"
+    ],
+    "purposeAndLimits": "Definition plus references; callsite argument claims require their own complete support.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/navigation/queries.test.ts",
+        "status": "passed",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "trace",
+      "args": [
+        "trace",
+        "runJob"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "deps",
+    "syntax": "deps <file>",
+    "group": "Specialized analysis",
+    "description": "Files this file depends on (internal)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/deps.json"
+    ],
+    "purposeAndLimits": "Outgoing static file dependencies including resolved imports; not runtime scheduling.",
+    "regressionEvidence": [
+      {
+        "file": "tests/symbols/file-dep-graph.test.ts",
+        "status": "passed",
+        "passed": 9,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/graph/graph-provider-calibration.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/import-fallbacks.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "deps",
+      "args": [
+        "deps",
+        "src/service/runner.ts"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "deps",
+        "claim": "outgoing files",
+        "passed": true,
+        "actual": [
+          "src/core/math.ts",
+          "src/core/store.ts"
+        ],
+        "expected": [
+          "src/core/math.ts",
+          "src/core/store.ts"
+        ]
+      }
+    ]
+  },
+  {
+    "command": "rdeps",
+    "syntax": "rdeps <file>",
+    "group": "Specialized analysis",
+    "description": "Files that depend on this file/module",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/rdeps.json"
+    ],
+    "purposeAndLimits": "Reverse static file dependencies; absence limited to indexed/resolved coverage.",
+    "regressionEvidence": [
+      {
+        "file": "tests/symbols/file-dep-graph.test.ts",
+        "status": "passed",
+        "passed": 9,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/exact-file-intent.test.ts",
+        "status": "passed",
+        "passed": 10,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "rdeps",
+      "args": [
+        "rdeps",
+        "src/core/math.ts"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "rdeps",
+        "claim": "incoming files",
+        "passed": true,
+        "actual": [
+          "src/service/runner.ts"
+        ],
+        "expected": [
+          "src/service/runner.ts"
+        ]
+      }
+    ]
+  },
+  {
+    "command": "system",
+    "syntax": "system <module>",
+    "group": "Specialized analysis",
+    "description": "One-hop module summary: matched files, documented symbols, and file reference dependencies",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/system.json"
+    ],
+    "purposeAndLimits": "Directory membership and one-hop dependencies; fixed exact directory resolution.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/internal/file-resolution.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/exact-file-intent.test.ts",
+        "status": "passed",
+        "passed": 10,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/queries.test.ts",
+        "status": "passed",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "system",
+      "args": [
+        "system",
+        "src/core"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "system",
+        "claim": "exact directory membership",
+        "passed": true,
+        "actual": [
+          "src/core/math.ts",
+          "src/core/store.ts"
+        ],
+        "expected": [
+          "src/core/math.ts",
+          "src/core/store.ts"
+        ]
+      },
+      {
+        "command": "system",
+        "claim": "external consumer direction",
+        "passed": true,
+        "actual": [
+          "src/service/runner.ts"
+        ],
+        "expected": [
+          "src/service/runner.ts"
+        ]
+      },
+      {
+        "command": "system",
+        "claim": "no outgoing internal-repository dependency from core",
+        "passed": true,
+        "actual": [],
+        "expected": []
+      }
+    ]
+  },
+  {
+    "command": "surface",
+    "syntax": "surface <module>",
+    "group": "Specialized analysis",
+    "description": "What symbols consumers actually use from this module",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/surface.json"
+    ],
+    "purposeAndLimits": "Symbols externally referenced through a file/module selection; no ownership verdict.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/internal/file-resolution.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/queries-advanced.test.ts",
+        "status": "passed",
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/queries.test.ts",
+        "status": "passed",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "surface",
+      "args": [
+        "surface",
+        "src/core"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "surface",
+        "claim": "only observed external consumer",
+        "passed": true,
+        "actual": [
+          "src/service/runner.ts"
+        ],
+        "expected": [
+          "src/service/runner.ts"
+        ]
+      },
+      {
+        "command": "surface",
+        "claim": "unused read method absent; used write method present",
+        "passed": true,
+        "actual": [
+          false,
+          true
+        ],
+        "expected": [
+          false,
+          true
+        ]
+      }
+    ]
+  },
+  {
+    "command": "hotspots",
+    "syntax": "hotspots",
+    "group": "Specialized analysis",
+    "description": "Rank symbols by cross-file reference count; a reference metric, not runtime contention",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/hotspots.json"
+    ],
+    "purposeAndLimits": "Cross-file reference counts; does not measure runtime traffic or contention.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/navigation/command-accuracy.test.ts",
+        "status": "passed",
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/queries.test.ts",
+        "status": "passed",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "hotspots",
+      "args": [
+        "hotspots"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "imports",
+    "syntax": "imports <file>",
+    "group": "Specialized analysis",
+    "description": "What symbols does this file import?",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/imports.json"
+    ],
+    "purposeAndLimits": "Imported bindings resolved to files; source fallbacks disclose their basis.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/navigation/import-fallbacks.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/queries.test.ts",
+        "status": "passed",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "imports",
+      "args": [
+        "imports",
+        "src/service/runner.ts"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "imports",
+        "claim": "imported bindings",
+        "passed": true,
+        "actual": [
+          [
+            "Store",
+            "src/core/store.ts"
+          ],
+          [
+            "sum",
+            "src/core/math.ts"
+          ]
+        ],
+        "expected": [
+          [
+            "Store",
+            "src/core/store.ts"
+          ],
+          [
+            "sum",
+            "src/core/math.ts"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "command": "imported-by",
+    "syntax": "imported-by <symbol>",
+    "group": "Specialized analysis",
+    "description": "Which files import this symbol?",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/imported-by.json"
+    ],
+    "purposeAndLimits": "Files importing the selected symbol; not every dynamic loader.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/navigation/import-fallbacks.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/queries.test.ts",
+        "status": "passed",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "imported-by",
+      "args": [
+        "imported-by",
+        "sum"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "members",
+    "syntax": "members <symbol>",
+    "group": "Specialized analysis",
+    "description": "All children of a symbol (methods, fields, nested types)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/members.json"
+    ],
+    "purposeAndLimits": "Direct children, including occurrence-only indexed fields; declaration or identifier ranges.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/navigation/command-identity-regressions.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/queries-advanced.test.ts",
+        "status": "passed",
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "members",
+      "args": [
+        "members",
+        "Store"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "members",
+        "claim": "field and methods with exact identifier/declaration lines",
+        "passed": true,
+        "actual": [
+          [
+            "value.",
+            1
+          ],
+          [
+            "read().",
+            2
+          ],
+          [
+            "write().",
+            3
+          ]
+        ],
+        "expected": [
+          [
+            "value.",
+            1
+          ],
+          [
+            "read().",
+            2
+          ],
+          [
+            "write().",
+            3
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "command": "fan-in",
+    "syntax": "fan-in [symbol]",
+    "group": "Specialized analysis",
+    "description": "Count files referencing an exact symbol; top JSON rows include exact symbol identity",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/fan-in.json"
+    ],
+    "purposeAndLimits": "Number of reference files for exact symbol identities, not call frequency.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/navigation/command-accuracy.test.ts",
+        "status": "passed",
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/queries.test.ts",
+        "status": "passed",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "fan-in",
+      "args": [
+        "fan-in",
+        "sum"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "fan-in",
+        "claim": "one reference file, not two occurrences",
+        "passed": true,
+        "actual": [
+          1
+        ],
+        "expected": [
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "command": "fan-out",
+    "syntax": "fan-out [file]",
+    "group": "Specialized analysis",
+    "description": "How many external symbols a file uses (or top fan-out across codebase)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/fan-out.json"
+    ],
+    "purposeAndLimits": "External symbol count for files; module/type references are included.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/navigation/command-accuracy.test.ts",
+        "status": "passed",
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/queries.test.ts",
+        "status": "passed",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "fan-out",
+      "args": [
+        "fan-out",
+        "src/service/runner.ts"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "coupling",
+    "syntax": "coupling [file1] [file2]",
+    "group": "Specialized analysis",
+    "description": "Count shared-symbol coupling between two files, or rank file pairs by that metric",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/coupling.json"
+    ],
+    "purposeAndLimits": "Shared-symbol counts; candidates for coordination review, not conceptual similarity.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/navigation/queries-advanced.test.ts",
+        "status": "passed",
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/queries.test.ts",
+        "status": "passed",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "coupling",
+      "args": [
+        "coupling",
+        "src/service/runner.ts",
+        "src/consumer.ts"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "cycles",
+    "syntax": "cycles",
+    "group": "Specialized analysis",
+    "description": "Find every cyclic file-dependency component and show one deterministic witness for each",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/cycles.json"
+    ],
+    "purposeAndLimits": "Every cyclic static file component with a witness; not every simple cycle or a runtime failure.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/graph/cycles.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/graph/graph-provider-calibration.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "cycles",
+      "args": [
+        "cycles"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "cycles",
+        "claim": "one real component, closed witness",
+        "passed": true,
+        "actual": [
+          [
+            [
+              "src/cycle/a.ts",
+              "src/cycle/b.ts"
+            ],
+            [
+              "src/cycle/a.ts",
+              "src/cycle/b.ts",
+              "src/cycle/a.ts"
+            ]
+          ]
+        ],
+        "expected": [
+          [
+            [
+              "src/cycle/a.ts",
+              "src/cycle/b.ts"
+            ],
+            [
+              "src/cycle/a.ts",
+              "src/cycle/b.ts",
+              "src/cycle/a.ts"
+            ]
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "command": "architecture",
+    "syntax": "architecture",
+    "group": "Specialized analysis",
+    "description": "Evaluate project-owned architectural boundaries and dependency rules",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/architecture.json"
+    ],
+    "purposeAndLimits": "Validate explicit project boundaries, allowances and limits; coverage exposes unmapped files.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/architecture-cli-contract.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/graph/architecture.test.ts",
+        "status": "passed",
+        "passed": 29,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "architecture",
+      "args": [
+        "architecture"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "architecture",
+        "claim": "declared service to core edge",
+        "passed": true,
+        "actual": [
+          [
+            "service",
+            "core",
+            "allowed",
+            2
+          ]
+        ],
+        "expected": [
+          [
+            "service",
+            "core",
+            "allowed",
+            2
+          ]
+        ]
+      },
+      {
+        "command": "architecture",
+        "claim": "partial policy file coverage is disclosed",
+        "passed": true,
+        "actual": [
+          13,
+          5,
+          8
+        ],
+        "expected": [
+          13,
+          5,
+          8
+        ]
+      }
+    ]
+  },
+  {
+    "command": "bottlenecks",
+    "syntax": "bottlenecks",
+    "group": "Specialized analysis",
+    "description": "Rank coordination hubs by incoming evidence files \u00d7 outgoing cross-file callable targets",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/bottlenecks.json"
+    ],
+    "purposeAndLimits": "Incoming evidence files times outgoing targets; ranking for inspection only.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/graph/graph-risk-output.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/command-accuracy.test.ts",
+        "status": "passed",
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "bottlenecks",
+      "args": [
+        "bottlenecks"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "by-kind",
+    "syntax": "by-kind <kind>",
+    "group": "Specialized analysis",
+    "description": "Find symbols by SCIP kind (class, interface, enum, function, etc.)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/by-kind.json"
+    ],
+    "purposeAndLimits": "Compiler-indexed symbol kinds; source-only symbols depend on provider coverage.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/navigation/queries-advanced.test.ts",
+        "status": "passed",
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/queries.test.ts",
+        "status": "passed",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "by-kind",
+      "args": [
+        "by-kind",
+        "function"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "kind-counts",
+    "syntax": "kind-counts",
+    "group": "Specialized analysis",
+    "description": "Histogram of symbol kinds in the codebase",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/kind-counts.json"
+    ],
+    "purposeAndLimits": "Counts of compiler symbol kinds; not a count of domain concepts.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/navigation/command-accuracy.test.ts",
+        "status": "passed",
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/queries.test.ts",
+        "status": "passed",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "kind-counts",
+      "args": [
+        "kind-counts"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "dependency-depth",
+    "syntax": "dependency-depth",
+    "group": "Specialized analysis",
+    "description": "Find longest paths through the SCC-condensed file dependency graph",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/dependency-depth.json"
+    ],
+    "purposeAndLimits": "Longest paths after condensing cyclic file groups; not execution depth.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/graph/graph-provider-calibration.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/graph/graph-risk-output.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "dependency-depth",
+      "args": [
+        "dependency-depth"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "hierarchy",
+    "syntax": "hierarchy <symbol>",
+    "group": "Specialized analysis",
+    "description": "Show a symbol's ancestry chain (method \u2192 class \u2192 module)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/hierarchy.json"
+    ],
+    "purposeAndLimits": "Actual indexed lexical ancestors; descriptor-only invented identities removed.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/navigation/hierarchy.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "hierarchy",
+      "args": [
+        "hierarchy",
+        "Store#read()."
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "hierarchy",
+        "claim": "all ancestry identities are full indexed symbols",
+        "passed": true,
+        "actual": true,
+        "expected": true
+      },
+      {
+        "command": "hierarchy",
+        "claim": "indexed owner order",
+        "passed": true,
+        "actual": [
+          "Store#read().",
+          "Store#",
+          ""
+        ],
+        "expected": [
+          "Store#read().",
+          "Store#",
+          ""
+        ]
+      }
+    ]
+  },
+  {
+    "command": "entry-map",
+    "syntax": "entry-map <entry>",
+    "group": "Specialized analysis",
+    "description": "Map the complete indexed call graph from one detected entry point, collapsed by file",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/entry-map.json"
+    ],
+    "purposeAndLimits": "Static call graph from a detected ingress; rejects ordinary non-entry callables.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/graph/entry-map.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "entry-map",
+      "args": [
+        "entry-map",
+        "main"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "entry-map",
+        "claim": "non-entry callable explicitly refused",
+        "passed": true,
+        "actual": "not-entry",
+        "expected": "not-entry"
+      }
+    ]
+  },
+  {
+    "command": "call-graph",
+    "syntax": "call-graph <symbol>",
+    "group": "Specialized analysis",
+    "description": "Show static may-call edges with exact/candidate evidence and explicit blind spots",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/call-graph.json"
+    ],
+    "purposeAndLimits": "Static may-call evidence with candidate neighbors separate; nested owner and warm cache repaired.",
+    "regressionEvidence": [
+      {
+        "file": "tests/symbols/member-call-targets.test.ts",
+        "status": "passed",
+        "passed": 12,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/symbols/scip-occurrence-callees.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/quality/function-complexity-contract.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/semantic/rust/rust-scip-occurrence-callees.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "call-graph",
+      "args": [
+        "call-graph",
+        "runJob"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "call-graph",
+        "claim": "three exact direct targets, no unused read",
+        "passed": true,
+        "actual": [
+          [
+            "src:core:math:sum()",
+            "exact"
+          ],
+          [
+            "src:core:store:Store",
+            "exact"
+          ],
+          [
+            "src:core:store:Store:write()",
+            "exact"
+          ]
+        ],
+        "expected": [
+          [
+            "src:core:math:sum()",
+            "exact"
+          ],
+          [
+            "src:core:store:Store",
+            "exact"
+          ],
+          [
+            "src:core:store:Store:write()",
+            "exact"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "command": "affected",
+    "syntax": "affected <symbol>",
+    "group": "Specialized analysis",
+    "description": "Conservative reverse caller/reference closure of symbols that may be impacted by a change",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/affected.json"
+    ],
+    "purposeAndLimits": "Conservative reverse caller/reference closure; an affected consumer may need no edit.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/graph/graph-provider-calibration.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/graph/graph-risk-output.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/command-accuracy.test.ts",
+        "status": "passed",
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "affected",
+      "args": [
+        "affected",
+        "sum"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "affected",
+        "claim": "two downstream levels",
+        "passed": true,
+        "actual": [
+          [
+            "src/service/runner.ts",
+            1
+          ],
+          [
+            "src/consumer.ts",
+            2
+          ]
+        ],
+        "expected": [
+          [
+            "src/service/runner.ts",
+            1
+          ],
+          [
+            "src/consumer.ts",
+            2
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "command": "change-surface",
+    "syntax": "change-surface <file>",
+    "group": "Specialized analysis",
+    "description": "Pre-change briefing: consumers, published API, operational roots, and explained change risk",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/change-surface.json"
+    ],
+    "purposeAndLimits": "Consumers, published API and operational roots before a change; explained risk signals.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/impact/change-surface-risk.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "change-surface",
+      "args": [
+        "change-surface",
+        "src/core/math.ts"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "co-change",
+    "syntax": "co-change [file]",
+    "group": "Specialized analysis",
+    "description": "Files that change together in git history without a dependency edge \u2014 hidden coupling candidates",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/co-change.json"
+    ],
+    "purposeAndLimits": "Git co-change without a dependency edge; historical association is not causation.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/co-change-tiers.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "co-change",
+      "args": [
+        "co-change",
+        "src/service/runner.ts"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "incomplete-migration",
+    "syntax": "incomplete-migration",
+    "group": "Specialized analysis",
+    "description": "Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/incomplete-migration.json"
+    ],
+    "purposeAndLimits": "New helpers plus similar unwired sites; migration candidates need source confirmation.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/impact/incomplete-migration.test.ts",
+        "status": "passed",
+        "passed": 14,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "incomplete-migration",
+      "args": [
+        "incomplete-migration"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "reference-neighborhood",
+    "syntax": "reference-neighborhood <symbol>",
+    "group": "Specialized analysis",
+    "description": "Show definition/reference sites and incoming/outgoing static calls without value-flow claims",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/reference-neighborhood.json"
+    ],
+    "purposeAndLimits": "Definition/reference sites plus incoming/outgoing calls; deliberately no dataflow claims.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/graph/graph-provider-calibration.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/command-accuracy.test.ts",
+        "status": "passed",
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "reference-neighborhood",
+      "args": [
+        "reference-neighborhood",
+        "runJob"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "value-flow",
+    "syntax": "value-flow <symbol>",
+    "group": "Specialized analysis",
+    "description": "Show only proved argument/parameter and bounded static-value transfers around a symbol",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/value-flow.json"
+    ],
+    "purposeAndLimits": "Proved argument/parameter and bounded value transfers; no general heap/effect proof.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/graph/graph-provider-calibration.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/graph/program-data-edges.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "value-flow",
+      "args": [
+        "value-flow",
+        "sum"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "value-flow",
+        "claim": "data relationships only",
+        "passed": true,
+        "actual": [
+          "dataflow"
+        ],
+        "expected": [
+          "dataflow"
+        ]
+      },
+      {
+        "command": "value-flow",
+        "claim": "return value transfer exists",
+        "passed": true,
+        "actual": true,
+        "expected": true
+      }
+    ]
+  },
+  {
+    "command": "dependence-slice",
+    "syntax": "dependence-slice <file:line>",
+    "group": "Specialized analysis",
+    "description": "Slice one variable occurrence through function-local value and control dependencies",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/dependence-slice.json"
+    ],
+    "purposeAndLimits": "One occurrence through local value/control dependencies; alias/delete gaps now incomplete. No general interprocedural slice.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/graph/dependence-slice.test.ts",
+        "status": "passed",
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "dependence-slice",
+      "args": [
+        "dependence-slice",
+        "src/service/runner.ts:7",
+        "--variable",
+        "total",
+        "--column",
+        "22"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "dependence-slice",
+        "claim": "exact occurrence is selected",
+        "passed": true,
+        "actual": "matched",
+        "expected": "matched"
+      },
+      {
+        "command": "dependence-slice",
+        "claim": "slice excludes unrelated store state",
+        "passed": true,
+        "actual": [
+          "sum",
+          "total"
+        ],
+        "expected": [
+          "sum",
+          "total"
+        ]
+      }
+    ]
+  },
+  {
+    "command": "reference-reachability",
+    "syntax": "reference-reachability <symbol>",
+    "group": "Specialized analysis",
+    "description": "Traverse legacy callee or reference-owner reachability without calling it a program slice",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/reference-reachability.json"
+    ],
+    "purposeAndLimits": "Legacy caller/reference-owner reachability; retained for graph consumers, not a program slice.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/graph/graph-provider-calibration.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/command-accuracy.test.ts",
+        "status": "passed",
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "reference-reachability",
+      "args": [
+        "reference-reachability",
+        "runJob"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "diff-impact",
+    "syntax": "diff-impact",
+    "group": "Specialized analysis",
+    "description": "Map changed symbols and downstream consumers from the current git diff",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/diff-impact.json"
+    ],
+    "purposeAndLimits": "Changed symbols and downstream consumers from a Git base; coverage includes attribution gaps.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/impact/context-consumer-reuse.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/impact/diff-impact-accuracy.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/impact/newly-unreferenced-residue.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "diff-impact",
+      "args": [
+        "diff-impact",
+        "--base",
+        "HEAD"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "diff-impact",
+        "claim": "modified and untracked symbols",
+        "passed": true,
+        "actual": [
+          "src:new:newFunction()",
+          "src:service:runner:runJob()"
+        ],
+        "expected": [
+          "src:new:newFunction()",
+          "src:service:runner:runJob()"
+        ]
+      },
+      {
+        "command": "diff-impact",
+        "claim": "downstream consumer",
+        "passed": true,
+        "actual": [
+          "src/consumer.ts"
+        ],
+        "expected": [
+          "src/consumer.ts"
+        ]
+      }
+    ]
+  },
+  {
+    "command": "dead",
+    "syntax": "dead [scope]",
+    "group": "Quality and cleanup",
+    "description": "Find repository-dead code, file-internal symbols, and implicit-usage signals",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/dead.json"
+    ],
+    "purposeAndLimits": "Repository-dead and file-local evidence with implicit-use counterevidence; no automatic deletion.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/dead-output.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/cleanup/dead-vue-script-setup.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "dead",
+      "args": [
+        "dead"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "unused-imports",
+    "syntax": "unused-imports <file>",
+    "group": "Quality and cleanup",
+    "description": "Find imports not referenced in the same file",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/unused-imports.json"
+    ],
+    "purposeAndLimits": "Unused local imported bindings; provider coverage limits absence claims.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/drift-accuracy.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/import-fallbacks.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/queries.test.ts",
+        "status": "passed",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "unused-imports",
+      "args": [
+        "unused-imports",
+        "src/service/runner.ts"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "isolated",
+    "syntax": "isolated",
+    "group": "Quality and cleanup",
+    "description": "Find completely orphaned symbols (no references at all)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/isolated.json"
+    ],
+    "purposeAndLimits": "Zero discovered references; unindexed/dynamic consumers may still exist.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/isolated-query.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "isolated",
+      "args": [
+        "isolated"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "similar",
+    "syntax": "similar [symbol] [other]",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic function similarity candidates from callee fingerprints",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/similar.json"
+    ],
+    "purposeAndLimits": "Function callee-fingerprint candidates; shared calls do not prove equivalent behavior.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/similarity-fingerprint-product.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "similar",
+      "args": [
+        "similar",
+        "runJob"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "similar-files",
+    "syntax": "similar-files [file]",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic similar-file candidates from dependency profiles",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/similar-files.json"
+    ],
+    "purposeAndLimits": "Dependency-profile similarity; not duplicate source or equivalent modules.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/similarity-fingerprint-product.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "similar-files",
+      "args": [
+        "similar-files",
+        "src/service/runner.ts"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "react-component-duplicates",
+    "syntax": "react-component-duplicates [file]",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic duplicated React component structure candidates from JSX tags, props, events, and bindings",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/react-component-duplicates.json"
+    ],
+    "purposeAndLimits": "Heuristic JSX structure candidates; confirm behavior, state and binding differences.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/frontend/react-frontend-rich-internals.test.ts",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/frontend/react-profile-policy.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "react-component-duplicates",
+      "args": [
+        "react-component-duplicates"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "react-hook-candidates",
+    "syntax": "react-hook-candidates [file]",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic React hook extraction candidates from shared state, effects, requests, and handlers",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/react-hook-candidates.json"
+    ],
+    "purposeAndLimits": "Shared React state/effect/request structure; extraction requires lifetime review.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/frontend/react-frontend-rich-internals.test.ts",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/frontend/react-profile-policy.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "react-hook-candidates",
+      "args": [
+        "react-hook-candidates"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "react-large-component-pressure",
+    "syntax": "react-large-component-pressure [file]",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic large React component pressure candidates from component lines, JSX structure, and hook behavior",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/react-large-component-pressure.json"
+    ],
+    "purposeAndLimits": "Size, JSX and hooks pressure; not proof of too many responsibilities.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/frontend/react-frontend-rich-internals.test.ts",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "react-large-component-pressure",
+      "args": [
+        "react-large-component-pressure"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "vue-component-duplicates",
+    "syntax": "vue-component-duplicates [file]",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic duplicated Vue component structure candidates from template tags, bindings, slots, and directives",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/vue-component-duplicates.json"
+    ],
+    "purposeAndLimits": "Heuristic template structure candidates; confirm scripts, directives and bindings.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/frontend/vue-template-rich-internals.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "vue-component-duplicates",
+      "args": [
+        "vue-component-duplicates"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "vue-composable-candidates",
+    "syntax": "vue-composable-candidates [file]",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic Vue composable extraction candidates from shared state, effects, requests, and template bindings",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/vue-composable-candidates.json"
+    ],
+    "purposeAndLimits": "Shared Vue state/effect/request patterns; no automatic composable extraction.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/frontend/vue-template-rich-internals.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "vue-composable-candidates",
+      "args": [
+        "vue-composable-candidates"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "vue-large-view-pressure",
+    "syntax": "vue-large-view-pressure [file]",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic large Vue view pressure candidates from template, script, style, and external script line counts",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/vue-large-view-pressure.json"
+    ],
+    "purposeAndLimits": "Template/script/style size pressure, including external scripts; not a quality grade.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/frontend/vue-large-view-pressure-delegation.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/frontend/vue-template-rich-internals.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "vue-large-view-pressure",
+      "args": [
+        "vue-large-view-pressure"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "similar-chains",
+    "syntax": "similar-chains",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic similar-chain candidates from dependency flows",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/similar-chains.json"
+    ],
+    "purposeAndLimits": "Dependency-flow fingerprint candidates; paths are not identical algorithms.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/similarity-fingerprint-product.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "similar-chains",
+      "args": [
+        "similar-chains"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "extract-candidates",
+    "syntax": "extract-candidates",
+    "group": "Quality and cleanup",
+    "description": "Find extraction candidates: contiguous regions whose callees are used nowhere else in the function",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/extract-candidates.json"
+    ],
+    "purposeAndLimits": "Contiguous callee-isolated regions; not a proven safe extraction or local slice.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/extract-candidates-output.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "extract-candidates",
+      "args": [
+        "extract-candidates"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "locality-candidates",
+    "syntax": "locality-candidates [symbol-or-file]",
+    "group": "Quality and cleanup",
+    "description": "Find directory-locality and ancestry candidates from consumer ownership",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/locality-candidates.json"
+    ],
+    "purposeAndLimits": "Consumer directory ancestry suggests placement; fixed symbol/file confusion. Business ownership needs review.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/locality-candidates.test.ts",
+        "status": "passed",
+        "passed": 11,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/command-identity-regressions.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "locality-candidates",
+      "args": [
+        "locality-candidates",
+        "sum"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "locality-candidates",
+        "claim": "sum symbol not consumer filename substring",
+        "passed": true,
+        "actual": [
+          [
+            "symbol",
+            "src/core/math.ts"
+          ]
+        ],
+        "expected": [
+          [
+            "symbol",
+            "src/core/math.ts"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "command": "cleanup-plan",
+    "syntax": "cleanup-plan",
+    "group": "Quality and cleanup",
+    "description": "Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/cleanup-plan.json"
+    ],
+    "purposeAndLimits": "Orders dead-code candidates and possible cascades; each deletion still needs usage verification.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/cleanup-plan.test.ts",
+        "status": "passed",
+        "passed": 19,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/cleanup/coverage-contracts.test.ts",
+        "status": "passed",
+        "passed": 14,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "cleanup-plan",
+      "args": [
+        "cleanup-plan"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "recent-duplicates",
+    "syntax": "recent-duplicates",
+    "group": "Quality and cleanup",
+    "description": "Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/recent-duplicates.json"
+    ],
+    "purposeAndLimits": "Recent-to-established duplication candidates; age and similarity do not justify substitution.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/frontend/frontend-recent-duplicates.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/cleanup/recent-duplicates-pruning.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "recent-duplicates",
+      "args": [
+        "recent-duplicates"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "doc-drift",
+    "syntax": "doc-drift [doc]",
+    "group": "Quality and cleanup",
+    "description": "Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/doc-drift.json"
+    ],
+    "purposeAndLimits": "Code continued changing after related docs; candidate, not proof of false documentation.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/doc-drift.test.ts",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "doc-drift",
+      "args": [
+        "doc-drift"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "unused-params",
+    "syntax": "unused-params",
+    "group": "Quality and cleanup",
+    "description": "Speculative-generality candidates: trailing parameters no body ever uses (TS/JS)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/unused-params.json"
+    ],
+    "purposeAndLimits": "TS/JS trailing parameters unused in bodies; interface/callback contracts can require them.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/unused-params.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "unused-params",
+      "args": [
+        "unused-params"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "drift",
+    "syntax": "drift [module]",
+    "group": "Quality and cleanup",
+    "description": "Detect drift candidates: unused imports and declared architecture violations; pass --architecture for boundary context",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/drift.json"
+    ],
+    "purposeAndLimits": "Unused import and explicit boundary violations; does not infer architectural intent.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/drift-accuracy.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/graph/architecture.test.ts",
+        "status": "passed",
+        "passed": 29,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "drift",
+      "args": [
+        "drift"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "wrapper-candidates",
+    "syntax": "wrapper-candidates",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic wrapper candidates only called by one consumer (high false-positive rate on codebases with intentional layering/ambient types \u2014 treat as exploration, not findings)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/wrapper-candidates.json"
+    ],
+    "purposeAndLimits": "Retain as optional exploration only: single-consumer wrappers can be intentional and useful.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/wrapper-candidates.test.ts",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "wrapper-candidates",
+      "args": [
+        "wrapper-candidates"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "passthrough-candidates",
+    "syntax": "passthrough-candidates",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic passthrough candidates that forward to one callee",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/passthrough-candidates.json"
+    ],
+    "purposeAndLimits": "Forwarding wrappers with signature checks; layering can justify keeping them.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/passthrough-candidates-output.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "passthrough-candidates",
+      "args": [
+        "passthrough-candidates"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "stale-abstractions",
+    "syntax": "stale-abstractions",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic stale abstraction candidates with 0-1 consumers (high false-positive rate on codebases with intentional layering/ambient types \u2014 treat as exploration, not findings)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/stale-abstractions.json"
+    ],
+    "purposeAndLimits": "Retain as optional exploration only: few consumers do not establish a bad abstraction.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/stale-abstractions-accuracy.test.ts",
+        "status": "passed",
+        "passed": 11,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "stale-abstractions",
+      "args": [
+        "stale-abstractions"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "complexity-hotspots",
+    "syntax": "complexity-hotspots",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic complexity hotspot candidates from LOC x fan-in x fan-out",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/complexity-hotspots.json"
+    ],
+    "purposeAndLimits": "LOC times fan-in/out ranking; distinct from cyclomatic/cognitive measurement.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/quality/complexity-hotspots.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "complexity-hotspots",
+      "args": [
+        "complexity-hotspots"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "slice-cohesion",
+    "syntax": "slice-cohesion [symbol]",
+    "group": "Quality and cleanup",
+    "description": "Find low-cohesion candidates from backward slices: outputs whose statements never meet are separate local computations",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/slice-cohesion.json"
+    ],
+    "purposeAndLimits": "Disconnected local output computations; only covered local flow can support the candidate.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/graph/dependence-slice.test.ts",
+        "status": "passed",
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/quality/slice-cohesion-coverage.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/quality/slice-cohesion.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "slice-cohesion",
+      "args": [
+        "slice-cohesion",
+        "runJob"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "self-audit",
+    "syntax": "self-audit",
+    "group": "Quality and cleanup",
+    "description": "Score cheap evidence paths against the best available semantic/source oracle on sampled symbols",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/self-audit.json"
+    ],
+    "purposeAndLimits": "Agreement between cheap and richer providers; they can share bugs. Diagnostic, not ground-truth accuracy.",
+    "regressionEvidence": [
+      {
+        "file": "tests/source/source-backed-accuracy.test.ts",
+        "status": "passed",
+        "passed": 15,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/graph/graph-provider-calibration.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "self-audit",
+      "args": [
+        "self-audit",
+        "--samples",
+        "5"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "complexity",
+    "syntax": "complexity <symbol>",
+    "group": "Quality and cleanup",
+    "description": "Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/complexity.json"
+    ],
+    "purposeAndLimits": "Documented function-local branch/cyclomatic counts and exact/candidate callees; nested scopes repaired.",
+    "regressionEvidence": [
+      {
+        "file": "tests/source/function-metrics.test.ts",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/quality/complexity.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/quality/function-complexity-contract.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "complexity",
+      "args": [
+        "complexity",
+        "runJob"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "complexity",
+        "claim": "one conditional and three actual call targets",
+        "passed": true,
+        "actual": [
+          1,
+          2,
+          3,
+          0
+        ],
+        "expected": [
+          1,
+          2,
+          3,
+          0
+        ]
+      }
+    ]
+  },
+  {
+    "command": "redundant-reexports",
+    "syntax": "redundant-reexports",
+    "group": "Quality and cleanup",
+    "description": "Find barrel re-exports that nobody imports through",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/redundant-reexports.json"
+    ],
+    "purposeAndLimits": "Unused barrel routing candidates; public/external API consumers require review.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/redundant-reexports-fallback.test.ts",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "redundant-reexports",
+      "args": [
+        "redundant-reexports"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "duplicate-bodies",
+    "syntax": "duplicate-bodies",
+    "group": "Quality and cleanup",
+    "description": "Find exact duplicate small-body candidates across files",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/duplicate-bodies.json"
+    ],
+    "purposeAndLimits": "Exact small-body token candidates; identical text can still reference different bindings.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/duplicate-bodies-policy.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/cleanup/duplicate-bodies.test.ts",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "duplicate-bodies",
+      "args": [
+        "duplicate-bodies"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "duplicate-bodies",
+        "claim": "exact small body pair",
+        "passed": true,
+        "actual": [
+          [
+            "src:duplicate:a:formatOne()",
+            "src:duplicate:b:formatTwo()"
+          ]
+        ],
+        "expected": [
+          [
+            "src:duplicate:a:formatOne()",
+            "src:duplicate:b:formatTwo()"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "command": "twin-drift",
+    "syntax": "twin-drift",
+    "group": "Quality and cleanup",
+    "description": "Twin drift candidates: same-name (or near-name) functions across files with diverged bodies",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/twin-drift.json"
+    ],
+    "purposeAndLimits": "Same/near-name divergent bodies; similarity of names does not establish common responsibility.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/twin-drift.test.ts",
+        "status": "passed",
+        "passed": 40,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/health/health-twin-drift.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "twin-drift",
+      "args": [
+        "twin-drift"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "not-implemented",
+    "syntax": "not-implemented",
+    "group": "Quality and cleanup",
+    "description": "Reachable placeholder stub candidates (throw-stub, TODO+return-default, empty body) \u2014 production callers can actually reach these; an unreachable stub is dead's job, not this one's",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/not-implemented.json"
+    ],
+    "purposeAndLimits": "Reachable stub patterns; deliberate defaults/abstract hooks need confirmation.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/not-implemented.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "not-implemented",
+      "args": [
+        "not-implemented"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "decorative-checkers",
+    "syntax": "decorative-checkers",
+    "group": "Quality and cleanup",
+    "description": "Decorative checker candidates: validate*/verify*/check*/assert*/is*/has* callables with no reachable failure exit anywhere in their body",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/decorative-checkers.json"
+    ],
+    "purposeAndLimits": "Checker-shaped functions lacking known failure exits; naming and external effects limit inference.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/decorative-checkers.test.ts",
+        "status": "passed",
+        "passed": 16,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "decorative-checkers",
+      "args": [
+        "decorative-checkers"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "test-quality",
+    "syntax": "test-quality",
+    "group": "Quality and cleanup",
+    "description": "Test-quality candidates: assertion-free it/test bodies, a skipped-test ledger with git-blame age, and mock-echo tests that assert the same literal they stubbed into a mock",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/test-quality.json"
+    ],
+    "purposeAndLimits": "Assertion-free, skipped and mock-echo candidates; custom helpers can encode valid assertions.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/test-quality.test.ts",
+        "status": "passed",
+        "passed": 17,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "test-quality",
+      "args": [
+        "test-quality"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "similar-signatures",
+    "syntax": "similar-signatures",
+    "group": "Quality and cleanup",
+    "description": "Find functions with near-identical type signatures (same shape)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/similar-signatures.json"
+    ],
+    "purposeAndLimits": "Near-identical type shapes; many distinct operations legitimately share a signature.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/cleanup/similar-signatures-fallback.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "similar-signatures",
+      "args": [
+        "similar-signatures"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "review",
+    "syntax": "review",
+    "group": "Maintenance",
+    "description": "Review current TS/JS changes against a Git commit, including new and untracked functions",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/review.json"
+    ],
+    "purposeAndLimits": "Current TS/JS diff metrics/findings, including untracked functions; CRAP requires source-matched measured coverage.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/source-review-cli.test.ts",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/source/function-metrics.test.ts",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/source/maintenance-snapshot.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/health/source-modules.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/health/source-review.test.ts",
+        "status": "passed",
+        "passed": 32,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "review",
+      "args": [
+        "review",
+        "--base",
+        "HEAD"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "review",
+        "claim": "changed function status",
+        "passed": true,
+        "actual": [
+          [
+            "newFunction",
+            "added"
+          ],
+          [
+            "runJob",
+            "modified"
+          ]
+        ],
+        "expected": [
+          [
+            "newFunction",
+            "added"
+          ],
+          [
+            "runJob",
+            "modified"
+          ]
+        ]
+      },
+      {
+        "command": "review",
+        "claim": "modified complexity deltas",
+        "passed": true,
+        "actual": {
+          "cyclomatic": 1,
+          "cognitive": 1
+        },
+        "expected": {
+          "cyclomatic": 1,
+          "cognitive": 1
+        }
+      },
+      {
+        "command": "review",
+        "claim": "missing measured coverage remains unavailable",
+        "passed": true,
+        "actual": [
+          "unavailable",
+          "unavailable"
+        ],
+        "expected": [
+          "unavailable",
+          "unavailable"
+        ]
+      },
+      {
+        "command": "review",
+        "claim": "missing coverage does not produce CRAP numbers",
+        "passed": true,
+        "actual": false,
+        "expected": false
+      }
+    ]
+  },
+  {
+    "command": "reindex",
+    "syntax": "reindex",
+    "group": "Maintenance",
+    "description": "Index the codebase and convert to SQLite",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json"
+    ],
+    "purposeAndLimits": "Publish compiler index generations and SQLite; incremental refusal and explicit full fallback are intentional.",
+    "regressionEvidence": [
+      {
+        "file": "tests/reindex/reindex-reliability.test.ts",
+        "status": "passed",
+        "passed": 46,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/reindex/shared-worktree-cache.integration.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/reindex/typescript-incremental-index.test.ts",
+        "status": "passed",
+        "passed": 18,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/reindex-json.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": null,
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "augment-sources",
+    "syntax": "augment-sources",
+    "group": "Maintenance",
+    "description": "Add source files skipped by upstream SCIP indexers to the SQLite documents table",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json"
+    ],
+    "purposeAndLimits": "Add missing source documents; does not manufacture compiler symbols.",
+    "regressionEvidence": [
+      {
+        "file": "tests/reindex/augment-sources.test.ts",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/reindex/post-index-augmentation.test.ts",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": null,
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "augment-vue",
+    "syntax": "augment-vue",
+    "group": "Maintenance",
+    "description": "Add compiler-resolved Vue SFC references to the SQLite index using Volar",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json"
+    ],
+    "purposeAndLimits": "Add compiler-resolved Vue references through isolated workers; requires the Vue tooling/provider.",
+    "regressionEvidence": [
+      {
+        "file": "tests/reindex/augment-vue-reference-task.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/reindex/augment-vue-workers.test.ts",
+        "status": "passed",
+        "passed": 10,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": null,
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "stats",
+    "syntax": "stats",
+    "group": "Maintenance",
+    "description": "Show index statistics",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/stats.json"
+    ],
+    "purposeAndLimits": "Index statistics; they describe the indexed generation, not all current source.",
+    "regressionEvidence": [
+      {
+        "file": "tests/queries/navigation/command-accuracy.test.ts",
+        "status": "passed",
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/navigation/queries.test.ts",
+        "status": "passed",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "stats",
+      "args": [
+        "stats"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "context",
+    "syntax": "context <target>",
+    "group": "Maintenance",
+    "description": "Compiler-backed context for a symbol, file, or module",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/context.json"
+    ],
+    "purposeAndLimits": "Aggregate known symbol/file/module evidence with reusable consumer reads; no inferred task relevance.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/context-decision-packet.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/impact/context-consumer-reuse.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "context",
+      "args": [
+        "context",
+        "runJob"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "health",
+    "syntax": "health",
+    "group": "Maintenance",
+    "description": "Find concrete TS/JS complexity, duplication, and dependency issues without an index",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/health.json"
+    ],
+    "purposeAndLimits": "First-use TS/JS source scan for measured complexity, token duplicates and imports; no general conceptual ownership verdict.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/source-review-cli.test.ts",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/source/maintenance-project.test.ts",
+        "status": "passed",
+        "passed": 7,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/health/seeded-defect-recall.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/health/source-modules.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/health/source-review.test.ts",
+        "status": "passed",
+        "passed": 32,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "health",
+      "args": [
+        "health"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "health",
+        "claim": "cycle detected without an index-dependent graph call",
+        "passed": true,
+        "actual": [
+          "dependency-cycle"
+        ],
+        "expected": [
+          "dependency-cycle"
+        ]
+      },
+      {
+        "command": "health",
+        "claim": "all TS files/functions analyzed",
+        "passed": true,
+        "actual": [
+          13,
+          28,
+          []
+        ],
+        "expected": [
+          13,
+          28,
+          []
+        ]
+      }
+    ]
+  },
+  {
+    "command": "install-skills",
+    "syntax": "install-skills",
+    "group": "Maintenance",
+    "description": "Install core exploration skills into Claude Code, Codex, and shared agent roots",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json"
+    ],
+    "purposeAndLimits": "Install owned guidance files; verify through temporary roots, never user-global audit mutation.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/agent-setup.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/architecture-hook-setup.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/ast-parser-setup.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/project-setup.test.ts",
+        "status": "passed",
+        "passed": 21,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/setup.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/cleanup/dead-vue-script-setup.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": null,
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "check-deps",
+    "syntax": "check-deps",
+    "group": "Maintenance",
+    "description": "Check whether scip-query and the detected language indexers are runnable",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/check-deps.log"
+    ],
+    "purposeAndLimits": "Report executable/provider readiness; not semantic accuracy.",
+    "regressionEvidence": [
+      {
+        "file": "tests/reindex/project-tool-execution.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/agent-setup.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/architecture-hook-setup.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/ast-parser-setup.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/project-setup.test.ts",
+        "status": "passed",
+        "passed": 21,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/setup.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/cleanup/dead-vue-script-setup.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "check-deps",
+      "args": [
+        "check-deps"
+      ],
+      "exitCode": 0,
+      "hasPacket": false,
+      "humanOnly": true
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "capabilities",
+    "syntax": "capabilities",
+    "group": "Maintenance",
+    "description": "Report which mapping and analysis capabilities are available in this project",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/capabilities.json"
+    ],
+    "purposeAndLimits": "Report provider support and coverage; available does not mean complete analysis.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/health-capability-disclosure.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/project-setup.test.ts",
+        "status": "passed",
+        "passed": 21,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/graph/graph-provider-calibration.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "capabilities",
+      "args": [
+        "capabilities"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "init",
+    "syntax": "init",
+    "group": "Maintenance",
+    "description": "Create a .scipquery.json configuration file for this project",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json"
+    ],
+    "purposeAndLimits": "Write project configuration; existing configuration must be preserved.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/project-setup.test.ts",
+        "status": "passed",
+        "passed": 21,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/runtime-config.test.ts",
+        "status": "passed",
+        "passed": 64,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": null,
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "config-validate",
+    "syntax": "config-validate",
+    "group": "Maintenance",
+    "description": "Validate .scipquery.json, structured suppressions, architecture, and coupling groups",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "fixture-claims-and-regressions",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/config-validate.json"
+    ],
+    "purposeAndLimits": "Validate configuration, architecture and suppression structure; no proof of written justification.",
+    "regressionEvidence": [
+      {
+        "file": "tests/domain/project-config.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/runtime-config.test.ts",
+        "status": "passed",
+        "passed": 64,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/storage/suppression-store.test.ts",
+        "status": "passed",
+        "passed": 27,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "config-validate",
+      "args": [
+        "config-validate"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": [
+      {
+        "command": "config-validate",
+        "claim": "valid architecture config accepted",
+        "passed": true,
+        "actual": [],
+        "expected": []
+      }
+    ]
+  },
+  {
+    "command": "suppress",
+    "syntax": "suppress <id>",
+    "group": "Maintenance",
+    "description": "Record an accepted finding under .scipquery/suppressions with a required reason",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json"
+    ],
+    "purposeAndLimits": "Record reviewed exceptions with reason and target-content hashes; all target files required for automatic acceptance.",
+    "regressionEvidence": [
+      {
+        "file": "tests/domain/suppression-adjudication.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/source-review-cli.test.ts",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/storage/suppression-store.test.ts",
+        "status": "passed",
+        "passed": 27,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/health/source-review.test.ts",
+        "status": "passed",
+        "passed": 32,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": null,
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "doctor",
+    "syntax": "doctor",
+    "group": "Maintenance",
+    "description": "Diagnose configuration, index freshness, dependencies, and project capabilities",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/doctor.json"
+    ],
+    "purposeAndLimits": "Diagnose configuration, tools and freshness; readiness diagnostics, not correctness certification.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/agent-setup.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/architecture-hook-setup.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/ast-parser-setup.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/health-capability-disclosure.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/project-setup.test.ts",
+        "status": "passed",
+        "passed": 21,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/setup.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/cleanup/dead-vue-script-setup.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "doctor",
+      "args": [
+        "doctor"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "setup",
+    "syntax": "setup",
+    "group": "Maintenance",
+    "description": "Install skills, write agent guidance, refresh the index, and report readiness",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json"
+    ],
+    "purposeAndLimits": "Compose install/guidance/index readiness; temporary-root regression coverage, not a global install trial.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/agent-setup.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/architecture-hook-setup.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/ast-parser-setup.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/project-setup.test.ts",
+        "status": "passed",
+        "passed": 21,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/setup-wizard.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/setup.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/cleanup/dead-vue-script-setup.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": null,
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "setup-agent",
+    "syntax": "setup-agent",
+    "group": "Maintenance",
+    "description": "Write concise scip-query mapping and cleanup guidance to AGENTS.md and CLAUDE.md",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json"
+    ],
+    "purposeAndLimits": "Write marked project guidance without replacing unrelated text.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/agent-setup.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/project-setup.test.ts",
+        "status": "passed",
+        "passed": 21,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": null,
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "uninstall",
+    "syntax": "uninstall",
+    "group": "Maintenance",
+    "description": "Remove selected scip-query-owned skills or project guidance",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json"
+    ],
+    "purposeAndLimits": "Remove selected tool-owned guidance/installations; preserve unrelated user content.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/agent-setup.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/architecture-hook-setup.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/ast-parser-setup.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/project-setup.test.ts",
+        "status": "passed",
+        "passed": 21,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/setup.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/cleanup/dead-vue-script-setup.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": null,
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "watch",
+    "syntax": "watch",
+    "group": "Maintenance",
+    "description": "Watch in the foreground or manage the project refresh service",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json"
+    ],
+    "purposeAndLimits": "Foreground/background refresh lifecycle and cancellation; OS/process behavior remains environment-dependent.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/watch-refresh-coordinator.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/watch-service.test.ts",
+        "status": "passed",
+        "passed": 27,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/watch.test.ts",
+        "status": "passed",
+        "passed": 47,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/worktree-watch-service.integration.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": null,
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "status",
+    "syntax": "status",
+    "group": "Maintenance",
+    "description": "Show index status for this project",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json",
+      "final/status.json"
+    ],
+    "purposeAndLimits": "Index generation/freshness status; not a repository quality summary.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/project-setup.test.ts",
+        "status": "passed",
+        "passed": 21,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/watch-service.test.ts",
+        "status": "passed",
+        "passed": 27,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": {
+      "command": "status",
+      "args": [
+        "status"
+      ],
+      "exitCode": 0,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "tla",
+    "syntax": "tla <operation> [spec]",
+    "group": "Formal modeling",
+    "description": "TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "remove",
+    "accuracy": "retired",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json"
+    ],
+    "reason": "User explicitly requested retirement of formal modeling.",
+    "purposeAndLimits": "Removed: model generation, TLA verification and trace conformance are outside exploration and change-quality scope.",
+    "regressionEvidence": [
+      {
+        "file": "tests/scripts/render-command-reference.test.ts",
+        "status": "passed",
+        "passed": 12,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/architecture-cli-contract.test.ts",
+        "status": "passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/cli-contract.test.ts",
+        "status": "passed",
+        "passed": 43,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/code-cli-contract.test.ts",
+        "status": "passed",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/command-panels.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/methods-cli-contract.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/search-cli-contract.test.ts",
+        "status": "passed",
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": null,
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "continue",
+    "syntax": "continue <cursor>",
+    "group": "Compatibility and deprecated controls",
+    "description": "Continue an immutable output snapshot",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json"
+    ],
+    "purposeAndLimits": "Immutable output cursor transport; expire/missing/page behavior covered independently.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/output-pagination.test.ts",
+        "status": "passed",
+        "passed": 30,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/result-pagination.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": null,
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "hook-architecture-stop",
+    "syntax": "hook-architecture-stop",
+    "group": "Compatibility and deprecated controls",
+    "description": "Internal architecture-only Stop hook",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain-internal",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json"
+    ],
+    "purposeAndLimits": "Internal hook checks explicit architecture after source changes; no extra analytic capability.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/architecture-hook-setup.test.ts",
+        "status": "passed",
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/architecture-stop-hook.test.ts",
+        "status": "passed",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": null,
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "__diff-impact-batch",
+    "syntax": "__diff-impact-batch",
+    "group": "Compatibility and deprecated controls",
+    "description": "Internal diff-impact batch worker",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain-internal",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json"
+    ],
+    "purposeAndLimits": "Internal isolated impact worker protocol; not a user-facing analysis choice.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/isolated-analysis-runner.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/precomputed-command.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/impact/diff-impact-accuracy.test.ts",
+        "status": "passed",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": null,
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "__health-phase",
+    "syntax": "__health-phase",
+    "group": "Compatibility and deprecated controls",
+    "description": "Internal health phase worker",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain-internal",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json"
+    ],
+    "purposeAndLimits": "Internal isolated health worker protocol; not a user-facing analysis choice.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/isolated-analysis-runner.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/precomputed-command.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/health/health-full.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": null,
+    "semanticFixtureChecks": []
+  },
+  {
+    "command": "__health-semantic-prewarm",
+    "syntax": "__health-semantic-prewarm",
+    "group": "Compatibility and deprecated controls",
+    "description": "Internal health semantic prewarm worker",
+    "helpExitCode": 0,
+    "helpShowsUsage": true,
+    "decision": "retain-internal",
+    "accuracy": "regression-covered; general accuracy unmeasured",
+    "evidence": [
+      "final/claims.json",
+      "final/test-summary.json"
+    ],
+    "purposeAndLimits": "Internal semantic cache prewarm protocol; not a separate detector.",
+    "regressionEvidence": [
+      {
+        "file": "tests/runtime/health-report-cache.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/isolated-analysis-runner.test.ts",
+        "status": "passed",
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/runtime/precomputed-command.test.ts",
+        "status": "passed",
+        "passed": 2,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "file": "tests/queries/health/health-report.test.ts",
+        "status": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "cliRun": null,
+    "semanticFixtureChecks": []
+  }
+]

@@ -218,8 +218,7 @@ describe('passthroughCandidates output classification', () => {
       expect(results.find((result) => result.shortName.endsWith('reveal()'))).toBeUndefined();
 
       const report = health(db);
-      const passthroughScore = report.scoreBreakdown.find((deduction) => deduction.axis === 'passthroughs');
-      expect(passthroughScore?.detail).toContain('5 passthrough candidate(s) (3.5 score-weighted)');
+      expect(report.findings.passthroughs).toBe(5);
     });
   });
 });

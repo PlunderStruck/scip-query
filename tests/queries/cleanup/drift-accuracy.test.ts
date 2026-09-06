@@ -104,6 +104,22 @@ function withDriftFixture(run: (db: ScipDatabase) => void): void {
 }
 
 describe('drift accuracy', () => {
+  it('does not count an indexed import declaration as use of that import', () => {
+    withDriftFixture((db) => {
+      const raw = new Database(db.config.dbPath);
+      raw.exec(`
+        INSERT INTO global_symbols (id, symbol, display_name, kind) VALUES (1, 'scip-typescript npm fixture 1 src/\`views/unused-helper.ts\`/unusedHelper().', 'unusedHelper', 12);
+        INSERT INTO defn_enclosing_ranges VALUES (1, 5, 1, 0, 0, 0, 47);
+        INSERT INTO chunks VALUES (1, 5, 0, 0, 0, X'00'), (2, 1, 0, 3, 3, X'00');
+        INSERT INTO mentions VALUES (1, 1, 1), (2, 1, 2);
+      `);
+      raw.close();
+      expect(drift(db, { semantic: false }).results).toEqual(
+        expect.arrayContaining([expect.objectContaining({ kind: 'unused-import', dep: 'src/views/unused-helper.ts' })]),
+      );
+    });
+  });
+
   it('does not report Vue component imports as unused drift', () => {
     withDriftFixture((db) => {
       const summary = drift(db);

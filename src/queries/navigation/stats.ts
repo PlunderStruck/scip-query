@@ -7,6 +7,7 @@ export interface StatsResult {
   definitions: number;
   references: number;
   indexSizeBytes: number;
+  /** Database file modification time; legacy name, not evidence of source freshness. */
   lastBuilt: Date | null;
 }
 

@@ -1,0 +1,68 @@
+[
+  {
+    "command": "trace",
+    "exitCode": 1,
+    "stderr": "error: unknown command 'trace'\n(Did you mean surface?)\n",
+    "passed": true
+  },
+  {
+    "command": "reference-neighborhood",
+    "exitCode": 1,
+    "stderr": "error: unknown command 'reference-neighborhood'\n",
+    "passed": true
+  },
+  {
+    "command": "value-flow",
+    "exitCode": 1,
+    "stderr": "error: unknown command 'value-flow'\n",
+    "passed": true
+  },
+  {
+    "command": "reference-reachability",
+    "exitCode": 1,
+    "stderr": "error: unknown command 'reference-reachability'\n",
+    "passed": true
+  },
+  {
+    "command": "isolated",
+    "exitCode": 1,
+    "stderr": "error: unknown command 'isolated'\n",
+    "passed": true
+  },
+  {
+    "command": "similar-chains",
+    "exitCode": 1,
+    "stderr": "error: unknown command 'similar-chains'\n",
+    "passed": true
+  },
+  {
+    "command": "extract-candidates",
+    "exitCode": 1,
+    "stderr": "error: unknown command 'extract-candidates'\n",
+    "passed": true
+  },
+  {
+    "command": "wrapper-candidates",
+    "exitCode": 1,
+    "stderr": "error: unknown command 'wrapper-candidates'\n",
+    "passed": true
+  },
+  {
+    "command": "stale-abstractions",
+    "exitCode": 1,
+    "stderr": "error: unknown command 'stale-abstractions'\n",
+    "passed": true
+  },
+  {
+    "command": "complexity-hotspots",
+    "exitCode": 1,
+    "stderr": "error: unknown command 'complexity-hotspots'\n",
+    "passed": true
+  },
+  {
+    "command": "self-audit",
+    "exitCode": 1,
+    "stderr": "error: unknown command 'self-audit'\n",
+    "passed": true
+  }
+]

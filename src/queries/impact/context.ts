@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { profileSpan } from '../../instrumentation/profile.js';
-import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import type { CoChangeSubjectContext } from '../../analysis/git-history.js';
+import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import { getSuppressionInventory } from '../../analysis/suppressions.js';
 import { classifyFile } from '../../analysis/file-classifier.js';
 import { affected, type AffectedResult } from '../graph/affected.js';
@@ -10,9 +10,7 @@ import { changeSurface, type ChangeSurfaceResult } from './change-surface.js';
 import { coChange } from '../cleanup/co-change.js';
 import { similar, type SimilarSymbolResult } from '../cleanup/similar.js';
 import { complexity, type ComplexityResult } from '../quality/complexity.js';
-import { dataflow, type DataflowResult } from '../navigation/dataflow.js';
 import { deps, rdeps, type DepResult } from '../navigation/deps.js';
-import { slice, type SliceResult } from '../navigation/slice.js';
 import { surface, type SurfaceResult } from '../navigation/surface.js';
 import { system, type SystemResult } from '../navigation/system.js';
 import { traceEvidence, type TraceEvidenceResult, type TraceResult } from '../navigation/trace.js';
@@ -28,7 +26,6 @@ import { enclosingSourceUnitSnippet } from '../navigation/source-snippet.js';
 export interface RepositoryContextOptions {
   semantic?: boolean;
   impactDepth?: number;
-  sliceDepth?: number;
   scope?: string;
   /** Already-resolved invocation HEAD for snapshot-consistent history evidence. */
   gitHead?: string;
@@ -121,9 +118,6 @@ export interface RepositoryContextResult {
   trace: TraceResult;
   callGraph: CallGraphResult | null;
   complexity: ComplexityResult | null;
-  dataflow: DataflowResult | null;
-  backwardSlice: SliceResult | null;
-  forwardSlice: SliceResult | null;
   affected: AffectedResult[];
   changeSurface: ChangeSurfaceResult | null;
   deps: DepResult[];
@@ -161,7 +155,6 @@ export function repositoryContext(
   opts: RepositoryContextOptions = {},
 ): RepositoryContextResult {
   const impactDepth = opts.impactDepth ?? 3;
-  const sliceDepth = opts.sliceDepth ?? 3;
   const semantic = opts.semantic;
   const pathResolution = looksLikePathTarget(target) ? resolveRepositoryContextPrimaryCallable(db, target) : null;
   const graphTarget = pathResolution ? (pathResolution.primary?.symbol ?? null) : target;
@@ -169,14 +162,11 @@ export function repositoryContext(
     traceResult,
     callGraphResult,
     complexityResult,
-    dataflowResult,
-    backwardSliceResult,
-    forwardSliceResult,
     affectedResults,
     reuseCandidates,
     targetSymbol,
     affectedConsumerReuse,
-  } = buildRepositoryContextSymbolComponents(db, graphTarget, opts, impactDepth, sliceDepth);
+  } = buildRepositoryContextSymbolComponents(db, graphTarget, opts, impactDepth);
 
   const changeSurfaceResult = profileRepositoryContextComponent(
     'change-surface',
@@ -241,9 +231,6 @@ export function repositoryContext(
       traceResult.referencedBy.length > 0 ||
       callGraphResult !== null ||
       complexityResult !== null ||
-      dataflowResult !== null ||
-      backwardSliceResult !== null ||
-      forwardSliceResult !== null ||
       affectedResults.length > 0,
     file: changeSurfaceResult !== null || depsResults.length > 0 || rdepsResults.length > 0,
     module: systemResult.files.length > 0 || systemResult.symbols.length > 0 || surfaceResults.length > 0,
@@ -252,7 +239,7 @@ export function repositoryContext(
   const warnings: string[] = [];
   if (pathResolution && !pathResolution.primary && pathResolution.callableCount > 1) {
     warnings.push(
-      `File target has ${pathResolution.callableCount} callable symbols; use one callable name for compiler-resolved flow.`,
+      `File target has ${pathResolution.callableCount} callable symbols; use one callable name for compiler-resolved relationships.`,
     );
   }
   const referencedFiles = [...new Set(traceResult.referencedBy.map((reference) => reference.relativePath))];
@@ -285,9 +272,6 @@ export function repositoryContext(
     trace: stripTraceSourceEvidence(traceResult),
     callGraph: callGraphResult,
     complexity: complexityResult,
-    dataflow: dataflowResult,
-    backwardSlice: backwardSliceResult,
-    forwardSlice: forwardSliceResult,
     affected: affectedResults,
     changeSurface: changeSurfaceResult,
     deps: depsResults,
@@ -312,7 +296,6 @@ function buildRepositoryContextSymbolComponents(
   graphTarget: string | null,
   opts: RepositoryContextOptions,
   impactDepth: number,
-  sliceDepth: number,
 ) {
   const semantic = opts.semantic;
   const traceResult = graphTarget
@@ -337,34 +320,6 @@ function buildRepositoryContextSymbolComponents(
         graphTarget,
         () => complexity(db, graphTarget, { semantic }),
         (result) => ({ callees: result?.calleeCount ?? 0 }),
-      )
-    : null;
-  const dataflowResult = graphTarget
-    ? profileRepositoryContextComponent(
-        'dataflow',
-        graphTarget,
-        () => dataflow(db, graphTarget, { semantic }),
-        (result) => ({
-          references: result?.usageSites.length ?? 0,
-          producers: result?.producers.length ?? 0,
-          consumers: result?.consumers.length ?? 0,
-        }),
-      )
-    : null;
-  const backwardSliceResult = graphTarget
-    ? profileRepositoryContextComponent(
-        'backward-slice',
-        graphTarget,
-        () => slice(db, graphTarget, { direction: 'backward', maxDepth: sliceDepth, semantic }),
-        (result) => ({ maxDepth: sliceDepth, connectedSymbols: result?.connectedSymbols.length ?? 0 }),
-      )
-    : null;
-  const forwardSliceResult = graphTarget
-    ? profileRepositoryContextComponent(
-        'forward-slice',
-        graphTarget,
-        () => slice(db, graphTarget, { direction: 'forward', maxDepth: sliceDepth, semantic }),
-        (result) => ({ maxDepth: sliceDepth, connectedSymbols: result?.connectedSymbols.length ?? 0 }),
       )
     : null;
   const affectedResults = graphTarget
@@ -426,9 +381,6 @@ function buildRepositoryContextSymbolComponents(
     traceResult,
     callGraphResult,
     complexityResult,
-    dataflowResult,
-    backwardSliceResult,
-    forwardSliceResult,
     affectedResults,
     reuseCandidates,
     targetSymbol,

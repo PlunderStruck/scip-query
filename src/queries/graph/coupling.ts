@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { TARGET_COUPLING_SQL } from '../internal/target-coupling.js';
-import { resolveIndexedFile } from '../internal/file-resolution.js';
+import { resolveUniqueIndexedPath } from '../internal/file-resolution.js';
 
 export interface CouplingResult {
   file1: string;
@@ -17,8 +17,12 @@ export interface CouplingResult {
  * (symbols defined in one and referenced in the other, or vice versa).
  */
 export function coupling(db: ScipDatabase, file1: string, file2: string): CouplingResult {
-  const resolvedFile1 = resolveIndexedFile(db, file1) ?? file1;
-  const resolvedFile2 = resolveIndexedFile(db, file2) ?? file2;
+  const resolvedFile1 = resolveUniqueIndexedPath(db, file1);
+  const resolvedFile2 = resolveUniqueIndexedPath(db, file2);
+  if (!resolvedFile1 || !resolvedFile2) {
+    throw new Error('Coupling requires two uniquely resolved indexed files. Use exact project paths.');
+  }
+  if (resolvedFile1 === resolvedFile2) throw new Error('Coupling requires two distinct files.');
 
   const row = db.get<{ shared: number }>(
     TARGET_COUPLING_SQL,
@@ -44,8 +48,8 @@ export function sharedSymbolCoupling(db: ScipDatabase, file1: string, file2: str
 // scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function topCoupling(db: ScipDatabase, opts: { limit?: number; scope?: string } = {}): CouplingResult[] {
   const { limit = 20, scope } = opts;
-  const scopeFilter = scope ? `AND def_d.relative_path LIKE ? AND ref_d.relative_path LIKE ?` : '';
-  const scopeParams = scope ? [`%${scope}%`, `%${scope}%`] : [];
+  const scopeFilter = scope ? `AND instr(def_d.relative_path, ?) > 0 AND instr(ref_d.relative_path, ?) > 0` : '';
+  const scopeParams = scope ? [scope, scope] : [];
 
   // Find file pairs that share the most symbols (one defines, other references)
   const rows = db.all<{

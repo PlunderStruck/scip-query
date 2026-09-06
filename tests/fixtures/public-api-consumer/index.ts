@@ -1,21 +1,14 @@
 import { ProjectIndex, parseSymbol, type ScipDatabase, type ScipQueryConfig } from 'scip-query';
-import type {
-  OutcomeEvent,
-  OutcomeEventKind,
-  OutcomeObserverAuthority,
-  OutcomeObserverKind,
-  OutcomeObserverProvenance,
-} from 'scip-query/queries/index';
-import { twinAb, type TwinAbOutcome } from 'scip-query/queries/twin-ab';
+
 import { pathMatchesGlob } from 'scip-query/queries/files';
 import { refs, type RefResult } from 'scip-query/queries/refs';
 import { resolveMethods, type MethodsResolution } from 'scip-query/queries/methods';
 import {
-  planContext,
-  type PlanContextHistory,
-  type PlanContextOptions,
-  type PlanContextResult,
-} from 'scip-query/queries/plan-context';
+  repositoryContext,
+  type RepositoryContextHistory,
+  type RepositoryContextOptions,
+  type RepositoryContextResult,
+} from 'scip-query/queries/context';
 import {
   createBaseContentReader,
   createBaseContentResultReader,
@@ -36,19 +29,14 @@ import {
 
 declare const database: ScipDatabase;
 declare const config: ScipQueryConfig;
-declare const historicalOutcomeEvent: OutcomeEvent;
-const historicalOutcomeKind: OutcomeEventKind = historicalOutcomeEvent.event;
-const historicalObserverKind: OutcomeObserverKind | undefined = historicalOutcomeEvent.observer?.kind;
-const historicalObserverAuthority: OutcomeObserverAuthority | undefined = historicalOutcomeEvent.observer?.authority;
-const historicalObserver: OutcomeObserverProvenance | undefined = historicalOutcomeEvent.observer;
 
 const index = new ProjectIndex(database);
 const references: RefResult[] = refs(database, 'login');
 const methodResolution: MethodsResolution = resolveMethods(database, { className: 'AuthService' });
 const preparedRead = database.db.prepare('SELECT 1 AS value').get();
-const legacyContextOptions: PlanContextOptions = { impactDepth: 2 };
-const legacyContext: PlanContextResult = planContext(database, 'login', legacyContextOptions);
-const legacyContextHistory: PlanContextHistory = legacyContext.history;
+const contextOptions: RepositoryContextOptions = { impactDepth: 2 };
+const context: RepositoryContextResult = repositoryContext(database, 'login', contextOptions);
+const contextHistory: RepositoryContextHistory = context.history;
 // @ts-expect-error The public query port does not own the connection lifecycle.
 database.db.close();
 // @ts-expect-error Mutable connection configuration is private to ScipDatabase.
@@ -102,16 +90,8 @@ const namedLegacyReader = createBaseContentReader({
 const legacyHistorical: string | null = fileContentAtBase('.', 'HEAD', 'src/index.ts');
 const legacyHistoricalBatch = fileContentsAtBase('.', 'HEAD', ['src/index.ts']);
 const legacyReader = createBaseContentReader('.', 'HEAD', ['src/index.ts']);
-const twins: TwinAbOutcome = twinAb(database, {
-  refA: 'escapeRegex',
-  refB: 'escapeRegExp',
-  outFile: '/tmp/twin.test.ts',
-});
-const legacyTwins: TwinAbOutcome = twinAb(database, 'escapeRegex', 'escapeRegExp', '/tmp/twin.test.ts');
 const globMatches: boolean = pathMatchesGlob({ pattern: 'src/*.ts', relativePath: 'src/index.ts' });
 const legacyGlobMatches: boolean = pathMatchesGlob('src/*.ts', 'src/index.ts');
-// @ts-expect-error The named twin contract requires the outFile role.
-twinAb(database, { refA: 'escapeRegex', refB: 'escapeRegExp', outputPath: '/tmp/twin.test.ts' });
 // @ts-expect-error The named glob contract calls the candidate relativePath.
 pathMatchesGlob({ pattern: 'src/*.ts', path: 'src/index.ts' });
 // @ts-expect-error The named historical-content contract calls the file relativePath.
@@ -120,14 +100,10 @@ fileContentAtBase({ projectRoot: '.', base: 'HEAD', path: 'src/index.ts' });
 void [
   index,
   config,
-  historicalOutcomeKind,
-  historicalObserverKind,
-  historicalObserverAuthority,
-  historicalObserver,
   references,
   methodResolution,
   preparedRead,
-  legacyContextHistory,
+  contextHistory,
   resultPromise,
   decoded,
   historical,
@@ -139,8 +115,6 @@ void [
   legacyHistorical,
   legacyHistoricalBatch,
   legacyReader,
-  twins,
-  legacyTwins,
   globMatches,
   legacyGlobMatches,
   parseSymbol('local 1'),

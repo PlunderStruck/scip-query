@@ -187,15 +187,15 @@ describe('case-sensitive symbol resolution', () => {
   it('keeps refs aligned with the resolved symbol intent', () => {
     expect(refs(db, 'RunStore')).toEqual(
       expect.arrayContaining([
-        { relativePath: 'lib/src/run_store.dart', line: 0 },
-        { relativePath: 'lib/src/coordinator.dart', line: 1 },
+        { relativePath: 'lib/src/run_store.dart', line: 0, evidence: 'indexed-definition' },
+        { relativePath: 'lib/src/coordinator.dart', line: 1, evidence: 'source-or-chunk-candidate' },
       ]),
     );
 
     expect(refs(db, 'ProofCollector')).toEqual(
       expect.arrayContaining([
-        { relativePath: 'lib/src/proof.dart', line: 0 },
-        { relativePath: 'lib/src/coordinator.dart', line: 2 },
+        { relativePath: 'lib/src/proof.dart', line: 0, evidence: 'indexed-definition' },
+        { relativePath: 'lib/src/coordinator.dart', line: 2, evidence: 'source-or-chunk-candidate' },
       ]),
     );
   });

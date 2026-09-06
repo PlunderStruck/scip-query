@@ -1,0 +1,420 @@
+import type { ScipSymbol, ScipDescriptor, ScipLocalSymbol, DescriptorSuffix } from './types.js';
+
+/**
+ * SCIP Symbol Grammar (from the SCIP spec):
+ *
+ *   <symbol>     ::= <scheme> ' ' <package> ' ' <descriptor>+ | 'local ' <local-id>
+ *   <package>    ::= <manager> ' ' <package-name> ' ' <version> ' '
+ *   <descriptor> ::= <name> <suffix>
+ *
+ * Suffix characters:
+ *   /    namespace
+ *   #    type (class, interface, enum)
+ *   .    term (variable, field, property)
+ *   ().  method
+ *   [    type parameter
+ *   ()   parameter
+ *   :    meta
+ *   !    macro
+ *
+ * Names may be backtick-escaped: `some.weird/name`
+ */
+
+const SUFFIX_MAP: Record<string, DescriptorSuffix> = {
+  '/': 'namespace',
+  '#': 'type',
+  '.': 'term',
+  '[': 'type-param',
+  ':': 'meta',
+  '!': 'macro',
+};
+
+/**
+ * Parse a SCIP symbol string into its structured components.
+ * Works for any SCIP-indexed language (TypeScript, Java, Rust, Python, etc.)
+ */
+export function parseSymbol(raw: string): ScipSymbol | ScipLocalSymbol {
+  if (raw.startsWith('local ')) {
+    return { kind: 'local', id: raw.slice(6), raw };
+  }
+
+  // Split: <scheme> <manager> <package-name> <version> <descriptors...>
+  // The tricky part: package-name can contain spaces if backtick-escaped
+  const parts = raw.split(' ');
+  if (parts.length < 4) {
+    // Malformed — return a best-effort parse
+    return {
+      scheme: parts[0] ?? '',
+      manager: parts[1] ?? '',
+      packageName: parts[2] ?? '',
+      version: '',
+      descriptors: [],
+      raw,
+    };
+  }
+
+  const scheme = parts[0]!;
+  const manager = parts[1]!;
+
+  // Package name and version: package name might be backtick-escaped
+  // After scheme + manager, we need to find package + version + descriptor string
+  let restAfterManager = raw.slice(scheme.length + 1 + manager.length + 1);
+
+  // Parse package name (may be backtick-escaped)
+  let packageName: string;
+  if (restAfterManager.startsWith('`')) {
+    const closingTick = restAfterManager.indexOf('`', 1);
+    if (closingTick === -1) {
+      packageName = restAfterManager.slice(1);
+      restAfterManager = '';
+    } else {
+      packageName = restAfterManager.slice(1, closingTick);
+      restAfterManager = restAfterManager.slice(closingTick + 2); // skip ` and space
+    }
+  } else {
+    const spaceIdx = restAfterManager.indexOf(' ');
+    if (spaceIdx === -1) {
+      packageName = restAfterManager;
+      restAfterManager = '';
+    } else {
+      packageName = restAfterManager.slice(0, spaceIdx);
+      restAfterManager = restAfterManager.slice(spaceIdx + 1);
+    }
+  }
+
+  // Parse version
+  let version: string;
+  const versionSpaceIdx = restAfterManager.indexOf(' ');
+  if (versionSpaceIdx === -1) {
+    version = restAfterManager;
+    restAfterManager = '';
+  } else {
+    version = restAfterManager.slice(0, versionSpaceIdx);
+    restAfterManager = restAfterManager.slice(versionSpaceIdx + 1);
+  }
+
+  // Parse descriptors from the remaining string
+  const descriptors = parseDescriptors(restAfterManager);
+
+  return { scheme, manager, packageName, version, descriptors, raw };
+}
+
+export function parentTypeName(rawSymbol: string): string | null {
+  const parsed = parseSymbol(rawSymbol);
+  if ('kind' in parsed) {
+    return null;
+  }
+
+  for (let index = parsed.descriptors.length - 2; index >= 0; index--) {
+    const descriptor = parsed.descriptors[index];
+    if (descriptor?.suffix === 'type') {
+      return descriptor.name;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Parse the descriptor chain from a SCIP symbol.
+ *
+ * SCIP descriptor grammar:
+ *   namespace:   name/
+ *   type:        name#
+ *   term:        name.
+ *   method:      name(disambiguator).
+ *   type-param:  [name]          (bracket-wrapped, prefix syntax)
+ *   parameter:   (name)          (paren-wrapped, prefix syntax)
+ *   meta:        name:
+ *   macro:       name!
+ *
+ * Names can be backtick-escaped: `some/name.with.dots`
+ */
+interface DescriptorRead {
+  descriptor?: ScipDescriptor;
+  next: number;
+}
+
+function parseDescriptors(input: string): ScipDescriptor[] {
+  const descriptors: ScipDescriptor[] = [];
+  let index = 0;
+  while (index < input.length) {
+    const read = readPrefixedDescriptor(input, index, descriptors.length === 0) ?? readNamedDescriptor(input, index);
+    if (read.descriptor) descriptors.push(read.descriptor);
+    index = read.next;
+  }
+  return descriptors;
+}
+
+/** Brackets and bare parentheses name parameters before a descriptor name is read. */
+function readPrefixedDescriptor(input: string, index: number, first: boolean): DescriptorRead | undefined {
+  if (input[index] === '[') {
+    const close = input.indexOf(']', index + 1);
+    return {
+      descriptor: { name: input.slice(index + 1, close === -1 ? undefined : close), suffix: 'type-param' },
+      next: close === -1 ? input.length : close + 1,
+    };
+  }
+  if (input[index] !== '(' || !(first || index === 0 || isSuffixChar(input[index - 1]!))) return undefined;
+  const close = input.indexOf(')', index + 1);
+  if (close === -1 || input[close + 1] === '.') return undefined;
+  return { descriptor: { name: input.slice(index + 1, close), suffix: 'parameter' }, next: close + 1 };
+}
+
+/** An unfinished quoted name remains a term, including the historical empty-name case. */
+function readNamedDescriptor(input: string, index: number): DescriptorRead {
+  if (input[index] === '`') {
+    const close = input.indexOf('`', index + 1);
+    if (close === -1) {
+      return { descriptor: { name: input.slice(index + 1), suffix: 'term' }, next: input.length };
+    }
+    return readDescriptorSuffix(input, input.slice(index + 1, close), close + 1);
+  }
+  const start = index;
+  while (index < input.length && !isSuffixChar(input[index]!)) index++;
+  return readDescriptorSuffix(input, input.slice(start, index), index);
+}
+
+function readDescriptorSuffix(input: string, name: string, index: number): DescriptorRead {
+  if (index >= input.length) {
+    return { descriptor: name ? { name, suffix: 'term' } : undefined, next: index };
+  }
+  if (input[index] === '(') {
+    const close = input.indexOf(')', index + 1);
+    if (close === -1) return { descriptor: { name, suffix: 'term' }, next: index + 1 };
+    // Accept bare disambiguators as methods as well as the standard trailing dot.
+    return { descriptor: { name, suffix: 'method' }, next: close + (input[close + 1] === '.' ? 2 : 1) };
+  }
+  const suffix = SUFFIX_MAP[input[index]!];
+  return { descriptor: suffix ? { name, suffix } : undefined, next: index + 1 };
+}
+
+function isSuffixChar(c: string): boolean {
+  return c === '/' || c === '#' || c === '.' || c === '(' || c === '[' || c === ':' || c === '!';
+}
+
+/**
+ * Convert a parsed SCIP symbol to a short, human-readable name.
+ * Language-agnostic: works for any SCIP-indexed language.
+ *
+ * Examples:
+ *   "scip-typescript npm @vega/api 0.1.3 src/modules/auth/auth.service.ts/AuthService#login()."
+ *   → "auth.service:AuthService:login()"
+ *
+ *   "scip-java maven com.example/mylib 1.0.0 com/example/MyClass#doStuff()."
+ *   → "MyClass:doStuff()"
+ *
+ *   "rust-analyzer cargo my-crate 0.1.0 src/lib.rs/MyStruct#new()."
+ *   → "lib:MyStruct:new()"
+ */
+export function shortenSymbol(raw: string): string {
+  const parsed = parseSymbol(raw);
+  if ('kind' in parsed && parsed.kind === 'local') {
+    return `local:${parsed.id}`;
+  }
+
+  const sym = parsed as ScipSymbol;
+  if (sym.descriptors.length === 0) return sym.raw;
+
+  const parts: string[] = [];
+  for (const desc of sym.descriptors) {
+    const name = shortDescriptorName(desc);
+    if (name) parts.push(name);
+  }
+
+  return parts.join(':');
+}
+
+function shortDescriptorName(desc: ScipDescriptor): string {
+  const name = desc.suffix === 'namespace' ? stripSourceExtension(desc.name) : desc.name;
+  if (!name) return '';
+  return desc.suffix === 'method' ? `${name}()` : name;
+}
+
+function stripSourceExtension(name: string): string {
+  return name
+    .replace(/\.(ts|tsx|js|jsx|mjs|cjs)$/, '')
+    .replace(/\.(py|pyi)$/, '')
+    .replace(/\.(rs)$/, '')
+    .replace(/\.(java|scala|kt|kts)$/, '')
+    .replace(/\.(rb)$/, '')
+    .replace(/\.(go)$/, '')
+    .replace(/\.(cs|vb)$/, '')
+    .replace(/\.(dart)$/, '')
+    .replace(/\.(php)$/, '')
+    .replace(/\.(c|cc|cpp|cxx|h|hpp)$/, '');
+}
+
+/**
+ * Extract just the leaf name from a SCIP symbol.
+ * Useful when you only need the function/class/variable name without path context.
+ */
+export function leafName(raw: string): string {
+  const parsed = parseSymbol(raw);
+  if ('kind' in parsed && parsed.kind === 'local') {
+    return parsed.id;
+  }
+
+  const sym = parsed as ScipSymbol;
+  if (sym.descriptors.length === 0) return '';
+
+  const last = sym.descriptors[sym.descriptors.length - 1]!;
+  return last.name;
+}
+
+/**
+ * The leaf name qualified by its enclosing type when it has one
+ * (`BaseLogger log`, `StatusBadgeRelay normalizeBadgeStatus`); a free function
+ * is its leaf alone. Package, directory, and file descriptors are never
+ * included, so a detector reading names for vocabulary does not see the
+ * directory a symbol lives in.
+ */
+export function ownerQualifiedLeafName(raw: string): string {
+  const parsed = parseSymbol(raw);
+  if ('kind' in parsed && parsed.kind === 'local') return parsed.id;
+  const descriptors = (parsed as ScipSymbol).descriptors;
+  const last = descriptors[descriptors.length - 1];
+  if (!last) return '';
+  const owner = descriptors[descriptors.length - 2];
+  return owner && owner.suffix === 'type' ? `${owner.name} ${last.name}` : last.name;
+}
+
+/** The enclosing type's name when the symbol is a member declared on one, else null. */
+export function ownerTypeName(raw: string): string | null {
+  const parsed = parseSymbol(raw);
+  if ('kind' in parsed && parsed.kind === 'local') return null;
+  const descriptors = (parsed as ScipSymbol).descriptors;
+  const owner = descriptors[descriptors.length - 2];
+  return owner && owner.suffix === 'type' ? owner.name : null;
+}
+
+/** Return the suffix of the last descriptor, if the symbol parsed cleanly. */
+export function leafSuffix(raw: string): DescriptorSuffix | null {
+  const parsed = parseSymbol(raw);
+  if ('kind' in parsed && parsed.kind === 'local') {
+    return null;
+  }
+
+  const sym = parsed as ScipSymbol;
+  const last = sym.descriptors[sym.descriptors.length - 1];
+  return last?.suffix ?? null;
+}
+
+/** True when the symbol looks callable — ends with `().` or has method suffix. */
+export function isCallableSymbol(raw: string): boolean {
+  return raw.endsWith('().') || leafSuffix(raw) === 'method';
+}
+
+/** True when the symbol represents a callable/function-like definition. */
+export function isFunctionLikeSymbol(raw: string): boolean {
+  const suffix = leafSuffix(raw);
+  if (suffix === 'method') return true;
+  if (suffix !== 'term') return false;
+  if (raw.endsWith('().')) return true;
+  // rust-analyzer emits struct fields and associated values as plain term
+  // descriptors beneath a type (`Type#field.`). They are not callables even
+  // though file-level Rust terms may still need source-backed classification.
+  if (raw.startsWith('rust-analyzer ') && raw.includes('#')) return false;
+  if (!raw.startsWith('scip-typescript ')) return true;
+  // scip-typescript plain terms split two ways: members of a type
+  // (`Parent#leaf.`) are properties/fields and never callable, while
+  // file-level terms include arrow-function consts, which detectors like
+  // unused-params must treat as callable.
+  return !/#[A-Za-z0-9_$]+\.$/.test(raw);
+}
+
+/** True when the symbol is a namespace/module/file surface rather than a callable or type. */
+export function isModuleLikeSymbol(raw: string): boolean {
+  return leafSuffix(raw) === 'namespace';
+}
+
+// rust-analyzer encodes inherent impl members as `impl#[Type]Member.` and
+// trait impl members as `impl#[Type][Trait]Member.`. Two adjacent bracketed
+// groups means the member belongs to a `impl Trait for Type` block — i.e.
+// it's reached via dispatch and the SCIP graph rarely traces those calls.
+// Many heuristics (dead, isolated, wrapper, passthrough, …) need to skip
+// these symbols to avoid false positives, so the regex lives here once.
+// Match `impl#[Type][Trait]…` whether the impl block sits at the crate root
+// (`<version> impl#…`) or nested in a module (`<version> path/to/mod/impl#…`).
+const RUST_TRAIT_IMPL_RE = /^rust-analyzer\b.*[\s/]impl#\[[^\]]+\]\[[^\]]+\]/;
+export function isRustTraitImplMember(symbol: string): boolean {
+  return RUST_TRAIT_IMPL_RE.test(symbol);
+}
+
+// True when any namespace segment in the SCIP path is named `tests`,
+// `test`, or `_tests` — i.e. the symbol lives inside a `#[cfg(test)] mod
+// tests { ... }` block. file-classifier alone misses these because the
+// containing file is a regular source file; only the inner module is test-
+// scoped. Lots of heuristics (similar-pairs, wrapper-candidates, …) want
+// to skip them to avoid flooding the report with test-helper noise.
+const TEST_MOD_NAMES = new Set(['test', 'tests', '_tests']);
+export function isInRustTestModule(symbol: string): boolean {
+  const parsed = parseSymbol(symbol);
+  if ('kind' in parsed) return false;
+  // Skip the leaf — only enclosing namespaces count.
+  for (let i = 0; i < parsed.descriptors.length - 1; i += 1) {
+    const d = parsed.descriptors[i];
+    if (d?.suffix === 'namespace' && d.name && TEST_MOD_NAMES.has(d.name)) return true;
+  }
+  return false;
+}
+
+/**
+ * Determine whether `candidateRaw` is a direct child of `parentRaw`
+ * in the SCIP descriptor chain.
+ */
+export function isDirectChildSymbol(parentRaw: string, candidateRaw: string): boolean {
+  const parent = parseSymbol(parentRaw);
+  const candidate = parseSymbol(candidateRaw);
+
+  if ('kind' in parent || 'kind' in candidate) {
+    return false;
+  }
+
+  const parentDescriptors = (parent as ScipSymbol).descriptors;
+  const candidateDescriptors = (candidate as ScipSymbol).descriptors;
+
+  if (candidateDescriptors.length !== parentDescriptors.length + 1) {
+    return false;
+  }
+
+  for (let i = 0; i < parentDescriptors.length; i++) {
+    const parentDesc = parentDescriptors[i]!;
+    const candidateDesc = candidateDescriptors[i]!;
+    if (parentDesc.name !== candidateDesc.name || parentDesc.suffix !== candidateDesc.suffix) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Determine whether `ancestorRaw` is a strict ancestor of `descendantRaw`
+ * in the SCIP descriptor chain (any depth, but not equal).
+ */
+export function isAncestorSymbol(ancestorRaw: string, descendantRaw: string): boolean {
+  const ancestor = parseSymbol(ancestorRaw);
+  const descendant = parseSymbol(descendantRaw);
+
+  if ('kind' in ancestor || 'kind' in descendant) {
+    return false;
+  }
+
+  const ancestorDescriptors = (ancestor as ScipSymbol).descriptors;
+  const descendantDescriptors = (descendant as ScipSymbol).descriptors;
+
+  if (descendantDescriptors.length <= ancestorDescriptors.length) {
+    return false;
+  }
+
+  for (let i = 0; i < ancestorDescriptors.length; i++) {
+    const ancestorDesc = ancestorDescriptors[i]!;
+    const descendantDesc = descendantDescriptors[i]!;
+    if (ancestorDesc.name !== descendantDesc.name || ancestorDesc.suffix !== descendantDesc.suffix) {
+      return false;
+    }
+  }
+
+  return true;
+}

@@ -1,0 +1,198 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "health",
+  "operationRole": "composite",
+  "evidence": "mixed",
+  "args": [],
+  "options": {
+    "writeBaseline": true,
+    "json": true
+  },
+  "result": {
+    "path": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/.scipquery-baseline.json",
+    "findingCount": 0
+  },
+  "coverage": {
+    "complete": null,
+    "totalKnown": false,
+    "returned": 1
+  },
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "operationRole": "composite",
+    "receipt": {
+      "schemaVersion": 2,
+      "observedAt": "2026-09-06T07:14:18.770Z",
+      "facts": {
+        "collaborationDomain": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:collaboration-domain",
+            "version": 1
+          },
+          "digest": "12b3d23d2bb3429c31aff20478764eb784d8f792f1d99fd05b8c3f595352050f"
+        },
+        "workspaceInstance": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:workspace-instance",
+            "version": 1
+          },
+          "digest": "576741c7c7be314f883413f5b274f30d17927e4138bb3d1b3e2ec69e6699e626"
+        },
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "6afb9f4b56aad01d848f6e26aaaed7c4ae955dcd47fe3e92cad7bc2b13d5b592"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "6afb9f4b56aad01d848f6e26aaaed7c4ae955dcd47fe3e92cad7bc2b13d5b592"
+          }
+        },
+        {
+          "kind": "live-workspace",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:workspace-instance",
+              "version": 1
+            },
+            "digest": "576741c7c7be314f883413f5b274f30d17927e4138bb3d1b3e2ec69e6699e626"
+          }
+        },
+        {
+          "kind": "process"
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        },
+        {
+          "source": "live-workspace",
+          "kind": "not-established"
+        },
+        {
+          "source": "process",
+          "kind": "not-established"
+        }
+      ],
+      "diagnostics": {
+        "clean": false,
+        "headCommit": "c7e8b0f4d904078e71fa878688ed2fcb40ab34fe",
+        "treeOid": "30efecd0a41e4d3dc60b27a96bda4ec829e26507"
+      }
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "mixed",
+      "coverage": {
+        "complete": null,
+        "totalKnown": false,
+        "returned": 1
+      },
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "mixed",
+        "coverage": {
+          "state": "unknown",
+          "returned": 1,
+          "totalKnown": false
+        },
+        "producerValidation": {
+          "status": "not-evaluated"
+        },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": [
+            "collaborationDomain",
+            "wholeContent",
+            "observationStability"
+          ],
+          "reasons": [
+            "wholeContent:unknown",
+            "observationStability:unknown",
+            "leftIndexAlignment:unknown",
+            "rightIndexAlignment:unknown"
+          ]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": [
+            "No repository action policy was supplied for this claim."
+          ]
+        },
+        "families": [
+          {
+            "id": "actions",
+            "selector": "actions[]",
+            "origin": {
+              "kind": "result-field",
+              "field": "evidence",
+              "values": {
+                "graph-fact": "compiler-graph",
+                "heuristic": "heuristic",
+                "change-graph": "change-history"
+              }
+            }
+          },
+          {
+            "id": "source-findings",
+            "selector": "findings[]",
+            "origin": {
+              "kind": "result-field",
+              "field": "evidence",
+              "values": {
+                "derived": "repository-source",
+                "candidate": "heuristic"
+              }
+            }
+          },
+          {
+            "id": "coverage-notes",
+            "selector": "coverage",
+            "origin": {
+              "kind": "fixed",
+              "origin": "repository-source"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

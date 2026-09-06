@@ -1,0 +1,332 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "by-kind",
+  "operationRole": "repository-observation",
+  "evidence": "graph-fact",
+  "args": [
+    "function"
+  ],
+  "options": {
+    "limit": 100,
+    "json": true,
+    "session": true,
+    "jsonOutput": "/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/full-tool-audit/2026-09-05/followup/final/by-kind.json"
+  },
+  "result": [
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/helper().",
+      "shortName": "src:calls:helper()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/calls.ts",
+      "startLine": 0,
+      "endLine": 0
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/returnedReference().",
+      "shortName": "src:calls:returnedReference()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/calls.ts",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/arrayReference().",
+      "shortName": "src:calls:arrayReference()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/calls.ts",
+      "startLine": 2,
+      "endLine": 2
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/actualCall().",
+      "shortName": "src:calls:actualCall()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/calls.ts",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/nestedOwner().",
+      "shortName": "src:calls:nestedOwner()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/calls.ts",
+      "startLine": 4,
+      "endLine": 7
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/nullish().",
+      "shortName": "src:calls:nullish()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/calls.ts",
+      "startLine": 8,
+      "endLine": 8
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/nestedMetric().",
+      "shortName": "src:calls:nestedMetric()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/calls.ts",
+      "startLine": 9,
+      "endLine": 12
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/sameLineBranches().",
+      "shortName": "src:calls:sameLineBranches()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/calls.ts",
+      "startLine": 13,
+      "endLine": 13
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`consumer.ts`/main().",
+      "shortName": "src:consumer:main()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/consumer.ts",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`math.ts`/sum().",
+      "shortName": "src:core:math:sum()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/core/math.ts",
+      "startLine": 0,
+      "endLine": 0
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/cycle/`a.ts`/readA().",
+      "shortName": "src:cycle:a:readA()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/cycle/a.ts",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/cycle/`b.ts`/readB().",
+      "shortName": "src:cycle:b:readB()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/cycle/b.ts",
+      "startLine": 1,
+      "endLine": 1
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/duplicate/`a.ts`/formatOne().",
+      "shortName": "src:duplicate:a:formatOne()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/duplicate/a.ts",
+      "startLine": 0,
+      "endLine": 4
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/duplicate/`b.ts`/formatTwo().",
+      "shortName": "src:duplicate:b:formatTwo()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/duplicate/b.ts",
+      "startLine": 0,
+      "endLine": 4
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`first.ts`/sharedName().",
+      "shortName": "src:first:sharedName()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/first.ts",
+      "startLine": 0,
+      "endLine": 0
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`flow.ts`/aggregateAlias().",
+      "shortName": "src:flow:aggregateAlias()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/flow.ts",
+      "startLine": 0,
+      "endLine": 4
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`flow.ts`/arrayAlias().",
+      "shortName": "src:flow:arrayAlias()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/flow.ts",
+      "startLine": 5,
+      "endLine": 9
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`flow.ts`/deleteMutation().",
+      "shortName": "src:flow:deleteMutation()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/flow.ts",
+      "startLine": 10,
+      "endLine": 14
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`flow.ts`/compoundLogical().",
+      "shortName": "src:flow:compoundLogical()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/flow.ts",
+      "startLine": 15,
+      "endLine": 19
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`flow.ts`/mutate().",
+      "shortName": "src:flow:mutate()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/flow.ts",
+      "startLine": 20,
+      "endLine": 20
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`flow.ts`/callMutation().",
+      "shortName": "src:flow:callMutation()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/flow.ts",
+      "startLine": 21,
+      "endLine": 24
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`new.ts`/newFunction().",
+      "shortName": "src:new:newFunction()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/new.ts",
+      "startLine": 0,
+      "endLine": 0
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`second.ts`/sharedName().",
+      "shortName": "src:second:sharedName()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/second.ts",
+      "startLine": 0,
+      "endLine": 0
+    },
+    {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+      "shortName": "src:service:runner:runJob()",
+      "kind": 17,
+      "kindName": "Function",
+      "relativePath": "src/service/runner.ts",
+      "startLine": 2,
+      "endLine": 7
+    }
+  ],
+  "coverage": {
+    "complete": null,
+    "totalKnown": false,
+    "returned": 24
+  },
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "operationRole": "repository-observation",
+    "receipt": {
+      "schemaVersion": 2,
+      "observedAt": "2026-09-06T03:42:57.467Z",
+      "facts": {
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        }
+      ]
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "graph-fact",
+      "coverage": {
+        "complete": null,
+        "totalKnown": false,
+        "returned": 24
+      },
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "compiler-graph",
+        "coverage": {
+          "state": "unknown",
+          "returned": 24,
+          "totalKnown": false
+        },
+        "producerValidation": {
+          "status": "not-evaluated"
+        },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": [
+            "collaborationDomain",
+            "wholeContent",
+            "observationStability"
+          ],
+          "reasons": [
+            "collaborationDomain:unknown",
+            "wholeContent:unknown",
+            "leftIndexAlignment:unknown",
+            "rightIndexAlignment:unknown"
+          ]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": [
+            "No repository action policy was supplied for this claim."
+          ]
+        }
+      }
+    }
+  }
+}

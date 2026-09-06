@@ -168,7 +168,10 @@ export function coChange(
     maxFilesPerCommit,
   });
   if (!history || !allPairs) return { available: false, commitsAnalyzed: 0, findings: [] };
-  const pairs = typeof opts.scanLimit === 'number' ? allPairs.slice(0, opts.scanLimit) : allPairs;
+  if (limit === 0) return { available: true, commitsAnalyzed: history.commits.length, findings: [] };
+  const scopedPairs =
+    file === undefined ? allPairs : allPairs.filter((pair) => pair.fileA.includes(file) || pair.fileB.includes(file));
+  const pairs = typeof opts.scanLimit === 'number' ? scopedPairs.slice(0, opts.scanLimit) : scopedPairs;
 
   const graph = buildFileDepGraph(db);
   const declaredCouplings = declaredCouplingSets(db);
@@ -177,27 +180,8 @@ export function coChange(
 
   const findings: CoChangeFinding[] = [];
   for (const pair of pairs) {
-    if (NOISE_FILE_PATTERN.test(pair.fileA) || NOISE_FILE_PATTERN.test(pair.fileB)) continue;
-    // History contains files that were since moved or deleted — a pair is
-    // only actionable when both sides still exist.
-    if (!fileStillExists(db, pair.fileA) || !fileStillExists(db, pair.fileB)) continue;
-    if (partnersMode && !pair.fileA.includes(file) && !pair.fileB.includes(file)) continue;
-    if (!partnersMode) {
-      // Tests co-changing with their subject is expected (and healthy) —
-      // the hidden-coupling detector targets production/config/doc pairs.
-      if (classifyFile(pair.fileA) === 'test' || classifyFile(pair.fileB) === 'test') continue;
-      // Same-stem siblings (Component.vue / .script.ts / .css) are one unit
-      // split across files — expected coupling, not a hidden concept.
-      if (isSameStemSibling(pair.fileA, pair.fileB)) continue;
-      // 21.2 calibration retune (external calibration: Vega_2.0 §5 —
-      // "suppress ... locale-sibling (locales/*.json) pairs by default — the
-      // 'hidden' premise fails when colocation already signals the
-      // coupling"). Per-locale resource files (locales/en/x.json vs
-      // locales/fr/x.json) are the same content in every language by
-      // design — the coupling is obvious from the directory structure, not
-      // a hidden concept worth surfacing.
-      if (isLocaleSiblingPair(pair.fileA, pair.fileB)) continue;
-    }
+    if (!isCurrentCoChangePair(db, pair)) continue;
+    if (!partnersMode && isExpectedCoChangePair(pair.fileA, pair.fileB)) continue;
     const structurallyLinked = structurallyLinkedPair(pair.fileA, pair.fileB);
     if (!includeLinked && structurallyLinked) continue;
     const classification = classifyCoChangePartner(pair.fileA, pair.fileB);
@@ -218,6 +202,33 @@ export function coChange(
     commitsAnalyzed: history.commits.length,
     findings,
   };
+}
+
+function isCurrentCoChangePair(db: ScipDatabase, pair: CoChangePairEvidence): boolean {
+  if (NOISE_FILE_PATTERN.test(pair.fileA) || NOISE_FILE_PATTERN.test(pair.fileB)) return false;
+  // History contains files that were since moved or deleted — a pair is
+  // only actionable when both sides still exist.
+  if (!fileStillExists(db, pair.fileA) || !fileStillExists(db, pair.fileB)) return false;
+  return true;
+}
+
+/** Colocated resource variants and a test with its subject already have an observed reason to change together. */
+function isExpectedCoChangePair(fileA: string, fileB: string): boolean {
+  // Tests co-changing with their subject is expected (and healthy) —
+  // the hidden-coupling detector targets production/config/doc pairs.
+  if (classifyFile(fileA) === 'test' || classifyFile(fileB) === 'test') return true;
+  // Same-stem siblings (Component.vue / .script.ts / .css) are one unit
+  // split across files — expected coupling, not a hidden concept.
+  if (isSameStemSibling(fileA, fileB)) return true;
+  // 21.2 calibration retune (external calibration: Vega_2.0 §5 —
+  // "suppress ... locale-sibling (locales/*.json) pairs by default — the
+  // 'hidden' premise fails when colocation already signals the
+  // coupling"). Per-locale resource files (locales/en/x.json vs
+  // locales/fr/x.json) are the same content in every language by
+  // design — the coupling is obvious from the directory structure, not
+  // a hidden concept worth surfacing.
+  if (isLocaleSiblingPair(fileA, fileB)) return true;
+  return false;
 }
 
 function fileStillExists(db: ScipDatabase, relativePath: string): boolean {

@@ -3,9 +3,12 @@ import { nearestSymbolNames, resolveSymbol } from '../../symbols/symbol-lookup.j
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import type { SymbolResolution } from '../../domain/types.js';
 import { displayLine } from '../render.js';
-import { symbolResolutionJson, type SymbolResolutionJson } from '../../queries/navigation/code-result-json.js';
 
-export { symbolResolutionJson, type SymbolResolutionJson } from '../../queries/navigation/code-result-json.js';
+export {
+  symbolResolutionJson,
+  withSymbolResolutionJson,
+  type SymbolResolutionJson,
+} from '../../queries/navigation/code-result-json.js';
 
 export function symbolResolutionBefore(db: ScipDatabase, query: string): void {
   const resolution = resolveSymbol(db, query);
@@ -19,18 +22,6 @@ export function symbolResolutionEmptyMessage(
   fallback = 'No results found for resolved symbol.',
 ): string {
   return resolveSymbol(db, query).match ? fallback : noMatchMessage(query, nearestSymbolNames(db, query, 5));
-}
-
-export function withSymbolResolutionJson<T>(
-  db: ScipDatabase,
-  query: string,
-  payload: T,
-  payloadKey: string,
-): SymbolResolutionJson & Record<string, unknown> {
-  return {
-    ...symbolResolutionJson(db, query),
-    [payloadKey]: payload,
-  };
 }
 
 export function noMatchMessage(query: string, suggestions: readonly string[]): string {

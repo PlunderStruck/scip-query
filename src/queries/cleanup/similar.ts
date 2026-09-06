@@ -1,9 +1,10 @@
+import { isRecordObject } from '../../domain/record-validation.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
-import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
+import { resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
-import { getSourceLines, getSourceText } from '../../source/primitives/source-text.js';
-import { escapeRegex } from '../../source/primitives/regex-utils.js';
+import { getSourceText } from '../../source/primitives/source-text.js';
+import { definitionSourceSnippet } from './duplicate-bodies.js';
 import {
   computeIdfFromDocFreq,
   difference,
@@ -134,8 +135,8 @@ export function similarConsolidationPlan(
   symbolPatternB: string,
   opts: { semantic?: boolean; scanLimit?: number } = {},
 ): SimilarConsolidationPlan | null {
-  const matchA = findFirstSymbolMatch(db, symbolPatternA);
-  const matchB = findFirstSymbolMatch(db, symbolPatternB);
+  const matchA = uniqueSimilarityTarget(db, symbolPatternA);
+  const matchB = uniqueSimilarityTarget(db, symbolPatternB);
   if (!matchA || !matchB) return null;
 
   const row = similar(db, matchA.symbol, {
@@ -178,9 +179,9 @@ function consolidationStrategyForSimilarRow(row: SimilarSymbolResult): string {
     return `B's ${evidenceNoun} evidence is a subset of A's. A may subsume part of B's structure, but verify signatures, guards, and non-call logic first.`;
   }
   if (row.uniqueToA.length <= 2 && row.uniqueToB.length <= 2) {
-    return `Create a shared helper around the ${row.sharedCallees.length} shared ${evidenceNoun}(s). Pass the ${row.uniqueToA.length + row.uniqueToB.length} divergent point(s) as parameters or callbacks.`;
+    return `Inspect whether control flow and effects permit a shared helper around the ${row.sharedCallees.length} shared ${evidenceNoun}(s). Check whether the ${row.uniqueToA.length + row.uniqueToB.length} divergent point(s) can be parameters or callbacks.`;
   }
-  return `Extract the ${row.sharedCallees.length} shared ${evidenceNoun}(s) into a common helper. Keep each function's unique logic outside that helper (${row.uniqueToA.length} item(s) in A, ${row.uniqueToB.length} in B).`;
+  return `Inspect whether control flow and effects permit extracting the ${row.sharedCallees.length} shared ${evidenceNoun}(s) into a common helper. Keep each function's unique logic outside that helper (${row.uniqueToA.length} item(s) in A, ${row.uniqueToB.length} in B).`;
 }
 
 // scip-query: ignore-extract — reviewed E3 feature-local pipeline; the helper cluster has no separate owner or consumer.
@@ -674,6 +675,7 @@ interface SerializedSourceFingerprintEntry {
 }
 
 interface SerializedSourceFingerprintFile {
+  version: 2;
   entries: SerializedSourceFingerprintEntry[];
 }
 
@@ -744,8 +746,16 @@ const INFRASTRUCTURE_CALLEE_FRAGMENTS = [
   ':storage:per-db-cache:PerDbValue:has',
 ];
 
+function uniqueSimilarityTarget(db: ScipDatabase, pattern: string) {
+  const resolution = resolveSymbol(db, pattern);
+  if (resolution.candidates.length > 0) {
+    throw new Error(`Ambiguous similarity target: ${pattern}. Use an exact symbol or file:line.`);
+  }
+  return resolution.match;
+}
+
 function findCallees(db: ScipDatabase, symbolPattern: string, opts: { semantic: boolean }): SymbolFingerprint | null {
-  const target = findFirstSymbolMatch(db, symbolPattern);
+  const target = uniqueSimilarityTarget(db, symbolPattern);
   if (!target) return null;
   if (!isFunctionLikeSymbol(target.symbol)) return null;
 
@@ -1294,14 +1304,14 @@ export function promoteSiblingSimilarity(
     actionTier: 'direct',
     evidenceClassReasons: [...classification.evidenceClassReasons, reason],
     recommendation: siblings
-      ? 'Sibling functions in one file share most of their callees; review for a shared step to extract.'
+      ? 'Sibling functions have overlapping weighted callee sets; compare ordering, guards and effects before considering extraction.'
       : 'Shared evidence carries domain behavior alongside scaffolding at high overlap; review for an extract/reuse opportunity.',
   };
 }
 
 function similarityRecommendation(evidenceClass: SimilarEvidenceClass, actionTier: SimilarActionTier): string {
   if (actionTier === 'direct') {
-    return 'Shared domain behavior looks concrete; review for an extract/reuse opportunity.';
+    return 'Shared names match the domain vocabulary heuristic; compare behavior before considering extraction or reuse.';
   }
   if (evidenceClass === 'mixed') {
     return 'Shared evidence mixes domain behavior with scaffolding; review semantics before extracting anything.';
@@ -1482,7 +1492,7 @@ const NON_DOMAIN_CONTEXT_TOKENS = new Set([
 ]);
 
 function findSourceFingerprint(db: ScipDatabase, symbolPattern: string): SourceFingerprint | null {
-  const match = findFirstSymbolMatch(db, symbolPattern);
+  const match = uniqueSimilarityTarget(db, symbolPattern);
   if (!match || !isFunctionLikeSymbol(match.symbol)) {
     return null;
   }
@@ -1496,7 +1506,7 @@ function buildSourceFingerprintTokens(
   match: { symbol: string; relativePath: string; startLine: number; endLine: number },
 ): Set<string> | null {
   const leaf = leafName(match.symbol);
-  const snippet = definitionSnippet(db, match.relativePath, match.startLine, match.endLine, leaf);
+  const snippet = definitionSourceSnippet(db, match) ?? '';
   const tokens = sourceTokens(snippet, leaf);
   return tokens.size > 0 ? tokens : null;
 }
@@ -1693,97 +1703,52 @@ function sourceFingerprintsForDefinitions(
 
   const bySymbol = new Map<string, SourceFingerprint>();
   for (const [relativePath, fileDefinitions] of definitionsByFile) {
-    const source = getSourceText(db, relativePath);
-    if (!source) continue;
-    const contentHash = fileContentHash(db, relativePath, source);
-    const cachedEntries = readSourceFingerprintCache(db, relativePath, contentHash);
-    let changed = false;
-    let lines: readonly string[] | null = null;
-
-    for (const definition of fileDefinitions) {
-      const key = sourceFingerprintDefinitionKey(definition);
-      const cached = cachedEntries.get(key);
-      let tokens = cached ? new Set(cached.tokens) : null;
-      if (!tokens) {
-        lines ??= getSourceLines(db, relativePath);
-        tokens = sourceTokens(
-          definitionSnippetFromLines(lines, definition.startLine, definition.endLine, definition.leaf),
-          definition.leaf,
-        );
-        cachedEntries.set(key, {
-          key,
-          symbol: definition.symbol,
-          startLine: definition.startLine,
-          endLine: definition.endLine,
-          leaf: definition.leaf,
-          tokens: [...tokens].sort(),
-        });
-        changed = true;
-      }
-      if (tokens.size > 0) {
-        bySymbol.set(definition.symbol, {
-          symbol: definition.symbol,
-          file: definition.relativePath,
-          tokens,
-        });
-      }
-    }
-
-    if (changed) writeSourceFingerprintCache(db, relativePath, contentHash, cachedEntries);
+    for (const fingerprint of fileSourceFingerprints(db, relativePath, fileDefinitions))
+      bySymbol.set(fingerprint.symbol, fingerprint);
   }
 
   return definitions.map((definition) => bySymbol.get(definition.symbol)).filter((fp): fp is SourceFingerprint => !!fp);
 }
 
-function definitionSnippet(
+function fileSourceFingerprints(
   db: ScipDatabase,
   relativePath: string,
-  startLine: number,
-  endLine: number,
-  leaf: string,
-): string {
-  const lines = getSourceLines(db, relativePath);
-  if (lines.length === 0) {
-    return '';
-  }
+  fileDefinitions: readonly IndexedDefinition[],
+): SourceFingerprint[] {
+  const fingerprints: SourceFingerprint[] = [];
+  const source = getSourceText(db, relativePath);
+  if (!source) return [];
+  const contentHash = fileContentHash(db, relativePath, source);
+  const cachedEntries = readSourceFingerprintCache(db, relativePath, contentHash);
+  let changed = false;
 
-  return definitionSnippetFromLines(lines, startLine, endLine, leaf);
-}
-
-function definitionSnippetFromLines(
-  lines: readonly string[],
-  startLine: number,
-  endLine: number,
-  leaf: string,
-): string {
-  if (endLine >= startLine && endLine - startLine <= 12) {
-    return lines.slice(startLine, endLine + 1).join('\n');
-  }
-
-  const markerPatterns = [
-    new RegExp(`\\bdef\\s+${escapeRegex(leaf)}\\b`),
-    new RegExp(`\\bfun\\s+${escapeRegex(leaf)}\\b`),
-    new RegExp(`\\bfn\\s+${escapeRegex(leaf)}\\b`),
-    new RegExp(`\\bfunction\\s+${escapeRegex(leaf)}\\b`),
-    new RegExp(`\\b${escapeRegex(leaf)}\\s*\\(`),
-  ];
-  const definitionStart = lines.findIndex((line) => markerPatterns.some((pattern) => pattern.test(line)));
-  if (definitionStart >= 0) {
-    let definitionEnd = definitionStart;
-    for (let index = definitionStart + 1; index < lines.length && index <= definitionStart + 8; index++) {
-      const line = lines[index] ?? '';
-      if (index > definitionStart && looksLikeDefinitionBoundary(line)) {
-        break;
-      }
-      definitionEnd = index;
-      if (line.trim() === '' && index > definitionStart + 1) {
-        break;
-      }
+  for (const definition of fileDefinitions) {
+    const key = sourceFingerprintDefinitionKey(definition);
+    const cached = cachedEntries.get(key);
+    let tokens = cached ? new Set(cached.tokens) : null;
+    if (!tokens) {
+      tokens = sourceTokens(definitionSourceSnippet(db, definition) ?? '', definition.leaf);
+      cachedEntries.set(key, {
+        key,
+        symbol: definition.symbol,
+        startLine: definition.startLine,
+        endLine: definition.endLine,
+        leaf: definition.leaf,
+        tokens: [...tokens].sort(),
+      });
+      changed = true;
     }
-    return lines.slice(definitionStart, definitionEnd + 1).join('\n');
+    if (tokens.size > 0) {
+      fingerprints.push({
+        symbol: definition.symbol,
+        file: definition.relativePath,
+        tokens,
+      });
+    }
   }
 
-  return lines.slice(startLine, Math.min(lines.length, startLine + 8)).join('\n');
+  if (changed) writeSourceFingerprintCache(db, relativePath, contentHash, cachedEntries);
+  return fingerprints;
 }
 
 function sourceFingerprintDefinitionKey(definition: IndexedDefinition): string {
@@ -1801,21 +1766,10 @@ function readSourceFingerprintCache(
 function deserializeSourceFingerprintCache(payload: string): Map<string, SerializedSourceFingerprintEntry> | null {
   try {
     const parsed = JSON.parse(payload) as SerializedSourceFingerprintFile;
-    if (!Array.isArray(parsed.entries)) return null;
+    if (parsed.version !== 2 || !Array.isArray(parsed.entries)) return null;
     const entries = new Map<string, SerializedSourceFingerprintEntry>();
     for (const entry of parsed.entries) {
-      if (
-        !entry ||
-        typeof entry.key !== 'string' ||
-        typeof entry.symbol !== 'string' ||
-        typeof entry.startLine !== 'number' ||
-        typeof entry.endLine !== 'number' ||
-        typeof entry.leaf !== 'string' ||
-        !Array.isArray(entry.tokens) ||
-        !entry.tokens.every((token) => typeof token === 'string')
-      ) {
-        return null;
-      }
+      if (!isSourceFingerprintEntry(entry)) return null;
       entries.set(entry.key, entry);
     }
     return entries;
@@ -1824,8 +1778,22 @@ function deserializeSourceFingerprintCache(payload: string): Map<string, Seriali
   }
 }
 
+function isSourceFingerprintEntry(entry: unknown): entry is SerializedSourceFingerprintEntry {
+  return (
+    isRecordObject(entry) &&
+    typeof entry.key === 'string' &&
+    typeof entry.symbol === 'string' &&
+    typeof entry.startLine === 'number' &&
+    typeof entry.endLine === 'number' &&
+    typeof entry.leaf === 'string' &&
+    Array.isArray(entry.tokens) &&
+    entry.tokens.every((token) => typeof token === 'string')
+  );
+}
+
 function serializeSourceFingerprintCache(entries: ReadonlyMap<string, SerializedSourceFingerprintEntry>): string {
   const payload: SerializedSourceFingerprintFile = {
+    version: 2,
     entries: [...entries.values()].sort((a, b) => a.key.localeCompare(b.key)),
   };
   return JSON.stringify(payload);
@@ -1898,8 +1866,4 @@ function splitIdentifier(value: string): Set<string> {
       .map((part) => part.toLowerCase())
       .filter((part) => part.length > 1),
   );
-}
-
-function looksLikeDefinitionBoundary(line: string): boolean {
-  return /^\s*(?:def|fun|fn|function|class|trait|module|object|enum|interface|public|private|protected)\b/.test(line);
 }

@@ -17,16 +17,13 @@ import {
   bottlenecks,
   coChange,
   complexity,
-  complexityHotspots,
   deepChains,
   cycleSummary,
   decorativeCheckers,
   docDrift,
   drift,
   duplicateBodies,
-  extractCandidates,
   hotspots,
-  isolated,
   localityCandidates,
   notImplemented,
   passthroughCandidates,
@@ -36,21 +33,18 @@ import {
   recentDuplicates,
   redundantReexports,
   similarAll,
-  similarChains,
   similarFiles,
   similarSignatures,
   testQuality,
   twinDrift,
   unusedImports,
   unusedParams,
-  staleAbstractions,
   topCoupling,
   topFanIn,
   topFanOut,
   vueComponentDuplicates,
   vueComposableCandidates,
   vueLargeViewPressure,
-  wrapperCandidates,
 } from '../dist/queries/index.js';
 import { ScipDatabase, shortenSymbol } from '../dist/index.js';
 import {
@@ -168,8 +162,6 @@ const similarityTruthRules = {
     'The two callables have the disclosed shared callee or source-token evidence and score; generic scaffolding alone is not direct consolidation evidence.',
   'similar-files':
     'The two files have the disclosed distinctive dependency overlap and score; matching framework infrastructure alone is support rather than consolidation evidence.',
-  'similar-chains':
-    'Both sequences are real dependency paths and the reported edit distance, divergence, prefix, suffix, and similarity agree.',
   'similar-signatures':
     'Every grouped callable has the same normalized parameter and return shape plus compatible LOC band; equal shape alone does not imply duplicate behavior.',
   'twin-drift':
@@ -183,17 +175,11 @@ const architectureTruthRules = {
     'The doc currently cites or historically co-changed with the reported subject, the subject changed after the doc update, any broken reference is genuinely unresolved, and the staleness arithmetic agrees; updating prose is a separate recommendation.',
   drift:
     'The reported dependency edge exists and the stated subtype is true: no accepted import use survived, an explicit project-owned architecture rule rejects the grouped boundary edge, or exactly one accepted sibling has the dependency; undeclared and inferred edges are not violations.',
-  'wrapper-candidates':
-    'The short production callable has exactly one production external caller file after test, entry, and barrel exclusions, and its enclosing caller or file has the reported fan-in after semantic and source fallback; removing the layer is separate.',
   'passthrough-candidates':
     'The callable has one unique callee and its body literally forwards its parameters through a return expression; public or boundary value is separate.',
-  'stale-abstractions':
-    'The reported type or class has the disclosed real, transitive, barrel, singleton, and defining-file use evidence and therefore matches the stated low-consumer class; folding or deleting it is separate.',
 };
 
 const graphRiskTruthRules = {
-  'extract-candidates':
-    'The production callable has the reported source span, distinct callee set, disconnected callee co-occurrence clusters, and isolation scores; whether a new helper would improve the code is separate.',
   'locality-candidates':
     'The reported source unit, consumer files, common owner, boundary markers, destination confidence, and withheld or suggested home agree with indexed and configured ownership evidence; moving code is separate.',
   coupling:
@@ -202,8 +188,6 @@ const graphRiskTruthRules = {
     'The production callable has the reported distinct incoming consumer files and distinct cross-file callee symbols, and score equals fan-in multiplied by fan-out; risk is separate.',
   'deep-chains':
     'Every adjacent component in the representative chain is connected by a real file dependency after cycles are condensed, and depth matches the disclosed materialized component members; shortening it is separate.',
-  'complexity-hotspots':
-    'The callable source span, LOC, distinct incoming files, distinct callees, external fan-out, branch basis, and composite score agree with production evidence; refactoring priority is separate.',
   hotspots:
     'The emitted symbol is defined in the reported file and has the reported cross-file reference and distinct referencing-file counts; change risk is separate.',
   'fan-in':
@@ -680,17 +664,6 @@ function collectFactualCandidates(db, detector, context) {
         ),
       );
     return { total: definitions.length, rows: measured };
-  } else if (detector === 'isolated') {
-    evidence = 'graph-fact';
-    rawRows = isolated(db, { minLoc: 3, semantic: true }).map((finding) => ({
-      relativePath: finding.relativePath,
-      startLine: finding.startLine,
-      endLine: finding.endLine,
-      symbol: finding.symbol,
-      shortName: finding.shortName,
-      details: finding,
-      sourceExcerpt: sourceExcerpt(context.root, finding.relativePath, finding.startLine, finding.endLine),
-    }));
   } else if (detector === 'redundant-reexports') {
     evidence = 'graph-fact';
     rawRows = redundantReexports(db).map((finding) => {
@@ -792,23 +765,6 @@ function collectSimilarityCandidates(db, detector, context) {
         findingKind: 'dependency-profile',
         details: finding,
         sourceExcerpt: dependencyFilesExcerpt(context.root, [finding.fileA, finding.fileB]),
-      });
-    });
-  } else if (detector === 'similar-chains') {
-    metadata = {
-      exhaustiveCandidateFrame: false,
-      frameLimit: '500 generated dependency chains before pair comparison',
-    };
-    rawRows = similarChains(db, { limit: Number.POSITIVE_INFINITY }).map((finding) => {
-      const endpoints = [fileEndpoint(finding.chainA[0]), fileEndpoint(finding.chainB[0])];
-      return similarityRow({
-        root: context.root,
-        endpoints,
-        symbol: `${finding.chainA.join('>')}|${finding.chainB.join('>')}`,
-        shortName: `${finding.chainA.join(' → ')} ↔ ${finding.chainB.join(' → ')}`,
-        findingKind: 'dependency-chain',
-        details: finding,
-        sourceExcerpt: dependencyFilesExcerpt(context.root, [...finding.chainA, ...finding.chainB]),
       });
     });
   } else if (detector === 'similar-signatures') {
@@ -962,24 +918,6 @@ function collectArchitectureCandidates(db, detector, context) {
         sourceExcerpt: dependencyFilesExcerpt(context.root, [finding.file, finding.dep]),
       });
     });
-  } else if (detector === 'wrapper-candidates') {
-    rawRows = wrapperCandidates(db, {
-      limit: Number.POSITIVE_INFINITY,
-      semantic: true,
-    }).map((finding) => {
-      const endpoints = [definitionEndpoint(db, finding.symbol, finding.file, context.root)];
-      if (finding.singleCaller) {
-        endpoints.push(definitionEndpoint(db, finding.singleCaller, finding.file, context.root));
-      }
-      return similarityRow({
-        root: context.root,
-        endpoints,
-        symbol: `${finding.symbol}|${finding.singleCaller}`,
-        shortName: `${finding.shortName} → ${finding.singleCallerShort}`,
-        findingKind: `single-caller:${finding.actionTier}`,
-        details: finding,
-      });
-    });
   } else if (detector === 'passthrough-candidates') {
     rawRows = passthroughCandidates(db, {
       limit: Number.POSITIVE_INFINITY,
@@ -998,21 +936,6 @@ function collectArchitectureCandidates(db, detector, context) {
         details: finding,
       });
     });
-  } else if (detector === 'stale-abstractions') {
-    rawRows = staleAbstractions(db, {
-      includeLowConfidence: true,
-      limit: Number.POSITIVE_INFINITY,
-      semantic: true,
-    }).map((finding) =>
-      similarityRow({
-        root: context.root,
-        endpoints: [definitionEndpoint(db, finding.symbol, finding.file, context.root)],
-        symbol: finding.symbol,
-        shortName: finding.shortName,
-        findingKind: finding.stalenessKind,
-        details: finding,
-      }),
-    );
   } else {
     throw new Error(`unsupported architecture detector: ${detector}`);
   }
@@ -1039,11 +962,7 @@ function collectArchitectureCandidates(db, detector, context) {
 }
 
 function collectGraphRiskCandidates(db, detector, context) {
-  const evidence = ['extract-candidates', 'locality-candidates', 'bottlenecks', 'complexity-hotspots'].includes(
-    detector,
-  )
-    ? 'mixed'
-    : 'graph-fact';
+  const evidence = ['locality-candidates', 'bottlenecks'].includes(detector) ? 'mixed' : 'graph-fact';
   const normalize = (candidate) =>
     normalizeSimilarityCandidate(candidate, {
       detector,
@@ -1055,22 +974,7 @@ function collectGraphRiskCandidates(db, detector, context) {
 
   let rawRows;
   let metadata = { exhaustiveCandidateFrame: true };
-  if (detector === 'extract-candidates') {
-    rawRows = extractCandidates(db, {
-      limit: UNBOUNDED_RESULT_LIMIT,
-      semantic: true,
-    }).map((finding) => {
-      const endpoints = [definitionEndpoint(db, finding.symbol, finding.relativePath, context.root)];
-      return deferredSimilarityRow({
-        root: context.root,
-        endpoints,
-        symbol: finding.symbol,
-        shortName: finding.shortName,
-        findingKind: finding.extractionKind,
-        details: finding,
-      });
-    });
-  } else if (detector === 'locality-candidates') {
+  if (detector === 'locality-candidates') {
     rawRows = localityCandidates(db, {
       limit: UNBOUNDED_RESULT_LIMIT,
       semantic: true,
@@ -1124,20 +1028,6 @@ function collectGraphRiskCandidates(db, detector, context) {
         symbol: finding.chain.join('|'),
         shortName: `${finding.chain[0]} → ${finding.chain.at(-1)}`,
         findingKind: `${finding.chainKind}:${magnitudeBand(finding.depth, 15, 8)}`,
-        details: finding,
-      }),
-    );
-  } else if (detector === 'complexity-hotspots') {
-    rawRows = complexityHotspots(db, {
-      limit: UNBOUNDED_RESULT_LIMIT,
-      semantic: true,
-    }).map((finding) =>
-      deferredSimilarityRow({
-        root: context.root,
-        endpoints: [definitionEndpoint(db, finding.symbol, finding.file, context.root)],
-        symbol: finding.symbol,
-        shortName: finding.shortName,
-        findingKind: `${finding.estimateBasis}:${magnitudeBand(finding.score, 10, 1)}`,
         details: finding,
       }),
     );
@@ -1934,7 +1824,6 @@ function runNavigationCase(testCase, projectRoot, cacheDir) {
     outline: runCli(['outline', testCase.file], projectRoot, env, 60_000),
     code: runCli(['code', testCase.symbol], projectRoot, env, 60_000),
     refs: runCli(['refs', testCase.symbol], projectRoot, env, 60_000),
-    trace: runCli(['trace', testCase.symbol], projectRoot, env, 60_000),
     callGraph: runCli(['call-graph', testCase.symbol], projectRoot, env, 60_000),
     complexity: runCli(['complexity', testCase.symbol], projectRoot, env, 60_000),
     dataflow: runCli(['dataflow', testCase.symbol], projectRoot, env, 60_000),
@@ -1944,7 +1833,6 @@ function runNavigationCase(testCase, projectRoot, cacheDir) {
   checks.push(assertIncludes('outline output', commands.outline.stdout, [testCase.symbol]));
   checks.push(assertIncludes('code output', commands.code.stdout, testCase.sourceIncludes));
   checks.push(assertIncludes('refs output', commands.refs.stdout, testCase.expectedRefs));
-  checks.push(assertIncludes('trace output', commands.trace.stdout, ['═══ DEFINITION ═══', testCase.file]));
   checks.push(assertIncludes('call-graph output', commands.callGraph.stdout, testCase.expectedCallGraph));
   checks.push(assertIncludes('complexity output', commands.complexity.stdout, ['Cyclomatic', 'Fan-in', 'Fan-out']));
   checks.push(assertIncludes('dataflow output', commands.dataflow.stdout, testCase.expectedDataflow));
@@ -1989,7 +1877,7 @@ function parseEnvelope(text, command) {
     }
     return envelope;
   } catch (error) {
-    throw new Error(`could not parse ${command} JSON: ${errorMessage(error)}`);
+    throw new Error(`could not parse ${command} JSON: ${errorMessage(error)}`, { cause: error });
   }
 }
 

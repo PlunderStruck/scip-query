@@ -1,145 +1,217 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import {
-  graphEvidence,
-  type GraphEvidenceCoverage,
-  type GraphEvidenceEdge,
-  type GraphEvidenceTarget,
-} from './graph-evidence.js';
+import { semanticLocalFlowForRange } from '../../semantic/local-flow.js';
+import type {
+  TypeScriptLocalFlowCoverage,
+  TypeScriptLocalFlowEdge,
+  TypeScriptLocalFlowPoint,
+} from '../../semantic/local-flow.js';
 
 export type DependenceSliceDirection = 'backward' | 'forward';
-
-export interface DependenceSliceEdge extends GraphEvidenceEdge {
+export interface DependenceSliceEdge extends TypeScriptLocalFlowEdge {
   traversalDepth: number;
-  supporting: boolean;
 }
-
-/** Coverage of the partial dependence graph used for this slice. */
 export interface DependenceSliceCoverage {
-  status: GraphEvidenceCoverage['status'];
-  criterionKind: 'symbol-summary' | 'source-location-summary';
-  basis: 'partial-system-dependence-graph';
-  analysisBasis: 'typescript-cfg-reaching-definitions-plus-system-edges';
-  providers: readonly ['typescript-local-dependence', 'bounded-static-value-flow'];
-  graph: GraphEvidenceCoverage;
-  unsupportedRelations: string[];
+  status: 'complete' | 'bounded' | 'incomplete';
+  basis: 'function-local-dependence';
+  model: TypeScriptLocalFlowCoverage;
+  omittedEdges: number;
+  omittedPoints: number;
+  depthLimited: boolean;
+  candidateEdges: number;
 }
-
 export interface DependenceSliceResult {
   kind: 'dependence-slice';
   direction: DependenceSliceDirection;
   criterion: string;
-  targets: GraphEvidenceTarget[];
-  nodeIds: string[];
+  variable?: string;
+  resolution: 'matched' | 'ambiguous' | 'missing' | 'unsupported';
+  /** Exact source candidates; narrow an ambiguous read with --variable and --column. */
+  candidates: TypeScriptLocalFlowPoint[];
+  /** Offsets, lines, and columns use the compiler's zero-based source coordinates. */
+  points: TypeScriptLocalFlowPoint[];
   edges: DependenceSliceEdge[];
   coverage: DependenceSliceCoverage;
 }
 
-const LOCATION_SELECTOR = /:\d+(?:-\d+)?$/u;
-
 /**
- * Compute a directional slice over the currently proved program-dependence
- * projection around one exact symbol or source location.
- *
- * The criterion is a summary root rather than the classic `(program point,
- * variable)` pair. Data-transfer and control-dependence edges carry the slice;
- * ownership, call, and exact runtime edges connect those dependencies across
- * callable boundaries and are marked as supporting edges in the result.
+ * Slice one variable occurrence through compiler-local value and control dependencies.
+ * The public location and optional column are one-based. Calls are not traversed;
+ * closure ordering, heap effects, and every provider limitation remain unproved.
  */
 export function dependenceSlice(
   db: ScipDatabase,
   criterion: string,
-  options: { direction?: DependenceSliceDirection; maxDepth?: number; maxEdges?: number } = {},
+  options: {
+    variable?: string;
+    column?: number;
+    direction?: DependenceSliceDirection;
+    maxDepth?: number;
+    maxEdges?: number;
+  } = {},
 ): DependenceSliceResult {
-  const direction = options.direction ?? 'backward';
-  const maxDepth = options.maxDepth ?? 3;
-  if (!Number.isSafeInteger(maxDepth) || maxDepth < 0) {
-    throw new RangeError(`Dependence-slice depth must be a non-negative safe integer; received ${maxDepth}.`);
-  }
-  const locationCriterion = LOCATION_SELECTOR.test(criterion);
-  const graph = graphEvidence(db, locationCriterion ? { locations: [criterion] } : { symbols: [criterion] }, {
-    families: ['execution', 'runtime', 'dataflow', 'ownership'],
-    maxDepth: maxDepth + 1,
-    maxEdges: options.maxEdges ?? 200,
-  });
-  const rootIds = new Set(graph.targets.flatMap((target) => target.nodeIds));
-  const visited = new Set(rootIds);
-  const edgeDepth = new Map<string, number>();
-
-  expandOwnedNodes(graph.edges, visited, edgeDepth, 0);
-  for (let depth = 1; depth <= maxDepth; depth += 1) {
-    const reached: string[] = [];
-    for (const edge of graph.edges) {
-      if (direction === 'backward' ? visited.has(edge.to.id) : visited.has(edge.from.id)) {
-        const next = direction === 'backward' ? edge.from.id : edge.to.id;
-        if (visited.has(next)) continue;
-        reached.push(next);
-        edgeDepth.set(edge.id, depth);
-      }
-    }
-    if (reached.length === 0) break;
-    for (const nodeId of reached) visited.add(nodeId);
-    expandOwnedNodes(graph.edges, visited, edgeDepth, depth);
-  }
-
-  const edges = graph.edges
-    .filter((edge) => visited.has(edge.from.id) && visited.has(edge.to.id))
-    .filter((edge) => edgeDepth.has(edge.id) || edge.family === 'ownership')
-    .map((edge) => ({
-      ...edge,
-      traversalDepth: edgeDepth.get(edge.id) ?? 0,
-      supporting: edge.family !== 'dataflow' && !isControlDependence(edge),
-    }))
-    .sort(
-      (left, right) =>
-        left.traversalDepth - right.traversalDepth ||
-        left.family.localeCompare(right.family) ||
-        left.from.label.localeCompare(right.from.label) ||
-        left.to.label.localeCompare(right.to.label),
-    );
-
-  return {
+  const { file, line, maxDepth, maxEdges, direction } = parseSliceRequest(criterion, options);
+  const flow = semanticLocalFlowForRange(db, file, line - 1, line - 1);
+  const model: TypeScriptLocalFlowCoverage = flow?.coverage ?? {
+    status: 'unsupported',
+    basis: 'typescript-compiler-cfg-reaching-definitions',
+    unsupported: ['Function-local slicing currently requires TypeScript or JavaScript source.'],
+  };
+  const candidates = selectSliceCriteria(flow?.points ?? [], line, options);
+  const resolution =
+    model.status === 'unsupported'
+      ? 'unsupported'
+      : candidates.length === 1
+        ? 'matched'
+        : candidates.length > 1
+          ? 'ambiguous'
+          : 'missing';
+  const result: DependenceSliceResult = {
     kind: 'dependence-slice',
     direction,
     criterion,
-    targets: graph.targets,
-    nodeIds: [...visited].sort(),
-    edges,
+    ...(options.variable !== undefined ? { variable: options.variable } : {}),
+    resolution,
+    candidates,
+    points: [],
+    edges: [],
     coverage: {
-      status: graph.coverage.status,
-      criterionKind: locationCriterion ? 'source-location-summary' : 'symbol-summary',
-      basis: 'partial-system-dependence-graph',
-      analysisBasis: 'typescript-cfg-reaching-definitions-plus-system-edges',
-      providers: ['typescript-local-dependence', 'bounded-static-value-flow'],
-      graph: graph.coverage,
-      unsupportedRelations: [
-        'general heap alias and cross-instance field points-to flow',
-        'exceptional control and value flow',
-        'closure invocation order',
-        'downstream local definition-use after a call result',
-        'unresolved dynamic dispatch',
-      ],
+      status: 'incomplete',
+      basis: 'function-local-dependence',
+      model,
+      omittedEdges: 0,
+      omittedPoints: 0,
+      depthLimited: false,
+      candidateEdges: 0,
     },
   };
+  const root = candidates[0];
+  if (resolution !== 'matched' || !root || !flow) return result;
+  const points = new Map(flow.points.map((point) => [point.id, point]));
+  const adjacent = exactLocalAdjacency(flow, points, root.callableId, direction);
+  const { selected, reached, depthFrontier } = traverseDependenceSlice(adjacent, root.id, direction, maxDepth);
+  result.edges = [...selected.values()].slice(0, maxEdges);
+  const rendered = new Set([root.id, ...result.edges.flatMap((edge) => [edge.fromPointId, edge.toPointId])]);
+  result.points = [...rendered]
+    .map((id) => points.get(id)!)
+    .sort((a, b) => a.start - b.start || a.id.localeCompare(b.id));
+  const omittedEdges = selected.size - result.edges.length;
+  const depthLimited = depthFrontier.size > 0;
+  result.coverage = {
+    status: model.status !== 'complete' ? 'incomplete' : omittedEdges > 0 || depthLimited ? 'bounded' : 'complete',
+    basis: 'function-local-dependence',
+    model,
+    omittedEdges,
+    omittedPoints: reached.size - rendered.size,
+    depthLimited,
+    candidateEdges: flow.edges.filter(
+      (edge) => edge.strength === 'candidate' && (reached.has(edge.fromPointId) || reached.has(edge.toPointId)),
+    ).length,
+  };
+  return result;
 }
 
-function expandOwnedNodes(
-  edges: readonly GraphEvidenceEdge[],
-  visited: Set<string>,
-  edgeDepth: Map<string, number>,
-  depth: number,
-): void {
-  let changed = true;
-  while (changed) {
-    changed = false;
+type SliceOptions = NonNullable<Parameters<typeof dependenceSlice>[2]>;
+
+function parseSliceRequest(criterion: string, options: SliceOptions) {
+  const location = /^(.*):([1-9]\d*)$/u.exec(criterion);
+  if (!location)
+    throw new Error(
+      'A dependence slice requires an exact file:line, with --variable or --column when ambiguous. Use evidence for symbol relationships.',
+    );
+  const line = Number(location[2]);
+  const maxDepth = options.maxDepth ?? Number.MAX_SAFE_INTEGER;
+  const maxEdges = options.maxEdges ?? 200;
+  validateSliceNumbers(line, options.column, maxDepth, maxEdges);
+  const direction = options.direction ?? 'backward';
+  if (direction !== 'backward' && direction !== 'forward')
+    throw new Error('Slice direction must be backward or forward.');
+  return { file: location[1]!, line, maxDepth, maxEdges, direction };
+}
+
+function validateSliceNumbers(line: number, column: number | undefined, maxDepth: number, maxEdges: number): void {
+  for (const [name, value] of [
+    ['line', line],
+    ['depth', maxDepth],
+    ['max-edges', maxEdges],
+  ] as const) {
+    if (!Number.isSafeInteger(value) || value < (name === 'line' ? 1 : 0))
+      throw new RangeError(`Invalid slice ${name}: ${value}.`);
+  }
+  if (column !== undefined && (!Number.isSafeInteger(column) || column < 1))
+    throw new RangeError('Slice column must be a positive safe integer.');
+}
+
+function selectSliceCriteria(
+  points: readonly TypeScriptLocalFlowPoint[],
+  line: number,
+  options: SliceOptions,
+): TypeScriptLocalFlowPoint[] {
+  let candidates = points.filter(
+    (point) =>
+      point.line === line - 1 &&
+      ['use', 'definition', 'parameter-definition'].includes(point.kind) &&
+      (options.variable === undefined || point.name === options.variable),
+  );
+  if (options.column !== undefined) {
+    const column = options.column - 1;
+    candidates = candidates.filter(
+      (point) => column >= point.column && column < point.column + point.end - point.start,
+    );
+    const smallest = Math.min(...candidates.map((point) => point.end - point.start));
+    candidates = candidates.filter((point) => point.end - point.start === smallest);
+  }
+  return candidates;
+}
+
+function exactLocalAdjacency(
+  flow: NonNullable<ReturnType<typeof semanticLocalFlowForRange>>,
+  points: ReadonlyMap<string, TypeScriptLocalFlowPoint>,
+  callableId: string,
+  direction: DependenceSliceDirection,
+): Map<string, TypeScriptLocalFlowEdge[]> {
+  const adjacent = new Map<string, TypeScriptLocalFlowEdge[]>();
+  for (const edge of flow.edges) {
+    if (
+      edge.strength !== 'exact' ||
+      points.get(edge.fromPointId)?.callableId !== callableId ||
+      points.get(edge.toPointId)?.callableId !== callableId
+    )
+      continue;
+    const id = direction === 'backward' ? edge.toPointId : edge.fromPointId;
+    const rows = adjacent.get(id) ?? [];
+    rows.push(edge);
+    adjacent.set(id, rows);
+  }
+  return adjacent;
+}
+
+function traverseDependenceSlice(
+  adjacent: ReadonlyMap<string, readonly TypeScriptLocalFlowEdge[]>,
+  rootId: string,
+  direction: DependenceSliceDirection,
+  maxDepth: number,
+) {
+  const reached = new Set([rootId]);
+  const selected = new Map<string, DependenceSliceEdge>();
+  const queue = [{ id: rootId, depth: 0 }];
+  const depthFrontier = new Set<string>();
+  for (let index = 0; index < queue.length; index++) {
+    const current = queue[index]!;
+    const edges = adjacent.get(current.id) ?? [];
+    if (current.depth >= maxDepth) {
+      for (const edge of edges) depthFrontier.add(edge.id);
+      continue;
+    }
     for (const edge of edges) {
-      if (edge.family !== 'ownership' || !visited.has(edge.from.id) || visited.has(edge.to.id)) continue;
-      visited.add(edge.to.id);
-      edgeDepth.set(edge.id, depth);
-      changed = true;
+      // Each edge belongs to one traversal source, and each source is queued once.
+      selected.set(edge.id, { ...edge, traversalDepth: current.depth + 1 });
+      const next = direction === 'backward' ? edge.fromPointId : edge.toPointId;
+      if (!reached.has(next)) {
+        reached.add(next);
+        queue.push({ id: next, depth: current.depth + 1 });
+      }
     }
   }
-}
-
-function isControlDependence(edge: GraphEvidenceEdge): boolean {
-  return edge.semanticFamily === 'control' && edge.sourceKind === 'control-dependence';
+  for (const id of selected.keys()) depthFrontier.delete(id);
+  return { selected, reached, depthFrontier };
 }

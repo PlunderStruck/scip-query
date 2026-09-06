@@ -1,0 +1,14 @@
+{
+  "fixtureRoot": "/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-first-use-final-dhut6rhj",
+  "startedWithIndex": false,
+  "checks": {
+    "exitZero": true,
+    "files": true,
+    "functions": true,
+    "cycle": true,
+    "coverage": true,
+    "noProblems": true,
+    "noIndexCreated": true
+  },
+  "passed": true
+}

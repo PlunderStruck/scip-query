@@ -192,12 +192,12 @@ describe('code CLI output contract', { timeout: 30_000 }, () => {
     expect(invocation.stdout).toContain('src/watch.ts:2-2  src:watch:Watcher:start()');
     expect(invocation.stdout).toContain('src/watch.ts:3-3  src/watch.ts:3-3');
     expect(invocation.stdout).toContain('═══ COVERAGE ═══');
-    expect(invocation.stdout).toContain('2/2 selectors resolved');
-    expect(invocation.stdout).toContain('dynamic calls and references outside the requested lines are not claimed');
+    expect(invocation.stdout).toContain('2/2 selector(s) resolved');
+    expect(invocation.stdout).toContain('referenced definitions and runtime relationships are not claimed');
   });
 
   it('completes an exact range with statically attributed same-file callable definitions', () => {
-    const invocation = runCode(['src/flow.ts:5-5']);
+    const invocation = runCode(['src/flow.ts:5-5', '--local-calls']);
 
     expect(invocation.status).toBe(0);
     expect(invocation.stdout).toContain('     5  export function alpha()');

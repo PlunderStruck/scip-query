@@ -1,0 +1,230 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "review",
+  "operationRole": "repository-observation",
+  "evidence": "graph-fact",
+  "args": [],
+  "options": {
+    "base": "HEAD",
+    "json": true
+  },
+  "result": {
+    "mode": "review",
+    "base": "f28ecc119966b2ef4c341a7acd97c330973a92c9",
+    "current": "8b2d87f1a174f801df602c7802338d6abd933fb2a1b6820cbac8ce6eb4408cf1",
+    "metricRules": "typescript-function-local-v1",
+    "changedFiles": [
+      "src/new.ts",
+      "src/service/runner.ts"
+    ],
+    "configurationChanges": [],
+    "relationshipChangedFiles": [],
+    "architecture": {
+      "configured": true,
+      "boundaries": [
+        {
+          "name": "core",
+          "paths": [
+            "src/core/**"
+          ],
+          "fileCount": 2,
+          "dependencyPolicyDeclared": true
+        },
+        {
+          "name": "cycle",
+          "paths": [
+            "src/cycle/**"
+          ],
+          "fileCount": 2,
+          "dependencyPolicyDeclared": true
+        },
+        {
+          "name": "service",
+          "paths": [
+            "src/service/**"
+          ],
+          "fileCount": 1,
+          "dependencyPolicyDeclared": true
+        }
+      ],
+      "coverage": {
+        "totalFiles": 13,
+        "mappedFiles": 5,
+        "unmappedFiles": [
+          "src/calls.ts",
+          "src/consumer.ts",
+          "src/duplicate/a.ts",
+          "src/duplicate/b.ts",
+          "src/first.ts",
+          "src/flow.ts",
+          "src/new.ts",
+          "src/second.ts"
+        ],
+        "ambiguousFiles": []
+      },
+      "policyCoverage": {
+        "declaredRows": 3,
+        "totalBoundaries": 3,
+        "missingRows": [],
+        "requiresCompletePolicy": false,
+        "requiresCompleteCoverage": false,
+        "requiresMinimalPolicy": false
+      },
+      "dependencyRoles": {
+        "excludedTestEdges": 0,
+        "basis": "production-imports-including-types",
+        "cycleMeaning": "Boundary cycles concern declared groups. File cycle members, when present, concern static imports including types; neither establishes a runtime initialization failure."
+      },
+      "cycles": []
+    },
+    "functions": [
+      {
+        "status": "added",
+        "after": {
+          "name": "newFunction",
+          "file": "src/new.ts",
+          "startLine": 1,
+          "endLine": 1,
+          "startOffset": 0,
+          "endOffset": 76,
+          "sourceHash": "e2cb894b00cb34373c85dbda38aa677233c05f26c627ba6a4a7ea9150dcd8f3d",
+          "bodyHash": "f9c8445b4ca2f1e3c8a3feb2d9e6f7d61be3343014397eba4a3230e26f0e93bf",
+          "renamedBodyHash": "093c7225240a97d054ea5f8e90df7a247bf092c17930be33abc0019c673bde5e",
+          "tokenCount": 11,
+          "cyclomatic": 2,
+          "cognitive": 1,
+          "contributions": [
+            {
+              "line": 1,
+              "column": 53,
+              "kind": "ConditionalExpression",
+              "cyclomatic": 1,
+              "cognitive": 1
+            }
+          ],
+          "coverage": {
+            "status": "unavailable",
+            "reason": "No source-matched coverage artifact supplied."
+          }
+        }
+      },
+      {
+        "status": "modified",
+        "before": {
+          "name": "runJob",
+          "file": "src/service/runner.ts",
+          "startLine": 3,
+          "endLine": 8,
+          "startOffset": 75,
+          "endOffset": 197,
+          "sourceHash": "a2cb3521432f7b03efb3eb88ba614333be66a523a2f9bf8529a1e261b095e545",
+          "bodyHash": "eafb0e22ead3c8f1075d3d1d94cd72e1b8b69f0e791c8a91537a532e35afc13f",
+          "renamedBodyHash": "ac587a81391066723665cc01c59dcacac45ed3315f98d4712905b11bd9808d23",
+          "tokenCount": 30,
+          "cyclomatic": 1,
+          "cognitive": 0,
+          "contributions": [],
+          "coverage": {
+            "status": "unavailable",
+            "reason": "No source-matched coverage supplied."
+          }
+        },
+        "after": {
+          "name": "runJob",
+          "file": "src/service/runner.ts",
+          "startLine": 3,
+          "endLine": 8,
+          "startOffset": 75,
+          "endOffset": 213,
+          "sourceHash": "af0cd74b607220ebb46f42cadfd09333cdf81a70e809c4bb170130be1e616b0e",
+          "bodyHash": "873f71bb277f26068cf95678fe90e3dfa125f41e03e0df93ff70f3411671d906",
+          "renamedBodyHash": "ea0d3d133dd86ce6ad000f03745970599baf499fbb308c5136cca56f2cdcea79",
+          "tokenCount": 36,
+          "cyclomatic": 2,
+          "cognitive": 1,
+          "contributions": [
+            {
+              "line": 7,
+              "column": 10,
+              "kind": "ConditionalExpression",
+              "cyclomatic": 1,
+              "cognitive": 1
+            }
+          ],
+          "coverage": {
+            "status": "unavailable",
+            "reason": "No source-matched coverage artifact supplied."
+          }
+        },
+        "delta": {
+          "cyclomatic": 1,
+          "cognitive": 1
+        }
+      }
+    ],
+    "findings": [],
+    "suppressionDecisions": [],
+    "blockingFindingIds": [],
+    "modules": [],
+    "affectedFiles": [
+      "src/consumer.ts"
+    ],
+    "coverage": {
+      "status": "accounted",
+      "analyzedFiles": 13,
+      "eligibleFiles": 13,
+      "excludedFiles": 11,
+      "exclusions": {
+        "unsupported-language": 11
+      },
+      "dependencies": {
+        "resolutions": {
+          "internal": 5,
+          "external": 0,
+          "builtin": 0,
+          "excluded": 0,
+          "missing": 0,
+          "ambiguous": 0,
+          "dynamic": 0
+        },
+        "typeOnly": 0,
+        "test": 0,
+        "deferredOrCommonJs": 0,
+        "unresolved": [],
+        "excluded": []
+      },
+      "analyzedFunctions": 28,
+      "unresolvedImports": 0,
+      "testCoverage": {
+        "requested": false,
+        "available": 0,
+        "unavailable": 2,
+        "reasons": [
+          "No source-matched coverage artifact supplied."
+        ]
+      },
+      "problems": [],
+      "limits": [
+        "TS/JS implemented functions; metric rules typescript-function-local-v1. Cognitive counts structural nesting and logical sequences; recursion and interprocedural behavior are not measured.",
+        "Duplication compares whole function body tokens (at least 60 tokens), retaining literals and property names. Renamed local bindings are candidates; similarity does not prove interchangeable behavior or justify deletion.",
+        "Dependencies use compiler resolution over captured source and project configuration, including aliases, repository package exports, literal dynamic imports and unshadowed CommonJS calls. External packages, excluded targets and unresolved imports are distinguished. Production file cycles use static value imports; type/test/deferred relationships remain separate. Runtime handoffs and custom loaders are not inferred.",
+        "Ownership and mixed responsibilities require evidence about callers, state and business rules; this scan does not infer a correct owner or an architectural grade.",
+        "Default exclusions: tests/fixtures/benchmarks, reference/vendor copies, generated files, declarations and build output. Use --include-tests, --include-references or --include-generated for the corresponding source roles.",
+        "Diff is the selected Git commit versus current files, including untracked files; staged-only review and inferred rename/split identity are not claimed.",
+        "Coverage without matching source hashes is unavailable, never zero. Base CRAP is unavailable unless independently measured against that base.",
+        "Affected files are transitive importers in the covered source graph. Use fresh diff-impact/evidence for symbol consumers and runtime effects."
+      ]
+    }
+  },
+  "coverage": {
+    "complete": null,
+    "totalKnown": false,
+    "returned": 1
+  }
+}

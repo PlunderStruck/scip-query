@@ -13,7 +13,7 @@ import {
   semanticSignature,
 } from '../../../src/semantic/shared-primitives.js';
 import { getAllDefinitions } from '../../../src/symbols/definition-catalog.js';
-import { dead, refs, staleAbstractions } from '../../../src/queries/index.js';
+import { dead, refs } from '../../../src/queries/index.js';
 import { createEvidenceSchema } from '../../fixtures/evidence-fixture.js';
 import {
   assembleReferenceFragments,
@@ -877,8 +877,6 @@ describe('TypeScript semantic provider', () => {
       expect(dead(db, { minLoc: 1 }).symbols.map((symbol) => symbol.shortName)).not.toContain('api:semanticOnly()');
       expect(dead(db, { minLoc: 1 }).symbols.map((symbol) => symbol.shortName)).not.toContain('api:defaultHelper()');
       expect(dead(db, { minLoc: 1 }).symbols.map((symbol) => symbol.shortName)).not.toContain('api:namespaceHelper()');
-      expect(staleAbstractions(db, { minLoc: 1 }).map((symbol) => symbol.shortName)).not.toContain('api:ApiShape');
-      expect(staleAbstractions(db, { minLoc: 1 }).map((symbol) => symbol.shortName)).not.toContain('api:AliasShape');
     });
   });
 
@@ -896,9 +894,6 @@ describe('TypeScript semantic provider', () => {
 
       expect(refs(db, 'CreateHorseInput').map((ref) => ref.relativePath)).toEqual(
         expect.arrayContaining(['shared/src/index.ts', 'backend/src/schemas/horses.ts']),
-      );
-      expect(staleAbstractions(db, { minLoc: 1 }).map((symbol) => symbol.shortName)).not.toContain(
-        'contracts:horses:CreateHorseInput',
       );
     });
   });

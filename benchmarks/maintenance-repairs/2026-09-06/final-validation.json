@@ -1,0 +1,118 @@
+{
+  "scope": {
+    "originalFindings": 114,
+    "complexityRegressions": 67,
+    "architectureFindings": 47,
+    "fixed": 114,
+    "thresholdsRaised": false,
+    "suppressionsAdded": false,
+    "productionDependencyPermissionsWidened": false,
+    "baseline": "Start of the 114-entry maintenance follow-up, after the earlier uncommitted scanner and command audit work."
+  },
+  "finalChecks": {
+    "fullUnitSuite": {
+      "passed": 2911,
+      "failed": 0,
+      "pending": 0,
+      "testFiles": 341,
+      "artifact": "final-unit-results.json"
+    },
+    "lint": "passed",
+    "typecheck": "passed",
+    "build": "passed",
+    "publicApiCompatibility": "passed",
+    "publicApiConsumerTypecheck": "passed",
+    "skillLinks": "passed",
+    "repositoryReview": {
+      "introducedOrWorsened": 0,
+      "blocking": 0,
+      "coverage": "accounted"
+    },
+    "indexedArchitecture": {
+      "mappedFiles": 555,
+      "totalFiles": 555,
+      "forbiddenEdges": 0,
+      "cycles": 0,
+      "staleAllowances": 0
+    },
+    "cliReadOutcomes": {
+      "passed": 71,
+      "total": 71,
+      "successfulExits": 70,
+      "expectedRejections": 1
+    },
+    "cliFactualAssertions": {
+      "passed": 42,
+      "total": 42
+    },
+    "separateCliChecks": {
+      "controls": {
+        "passed": 48,
+        "total": 48
+      },
+      "transport": {
+        "passed": 58,
+        "total": 58
+      },
+      "vue": {
+        "passed": 7,
+        "total": 7
+      },
+      "frontend": {
+        "passed": 34,
+        "total": 34
+      },
+      "architecture": {
+        "passed": 8,
+        "total": 8
+      },
+      "retirements": {
+        "passed": 11,
+        "total": 11
+      }
+    },
+    "stagedSourceWhitespace": "passed; raw benchmark evidence retains original whitespace"
+  },
+  "remainingRepositoryFindings": {
+    "architecture:resolved": 49,
+    "duplication:existing": 7,
+    "complexity:resolved": 97,
+    "complexity:existing": 642,
+    "complexity:uncomparable": 10
+  },
+  "compatibility": {
+    "queryServiceProtocolVersion": 27,
+    "healthReportCacheVersion": 13,
+    "publicApiDigest": "88ac6629033f84f6"
+  },
+  "builtJavaScriptTreeSha256": "f7615d22570dc33e272dfe73017ca351f3aad70558b1e9f23def7cb66ca0a130",
+  "limits": [
+    "The 114-entry scope addresses the tracked regressions and architecture findings; existing repository complexity and duplication findings remain visible.",
+    "Indexed architecture covers observed documents and relationships; current-source review separately covers 558 eligible TS/JS files. Neither identifies the correct business owner automatically.",
+    "Ten complexity findings have non-unique function identities and remain uncomparable across the diff.",
+    "CRAP requires matching measured coverage; no repository coverage artifact was supplied for this review.",
+    "Semantic impact is unavailable with cold TypeScript fragments and the watch service disabled; source-fallback consumers are reported with their own coverage.",
+    "Passing fixtures does not establish universal accuracy or a causal improvement in coding-agent outcomes."
+  ],
+  "artifactWhitespace": "Raw benchmark patches and captured terminal output retain original whitespace. Source, tests, configuration, documentation, scripts and skills pass staged whitespace checks.",
+  "status": "verified",
+  "earlierPolicyChangesIncludedInCommit": {
+    "sourceBoundaryMaxFiles": {
+      "beforeHEAD": 61,
+      "current": 67,
+      "context": "Earlier scanner work added six source-analysis modules. This predates the 114-entry repair scope and is not evidence of architectural quality."
+    },
+    "productionAllowancesAddedBeforeFollowup": [
+      {
+        "from": "queries-health",
+        "to": "source",
+        "purpose": "Current-source maintenance analysis"
+      },
+      {
+        "from": "reindex-augmentation",
+        "to": "domain",
+        "purpose": "Shared index identity decoding"
+      }
+    ]
+  }
+}

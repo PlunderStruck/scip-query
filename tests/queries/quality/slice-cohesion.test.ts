@@ -340,10 +340,10 @@ describe('slice-cohesion', () => {
       const [candidate] = results;
       expect(candidate).toMatchObject({
         splitCandidate: true,
-        actionTier: 'signal',
+        actionTier: 'support',
         archetype: 'calculation',
         operational: false,
-        coverage: expect.objectContaining({ status: 'complete', model: 'function-local-flow' }),
+        coverage: expect.objectContaining({ status: 'partial', model: 'function-local-flow' }),
       });
       // Scan results are compact: no per-unit listing and no slice arrays.
       expect(candidate!.units).toBeUndefined();
@@ -375,8 +375,9 @@ describe('slice-cohesion', () => {
       expect(labelsCluster!.lineRanges).toEqual([{ startLine: 7, endLine: 9 }]);
       expect(candidate!.separableStatements).toBe(labelsCluster!.units.length);
       expect(candidate!.metrics.tightness).toBe(0);
-      expect(candidate!.recommendation).toBe(
-        'Extract from summarizeOrders: 1) pure calculation candidate: lines 8-10 producing return.labels from (orders). ' +
+      expect(candidate!.recommendation).toContain('Inspect before extracting: local flow is partial');
+      expect(candidate!.recommendation).toContain(
+        'Candidate seam(s): 1) pure calculation candidate: lines 8-10 producing return.labels from (orders). ' +
           'Stays in place: the largest computation (lines 4-6, line 12 producing return.totals, return.grand).',
       );
     });
@@ -479,7 +480,7 @@ describe('slice-cohesion', () => {
       expect(reset!.clusters).toHaveLength(1);
 
       const [campaigns] = sliceCohesion(db, { symbol: 'Campaigns' });
-      expect(campaigns).toMatchObject({ archetype: 'react-component', splitCandidate: true, actionTier: 'signal' });
+      expect(campaigns).toMatchObject({ archetype: 'react-component', splitCandidate: true, actionTier: 'support' });
       const effect = campaigns!.clusters.find((cluster) => cluster.role === 'extraction');
       expect(effect).toMatchObject({ kind: 'hook', narrow: true });
       expect(effect!.hooks).toEqual(['useRouter@30', 'useSearchParams@31', 'useEffect@35']);

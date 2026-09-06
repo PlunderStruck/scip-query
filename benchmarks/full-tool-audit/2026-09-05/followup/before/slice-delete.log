@@ -1,0 +1,1 @@
+{"kind":"scip-query-json-export","schemaVersion":1,"producer":{"name":"scip-query","version":"0.25.0"},"command":"dependence-slice","path":"/private/tmp/scip-followup-cli/slice-delete.json","bytes":12433,"sha256":"043b95c16adc1d145af9ce073a29d869e52da440841bea8e55ae93732f27022e"}

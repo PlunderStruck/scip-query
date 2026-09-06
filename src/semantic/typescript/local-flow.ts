@@ -145,6 +145,17 @@ export function analyzeTypeScriptLocalFlow(
   const program = inMemoryProgram(ts, parseTypeScriptSourceFile(ts, sourceText, fileName));
   const sourceFile = program.getSourceFile(resolve(fileName)) ?? program.getSourceFile(fileName);
   if (!sourceFile) return unsupportedResult(`The TypeScript compiler did not materialize ${fileName}.`);
+  const diagnostics = program.getSyntacticDiagnostics(sourceFile);
+  if (diagnostics.length) {
+    return unsupportedResult(
+      diagnostics
+        .map((diagnostic) => {
+          const location = sourceFile.getLineAndCharacterOfPosition(diagnostic.start ?? 0);
+          return `TypeScript syntax error at ${fileName}:${location.line + 1}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ')}`;
+        })
+        .join('; '),
+    );
+  }
   const state: AnalysisState = {
     ts,
     sourceFile,
@@ -440,113 +451,194 @@ function buildStatement(
 ): string {
   const ts = state.ts;
   if (ts.isBlock(statement)) return buildStatements(state, cfg, [...statement.statements], next, context);
-  if (ts.isIfStatement(statement)) {
-    const predicate = cfgNode(state, cfg, 'predicate', statement.expression);
-    const whenTrue = buildStatement(state, cfg, statement.thenStatement, next, context);
-    const whenFalse = statement.elseStatement
-      ? buildStatement(state, cfg, statement.elseStatement, next, context)
-      : next;
-    connect(cfg, predicate.id, whenTrue);
-    connect(cfg, predicate.id, whenFalse);
-    return predicate.id;
-  }
-  if (ts.isWhileStatement(statement)) {
-    const predicate = cfgNode(state, cfg, 'predicate', statement.expression);
-    const body = buildStatement(state, cfg, statement.statement, predicate.id, {
+  if (ts.isIfStatement(statement)) return buildIfStatement(state, cfg, statement, next, context);
+  if (ts.isWhileStatement(statement) || ts.isDoStatement(statement))
+    return buildPredicateLoop(state, cfg, statement, next, context);
+  if (ts.isForStatement(statement)) return buildForStatement(state, cfg, statement, next, context);
+  if (ts.isForInStatement(statement) || ts.isForOfStatement(statement))
+    return buildIterationStatement(state, cfg, statement, next, context);
+  if (ts.isSwitchStatement(statement)) return buildSwitchStatement(state, cfg, statement, next, context);
+  if (ts.isTryStatement(statement)) return buildTryStatement(state, cfg, statement, next, context);
+  if (ts.isExpressionStatement(statement)) return buildExpressionFlow(state, cfg, statement.expression, next);
+  return (
+    buildJumpStatement(state, cfg, statement, next, context) ?? buildSequentialStatement(state, cfg, statement, next)
+  );
+}
+
+function buildIfStatement(
+  state: AnalysisState,
+  cfg: Map<string, CfgNode>,
+  statement: TypeScript.IfStatement,
+  next: string,
+  context: BuildContext,
+): string {
+  const predicate = cfgNode(state, cfg, 'predicate', statement.expression);
+  const whenTrue = buildStatement(state, cfg, statement.thenStatement, next, context);
+  const whenFalse = statement.elseStatement ? buildStatement(state, cfg, statement.elseStatement, next, context) : next;
+  connect(cfg, predicate.id, whenTrue);
+  connect(cfg, predicate.id, whenFalse);
+  return predicate.id;
+}
+
+function buildPredicateLoop(
+  state: AnalysisState,
+  cfg: Map<string, CfgNode>,
+  statement: TypeScript.WhileStatement | TypeScript.DoStatement,
+  next: string,
+  context: BuildContext,
+): string {
+  const predicate = cfgNode(state, cfg, 'predicate', statement.expression);
+  const body = buildStatement(state, cfg, statement.statement, predicate.id, {
+    ...context,
+    breakTarget: next,
+    continueTarget: predicate.id,
+  });
+  connect(cfg, predicate.id, body);
+  connect(cfg, predicate.id, next);
+  return state.ts.isDoStatement(statement) ? body : predicate.id;
+}
+
+function buildForStatement(
+  state: AnalysisState,
+  cfg: Map<string, CfgNode>,
+  statement: TypeScript.ForStatement,
+  next: string,
+  context: BuildContext,
+): string {
+  const predicate = cfgNode(state, cfg, 'predicate', statement.condition ?? statement);
+  const increment = statement.incrementor ? cfgNode(state, cfg, 'statement', statement.incrementor) : null;
+  if (increment) connect(cfg, increment.id, predicate.id);
+  const continueTarget = increment?.id ?? predicate.id;
+  const body = buildStatement(state, cfg, statement.statement, continueTarget, {
+    ...context,
+    breakTarget: next,
+    continueTarget,
+  });
+  connect(cfg, predicate.id, body);
+  if (statement.condition) connect(cfg, predicate.id, next);
+  if (!statement.initializer) return predicate.id;
+  const initializer = cfgNode(state, cfg, 'statement', statement.initializer);
+  connect(cfg, initializer.id, predicate.id);
+  return initializer.id;
+}
+
+function buildIterationStatement(
+  state: AnalysisState,
+  cfg: Map<string, CfgNode>,
+  statement: TypeScript.ForInStatement | TypeScript.ForOfStatement,
+  next: string,
+  context: BuildContext,
+): string {
+  state.unsupported.add(
+    'for-in/for-of loop variables are drawn from the iterable as a whole; per-element flow is not modeled.',
+  );
+  const predicate = cfgNode(state, cfg, 'predicate', statement.expression);
+  const initializer = cfgNode(state, cfg, 'statement', statement.initializer);
+  const body = buildStatement(state, cfg, statement.statement, predicate.id, {
+    ...context,
+    breakTarget: next,
+    continueTarget: predicate.id,
+  });
+  connect(cfg, predicate.id, initializer.id);
+  connect(cfg, predicate.id, next);
+  connect(cfg, initializer.id, body);
+  return predicate.id;
+}
+
+function buildSwitchStatement(
+  state: AnalysisState,
+  cfg: Map<string, CfgNode>,
+  statement: TypeScript.SwitchStatement,
+  next: string,
+  context: BuildContext,
+): string {
+  state.unsupported.add(
+    'switch fallthrough is represented conservatively; discriminant-to-case value refinement is unsupported.',
+  );
+  const predicate = cfgNode(state, cfg, 'predicate', statement.expression);
+  let fallthrough = next;
+  const entries: string[] = [];
+  for (let index = statement.caseBlock.clauses.length - 1; index >= 0; index -= 1) {
+    const clause = statement.caseBlock.clauses[index]!;
+    fallthrough = buildStatements(state, cfg, [...clause.statements], fallthrough, {
       ...context,
       breakTarget: next,
-      continueTarget: predicate.id,
     });
-    connect(cfg, predicate.id, body);
-    connect(cfg, predicate.id, next);
-    return predicate.id;
+    entries.push(fallthrough);
   }
-  if (ts.isDoStatement(statement)) {
-    const predicate = cfgNode(state, cfg, 'predicate', statement.expression);
-    const body = buildStatement(state, cfg, statement.statement, predicate.id, {
-      ...context,
-      breakTarget: next,
-      continueTarget: predicate.id,
-    });
-    connect(cfg, predicate.id, body);
-    connect(cfg, predicate.id, next);
-    return body;
-  }
-  if (ts.isForStatement(statement)) {
-    const predicate = cfgNode(state, cfg, 'predicate', statement.condition ?? statement);
-    const increment = statement.incrementor ? cfgNode(state, cfg, 'statement', statement.incrementor) : null;
-    if (increment) connect(cfg, increment.id, predicate.id);
-    const continueTarget = increment?.id ?? predicate.id;
-    const body = buildStatement(state, cfg, statement.statement, continueTarget, {
-      ...context,
-      breakTarget: next,
-      continueTarget,
-    });
-    connect(cfg, predicate.id, body);
-    if (statement.condition) connect(cfg, predicate.id, next);
-    if (!statement.initializer) return predicate.id;
-    const initializer = cfgNode(state, cfg, 'statement', statement.initializer);
-    connect(cfg, initializer.id, predicate.id);
-    return initializer.id;
-  }
-  if (ts.isForInStatement(statement) || ts.isForOfStatement(statement)) {
-    state.unsupported.add(
-      'for-in/for-of loop variables are drawn from the iterable as a whole; per-element flow is not modeled.',
-    );
-    const predicate = cfgNode(state, cfg, 'predicate', statement.expression);
-    const initializer = cfgNode(state, cfg, 'statement', statement.initializer);
-    const body = buildStatement(state, cfg, statement.statement, predicate.id, {
-      ...context,
-      breakTarget: next,
-      continueTarget: predicate.id,
-    });
-    connect(cfg, predicate.id, initializer.id);
-    connect(cfg, predicate.id, next);
-    connect(cfg, initializer.id, body);
-    return predicate.id;
-  }
-  if (ts.isSwitchStatement(statement)) {
-    state.unsupported.add(
-      'switch fallthrough is represented conservatively; discriminant-to-case value refinement is unsupported.',
-    );
-    const predicate = cfgNode(state, cfg, 'predicate', statement.expression);
-    let fallthrough = next;
-    const entries: string[] = [];
-    for (let index = statement.caseBlock.clauses.length - 1; index >= 0; index -= 1) {
-      const clause = statement.caseBlock.clauses[index]!;
-      fallthrough = buildStatements(state, cfg, [...clause.statements], fallthrough, {
-        ...context,
-        breakTarget: next,
-      });
-      entries.push(fallthrough);
-    }
-    for (const entry of entries) connect(cfg, predicate.id, entry);
-    connect(cfg, predicate.id, next);
-    return predicate.id;
-  }
+  for (const entry of entries) connect(cfg, predicate.id, entry);
+  connect(cfg, predicate.id, next);
+  return predicate.id;
+}
+
+function buildJumpStatement(
+  state: AnalysisState,
+  cfg: Map<string, CfgNode>,
+  statement: TypeScript.Statement,
+  next: string,
+  context: BuildContext,
+): string | null {
+  const ts = state.ts;
   if (ts.isReturnStatement(statement) || ts.isThrowStatement(statement)) {
     const terminal = cfgNode(state, cfg, 'statement', statement);
     const target = ts.isThrowStatement(statement) ? (context.throwTarget ?? context.exitId) : context.exitId;
     connect(cfg, terminal.id, target);
     return terminal.id;
   }
-  if (ts.isBreakStatement(statement)) {
+  if (ts.isBreakStatement(statement) || ts.isContinueStatement(statement)) {
+    const kind = ts.isBreakStatement(statement) ? 'break' : 'continue';
+    const target = context[`${kind}Target`];
     const node = cfgNode(state, cfg, 'statement', statement);
-    if (!context.breakTarget) state.unsupported.add('A break statement could not be attached to a structured target.');
-    connect(cfg, node.id, context.breakTarget ?? next);
+    if (!target) state.unsupported.add(`A ${kind} statement could not be attached to a structured target.`);
+    connect(cfg, node.id, target ?? next);
     return node.id;
   }
-  if (ts.isContinueStatement(statement)) {
-    const node = cfgNode(state, cfg, 'statement', statement);
-    if (!context.continueTarget)
-      state.unsupported.add('A continue statement could not be attached to a structured target.');
-    connect(cfg, node.id, context.continueTarget ?? next);
-    return node.id;
-  }
-  if (ts.isTryStatement(statement)) return buildTryStatement(state, cfg, statement, next, context);
+  return null;
+}
+
+function buildSequentialStatement(
+  state: AnalysisState,
+  cfg: Map<string, CfgNode>,
+  statement: TypeScript.Statement,
+  next: string,
+): string {
   const node = cfgNode(state, cfg, 'statement', statement);
   connect(cfg, node.id, next);
   return node.id;
+}
+
+/** Branching expression statements need distinct CFG paths so a conditional write cannot kill its fallback. */
+function buildExpressionFlow(
+  state: AnalysisState,
+  cfg: Map<string, CfgNode>,
+  expression: TypeScript.Expression,
+  next: string,
+): string {
+  const ts = state.ts;
+  if (ts.isParenthesizedExpression(expression)) return buildExpressionFlow(state, cfg, expression.expression, next);
+  if (ts.isConditionalExpression(expression)) {
+    const predicate = cfgNode(state, cfg, 'predicate', expression.condition);
+    connect(cfg, predicate.id, buildExpressionFlow(state, cfg, expression.whenTrue, next));
+    connect(cfg, predicate.id, buildExpressionFlow(state, cfg, expression.whenFalse, next));
+    return predicate.id;
+  }
+  if (ts.isBinaryExpression(expression) && shortCircuitOperator(ts, expression.operatorToken.kind)) {
+    const predicate = cfgNode(state, cfg, 'predicate', expression.left);
+    connect(cfg, predicate.id, next);
+    connect(cfg, predicate.id, buildExpressionFlow(state, cfg, expression.right, next));
+    return predicate.id;
+  }
+  const node = cfgNode(state, cfg, 'statement', expression);
+  connect(cfg, node.id, next);
+  return node.id;
+}
+
+function shortCircuitOperator(ts: TypeScriptModule, kind: TypeScript.SyntaxKind): boolean {
+  return (
+    kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+    kind === ts.SyntaxKind.BarBarToken ||
+    kind === ts.SyntaxKind.QuestionQuestionToken
+  );
 }
 
 /**
@@ -701,64 +793,22 @@ function collectNodeAccesses(
   const ts = state.ts;
   const visit = (node: TypeScript.Node): void => {
     if (node !== root && ts.isFunctionLike(node)) return;
-    if (ts.isVariableDeclaration(node)) {
-      const source = node.initializer ?? iterationSource(ts, node);
-      const uses = source ? collectUses(state, analysis.id, source, cfg) : [];
-      const targets = bindingTargets(state, node.name, (fallback) =>
-        uses.push(...collectUses(state, analysis.id, fallback, cfg)),
-      );
-      cfg.uses.push(...uses);
-      if (targets.length === 0 && ts.isIdentifier(node.name)) {
-        cfg.invalidatesAllDefinitions = true;
-        state.unsupported.add('A variable declaration could not be resolved to a compiler symbol.');
-        return;
-      }
-      const rhsUseIds = uses.map((use) => use.point.id);
-      for (const target of targets) {
-        cfg.definitions.push({
-          point: point(state, target.node, 'definition', target.symbolKey, target.name, analysis.id),
-          rhsUseIds,
-          partial: false,
-        });
-      }
+    if (ts.isVariableDeclaration(node)) return collectDeclarationAccesses(state, analysis, cfg, node);
+    if (
+      ts.isConditionalExpression(node) ||
+      (ts.isBinaryExpression(node) && shortCircuitOperator(ts, node.operatorToken.kind))
+    ) {
+      // Expressions not split into CFG nodes (e.g. within a predicate or initializer)
+      // must not model their conditional assignments as unconditional definitions.
+      cfg.uses.push(...collectUses(state, analysis.id, node, cfg));
       return;
     }
-    if (ts.isBinaryExpression(node) && assignmentOperator(ts, node.operatorToken.kind)) {
-      const rhsUses = collectUses(state, analysis.id, node.right, cfg);
-      if (node.operatorToken.kind !== ts.SyntaxKind.EqualsToken)
-        rhsUses.push(...collectUses(state, analysis.id, node.left, cfg));
-      const targets = assignmentTargets(state, analysis.id, node.left, cfg, rhsUses);
-      cfg.uses.push(...rhsUses);
-      if (!targets) {
-        cfg.invalidatesAllDefinitions = true;
-        state.unsupported.add('Dynamic assignment targets are not included in reaching definitions.');
-        return;
-      }
-      const rhsUseIds = rhsUses.map((use) => use.point.id);
-      for (const target of targets) {
-        cfg.definitions.push({
-          point: point(state, target.node, 'definition', target.symbolKey, target.name, analysis.id),
-          rhsUseIds,
-          partial: target.partial,
-        });
-      }
+    if (ts.isBinaryExpression(node) && assignmentOperator(ts, node.operatorToken.kind))
+      return collectAssignmentAccesses(state, analysis, cfg, node);
+    if (isUpdateExpression(ts, node)) return collectUpdateAccesses(state, analysis, cfg, node);
+    if (ts.isDeleteExpression(node)) {
+      reportDelete(state, cfg);
       return;
-    }
-    if (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) {
-      if (node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken) {
-        const uses = collectUses(state, analysis.id, node.operand, cfg);
-        const targets = assignmentTargets(state, analysis.id, node.operand, cfg, uses) ?? [];
-        cfg.uses.push(...uses);
-        const rhsUseIds = uses.map((use) => use.point.id);
-        for (const target of targets) {
-          cfg.definitions.push({
-            point: point(state, target.node, 'definition', target.symbolKey, target.name, analysis.id),
-            rhsUseIds,
-            partial: target.partial,
-          });
-        }
-        return;
-      }
     }
     if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node)) return;
     if (isUseNode(state, node)) {
@@ -773,10 +823,95 @@ function collectNodeAccesses(
   cfg.uses = uniqueUses(cfg.uses);
 }
 
+function collectDeclarationAccesses(
+  state: AnalysisState,
+  analysis: CallableAnalysis,
+  cfg: CfgNode,
+  node: TypeScript.VariableDeclaration,
+): void {
+  const ts = state.ts;
+  const source = node.initializer ?? iterationSource(ts, node);
+  reportPossibleAlias(state, node.initializer);
+  const uses = source ? collectUses(state, analysis.id, source, cfg) : [];
+  const targets = bindingTargets(state, node.name, (fallback) =>
+    uses.push(...collectUses(state, analysis.id, fallback, cfg)),
+  );
+  cfg.uses.push(...uses);
+  if (targets.length === 0 && ts.isIdentifier(node.name)) {
+    cfg.invalidatesAllDefinitions = true;
+    state.unsupported.add('A variable declaration could not be resolved to a compiler symbol.');
+    return;
+  }
+  recordFlowDefinitions(state, analysis.id, cfg, targets, uses);
+}
+
+function collectAssignmentAccesses(
+  state: AnalysisState,
+  analysis: CallableAnalysis,
+  cfg: CfgNode,
+  node: TypeScript.BinaryExpression,
+): void {
+  const ts = state.ts;
+  if (node.operatorToken.kind === ts.SyntaxKind.EqualsToken) reportPossibleAlias(state, node.right);
+  const rhsUses = collectUses(state, analysis.id, node.right, cfg);
+  if (node.operatorToken.kind !== ts.SyntaxKind.EqualsToken)
+    rhsUses.push(...collectUses(state, analysis.id, node.left, cfg));
+  const targets = assignmentTargets(state, analysis.id, node.left, cfg, rhsUses);
+  cfg.uses.push(...rhsUses);
+  if (!targets) {
+    cfg.invalidatesAllDefinitions = true;
+    state.unsupported.add('Dynamic assignment targets are not included in reaching definitions.');
+    return;
+  }
+  recordFlowDefinitions(state, analysis.id, cfg, targets, rhsUses);
+}
+
+function collectUpdateAccesses(
+  state: AnalysisState,
+  analysis: CallableAnalysis,
+  cfg: CfgNode,
+  node: TypeScript.PrefixUnaryExpression | TypeScript.PostfixUnaryExpression,
+): void {
+  const uses = collectUses(state, analysis.id, node.operand, cfg);
+  const targets = assignmentTargets(state, analysis.id, node.operand, cfg, uses) ?? [];
+  cfg.uses.push(...uses);
+  recordFlowDefinitions(state, analysis.id, cfg, targets, uses);
+}
+
+function recordFlowDefinitions(
+  state: AnalysisState,
+  callableIdValue: string,
+  cfg: CfgNode,
+  targets: readonly (AccessTargetInfo & { partial?: boolean })[],
+  uses: readonly FlowUse[],
+): void {
+  const rhsUseIds = uses.map((use) => use.point.id);
+  for (const target of targets) {
+    cfg.definitions.push({
+      point: point(state, target.node, 'definition', target.symbolKey, target.name, callableIdValue),
+      rhsUseIds,
+      partial: target.partial ?? false,
+    });
+  }
+}
+
 function collectUses(state: AnalysisState, callableIdValue: string, root: TypeScript.Node, cfg: CfgNode): FlowUse[] {
   const uses: FlowUse[] = [];
   const visit = (node: TypeScript.Node): void => {
     if (state.ts.isFunctionLike(node)) return;
+    if (state.ts.isDeleteExpression(node)) {
+      reportDelete(state, cfg);
+      return;
+    }
+    if (isUpdateExpression(state.ts, node)) {
+      cfg.invalidatesAllDefinitions = true;
+      const location = state.sourceFile.getLineAndCharacterOfPosition(node.getStart(state.sourceFile));
+      state.unsupported.add(
+        `Nested increment/decrement at ${state.sourceFile.fileName}:${location.line + 1} is not included in ordered local definition-use flow.`,
+      );
+      visit(node.operand);
+      return;
+    }
     if (state.ts.isBinaryExpression(node) && assignmentOperator(state.ts, node.operatorToken.kind)) {
       cfg.invalidatesAllDefinitions = true;
       state.unsupported.add('Nested assignment expressions are not included in ordered local definition-use flow.');
@@ -794,6 +929,92 @@ function collectUses(state: AnalysisState, callableIdValue: string, root: TypeSc
   };
   visit(root);
   return uniqueUses(uses);
+}
+
+function isUpdateExpression(
+  ts: TypeScriptModule,
+  node: TypeScript.Node,
+): node is TypeScript.PrefixUnaryExpression | TypeScript.PostfixUnaryExpression {
+  return (
+    (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+    (node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken)
+  );
+}
+
+function reportPossibleAlias(state: AnalysisState, node: TypeScript.Expression | undefined): void {
+  if (!node) return;
+  const values = aliasValues(state.ts, node);
+  if (values) {
+    for (const value of values) reportPossibleAlias(state, value);
+    return;
+  }
+  if (!receiverTarget(state, node) || !mayCarryObject(state, node)) return;
+  const location = state.sourceFile.getLineAndCharacterOfPosition(node.getStart(state.sourceFile));
+  state.unsupported.add(
+    `Object alias at ${state.sourceFile.fileName}:${location.line + 1} is not included in local points-to flow.`,
+  );
+}
+
+/** Values retained by aggregate construction or forwarded by an expression wrapper. */
+function aliasValues(
+  ts: TypeScriptModule,
+  node: TypeScript.Expression,
+): readonly (TypeScript.Expression | undefined)[] | undefined {
+  if (ts.isObjectLiteralExpression(node)) {
+    return node.properties.map((property) => aliasPropertyValue(ts, property));
+  }
+  if (ts.isArrayLiteralExpression(node)) {
+    return node.elements.map((element) => (ts.isSpreadElement(element) ? element.expression : element));
+  }
+  if (ts.isConditionalExpression(node)) return [node.whenTrue, node.whenFalse];
+  const wrapped = aliasWrappedValue(ts, node);
+  return wrapped ? [wrapped] : undefined;
+}
+
+function aliasPropertyValue(
+  ts: TypeScriptModule,
+  property: TypeScript.ObjectLiteralElementLike,
+): TypeScript.Expression | undefined {
+  if (ts.isPropertyAssignment(property)) return property.initializer;
+  if (ts.isShorthandPropertyAssignment(property)) return property.name;
+  if (ts.isSpreadAssignment(property)) return property.expression;
+  return undefined;
+}
+
+function aliasWrappedValue(ts: TypeScriptModule, node: TypeScript.Expression): TypeScript.Expression | undefined {
+  if (
+    ts.isParenthesizedExpression(node) ||
+    ts.isAsExpression(node) ||
+    ts.isSatisfiesExpression(node) ||
+    ts.isNonNullExpression(node) ||
+    ts.isTypeAssertionExpression(node)
+  ) {
+    return node.expression;
+  }
+  return undefined;
+}
+
+function reportDelete(state: AnalysisState, cfg: CfgNode): void {
+  cfg.invalidatesAllDefinitions = true;
+  state.unsupported.add(
+    'Property deletion is not included in local mutation flow; prior reaching definitions are invalidated.',
+  );
+}
+
+function mayCarryObject(state: AnalysisState, node: TypeScript.Node): boolean {
+  const ts = state.ts;
+  const type = state.checker.getTypeAtLocation(node);
+  const types = type.isUnionOrIntersection() ? type.types : [type];
+  return types.some(
+    (part) =>
+      (part.flags &
+        (ts.TypeFlags.Object |
+          ts.TypeFlags.Any |
+          ts.TypeFlags.Unknown |
+          ts.TypeFlags.TypeParameter |
+          ts.TypeFlags.NonPrimitive)) !==
+      0,
+  );
 }
 
 function isUseNode(
@@ -1270,7 +1491,18 @@ function addControlDependenceEdges(state: AnalysisState, analysis: CallableAnaly
   order.forEach((id, index) => nodeIndex.set(id, index));
   const exitIndex = nodeIndex.get(analysis.exitId)!;
   for (const branch of analysis.cfg.values()) {
-    if (branch.kind !== 'predicate' || branch.successors.size < 2 || !branch.displayPoint) continue;
+    if (branch.kind !== 'predicate' || !branch.displayPoint) continue;
+    for (const use of branch.uses) {
+      addEdge(
+        state,
+        'value-source',
+        use.point.id,
+        branch.displayPoint.id,
+        'exact',
+        'The predicate evaluates this variable occurrence to choose its control-flow successor.',
+      );
+    }
+    if (branch.successors.size < 2) continue;
     const branchPostdominators = sets[nodeIndex.get(branch.id)!]!;
     for (const successor of branch.successors) {
       bitSetForEach(sets[nodeIndex.get(successor)!]!, (dependentIndex) => {

@@ -1,0 +1,205 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "system",
+  "operationRole": "repository-observation",
+  "evidence": "graph-fact",
+  "args": [
+    "src/core"
+  ],
+  "options": {
+    "json": true,
+    "session": true,
+    "jsonOutput": "/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/command-contracts/2026-09-05/cli/system.json"
+  },
+  "result": {
+    "files": [
+      "src/core/math.ts",
+      "src/core/store.ts"
+    ],
+    "symbols": [
+      {
+        "startLine": 0,
+        "endLine": 0,
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`math.ts`/sum().",
+        "shortName": "src:core:math:sum()",
+        "signature": "function sum(left: number, right: number): number",
+        "relativePath": "src/core/math.ts",
+        "enclosingSymbol": null
+      },
+      {
+        "startLine": 0,
+        "endLine": 1,
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`math.ts`/",
+        "shortName": "src:core:math",
+        "signature": "module \"math.ts\"",
+        "relativePath": "src/core/math.ts",
+        "enclosingSymbol": null
+      },
+      {
+        "startLine": 0,
+        "endLine": 4,
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#",
+        "shortName": "src:core:store:Store",
+        "signature": "class Store",
+        "relativePath": "src/core/store.ts",
+        "enclosingSymbol": null
+      },
+      {
+        "startLine": 0,
+        "endLine": 5,
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/",
+        "shortName": "src:core:store",
+        "signature": "module \"store.ts\"",
+        "relativePath": "src/core/store.ts",
+        "enclosingSymbol": null
+      },
+      {
+        "startLine": 2,
+        "endLine": 2,
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#read().",
+        "shortName": "src:core:store:Store:read()",
+        "signature": "read(): number",
+        "relativePath": "src/core/store.ts",
+        "enclosingSymbol": null
+      },
+      {
+        "startLine": 3,
+        "endLine": 3,
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#write().",
+        "shortName": "src:core:store:Store:write()",
+        "signature": "write(value: number): void",
+        "relativePath": "src/core/store.ts",
+        "enclosingSymbol": null
+      }
+    ],
+    "dependsOn": [],
+    "dependedOnBy": [
+      "src/service/runner.ts"
+    ]
+  },
+  "coverage": {
+    "complete": true,
+    "totalKnown": true,
+    "returned": 9,
+    "total": 9,
+    "omitted": 0
+  },
+  "agentResult": {
+    "counts": {
+      "files": 2,
+      "symbols": 6,
+      "dependencies": 0,
+      "consumers": 1
+    },
+    "files": [
+      "src/core/math.ts",
+      "src/core/store.ts"
+    ],
+    "dependsOn": [],
+    "dependedOnBy": [
+      "src/service/runner.ts"
+    ],
+    "detail": {
+      "location": "result",
+      "symbolUnits": "result.symbols contains documented indexed symbols with their line ranges"
+    }
+  },
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "operationRole": "repository-observation",
+    "receipt": {
+      "schemaVersion": 2,
+      "observedAt": "2026-09-06T07:47:55.837Z",
+      "facts": {
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        }
+      ]
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "graph-fact",
+      "coverage": {
+        "complete": true,
+        "totalKnown": true,
+        "returned": 9,
+        "total": 9,
+        "omitted": 0
+      },
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "compiler-graph",
+        "coverage": {
+          "state": "complete",
+          "returned": 9,
+          "totalKnown": true,
+          "total": 9,
+          "omitted": 0
+        },
+        "producerValidation": {
+          "status": "not-evaluated"
+        },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": [
+            "collaborationDomain",
+            "wholeContent",
+            "observationStability"
+          ],
+          "reasons": [
+            "collaborationDomain:unknown",
+            "wholeContent:unknown",
+            "leftIndexAlignment:unknown",
+            "rightIndexAlignment:unknown"
+          ]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": [
+            "No repository action policy was supplied for this claim."
+          ]
+        }
+      }
+    }
+  }
+}

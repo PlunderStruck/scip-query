@@ -16,9 +16,8 @@ import { acquireProcessFileLockAsync } from './repository-cache-lock.js';
 import { isDirectorySyncUnsupported, writeFileCompletely } from '../filesystem/file-descriptor.js';
 
 /**
- * Shared download/checksum-verify/cache primitive behind `tla fetch-tools`
- * (src/tla/tool-runner.ts's tla2tools.jar fetch) and the Windows scip.exe
- * fetch. It belongs to the host-platform boundary because checksum validation,
+ * Download/checksum-verify/cache primitive for the Windows scip.exe fetch.
+ * It belongs to the host-platform boundary because checksum validation,
  * filesystem installation, and network retrieval do not own TLA policy.
  */
 

@@ -1,0 +1,64 @@
+[scip-query output page: characters 173938-177483 of 177484]
+  2947  ORIGINAL_TOKEN_2946 immutable source content value
+  2948  ORIGINAL_TOKEN_2947 immutable source content value
+  2949  ORIGINAL_TOKEN_2948 immutable source content value
+  2950  ORIGINAL_TOKEN_2949 immutable source content value
+  2951  ORIGINAL_TOKEN_2950 immutable source content value
+  2952  ORIGINAL_TOKEN_2951 immutable source content value
+  2953  ORIGINAL_TOKEN_2952 immutable source content value
+  2954  ORIGINAL_TOKEN_2953 immutable source content value
+  2955  ORIGINAL_TOKEN_2954 immutable source content value
+  2956  ORIGINAL_TOKEN_2955 immutable source content value
+  2957  ORIGINAL_TOKEN_2956 immutable source content value
+  2958  ORIGINAL_TOKEN_2957 immutable source content value
+  2959  ORIGINAL_TOKEN_2958 immutable source content value
+  2960  ORIGINAL_TOKEN_2959 immutable source content value
+  2961  ORIGINAL_TOKEN_2960 immutable source content value
+  2962  ORIGINAL_TOKEN_2961 immutable source content value
+  2963  ORIGINAL_TOKEN_2962 immutable source content value
+  2964  ORIGINAL_TOKEN_2963 immutable source content value
+  2965  ORIGINAL_TOKEN_2964 immutable source content value
+  2966  ORIGINAL_TOKEN_2965 immutable source content value
+  2967  ORIGINAL_TOKEN_2966 immutable source content value
+  2968  ORIGINAL_TOKEN_2967 immutable source content value
+  2969  ORIGINAL_TOKEN_2968 immutable source content value
+  2970  ORIGINAL_TOKEN_2969 immutable source content value
+  2971  ORIGINAL_TOKEN_2970 immutable source content value
+  2972  ORIGINAL_TOKEN_2971 immutable source content value
+  2973  ORIGINAL_TOKEN_2972 immutable source content value
+  2974  ORIGINAL_TOKEN_2973 immutable source content value
+  2975  ORIGINAL_TOKEN_2974 immutable source content value
+  2976  ORIGINAL_TOKEN_2975 immutable source content value
+  2977  ORIGINAL_TOKEN_2976 immutable source content value
+  2978  ORIGINAL_TOKEN_2977 immutable source content value
+  2979  ORIGINAL_TOKEN_2978 immutable source content value
+  2980  ORIGINAL_TOKEN_2979 immutable source content value
+  2981  ORIGINAL_TOKEN_2980 immutable source content value
+  2982  ORIGINAL_TOKEN_2981 immutable source content value
+  2983  ORIGINAL_TOKEN_2982 immutable source content value
+  2984  ORIGINAL_TOKEN_2983 immutable source content value
+  2985  ORIGINAL_TOKEN_2984 immutable source content value
+  2986  ORIGINAL_TOKEN_2985 immutable source content value
+  2987  ORIGINAL_TOKEN_2986 immutable source content value
+  2988  ORIGINAL_TOKEN_2987 immutable source content value
+  2989  ORIGINAL_TOKEN_2988 immutable source content value
+  2990  ORIGINAL_TOKEN_2989 immutable source content value
+  2991  ORIGINAL_TOKEN_2990 immutable source content value
+  2992  ORIGINAL_TOKEN_2991 immutable source content value
+  2993  ORIGINAL_TOKEN_2992 immutable source content value
+  2994  ORIGINAL_TOKEN_2993 immutable source content value
+  2995  ORIGINAL_TOKEN_2994 immutable source content value
+  2996  ORIGINAL_TOKEN_2995 immutable source content value
+  2997  ORIGINAL_TOKEN_2996 immutable source content value
+  2998  ORIGINAL_TOKEN_2997 immutable source content value
+  2999  ORIGINAL_TOKEN_2998 immutable source content value
+  3000  ORIGINAL_TOKEN_2999 immutable source content value
+
+═══ EVIDENCE CALIBRATION ═══
+  Source bodies are exact working-tree bytes; compiler identity and bindings are limited to reported semantic coverage.
+  Freshness: 1/1 text current; semantics 0 aligned, 0 stale, 1 unavailable.
+
+═══ COVERAGE ═══
+  One exact selector resolved to the complete source body shown; callers and runtime relationships are not implied.
+
+[scip-query transport complete; evaluate command coverage separately]

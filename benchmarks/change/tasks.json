@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "dispatch-desk-changes-v2",
+  "tasks": [
+    {
+      "id": "shared-rule",
+      "request": "Change cancellation eligibility for all web, administrative, and scheduled-job entry points. Only confirmed, unlocked reservations whose start is at least 24 hours after now may be cancelled (timestamps are milliseconds; exactly 24 hours is allowed). Rejection must leave the supplied store untouched; success must append the reservation id once and exactly one reservation.cancelled audit record with that id. Keep existing return shapes. Put the eligibility decision and cancellation write in their declared reservation owner, with every channel going through it.",
+      "followUp": "Change the cancellation window from 24 hours to 48 hours for all channels; exactly 48 hours is allowed. Preserve the confirmed-status and lock checks, rejection behavior, audit identity, and return shapes. Make the rule change in its existing owner."
+    },
+    {
+      "id": "separate-responsibilities",
+      "request": "Remove the duplicated checkoutQuote/supportQuote calculation by giving their shared quote rule one owner in pricing. Preserve their public names and results: round unitPrice * quantity to the nearest cent. Keep chargeFee and refundFee behavior unchanged. Charging and refunding have independent policies even though their current formulas match; any shared arithmetic must allow either policy to change independently.",
+      "followUp": "Add an optional third argument discountPercent to checkoutQuote and supportQuote, defaulting to zero. Their shared quote policy should subtract that percentage before rounding the total to cents. Also change chargeFee alone to max(2, round(amount * 0.03)); refundFee must retain max(1, round(amount * 0.02)). Preserve two-argument quote calls."
+    },
+    {
+      "id": "retire-implementation",
+      "request": "Retire the legacy receipt transport. Both receiptRoutes.receipt and receiptJobs.receipt must use sendReceipt, preserving receipt.sent event identity, order id, recipient, and the caller's store. Remove sendLegacyReceipt, its exclusive implementation file, every active legacy-receipt import, and the legacyReceiptEnabled configuration key. Keep receiptRetryLimit at 3 and preserve existing public operations other than the explicitly retired implementation.",
+      "followUp": "Make sending a v2 receipt idempotent by order id within the supplied ReceiptStore: repeated delivery through either receiptRoutes.receipt or receiptJobs.receipt must leave exactly one event for that order in that store. Different orders must still send, and two independent stores must each receive their own event for the same order. Do not use process-global deduplication state."
+    },
+    {
+      "id": "dependency-direction",
+      "request": "Repair shipping's forbidden dependency from domain to adapters. Domain shippingCost must receive its rate from the caller rather than reading web configuration. Keep webShippingQuote(weight) behavior and its configured rate of 7. Preserve the existing module boundary declarations and allowed dependency directions; fix the code without broadening, deleting, or disabling policy.",
+      "followUp": "Add a public batchShippingQuote(weight, rate) operation that uses the same domain shipping calculation with a caller-supplied rate. Calls using different rates must not affect one another or change webShippingQuote's rate of 7. Preserve the dependency direction and keep configuration out of the domain calculation."
+    }
+  ]
+}

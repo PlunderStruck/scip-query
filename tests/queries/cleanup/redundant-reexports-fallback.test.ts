@@ -104,7 +104,7 @@ describe('redundant re-export fallbacks', () => {
           barrelFile: 'src/analysis_status_exports.rs',
           originalFile: 'src/analysis_status_core.rs',
           symbol: expect.stringContaining('normalize_status_label'),
-          actionTier: 'direct',
+          actionTier: 'signal',
           surfaceEvidence: [],
         }),
       ]),
@@ -150,7 +150,7 @@ describe('redundant re-export fallbacks', () => {
     ]);
   });
 
-  it('starts SCIP re-export discovery from the scoped barrel references', () => {
+  it('resolves scoped re-export declarations to the original binding', () => {
     expect(redundantReexports(db, { scope: 'src/unused' })).toEqual([
       expect.objectContaining({
         barrelFile: 'src/unused/index.ts',

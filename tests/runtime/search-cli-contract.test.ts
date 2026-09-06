@@ -281,84 +281,6 @@ describe('search CLI identity and materialization contract', { timeout: 30_000 }
     expect(invocation.stdout).not.toContain('<file scope> @ 2');
   });
 
-  it('returns compact connected anchor sets without materializing function source', () => {
-    const invocation = runCommand('anchors', [
-      'How does a fetched paper become local state, and what protects duplicates from interrupted updates?',
-      '--limit',
-      '2',
-    ]);
-
-    expect(invocation.status).toBe(0);
-    expect(invocation.stderr).toBe('');
-    expect(invocation.stdout).toContain('NORMALIZED REPOSITORY VOCABULARY');
-    expect(invocation.stdout).toContain('EVIDENCE-GROUNDED ANCHOR SETS');
-    expect(invocation.stdout).toContain('executeDownload');
-    expect(invocation.stdout).toContain('persistPaper');
-    expect(invocation.stdout).toContain('withMutex');
-    expect(invocation.stdout).toContain("--symbol 'src/anchor-store.ts:2-5'");
-    expect(invocation.stdout).toContain('next abstraction (run to completion before any inspect)');
-    expect(invocation.stdout).toContain('Anchor roots are locator evidence, not behavior evidence.');
-    expect(invocation.stdout).toContain('Connectivity cannot make a partial set eligible.');
-    expect(invocation.stdout).toContain('use the first ranked eligible set');
-    expect(invocation.stdout).toContain('Never run a map and inspect concurrently.');
-    expect(invocation.stdout).not.toContain('const localState');
-  });
-
-  it('mechanically requires the selected map before detail inspection in an explicit session', () => {
-    const navigationEnv = {
-      SCIP_QUERY_SESSION: 'search-cli-map-order',
-      SCIP_QUERY_SESSION_DIR: join(fixtureRoot, '.navigation-sessions'),
-    };
-    const anchors = runCommand(
-      'anchors',
-      ['How does a fetched paper become local state, and what protects duplicates from interrupted updates?'],
-      navigationEnv,
-    );
-    expect(anchors.status).toBe(0);
-
-    const premature = runCommand('inspect', ['--at', 'src/anchor-store.ts:2', '--view', 'behavior'], navigationEnv);
-    expect(premature.status).toBe(1);
-    expect(premature.stdout).toBe('');
-    expect(premature.stderr).toContain('NAVIGATION MAP REQUIRED');
-    expect(premature.stderr).toContain('map and detail exploration cannot run concurrently');
-
-    const mapped = runCommandFully(
-      'system-map',
-      ['--symbol', 'src/anchor-store.ts:2-5', '--symbol', 'src/anchor-mutex.ts:1-3'],
-      navigationEnv,
-    );
-    expect(mapped.status).toBe(0);
-    expect(mapped.stdout).toContain('ANSWER EVIDENCE CONTRACT');
-    expect(mapped.stdout).toContain('condition and outcome');
-    expect(mapped.stdout).toContain('working directory');
-    expect(mapped.stdout).toContain('singleton/shared/per-invocation');
-    expect(mapped.stdout).toContain('stops or continues');
-    expect(mapped.stdout).toContain('precedence and bypass scope');
-
-    const inspected = runCommand('inspect', ['--at', 'src/anchor-store.ts:2', '--view', 'behavior'], navigationEnv);
-    expect(inspected.status).toBe(0);
-    expect(inspected.stdout).toContain('persistPaper');
-  }, 20_000);
-
-  it('prints the answer contract when disconnected anchors still render behavior', () => {
-    const mapped = runCommand('system-map', [
-      '--symbol',
-      'scip-typescript npm fixture 1.0.0 src/`anchor-download.ts`/executeDownload().',
-      '--symbol',
-      'scip-typescript npm fixture 1.0.0 src/`expansive-flow.ts`/expansiveFlow().',
-    ]);
-
-    expect(mapped.status).toBe(0);
-    expect(mapped.stdout).toContain('CONNECTED BEHAVIOR');
-    expect(mapped.stdout).toContain('ANSWER EVIDENCE CONTRACT');
-    expect(mapped.stdout).toContain('Draft audit — structured payloads:');
-    expect(mapped.stdout).toContain('src/expansive-flow.ts:602');
-    expect(mapped.stdout).toContain(
-      "return { type: 'tool_result', tool_use_id: 'call-1', content: 'ok', isError: false, };",
-    );
-    expect(mapped.stdout).toContain('Draft audit — terminal outcomes:');
-  });
-
   it('replaces repeated behavior projections with session evidence receipts', () => {
     const sessionEnv = {
       SCIP_QUERY_SESSION: 'search-cli-behavior-ledger',
@@ -445,25 +367,6 @@ describe('search CLI identity and materialization contract', { timeout: 30_000 }
     );
   }
 
-  function runCommandFully(
-    command: string,
-    args: readonly string[],
-    extraEnvironment: Readonly<Record<string, string>> = {},
-  ): { status: number | null; stdout: string; stderr: string } {
-    let invocation = runCommand(command, args, extraEnvironment);
-    const stdout: string[] = [];
-    let stderr = '';
-    while (true) {
-      stderr += invocation.stderr;
-      const page = humanPage(invocation.stdout);
-      stdout.push(page.content);
-      if (invocation.status !== 0 || !page.cursor) {
-        return { status: invocation.status, stdout: stdout.join(''), stderr };
-      }
-      invocation = runCommand('continue', [page.cursor], extraEnvironment);
-    }
-  }
-
   function runJsonCommandFully(
     command: string,
     args: readonly string[],
@@ -493,19 +396,5 @@ describe('search CLI identity and materialization contract', { timeout: 30_000 }
       }
       invocation = runCommand('continue', [cursor], extraEnvironment);
     }
-  }
-
-  function humanPage(output: string): { content: string; cursor?: string } {
-    if (!output.startsWith('[scip-query output page:')) return { content: output };
-    const contentStart = output.indexOf('\n') + 1;
-    const incompleteStart = output.lastIndexOf('\n[Incomplete:');
-    const completeStart = output.lastIndexOf('\n[scip-query transport complete; evaluate command coverage separately]');
-    const contentEnd = Math.max(incompleteStart, completeStart);
-    if (contentStart <= 0 || contentEnd < contentStart) throw new Error('Malformed human output page.');
-    const cursor = output.match(/\bcontinue ([A-Za-z0-9_.-]+)/u)?.[1];
-    return {
-      content: output.slice(contentStart, contentEnd),
-      ...(cursor ? { cursor } : {}),
-    };
   }
 });

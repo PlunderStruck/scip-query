@@ -1,0 +1,147 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "complexity",
+  "operationRole": "repository-observation",
+  "evidence": "graph-fact",
+  "args": [
+    "sameLineBranches"
+  ],
+  "options": {
+    "json": true,
+    "session": true,
+    "jsonOutput": "/private/tmp/scip-followup-cli/complexity-sameLineBranches.json"
+  },
+  "result": {
+    "matched": true,
+    "resolved": {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/sameLineBranches().",
+      "shortName": "src:calls:sameLineBranches()",
+      "relativePath": "src/calls.ts"
+    },
+    "otherMatches": [],
+    "totalMatches": 1,
+    "complexity": {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/sameLineBranches().",
+      "shortName": "src:calls:sameLineBranches()",
+      "relativePath": "src/calls.ts",
+      "startLine": 13,
+      "endLine": 13,
+      "loc": 1,
+      "branches": 1,
+      "estimateBasis": "ast",
+      "metricRules": "typescript-function-local-v1",
+      "cyclomaticEstimate": 2,
+      "calleeCount": 0,
+      "candidateCalleeCount": 1,
+      "fanIn": 0,
+      "fanOut": 0
+    }
+  },
+  "coverage": {
+    "complete": null,
+    "totalKnown": false,
+    "returned": 1,
+    "resolution": {
+      "state": "exact",
+      "totalCandidates": 1
+    }
+  },
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "operationRole": "repository-observation",
+    "receipt": {
+      "schemaVersion": 2,
+      "observedAt": "2026-09-06T02:48:24.694Z",
+      "facts": {
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "9ac14a281194a148cf10c602037b09606e09d9ffe44bb4fa89756a4fd7ab8821"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "9ac14a281194a148cf10c602037b09606e09d9ffe44bb4fa89756a4fd7ab8821"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        }
+      ]
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "graph-fact",
+      "coverage": {
+        "complete": null,
+        "totalKnown": false,
+        "returned": 1,
+        "resolution": {
+          "state": "exact",
+          "totalCandidates": 1
+        }
+      },
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "compiler-graph",
+        "coverage": {
+          "state": "unknown",
+          "returned": 1,
+          "totalKnown": false
+        },
+        "producerValidation": {
+          "status": "not-evaluated"
+        },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": [
+            "collaborationDomain",
+            "wholeContent",
+            "observationStability"
+          ],
+          "reasons": [
+            "collaborationDomain:unknown",
+            "wholeContent:unknown",
+            "leftIndexAlignment:unknown",
+            "rightIndexAlignment:unknown"
+          ]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": [
+            "No repository action policy was supplied for this claim."
+          ]
+        }
+      }
+    }
+  }
+}

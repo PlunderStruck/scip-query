@@ -130,7 +130,7 @@ function listAuxiliaryFiles(absRoot: string, extensions: ReadonlySet<string>): s
 
 function listGitTrackedFiles(absRoot: string, extensions: ReadonlySet<string>): string[] | null {
   try {
-    const stdout = execFileSync('git', ['-C', absRoot, 'ls-files', '-co', '--exclude-standard', '--', '.'], {
+    const stdout = execFileSync('git', ['-C', absRoot, 'ls-files', '-z', '-co', '--exclude-standard', '--', '.'], {
       encoding: 'utf-8',
       maxBuffer: 25 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -138,7 +138,7 @@ function listGitTrackedFiles(absRoot: string, extensions: ReadonlySet<string>): 
       killSignal: 'SIGKILL',
     });
     return stdout
-      .split('\n')
+      .split('\0')
       .filter((file) => file && extensions.has(extname(file).toLowerCase()))
       .sort();
   } catch {

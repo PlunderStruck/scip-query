@@ -1,0 +1,140 @@
+
+src/lib/client-access/index.ts:42-54
+42: export {
+43:   CampaignAccessDeniedError,
+44:   getCampaignCapabilities,
+45:   getCampaignCapabilitiesForActor,
+46:   loadCampaignAccessFacts,
+47:   loadCampaignAccessFactsForActors,
+48:   requireCampaignCapability,
+49: } from "./operations/campaign-access";
+50: export type { CampaignWorkspaceLocation } from "./operations/campaign-workspace-location";
+51: export { resolveCampaignWorkspaceLocation } from "./operations/campaign-workspace-location";
+52: export { removeDirectBrandRelationship } from "./operations/brand-relationships";
+53: export { grantCampaignVisibility } from "./operations/grant-visibility";
+
+src/lib/client-access/operations/campaign-workspace-location.ts:1-22
+1: import { db } from "@/db";
+2: import { offer_workspace_access, offers } from "@/db/schema";
+3: import type { DbInstance } from "@/db/types";
+4: import type { CampaignVisibilityScope } from "@/lib/client-access/core/model";
+5: import { resolveAuthorizedOfferId } from "@/lib/client-access/infra/campaign-visibility";
+6: import { getClientById } from "@/lib/clients";
+7: import { and, eq, inArray } from "drizzle-orm";
+8: 
+9: /**
+10:  * Where a campaign sits relative to the workspace the viewer currently has
+11:  * selected. A deep link (`/todos/applications?campaign=<id>`) carries no
+12:  * workspace, so a link to another brand's campaign returns an empty queue —
+13:  * this tells the surface to say so instead of "nothing to do".
+14:  */
+15: export type CampaignWorkspaceLocation =
+16:   | { kind: "visible" }
+17:   /** Reachable, but only after switching to `clientId`. */
+18:   | { kind: "other_workspace"; clientId: string; clientName: string | null }
+19:   | { kind: "unavailable" };
+20: 
+21: /**
+22:  * Never widen visibility: a workspace the viewer cannot switch to is reported
+
+src/lib/clients/index.ts:1-5
+1: export * from "./queries";
+2: export * from "./constants";
+3: export * from "./brand-identity";
+4: export * from "./brand-identity-contract";
+
+src/lib/clients/queries.ts:30-49
+30:   inArray,
+31:   isNotNull,
+32:   isNull,
+33:   ne,
+34:   or,
+35:   sql,
+36: } from "drizzle-orm";
+37: import { z } from "zod";
+38: import { CLIENT_SEARCH_LIMIT } from "./constants";
+39: import { getAgencyClientIds } from "@/lib/client-access";
+40: import { listPlatformAdminUsers } from "@/lib/auth/queries";
+41: 
+42: export {
+43:   CLIENT_TYPES,
+44:   CLIENT_TYPE_OPTIONS,
+45:   BRAND_CLIENT_TYPE_OPTIONS,
+46:   CLIENT_PIPELINE_STAGES,
+47:   CLIENT_PIPELINE_SOURCES,
+48:   type ClientType,
+49: } from "@/db/schema";
+
+src/app/api/buy/analytics/stats/entities/route.ts:30-45
+30: // A page of creators at a time — larger id lists are rejected rather than
+31: // silently truncated.
+32: const MAX_CREATOR_IDS = 200;
+33: 
+34: function parseCreatorIds(req: AuthenticatedRequest): string[] {
+35:   const raw = req.nextUrl.searchParams.get("ids");
+36:   if (!raw) return [];
+37:   return [
+38:     ...new Set(
+39:       raw
+40:         .split(",")
+41:         .map((id) => id.trim())
+42:         .filter((id) => id.length > 0)
+43:     ),
+44:   ];
+45: }
+
+src/app/api/buy/campaigns/[id]/account-post-counts/route.ts:10-27
+10:   params: Promise<{ id: string }>;
+11: }
+12: 
+13: // Matches the campaign creator table's page size cap (ids come in batches).
+14: const MAX_CREATOR_IDS = 200;
+15: 
+16: function parseCreatorIds(req: AuthenticatedRequest): string[] {
+17:   const raw = req.nextUrl.searchParams.get("ids");
+18:   if (!raw) return [];
+19:   return [
+20:     ...new Set(
+21:       raw
+22:         .split(",")
+23:         .map((id) => id.trim())
+24:         .filter((id) => id.length > 0)
+25:     ),
+26:   ];
+27: }
+
+src/app/api/buy/creators/account-health/route.ts:7-40
+7: import { resolveRosterViewer } from "@/lib/creators/roster-viewer";
+8: import { NextRequest, NextResponse } from "next/server";
+9: 
+10: // Matches the campaign creator table's page size cap (ids come in batches).
+11: const MAX_CREATOR_IDS = 200;
+12: 
+13: function parseCreatorIds(req: AuthenticatedRequest): string[] {
+14:   const raw = req.nextUrl.searchParams.get("ids");
+15:   if (!raw) return [];
+16:   return [
+17:     ...new Set(
+18:       raw
+19:         .split(",")
+20:         .map((id) => id.trim())
+21:         .filter((id) => id.length > 0)
+22:     ),
+23:   ];
+24: }
+25: 
+26: /**
+27:  * GET /api/buy/creators/account-health?ids=<uid,uid,...>
+28:  *
+29:  * Per-creator account health (red/amber/green from each linked account's most
+30:  * recent videos, across every campaign the viewer can see). Keyed by creator
+31:  * uid, with per `social_account_id` health for the campaign row's platform-icon
+32:  * dots.
+33:  */
+34: async function handleGet(req: AuthenticatedRequest) {
+35:   try {
+36:     const ids = parseCreatorIds(req);
+37:     if (ids.length === 0) {
+38:       return NextResponse.json({ byCreatorId: {} });
+39:     }
+40:     if (ids.length > MAX_CREATOR_IDS) {

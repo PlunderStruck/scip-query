@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
+import { referenceOccurrenceLines } from '../../storage/scip-rows.js';
 import { findIdentifierLines } from '../identifier-index.js';
 import { getFullSymbolMatch } from '../symbol-lookup.js';
 import { leafName } from '../symbol-parser.js';
@@ -119,13 +120,21 @@ export function resolvedCandidateLines(
   match: { symbolId: number; relativePath: string; startLine: number; endLine: number },
   identifier: string | null,
 ): Map<string, number[]> {
-  return resolvedCandidateLinesFromChunks(db, referenceChunksByFile(db, match.symbolId), match, identifier);
+  return resolvedCandidateLinesFromChunks(
+    db,
+    referenceChunksByFile(db, match.symbolId),
+    {
+      ...match,
+      symbol: db.get<{ symbol: string }>('SELECT symbol FROM global_symbols WHERE id = ?', match.symbolId)?.symbol,
+    },
+    identifier,
+  );
 }
 
 function resolvedCandidateLinesFromChunks(
   db: ScipDatabase,
   chunksByFile: ReadonlyMap<string, readonly ReferenceChunk[]>,
-  match: { relativePath: string; startLine: number; endLine: number },
+  match: { relativePath: string; startLine: number; endLine: number; symbol?: string },
   identifier: string | null,
 ): Map<string, number[]> {
   const fileLines = new Map<string, number[]>();
@@ -165,9 +174,11 @@ function resolvedLinesForFile(
   db: ScipDatabase,
   file: string,
   chunks: readonly ReferenceChunk[],
-  match: { relativePath: string; startLine: number; endLine: number },
+  match: { relativePath: string; startLine: number; endLine: number; symbol?: string },
   identifier: string | null,
 ): number[] {
+  const indexed = match.symbol ? referenceOccurrenceLines(db, file, match.symbol) : null;
+  if (indexed !== null) return indexed;
   const excludeOpts =
     file === match.relativePath ? { excludeStartLine: match.startLine, excludeEndLine: match.endLine } : {};
   const allHits = identifier ? findIdentifierLines(db, file, identifier, excludeOpts) : [];

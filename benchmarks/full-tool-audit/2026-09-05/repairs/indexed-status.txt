@@ -1,0 +1,39 @@
+Project:  /Users/aydansalois/Documents/GitHub/scip-query
+DB path:  /Users/aydansalois/.cache/scip-query/projects/178a22f2ce58/index.db
+TS sem:  available (/Users/aydansalois/Documents/GitHub/scip-query/tsconfig.json)
+rust sem:available (/Users/aydansalois/.cargo/bin/rust-analyzer)
+rust note: rust-analyzer semantic reference queries are enabled.
+Exists:   yes
+Fresh:    fresh
+Refresh:  rebuilt by manual-cli (scip-query reindex) in 12.6s at 2026-09-06T02:30:55.463Z
+Watch service: running [daemon] (pid 98657)
+Worktree: /Users/aydansalois/Documents/GitHub/scip-query [fdc2f652e446]
+Watcher: Watching (idle)
+Index generation: 4524955ffada
+Idle exit: 2026-09-06T02:46:08.983Z
+Reindex activity (24h): 30 run(s) (22 rebuilt, 3 reused, 5 failed), 0 redundant refresh(es) suppressed, 593.4 MB estimated writes (1.3 GB logical output)
+Reindex staging: 1005.4 MB reflinked, 0 B byte-copied
+Reindex language python: 1 run(s) (1 rebuilt, 0 reused), 71 KB produced, 1.0 s cumulative indexer time
+Reindex language rust: 23 run(s) (1 rebuilt, 22 reused), 85 KB produced, 2.4 s cumulative indexer time
+Reindex language typescript: 25 run(s) (21 rebuilt, 4 reused), 323.0 MB produced, 73.6 s cumulative indexer time
+Refresh requests: 0 pending, 0 claimed, 0 completed, 0 expired
+TypeScript semantics: idle (0 Projects, 0 requests)
+TypeScript index: idle (0 warmups, 0 updates, 0 requests, 0/2 warm sessions)
+TypeScript index memory: 0 B; 3.6 GB retirement mark
+Shared:   missed, base none, active none, 0 generation(s), 0 B
+Share why: worktree has uncommitted changes
+Share GC:  0 protected, 0 unreferenced (0 B), 0 temporary
+Cache GC: 0 worktree(s), 0 generation(s), 0 B removed
+Rust sess: durable/stopped (default; worker fallback; opt out with SCIP_RUST_SEMANTIC_DURABLE_SESSION=0)
+DB gen:   current 4524955ffada (full; 1430ms convert, current SCIP companion)
+DB layout: immutable artifact set; stable paths are mirrors
+Recovery: ed4fda28e7ff at .scipquery-generations/ed4fda28e7ffb8ad6843212d5ac23f296035f41d9dc7209b65ea5b65b8c4ca37/index.db
+Local GC: managed, 2 generation(s), 134.6 MB, 2 protected (0 live reader lease(s)); limits 2 / 2.0 GB
+Local age: oldest generation 2026-09-06T02:28:26.525Z
+Local last: collected at 2026-09-06T02:30:55.794Z, 1 removed
+Shadow:   passing, 100.0% recall, 552 predicted / 6 changed, 100.0% of project; fallback: changed-file-outside-project, configuration-changed, file-added, project-identity-changed
+Latest:   /Users/aydansalois/.cache/scip-query/projects/178a22f2ce58/affected-shadow-latest.json
+Symbols:  42386
+Files:    552
+Size:     33.4 MB
+Built:    14s ago

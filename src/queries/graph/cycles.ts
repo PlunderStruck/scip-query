@@ -75,7 +75,7 @@ export function dependencyCycleSummary(db: ScipDatabase, opts: DependencyCycleOp
   const graph = buildFileDepGraph(
     db,
     scope,
-    edgeBasis === 'imports' ? { scipEdges: 'imports-only', sourceEdges: 'imports-only' } : undefined,
+    edgeBasis === 'imports' ? { scipEdges: 'imports-only', sourceEdges: 'imports-and-reexports' } : undefined,
   );
   const { components } = stronglyConnectedComponents(graph);
   const allCycles = components

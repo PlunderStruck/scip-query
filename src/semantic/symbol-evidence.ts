@@ -231,7 +231,7 @@ function semanticCalleeCacheEntriesForPrefetchedRows(
   return { entries, sourceMissing, skippedUnsupportedLanguage };
 }
 
-const TYPESCRIPT_CALLEE_SCHEMA = 'typescript-callees-v3-alias-resolved';
+const TYPESCRIPT_CALLEE_SCHEMA = 'typescript-callees-v4-lexical-owner';
 
 function semanticCalleeDepsDigest(db: ScipDatabase, relativePath: string): string | null {
   const language = semanticProviderLanguageForPath(relativePath);

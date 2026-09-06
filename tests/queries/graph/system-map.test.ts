@@ -9,9 +9,7 @@ import {
   writeRuntimeBoundaryGraph,
 } from '../../../src/analysis/runtime-boundaries/index.js';
 import { systemMap } from '../../../src/queries/graph/system-map.js';
-import { dependenceSlice } from '../../../src/queries/graph/dependence-slice.js';
 import { graphEvidence } from '../../../src/queries/graph/graph-evidence.js';
-import { valueFlow } from '../../../src/queries/graph/value-flow.js';
 import { connectedBehaviorPacket } from '../../../src/queries/internal/connected-behavior.js';
 import { createExplorationTopology } from '../../../src/queries/internal/exploration-topology.js';
 import { ProjectIndex } from '../../../src/queries/internal/project-index.js';
@@ -176,7 +174,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('confirms incoming calls made through a named import alias', async () => {
+  it('qualifies incoming calls inferred from a named import alias as candidates', async () => {
     const db = await createSystemMapDb({ indexedAliasedCaller: true });
     try {
       const result = graphEvidence(
@@ -190,7 +188,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           expect.objectContaining({
             family: 'execution',
             subtype: 'call',
-            evidenceStrength: 'derived',
+            evidenceStrength: 'candidate',
             from: expect.objectContaining({ label: expect.stringContaining('sessionStreamEvents') }),
             to: expect.objectContaining({ label: expect.stringContaining('appendStreamEvents') }),
           }),
@@ -540,12 +538,15 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('keeps proved value flow distinct from reference and call neighborhoods', async () => {
+  it('keeps an explicit dataflow projection distinct from reference and call neighborhoods', async () => {
     const db = await createSystemMapDb();
     try {
-      const flow = valueFlow(db, { symbols: [symbols.companionCommand, symbols.companionAppend] }, { maxDepth: 1 });
+      const flow = graphEvidence(
+        db,
+        { symbols: [symbols.companionCommand, symbols.companionAppend] },
+        { families: ['dataflow'], direction: 'both', maxDepth: 1, maxEdges: 48 },
+      );
 
-      expect(flow.kind).toBe('value-flow');
       expect(flow.edges).toEqual(
         expect.arrayContaining([expect.objectContaining({ family: 'dataflow', subtype: 'argument-to-parameter' })]),
       );
@@ -560,40 +561,6 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
             subtype: 'definition-to-use',
             providerId: 'typescript-local-dependence',
           }),
-        ]),
-      );
-      expect(flow.coverage).toMatchObject({
-        basis: 'proved-bounded-static-value-flow',
-        analysisBasis: 'partial-system-definition-use',
-        providers: ['bounded-static-value-flow', 'typescript-local-dependence'],
-      });
-      expect(flow.coverage.unsupportedRelations).not.toContain('general local definition-use chains');
-      expect(flow.coverage.unsupportedRelations).toContain(
-        'general heap alias and cross-instance field points-to flow',
-      );
-    } finally {
-      db.close();
-    }
-  });
-
-  it('computes a directional dependence slice and labels call connectors as support', async () => {
-    const db = await createSystemMapDb();
-    try {
-      const result = dependenceSlice(db, symbols.companionAppend, {
-        direction: 'backward',
-        maxDepth: 2,
-        maxEdges: 200,
-      });
-
-      expect(result).toMatchObject({
-        kind: 'dependence-slice',
-        direction: 'backward',
-        coverage: { basis: 'partial-system-dependence-graph', criterionKind: 'symbol-summary' },
-      });
-      expect(result.edges).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ family: 'dataflow', subtype: 'argument-to-parameter', supporting: false }),
-          expect.objectContaining({ family: 'execution', subtype: 'call', supporting: true }),
         ]),
       );
     } finally {
@@ -662,7 +629,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
             fromNodeId: expect.stringContaining('prompt'),
             toNodeId: expect.stringContaining('loop'),
             evidence: expect.arrayContaining([
-              expect.objectContaining({ method: 'ast-callsite', strength: 'derived' }),
+              expect.objectContaining({ method: 'ast-callsite', strength: 'candidate' }),
             ]),
           }),
         ]),
@@ -1405,24 +1372,17 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
         ]),
       );
       expect(result.topology?.nodes.find((node) => node.label === 'hidden')?.attributes['publicEntry']).not.toBe(true);
-      expect(result.topology?.routeCatalog?.routes).toEqual(
+      // A lexical name match without a compiler binding remains an exploration lead.
+      // It cannot establish an executable route to the public entry point.
+      expect(result.topology?.routeCatalog?.routes).toEqual([]);
+      expect(result.topology?.edges).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            endpointKind: 'public-entry',
-            endpointLocation: expect.objectContaining({ file: 'src/public.ts' }),
-            anchorLabel: expect.stringContaining('compact'),
+            kind: 'call',
+            evidence: expect.arrayContaining([expect.objectContaining({ strength: 'candidate' })]),
           }),
         ]),
       );
-      const routeId = result.topology?.routeCatalog?.routes[0]?.id;
-      expect(routeId).toBeDefined();
-      const selected = systemMap(db, {
-        symbols: [compactSymbol],
-        maxDepth: 1,
-        relations: ['call'],
-        routeIds: [routeId!],
-      });
-      expect(selected.topology?.routeCatalog?.selectedRouteIds).toEqual([routeId]);
     } finally {
       db.close();
     }
@@ -1445,7 +1405,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           expect.objectContaining({
             kind: 'call',
             evidence: expect.arrayContaining([
-              expect.objectContaining({ method: 'ast-callsite', strength: 'derived' }),
+              expect.objectContaining({ method: 'ast-callsite', strength: 'candidate' }),
             ]),
           }),
           expect.objectContaining({
@@ -2571,6 +2531,15 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       expect(result.anchors).toContainEqual(
         expect.objectContaining({ kind: 'symbol', query: 'doesNotExist', status: 'missing' }),
       );
+      expect(result.closure.status).toBe('incomplete');
+      expect(result.closure.explanation).toContain('doesNotExist');
+      const evidence = graphEvidence(
+        db,
+        { symbols: [symbols.companionCommand, 'doesNotExist'] },
+        { families: ['execution'], direction: 'outgoing', maxDepth: 1, maxEdges: 40 },
+      );
+      expect(evidence.coverage.status).toBe('incomplete');
+      expect(evidence.edges.length).toBeGreaterThan(0);
       expect(result.coverage.frontierFiles + result.coverage.frontierSymbols).toBeGreaterThan(0);
       expect(result.coverage.blindSpots).toEqual(expect.arrayContaining([expect.stringContaining('Traversal stops')]));
     } finally {

@@ -1,0 +1,49 @@
+{
+  "acceptedAt": "2026-09-06T07:27:24.692Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "88ac6629033f84f665a2a023fb08fe4b24e6bff8a7452d085a7ee80236599b5e",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "DiffImpactResult changed from interface DiffImpactResult { changedFiles: string[]; changedSymbols: Array<{ symbol: string; shortName: string; file: string; startLine: number; endLine: number; fanIn: number; ... to interface DiffImpactResult { changedFiles: string[]; unindexedChangedFiles?: string[]; changedSymbols: Array<{ symbol: string; shortName: string; file: string; startLine: number....",
+      "target": "./queries:DiffImpactResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "mergeDiffImpactPartials changed from declare function mergeDiffImpactPartials(changedFiles: readonly string[], partials: readonly DiffImpactPartial[]): DiffImpactResult; to declare function mergeDiffImpactPartials(changedFiles: readonly string[], partials: readonly DiffImpactPartial[], unindexedChangedFiles?: readonly string[]): DiffImpactResult;.",
+      "target": "./queries:mergeDiffImpactPartials"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "DiffImpactResult changed from interface DiffImpactResult { changedFiles: string[]; changedSymbols: Array<{ symbol: string; shortName: string; file: string; startLine: number; endLine: number; fanIn: number; ... to interface DiffImpactResult { changedFiles: string[]; unindexedChangedFiles?: string[]; changedSymbols: Array<{ symbol: string; shortName: string; file: string; startLine: number....",
+      "target": "./queries/diff-impact:DiffImpactResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "mergeDiffImpactPartials changed from declare function mergeDiffImpactPartials(changedFiles: readonly string[], partials: readonly DiffImpactPartial[]): DiffImpactResult; to declare function mergeDiffImpactPartials(changedFiles: readonly string[], partials: readonly DiffImpactPartial[], unindexedChangedFiles?: readonly string[]): DiffImpactResult;.",
+      "target": "./queries/diff-impact:mergeDiffImpactPartials"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "DiffImpactResult changed from interface DiffImpactResult { changedFiles: string[]; changedSymbols: Array<{ symbol: string; shortName: string; file: string; startLine: number; endLine: number; fanIn: number; ... to interface DiffImpactResult { changedFiles: string[]; unindexedChangedFiles?: string[]; changedSymbols: Array<{ symbol: string; shortName: string; file: string; startLine: number....",
+      "target": "./queries/index:DiffImpactResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "mergeDiffImpactPartials changed from declare function mergeDiffImpactPartials(changedFiles: readonly string[], partials: readonly DiffImpactPartial[]): DiffImpactResult; to declare function mergeDiffImpactPartials(changedFiles: readonly string[], partials: readonly DiffImpactPartial[], unindexedChangedFiles?: readonly string[]): DiffImpactResult;.",
+      "target": "./queries/index:mergeDiffImpactPartials"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.25.0",
+  "previousDigest": "3c4d93cfd7b6f7c0bd9e13f3ca992fdbce1628297a79935c1ea35ec1b5e5ec55",
+  "reason": "Diff-impact now unions consumer evidence and discloses unindexed paths; see docs/api/compatibility/2026-09-05-command-contract-pruning.md",
+  "schemaVersion": 1
+}

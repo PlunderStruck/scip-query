@@ -1,0 +1,1243 @@
+{
+  "acceptedAt": "2026-09-05T18:48:51.911Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "5ad9572c68bf5ed662e157f7fdc5340a99728f8f008613df96894a1ef4379e6a",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AnchorDiscoveryCandidate.",
+      "target": "./queries:AnchorDiscoveryCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AnchorDiscoveryGroup.",
+      "target": "./queries:AnchorDiscoveryGroup"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AnchorDiscoveryMatchSource.",
+      "target": "./queries:AnchorDiscoveryMatchSource"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AnchorDiscoveryOptions.",
+      "target": "./queries:AnchorDiscoveryOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AnchorDiscoveryRelation.",
+      "target": "./queries:AnchorDiscoveryRelation"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AnchorDiscoveryResult.",
+      "target": "./queries:AnchorDiscoveryResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AnchorDiscoveryTermMatch.",
+      "target": "./queries:AnchorDiscoveryTermMatch"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AnchorDiscoveryUpstreamEntry.",
+      "target": "./queries:AnchorDiscoveryUpstreamEntry"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConnectedBehaviorLine.",
+      "target": "./queries:ConnectedBehaviorLine"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConnectedBehaviorOptions.",
+      "target": "./queries:ConnectedBehaviorOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConnectedBehaviorPacket.",
+      "target": "./queries:ConnectedBehaviorPacket"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConnectedBehaviorPath.",
+      "target": "./queries:ConnectedBehaviorPath"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConnectedBehaviorRepresentation.",
+      "target": "./queries:ConnectedBehaviorRepresentation"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConnectedBehaviorStep.",
+      "target": "./queries:ConnectedBehaviorStep"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConnectedBehaviorStepRole.",
+      "target": "./queries:ConnectedBehaviorStepRole"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConnectedBehaviorTransition.",
+      "target": "./queries:ConnectedBehaviorTransition"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConvergenceResult.",
+      "target": "./queries:ConvergenceResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export DataflowResult.",
+      "target": "./queries:DataflowResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DependenceSliceCoverage changed from interface DependenceSliceCoverage { status: GraphEvidenceCoverage['status']; criterionKind: 'symbol-summary' | 'source-location-summary'; basis: 'partial-system-dependence-graph... to interface DependenceSliceCoverage { status: 'complete' | 'bounded' | 'incomplete'; basis: 'function-local-dependence'; model: TypeScriptLocalFlowCoverage; omittedEdges: number; ....",
+      "target": "./queries:DependenceSliceCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DependenceSliceEdge changed from interface DependenceSliceEdge extends GraphEvidenceEdge { traversalDepth: number; supporting: boolean; } to interface DependenceSliceEdge extends TypeScriptLocalFlowEdge { traversalDepth: number; }.",
+      "target": "./queries:DependenceSliceEdge"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DependenceSliceResult changed from interface DependenceSliceResult { kind: 'dependence-slice'; direction: DependenceSliceDirection; criterion: string; targets: GraphEvidenceTarget[]; nodeIds: string[]; edges: Dep... to interface DependenceSliceResult { kind: 'dependence-slice'; direction: DependenceSliceDirection; criterion: string; variable?: string; resolution: 'matched' | 'ambiguous' | 'mis....",
+      "target": "./queries:DependenceSliceResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HealthReport changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { overview: { documents: number; symbols: number; indexSizeBytes: number; }; provenance?: HealthProvenance; findings: { deadSymbols: number; deadLoc: numb....",
+      "target": "./queries:HealthReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeEvent.",
+      "target": "./queries:OutcomeEvent"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeEventKind.",
+      "target": "./queries:OutcomeEventKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeObserverAuthority.",
+      "target": "./queries:OutcomeObserverAuthority"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeObserverKind.",
+      "target": "./queries:OutcomeObserverKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeObserverProvenance.",
+      "target": "./queries:OutcomeObserverProvenance"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextHistory.",
+      "target": "./queries:PlanContextHistory"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextOptions.",
+      "target": "./queries:PlanContextOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextResult.",
+      "target": "./queries:PlanContextResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ReferenceReachabilityResult.",
+      "target": "./queries:ReferenceReachabilityResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "RepositoryContextOptions changed from interface RepositoryContextOptions { semantic?: boolean; impactDepth?: number; sliceDepth?: number; scope?: string; gitHead?: string; } to interface RepositoryContextOptions { semantic?: boolean; impactDepth?: number; referenceDepth?: number; scope?: string; gitHead?: string; }.",
+      "target": "./queries:RepositoryContextOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "RepositoryContextResult changed from interface RepositoryContextResult { target: string; primaryCallable?: RepositoryContextPrimaryCallable; matched: { symbol: boolean; file: boolean; module: boolean; }; history: R... to interface RepositoryContextResult { target: string; primaryCallable?: RepositoryContextPrimaryCallable; matched: { symbol: boolean; file: boolean; module: boolean; }; history: R....",
+      "target": "./queries:RepositoryContextResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionCandidate changed from interface SliceCohesionCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; units: SliceCohesionUnit[]; statemen... to interface SliceCohesionCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; archetype: SliceCohesionArchetype; o....",
+      "target": "./queries:SliceCohesionCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionCluster changed from interface SliceCohesionCluster { outputs: string[]; units: number[]; lineRanges: SliceCohesionLineRange[]; inputs: string[]; guardOnly: boolean; } to interface SliceCohesionCluster { outputs: string[]; units: number[]; lineRanges: SliceCohesionLineRange[]; inputs: string[]; kind: SliceCohesionClusterKind; role: SliceCohesionC....",
+      "target": "./queries:SliceCohesionCluster"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionCoverage changed from interface SliceCohesionCoverage { status: 'complete' | 'partial'; basis: 'typescript-local-flow-backward-slices'; unsupported: string[]; candidateEdges: number; } to interface SliceCohesionCoverage { status: 'complete' | 'partial'; model: 'function-local-flow'; basis: 'typescript-local-flow-backward-slices'; unsupported: string[]; candidateE....",
+      "target": "./queries:SliceCohesionCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionOutput changed from interface SliceCohesionOutput { id: string; kind: SliceCohesionOutputKind; label: string; line: number; guard: boolean; slice: number[]; fullSlice: number[]; } to interface SliceCohesionOutput { id: string; kind: SliceCohesionOutputKind; label: string; line: number; units: number[]; guard: boolean; hook: boolean; sliceSize: number; fullSl....",
+      "target": "./queries:SliceCohesionOutput"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SliceResult.",
+      "target": "./queries:SliceResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapAnchor.",
+      "target": "./queries:SystemMapAnchor"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapAnchorCandidate.",
+      "target": "./queries:SystemMapAnchorCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapAnchorKind.",
+      "target": "./queries:SystemMapAnchorKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapAnchorStatus.",
+      "target": "./queries:SystemMapAnchorStatus"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapBoundaryParticipant.",
+      "target": "./queries:SystemMapBoundaryParticipant"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapCoverage.",
+      "target": "./queries:SystemMapCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapDrilldown.",
+      "target": "./queries:SystemMapDrilldown"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapDrilldownAnchor.",
+      "target": "./queries:SystemMapDrilldownAnchor"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapEvidenceFloor.",
+      "target": "./queries:SystemMapEvidenceFloor"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapExternalBoundary.",
+      "target": "./queries:SystemMapExternalBoundary"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapFile.",
+      "target": "./queries:SystemMapFile"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapLiteralHit.",
+      "target": "./queries:SystemMapLiteralHit"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapNotableSymbol.",
+      "target": "./queries:SystemMapNotableSymbol"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapOptions.",
+      "target": "./queries:SystemMapOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapReferenceScope.",
+      "target": "./queries:SystemMapReferenceScope"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapRegion.",
+      "target": "./queries:SystemMapRegion"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapRegionRelation.",
+      "target": "./queries:SystemMapRegionRelation"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapRelation.",
+      "target": "./queries:SystemMapRelation"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapRelationEvidence.",
+      "target": "./queries:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapRelationFamilyCoverage.",
+      "target": "./queries:SystemMapRelationFamilyCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapRelationKind.",
+      "target": "./queries:SystemMapRelationKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapRelationStrength.",
+      "target": "./queries:SystemMapRelationStrength"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapResult.",
+      "target": "./queries:SystemMapResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapSourceConstruct.",
+      "target": "./queries:SystemMapSourceConstruct"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapSourceScope.",
+      "target": "./queries:SystemMapSourceScope"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapSymbol.",
+      "target": "./queries:SystemMapSymbol"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export convergence.",
+      "target": "./queries:convergence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export dataflow.",
+      "target": "./queries:dataflow"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export deepChains.",
+      "target": "./queries:deepChains"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "dependenceSlice changed from declare function dependenceSlice(db: ScipDatabase, criterion: string, options?: { direction?: DependenceSliceDirection; maxDepth?: number; maxEdges?: number; }): DependenceSlice... to declare function dependenceSlice(db: ScipDatabase, criterion: string, options?: { variable?: string; column?: number; direction?: DependenceSliceDirection; maxDepth?: number; ma....",
+      "target": "./queries:dependenceSlice"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export discoverAnchors.",
+      "target": "./queries:discoverAnchors"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export normalizeAnchorQuery.",
+      "target": "./queries:normalizeAnchorQuery"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export planContext.",
+      "target": "./queries:planContext"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "referenceReachability changed from declare function referenceReachability(db: ScipDatabase, symbolPattern: string, opts?: { direction?: 'backward' | 'forward'; maxDepth?: number; semantic?: boolean; }): SliceResu... to declare function referenceReachability(db: ScipDatabase, symbolPattern: string, opts?: { direction?: 'backward' | 'forward'; maxDepth?: number; semantic?: boolean; }): Reference....",
+      "target": "./queries:referenceReachability"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export slice.",
+      "target": "./queries:slice"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "sliceCohesion changed from declare function sliceCohesion(db: ScipDatabase, opts?: { scope?: string; symbol?: string; minLoc?: number; minStatements?: number; minClusterUnits?: number; limit?: number; sca... to declare function sliceCohesion(db: ScipDatabase, opts?: { scope?: string; symbol?: string; minLoc?: number; minStatements?: number; minClusterUnits?: number; limit?: number; sca....",
+      "target": "./queries:sliceCohesion"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "sliceCohesionForDefinition changed from declare function sliceCohesionForDefinition(db: ScipDatabase, definition: IndexedDefinition, opts?: { minStatements?: number; minClusterUnits?: number; }, cache?: SourceFileCach... to declare function sliceCohesionForDefinition(db: ScipDatabase, definition: IndexedDefinition, opts?: { minStatements?: number; minClusterUnits?: number; detail?: boolean; }, cach....",
+      "target": "./queries:sliceCohesionForDefinition"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export systemMap.",
+      "target": "./queries:systemMap"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/anchors.",
+      "target": "./queries/anchors"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "RepositoryContextOptions changed from interface RepositoryContextOptions { semantic?: boolean; impactDepth?: number; sliceDepth?: number; scope?: string; gitHead?: string; } to interface RepositoryContextOptions { semantic?: boolean; impactDepth?: number; referenceDepth?: number; scope?: string; gitHead?: string; }.",
+      "target": "./queries/context:RepositoryContextOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "RepositoryContextResult changed from interface RepositoryContextResult { target: string; primaryCallable?: RepositoryContextPrimaryCallable; matched: { symbol: boolean; file: boolean; module: boolean; }; history: R... to interface RepositoryContextResult { target: string; primaryCallable?: RepositoryContextPrimaryCallable; matched: { symbol: boolean; file: boolean; module: boolean; }; history: R....",
+      "target": "./queries/context:RepositoryContextResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/convergence.",
+      "target": "./queries/convergence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/dataflow.",
+      "target": "./queries/dataflow"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/deep-chains.",
+      "target": "./queries/deep-chains"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DependenceSliceCoverage changed from interface DependenceSliceCoverage { status: GraphEvidenceCoverage['status']; criterionKind: 'symbol-summary' | 'source-location-summary'; basis: 'partial-system-dependence-graph... to interface DependenceSliceCoverage { status: 'complete' | 'bounded' | 'incomplete'; basis: 'function-local-dependence'; model: TypeScriptLocalFlowCoverage; omittedEdges: number; ....",
+      "target": "./queries/dependence-slice:DependenceSliceCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DependenceSliceEdge changed from interface DependenceSliceEdge extends GraphEvidenceEdge { traversalDepth: number; supporting: boolean; } to interface DependenceSliceEdge extends TypeScriptLocalFlowEdge { traversalDepth: number; }.",
+      "target": "./queries/dependence-slice:DependenceSliceEdge"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DependenceSliceResult changed from interface DependenceSliceResult { kind: 'dependence-slice'; direction: DependenceSliceDirection; criterion: string; targets: GraphEvidenceTarget[]; nodeIds: string[]; edges: Dep... to interface DependenceSliceResult { kind: 'dependence-slice'; direction: DependenceSliceDirection; criterion: string; variable?: string; resolution: 'matched' | 'ambiguous' | 'mis....",
+      "target": "./queries/dependence-slice:DependenceSliceResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "dependenceSlice changed from declare function dependenceSlice(db: ScipDatabase, criterion: string, options?: { direction?: DependenceSliceDirection; maxDepth?: number; maxEdges?: number; }): DependenceSlice... to declare function dependenceSlice(db: ScipDatabase, criterion: string, options?: { variable?: string; column?: number; direction?: DependenceSliceDirection; maxDepth?: number; ma....",
+      "target": "./queries/dependence-slice:dependenceSlice"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export deepChains.",
+      "target": "./queries/dependency-depth:deepChains"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AnchorDiscoveryCandidate.",
+      "target": "./queries/index:AnchorDiscoveryCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AnchorDiscoveryGroup.",
+      "target": "./queries/index:AnchorDiscoveryGroup"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AnchorDiscoveryMatchSource.",
+      "target": "./queries/index:AnchorDiscoveryMatchSource"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AnchorDiscoveryOptions.",
+      "target": "./queries/index:AnchorDiscoveryOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AnchorDiscoveryRelation.",
+      "target": "./queries/index:AnchorDiscoveryRelation"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AnchorDiscoveryResult.",
+      "target": "./queries/index:AnchorDiscoveryResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AnchorDiscoveryTermMatch.",
+      "target": "./queries/index:AnchorDiscoveryTermMatch"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export AnchorDiscoveryUpstreamEntry.",
+      "target": "./queries/index:AnchorDiscoveryUpstreamEntry"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConnectedBehaviorLine.",
+      "target": "./queries/index:ConnectedBehaviorLine"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConnectedBehaviorOptions.",
+      "target": "./queries/index:ConnectedBehaviorOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConnectedBehaviorPacket.",
+      "target": "./queries/index:ConnectedBehaviorPacket"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConnectedBehaviorPath.",
+      "target": "./queries/index:ConnectedBehaviorPath"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConnectedBehaviorRepresentation.",
+      "target": "./queries/index:ConnectedBehaviorRepresentation"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConnectedBehaviorStep.",
+      "target": "./queries/index:ConnectedBehaviorStep"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConnectedBehaviorStepRole.",
+      "target": "./queries/index:ConnectedBehaviorStepRole"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConnectedBehaviorTransition.",
+      "target": "./queries/index:ConnectedBehaviorTransition"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export ConvergenceResult.",
+      "target": "./queries/index:ConvergenceResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export DataflowResult.",
+      "target": "./queries/index:DataflowResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DependenceSliceCoverage changed from interface DependenceSliceCoverage { status: GraphEvidenceCoverage['status']; criterionKind: 'symbol-summary' | 'source-location-summary'; basis: 'partial-system-dependence-graph... to interface DependenceSliceCoverage { status: 'complete' | 'bounded' | 'incomplete'; basis: 'function-local-dependence'; model: TypeScriptLocalFlowCoverage; omittedEdges: number; ....",
+      "target": "./queries/index:DependenceSliceCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DependenceSliceEdge changed from interface DependenceSliceEdge extends GraphEvidenceEdge { traversalDepth: number; supporting: boolean; } to interface DependenceSliceEdge extends TypeScriptLocalFlowEdge { traversalDepth: number; }.",
+      "target": "./queries/index:DependenceSliceEdge"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "DependenceSliceResult changed from interface DependenceSliceResult { kind: 'dependence-slice'; direction: DependenceSliceDirection; criterion: string; targets: GraphEvidenceTarget[]; nodeIds: string[]; edges: Dep... to interface DependenceSliceResult { kind: 'dependence-slice'; direction: DependenceSliceDirection; criterion: string; variable?: string; resolution: 'matched' | 'ambiguous' | 'mis....",
+      "target": "./queries/index:DependenceSliceResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "HealthReport changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { overview: { documents: number; symbols: number; indexSizeBytes: number; }; provenance?: HealthProvenance; findings: { deadSymbols: number; deadLoc: numb....",
+      "target": "./queries/index:HealthReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeEvent.",
+      "target": "./queries/index:OutcomeEvent"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeEventKind.",
+      "target": "./queries/index:OutcomeEventKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeObserverAuthority.",
+      "target": "./queries/index:OutcomeObserverAuthority"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeObserverKind.",
+      "target": "./queries/index:OutcomeObserverKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export OutcomeObserverProvenance.",
+      "target": "./queries/index:OutcomeObserverProvenance"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextHistory.",
+      "target": "./queries/index:PlanContextHistory"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextOptions.",
+      "target": "./queries/index:PlanContextOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export PlanContextResult.",
+      "target": "./queries/index:PlanContextResult"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ReferenceReachabilityResult.",
+      "target": "./queries/index:ReferenceReachabilityResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "RepositoryContextOptions changed from interface RepositoryContextOptions { semantic?: boolean; impactDepth?: number; sliceDepth?: number; scope?: string; gitHead?: string; } to interface RepositoryContextOptions { semantic?: boolean; impactDepth?: number; referenceDepth?: number; scope?: string; gitHead?: string; }.",
+      "target": "./queries/index:RepositoryContextOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "RepositoryContextResult changed from interface RepositoryContextResult { target: string; primaryCallable?: RepositoryContextPrimaryCallable; matched: { symbol: boolean; file: boolean; module: boolean; }; history: R... to interface RepositoryContextResult { target: string; primaryCallable?: RepositoryContextPrimaryCallable; matched: { symbol: boolean; file: boolean; module: boolean; }; history: R....",
+      "target": "./queries/index:RepositoryContextResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionCandidate changed from interface SliceCohesionCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; units: SliceCohesionUnit[]; statemen... to interface SliceCohesionCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; archetype: SliceCohesionArchetype; o....",
+      "target": "./queries/index:SliceCohesionCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionCluster changed from interface SliceCohesionCluster { outputs: string[]; units: number[]; lineRanges: SliceCohesionLineRange[]; inputs: string[]; guardOnly: boolean; } to interface SliceCohesionCluster { outputs: string[]; units: number[]; lineRanges: SliceCohesionLineRange[]; inputs: string[]; kind: SliceCohesionClusterKind; role: SliceCohesionC....",
+      "target": "./queries/index:SliceCohesionCluster"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionCoverage changed from interface SliceCohesionCoverage { status: 'complete' | 'partial'; basis: 'typescript-local-flow-backward-slices'; unsupported: string[]; candidateEdges: number; } to interface SliceCohesionCoverage { status: 'complete' | 'partial'; model: 'function-local-flow'; basis: 'typescript-local-flow-backward-slices'; unsupported: string[]; candidateE....",
+      "target": "./queries/index:SliceCohesionCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionOutput changed from interface SliceCohesionOutput { id: string; kind: SliceCohesionOutputKind; label: string; line: number; guard: boolean; slice: number[]; fullSlice: number[]; } to interface SliceCohesionOutput { id: string; kind: SliceCohesionOutputKind; label: string; line: number; units: number[]; guard: boolean; hook: boolean; sliceSize: number; fullSl....",
+      "target": "./queries/index:SliceCohesionOutput"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SliceResult.",
+      "target": "./queries/index:SliceResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapAnchor.",
+      "target": "./queries/index:SystemMapAnchor"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapAnchorCandidate.",
+      "target": "./queries/index:SystemMapAnchorCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapAnchorKind.",
+      "target": "./queries/index:SystemMapAnchorKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapAnchorStatus.",
+      "target": "./queries/index:SystemMapAnchorStatus"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapBoundaryParticipant.",
+      "target": "./queries/index:SystemMapBoundaryParticipant"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapCoverage.",
+      "target": "./queries/index:SystemMapCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapDrilldown.",
+      "target": "./queries/index:SystemMapDrilldown"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapDrilldownAnchor.",
+      "target": "./queries/index:SystemMapDrilldownAnchor"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapEvidenceFloor.",
+      "target": "./queries/index:SystemMapEvidenceFloor"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapExternalBoundary.",
+      "target": "./queries/index:SystemMapExternalBoundary"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapFile.",
+      "target": "./queries/index:SystemMapFile"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapLiteralHit.",
+      "target": "./queries/index:SystemMapLiteralHit"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapNotableSymbol.",
+      "target": "./queries/index:SystemMapNotableSymbol"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapOptions.",
+      "target": "./queries/index:SystemMapOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapReferenceScope.",
+      "target": "./queries/index:SystemMapReferenceScope"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapRegion.",
+      "target": "./queries/index:SystemMapRegion"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapRegionRelation.",
+      "target": "./queries/index:SystemMapRegionRelation"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapRelation.",
+      "target": "./queries/index:SystemMapRelation"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapRelationEvidence.",
+      "target": "./queries/index:SystemMapRelationEvidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapRelationFamilyCoverage.",
+      "target": "./queries/index:SystemMapRelationFamilyCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapRelationKind.",
+      "target": "./queries/index:SystemMapRelationKind"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapRelationStrength.",
+      "target": "./queries/index:SystemMapRelationStrength"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapResult.",
+      "target": "./queries/index:SystemMapResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapSourceConstruct.",
+      "target": "./queries/index:SystemMapSourceConstruct"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapSourceScope.",
+      "target": "./queries/index:SystemMapSourceScope"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SystemMapSymbol.",
+      "target": "./queries/index:SystemMapSymbol"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export convergence.",
+      "target": "./queries/index:convergence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export dataflow.",
+      "target": "./queries/index:dataflow"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export deepChains.",
+      "target": "./queries/index:deepChains"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "dependenceSlice changed from declare function dependenceSlice(db: ScipDatabase, criterion: string, options?: { direction?: DependenceSliceDirection; maxDepth?: number; maxEdges?: number; }): DependenceSlice... to declare function dependenceSlice(db: ScipDatabase, criterion: string, options?: { variable?: string; column?: number; direction?: DependenceSliceDirection; maxDepth?: number; ma....",
+      "target": "./queries/index:dependenceSlice"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export discoverAnchors.",
+      "target": "./queries/index:discoverAnchors"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export normalizeAnchorQuery.",
+      "target": "./queries/index:normalizeAnchorQuery"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export planContext.",
+      "target": "./queries/index:planContext"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "referenceReachability changed from declare function referenceReachability(db: ScipDatabase, symbolPattern: string, opts?: { direction?: 'backward' | 'forward'; maxDepth?: number; semantic?: boolean; }): SliceResu... to declare function referenceReachability(db: ScipDatabase, symbolPattern: string, opts?: { direction?: 'backward' | 'forward'; maxDepth?: number; semantic?: boolean; }): Reference....",
+      "target": "./queries/index:referenceReachability"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export slice.",
+      "target": "./queries/index:slice"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "sliceCohesion changed from declare function sliceCohesion(db: ScipDatabase, opts?: { scope?: string; symbol?: string; minLoc?: number; minStatements?: number; minClusterUnits?: number; limit?: number; sca... to declare function sliceCohesion(db: ScipDatabase, opts?: { scope?: string; symbol?: string; minLoc?: number; minStatements?: number; minClusterUnits?: number; limit?: number; sca....",
+      "target": "./queries/index:sliceCohesion"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "sliceCohesionForDefinition changed from declare function sliceCohesionForDefinition(db: ScipDatabase, definition: IndexedDefinition, opts?: { minStatements?: number; minClusterUnits?: number; }, cache?: SourceFileCach... to declare function sliceCohesionForDefinition(db: ScipDatabase, definition: IndexedDefinition, opts?: { minStatements?: number; minClusterUnits?: number; detail?: boolean; }, cach....",
+      "target": "./queries/index:sliceCohesionForDefinition"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export systemMap.",
+      "target": "./queries/index:systemMap"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/plan-context.",
+      "target": "./queries/plan-context"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export DataflowResult.",
+      "target": "./queries/reference-neighborhood:DataflowResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export dataflow.",
+      "target": "./queries/reference-neighborhood:dataflow"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export ReferenceReachabilityResult.",
+      "target": "./queries/reference-reachability:ReferenceReachabilityResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export SliceResult.",
+      "target": "./queries/reference-reachability:SliceResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "referenceReachability changed from declare function referenceReachability(db: ScipDatabase, symbolPattern: string, opts?: { direction?: 'backward' | 'forward'; maxDepth?: number; semantic?: boolean; }): SliceResu... to declare function referenceReachability(db: ScipDatabase, symbolPattern: string, opts?: { direction?: 'backward' | 'forward'; maxDepth?: number; semantic?: boolean; }): Reference....",
+      "target": "./queries/reference-reachability:referenceReachability"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export slice.",
+      "target": "./queries/reference-reachability:slice"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/slice.",
+      "target": "./queries/slice"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionArchetype.",
+      "target": "./queries/slice-cohesion:SliceCohesionArchetype"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionCandidate changed from interface SliceCohesionCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; units: SliceCohesionUnit[]; statemen... to interface SliceCohesionCandidate { symbol: string; shortName: string; relativePath: string; startLine: number; endLine: number; loc: number; archetype: SliceCohesionArchetype; o....",
+      "target": "./queries/slice-cohesion:SliceCohesionCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionCluster changed from interface SliceCohesionCluster { outputs: string[]; units: number[]; lineRanges: SliceCohesionLineRange[]; inputs: string[]; guardOnly: boolean; } to interface SliceCohesionCluster { outputs: string[]; units: number[]; lineRanges: SliceCohesionLineRange[]; inputs: string[]; kind: SliceCohesionClusterKind; role: SliceCohesionC....",
+      "target": "./queries/slice-cohesion:SliceCohesionCluster"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionClusterKind.",
+      "target": "./queries/slice-cohesion:SliceCohesionClusterKind"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SliceCohesionClusterRole.",
+      "target": "./queries/slice-cohesion:SliceCohesionClusterRole"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionCoverage changed from interface SliceCohesionCoverage { status: 'complete' | 'partial'; basis: 'typescript-local-flow-backward-slices'; unsupported: string[]; candidateEdges: number; } to interface SliceCohesionCoverage { status: 'complete' | 'partial'; model: 'function-local-flow'; basis: 'typescript-local-flow-backward-slices'; unsupported: string[]; candidateE....",
+      "target": "./queries/slice-cohesion:SliceCohesionCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SliceCohesionOutput changed from interface SliceCohesionOutput { id: string; kind: SliceCohesionOutputKind; label: string; line: number; guard: boolean; slice: number[]; fullSlice: number[]; } to interface SliceCohesionOutput { id: string; kind: SliceCohesionOutputKind; label: string; line: number; units: number[]; guard: boolean; hook: boolean; sliceSize: number; fullSl....",
+      "target": "./queries/slice-cohesion:SliceCohesionOutput"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "sliceCohesion changed from declare function sliceCohesion(db: ScipDatabase, opts?: { scope?: string; symbol?: string; minLoc?: number; minStatements?: number; minClusterUnits?: number; limit?: number; sca... to declare function sliceCohesion(db: ScipDatabase, opts?: { scope?: string; symbol?: string; minLoc?: number; minStatements?: number; minClusterUnits?: number; limit?: number; sca....",
+      "target": "./queries/slice-cohesion:sliceCohesion"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "sliceCohesionForDefinition changed from declare function sliceCohesionForDefinition(db: ScipDatabase, definition: IndexedDefinition, opts?: { minStatements?: number; minClusterUnits?: number; }, cache?: SourceFileCach... to declare function sliceCohesionForDefinition(db: ScipDatabase, definition: IndexedDefinition, opts?: { minStatements?: number; minClusterUnits?: number; detail?: boolean; }, cach....",
+      "target": "./queries/slice-cohesion:sliceCohesionForDefinition"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/source-inspection; review their variance and runtime meaning.",
+      "target": "./queries/source-inspection"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/system-map.",
+      "target": "./queries/system-map"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "entry-declaration-changed",
+      "message": "Referenced declarations changed for ./queries/value-flow; review their variance and runtime meaning.",
+      "target": "./queries/value-flow"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "installSkills changed from declare function installSkills(opts?: { quiet?: boolean; homeDir?: string; }): InstallSkillsResult; to declare function installSkills(opts?: { quiet?: boolean; homeDir?: string; all?: boolean; }): InstallSkillsResult;.",
+      "target": "./runtime:installSkills"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "E changed from interface ExplorationSourceLocation { file: string; line: number; endLine?: number; } to type ExplorationAnchorStatus = 'matched' | 'ambiguous' | 'missing';.",
+      "target": "exploration-topology-<hash>.d.ts:E"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "a changed from type ExplorationEvidenceStrength = 'exact' | 'derived' | 'candidate' | 'mixed' | 'unknown'; to interface ExplorationCompletion { status: ExplorationCompletionStatus; scope: string; explanation: string; }.",
+      "target": "exploration-topology-<hash>.d.ts:a"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from interface ExplorationTopologyNode { id: string; kind: string; label: string; disposition: ExplorationDisposition; location: ExplorationSourceLocation | null; anchorIds: string[]... to type ExplorationCompletionStatus = 'selection-complete' | 'connector-complete' | 'frontier-accounted' | 'coverage-incomplete';.",
+      "target": "exploration-topology-<hash>.d.ts:b"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "c changed from interface ExplorationEvidenceSource { method: string; strength: ExplorationEvidenceStrength; identity: string | null; location: ExplorationSourceLocation | null; } to type ExplorationDisposition = 'emitted' | 'folded' | 'excluded' | 'unsupported';.",
+      "target": "exploration-topology-<hash>.d.ts:c"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "d changed from interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop... to interface ExplorationDispositionCounts { total: number; emitted: number; folded: number; excluded: number; unsupported: number; }.",
+      "target": "exploration-topology-<hash>.d.ts:d"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "e changed from type ExplorationAnchorStatus = 'matched' | 'ambiguous' | 'missing'; to interface ExplorationEvidenceSource { method: string; strength: ExplorationEvidenceStrength; identity: string | null; location: ExplorationSourceLocation | null; }.",
+      "target": "exploration-topology-<hash>.d.ts:e"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "f changed from interface ExplorationCompletion { status: ExplorationCompletionStatus; scope: string; explanation: string; } to type ExplorationEvidenceStrength = 'exact' | 'derived' | 'candidate' | 'mixed' | 'unknown';.",
+      "target": "exploration-topology-<hash>.d.ts:f"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "g changed from type ExplorationCompletionStatus = 'selection-complete' | 'connector-complete' | 'frontier-accounted' | 'coverage-incomplete'; to interface ExplorationFrontierGroup { id: string; kind: string; direction: 'incoming' | 'outgoing' | 'undirected' | 'unresolved'; fromNodeIds: string[]; edgeIds: string[]; member....",
+      "target": "exploration-topology-<hash>.d.ts:g"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "h changed from type ExplorationDisposition = 'emitted' | 'folded' | 'excluded' | 'unsupported'; to interface ExplorationSourceLocation { file: string; line: number; endLine?: number; }.",
+      "target": "exploration-topology-<hash>.d.ts:h"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "i changed from interface ExplorationDispositionCounts { total: number; emitted: number; folded: number; excluded: number; unsupported: number; } to interface ExplorationTopology { schemaVersion: 1; anchors: ExplorationTopologyAnchor[]; nodes: ExplorationTopologyNode[]; edges: ExplorationTopologyEdge[]; paths: ExplorationTop....",
+      "target": "exploration-topology-<hash>.d.ts:i"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "j changed from interface ExplorationFrontierGroup { id: string; kind: string; direction: 'incoming' | 'outgoing' | 'undirected' | 'unresolved'; fromNodeIds: string[]; edgeIds: string[]; member... to interface ExplorationTopologyAnchor { id: string; kind: string; query: string; status: ExplorationAnchorStatus; nodeIds: string[]; candidateNodeIds: string[]; omittedCandidates:....",
+      "target": "exploration-topology-<hash>.d.ts:j"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "k changed from interface ExplorationTopologyAnchor { id: string; kind: string; query: string; status: ExplorationAnchorStatus; nodeIds: string[]; candidateNodeIds: string[]; omittedCandidates:... to interface ExplorationTopologyCoverage { status: 'accounted' | 'incomplete'; scope: string; nodes: ExplorationDispositionCounts; edges: ExplorationDispositionCounts; matchedAncho....",
+      "target": "exploration-topology-<hash>.d.ts:k"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "l changed from interface ExplorationTopologyCoverage { status: 'accounted' | 'incomplete'; scope: string; nodes: ExplorationDispositionCounts; edges: ExplorationDispositionCounts; matchedAncho... to interface ExplorationTopologyEdge { id: string; kind: string; fromNodeId: string; toNodeId: string; directed: true; disposition: ExplorationDisposition; evidence: ExplorationEvi....",
+      "target": "exploration-topology-<hash>.d.ts:l"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "m changed from interface ExplorationTopologyEdge { id: string; kind: string; fromNodeId: string; toNodeId: string; directed: true; disposition: ExplorationDisposition; evidence: ExplorationEvi... to interface ExplorationTopologyInput { anchors: readonly ExplorationTopologyAnchor[]; nodes: readonly ExplorationTopologyNode[]; edges: readonly ExplorationTopologyEdge[]; paths?:....",
+      "target": "exploration-topology-<hash>.d.ts:m"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "n changed from interface ExplorationTopologyInput { anchors: readonly ExplorationTopologyAnchor[]; nodes: readonly ExplorationTopologyNode[]; edges: readonly ExplorationTopologyEdge[]; paths?:... to interface ExplorationTopologyNode { id: string; kind: string; label: string; disposition: ExplorationDisposition; location: ExplorationSourceLocation | null; anchorIds: string[]....",
+      "target": "exploration-topology-<hash>.d.ts:n"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module graph-evidence-<hash>.d.ts was removed or renamed.",
+      "target": "graph-evidence-<hash>.d.ts"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "a changed from type GraphProjectionDirection = (typeof GRAPH_PROJECTION_DIRECTIONS)[number]; to declare const GRAPH_EVIDENCE_FAMILIES: readonly [ \"execution\", \"runtime\", \"dataflow\", \"state\", \"temporal\", \"contract\", \"identity\", \"ownership\", \"dependencies\" ];.",
+      "target": "graph-exploration-contract-<hash>.d.ts:a"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "b changed from declare const GRAPH_EVIDENCE_FAMILIES: readonly [ \"execution\", \"runtime\", \"dataflow\", \"state\", \"temporal\", \"contract\", \"identity\", \"ownership\", \"dependencies\" ]; to type GraphProjectionDirection = (typeof GRAPH_PROJECTION_DIRECTIONS)[number];.",
+      "target": "graph-exploration-contract-<hash>.d.ts:b"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "c changed from interface HealthReport { score: number; riskScore: number; hygieneScore: number; scoreBreakdown: ScoreDeduction[]; overview: { documents: number; symbols: number; indexSizeBytes... to interface HealthReport { overview: { documents: number; symbols: number; indexSizeBytes: number; }; provenance?: HealthProvenance; findings: { deadSymbols: number; deadLoc: numb....",
+      "target": "health-<hash>.d.ts:c"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module next-anchor-candidates-<hash>.d.ts was removed or renamed.",
+      "target": "next-anchor-candidates-<hash>.d.ts"
+    },
+    {
+      "classification": "uncertain",
+      "kind": "referenced-declaration-module-changed",
+      "message": "Referenced declaration module value-flow-<hash>.d.ts was added or renamed.",
+      "target": "value-flow-<hash>.d.ts"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.25.0",
+  "previousDigest": "74aa8647446a3270910f56520baa55b91440d317c3b6a3c8e61397f8ef77e3b5",
+  "reason": "Retire obsolete analysis surfaces and health grades; replace summary slicing with function-local occurrence dependence and truthful reference context fields. The snapshot also catches up the SliceCohesion signatures already present in the baseline source; this pass changes their recommendation wording, not their result model.",
+  "schemaVersion": 1
+}

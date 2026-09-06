@@ -19,6 +19,8 @@ export const BUILTIN_SKILLS = [
   'scip-calibrate',
   'conductor',
 ] as const;
+export const DEFAULT_SKILLS = ['scip-query', 'scip-explore'] as const;
+
 export const COMPATIBILITY_SKILLS = ['concrete-plan'] as const;
 export const INSTALLABLE_SKILLS = [
   'scip-query',
@@ -58,7 +60,7 @@ export interface UninstallSkillsResult {
  * Uses symlinks (junctions on Windows)
  * so skills auto-update when the package updates.
  */
-export function installSkills(opts: { quiet?: boolean; homeDir?: string } = {}): InstallSkillsResult {
+export function installSkills(opts: { quiet?: boolean; homeDir?: string; all?: boolean } = {}): InstallSkillsResult {
   const log = opts.quiet ? () => {} : console.log;
   const thisFile = fileURLToPath(import.meta.url);
   const skillsSource = resolve(dirname(thisFile), '..', 'skills');
@@ -84,40 +86,58 @@ export function installSkills(opts: { quiet?: boolean; homeDir?: string } = {}):
     const toolName = toolNameForTarget(targetDir);
     pruneStaleOwnedSkillLinks(targetDir, skillsSource, toolName, result, log);
 
-    for (const skill of INSTALLABLE_SKILLS) {
-      const source = join(skillsSource, skill);
-      const target = join(targetDir, skill);
-
-      if (!existsSync(source)) {
-        result.skipped.push(`${toolName}/${skill}`);
-        continue;
-      }
-
-      if (existsSync(target)) {
-        try {
-          const existing = readlinkSync(target);
-          if (resolve(existing) === resolve(source)) {
-            result.alreadyLinked.push(`${toolName}/${skill}`);
-            log(`  ok:   ${skill} → ${toolName} (already linked)`);
-            continue;
-          }
-        } catch {
-          // Not a symlink — don't overwrite user's custom skill
-          result.skipped.push(`${toolName}/${skill}`);
-          log(`  skip: ${skill} → ${toolName} (exists, not a symlink)`);
-          continue;
-        }
-        unlinkSync(target);
-      }
-
-      // Use 'junction' on Windows (doesn't need admin), 'dir' elsewhere
-      symlinkSync(source, target, IS_WINDOWS ? 'junction' : 'dir');
-      result.installed.push(`${toolName}/${skill}`);
-      log(`  done: ${skill} → ${toolName}`);
+    for (const skill of opts.all ? INSTALLABLE_SKILLS : DEFAULT_SKILLS) {
+      installSkillLink(targetDir, skillsSource, toolName, skill, result, log);
     }
   }
 
   return result;
+}
+
+/** Update only links owned by this package; regular directories and other packages remain untouched. */
+function installSkillLink(
+  targetDir: string,
+  skillsSource: string,
+  toolName: string,
+  skill: string,
+  result: InstallSkillsResult,
+  log: (message: string) => void,
+): void {
+  const source = join(skillsSource, skill);
+  const target = join(targetDir, skill);
+
+  if (!existsSync(source)) {
+    result.skipped.push(`${toolName}/${skill}`);
+    return;
+  }
+
+  let existingTarget: string | null = null;
+  try {
+    // readlink also detects dangling links; resolve relative links at their parent.
+    existingTarget = resolve(dirname(target), readlinkSync(target));
+  } catch {
+    if (existsSync(target)) {
+      result.skipped.push(`${toolName}/${skill}`);
+      log(`  skip: ${skill} → ${toolName} (exists, not a symlink)`);
+      return;
+    }
+  }
+  if (existingTarget === resolve(source)) {
+    result.alreadyLinked.push(`${toolName}/${skill}`);
+    log(`  ok:   ${skill} → ${toolName} (already linked)`);
+    return;
+  }
+  if (existingTarget && !isPathInside(existingTarget, skillsSource)) {
+    result.skipped.push(`${toolName}/${skill}`);
+    log(`  skip: ${skill} → ${toolName} (symlink outside this scip-query package)`);
+    return;
+  }
+  if (existingTarget) unlinkSync(target);
+
+  // Use 'junction' on Windows (doesn't need admin), 'dir' elsewhere
+  symlinkSync(source, target, IS_WINDOWS ? 'junction' : 'dir');
+  result.installed.push(`${toolName}/${skill}`);
+  log(`  done: ${skill} → ${toolName}`);
 }
 
 function pruneStaleOwnedSkillLinks(
@@ -205,4 +225,4 @@ export function postinstall(): void {
   );
 }
 
-export { isScipInstalled, getScipVersion, printScipInstallInstructions } from '../platform/scip-cli.js';
+export { getScipVersion, isScipInstalled, printScipInstallInstructions } from '../platform/scip-cli.js';

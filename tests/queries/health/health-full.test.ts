@@ -185,31 +185,9 @@ describe('health --full', () => {
     const fullReport = health(db, { full: true });
 
     expect(regularReport.findings.similarPairs).toBe(50);
+    expect(regularReport.warnings?.join(' ')).toMatch(/50.*full/i);
     expect(defaultReport.findings.similarPairs).toBe(56);
     expect(fullReport.findings.similarPairs).toBe(56);
-    expect(defaultReport.pressure).toEqual(fullReport.pressure);
-    expect(regularReport.pressure).toEqual([]);
-    expect(fullReport.pressure).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          axis: 'similar-pressure',
-          category: 'Similar functions',
-          count: 56,
-          threshold: 50,
-          extraPenalty: 1,
-        }),
-      ]),
-    );
-    expect(fullReport.scoreBreakdown).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          axis: 'similar-pressure',
-          points: 1,
-          kind: 'hygiene',
-        }),
-      ]),
-    );
-    expect(fullReport.hygieneScore).toBeLessThan(regularReport.hygieneScore);
   });
 
   it('uses the public dead-command defaults for its dead-code count', () => {

@@ -1,0 +1,125 @@
+diff --git a/src/adapters/cancellation-job.ts b/src/adapters/cancellation-job.ts
+index 82c2f03..99d8010 100644
+--- a/src/adapters/cancellation-job.ts
++++ b/src/adapters/cancellation-job.ts
+@@ -1,8 +1,6 @@
+ import type { CancellationStore, Reservation } from '../domain/types.js';
++import { cancelReservation } from '../reservations/cancel.js';
+ 
+ export function cancelFromJob(reservation: Reservation, now: number, store: CancellationStore): boolean {
+-  if (reservation.status === 'cancelled' || reservation.startsAt <= now) return false;
+-  store.cancelled.push(reservation.id);
+-  store.audit.push({ kind: 'reservation.cancelled', reservationId: reservation.id });
+-  return true;
++  return cancelReservation(reservation, now, store);
+ }
+diff --git a/src/reservations/policy.ts b/src/reservations/policy.ts
+index 6d0ac2b..8691b51 100644
+--- a/src/reservations/policy.ts
++++ b/src/reservations/policy.ts
+@@ -1,5 +1,11 @@
+ import type { Reservation } from '../domain/types.js';
+ 
++const MINIMUM_CANCELLATION_NOTICE_MS = 24 * 60 * 60 * 1000;
++
+ export function canCancel(reservation: Reservation, now: number): boolean {
+-  return reservation.status !== 'cancelled' && reservation.startsAt > now;
++  return (
++    reservation.status === 'confirmed' &&
++    !reservation.locked &&
++    reservation.startsAt - now >= MINIMUM_CANCELLATION_NOTICE_MS
++  );
+ }
+diff --git a/test/cancellation.test.mjs b/test/cancellation.test.mjs
+new file mode 100644
+index 0000000..3cd9284
+--- /dev/null
++++ b/test/cancellation.test.mjs
+@@ -0,0 +1,87 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import * as desk from '../build/index.js';
++
++const DAY_MS = 24 * 60 * 60 * 1000;
++const NOW = 1_700_000_000_000;
++
++const channels = [
++  {
++    name: 'web',
++    cancel: desk.cancelFromWeb,
++    accepted: { ok: true },
++    rejected: { ok: false },
++  },
++  {
++    name: 'admin',
++    cancel: desk.cancelFromAdmin,
++    accepted: true,
++    rejected: false,
++  },
++  {
++    name: 'scheduled job',
++    cancel: desk.cancelFromJob,
++    accepted: true,
++    rejected: false,
++  },
++];
++
++function reservation(overrides = {}) {
++  return {
++    id: 'reservation-123',
++    status: 'confirmed',
++    startsAt: NOW + DAY_MS,
++    locked: false,
++    ...overrides,
++  };
++}
++
++function populatedStore() {
++  return {
++    cancelled: ['previous-reservation'],
++    audit: [{ kind: 'reservation.cancelled', reservationId: 'previous-reservation' }],
++  };
++}
++
++for (const channel of channels) {
++  test(`${channel.name} permits an unlocked confirmed reservation exactly 24 hours ahead`, () => {
++    const store = populatedStore();
++
++    assert.deepEqual(channel.cancel(reservation(), NOW, store), channel.accepted);
++    assert.deepEqual(store, {
++      cancelled: ['previous-reservation', 'reservation-123'],
++      audit: [
++        { kind: 'reservation.cancelled', reservationId: 'previous-reservation' },
++        { kind: 'reservation.cancelled', reservationId: 'reservation-123' },
++      ],
++    });
++  });
++
++  for (const [reason, overrides] of [
++    ['pending', { status: 'pending' }],
++    ['already cancelled', { status: 'cancelled' }],
++    ['locked', { locked: true }],
++    ['less than 24 hours ahead', { startsAt: NOW + DAY_MS - 1 }],
++  ]) {
++    test(`${channel.name} rejects a reservation that is ${reason} without changing the store`, () => {
++      const store = populatedStore();
++      const before = structuredClone(store);
++
++      assert.deepEqual(channel.cancel(reservation(overrides), NOW, store), channel.rejected);
++      assert.deepEqual(store, before);
++    });
++  }
++}
++
++test('public reservation eligibility and cancellation operations use the same boundary', () => {
++  const eligible = reservation();
++  const store = { cancelled: [], audit: [] };
++
++  assert.equal(desk.canCancel(eligible, NOW), true);
++  assert.equal(desk.cancelReservation(eligible, NOW, store), true);
++  assert.deepEqual(store, {
++    cancelled: ['reservation-123'],
++    audit: [{ kind: 'reservation.cancelled', reservationId: 'reservation-123' }],
++  });
++  assert.equal(desk.canCancel(reservation({ startsAt: NOW + DAY_MS - 1 }), NOW), false);
++});

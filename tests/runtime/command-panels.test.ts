@@ -25,6 +25,7 @@ describe('command cockpit panels', () => {
 
     expect(ordinary).toContain('Primary exploration:');
     expect(ordinary).toContain('Maintenance:');
+    for (const name of ['health', 'review', 'context']) expect(ordinary).toMatch(new RegExp(`^  ${name} `, 'm'));
     expect(ordinary).not.toContain('Specialized analysis:');
     expect(ordinary).not.toContain('Quality and cleanup:');
     expect(ordinary).not.toContain('Formal modeling:');
@@ -32,8 +33,8 @@ describe('command cockpit panels', () => {
     expect(ordinary).not.toContain('anchors <question>');
     expect(complete).toContain('Specialized analysis:');
     expect(complete).toContain('Quality and cleanup:');
-    expect(complete).toContain('Formal modeling:');
+    expect(complete).not.toContain('Formal modeling:');
     expect(complete).toContain('Compatibility and deprecated controls:');
-    expect(complete).toContain('anchors <question>');
+    expect(complete).not.toContain('anchors <question>');
   });
 });

@@ -1,3 +1,5 @@
+import { readRepositoryTextFile } from '../../source/primitives/repository-text.js';
+import { getSourceLines } from '../../source/primitives/source-text.js';
 import { existsSync } from 'node:fs';
 import { SymbolRole } from '@c4312/scip';
 import type { IndexedDefinition } from '../../domain/types.js';
@@ -7,6 +9,9 @@ import { readScipArtifact } from '../../storage/scip-artifact.js';
 import { getAllDefinitions } from '../definition-catalog.js';
 import {
   chunkOccurrenceTargetsForFile,
+  normalizeOccurrenceRange,
+  sameOccurrenceRange,
+  type OccurrenceSourceRange,
   indexStoresOccurrenceData,
   type FileOccurrenceTargets,
 } from './scip-chunk-occurrences.js';
@@ -19,6 +24,7 @@ export interface ScipOccurrenceCallTarget {
 
 export interface ScipOccurrenceDefinitionTarget {
   sourceLine: number;
+  sourceRange?: OccurrenceSourceRange;
   definition: IndexedDefinition;
 }
 
@@ -38,6 +44,7 @@ type IndexedOccurrenceCallTarget = ScipOccurrenceDefinitionTarget;
 
 interface ScipOccurrenceCallTargetIndex {
   byFile: Map<string, IndexedOccurrenceCallTarget[]>;
+  externalByFile: Map<string, OccurrenceSourceRange[]>;
 }
 
 const SCIP_OCCURRENCE_CALL_TARGET_INDEX = new WeakMap<ScipDatabase, ScipOccurrenceCallTargetIndex | null>();
@@ -49,9 +56,15 @@ const SCIP_OCCURRENCE_CALL_TARGET_INDEX = new WeakMap<ScipDatabase, ScipOccurren
  * occurrence data. Null means no occurrence evidence exists for the file.
  */
 export function scipOccurrenceTargetsForFile(db: ScipDatabase, relativePath: string): FileOccurrenceTargets | null {
+  if (readRepositoryTextFile(db, relativePath)?.freshness.semantic.state === 'stale') return null;
   const chunkLookup = chunkOccurrenceTargetsForFile(db, relativePath);
   if (chunkLookup.available) {
-    return { targets: chunkLookup.targets, externalLeafKeys: chunkLookup.externalLeafKeys, locals: chunkLookup.locals };
+    return {
+      targets: chunkLookup.targets,
+      externalLeafKeys: chunkLookup.externalLeafKeys,
+      externalRanges: chunkLookup.externalRanges,
+      locals: chunkLookup.locals,
+    };
   }
   if (chunkLookup.reason === 'no-document') return null;
   // An index that stores occurrence data never justifies deserializing the
@@ -60,14 +73,19 @@ export function scipOccurrenceTargetsForFile(db: ScipDatabase, relativePath: str
   if (indexStoresOccurrenceData(db)) return { targets: [], externalLeafKeys: new Set(), locals: [] };
   const index = scipOccurrenceCallTargetIndex(db);
   if (!index) return null;
-  return { targets: index.byFile.get(relativePath) ?? [], externalLeafKeys: new Set(), locals: [] };
+  return {
+    targets: index.byFile.get(relativePath) ?? [],
+    externalLeafKeys: new Set(),
+    externalRanges: index.externalByFile.get(relativePath) ?? [],
+    locals: [],
+  };
 }
 
 /**
  * Recover compiler-resolved callees for a source range that has no callable
  * symbol of its own. A target is admitted only when the source parser and the
- * SCIP occurrence artifact report the same number of calls for that exact
- * line-and-leaf key; unmatched calls remain explicit coverage gaps.
+ * SCIP occurrence identify the same callee token range; unmatched calls
+ * remain explicit coverage gaps.
  */
 export function scipOccurrenceCallTargetsForRange(
   db: ScipDatabase,
@@ -85,25 +103,21 @@ export function scipOccurrenceCallTargetsForRange(
   if (!fileTargets) {
     return { available: false, targets: [], resolvedCallsites: 0, unresolvedCallsites: callsites.length };
   }
-  const occurrences = fileTargets.targets
-    .filter((target) => target.sourceLine >= startLine && target.sourceLine <= endLine)
-    .map((target): ScipOccurrenceCallTarget => ({ ...target, calleeLeaf: target.definition.leaf }));
-  const sourceCounts = lineLeafCounts(callsites.map((site) => ({ line: site.line, leaf: site.calleeLeaf })));
-  const occurrenceCounts = lineLeafCounts(
-    occurrences.map((occurrence) => ({ line: occurrence.sourceLine, leaf: occurrence.calleeLeaf })),
-  );
-  const resolvedKeys = new Set(
-    [...sourceCounts].flatMap(([key, count]) => (occurrenceCounts.get(key) === count ? [key] : [])),
-  );
-  const targets = occurrences.filter((occurrence) =>
-    resolvedKeys.has(lineLeafKey(occurrence.sourceLine, occurrence.calleeLeaf)),
-  );
-  const resolvedCallsites = [...resolvedKeys].reduce((total, key) => total + (sourceCounts.get(key) ?? 0), 0);
+  const targets: ScipOccurrenceCallTarget[] = [];
+  let resolvedCallsites = 0;
+  for (const site of callsites) {
+    const matches = fileTargets.targets.filter((target) => sameOccurrenceRange(target.sourceRange, site.targetRange));
+    const unique = new Map(matches.map((target) => [target.definition.symbol, target]));
+    if (unique.size !== 1) continue;
+    const match = [...unique.values()][0]!;
+    resolvedCallsites++;
+    targets.push({ ...match, sourceLine: site.line, calleeLeaf: match.definition.leaf });
+  }
   return {
     available: true,
     targets,
     resolvedCallsites,
-    unresolvedCallsites: Math.max(0, callsites.length - resolvedCallsites),
+    unresolvedCallsites: callsites.length - resolvedCallsites,
   };
 }
 
@@ -161,7 +175,7 @@ function loadScipOccurrenceCallTargetIndex(db: ScipDatabase): ScipOccurrenceCall
   if (!db.generation.indexPath || !existsSync(db.generation.indexPath)) return null;
   try {
     // A direct call target is proven jointly by call syntax at the source
-    // line and a SCIP occurrence with the same line-and-leaf cardinality. It
+    // token and a SCIP occurrence at that exact token range. It
     // does not need a declaration hover signature, which may degrade to
     // `any` when a function factory's dependencies are unavailable. Bare
     // callable references are filtered separately above because they lack
@@ -170,23 +184,44 @@ function loadScipOccurrenceCallTargetIndex(db: ScipDatabase): ScipOccurrenceCall
     const definitionBySymbol = new Map(definitions.map((definition) => [definition.symbol, definition]));
     const scipIndex = readScipArtifact(db.generation.indexPath, 'SCIP source-range call-target index');
     const byFile = new Map<string, IndexedOccurrenceCallTarget[]>();
+    const externalByFile = new Map<string, OccurrenceSourceRange[]>();
     for (const document of scipIndex.documents ?? []) {
       const relativePath = document.relativePath;
       if (!relativePath || db.isIgnored(relativePath)) continue;
-      const targets: IndexedOccurrenceCallTarget[] = [];
-      for (const occurrence of document.occurrences ?? []) {
-        if (!occurrence.symbol || (occurrence.symbolRoles & SymbolRole.Definition) !== 0) continue;
-        const definition = definitionBySymbol.get(occurrence.symbol);
-        const sourceLine = occurrence.range?.[0];
-        if (!definition || !Number.isInteger(sourceLine)) continue;
-        targets.push({ sourceLine, definition });
-      }
+      const { targets, externalRanges } = decodeScipDocumentTargets(db, relativePath, document, definitionBySymbol);
       byFile.set(relativePath, targets);
+      externalByFile.set(relativePath, externalRanges);
     }
-    return { byFile };
+    return { byFile, externalByFile };
   } catch {
     return null;
   }
+}
+
+/** Artifact fallback excludes definition occurrences; chunk decoding separately retains local binding definitions. */
+function decodeScipDocumentTargets(
+  db: ScipDatabase,
+  relativePath: string,
+  document: { positionEncoding: number; occurrences: { symbol: string; symbolRoles: number; range: number[] }[] },
+  definitionBySymbol: ReadonlyMap<string, IndexedDefinition>,
+): { targets: IndexedOccurrenceCallTarget[]; externalRanges: OccurrenceSourceRange[] } {
+  const targets: IndexedOccurrenceCallTarget[] = [];
+  const externalRanges: OccurrenceSourceRange[] = [];
+  const sourceLines = getSourceLines(db, relativePath);
+  const encoding = ({ 1: 'UTF-8', 2: 'UTF-16', 3: 'UTF-32' } as Record<number, string>)[document.positionEncoding];
+  for (const occurrence of document.occurrences ?? []) {
+    if (!occurrence.symbol || (occurrence.symbolRoles & SymbolRole.Definition) !== 0) continue;
+    const definition = definitionBySymbol.get(occurrence.symbol);
+    const sourceLine = occurrence.range?.[0];
+    if (!Number.isInteger(sourceLine)) continue;
+    const sourceRange = normalizeOccurrenceRange(occurrence.range, encoding, sourceLines);
+    if (!definition) {
+      if (sourceRange) externalRanges.push(sourceRange);
+      continue;
+    }
+    targets.push({ sourceLine, ...(sourceRange ? { sourceRange } : {}), definition });
+  }
+  return { targets, externalRanges };
 }
 
 export function scipDefinitionSourceConfirmsCallable(db: ScipDatabase, definition: IndexedDefinition): boolean {
@@ -214,17 +249,4 @@ function compilerDocumentationConfirmsCallable(definition: IndexedDefinition): b
     new RegExp(`\\bfunction\\s+${leaf}\\s*(?:<[^>]*>)?\\s*\\(`, 'u').test(documentation) ||
     new RegExp(`\\b(?:const|let|var)\\s+${leaf}\\s*:\\s*(?:<[^>]*>\\s*)?\\([^\\n]*\\)\\s*=>`, 'u').test(documentation)
   );
-}
-
-function lineLeafCounts(items: readonly { line: number; leaf: string }[]): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const item of items) {
-    const key = lineLeafKey(item.line, item.leaf);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  return counts;
-}
-
-function lineLeafKey(line: number, leaf: string): string {
-  return `${line}\0${leaf}`;
 }

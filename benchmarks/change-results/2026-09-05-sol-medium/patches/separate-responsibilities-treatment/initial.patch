@@ -1,0 +1,66 @@
+diff --git a/src/adapters/checkout-quote.ts b/src/adapters/checkout-quote.ts
+index 07be547..b56fddf 100644
+--- a/src/adapters/checkout-quote.ts
++++ b/src/adapters/checkout-quote.ts
+@@ -1,3 +1 @@
+-export function checkoutQuote(unitPrice: number, quantity: number): number {
+-  return Math.round(unitPrice * quantity * 100) / 100;
+-}
++export { quote as checkoutQuote } from '../pricing/quote.js';
+diff --git a/src/adapters/support-quote.ts b/src/adapters/support-quote.ts
+index df8e8e2..0d4562e 100644
+--- a/src/adapters/support-quote.ts
++++ b/src/adapters/support-quote.ts
+@@ -1,3 +1 @@
+-export function supportQuote(unitPrice: number, quantity: number): number {
+-  return Math.round(unitPrice * quantity * 100) / 100;
+-}
++export { quote as supportQuote } from '../pricing/quote.js';
+diff --git a/src/pricing/quote.ts b/src/pricing/quote.ts
+new file mode 100644
+index 0000000..9fb9ae1
+--- /dev/null
++++ b/src/pricing/quote.ts
+@@ -0,0 +1,3 @@
++export function quote(unitPrice: number, quantity: number): number {
++  return Math.round(unitPrice * quantity * 100) / 100;
++}
+diff --git a/test/quote.test.mjs b/test/quote.test.mjs
+new file mode 100644
+index 0000000..c526e01
+--- /dev/null
++++ b/test/quote.test.mjs
+@@ -0,0 +1,33 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++
++import {
++  chargeFee,
++  checkoutQuote,
++  refundFee,
++  supportQuote,
++} from '../build/index.js';
++
++test('public quote operations use the shared cent-rounded calculation', () => {
++  const cases = [
++    { unitPrice: 10.25, quantity: 2, expected: 20.5 },
++    { unitPrice: 0.335, quantity: 1, expected: 0.34 },
++    { unitPrice: 3.333, quantity: 3, expected: 10 },
++  ];
++
++  for (const { unitPrice, quantity, expected } of cases) {
++    assert.equal(checkoutQuote(unitPrice, quantity), expected);
++    assert.equal(supportQuote(unitPrice, quantity), expected);
++  }
++});
++
++test('charge and refund fees retain their independent public behavior', () => {
++  for (const { amount, expected } of [
++    { amount: 10, expected: 1 },
++    { amount: 100, expected: 2 },
++    { amount: 125, expected: 3 },
++  ]) {
++    assert.equal(chargeFee(amount), expected);
++    assert.equal(refundFee(amount), expected);
++  }
++});

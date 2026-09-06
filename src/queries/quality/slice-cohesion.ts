@@ -10,7 +10,7 @@ import {
   type TypeScriptLocalFlowResult,
 } from '../../semantic/local-flow.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
-import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
+import { resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import {
@@ -188,18 +188,6 @@ const COUNTED_KINDS: ReadonlySet<SliceCohesionUnitKind> = new Set(['statement', 
 const HOOK_NAME = /^use[A-Z0-9_]/u;
 const EFFECT_HOOK_NAME = /^use(?:[A-Z0-9_]\w*)?Effect$/u;
 const OPERATIONAL_PATH = /(?:^|\/)(?:scripts?|bin|tools?|tooling|migrations?|integration-tests?|e2e)\//u;
-
-/**
- * Flow gaps that over-approximate rather than drop dependencies. A slice
- * computed under them can only be too large, so they do not make the
- * partition unsafe.
- */
-const PRECISION_ONLY_GAPS: ReadonlySet<string> = new Set([
-  'Closure capture identity is known, but invocation order and intervening writes remain candidate flow.',
-  'Cross-callable field flow lacks receiver points-to and invocation-order analysis.',
-  'for-in/for-of loop variables are drawn from the iterable as a whole; per-element flow is not modeled.',
-  'switch fallthrough is represented conservatively; discriminant-to-case value refinement is unsupported.',
-]);
 
 interface Unit extends SliceCohesionUnit {
   node: TypeScript.Node;
@@ -560,7 +548,10 @@ function narrowExtractionStatements(candidate: SliceCohesionCandidate): number {
 }
 
 function resolveCallableDefinition(db: ScipDatabase, symbol: string): IndexedDefinition | null {
-  const match = findFirstSymbolMatch(db, symbol);
+  const resolution = resolveSymbol(db, symbol);
+  if (resolution.candidates.length > 0)
+    throw new Error(`Ambiguous symbol: ${symbol}. Use an exact SCIP symbol or file:line.`);
+  const match = resolution.match;
   if (!match) return null;
   const definitions = getDefinitionsForFile(db, match.relativePath);
   return (
@@ -575,9 +566,6 @@ function resolveCallableDefinition(db: ScipDatabase, symbol: string): IndexedDef
  * compiler is unavailable, no function-like body sits inside the
  * definition range, or the flow analysis reports no support at all.
  */
-// scip-query: ignore-extract — this is the detector's per-symbol unit: body
-// modelling, flow projection, slicing, clustering, and tiering define one
-// cohesion measurement.
 export function sliceCohesionForDefinition(
   db: ScipDatabase,
   definition: IndexedDefinition,
@@ -596,10 +584,9 @@ export function sliceCohesionForDefinition(
   if (!sourceFile) return null;
   const callable = callableForDefinition(ts, sourceFile, definition);
   if (!callable) return null;
-  // One compiler program per file: every callable in the file is analyzed
-  // together, and each definition filters the points inside its own range.
-  const lastLine = sourceFile.getLineStarts().length - 1;
-  const flow = semanticLocalFlowForRange(db, definition.relativePath, 0, lastLine);
+  // Coverage belongs to the selected callable and its nested functions. A gap
+  // in a sibling must not downgrade this function's extraction evidence.
+  const flow = semanticLocalFlowForRange(db, definition.relativePath, definition.startLine, definition.endLine);
   if (!flow || flow.coverage.status === 'unsupported') return null;
 
   const body = modelBody(ts, sourceFile, callable, definition.relativePath);
@@ -608,72 +595,12 @@ export function sliceCohesionForDefinition(
   const counted = body.units.filter((unit) => COUNTED_KINDS.has(unit.kind)).map((unit) => unit.index);
   const countedSet = new Set(counted);
 
-  // A guard's own reads stay out of the computation, but the loops and
-  // branches that enclose the guard still enclose everything under it. A
-  // catch or finally block handles the try block, so it depends on it.
-  const controlThroughGuards = (unit: number): number[] => {
-    const result: number[] = [];
-    const seen = new Set<number>();
-    const stack = [...flowModel.controlDeps[unit]!];
-    while (stack.length > 0) {
-      const predicate = stack.pop()!;
-      if (seen.has(predicate)) continue;
-      seen.add(predicate);
-      if (body.guardPredicates.has(predicate)) stack.push(...flowModel.controlDeps[predicate]!);
-      else result.push(predicate);
-    }
-    return result;
-  };
-  const handlerDeps = (unit: number): number[] => body.handlerDeps.get(unit) ?? [];
-  const computationDeps = (unit: number): number[] => [
-    ...flowModel.dataDeps[unit]!,
-    ...controlThroughGuards(unit),
-    ...handlerDeps(unit),
-  ];
-  const fullDeps = (unit: number): number[] => [
-    ...flowModel.dataDeps[unit]!,
-    ...flowModel.controlDeps[unit]!,
-    ...handlerDeps(unit),
-  ];
-  const slicedSeeds: SlicedSeed[] = seeds.map((seed) => {
-    const seedUnitList = seedUnits(seed, flowModel);
-    const slice = [...backwardSlice(seedUnitList, computationDeps)].filter((unit) => countedSet.has(unit));
-    const fullSlice = [...backwardSlice(seedUnitList, fullDeps)].filter((unit) => countedSet.has(unit));
-    // An output inside an exit-only branch is a guard, as is an unconditional
-    // exit that reads nothing computed here.
-    const guard =
-      body.guardUnits.has(seed.unit) ||
-      ((seed.kind === 'throw' || seed.kind === 'return') &&
-        seed.seedPoints === null &&
-        slice.every((unit) => unit === seed.unit));
-    return { seed, guard, slice: new Set(slice), fullSlice: new Set(fullSlice) };
-  });
-  const sliced = mergeOutputs(slicedSeeds);
+  const sliced = sliceOutputs(body, flowModel, seeds, countedSet);
 
   const valueOutputs = sliced.filter((output) => !output.guard);
   const metrics = cohesionMetrics(valueOutputs, counted.length);
   const outputUnits = new Set(sliced.flatMap((output) => output.units));
-  // Setup is shared only when outputs from different clusters read it. A
-  // unit that every reader consumes within one cluster is that cluster's
-  // computation, so it returns to the cluster and the partition is redrawn.
-  const preambleSet = new Set(sharedPreamble(valueOutputs, outputUnits, body, flowModel));
-  let clusters = clusterOutputs(valueOutputs, preambleSet, body, flowModel, thresholds);
-  for (;;) {
-    const clusterOf = new Map<string, number>();
-    clusters.forEach((cluster, index) => cluster.outputs.forEach((id) => clusterOf.set(id, index)));
-    const unshared = [...preambleSet].filter((unit) => {
-      const readers = new Set<number>();
-      for (const output of valueOutputs) {
-        const cluster = clusterOf.get(output.id);
-        if (cluster !== undefined && sliceOf(output).includes(unit)) readers.add(cluster);
-      }
-      return readers.size <= 1;
-    });
-    if (unshared.length === 0) break;
-    for (const unit of unshared) preambleSet.delete(unit);
-    clusters = clusterOutputs(valueOutputs, preambleSet, body, flowModel, thresholds);
-  }
-  const preamble = [...preambleSet].sort(ascending);
+  const { clusters, preamble } = partitionOutputComputations(valueOutputs, outputUnits, body, flowModel, thresholds);
   const clustered = new Set(clusters.flatMap((cluster) => cluster.outputs));
   const preambleOnlyOutputs = valueOutputs.filter((output) => !clustered.has(output.id)).map((output) => output.id);
   const reached = new Set(sliced.flatMap((output) => output.fullSlice ?? []));
@@ -685,7 +612,7 @@ export function sliceCohesionForDefinition(
   const splitCandidate = counted.length >= thresholds.minStatements && extractions.length >= 1;
   const unsupported = [...flow.coverage.unsupported];
   const coverage: SliceCohesionCoverage = {
-    status: unsupported.every((reason) => PRECISION_ONLY_GAPS.has(reason)) ? 'complete' : 'partial',
+    status: flow.coverage.status === 'complete' && flowModel.candidateEdges === 0 ? 'complete' : 'partial',
     model: 'function-local-flow',
     basis: 'typescript-local-flow-backward-slices',
     unsupported,
@@ -732,6 +659,88 @@ export function sliceCohesionForDefinition(
     recommendation: recommendation(splitCandidate, valueOutputs, metrics, context),
     coverage,
   };
+}
+
+/** Slice outputs with and without guard predicates; handler dependencies belong to both. */
+function sliceOutputs(
+  body: BodyModel,
+  flowModel: ReturnType<typeof projectFlow>,
+  seeds: readonly OutputSeed[],
+  countedSet: ReadonlySet<number>,
+): SliceCohesionOutput[] {
+  // A guard's own reads stay out of the computation, but the loops and
+  // branches that enclose the guard still enclose everything under it. A
+  // catch or finally block handles the try block, so it depends on it.
+  const controlThroughGuards = (unit: number): number[] => {
+    const result: number[] = [];
+    const seen = new Set<number>();
+    const stack = [...flowModel.controlDeps[unit]!];
+    while (stack.length > 0) {
+      const predicate = stack.pop()!;
+      if (seen.has(predicate)) continue;
+      seen.add(predicate);
+      if (body.guardPredicates.has(predicate)) stack.push(...flowModel.controlDeps[predicate]!);
+      else result.push(predicate);
+    }
+    return result;
+  };
+  const handlerDeps = (unit: number): number[] => body.handlerDeps.get(unit) ?? [];
+  const computationDeps = (unit: number): number[] => [
+    ...flowModel.dataDeps[unit]!,
+    ...controlThroughGuards(unit),
+    ...handlerDeps(unit),
+  ];
+  const fullDeps = (unit: number): number[] => [
+    ...flowModel.dataDeps[unit]!,
+    ...flowModel.controlDeps[unit]!,
+    ...handlerDeps(unit),
+  ];
+  const slicedSeeds: SlicedSeed[] = seeds.map((seed) => {
+    const seedUnitList = seedUnits(seed, flowModel);
+    const slice = [...backwardSlice(seedUnitList, computationDeps)].filter((unit) => countedSet.has(unit));
+    const fullSlice = [...backwardSlice(seedUnitList, fullDeps)].filter((unit) => countedSet.has(unit));
+    // An output inside an exit-only branch is a guard, as is an unconditional
+    // exit that reads nothing computed here.
+    const guard =
+      body.guardUnits.has(seed.unit) ||
+      ((seed.kind === 'throw' || seed.kind === 'return') &&
+        seed.seedPoints === null &&
+        slice.every((unit) => unit === seed.unit));
+    return { seed, guard, slice: new Set(slice), fullSlice: new Set(fullSlice) };
+  });
+  return mergeOutputs(slicedSeeds);
+}
+
+/** Reassign setup consumed by just one cluster until the shared partition stabilizes. */
+function partitionOutputComputations(
+  valueOutputs: SliceCohesionOutput[],
+  outputUnits: Set<number>,
+  body: BodyModel,
+  flowModel: ReturnType<typeof projectFlow>,
+  thresholds: Thresholds,
+): { clusters: SliceCohesionCluster[]; preamble: number[] } {
+  // Setup is shared only when outputs from different clusters read it. A
+  // unit that every reader consumes within one cluster is that cluster's
+  // computation, so it returns to the cluster and the partition is redrawn.
+  const preambleSet = new Set(sharedPreamble(valueOutputs, outputUnits, body, flowModel));
+  let clusters = clusterOutputs(valueOutputs, preambleSet, body, flowModel, thresholds);
+  for (;;) {
+    const clusterOf = new Map<string, number>();
+    clusters.forEach((cluster, index) => cluster.outputs.forEach((id) => clusterOf.set(id, index)));
+    const unshared = [...preambleSet].filter((unit) => {
+      const readers = new Set<number>();
+      for (const output of valueOutputs) {
+        const cluster = clusterOf.get(output.id);
+        if (cluster !== undefined && sliceOf(output).includes(unit)) readers.add(cluster);
+      }
+      return readers.size <= 1;
+    });
+    if (unshared.length === 0) break;
+    for (const unit of unshared) preambleSet.delete(unit);
+    clusters = clusterOutputs(valueOutputs, preambleSet, body, flowModel, thresholds);
+  }
+  const preamble = [...preambleSet].sort(ascending);
+  return { clusters, preamble };
 }
 
 function sliceOf(output: SliceCohesionOutput): number[] {
@@ -2206,17 +2215,17 @@ function tierFor(
   coverage: SliceCohesionCoverage,
 ): { tier: SliceCohesionActionTier; reason: string } {
   if (!splitCandidate)
-    return { tier: 'support', reason: 'The value outputs share one computation; no split is indicated.' };
+    return { tier: 'support', reason: 'No split meets the selected output and statement thresholds.' };
   if (coverage.status !== 'complete') {
     return {
       tier: 'support',
-      reason: `Local flow is partial (${coverageGap(coverage)}), so a dropped dependency could join the clusters; the seam is unproven.`,
+      reason: `${archetype === 'orchestration' ? 'Orchestration root: disjoint slices are expected. ' : ''}Local flow is partial (${coverageGap(coverage)}), so a dropped dependency could join the clusters; the seam is unproven.`,
     };
   }
   if (archetype === 'orchestration') {
     return {
       tier: 'support',
-      reason: 'Orchestration root: it sequences independent operations by design, so disjoint slices are expected.',
+      reason: 'The body matches an operation-sequencing pattern; disjoint slices alone do not justify splitting it.',
     };
   }
   const extractions = clusters.filter((cluster) => cluster.role === 'extraction');
@@ -2224,17 +2233,17 @@ function tierFor(
   if (narrow.length === 0) {
     return {
       tier: 'support',
-      reason: `Local slices are disjoint, but each of the ${extractions.length} extraction(s) would take more than ${MAX_SIGNAL_CLUSTER_INPUTS} parameters.`,
+      reason: `Local slices are disjoint, but each of the ${extractions.length} extraction(s) has more than ${MAX_SIGNAL_CLUSTER_INPUTS} observed input names.`,
     };
   }
   return {
     tier: 'signal',
-    reason: `Local flow model complete; ${narrow.length} extraction(s) with at most ${MAX_SIGNAL_CLUSTER_INPUTS} parameters leave the largest computation in place.`,
+    reason: `Local flow model complete; ${narrow.length} extraction(s) with at most ${MAX_SIGNAL_CLUSTER_INPUTS} observed input names; review captured state and ordering before planning an extraction.`,
   };
 }
 
 function coverageGap(coverage: SliceCohesionCoverage): string {
-  return coverage.unsupported.find((reason) => !PRECISION_ONLY_GAPS.has(reason)) ?? 'unsupported constructs present';
+  return coverage.unsupported[0] ?? 'candidate dependencies or unsupported constructs present';
 }
 
 function evidenceReasons(
@@ -2320,41 +2329,7 @@ function recommendation(
 ): string {
   const { body, clusters, coverage, archetype } = context;
   const name = callableLabel(body);
-  if (!splitCandidate) {
-    if (outputs.length === 0) return 'No value output was found; the body has nothing to slice.';
-    if (outputs.length === 1) return 'One value output; cohesion is trivially complete.';
-    const clustered = new Set(clusters.flatMap((cluster) => cluster.outputs));
-    const setupOnly = outputs.filter((output) => !clustered.has(output.id)).length;
-    const below = clusters.filter((cluster) => cluster.role === 'below-threshold' && !cluster.guardOnly);
-    const parts: string[] = [];
-    if (clusters.length === 0) {
-      parts.push(
-        `The ${outputs.length} value outputs read only shared setup derived from the inputs (${context.preamble.length} statement(s)); nothing separates them`,
-      );
-    } else {
-      parts.push(
-        `The ${outputs.length} value outputs form ${clusters.length} cluster(s)` +
-          (setupOnly > 0 ? `, and ${setupOnly} of them read only shared setup` : ''),
-      );
-      const whole = clusters.length === 1 ? clusters[0]! : null;
-      if (whole && whole.outputs.length > 1) {
-        parts.push(
-          `${metrics.superglue} statement(s) feed every output and ${metrics.glue} feed more than one` +
-            (metrics.superglue === 0
-              ? '; the outputs are chained through shared statements, branch predicates, or state writes rather than one common root'
-              : ''),
-        );
-      }
-      if (below.length > 0) {
-        parts.push(
-          `${below.length} cluster(s) stay below --min-cluster ${context.thresholds.minClusterUnits}: ${below
-            .map((cluster) => describeRanges(cluster.lineRanges, 2))
-            .join('; ')}`,
-        );
-      }
-    }
-    return `${parts.join('; ')}; keep the function whole.`;
-  }
+  if (!splitCandidate) return wholeFunctionRecommendation(outputs, metrics, context);
   const extractions = clusters.filter((cluster) => cluster.role === 'extraction');
   const remainder = clusters.find((cluster) => cluster.role === 'remainder');
   const describeExtraction = (cluster: SliceCohesionCluster, index: number): string =>
@@ -2365,7 +2340,7 @@ function recommendation(
   const seams = extractions.map(describeExtraction).join('; ');
   const stays = staysInPlace(context, remainder);
   if (coverage.status !== 'complete') {
-    return `Inspect before extracting: local flow is partial (${coverageGap(coverage)}). Candidate seam(s): ${seams}. ${stays}`.trim();
+    return `${archetype === 'orchestration' ? 'Preserve sequencing and treat it as an orchestration root. ' : ''}Inspect before extracting: local flow is partial (${coverageGap(coverage)}). Candidate seam(s): ${seams}. ${stays}`.trim();
   }
   if (archetype === 'orchestration') {
     return `${name} sequences ${extractions.length + 1} independent operations (${seams}); treat it as an orchestration root, not a cohesion defect, unless the steps serve unrelated purposes.`;
@@ -2373,7 +2348,48 @@ function recommendation(
   const advisory = extractions.every((cluster) => cluster.kind === 'effects')
     ? ' Advisory: an effect sequence may be intentional orchestration; confirm the steps serve a separate purpose before moving them.'
     : '';
-  return `Extract from ${name}: ${seams}. ${stays}${advisory}`.trim();
+  return `Review a possible extraction from ${name}: ${seams}. ${stays}${advisory}`.trim();
+}
+
+function wholeFunctionRecommendation(
+  outputs: readonly SliceCohesionOutput[],
+  metrics: SliceCohesionMetrics,
+  context: ReportContext,
+): string {
+  const { clusters } = context;
+  if (outputs.length === 0) return 'No value output was found; the body has nothing to slice.';
+  if (outputs.length === 1) return 'One value output; cohesion is trivially complete.';
+  const clustered = new Set(clusters.flatMap((cluster) => cluster.outputs));
+  const setupOnly = outputs.filter((output) => !clustered.has(output.id)).length;
+  const below = clusters.filter((cluster) => cluster.role === 'below-threshold' && !cluster.guardOnly);
+  const parts: string[] = [];
+  if (clusters.length === 0) {
+    return (
+      `The ${outputs.length} value outputs read only shared setup derived from the inputs (${context.preamble.length} statement(s)); nothing separates them` +
+      '; keep the function whole.'
+    );
+  }
+  parts.push(
+    `The ${outputs.length} value outputs form ${clusters.length} cluster(s)` +
+      (setupOnly > 0 ? `, and ${setupOnly} of them read only shared setup` : ''),
+  );
+  const whole = clusters.length === 1 ? clusters[0]! : null;
+  if (whole && whole.outputs.length > 1) {
+    parts.push(
+      `${metrics.superglue} statement(s) feed every output and ${metrics.glue} feed more than one` +
+        (metrics.superglue === 0
+          ? '; the outputs are chained through shared statements, branch predicates, or state writes rather than one common root'
+          : ''),
+    );
+  }
+  if (below.length > 0) {
+    parts.push(
+      `${below.length} cluster(s) stay below --min-cluster ${context.thresholds.minClusterUnits}: ${below
+        .map((cluster) => describeRanges(cluster.lineRanges, 2))
+        .join('; ')}`,
+    );
+  }
+  return `${parts.join('; ')}; keep the function whole.`;
 }
 
 function outputNames(ids: readonly string[], limit = 4): string {

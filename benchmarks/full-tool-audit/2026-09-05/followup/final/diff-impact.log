@@ -1,0 +1,1 @@
+{"kind":"scip-query-json-export","schemaVersion":1,"producer":{"name":"scip-query","version":"0.25.0"},"command":"diff-impact","path":"/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/full-tool-audit/2026-09-05/followup/final/diff-impact.json","bytes":5809,"sha256":"d24fa91e151981b1ded31d402476799bffbbd9977e31488dd7bdbffe14443c6b"}

@@ -1,3 +1,4 @@
+import { calleeEvidenceStrength as staticCallEvidenceStrength } from '../../symbols/graph/call-graph-evidence.js';
 import {
   classifyFile,
   isExplicitPackageSurfaceSymbol,
@@ -1090,7 +1091,8 @@ function finalizeSystemMap(input: {
   const repositoryCandidateBoundaryLinks =
     runtimeBoundaries?.links.filter((link) => link.strength === 'candidate').length ?? 0;
   const externalBoundaries = buildExternalBoundaries(externalImports, regionForFile);
-  const closureStatus = omittedSymbolCandidates === 0 ? 'accounted' : 'incomplete';
+  const incompleteReasons = systemMapIncompleteReasons(anchors, omittedSymbolCandidates);
+  const closureStatus = incompleteReasons.length === 0 ? 'accounted' : 'incomplete';
   const blindSpots = [
     ...(broadLiteralAnchors > 0
       ? [
@@ -1217,7 +1219,7 @@ function finalizeSystemMap(input: {
       explanation:
         closureStatus === 'accounted'
           ? 'Every fact reached under the declared anchors, relations, depth, evidence floor, source scopes, and installed analyzers is accounted for as emitted, withheld, ambiguous, external, or unresolved.'
-          : 'Some ambiguous symbol candidates were not identified, so the declared query is not fully accounted for.',
+          : incompleteReasons.join('; '),
     },
     coverage: {
       explicitAnchorCount: anchors.length,
@@ -1324,7 +1326,7 @@ function expandSourceConstructCallFrontier(context: SystemMapTraversalContext, d
       // when the compiler emitted no symbol for a wrapped function. Admit a
       // reverse edge only when this file has one callable with the target
       // name and the call is a direct (not receiver-member) invocation. The
-      // result is derived rather than exact because lexical shadowing can
+      // result is a candidate because lexical shadowing can
       // still change runtime identity without a compiler occurrence.
       const targetFacts = getSourceFacts(db, targetConstruct.file);
       const matchingLocalDefinitions = (targetFacts?.callables ?? []).filter(
@@ -1374,7 +1376,7 @@ function expandSourceConstructCallFrontier(context: SystemMapTraversalContext, d
             fromSourceConstruct: fromSourceConstruct ? sourceConstructIdentity(fromSourceConstruct) : undefined,
             toSourceConstruct: sourceConstructIdentity(targetConstruct),
             line: callsite.line,
-            strength: 'derived',
+            strength: 'candidate',
           });
         }
       }
@@ -1575,7 +1577,7 @@ function expandSystemMapSymbolFrontier(context: SystemMapTraversalContext, depth
               ? sourceConstructIdentity(referenceSourceConstruct)
               : undefined,
             line: site.line,
-            strength: 'derived',
+            strength: 'candidate',
           });
         }
         if (
@@ -1898,7 +1900,7 @@ function expandSystemMapFileFrontier(context: SystemMapTraversalContext, depth: 
               toFile: importedDefinition.relativePath,
               toSymbol: importedDefinition.symbol,
               line,
-              strength: 'derived',
+              strength: 'candidate',
             });
           }
         }
@@ -2996,6 +2998,15 @@ function selectAndAugmentSystemMapTopology(
   return augmentedTopology;
 }
 
+function systemMapIncompleteReasons(anchors: readonly SystemMapAnchor[], omittedSymbolCandidates: number): string[] {
+  return [
+    ...anchors
+      .filter((anchor) => anchor.status === 'missing')
+      .map((anchor) => `${anchor.kind} selector ${JSON.stringify(anchor.query)} is ${anchor.status}`),
+    ...(omittedSymbolCandidates > 0 ? [`${omittedSymbolCandidates} ambiguous symbol candidate(s) were omitted`] : []),
+  ];
+}
+
 function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopology {
   const sourceConstructHits = systemMapTopologySourceConstructHits(input);
   const anchors = systemMapTopologyAnchors(input, sourceConstructHits);
@@ -3011,10 +3022,7 @@ function buildSystemMapTopology(input: SystemMapTopologyInput): ExplorationTopol
       frontiers,
       scope: `explicit anchors; relations ${input.requestedRelationKinds.join(', ')}; depth ${input.maxDepth}; evidence floor ${input.evidenceFloor}; source scopes ${input.includedSourceScopes.join(', ')}`,
       blindSpots: [...input.blindSpots],
-      incompleteReasons:
-        input.closureStatus === 'incomplete'
-          ? [`${input.omittedSymbolCandidates} ambiguous symbol candidate(s) were omitted`]
-          : [],
+      incompleteReasons: systemMapIncompleteReasons(input.anchors, input.omittedSymbolCandidates),
     }),
     input,
   );
@@ -3127,7 +3135,7 @@ function symbolTopologyNodeId(symbol: string): string {
 }
 
 function calleeEvidenceStrength(source: CalleeEvidenceSource): SystemMapRelationStrength {
-  return source === 'semantic-callee' || source === 'scip-chunk' || source === 'scip-occurrence' ? 'exact' : 'derived';
+  return staticCallEvidenceStrength(source);
 }
 
 function buildSystemMapExpansion(

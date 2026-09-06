@@ -162,6 +162,7 @@ export function docDrift(
   if (!scan) return { available: false, commitsAnalyzed: 0, docsScanned: 0, findings: [] };
 
   const findings: DocDriftFinding[] = [];
+  let docsScanned = 0;
   for (const docFile of scan.docFiles) {
     if (doc !== undefined && !docFile.includes(doc)) continue;
     // Explicitly requested docs bypass the archival filter (detail mode).
@@ -169,6 +170,7 @@ export function docDrift(
     if (doc !== undefined && !projectFileExists(db.config.projectRoot, docFile)) continue;
     const snapshot = isSnapshotDoc(db, docFile);
     if (snapshot && !includeSnapshotExcluded) continue;
+    docsScanned += 1;
     const { value: docLastChangedAt, estimated: docLastChangedAtEstimated } = docLastChangedAtFor(
       db,
       docFile,
@@ -239,7 +241,7 @@ export function docDrift(
       docLastChangedAt,
       // Broken references weigh heavily — the spec cites deleted code.
       staleness: ordered.reduce((sum, subject) => sum + subject.changesSinceDocUpdate, 0) + broken.length * 10,
-      subjects: ordered.slice(0, 8),
+      subjects: ordered,
       brokenReferences: broken,
       ...(snapshot ? { snapshotExcluded: true } : {}),
       ...(docLastChangedAtEstimated ? { docLastChangedAtEstimated: true } : {}),
@@ -250,7 +252,7 @@ export function docDrift(
   return {
     available: true,
     commitsAnalyzed: scan.historyCommitCount,
-    docsScanned: scan.docFiles.length,
+    docsScanned,
     findings: findings.slice(0, limit),
   };
 }
@@ -379,7 +381,8 @@ function buildDocDriftScanIndex(db: ScipDatabase, historyMode: GitHistoryMode): 
   const git = gitEvidenceProduct(db, { historyMode });
   const history = git.commitHistory();
   if (!history) return null;
-  const tracked = git.trackedFiles() ?? new Set<string>();
+  const tracked = git.trackedFiles();
+  if (!tracked) return null;
 
   // One history pass: per-file change timestamps + doc↔code co-change counts.
   const changeTimes = new Map<string, number[]>();

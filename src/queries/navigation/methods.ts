@@ -3,7 +3,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { nearestSymbolNames, resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { detectAstLanguage, getSourceFacts } from '../../source/ast.js';
-import { isCallableSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
+import { isCallableSymbol, isDirectChildSymbol, leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import type { SymbolMatch, SymbolResolutionCandidate } from '../../domain/types.js';
 
 export interface MethodResult {
@@ -99,7 +99,8 @@ function methodsForOwner(db: ScipDatabase, classMatch: SymbolMatch): MethodResul
     .filter((definition) => isCallableSymbol(definition.symbol));
 
   const directMethods = definitions.filter(
-    (definition) => definition.parentTypeName === ownerName || definition.symbol.includes(ownerName),
+    (definition) =>
+      definition.enclosingSymbol === classMatch.symbol || isDirectChildSymbol(classMatch.symbol, definition.symbol),
   );
 
   const fileScopedMethods =

@@ -1,0 +1,6308 @@
+{
+  "configured": true,
+  "dependencyRoles": {
+    "excludedTestEdges": 37,
+    "basis": "production-imports-including-types",
+    "cycleMeaning": "Boundary cycles concern declared groups. File cycle members, when present, concern static imports including types; neither establishes a runtime initialization failure."
+  },
+  "testEdges": [
+    {
+      "from": "test-fixtures",
+      "to": "platform",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "tests/fixtures/protocol-state-contract/index.ts",
+          "toFile": "src/platform/process-file-lock.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "test-fixtures",
+      "to": "runtime-command-kit",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "tests/fixtures/invocation-coverage-contract/index.ts",
+          "toFile": "src/runtime/command-kit/command-descriptor-types.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "test-fixtures",
+      "to": "runtime-services",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 1,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "tests/fixtures/protocol-state-contract/index.ts",
+          "toFile": "src/runtime/output-pagination.ts"
+        },
+        {
+          "fromFile": "tests/fixtures/protocol-state-contract/index.ts",
+          "toFile": "src/runtime/watch-server.ts"
+        },
+        {
+          "fromFile": "tests/fixtures/protocol-state-contract/index.ts",
+          "toFile": "src/runtime/watch-service.ts"
+        },
+        {
+          "fromFile": "tests/fixtures/protocol-state-contract/index.ts",
+          "toFile": "src/runtime/worker-request-lane.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "test-fixtures",
+      "to": "semantic-contracts",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "tests/fixtures/protocol-state-contract/index.ts",
+          "toFile": "src/semantic/types.ts"
+        }
+      ],
+      "fragile": true
+    }
+  ],
+  "testForbiddenEdges": [],
+  "boundaries": [
+    {
+      "name": "agent-evaluation-tools",
+      "paths": [
+        "scripts/change-benchmark-core.mjs",
+        "scripts/codex-change-trial.mjs",
+        "scripts/codex-exploration-sandbox.mjs",
+        "scripts/codex-exploration-trial-core.mjs"
+      ],
+      "fileCount": 0,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "agent-evidence-capture",
+      "paths": [
+        "skills/scip-explore/scripts/capture-evidence.mjs"
+      ],
+      "fileCount": 0,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "agent-exploration-evaluation",
+      "paths": [
+        "scripts/codex-exploration-trial.mjs",
+        "scripts/compare-exploration-trials.mjs",
+        "scripts/exploration-benchmark-core.mjs",
+        "scripts/exploration-benchmark.mjs"
+      ],
+      "fileCount": 0,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "analysis",
+      "paths": [
+        "src/analysis/**"
+      ],
+      "fileCount": 29,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "benchmark-fixture",
+      "paths": [
+        "benchmarks/change/fixture/src/**"
+      ],
+      "fileCount": 19,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "build-configuration",
+      "paths": [
+        "eslint.config.js",
+        "tsup.config.ts",
+        "vitest.config.ts"
+      ],
+      "fileCount": 0,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "command-audit-tools",
+      "paths": [
+        "benchmarks/command-contracts/**",
+        "benchmarks/full-tool-audit/**"
+      ],
+      "fileCount": 19,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "contract-tooling",
+      "paths": [
+        "scripts/affected-set-shadow-contract.mjs",
+        "scripts/api-surface-contract.mjs",
+        "scripts/audit-production-dependencies.mjs",
+        "scripts/evidence-product-contract.mjs",
+        "scripts/incremental-freshness-contract.mjs",
+        "scripts/probe-rust-scip-boundary.mjs",
+        "scripts/verify-identity-collision-cli.mjs"
+      ],
+      "fileCount": 0,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "coverage-recorder",
+      "paths": [
+        "scripts/record-review-coverage.mjs"
+      ],
+      "fileCount": 0,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "detector-calibration-tools",
+      "paths": [
+        "scripts/accuracy-calibration-core.mjs",
+        "scripts/accuracy-calibration.mjs",
+        "scripts/score-detector-labels.ts",
+        "scripts/semantic-command-calibration.mjs",
+        "scripts/typescript-semantic-provider-comparison.mjs"
+      ],
+      "fileCount": 0,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "documentation-tooling",
+      "paths": [
+        "scripts/check-evidence-manifest-doc.mjs",
+        "scripts/check-skill-links.mjs",
+        "scripts/render-command-reference.ts"
+      ],
+      "fileCount": 0,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "domain",
+      "paths": [
+        "src/domain/**"
+      ],
+      "fileCount": 34,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "filesystem",
+      "paths": [
+        "src/filesystem/**"
+      ],
+      "fileCount": 4,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "instrumentation",
+      "paths": [
+        "src/instrumentation/**"
+      ],
+      "fileCount": 1,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "performance-tooling",
+      "paths": [
+        "scripts/bench-native-symbol-leaf.mjs",
+        "scripts/benchmark-agent-output.ts",
+        "scripts/benchmark-cold-reindex.ts",
+        "scripts/benchmark-edit-latency.ts",
+        "scripts/benchmark-graph-literal.ts",
+        "scripts/benchmark-query-service.ts",
+        "scripts/benchmark-reindex-accounting.ts",
+        "scripts/benchmark-source-search.ts",
+        "scripts/cache-lifecycle-soak.ts",
+        "scripts/profile-scoreboard.mjs"
+      ],
+      "fileCount": 0,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "platform",
+      "paths": [
+        "src/platform/**"
+      ],
+      "fileCount": 33,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "public-api",
+      "paths": [
+        "src/index.ts"
+      ],
+      "fileCount": 1,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "queries-cleanup",
+      "paths": [
+        "src/queries/cleanup/**"
+      ],
+      "fileCount": 25,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "queries-facade",
+      "paths": [
+        "src/queries/index.ts",
+        "src/queries/public-query-entries.ts",
+        "src/queries/service-queries.ts"
+      ],
+      "fileCount": 3,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "queries-frontend",
+      "paths": [
+        "src/queries/frontend/**"
+      ],
+      "fileCount": 6,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "queries-graph",
+      "paths": [
+        "src/queries/graph/**"
+      ],
+      "fileCount": 18,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "queries-health",
+      "paths": [
+        "src/queries/health/**"
+      ],
+      "fileCount": 12,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "queries-impact",
+      "paths": [
+        "src/queries/impact/**"
+      ],
+      "fileCount": 5,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "queries-internal",
+      "paths": [
+        "src/queries/internal/**"
+      ],
+      "fileCount": 27,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "queries-navigation",
+      "paths": [
+        "src/queries/navigation/**"
+      ],
+      "fileCount": 25,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "queries-quality",
+      "paths": [
+        "src/queries/quality/**"
+      ],
+      "fileCount": 2,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "queries-utils",
+      "paths": [
+        "src/queries/query-utils.ts"
+      ],
+      "fileCount": 1,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "reindex",
+      "paths": [
+        "src/reindex/*"
+      ],
+      "fileCount": 34,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "reindex-augmentation",
+      "paths": [
+        "src/reindex/augmentation/**"
+      ],
+      "fileCount": 3,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "reindex-vue",
+      "paths": [
+        "src/reindex/vue/**"
+      ],
+      "fileCount": 5,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "release-tooling",
+      "paths": [
+        "scripts/build-scip-windows.mjs",
+        "scripts/npm-release-state.ts",
+        "scripts/npm-release.ts",
+        "scripts/publish-scip-windows.ts",
+        "scripts/release-npm-guard.ts",
+        "scripts/release-npm.ts",
+        "scripts/scip-windows-package-identity.ts",
+        "scripts/scip-windows-provenance.mjs",
+        "scripts/scip-windows-release.ts",
+        "scripts/verify-scip-windows-registry.ts",
+        "scripts/verify-scip-windows.mjs"
+      ],
+      "fileCount": 0,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "runtime-command-kit",
+      "paths": [
+        "src/runtime/command-kit/**"
+      ],
+      "fileCount": 6,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "runtime-commands",
+      "paths": [
+        "src/runtime/commands/**"
+      ],
+      "fileCount": 8,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "runtime-entry",
+      "paths": [
+        "src/runtime/cli.ts",
+        "src/runtime/cli-error-boundary.ts",
+        "src/runtime/cli-main.ts",
+        "src/runtime/index.ts",
+        "src/runtime/postinstall.ts"
+      ],
+      "fileCount": 5,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "runtime-query-commands",
+      "paths": [
+        "src/runtime/query-commands/**"
+      ],
+      "fileCount": 15,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "runtime-services",
+      "paths": [
+        "src/runtime/agent-setup.ts",
+        "src/runtime/ast-parser-setup.ts",
+        "src/runtime/claim-qualification.ts",
+        "src/runtime/cleanup-verify.ts",
+        "src/runtime/cli-context.ts",
+        "src/runtime/cli-invocation.ts",
+        "src/runtime/cli-json-envelope.ts",
+        "src/runtime/cli-support.ts",
+        "src/runtime/command-operation.ts",
+        "src/runtime/config.ts",
+        "src/runtime/cursor-codec.ts",
+        "src/runtime/evidence-command-freshness.ts",
+        "src/runtime/file-product-warm.ts",
+        "src/runtime/generated-agent-command-catalog.ts",
+        "src/runtime/git-worktree-context-cache.ts",
+        "src/runtime/health-capability-disclosure.ts",
+        "src/runtime/health-dossier.ts",
+        "src/runtime/health-report-cache.ts",
+        "src/runtime/index-freshness.ts",
+        "src/runtime/isolated-analysis-runner.ts",
+        "src/runtime/observation-receipt.ts",
+        "src/runtime/output-pagination.ts",
+        "src/runtime/project-readiness.ts",
+        "src/runtime/project-reindex.ts",
+        "src/runtime/project-setup.ts",
+        "src/runtime/query-service-fastpath.ts",
+        "src/runtime/query-service-server.ts",
+        "src/runtime/query-service.ts",
+        "src/runtime/refs-pagination.ts",
+        "src/runtime/render.ts",
+        "src/runtime/repository-cache-lifecycle.ts",
+        "src/runtime/result-pagination.ts",
+        "src/runtime/revisioned-file.ts",
+        "src/runtime/setup-wizard.ts",
+        "src/runtime/setup.ts",
+        "src/runtime/source-emission-session.ts",
+        "src/runtime/suppression-writer.ts",
+        "src/runtime/typescript-mailbox-lanes.ts",
+        "src/runtime/typescript-mailbox-worker.ts",
+        "src/runtime/uninstall.ts",
+        "src/runtime/update-notice.ts",
+        "src/runtime/watch-refresh-coordinator.ts",
+        "src/runtime/watch-server.ts",
+        "src/runtime/watch-service-prune.ts",
+        "src/runtime/watch-service.ts",
+        "src/runtime/watch.ts",
+        "src/runtime/worker-request-lane.ts"
+      ],
+      "fileCount": 47,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "rust-kernels",
+      "paths": [
+        "crates/scip-query-kernels/**"
+      ],
+      "fileCount": 2,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "semantic-contracts",
+      "paths": [
+        "src/semantic/types.ts"
+      ],
+      "fileCount": 1,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "semantic-core",
+      "paths": [
+        "src/semantic/definition-groups.ts",
+        "src/semantic/index.ts",
+        "src/semantic/local-flow.ts",
+        "src/semantic/provider-cache.ts",
+        "src/semantic/session-manager.ts",
+        "src/semantic/shared-primitives.ts",
+        "src/semantic/symbol-evidence.ts"
+      ],
+      "fileCount": 7,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "semantic-rust",
+      "paths": [
+        "src/semantic/rust/**"
+      ],
+      "fileCount": 22,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "semantic-typescript",
+      "paths": [
+        "src/semantic/typescript/**"
+      ],
+      "fileCount": 23,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "source",
+      "paths": [
+        "src/source/**",
+        "src/language-parsers/**"
+      ],
+      "fileCount": 67,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "storage",
+      "paths": [
+        "src/storage/**"
+      ],
+      "fileCount": 17,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "symbols-core",
+      "paths": [
+        "src/symbols/*"
+      ],
+      "fileCount": 11,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "symbols-graph",
+      "paths": [
+        "src/symbols/graph/**"
+      ],
+      "fileCount": 8,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "symbols-references",
+      "paths": [
+        "src/symbols/references/**"
+      ],
+      "fileCount": 4,
+      "dependencyPolicyDeclared": true
+    },
+    {
+      "name": "test-fixtures",
+      "paths": [
+        "tests/fixtures/exploration-benchmark/identity-collision/src/push.ts",
+        "tests/fixtures/exploration-benchmark/identity-collision/src/slice.ts",
+        "tests/fixtures/exploration-benchmark/identity-collision/src/source.ts",
+        "tests/fixtures/invocation-coverage-contract/index.ts",
+        "tests/fixtures/protocol-state-contract/index.ts",
+        "tests/fixtures/public-api-consumer/index.ts"
+      ],
+      "fileCount": 6,
+      "dependencyPolicyDeclared": true
+    }
+  ],
+  "edges": [
+    {
+      "from": "analysis",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 16,
+      "importerCount": 14,
+      "importedFileCount": 7,
+      "examples": [
+        {
+          "fromFile": "src/analysis/change-risk-metadata.ts",
+          "toFile": "src/domain/path-normalization.ts"
+        },
+        {
+          "fromFile": "src/analysis/config-referenced-files.ts",
+          "toFile": "src/domain/path-normalization.ts"
+        },
+        {
+          "fromFile": "src/analysis/file-classifier.ts",
+          "toFile": "src/domain/bounded-regexp.ts"
+        },
+        {
+          "fromFile": "src/analysis/file-classifier.ts",
+          "toFile": "src/domain/path-normalization.ts"
+        },
+        {
+          "fromFile": "src/analysis/framework-task-surface.ts",
+          "toFile": "src/domain/path-normalization.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "analysis",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 42,
+      "importerCount": 17,
+      "importedFileCount": 16,
+      "examples": [
+        {
+          "fromFile": "src/analysis/change-risk-metadata.ts",
+          "toFile": "src/source/primitives/project-file-boundary.ts"
+        },
+        {
+          "fromFile": "src/analysis/config-referenced-files.ts",
+          "toFile": "src/source/primitives/project-file-boundary.ts"
+        },
+        {
+          "fromFile": "src/analysis/file-classifier.ts",
+          "toFile": "src/language-parsers/index.ts"
+        },
+        {
+          "fromFile": "src/analysis/file-classifier.ts",
+          "toFile": "src/language-parsers/source-evidence.ts"
+        },
+        {
+          "fromFile": "src/analysis/file-classifier.ts",
+          "toFile": "src/source/primitives/file-kind.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "analysis",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 35,
+      "importerCount": 18,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/analysis/change-risk-metadata.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/analysis/config-referenced-files.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/analysis/config-referenced-files.ts",
+          "toFile": "src/storage/per-db-cache.ts"
+        },
+        {
+          "fromFile": "src/analysis/config-referenced-files.ts",
+          "toFile": "src/storage/scip-documents.ts"
+        },
+        {
+          "fromFile": "src/analysis/file-classifier.ts",
+          "toFile": "src/storage/db.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "analysis",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 9,
+      "importerCount": 8,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/analysis/file-classifier.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        },
+        {
+          "fromFile": "src/analysis/runtime-boundaries/carrier-discriminators.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/analysis/runtime-boundaries/extractors.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/analysis/runtime-boundaries/http-mounts.ts",
+          "toFile": "src/symbols/imported-definitions.ts"
+        },
+        {
+          "fromFile": "src/analysis/runtime-boundaries/http-summaries.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "analysis",
+      "to": "symbols-graph",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 10,
+      "importerCount": 6,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/analysis/file-classifier.ts",
+          "toFile": "src/symbols/graph/file-dep-graph.ts"
+        },
+        {
+          "fromFile": "src/analysis/runtime-boundaries/carrier-discriminators.ts",
+          "toFile": "src/symbols/graph/resolved-call-sites.ts"
+        },
+        {
+          "fromFile": "src/analysis/runtime-boundaries/carrier-discriminators.ts",
+          "toFile": "src/symbols/graph/static-value-flow.ts"
+        },
+        {
+          "fromFile": "src/analysis/runtime-boundaries/carrier-discriminators.ts",
+          "toFile": "src/symbols/graph/value-flow.ts"
+        },
+        {
+          "fromFile": "src/analysis/runtime-boundaries/extractors.ts",
+          "toFile": "src/symbols/graph/static-value-flow.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "analysis",
+      "to": "symbols-references",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/analysis/runtime-boundaries/wrapper-propagation.ts",
+          "toFile": "src/symbols/references/reference-sites.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "platform",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 18,
+      "importerCount": 9,
+      "importedFileCount": 11,
+      "examples": [
+        {
+          "fromFile": "src/platform/bounded-regexp.ts",
+          "toFile": "src/domain/bounded-regexp.ts"
+        },
+        {
+          "fromFile": "src/platform/cache-layout.ts",
+          "toFile": "src/domain/path-normalization.ts"
+        },
+        {
+          "fromFile": "src/platform/cache-layout.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/platform/indexer-toolchain.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/platform/process-identity.ts",
+          "toFile": "src/domain/process-identity.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "platform",
+      "to": "filesystem",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 10,
+      "importerCount": 9,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/platform/bounded-file.ts",
+          "toFile": "src/filesystem/bounded-file.ts"
+        },
+        {
+          "fromFile": "src/platform/cache-layout.ts",
+          "toFile": "src/filesystem/durable-path.ts"
+        },
+        {
+          "fromFile": "src/platform/cache-layout.ts",
+          "toFile": "src/filesystem/file-descriptor.ts"
+        },
+        {
+          "fromFile": "src/platform/cli-version.ts",
+          "toFile": "src/filesystem/bounded-file.ts"
+        },
+        {
+          "fromFile": "src/platform/fingerprint-stat-cache.ts",
+          "toFile": "src/filesystem/file-descriptor.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "public-api",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/index.ts",
+          "toFile": "src/domain/types.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "public-api",
+      "to": "queries-internal",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/index.ts",
+          "toFile": "src/queries/internal/project-index.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "public-api",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/index.ts",
+          "toFile": "src/source/primitives/gitignore-filter.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "public-api",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/index.ts",
+          "toFile": "src/storage/db.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "public-api",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/index.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-cleanup",
+      "to": "analysis",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 23,
+      "importerCount": 16,
+      "importedFileCount": 8,
+      "examples": [
+        {
+          "fromFile": "src/queries/cleanup/cleanup-plan.ts",
+          "toFile": "src/analysis/file-classifier.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/co-change.ts",
+          "toFile": "src/analysis/file-classifier.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/co-change.ts",
+          "toFile": "src/analysis/generated-artifacts.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/co-change.ts",
+          "toFile": "src/analysis/git-history.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/coverage-contracts.ts",
+          "toFile": "src/analysis/glob-match.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-cleanup",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 18,
+      "importerCount": 13,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/queries/cleanup/callable-contracts.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/cleanup-plan.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/coverage-contracts.ts",
+          "toFile": "src/domain/path-glob.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/coverage-contracts.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/dead.ts",
+          "toFile": "src/domain/path-normalization.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-cleanup",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 4,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/cleanup/dead.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/doc-drift.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/similar.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/twin-drift.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-cleanup",
+      "to": "queries-frontend",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 1,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/queries/cleanup/recent-duplicates.ts",
+          "toFile": "src/queries/frontend/react-component-duplicates.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/recent-duplicates.ts",
+          "toFile": "src/queries/frontend/react-hook-candidates.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/recent-duplicates.ts",
+          "toFile": "src/queries/frontend/vue-component-duplicates.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/recent-duplicates.ts",
+          "toFile": "src/queries/frontend/vue-composable-candidates.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-cleanup",
+      "to": "queries-graph",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/cleanup/drift.ts",
+          "toFile": "src/queries/graph/architecture.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-cleanup",
+      "to": "queries-internal",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 22,
+      "importerCount": 13,
+      "importedFileCount": 10,
+      "examples": [
+        {
+          "fromFile": "src/queries/cleanup/cleanup-plan.ts",
+          "toFile": "src/queries/internal/project-index.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/dead.ts",
+          "toFile": "src/queries/internal/cache-invalidation.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/dead.ts",
+          "toFile": "src/queries/internal/dead-candidate-gate.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/dead.ts",
+          "toFile": "src/queries/internal/project-index.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/dead.ts",
+          "toFile": "src/queries/internal/reference-counts.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-cleanup",
+      "to": "queries-utils",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 9,
+      "importerCount": 9,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/cleanup/dead.ts",
+          "toFile": "src/queries/query-utils.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/decorative-checkers.ts",
+          "toFile": "src/queries/query-utils.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/duplicate-bodies.ts",
+          "toFile": "src/queries/query-utils.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/not-implemented.ts",
+          "toFile": "src/queries/query-utils.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/passthrough-candidates.ts",
+          "toFile": "src/queries/query-utils.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-cleanup",
+      "to": "semantic-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 6,
+      "importerCount": 5,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/queries/cleanup/dead.ts",
+          "toFile": "src/semantic/shared-primitives.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/dead.ts",
+          "toFile": "src/semantic/symbol-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/decorative-checkers.ts",
+          "toFile": "src/semantic/symbol-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/drift.ts",
+          "toFile": "src/semantic/shared-primitives.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/similar-signatures.ts",
+          "toFile": "src/semantic/shared-primitives.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-cleanup",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 39,
+      "importerCount": 19,
+      "importedFileCount": 12,
+      "examples": [
+        {
+          "fromFile": "src/queries/cleanup/boundary-evidence.ts",
+          "toFile": "src/source/primitives/source-text.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/callable-contracts.ts",
+          "toFile": "src/source/ast.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/co-change.ts",
+          "toFile": "src/source/primitives/project-file-boundary.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/coverage-contracts.ts",
+          "toFile": "src/source/ast.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/coverage-contracts.ts",
+          "toFile": "src/source/primitives/project-file-boundary.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-cleanup",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 35,
+      "importerCount": 23,
+      "importedFileCount": 7,
+      "examples": [
+        {
+          "fromFile": "src/queries/cleanup/boundary-evidence.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/callable-contracts.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/cleanup-plan.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/co-change.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/coverage-contracts.ts",
+          "toFile": "src/storage/db.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-cleanup",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 25,
+      "importerCount": 14,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/queries/cleanup/cleanup-plan.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/cleanup-plan.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/dead-exclusions.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/dead.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/dead.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-cleanup",
+      "to": "symbols-graph",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 5,
+      "importerCount": 5,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/queries/cleanup/co-change.ts",
+          "toFile": "src/symbols/graph/file-dep-graph.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/dead.ts",
+          "toFile": "src/symbols/graph/call-graph-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/decorative-checkers.ts",
+          "toFile": "src/symbols/graph/call-graph-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/similar-files.ts",
+          "toFile": "src/symbols/graph/file-dep-graph.ts"
+        },
+        {
+          "fromFile": "src/queries/cleanup/similar.ts",
+          "toFile": "src/symbols/graph/call-graph-evidence.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-cleanup",
+      "to": "symbols-references",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/cleanup/cleanup-plan.ts",
+          "toFile": "src/symbols/references/reference-sites.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-facade",
+      "to": "queries-cleanup",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 18,
+      "importerCount": 1,
+      "importedFileCount": 18,
+      "examples": [
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/cleanup/cleanup-plan.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/cleanup/co-change.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/cleanup/dead.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/cleanup/decorative-checkers.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/cleanup/doc-drift.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-facade",
+      "to": "queries-frontend",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 6,
+      "importerCount": 1,
+      "importedFileCount": 6,
+      "examples": [
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/frontend/react-component-duplicates.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/frontend/react-hook-candidates.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/frontend/react-large-component-pressure.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/frontend/vue-component-duplicates.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/frontend/vue-composable-candidates.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-facade",
+      "to": "queries-graph",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 14,
+      "importerCount": 2,
+      "importedFileCount": 12,
+      "examples": [
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/graph/affected.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/graph/architecture-baseline.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/graph/architecture.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/graph/bottlenecks.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/graph/coupling.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-facade",
+      "to": "queries-health",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 1,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/health/health-baseline.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/health/health-report.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/health/health.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/health/source-review.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-facade",
+      "to": "queries-impact",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 1,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/impact/change-surface.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/impact/context.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/impact/diff-impact.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/impact/incomplete-migration.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-facade",
+      "to": "queries-internal",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 1,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/internal/baseline-file.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/internal/exploration-topology.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-facade",
+      "to": "queries-navigation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 20,
+      "importerCount": 1,
+      "importedFileCount": 20,
+      "examples": [
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/navigation/binding-closure.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/navigation/by-kind.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/navigation/call-graph.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/navigation/code.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/navigation/deps.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-facade",
+      "to": "queries-quality",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 1,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/quality/complexity.ts"
+        },
+        {
+          "fromFile": "src/queries/index.ts",
+          "toFile": "src/queries/quality/slice-cohesion.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-frontend",
+      "to": "analysis",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 4,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/frontend/react-component-duplicates.ts",
+          "toFile": "src/analysis/similarity.ts"
+        },
+        {
+          "fromFile": "src/queries/frontend/react-hook-candidates.ts",
+          "toFile": "src/analysis/similarity.ts"
+        },
+        {
+          "fromFile": "src/queries/frontend/vue-component-duplicates.ts",
+          "toFile": "src/analysis/similarity.ts"
+        },
+        {
+          "fromFile": "src/queries/frontend/vue-composable-candidates.ts",
+          "toFile": "src/analysis/similarity.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-frontend",
+      "to": "queries-internal",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 13,
+      "importerCount": 6,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/queries/frontend/react-component-duplicates.ts",
+          "toFile": "src/queries/internal/frontend-behavior-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/frontend/react-component-duplicates.ts",
+          "toFile": "src/queries/internal/frontend-profile-roles.ts"
+        },
+        {
+          "fromFile": "src/queries/frontend/react-component-duplicates.ts",
+          "toFile": "src/queries/internal/pairwise-profiles.ts"
+        },
+        {
+          "fromFile": "src/queries/frontend/react-hook-candidates.ts",
+          "toFile": "src/queries/internal/frontend-behavior-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/frontend/react-hook-candidates.ts",
+          "toFile": "src/queries/internal/frontend-profile-roles.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-frontend",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 12,
+      "importerCount": 6,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/queries/frontend/react-component-duplicates.ts",
+          "toFile": "src/source/frontend-behavior-products.ts"
+        },
+        {
+          "fromFile": "src/queries/frontend/react-component-duplicates.ts",
+          "toFile": "src/source/react-profile.ts"
+        },
+        {
+          "fromFile": "src/queries/frontend/react-hook-candidates.ts",
+          "toFile": "src/source/frontend-behavior-products.ts"
+        },
+        {
+          "fromFile": "src/queries/frontend/react-hook-candidates.ts",
+          "toFile": "src/source/react-profile.ts"
+        },
+        {
+          "fromFile": "src/queries/frontend/react-large-component-pressure.ts",
+          "toFile": "src/source/frontend-behavior-products.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-frontend",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 6,
+      "importerCount": 6,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/frontend/react-component-duplicates.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/frontend/react-hook-candidates.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/frontend/react-large-component-pressure.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/frontend/vue-component-duplicates.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/frontend/vue-composable-candidates.ts",
+          "toFile": "src/storage/db.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-graph",
+      "to": "analysis",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 11,
+      "importerCount": 6,
+      "importedFileCount": 6,
+      "examples": [
+        {
+          "fromFile": "src/queries/graph/architecture.ts",
+          "toFile": "src/analysis/file-classifier.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/architecture.ts",
+          "toFile": "src/analysis/strongly-connected-components.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/cycles.ts",
+          "toFile": "src/analysis/file-classifier.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/cycles.ts",
+          "toFile": "src/analysis/strongly-connected-components.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/deep-chains.ts",
+          "toFile": "src/analysis/strongly-connected-components.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-graph",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 16,
+      "importerCount": 9,
+      "importedFileCount": 9,
+      "examples": [
+        {
+          "fromFile": "src/queries/graph/affected.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/architecture.ts",
+          "toFile": "src/domain/config-types.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/architecture.ts",
+          "toFile": "src/domain/path-glob.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/bottlenecks.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/entry-map.ts",
+          "toFile": "src/domain/group-by.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-graph",
+      "to": "queries-internal",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 20,
+      "importerCount": 12,
+      "importedFileCount": 11,
+      "examples": [
+        {
+          "fromFile": "src/queries/graph/architecture-baseline.ts",
+          "toFile": "src/queries/internal/baseline-file.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/architecture.ts",
+          "toFile": "src/queries/internal/architecture-policy.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/bottlenecks.ts",
+          "toFile": "src/queries/internal/project-index.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/coupling.ts",
+          "toFile": "src/queries/internal/file-resolution.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/coupling.ts",
+          "toFile": "src/queries/internal/target-coupling.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-graph",
+      "to": "queries-utils",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 3,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/graph/bottlenecks.ts",
+          "toFile": "src/queries/query-utils.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/graph-evidence.ts",
+          "toFile": "src/queries/query-utils.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/system-map.ts",
+          "toFile": "src/queries/query-utils.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-graph",
+      "to": "semantic-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 6,
+      "importerCount": 6,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/queries/graph/affected.ts",
+          "toFile": "src/semantic/symbol-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/bottlenecks.ts",
+          "toFile": "src/semantic/symbol-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/dependence-slice.ts",
+          "toFile": "src/semantic/local-flow.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/entry-map.ts",
+          "toFile": "src/semantic/symbol-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/hotspots.ts",
+          "toFile": "src/semantic/symbol-evidence.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-graph",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 13,
+      "importerCount": 6,
+      "importedFileCount": 10,
+      "examples": [
+        {
+          "fromFile": "src/queries/graph/affected.ts",
+          "toFile": "src/source/ast.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/program-control-edges.ts",
+          "toFile": "src/source/facts/behavior-skeleton.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/program-data-edges.ts",
+          "toFile": "src/source/ast/ast-core.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/program-data-edges.ts",
+          "toFile": "src/source/ast/ast-types.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/program-state-temporal-edges.ts",
+          "toFile": "src/source/facts/state-temporal-analysis.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-graph",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 20,
+      "importerCount": 17,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/queries/graph/affected.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/affected.ts",
+          "toFile": "src/storage/scip-rows.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/architecture-baseline.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/architecture.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/architecture.ts",
+          "toFile": "src/storage/scip-documents.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-graph",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 18,
+      "importerCount": 9,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/queries/graph/affected.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/affected.ts",
+          "toFile": "src/symbols/symbol-lookup.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/affected.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/architecture.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/bottlenecks.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-graph",
+      "to": "symbols-graph",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 14,
+      "importerCount": 10,
+      "importedFileCount": 7,
+      "examples": [
+        {
+          "fromFile": "src/queries/graph/affected.ts",
+          "toFile": "src/symbols/graph/call-graph-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/architecture.ts",
+          "toFile": "src/symbols/graph/file-dep-graph.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/bottlenecks.ts",
+          "toFile": "src/symbols/graph/call-graph-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/cycles.ts",
+          "toFile": "src/symbols/graph/file-dep-graph.ts"
+        },
+        {
+          "fromFile": "src/queries/graph/deep-chains.ts",
+          "toFile": "src/symbols/graph/file-dep-graph.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-health",
+      "to": "analysis",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 7,
+      "importerCount": 4,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/queries/health/health-baseline.ts",
+          "toFile": "src/analysis/file-classifier.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health.ts",
+          "toFile": "src/analysis/file-classifier.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health.ts",
+          "toFile": "src/analysis/git-history.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health.ts",
+          "toFile": "src/analysis/git-provenance.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health.ts",
+          "toFile": "src/analysis/suppressions.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-health",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 9,
+      "importerCount": 6,
+      "importedFileCount": 6,
+      "examples": [
+        {
+          "fromFile": "src/queries/health/detector-evidence-contracts.ts",
+          "toFile": "src/domain/graph-relation-providers.ts"
+        },
+        {
+          "fromFile": "src/queries/health/source-dependencies.ts",
+          "toFile": "src/domain/config-types.ts"
+        },
+        {
+          "fromFile": "src/queries/health/source-dependencies.ts",
+          "toFile": "src/domain/path-glob.ts"
+        },
+        {
+          "fromFile": "src/queries/health/source-findings.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/queries/health/source-modules.ts",
+          "toFile": "src/domain/config-types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-health",
+      "to": "queries-cleanup",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 13,
+      "importerCount": 2,
+      "importedFileCount": 8,
+      "examples": [
+        {
+          "fromFile": "src/queries/health/health-baseline.ts",
+          "toFile": "src/queries/cleanup/dead.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health-baseline.ts",
+          "toFile": "src/queries/cleanup/drift.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health-baseline.ts",
+          "toFile": "src/queries/cleanup/duplicate-bodies.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health-baseline.ts",
+          "toFile": "src/queries/cleanup/passthrough-candidates.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health-baseline.ts",
+          "toFile": "src/queries/cleanup/similar.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-health",
+      "to": "queries-frontend",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 6,
+      "importerCount": 1,
+      "importedFileCount": 6,
+      "examples": [
+        {
+          "fromFile": "src/queries/health/health.ts",
+          "toFile": "src/queries/frontend/react-component-duplicates.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health.ts",
+          "toFile": "src/queries/frontend/react-hook-candidates.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health.ts",
+          "toFile": "src/queries/frontend/react-large-component-pressure.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health.ts",
+          "toFile": "src/queries/frontend/vue-component-duplicates.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health.ts",
+          "toFile": "src/queries/frontend/vue-composable-candidates.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-health",
+      "to": "queries-graph",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 6,
+      "importerCount": 5,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/queries/health/detector-evidence-contracts.ts",
+          "toFile": "src/queries/graph/graph-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health-baseline.ts",
+          "toFile": "src/queries/graph/architecture.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health-baseline.ts",
+          "toFile": "src/queries/graph/cycles.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health.ts",
+          "toFile": "src/queries/graph/cycles.ts"
+        },
+        {
+          "fromFile": "src/queries/health/source-dependencies.ts",
+          "toFile": "src/queries/graph/architecture.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-health",
+      "to": "queries-internal",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 6,
+      "importerCount": 4,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/queries/health/health-baseline.ts",
+          "toFile": "src/queries/internal/baseline-file.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health-baseline.ts",
+          "toFile": "src/queries/internal/health-detector-profiles.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health.ts",
+          "toFile": "src/queries/internal/cache-invalidation.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health.ts",
+          "toFile": "src/queries/internal/health-detector-profiles.ts"
+        },
+        {
+          "fromFile": "src/queries/health/source-dependencies.ts",
+          "toFile": "src/queries/internal/architecture-policy.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-health",
+      "to": "queries-navigation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 2,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/health/health-types.ts",
+          "toFile": "src/queries/navigation/stats.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health.ts",
+          "toFile": "src/queries/navigation/stats.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-health",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 17,
+      "importerCount": 6,
+      "importedFileCount": 7,
+      "examples": [
+        {
+          "fromFile": "src/queries/health/source-dependencies.ts",
+          "toFile": "src/source/ast/function-metrics.ts"
+        },
+        {
+          "fromFile": "src/queries/health/source-dependencies.ts",
+          "toFile": "src/source/ast/maintenance-imports.ts"
+        },
+        {
+          "fromFile": "src/queries/health/source-dependencies.ts",
+          "toFile": "src/source/primitives/file-kind.ts"
+        },
+        {
+          "fromFile": "src/queries/health/source-finding-contract.ts",
+          "toFile": "src/source/ast/function-metrics.ts"
+        },
+        {
+          "fromFile": "src/queries/health/source-finding-contract.ts",
+          "toFile": "src/source/maintenance-coverage.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-health",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 5,
+      "importerCount": 3,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/queries/health/health-baseline.ts",
+          "toFile": "src/storage/atomic-json.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health-baseline.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/health/health.ts",
+          "toFile": "src/storage/sqlite-generation.ts"
+        },
+        {
+          "fromFile": "src/queries/health/source-suppressions.ts",
+          "toFile": "src/storage/suppression-store.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-impact",
+      "to": "analysis",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 6,
+      "importerCount": 4,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/change-surface.ts",
+          "toFile": "src/analysis/change-risk-metadata.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/analysis/file-classifier.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/analysis/git-history.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/analysis/suppressions.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/incomplete-migration.ts",
+          "toFile": "src/analysis/similarity.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-impact",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 8,
+      "importerCount": 5,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/change-surface.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/diff-impact.ts",
+          "toFile": "src/domain/path-normalization.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/diff-impact.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/incomplete-migration.ts",
+          "toFile": "src/domain/types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-impact",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-impact",
+      "to": "platform",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 2,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/diff-impact.ts",
+          "toFile": "src/platform/git-worktree.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/diff-impact.ts",
+          "toFile": "src/platform/project-files.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/newly-unreferenced-residue.ts",
+          "toFile": "src/platform/project-files.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-impact",
+      "to": "queries-cleanup",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 2,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/queries/cleanup/co-change.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/queries/cleanup/duplicate-bodies.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/queries/cleanup/similar.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/incomplete-migration.ts",
+          "toFile": "src/queries/cleanup/similar.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-impact",
+      "to": "queries-graph",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/queries/graph/affected.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-impact",
+      "to": "queries-internal",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 9,
+      "importerCount": 5,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/change-surface.ts",
+          "toFile": "src/queries/internal/file-resolution.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/change-surface.ts",
+          "toFile": "src/queries/internal/project-index.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/queries/internal/file-resolution.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/queries/internal/plan-source-candidates.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/diff-impact.ts",
+          "toFile": "src/queries/internal/change-analysis-types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-impact",
+      "to": "queries-navigation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 6,
+      "importerCount": 1,
+      "importedFileCount": 6,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/queries/navigation/call-graph.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/queries/navigation/deps.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/queries/navigation/source-snippet.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/queries/navigation/surface.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/queries/navigation/system.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-impact",
+      "to": "queries-quality",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/queries/quality/complexity.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-impact",
+      "to": "semantic-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 2,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/change-surface.ts",
+          "toFile": "src/semantic/shared-primitives.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/diff-impact.ts",
+          "toFile": "src/semantic/shared-primitives.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-impact",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 7,
+      "importerCount": 3,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/diff-impact.ts",
+          "toFile": "src/source/ast.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/incomplete-migration.ts",
+          "toFile": "src/source/ast/function-metrics.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/incomplete-migration.ts",
+          "toFile": "src/source/primitives/regex-utils.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/newly-unreferenced-residue.ts",
+          "toFile": "src/language-parsers/registry.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/newly-unreferenced-residue.ts",
+          "toFile": "src/source/ast.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-impact",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 5,
+      "importerCount": 5,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/change-surface.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/diff-impact.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/incomplete-migration.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/newly-unreferenced-residue.ts",
+          "toFile": "src/storage/db.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-impact",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 8,
+      "importerCount": 5,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/change-surface.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/symbols/symbol-lookup.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        },
+        {
+          "fromFile": "src/queries/impact/diff-impact.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-impact",
+      "to": "symbols-references",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/diff-impact.ts",
+          "toFile": "src/symbols/references/caller-evidence.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-internal",
+      "to": "analysis",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 9,
+      "importerCount": 6,
+      "importedFileCount": 6,
+      "examples": [
+        {
+          "fromFile": "src/queries/internal/dead-candidate-gate.ts",
+          "toFile": "src/analysis/file-classifier.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/frontend-behavior-evidence.ts",
+          "toFile": "src/analysis/similarity.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/frontend-profile-roles.ts",
+          "toFile": "src/analysis/file-classifier.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/frontend-profile-roles.ts",
+          "toFile": "src/analysis/frontend-route-conventions.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/frontend-profile-roles.ts",
+          "toFile": "src/analysis/ui-kit-surface.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-internal",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 10,
+      "importerCount": 9,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/queries/internal/architecture-policy.ts",
+          "toFile": "src/domain/config-types.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/architecture-policy.ts",
+          "toFile": "src/domain/path-glob.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/callee-evidence.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/consumer-evidence.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/dead-candidate-gate.ts",
+          "toFile": "src/domain/types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-internal",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 3,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/internal/candidate-scan.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/consumer-evidence.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/pairwise-profiles.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-internal",
+      "to": "queries-utils",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 3,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/internal/callee-evidence.ts",
+          "toFile": "src/queries/query-utils.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/candidate-scan.ts",
+          "toFile": "src/queries/query-utils.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/next-anchor-candidates.ts",
+          "toFile": "src/queries/query-utils.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-internal",
+      "to": "semantic-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 3,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/queries/internal/callee-evidence.ts",
+          "toFile": "src/semantic/symbol-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/consumer-evidence.ts",
+          "toFile": "src/semantic/shared-primitives.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/project-index.ts",
+          "toFile": "src/semantic/symbol-evidence.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-internal",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 17,
+      "importerCount": 6,
+      "importedFileCount": 9,
+      "examples": [
+        {
+          "fromFile": "src/queries/internal/connected-behavior.ts",
+          "toFile": "src/source/ast/ast-core.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/connected-behavior.ts",
+          "toFile": "src/source/ast/ast-types.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/connected-behavior.ts",
+          "toFile": "src/source/facts/behavior-skeleton.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/connected-behavior.ts",
+          "toFile": "src/source/facts/source-facts.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/connected-behavior.ts",
+          "toFile": "src/source/primitives/source-text.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-internal",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 22,
+      "importerCount": 14,
+      "importedFileCount": 8,
+      "examples": [
+        {
+          "fromFile": "src/queries/internal/baseline-file.ts",
+          "toFile": "src/storage/bounded-artifact.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/baseline-file.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/cache-invalidation.ts",
+          "toFile": "src/storage/cache-registry.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/cache-invalidation.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/callee-evidence.ts",
+          "toFile": "src/storage/db.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-internal",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 13,
+      "importerCount": 9,
+      "importedFileCount": 6,
+      "examples": [
+        {
+          "fromFile": "src/queries/internal/baseline-file.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/connected-behavior.ts",
+          "toFile": "src/symbols/identifier-index.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/consumer-evidence.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/dead-candidate-gate.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/dead-candidate-gate.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-internal",
+      "to": "symbols-graph",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 8,
+      "importerCount": 5,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/queries/internal/callee-evidence.ts",
+          "toFile": "src/symbols/graph/call-graph-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/connected-behavior.ts",
+          "toFile": "src/symbols/graph/scip-occurrence-call-targets.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/file-dependencies.ts",
+          "toFile": "src/symbols/graph/file-dep-graph.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/next-anchor-candidates.ts",
+          "toFile": "src/symbols/graph/call-graph-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/next-anchor-candidates.ts",
+          "toFile": "src/symbols/graph/member-call-targets.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-internal",
+      "to": "symbols-references",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 1,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/queries/internal/project-index.ts",
+          "toFile": "src/symbols/references/caller-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/internal/project-index.ts",
+          "toFile": "src/symbols/references/source-reference-scan.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-navigation",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 11,
+      "importerCount": 9,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/queries/navigation/by-kind.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/code.ts",
+          "toFile": "src/domain/source-inspection-limits.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/code.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/evidence.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/files.ts",
+          "toFile": "src/domain/path-normalization.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-navigation",
+      "to": "queries-internal",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 13,
+      "importerCount": 9,
+      "importedFileCount": 6,
+      "examples": [
+        {
+          "fromFile": "src/queries/navigation/code.ts",
+          "toFile": "src/queries/internal/exported-definition.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/deps.ts",
+          "toFile": "src/queries/internal/file-resolution.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/imports.ts",
+          "toFile": "src/queries/internal/file-resolution.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/methods.ts",
+          "toFile": "src/queries/internal/project-index.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/outline.ts",
+          "toFile": "src/queries/internal/file-resolution.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-navigation",
+      "to": "queries-utils",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 2,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/navigation/call-graph.ts",
+          "toFile": "src/queries/query-utils.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/source-inspection.ts",
+          "toFile": "src/queries/query-utils.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-navigation",
+      "to": "semantic-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 4,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/queries/navigation/call-graph.ts",
+          "toFile": "src/semantic/symbol-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/imports.ts",
+          "toFile": "src/semantic/shared-primitives.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/refs.ts",
+          "toFile": "src/semantic/symbol-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/trace.ts",
+          "toFile": "src/semantic/symbol-evidence.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-navigation",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 34,
+      "importerCount": 15,
+      "importedFileCount": 10,
+      "examples": [
+        {
+          "fromFile": "src/queries/navigation/binding-closure.ts",
+          "toFile": "src/language-parsers/index.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/binding-closure.ts",
+          "toFile": "src/source/facts/source-facts.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/binding-closure.ts",
+          "toFile": "src/source/primitives/source-text.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/code.ts",
+          "toFile": "src/source/primitives/project-file-boundary.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/code.ts",
+          "toFile": "src/source/primitives/repository-text.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-navigation",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 26,
+      "importerCount": 23,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/queries/navigation/binding-closure.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/by-kind.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/call-graph.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/code-result-json.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/code.ts",
+          "toFile": "src/storage/db.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-navigation",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 36,
+      "importerCount": 17,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/queries/navigation/binding-closure.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/binding-closure.ts",
+          "toFile": "src/symbols/imported-definitions.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/by-kind.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/by-kind.ts",
+          "toFile": "src/symbols/symbol-kind.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/by-kind.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-navigation",
+      "to": "symbols-graph",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 4,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/queries/navigation/call-graph.ts",
+          "toFile": "src/symbols/graph/call-graph-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/code.ts",
+          "toFile": "src/symbols/graph/call-graph-evidence.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/deps.ts",
+          "toFile": "src/symbols/graph/file-dep-graph.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/system.ts",
+          "toFile": "src/symbols/graph/file-dep-graph.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-navigation",
+      "to": "symbols-references",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 2,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/navigation/refs.ts",
+          "toFile": "src/symbols/references/reference-sites.ts"
+        },
+        {
+          "fromFile": "src/queries/navigation/trace.ts",
+          "toFile": "src/symbols/references/reference-sites.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-quality",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 2,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/queries/quality/complexity.ts",
+          "toFile": "src/domain/symbol-types.ts"
+        },
+        {
+          "fromFile": "src/queries/quality/slice-cohesion.ts",
+          "toFile": "src/domain/types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-quality",
+      "to": "queries-internal",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 2,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/queries/quality/complexity.ts",
+          "toFile": "src/queries/internal/indexed-reference-count.ts"
+        },
+        {
+          "fromFile": "src/queries/quality/complexity.ts",
+          "toFile": "src/queries/internal/project-index.ts"
+        },
+        {
+          "fromFile": "src/queries/quality/slice-cohesion.ts",
+          "toFile": "src/queries/internal/candidate-scan.ts"
+        },
+        {
+          "fromFile": "src/queries/quality/slice-cohesion.ts",
+          "toFile": "src/queries/internal/project-index.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-quality",
+      "to": "semantic-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/quality/slice-cohesion.ts",
+          "toFile": "src/semantic/local-flow.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-quality",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 5,
+      "importerCount": 1,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/queries/quality/complexity.ts",
+          "toFile": "src/source/ast.ts"
+        },
+        {
+          "fromFile": "src/queries/quality/complexity.ts",
+          "toFile": "src/source/ast/branch-nodes.ts"
+        },
+        {
+          "fromFile": "src/queries/quality/complexity.ts",
+          "toFile": "src/source/ast/function-metrics.ts"
+        },
+        {
+          "fromFile": "src/queries/quality/complexity.ts",
+          "toFile": "src/source/primitives/project-file-boundary.ts"
+        },
+        {
+          "fromFile": "src/queries/quality/complexity.ts",
+          "toFile": "src/source/primitives/source-stripper.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-quality",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 2,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/quality/complexity.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/queries/quality/slice-cohesion.ts",
+          "toFile": "src/storage/db.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-quality",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 6,
+      "importerCount": 2,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/queries/quality/complexity.ts",
+          "toFile": "src/symbols/symbol-lookup.ts"
+        },
+        {
+          "fromFile": "src/queries/quality/complexity.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        },
+        {
+          "fromFile": "src/queries/quality/slice-cohesion.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/queries/quality/slice-cohesion.ts",
+          "toFile": "src/symbols/definition-loc.ts"
+        },
+        {
+          "fromFile": "src/queries/quality/slice-cohesion.ts",
+          "toFile": "src/symbols/symbol-lookup.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "queries-utils",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/query-utils.ts",
+          "toFile": "src/domain/types.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-utils",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/query-utils.ts",
+          "toFile": "src/symbols/definition-loc.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "reindex",
+      "to": "analysis",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/reindex/runtime-boundaries.ts",
+          "toFile": "src/analysis/runtime-boundaries/index.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "reindex",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 41,
+      "importerCount": 21,
+      "importedFileCount": 10,
+      "examples": [
+        {
+          "fromFile": "src/reindex/affected-set.ts",
+          "toFile": "src/domain/project-input.ts"
+        },
+        {
+          "fromFile": "src/reindex/affected-shadow.ts",
+          "toFile": "src/domain/project-input.ts"
+        },
+        {
+          "fromFile": "src/reindex/affected-shadow.ts",
+          "toFile": "src/domain/time.ts"
+        },
+        {
+          "fromFile": "src/reindex/detect.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/reindex/incremental-sqlite-publication.ts",
+          "toFile": "src/domain/time.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "reindex",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 4,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/reindex/incremental-sqlite-publication.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/reindex/index.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/reindex/merge.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/reindex/runtime-boundaries.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "reindex",
+      "to": "platform",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 67,
+      "importerCount": 26,
+      "importedFileCount": 23,
+      "examples": [
+        {
+          "fromFile": "src/reindex/affected-shadow.ts",
+          "toFile": "src/platform/bounded-file.ts"
+        },
+        {
+          "fromFile": "src/reindex/detect.ts",
+          "toFile": "src/platform/project-file-inventory-context.ts"
+        },
+        {
+          "fromFile": "src/reindex/incremental-sqlite-publication.ts",
+          "toFile": "src/platform/file-clone.ts"
+        },
+        {
+          "fromFile": "src/reindex/index.ts",
+          "toFile": "src/platform/abort-signal.ts"
+        },
+        {
+          "fromFile": "src/reindex/index.ts",
+          "toFile": "src/platform/binary.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "reindex",
+      "to": "reindex-augmentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 2,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/reindex/index.ts",
+          "toFile": "src/reindex/augmentation/augment.ts"
+        },
+        {
+          "fromFile": "src/reindex/index.ts",
+          "toFile": "src/reindex/augmentation/post-index-augmentation.ts"
+        },
+        {
+          "fromFile": "src/reindex/runtime-boundaries.ts",
+          "toFile": "src/reindex/augmentation/post-index-augmentation.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "reindex",
+      "to": "reindex-vue",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/reindex/index.ts",
+          "toFile": "src/reindex/vue/augment-vue.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "reindex",
+      "to": "semantic-contracts",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 3,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/reindex/typescript-document-emitter.ts",
+          "toFile": "src/semantic/types.ts"
+        },
+        {
+          "fromFile": "src/reindex/typescript-incremental-index.ts",
+          "toFile": "src/semantic/types.ts"
+        },
+        {
+          "fromFile": "src/reindex/typescript-index-protocol.ts",
+          "toFile": "src/semantic/types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "reindex",
+      "to": "semantic-typescript",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 2,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/reindex/index.ts",
+          "toFile": "src/semantic/typescript/reference-fragment-shadow.ts"
+        },
+        {
+          "fromFile": "src/reindex/typescript-incremental-index.ts",
+          "toFile": "src/semantic/typescript/source-kinds.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "reindex",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 25,
+      "importerCount": 13,
+      "importedFileCount": 8,
+      "examples": [
+        {
+          "fromFile": "src/reindex/affected-shadow.ts",
+          "toFile": "src/storage/atomic-json.ts"
+        },
+        {
+          "fromFile": "src/reindex/affected-shadow.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/reindex/affected-shadow.ts",
+          "toFile": "src/storage/evidence-payload.ts"
+        },
+        {
+          "fromFile": "src/reindex/affected-shadow.ts",
+          "toFile": "src/storage/scip-documents.ts"
+        },
+        {
+          "fromFile": "src/reindex/index.ts",
+          "toFile": "src/storage/atomic-json.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "reindex",
+      "to": "symbols-graph",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 3,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/reindex/affected-shadow.ts",
+          "toFile": "src/symbols/graph/file-dep-graph.ts"
+        },
+        {
+          "fromFile": "src/reindex/index.ts",
+          "toFile": "src/symbols/graph/file-dep-graph.ts"
+        },
+        {
+          "fromFile": "src/reindex/typescript-incremental-index.ts",
+          "toFile": "src/symbols/graph/file-dep-graph.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "reindex-augmentation",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 1,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/reindex/augmentation/indexed-symbol-lookup.ts",
+          "toFile": "src/domain/scip-range.ts"
+        },
+        {
+          "fromFile": "src/reindex/augmentation/indexed-symbol-lookup.ts",
+          "toFile": "src/domain/scip-symbol.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "reindex-augmentation",
+      "to": "filesystem",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/reindex/augmentation/post-index-augmentation.ts",
+          "toFile": "src/filesystem/bounded-file.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "reindex-augmentation",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 1,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/reindex/augmentation/augment.ts",
+          "toFile": "src/source/primitives/gitignore-filter.ts"
+        },
+        {
+          "fromFile": "src/reindex/augmentation/augment.ts",
+          "toFile": "src/source/primitives/project-file-boundary.ts"
+        },
+        {
+          "fromFile": "src/reindex/augmentation/augment.ts",
+          "toFile": "src/source/primitives/source-fileset.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "reindex-vue",
+      "to": "platform",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 3,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/reindex/vue/augment-vue-runtime.ts",
+          "toFile": "src/platform/bounded-file.ts"
+        },
+        {
+          "fromFile": "src/reindex/vue/augment-vue-workers.ts",
+          "toFile": "src/platform/bounded-file.ts"
+        },
+        {
+          "fromFile": "src/reindex/vue/augment-vue.ts",
+          "toFile": "src/platform/project-files.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "reindex-vue",
+      "to": "reindex-augmentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 2,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/reindex/vue/augment-vue-runtime.ts",
+          "toFile": "src/reindex/augmentation/indexed-symbol-lookup.ts"
+        },
+        {
+          "fromFile": "src/reindex/vue/augment-vue.ts",
+          "toFile": "src/reindex/augmentation/augment.ts"
+        },
+        {
+          "fromFile": "src/reindex/vue/augment-vue.ts",
+          "toFile": "src/reindex/augmentation/post-index-augmentation.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-command-kit",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 6,
+      "importerCount": 3,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/runtime/command-kit/command-descriptor-types.ts",
+          "toFile": "src/domain/graph-exploration-contract.ts"
+        },
+        {
+          "fromFile": "src/runtime/command-kit/command-docs.ts",
+          "toFile": "src/domain/graph-relation-contracts.ts"
+        },
+        {
+          "fromFile": "src/runtime/command-kit/command-docs.ts",
+          "toFile": "src/domain/graph-relation-providers.ts"
+        },
+        {
+          "fromFile": "src/runtime/command-kit/exploration-manual.ts",
+          "toFile": "src/domain/graph-exploration-contract.ts"
+        },
+        {
+          "fromFile": "src/runtime/command-kit/exploration-manual.ts",
+          "toFile": "src/domain/graph-relation-contracts.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-command-kit",
+      "to": "runtime-services",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 16,
+      "importerCount": 5,
+      "importedFileCount": 8,
+      "examples": [
+        {
+          "fromFile": "src/runtime/command-kit/command-descriptor-types.ts",
+          "toFile": "src/runtime/claim-qualification.ts"
+        },
+        {
+          "fromFile": "src/runtime/command-kit/command-descriptor-types.ts",
+          "toFile": "src/runtime/command-operation.ts"
+        },
+        {
+          "fromFile": "src/runtime/command-kit/command-docs.ts",
+          "toFile": "src/runtime/claim-qualification.ts"
+        },
+        {
+          "fromFile": "src/runtime/command-kit/command-docs.ts",
+          "toFile": "src/runtime/command-operation.ts"
+        },
+        {
+          "fromFile": "src/runtime/command-kit/command-execution.ts",
+          "toFile": "src/runtime/claim-qualification.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-command-kit",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/command-kit/command-execution.ts",
+          "toFile": "src/storage/db.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-commands",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 1,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/domain/graph-relation-providers.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/domain/types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-commands",
+      "to": "platform",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 2,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/platform/cache-layout.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/platform/scip-cli.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-registry.ts",
+          "toFile": "src/platform/terminal-output.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-commands",
+      "to": "queries-facade",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 2,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/commands/architecture-stop-hook.ts",
+          "toFile": "src/queries/index.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/queries/index.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-commands",
+      "to": "queries-health",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/queries/health/health.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-commands",
+      "to": "reindex",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 1,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/reindex/affected-shadow.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/reindex/index.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/reindex/sqlite-generation-store.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-commands",
+      "to": "runtime-command-kit",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 12,
+      "importerCount": 7,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/runtime/commands/command-descriptors.ts",
+          "toFile": "src/runtime/command-kit/command-descriptor-types.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-descriptors.ts",
+          "toFile": "src/runtime/command-kit/command-spec-builders.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/runtime/command-kit/command-execution.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/runtime/command-kit/exploration-manual.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-panels.ts",
+          "toFile": "src/runtime/command-kit/command-descriptor-types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-commands",
+      "to": "runtime-query-commands",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 9,
+      "importerCount": 3,
+      "importedFileCount": 8,
+      "examples": [
+        {
+          "fromFile": "src/runtime/commands/command-descriptors.ts",
+          "toFile": "src/runtime/query-commands/maintenance.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/runtime/query-commands/maintenance.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/query-command-specs.ts",
+          "toFile": "src/runtime/query-commands/cleanup.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/query-command-specs.ts",
+          "toFile": "src/runtime/query-commands/core.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/query-command-specs.ts",
+          "toFile": "src/runtime/query-commands/graph.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-commands",
+      "to": "runtime-services",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 29,
+      "importerCount": 4,
+      "importedFileCount": 24,
+      "examples": [
+        {
+          "fromFile": "src/runtime/commands/command-descriptors.ts",
+          "toFile": "src/runtime/cli-support.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-descriptors.ts",
+          "toFile": "src/runtime/command-operation.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/runtime/agent-setup.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/runtime/ast-parser-setup.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/runtime/cli-context.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-commands",
+      "to": "semantic-rust",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/semantic/rust/lsp-session.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-commands",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 2,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/runtime/commands/architecture-stop-hook.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/architecture-stop-hook.ts",
+          "toFile": "src/storage/scip-documents.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/storage/suppression-store.ts"
+        },
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/storage/watch-refresh-requests.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-entry",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cli-main.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-entry",
+      "to": "platform",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 2,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cli-main.ts",
+          "toFile": "src/platform/project-file-inventory-context.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-main.ts",
+          "toFile": "src/platform/terminal-output.ts"
+        },
+        {
+          "fromFile": "src/runtime/index.ts",
+          "toFile": "src/platform/cache-layout.ts"
+        },
+        {
+          "fromFile": "src/runtime/index.ts",
+          "toFile": "src/platform/scip-cli.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-entry",
+      "to": "runtime-commands",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 1,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cli-main.ts",
+          "toFile": "src/runtime/commands/command-panels.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-main.ts",
+          "toFile": "src/runtime/commands/command-registry.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-main.ts",
+          "toFile": "src/runtime/commands/invocation-command-descriptors.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-entry",
+      "to": "runtime-services",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 16,
+      "importerCount": 3,
+      "importedFileCount": 15,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cli-main.ts",
+          "toFile": "src/runtime/cli-context.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-main.ts",
+          "toFile": "src/runtime/cli-support.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-main.ts",
+          "toFile": "src/runtime/evidence-command-freshness.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-main.ts",
+          "toFile": "src/runtime/git-worktree-context-cache.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-main.ts",
+          "toFile": "src/runtime/output-pagination.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-entry",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cli-main.ts",
+          "toFile": "src/storage/evidence-cache.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-query-commands",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 5,
+      "importerCount": 3,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/runtime/query-commands/cleanup/handlers.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/navigation.ts",
+          "toFile": "src/domain/graph-exploration-contract.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/navigation.ts",
+          "toFile": "src/domain/graph-relation-providers.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/navigation.ts",
+          "toFile": "src/domain/source-inspection-limits.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/symbol-resolution.ts",
+          "toFile": "src/domain/types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-query-commands",
+      "to": "queries-facade",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 11,
+      "importerCount": 11,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/query-commands/cleanup/descriptors.ts",
+          "toFile": "src/queries/index.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/cleanup/frontend-handlers.ts",
+          "toFile": "src/queries/index.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/cleanup/handlers.ts",
+          "toFile": "src/queries/index.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/cleanup/renderers.ts",
+          "toFile": "src/queries/index.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/core.ts",
+          "toFile": "src/queries/index.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-query-commands",
+      "to": "queries-navigation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 6,
+      "importerCount": 3,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/runtime/query-commands/direct-navigation.ts",
+          "toFile": "src/queries/navigation/code-result-json.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/direct-navigation.ts",
+          "toFile": "src/queries/navigation/code.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/direct-navigation.ts",
+          "toFile": "src/queries/navigation/outline.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/direct-navigation.ts",
+          "toFile": "src/queries/navigation/refs.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/navigation.ts",
+          "toFile": "src/queries/navigation/source-search.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-query-commands",
+      "to": "runtime-command-kit",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 31,
+      "importerCount": 11,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/runtime/query-commands/cleanup/descriptors.ts",
+          "toFile": "src/runtime/command-kit/command-descriptor-types.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/cleanup/descriptors.ts",
+          "toFile": "src/runtime/command-kit/command-execution.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/cleanup/descriptors.ts",
+          "toFile": "src/runtime/command-kit/command-spec-builders.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/cleanup/descriptors.ts",
+          "toFile": "src/runtime/command-kit/query-command-builders.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/cleanup/frontend-handlers.ts",
+          "toFile": "src/runtime/command-kit/command-execution.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-query-commands",
+      "to": "runtime-services",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 28,
+      "importerCount": 13,
+      "importedFileCount": 9,
+      "examples": [
+        {
+          "fromFile": "src/runtime/query-commands/cleanup/descriptors.ts",
+          "toFile": "src/runtime/command-operation.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/cleanup/frontend-handlers.ts",
+          "toFile": "src/runtime/render.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/cleanup/handlers.ts",
+          "toFile": "src/runtime/cleanup-verify.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/cleanup/handlers.ts",
+          "toFile": "src/runtime/cli-context.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/cleanup/handlers.ts",
+          "toFile": "src/runtime/cli-support.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-query-commands",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/query-commands/symbol-resolution.ts",
+          "toFile": "src/storage/db.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-query-commands",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 1,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/runtime/query-commands/symbol-resolution.ts",
+          "toFile": "src/symbols/symbol-lookup.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-commands/symbol-resolution.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-services",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 58,
+      "importerCount": 26,
+      "importedFileCount": 21,
+      "examples": [
+        {
+          "fromFile": "src/runtime/ast-parser-setup.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/runtime/claim-qualification.ts",
+          "toFile": "src/domain/claim-qualification.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-context.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-json-envelope.ts",
+          "toFile": "src/domain/observation-receipt.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-json-envelope.ts",
+          "toFile": "src/domain/record-validation.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-services",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 3,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cli-support.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/runtime/health-report-cache.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/runtime/typescript-mailbox-worker.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-services",
+      "to": "platform",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 92,
+      "importerCount": 32,
+      "importedFileCount": 23,
+      "examples": [
+        {
+          "fromFile": "src/runtime/agent-setup.ts",
+          "toFile": "src/platform/bounded-file.ts"
+        },
+        {
+          "fromFile": "src/runtime/agent-setup.ts",
+          "toFile": "src/platform/cache-layout.ts"
+        },
+        {
+          "fromFile": "src/runtime/ast-parser-setup.ts",
+          "toFile": "src/platform/bounded-file.ts"
+        },
+        {
+          "fromFile": "src/runtime/cleanup-verify.ts",
+          "toFile": "src/platform/binary.ts"
+        },
+        {
+          "fromFile": "src/runtime/cleanup-verify.ts",
+          "toFile": "src/platform/bounded-file.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-services",
+      "to": "queries-cleanup",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cleanup-verify.ts",
+          "toFile": "src/queries/cleanup/cleanup-plan.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-services",
+      "to": "queries-facade",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 3,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/agent-setup.ts",
+          "toFile": "src/queries/index.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-support.ts",
+          "toFile": "src/queries/index.ts"
+        },
+        {
+          "fromFile": "src/runtime/project-setup.ts",
+          "toFile": "src/queries/index.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-services",
+      "to": "queries-health",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 2,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/health-capability-disclosure.ts",
+          "toFile": "src/queries/health/health-report.ts"
+        },
+        {
+          "fromFile": "src/runtime/health-report-cache.ts",
+          "toFile": "src/queries/health/health-report.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-services",
+      "to": "queries-internal",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cli-support.ts",
+          "toFile": "src/queries/internal/production-callables.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-services",
+      "to": "queries-navigation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 17,
+      "importerCount": 4,
+      "importedFileCount": 12,
+      "examples": [
+        {
+          "fromFile": "src/runtime/query-service-fastpath.ts",
+          "toFile": "src/queries/navigation/code.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-service-fastpath.ts",
+          "toFile": "src/queries/navigation/source-search.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-service-server.ts",
+          "toFile": "src/queries/navigation/outline.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-service-server.ts",
+          "toFile": "src/queries/navigation/source-search.ts"
+        },
+        {
+          "fromFile": "src/runtime/query-service.ts",
+          "toFile": "src/queries/navigation/by-kind.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-services",
+      "to": "reindex",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 19,
+      "importerCount": 10,
+      "importedFileCount": 11,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cli-context.ts",
+          "toFile": "src/reindex/shared-generation-store.ts"
+        },
+        {
+          "fromFile": "src/runtime/index-freshness.ts",
+          "toFile": "src/reindex/detect.ts"
+        },
+        {
+          "fromFile": "src/runtime/index-freshness.ts",
+          "toFile": "src/reindex/index-coverage.ts"
+        },
+        {
+          "fromFile": "src/runtime/index-freshness.ts",
+          "toFile": "src/reindex/shared-generation-store.ts"
+        },
+        {
+          "fromFile": "src/runtime/index-freshness.ts",
+          "toFile": "src/reindex/sqlite-generation-store.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-services",
+      "to": "semantic-contracts",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/project-readiness.ts",
+          "toFile": "src/semantic/types.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-services",
+      "to": "semantic-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 1,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cli-support.ts",
+          "toFile": "src/semantic/provider-cache.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-support.ts",
+          "toFile": "src/semantic/shared-primitives.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-support.ts",
+          "toFile": "src/semantic/symbol-evidence.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-services",
+      "to": "semantic-rust",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 3,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cli-support.ts",
+          "toFile": "src/semantic/rust/engine-identity.ts"
+        },
+        {
+          "fromFile": "src/runtime/project-readiness.ts",
+          "toFile": "src/semantic/rust/status.ts"
+        },
+        {
+          "fromFile": "src/runtime/project-setup.ts",
+          "toFile": "src/semantic/rust/lsp-session.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-services",
+      "to": "semantic-typescript",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 7,
+      "importerCount": 5,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cli-support.ts",
+          "toFile": "src/semantic/typescript/reference-fragment-shadow.ts"
+        },
+        {
+          "fromFile": "src/runtime/project-readiness.ts",
+          "toFile": "src/semantic/typescript/status.ts"
+        },
+        {
+          "fromFile": "src/runtime/typescript-mailbox-lanes.ts",
+          "toFile": "src/semantic/typescript/project-budget.ts"
+        },
+        {
+          "fromFile": "src/runtime/typescript-mailbox-lanes.ts",
+          "toFile": "src/semantic/typescript/session-protocol.ts"
+        },
+        {
+          "fromFile": "src/runtime/typescript-mailbox-worker.ts",
+          "toFile": "src/semantic/typescript/session-protocol.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-services",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 14,
+      "importerCount": 8,
+      "importedFileCount": 10,
+      "examples": [
+        {
+          "fromFile": "src/runtime/ast-parser-setup.ts",
+          "toFile": "src/source/ast/ast-language.ts"
+        },
+        {
+          "fromFile": "src/runtime/ast-parser-setup.ts",
+          "toFile": "src/source/ast/ast-runtime.ts"
+        },
+        {
+          "fromFile": "src/runtime/cleanup-verify.ts",
+          "toFile": "src/source/primitives/import-path-resolver.ts"
+        },
+        {
+          "fromFile": "src/runtime/cleanup-verify.ts",
+          "toFile": "src/source/primitives/source-stripper.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-context.ts",
+          "toFile": "src/source/primitives/gitignore-filter.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-services",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 34,
+      "importerCount": 22,
+      "importedFileCount": 11,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cli-context.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-context.ts",
+          "toFile": "src/storage/sqlite-generation.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-context.ts",
+          "toFile": "src/storage/suppression-store.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-support.ts",
+          "toFile": "src/storage/cache-registry.ts"
+        },
+        {
+          "fromFile": "src/runtime/cli-support.ts",
+          "toFile": "src/storage/db.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-services",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 2,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/runtime/file-product-warm.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/runtime/refs-pagination.ts",
+          "toFile": "src/symbols/identifier-attribution.ts"
+        },
+        {
+          "fromFile": "src/runtime/refs-pagination.ts",
+          "toFile": "src/symbols/symbol-lookup.ts"
+        },
+        {
+          "fromFile": "src/runtime/refs-pagination.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "runtime-services",
+      "to": "symbols-references",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/refs-pagination.ts",
+          "toFile": "src/symbols/references/reference-sites.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "semantic-contracts",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/semantic/types.ts",
+          "toFile": "src/domain/types.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "semantic-core",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 4,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/semantic/local-flow.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/provider-cache.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/shared-primitives.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/symbol-evidence.ts",
+          "toFile": "src/domain/types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-core",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 2,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/semantic/shared-primitives.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/semantic/symbol-evidence.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-core",
+      "to": "semantic-contracts",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 5,
+      "importerCount": 5,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/semantic/index.ts",
+          "toFile": "src/semantic/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/provider-cache.ts",
+          "toFile": "src/semantic/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/session-manager.ts",
+          "toFile": "src/semantic/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/shared-primitives.ts",
+          "toFile": "src/semantic/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/symbol-evidence.ts",
+          "toFile": "src/semantic/types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-core",
+      "to": "semantic-rust",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 8,
+      "importerCount": 3,
+      "importedFileCount": 7,
+      "examples": [
+        {
+          "fromFile": "src/semantic/provider-cache.ts",
+          "toFile": "src/semantic/rust/callee-symbol-resolution.ts"
+        },
+        {
+          "fromFile": "src/semantic/provider-cache.ts",
+          "toFile": "src/semantic/rust/import-usage.ts"
+        },
+        {
+          "fromFile": "src/semantic/provider-cache.ts",
+          "toFile": "src/semantic/rust/provider.ts"
+        },
+        {
+          "fromFile": "src/semantic/provider-cache.ts",
+          "toFile": "src/semantic/rust/scip-occurrence-callees.ts"
+        },
+        {
+          "fromFile": "src/semantic/shared-primitives.ts",
+          "toFile": "src/semantic/rust/default-impl-references.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-core",
+      "to": "semantic-typescript",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 10,
+      "importerCount": 4,
+      "importedFileCount": 7,
+      "examples": [
+        {
+          "fromFile": "src/semantic/local-flow.ts",
+          "toFile": "src/semantic/typescript/local-flow.ts"
+        },
+        {
+          "fromFile": "src/semantic/local-flow.ts",
+          "toFile": "src/semantic/typescript/source-kinds.ts"
+        },
+        {
+          "fromFile": "src/semantic/provider-cache.ts",
+          "toFile": "src/semantic/typescript/remote-provider.ts"
+        },
+        {
+          "fromFile": "src/semantic/provider-cache.ts",
+          "toFile": "src/semantic/typescript/source-kinds.ts"
+        },
+        {
+          "fromFile": "src/semantic/shared-primitives.ts",
+          "toFile": "src/semantic/typescript/reference-fragment-shadow.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-core",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 3,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/semantic/local-flow.ts",
+          "toFile": "src/source/primitives/source-text.ts"
+        },
+        {
+          "fromFile": "src/semantic/provider-cache.ts",
+          "toFile": "src/source/ast/ast-language.ts"
+        },
+        {
+          "fromFile": "src/semantic/provider-cache.ts",
+          "toFile": "src/source/facts/source-facts.ts"
+        },
+        {
+          "fromFile": "src/semantic/symbol-evidence.ts",
+          "toFile": "src/source/primitives/source-text.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-core",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 12,
+      "importerCount": 5,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/semantic/local-flow.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/semantic/local-flow.ts",
+          "toFile": "src/storage/per-db-cache.ts"
+        },
+        {
+          "fromFile": "src/semantic/provider-cache.ts",
+          "toFile": "src/storage/cache-registry.ts"
+        },
+        {
+          "fromFile": "src/semantic/provider-cache.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/semantic/session-manager.ts",
+          "toFile": "src/storage/db.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-core",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 2,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/semantic/shared-primitives.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/semantic/symbol-evidence.ts",
+          "toFile": "src/symbols/semantic-evidence-port.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-core",
+      "to": "symbols-graph",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/semantic/symbol-evidence.ts",
+          "toFile": "src/symbols/graph/file-dep-graph.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "semantic-rust",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 23,
+      "importerCount": 16,
+      "importedFileCount": 6,
+      "examples": [
+        {
+          "fromFile": "src/semantic/rust/callee-symbol-resolution.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/default-impl-references.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/durable-session-protocol.ts",
+          "toFile": "src/domain/record-validation.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/durable-session-protocol.ts",
+          "toFile": "src/domain/stable-json.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/durable-session-protocol.ts",
+          "toFile": "src/domain/types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-rust",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 5,
+      "importerCount": 5,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/semantic/rust/durable-session.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/lsp-session-worker.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/lsp-session.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/provider.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/scip-occurrence-callees.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-rust",
+      "to": "platform",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 22,
+      "importerCount": 13,
+      "importedFileCount": 8,
+      "examples": [
+        {
+          "fromFile": "src/semantic/rust/default-impl-references.ts",
+          "toFile": "src/platform/project-files.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/durable-session-server.ts",
+          "toFile": "src/platform/process-file-lock.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/durable-session-server.ts",
+          "toFile": "src/platform/process-identity.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/durable-session-server.ts",
+          "toFile": "src/platform/process-liveness.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/durable-session.ts",
+          "toFile": "src/platform/bounded-file.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-rust",
+      "to": "semantic-contracts",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 12,
+      "importerCount": 12,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/semantic/rust/callee-symbol-resolution.ts",
+          "toFile": "src/semantic/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/default-impl-references.ts",
+          "toFile": "src/semantic/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/durable-session-protocol.ts",
+          "toFile": "src/semantic/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/import-usage.ts",
+          "toFile": "src/semantic/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/lsp-batch-worker.ts",
+          "toFile": "src/semantic/types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-rust",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 5,
+      "importerCount": 3,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/semantic/rust/default-impl-references.ts",
+          "toFile": "src/source/primitives/regex-utils.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/import-usage.ts",
+          "toFile": "src/language-parsers/index.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/import-usage.ts",
+          "toFile": "src/language-parsers/languages/rust.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/import-usage.ts",
+          "toFile": "src/source/ast.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/scip-occurrence-callees.ts",
+          "toFile": "src/source/facts/source-facts.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-rust",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 10,
+      "importerCount": 8,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/semantic/rust/callee-symbol-resolution.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/default-impl-references.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/default-impl-references.ts",
+          "toFile": "src/storage/scip-mentions.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/durable-session-protocol.ts",
+          "toFile": "src/storage/bounded-mailbox.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/durable-session-server.ts",
+          "toFile": "src/storage/atomic-json.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-rust",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 5,
+      "importerCount": 4,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/semantic/rust/callee-symbol-resolution.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/provider.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/scip-occurrence-callees.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/scip-occurrence-callees.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        },
+        {
+          "fromFile": "src/semantic/rust/scip-occurrence-references.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-typescript",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 20,
+      "importerCount": 14,
+      "importedFileCount": 6,
+      "examples": [
+        {
+          "fromFile": "src/semantic/typescript/call-ownership.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/definition-node-matcher.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/indexed-definitions.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/reference-fragment-shadow.ts",
+          "toFile": "src/domain/native-gc.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/reference-fragment-shadow.ts",
+          "toFile": "src/domain/project-input.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-typescript",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 6,
+      "importerCount": 6,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/semantic/typescript/reference-fragment-shadow.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/remote-provider.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/session-protocol.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/session-service.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/source-file-resolver.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-typescript",
+      "to": "platform",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 13,
+      "importerCount": 7,
+      "importedFileCount": 7,
+      "examples": [
+        {
+          "fromFile": "src/semantic/typescript/remote-provider.ts",
+          "toFile": "src/platform/bounded-file.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/remote-provider.ts",
+          "toFile": "src/platform/git-worktree.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/remote-provider.ts",
+          "toFile": "src/platform/process-identity.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/remote-provider.ts",
+          "toFile": "src/platform/process-liveness.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/remote-provider.ts",
+          "toFile": "src/platform/watch-service-state.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-typescript",
+      "to": "semantic-contracts",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 8,
+      "importerCount": 8,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/semantic/typescript/reference-fragment-shadow.ts",
+          "toFile": "src/semantic/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/reference-fragments.ts",
+          "toFile": "src/semantic/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/remote-provider.ts",
+          "toFile": "src/semantic/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/semantic-locations.ts",
+          "toFile": "src/semantic/types.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/session-host.ts",
+          "toFile": "src/semantic/types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-typescript",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 2,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/semantic/typescript/semantic-locations.ts",
+          "toFile": "src/source/primitives/regex-utils.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/ts-morph-provider.ts",
+          "toFile": "src/source/primitives/import-path-resolver.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-typescript",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 25,
+      "importerCount": 13,
+      "importedFileCount": 8,
+      "examples": [
+        {
+          "fromFile": "src/semantic/typescript/definition-node-matcher.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/indexed-definitions.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/indexed-definitions.ts",
+          "toFile": "src/storage/per-db-cache.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/reference-fragment-shadow.ts",
+          "toFile": "src/storage/cache-registry.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/reference-fragment-shadow.ts",
+          "toFile": "src/storage/db.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-typescript",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 6,
+      "importerCount": 3,
+      "importedFileCount": 2,
+      "examples": [
+        {
+          "fromFile": "src/semantic/typescript/definition-node-matcher.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/definition-node-matcher.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/indexed-definitions.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/indexed-definitions.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/ts-morph-provider.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "semantic-typescript",
+      "to": "symbols-graph",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 2,
+      "importerCount": 2,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/semantic/typescript/reference-fragment-shadow.ts",
+          "toFile": "src/symbols/graph/file-dep-graph.ts"
+        },
+        {
+          "fromFile": "src/semantic/typescript/semantic-identity-context.ts",
+          "toFile": "src/symbols/graph/file-dep-graph.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "source",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 31,
+      "importerCount": 28,
+      "importedFileCount": 10,
+      "examples": [
+        {
+          "fromFile": "src/language-parsers/import-index.ts",
+          "toFile": "src/domain/path-normalization.ts"
+        },
+        {
+          "fromFile": "src/language-parsers/index.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/language-parsers/languages/c-like.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/language-parsers/languages/clojure.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/language-parsers/languages/dart.ts",
+          "toFile": "src/domain/types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "source",
+      "to": "platform",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 9,
+      "importerCount": 9,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/language-parsers/index.ts",
+          "toFile": "src/platform/project-files.ts"
+        },
+        {
+          "fromFile": "src/source/maintenance-coverage.ts",
+          "toFile": "src/platform/project-files.ts"
+        },
+        {
+          "fromFile": "src/source/maintenance-snapshot.ts",
+          "toFile": "src/platform/project-files.ts"
+        },
+        {
+          "fromFile": "src/source/primitives/gitignore-filter.ts",
+          "toFile": "src/platform/bounded-file.ts"
+        },
+        {
+          "fromFile": "src/source/primitives/import-path-resolver.ts",
+          "toFile": "src/platform/workspace-packages.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "source",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 63,
+      "importerCount": 36,
+      "importedFileCount": 7,
+      "examples": [
+        {
+          "fromFile": "src/language-parsers/import-index.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/language-parsers/import-index.ts",
+          "toFile": "src/storage/per-db-cache.ts"
+        },
+        {
+          "fromFile": "src/language-parsers/index.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/language-parsers/index.ts",
+          "toFile": "src/storage/evidence-cache.ts"
+        },
+        {
+          "fromFile": "src/language-parsers/index.ts",
+          "toFile": "src/storage/evidence-payload.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "storage",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 14,
+      "importerCount": 6,
+      "importedFileCount": 10,
+      "examples": [
+        {
+          "fromFile": "src/storage/bounded-mailbox.ts",
+          "toFile": "src/domain/process-identity.ts"
+        },
+        {
+          "fromFile": "src/storage/bounded-mailbox.ts",
+          "toFile": "src/domain/stable-json.ts"
+        },
+        {
+          "fromFile": "src/storage/bounded-mailbox.ts",
+          "toFile": "src/domain/time.ts"
+        },
+        {
+          "fromFile": "src/storage/db.ts",
+          "toFile": "src/domain/path-normalization.ts"
+        },
+        {
+          "fromFile": "src/storage/db.ts",
+          "toFile": "src/domain/types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "storage",
+      "to": "filesystem",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 8,
+      "importerCount": 6,
+      "importedFileCount": 4,
+      "examples": [
+        {
+          "fromFile": "src/storage/atomic-file.ts",
+          "toFile": "src/filesystem/durable-file.ts"
+        },
+        {
+          "fromFile": "src/storage/atomic-file.ts",
+          "toFile": "src/filesystem/durable-path.ts"
+        },
+        {
+          "fromFile": "src/storage/atomic-file.ts",
+          "toFile": "src/filesystem/file-descriptor.ts"
+        },
+        {
+          "fromFile": "src/storage/bounded-artifact.ts",
+          "toFile": "src/filesystem/bounded-file.ts"
+        },
+        {
+          "fromFile": "src/storage/bounded-mailbox.ts",
+          "toFile": "src/filesystem/bounded-file.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "storage",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/storage/evidence-products.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "storage",
+      "to": "platform",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 5,
+      "importerCount": 3,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/storage/evidence-cache.ts",
+          "toFile": "src/platform/cli-version.ts"
+        },
+        {
+          "fromFile": "src/storage/scip-artifact.ts",
+          "toFile": "src/platform/bounded-file.ts"
+        },
+        {
+          "fromFile": "src/storage/sqlite-generation.ts",
+          "toFile": "src/platform/process-identity.ts"
+        },
+        {
+          "fromFile": "src/storage/sqlite-generation.ts",
+          "toFile": "src/platform/process-liveness.ts"
+        },
+        {
+          "fromFile": "src/storage/sqlite-generation.ts",
+          "toFile": "src/platform/repository-cache-lock.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "symbols-core",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 10,
+      "importerCount": 7,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/symbols/definition-catalog.ts",
+          "toFile": "src/domain/file-access-recorder.ts"
+        },
+        {
+          "fromFile": "src/symbols/definition-catalog.ts",
+          "toFile": "src/domain/native-gc.ts"
+        },
+        {
+          "fromFile": "src/symbols/definition-catalog.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/symbols/definition-loc.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/symbols/identifier-attribution.ts",
+          "toFile": "src/domain/path-normalization.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "symbols-core",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 14,
+      "importerCount": 5,
+      "importedFileCount": 9,
+      "examples": [
+        {
+          "fromFile": "src/symbols/definition-catalog.ts",
+          "toFile": "src/language-parsers/source-evidence.ts"
+        },
+        {
+          "fromFile": "src/symbols/definition-catalog.ts",
+          "toFile": "src/source/ast.ts"
+        },
+        {
+          "fromFile": "src/symbols/definition-catalog.ts",
+          "toFile": "src/source/primitives/regex-utils.ts"
+        },
+        {
+          "fromFile": "src/symbols/identifier-attribution.ts",
+          "toFile": "src/language-parsers/import-index.ts"
+        },
+        {
+          "fromFile": "src/symbols/identifier-attribution.ts",
+          "toFile": "src/source/primitives/source-fileset.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "symbols-core",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 20,
+      "importerCount": 8,
+      "importedFileCount": 7,
+      "examples": [
+        {
+          "fromFile": "src/symbols/definition-catalog.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/symbols/definition-catalog.ts",
+          "toFile": "src/storage/evidence-cache.ts"
+        },
+        {
+          "fromFile": "src/symbols/definition-catalog.ts",
+          "toFile": "src/storage/evidence-payload.ts"
+        },
+        {
+          "fromFile": "src/symbols/definition-catalog.ts",
+          "toFile": "src/storage/evidence-products.ts"
+        },
+        {
+          "fromFile": "src/symbols/definition-catalog.ts",
+          "toFile": "src/storage/per-db-cache.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "symbols-graph",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 11,
+      "importerCount": 7,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/symbols/graph/call-graph-evidence.ts",
+          "toFile": "src/domain/path-normalization.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/call-graph-evidence.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/file-dep-graph.ts",
+          "toFile": "src/domain/native-gc.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/file-dep-graph.ts",
+          "toFile": "src/domain/project-input.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/member-call-targets.ts",
+          "toFile": "src/domain/path-normalization.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "symbols-graph",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/symbols/graph/file-dep-graph.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "symbols-graph",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 22,
+      "importerCount": 8,
+      "importedFileCount": 11,
+      "examples": [
+        {
+          "fromFile": "src/symbols/graph/call-graph-evidence.ts",
+          "toFile": "src/language-parsers/index.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/call-graph-evidence.ts",
+          "toFile": "src/source/ast.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/call-graph-evidence.ts",
+          "toFile": "src/source/facts/source-fact-types.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/call-graph-evidence.ts",
+          "toFile": "src/source/facts/source-facts.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/file-dep-graph.ts",
+          "toFile": "src/language-parsers/index.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "symbols-graph",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 18,
+      "importerCount": 8,
+      "importedFileCount": 7,
+      "examples": [
+        {
+          "fromFile": "src/symbols/graph/call-graph-evidence.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/call-graph-evidence.ts",
+          "toFile": "src/storage/per-db-cache.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/file-dep-graph.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/file-dep-graph.ts",
+          "toFile": "src/storage/evidence-cache.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/file-dep-graph.ts",
+          "toFile": "src/storage/evidence-products.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "symbols-graph",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 16,
+      "importerCount": 6,
+      "importedFileCount": 7,
+      "examples": [
+        {
+          "fromFile": "src/symbols/graph/call-graph-evidence.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/call-graph-evidence.ts",
+          "toFile": "src/symbols/identifier-index.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/call-graph-evidence.ts",
+          "toFile": "src/symbols/leaf-symbol-index.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/call-graph-evidence.ts",
+          "toFile": "src/symbols/semantic-evidence-port.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/call-graph-evidence.ts",
+          "toFile": "src/symbols/symbol-kind.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "symbols-graph",
+      "to": "symbols-references",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 3,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/symbols/graph/call-graph-evidence.ts",
+          "toFile": "src/symbols/references/reference-sites.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/member-call-targets.ts",
+          "toFile": "src/symbols/references/reference-sites.ts"
+        },
+        {
+          "fromFile": "src/symbols/graph/resolved-call-sites.ts",
+          "toFile": "src/symbols/references/reference-sites.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "symbols-references",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 3,
+      "importerCount": 3,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/symbols/references/caller-evidence.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/symbols/references/reference-callers.ts",
+          "toFile": "src/domain/types.ts"
+        },
+        {
+          "fromFile": "src/symbols/references/reference-sites.ts",
+          "toFile": "src/domain/types.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "symbols-references",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/symbols/references/source-reference-scan.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "symbols-references",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 4,
+      "importerCount": 2,
+      "importedFileCount": 3,
+      "examples": [
+        {
+          "fromFile": "src/symbols/references/reference-callers.ts",
+          "toFile": "src/source/ast.ts"
+        },
+        {
+          "fromFile": "src/symbols/references/source-reference-scan.ts",
+          "toFile": "src/source/ast.ts"
+        },
+        {
+          "fromFile": "src/symbols/references/source-reference-scan.ts",
+          "toFile": "src/source/primitives/source-identifier-prefilter.ts"
+        },
+        {
+          "fromFile": "src/symbols/references/source-reference-scan.ts",
+          "toFile": "src/source/primitives/source-text.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "symbols-references",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 9,
+      "importerCount": 4,
+      "importedFileCount": 5,
+      "examples": [
+        {
+          "fromFile": "src/symbols/references/caller-evidence.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/symbols/references/caller-evidence.ts",
+          "toFile": "src/storage/per-db-cache.ts"
+        },
+        {
+          "fromFile": "src/symbols/references/reference-callers.ts",
+          "toFile": "src/storage/db.ts"
+        },
+        {
+          "fromFile": "src/symbols/references/reference-callers.ts",
+          "toFile": "src/storage/scip-documents.ts"
+        },
+        {
+          "fromFile": "src/symbols/references/reference-callers.ts",
+          "toFile": "src/storage/scip-mentions.ts"
+        }
+      ],
+      "fragile": false
+    },
+    {
+      "from": "symbols-references",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 13,
+      "importerCount": 4,
+      "importedFileCount": 7,
+      "examples": [
+        {
+          "fromFile": "src/symbols/references/caller-evidence.ts",
+          "toFile": "src/symbols/identifier-attribution.ts"
+        },
+        {
+          "fromFile": "src/symbols/references/caller-evidence.ts",
+          "toFile": "src/symbols/semantic-evidence-port.ts"
+        },
+        {
+          "fromFile": "src/symbols/references/reference-callers.ts",
+          "toFile": "src/symbols/definition-catalog.ts"
+        },
+        {
+          "fromFile": "src/symbols/references/reference-callers.ts",
+          "toFile": "src/symbols/leaf-symbol-index.ts"
+        },
+        {
+          "fromFile": "src/symbols/references/reference-callers.ts",
+          "toFile": "src/symbols/semantic-evidence-port.ts"
+        }
+      ],
+      "fragile": false
+    }
+  ],
+  "forbiddenEdges": [],
+  "reciprocalPairs": [],
+  "cycles": [],
+  "staleAllowances": [],
+  "boundaryLimits": [],
+  "fragileEdges": [
+    {
+      "from": "analysis",
+      "to": "symbols-references",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/analysis/runtime-boundaries/wrapper-propagation.ts",
+          "toFile": "src/symbols/references/reference-sites.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "public-api",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/index.ts",
+          "toFile": "src/domain/types.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "public-api",
+      "to": "queries-internal",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/index.ts",
+          "toFile": "src/queries/internal/project-index.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "public-api",
+      "to": "source",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/index.ts",
+          "toFile": "src/source/primitives/gitignore-filter.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "public-api",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/index.ts",
+          "toFile": "src/storage/db.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "public-api",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/index.ts",
+          "toFile": "src/symbols/symbol-parser.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-cleanup",
+      "to": "queries-graph",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/cleanup/drift.ts",
+          "toFile": "src/queries/graph/architecture.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-cleanup",
+      "to": "symbols-references",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/cleanup/cleanup-plan.ts",
+          "toFile": "src/symbols/references/reference-sites.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-impact",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-impact",
+      "to": "queries-graph",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/queries/graph/affected.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-impact",
+      "to": "queries-quality",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/context.ts",
+          "toFile": "src/queries/quality/complexity.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-impact",
+      "to": "symbols-references",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/impact/diff-impact.ts",
+          "toFile": "src/symbols/references/caller-evidence.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-quality",
+      "to": "semantic-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/quality/slice-cohesion.ts",
+          "toFile": "src/semantic/local-flow.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-utils",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/query-utils.ts",
+          "toFile": "src/domain/types.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "queries-utils",
+      "to": "symbols-core",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/queries/query-utils.ts",
+          "toFile": "src/symbols/definition-loc.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "reindex",
+      "to": "analysis",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/reindex/runtime-boundaries.ts",
+          "toFile": "src/analysis/runtime-boundaries/index.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "reindex",
+      "to": "reindex-vue",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/reindex/index.ts",
+          "toFile": "src/reindex/vue/augment-vue.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "reindex-augmentation",
+      "to": "filesystem",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/reindex/augmentation/post-index-augmentation.ts",
+          "toFile": "src/filesystem/bounded-file.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-command-kit",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/command-kit/command-execution.ts",
+          "toFile": "src/storage/db.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-commands",
+      "to": "queries-health",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/queries/health/health.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-commands",
+      "to": "semantic-rust",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/commands/command-handlers.ts",
+          "toFile": "src/semantic/rust/lsp-session.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-entry",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cli-main.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-entry",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cli-main.ts",
+          "toFile": "src/storage/evidence-cache.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-query-commands",
+      "to": "storage",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/query-commands/symbol-resolution.ts",
+          "toFile": "src/storage/db.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-services",
+      "to": "queries-cleanup",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cleanup-verify.ts",
+          "toFile": "src/queries/cleanup/cleanup-plan.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-services",
+      "to": "queries-internal",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/cli-support.ts",
+          "toFile": "src/queries/internal/production-callables.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-services",
+      "to": "semantic-contracts",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/project-readiness.ts",
+          "toFile": "src/semantic/types.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "runtime-services",
+      "to": "symbols-references",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/runtime/refs-pagination.ts",
+          "toFile": "src/symbols/references/reference-sites.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "semantic-contracts",
+      "to": "domain",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/semantic/types.ts",
+          "toFile": "src/domain/types.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "semantic-core",
+      "to": "symbols-graph",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/semantic/symbol-evidence.ts",
+          "toFile": "src/symbols/graph/file-dep-graph.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "storage",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/storage/evidence-products.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "symbols-graph",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/symbols/graph/file-dep-graph.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": true
+    },
+    {
+      "from": "symbols-references",
+      "to": "instrumentation",
+      "policyStatus": "allowed",
+      "fileEdgeCount": 1,
+      "importerCount": 1,
+      "importedFileCount": 1,
+      "examples": [
+        {
+          "fromFile": "src/symbols/references/source-reference-scan.ts",
+          "toFile": "src/instrumentation/profile.ts"
+        }
+      ],
+      "fragile": true
+    }
+  ],
+  "testBoundaryViolations": [],
+  "coarseBoundaries": [],
+  "coverage": {
+    "totalFiles": 555,
+    "mappedFiles": 555,
+    "unmappedFiles": [],
+    "ambiguousFiles": [],
+    "limitations": [
+      "This graph covers indexed documents and observed import/re-export relationships. Unindexed files and unsupported relationships cannot establish repository-wide absence; allowances from boundaries without observed source files are not classified as unused."
+    ]
+  },
+  "policyCoverage": {
+    "declaredRows": 47,
+    "totalBoundaries": 47,
+    "missingRows": [],
+    "requiresCompletePolicy": true,
+    "requiresCompleteCoverage": true,
+    "requiresMinimalPolicy": true
+  }
+}

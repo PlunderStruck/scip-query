@@ -10,8 +10,10 @@ import {
 export interface SimilarFileResult {
   fileA: string;
   fileB: string;
-  /** Jaccard similarity of dependency sets (0-1) */
+  /** Jaccard similarity after excluding dependencies imported by >=5 files and >30% of the repository. */
   similarity: number;
+  /** Candidate relationship based on filtered dependency sets, not behavioral equivalence. */
+  evidenceBasis: 'filtered-dependency-overlap';
   sharedDeps: string[];
   uniqueToA: string[];
   uniqueToB: string[];
@@ -20,15 +22,10 @@ export interface SimilarFileResult {
 /**
  * Find files with similar dependency profiles.
  *
- * Two files that depend on (import from) the same set of other files
- * are structurally doing similar work. High Jaccard similarity between
- * their dependency sets = likely copy-paste variants or consolidation candidates.
- *
- * Evidence policy: a pair must share at least two *distinctive* deps —
- * deps with low global fan-in. Files that overlap only on family
- * infrastructure (the modules everyone in their directory imports) are
- * not copy-paste variants; adapter families sharing an SDK scored 100%
- * before this gate while differing in everything that matters.
+ * Compares observed dependency sets after removing globally common dependencies.
+ * A result identifies shared structural dependencies; it does not establish
+ * duplicated behavior, a common conceptual owner, or safe consolidation.
+ * At least two low-popularity dependencies must be shared (one when minDeps=1).
  */
 export function similarFiles(
   db: ScipDatabase,
@@ -41,7 +38,7 @@ export function similarFiles(
   } = {},
 ): SimilarFileResult[] {
   const { minSimilarity = 0.5, limit = 20, scope, filePattern } = opts;
-  const minDeps = opts.minDeps ?? (filePattern ? 1 : 3);
+  const minDeps = opts.minDeps ?? (filePattern ? 1 : 4);
 
   // Build dependency profile for each file
   const { profiles, distinctiveDeps } = buildFileProfiles(db, { scope, minDeps });
@@ -54,7 +51,7 @@ export function similarFiles(
     overrunFactor: 5,
     candidateIndex,
     profile: { name: 'similar-files' },
-    compare: (a, b) => compareFileProfiles(a, b, minSimilarity, distinctiveDeps),
+    compare: (a, b) => compareFileProfiles(a, b, minSimilarity, distinctiveDeps, minDeps),
   });
 }
 
@@ -70,16 +67,18 @@ function buildFileProfiles(
   opts: { scope?: string; minDeps: number },
 ): { profiles: FileProfile[]; distinctiveDeps: Set<string> } {
   const { scope, minDeps } = opts;
-  const depMap = buildFileDepGraph(db, scope);
+  const depMap = buildFileDepGraph(db);
   const { universalDeps, distinctiveDeps } = classifyDependencyPopularity(depMap);
 
   // Filter to files with enough deps
   const profiles: FileProfile[] = [];
   for (const [file, deps] of depMap) {
-    if (deps.size >= minDeps) {
+    if (scope && !file.includes(scope)) continue;
+    const filtered = new Set([...deps].filter((dep) => !universalDeps.has(dep)));
+    if (filtered.size >= minDeps) {
       profiles.push({
         file,
-        deps: new Set([...deps].filter((dep) => !universalDeps.has(dep))),
+        deps: filtered,
       });
     }
   }
@@ -129,27 +128,21 @@ function compareFileProfiles(
   b: FileProfile,
   minSimilarity: number,
   distinctiveDeps: ReadonlySet<string>,
+  minDeps: number,
 ): SimilarFileResult | null {
   const shared = new Set<string>();
   for (const dep of a.deps) {
     if (b.deps.has(dep)) shared.add(dep);
   }
 
-  // Require at least 3 substantive shared deps and at least 4 deps on each
-  // side. Smaller dep sets give misleadingly high Jaccard scores — a file
-  // with 2 deps shared with another file with 2 deps reads as 100% similar
-  // even though neither file has enough structural surface to compare.
-  if (shared.size < 3) return null;
-  if (a.deps.size < 4 || b.deps.size < 4) return null;
+  // The explicit minimum controls comparison size as well as candidate selection.
+  if (shared.size < Math.min(3, minDeps)) return null;
 
-  // Distinctive-evidence gate: overlap made only of mid-popularity family
-  // infrastructure (every adapter imports the same SDK modules) is not
-  // copy-paste evidence. Require at least two low-fan-in shared deps.
   let distinctiveShared = 0;
   for (const dep of shared) {
     if (distinctiveDeps.has(dep)) distinctiveShared++;
   }
-  if (distinctiveShared < 2) return null;
+  if (distinctiveShared < Math.min(2, minDeps)) return null;
 
   const similarity = jaccard(a.deps, b.deps);
 
@@ -168,6 +161,7 @@ function compareFileProfiles(
     fileA: a.file,
     fileB: b.file,
     similarity,
+    evidenceBasis: 'filtered-dependency-overlap',
     sharedDeps: [...shared],
     uniqueToA: uniqueA,
     uniqueToB: uniqueB,

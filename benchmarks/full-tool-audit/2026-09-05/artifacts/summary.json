@@ -1,0 +1,94 @@
+{
+  "status": "audit pass completed; findings open",
+  "productionChanged": false,
+  "counts": {
+    "publicHelpInvocations": 95,
+    "queryInvocations": 83,
+    "fullSuiteTestsPassed": 2900,
+    "fullSuiteFilesPassed": 337,
+    "packageExportPathsLoaded": 77,
+    "auditAssertionsPassed": 16,
+    "auditAssertionsFailed": 19
+  },
+  "findings": [
+    {
+      "id": "F01",
+      "priority": "P1",
+      "title": "Incomplete dependence slices report complete",
+      "producer": "src/semantic/typescript/local-flow.ts:695",
+      "status": "open"
+    },
+    {
+      "id": "F02",
+      "priority": "P1",
+      "title": "Missing explicit file can resolve to another symbol",
+      "producer": "src/queries/navigation/code.ts:186",
+      "status": "open"
+    },
+    {
+      "id": "F03",
+      "priority": "P1",
+      "title": "Setup smoke pass can describe an unexecuted nonexistent command",
+      "producer": "src/runtime/project-setup.ts:949",
+      "status": "open"
+    },
+    {
+      "id": "F04",
+      "priority": "P1",
+      "title": "Mapping trace load errors are silently discarded",
+      "producer": "src/runtime/query-commands/tla.ts:334",
+      "status": "open"
+    },
+    {
+      "id": "F05",
+      "priority": "P2",
+      "title": "Complexity implementations disagree and candidate neighbors count as callees",
+      "producer": "src/queries/quality/complexity.ts:64",
+      "status": "open"
+    },
+    {
+      "id": "F06",
+      "priority": "P2",
+      "title": "Current file locator includes tracked deletions",
+      "producer": "src/queries/navigation/files.ts:14",
+      "status": "open"
+    },
+    {
+      "id": "F07",
+      "priority": "P1",
+      "title": "Suppression writes escape storage, nested records disappear, source decisions are ignored",
+      "producer": "src/storage/suppression-store.ts:87",
+      "status": "open"
+    },
+    {
+      "id": "F08",
+      "priority": "P2",
+      "title": "Test declaration reported as assertion-free invocation",
+      "producer": "src/queries/cleanup/test-quality.ts:163",
+      "status": "open"
+    },
+    {
+      "id": "F09",
+      "priority": "P2",
+      "title": "Checker asset no longer matches pinned digest",
+      "producer": "src/tla/tool-runner.ts:76",
+      "status": "open"
+    },
+    {
+      "id": "F10",
+      "priority": "P3",
+      "title": "Help and setup do not match the primary source-maintenance workflow",
+      "producer": "src/runtime/commands/command-panels.ts:84",
+      "status": "open"
+    }
+  ],
+  "limits": [
+    "Not exhaustive branch/validator/fallback verification",
+    "No live formal checker execution after checksum rejection",
+    "No new calibration of every language/framework adapter",
+    "Windows/Linux lifecycle not run on those operating systems",
+    "32 twin-drift groups unadjudicated",
+    "No general agent-outcome improvement demonstrated"
+  ],
+  "cleanup": "Task-owned services stopped and disposable repositories/packed consumer removed"
+}

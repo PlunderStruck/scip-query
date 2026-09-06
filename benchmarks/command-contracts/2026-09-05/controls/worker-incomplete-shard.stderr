@@ -1,0 +1,1 @@
+error: Prewarm requires both --shard-index and --shard-count, with 0 <= index < count and positive count.

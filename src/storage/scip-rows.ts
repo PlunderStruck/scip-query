@@ -1,13 +1,68 @@
 /**
- * Tiny shared module for the raw SCIP-row shape and the signature-string
- * helpers that operate on its `documentation` field.
+ * Shared raw SCIP rows, occurrence ranges and signature-string decoding.
  *
  * Lives in its own module so `definition-catalog.ts` and `symbol-lookup.ts`
  * can both depend on it without depending on each other. `hydrateSymbolMatch`
- * (which IS catalog work) lives in `definition-catalog.ts`; the row shape
- * and string-massage helpers live here.
+ * lives in `definition-catalog.ts`; raw index decoding lives here.
  */
 import type { ScipDatabase } from './db.js';
+import { fromBinary } from '@bufbuild/protobuf';
+import { DocumentSchema, SymbolRole } from '@c4312/scip';
+import { zstdDecompressSync } from 'node:zlib';
+import { createPerDbCache } from './per-db-cache.js';
+
+type DefinitionOccurrenceRange = Pick<SymbolQueryRow, 'start_line' | 'start_char' | 'end_line' | 'end_char'>;
+const DEFINITION_OCCURRENCE_RANGES = createPerDbCache<string, Map<string, DefinitionOccurrenceRange>>(
+  'definition-occurrence-ranges',
+  {
+    clearGroups: ['whole-project', 'definition-catalog'],
+    maxEntries: 64,
+  },
+);
+
+/** Identifier ranges directly recorded by the indexer, including fields without enclosing ranges. */
+export function definitionOccurrenceRanges(db: ScipDatabase, file: string): Map<string, DefinitionOccurrenceRange> {
+  return DEFINITION_OCCURRENCE_RANGES.get(db, file, () => {
+    const ranges = new Map<string, DefinitionOccurrenceRange>();
+    for (const row of db.all<{ occurrences: Uint8Array }>(
+      'SELECT c.occurrences FROM chunks c JOIN documents d ON d.id = c.document_id WHERE d.relative_path = ? ORDER BY c.chunk_index',
+      file,
+    )) {
+      for (const [symbol, range] of chunkDefinitionRanges(row.occurrences)) {
+        if (!ranges.has(symbol)) ranges.set(symbol, range);
+      }
+    }
+    return ranges;
+  });
+}
+
+function chunkDefinitionRanges(blob: Uint8Array): Map<string, DefinitionOccurrenceRange> {
+  const ranges = new Map<string, DefinitionOccurrenceRange>();
+  if (!blob || blob.length <= 1) return ranges;
+  try {
+    for (const occurrence of fromBinary(DocumentSchema, zstdDecompressSync(blob)).occurrences) {
+      const range = occurrenceDefinitionRange(occurrence);
+      if (range && occurrence.symbol && !ranges.has(occurrence.symbol)) ranges.set(occurrence.symbol, range);
+    }
+  } catch {
+    // Missing/corrupt occurrence data establishes no additional range.
+  }
+  return ranges;
+}
+
+function occurrenceDefinitionRange(occurrence: {
+  symbolRoles: number;
+  range: number[];
+}): DefinitionOccurrenceRange | undefined {
+  const range = occurrence.range;
+  if (!(occurrence.symbolRoles & SymbolRole.Definition) || range.length < 3) return undefined;
+  return {
+    start_line: range[0]!,
+    start_char: range[1]!,
+    end_line: range.length === 4 ? range[2]! : range[0]!,
+    end_char: range.length === 4 ? range[3]! : range[2]!,
+  };
+}
 
 /**
  * The minimum set of columns every "look up a definition / mention" query
@@ -55,8 +110,9 @@ export function definitionRangeRows(db: ScipDatabase, query: SymbolRowQuery): Sy
 }
 
 export function definitionMentionRows(db: ScipDatabase, query: SymbolRowQuery): SymbolQueryRow[] {
-  return db.all<SymbolQueryRow>(
-    `SELECT
+  return db
+    .all<SymbolQueryRow>(
+      `SELECT
       gs.id,
       gs.symbol,
       c.document_id,
@@ -77,8 +133,9 @@ export function definitionMentionRows(db: ScipDatabase, query: SymbolRowQuery): 
      GROUP BY gs.id, gs.symbol, c.document_id, d.relative_path, gs.display_name, gs.documentation
      ${orderByClause(query.orderBy)}
      ${limitClause(query.limit)}`,
-    ...(query.params ?? []),
-  );
+      ...(query.params ?? []),
+    )
+    .map((row) => ({ ...row, ...definitionOccurrenceRanges(db, row.relative_path).get(row.symbol) }));
 }
 
 function orderByClause(orderBy: string | undefined): string {
@@ -132,4 +189,46 @@ export function extractSignature(doc: string | null): string | null {
 function extractFirstFencedBlock(doc: string): string | null {
   const match = /^```(?:\w+)?\s*\n?([\s\S]*?)\n?```/.exec(doc.trimStart());
   return match?.[1]?.trim() || null;
+}
+
+const REFERENCE_OCCURRENCE_LINES = createPerDbCache<string, Map<string, number[]> | null>(
+  'reference-occurrence-lines',
+  { clearGroups: ['whole-project', 'source-file'], maxEntries: 64 },
+);
+
+/** Index-generation reference lines bound to one exact symbol; null means the occurrence provider is unavailable. */
+export function referenceOccurrenceLines(db: ScipDatabase, file: string, symbol: string): number[] | null {
+  const bySymbol = REFERENCE_OCCURRENCE_LINES.get(db, file, () => {
+    const rows = db.all<{ occurrences: Uint8Array | null }>(
+      'SELECT c.occurrences FROM chunks c JOIN documents d ON d.id = c.document_id WHERE d.relative_path = ? ORDER BY c.chunk_index',
+      file,
+    );
+    if (rows.length === 0) return null;
+    const lines = new Map<string, Set<number>>();
+    try {
+      for (const row of rows) {
+        if (!row.occurrences || row.occurrences.length <= 1) return null;
+        const { occurrences } = fromBinary(DocumentSchema, zstdDecompressSync(row.occurrences));
+        addReferenceOccurrenceLines(occurrences, lines);
+      }
+    } catch {
+      return null;
+    }
+    return new Map([...lines].map(([identity, values]) => [identity, [...values].sort((a, b) => a - b)]));
+  });
+  return bySymbol === null ? null : (bySymbol.get(symbol) ?? []);
+}
+
+function addReferenceOccurrenceLines(
+  occurrences: readonly { symbol: string; symbolRoles: number; range: number[] }[],
+  lines: Map<string, Set<number>>,
+): void {
+  for (const occurrence of occurrences) {
+    if (!occurrence.symbol || (occurrence.symbolRoles & SymbolRole.Definition) !== 0) continue;
+    const line = occurrence.range[0];
+    if (line === undefined || !Number.isSafeInteger(line) || line < 0) continue;
+    const bucket = lines.get(occurrence.symbol) ?? new Set<number>();
+    bucket.add(line);
+    lines.set(occurrence.symbol, bucket);
+  }
 }

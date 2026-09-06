@@ -77,7 +77,6 @@ export function pairwiseCandidateIndexFromKeys<Profile extends PairwiseFileProfi
   };
 }
 
-// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function rankedPairwiseProfileResults<
   Profile extends PairwiseFileProfile,
   Result extends { similarity: number },
@@ -98,32 +97,9 @@ export function rankedPairwiseProfileResults<
     };
 
     if (opts.filePattern) {
-      const targetIndex = opts.profiles.findIndex((profile) => profile.file.includes(opts.filePattern!));
-      if (targetIndex >= 0) {
-        const target = opts.profiles[targetIndex]!;
-        for (const candidateIndex of targetCandidateIndexes(opts, targetIndex)) {
-          const candidate = opts.profiles[candidateIndex]!;
-          if (opts.focusFiles && !opts.focusFiles.has(target.file) && !opts.focusFiles.has(candidate.file)) continue;
-          compareIndexes(targetIndex, candidateIndex);
-        }
-      }
+      compareFilePatternPairs(opts, compareIndexes);
     } else if (opts.focusFiles?.size !== 0) {
-      const stopAt =
-        typeof opts.overrunFactor === 'number' && Number.isFinite(opts.limit)
-          ? opts.limit * opts.overrunFactor
-          : Number.POSITIVE_INFINITY;
-      for (let i = 0; i < opts.profiles.length; i += 1) {
-        const left = opts.profiles[i]!;
-        const leftFocused = opts.focusFiles?.has(left.file) ?? false;
-        for (const j of upperCandidateIndexes(opts, i)) {
-          if (opts.focusFiles && !leftFocused && !opts.focusFiles.has(opts.profiles[j]!.file)) continue;
-          compareIndexes(i, j);
-        }
-        if (results.length > stopAt) {
-          counters.overrunApplied = true;
-          break;
-        }
-      }
+      counters.overrunApplied = compareUpperPairs(opts, compareIndexes, () => results.length);
     }
 
     results.sort(opts.sort ?? ((a, b) => b.similarity - a.similarity));
@@ -139,6 +115,56 @@ export function rankedPairwiseProfileResults<
     ...pairwiseProfileMetadata(opts.profile?.metadata),
     ...counters,
   }));
+}
+
+function compareFilePatternPairs<Profile extends PairwiseFileProfile, Result>(
+  opts: RankedPairwiseProfileOptions<Profile, Result>,
+  compareIndexes: (left: number, right: number) => void,
+): void {
+  const selected = new Set<string>();
+  for (let targetIndex = 0; targetIndex < opts.profiles.length; targetIndex++) {
+    const target = opts.profiles[targetIndex]!;
+    if (!target.file.includes(opts.filePattern!)) continue;
+    for (const candidateIndex of targetCandidateIndexes(opts, targetIndex)) {
+      const candidate = opts.profiles[candidateIndex]!;
+      if (!pairIntersectsFocus(opts.focusFiles, target, candidate)) continue;
+      const key = `${Math.min(targetIndex, candidateIndex)}:${Math.max(targetIndex, candidateIndex)}`;
+      if (selected.has(key)) continue;
+      selected.add(key);
+      compareIndexes(targetIndex, candidateIndex);
+    }
+  }
+}
+
+/** Stop only between complete left-hand rows, preserving the detector's existing overrun contract. */
+function compareUpperPairs<Profile extends PairwiseFileProfile, Result>(
+  opts: RankedPairwiseProfileOptions<Profile, Result>,
+  compareIndexes: (left: number, right: number) => void,
+  matchedCount: () => number,
+): boolean {
+  const stopAt =
+    typeof opts.overrunFactor === 'number' && Number.isFinite(opts.limit)
+      ? opts.limit * opts.overrunFactor
+      : Number.POSITIVE_INFINITY;
+  for (let i = 0; i < opts.profiles.length; i += 1) {
+    const left = opts.profiles[i]!;
+    for (const j of upperCandidateIndexes(opts, i)) {
+      if (!pairIntersectsFocus(opts.focusFiles, left, opts.profiles[j]!)) continue;
+      compareIndexes(i, j);
+    }
+    if (matchedCount() > stopAt) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function pairIntersectsFocus(
+  focus: ReadonlySet<string> | undefined,
+  left: PairwiseFileProfile,
+  right: PairwiseFileProfile,
+): boolean {
+  return focus === undefined || focus.has(left.file) || focus.has(right.file);
 }
 
 function targetCandidateIndexes<Profile extends PairwiseFileProfile, Result>(

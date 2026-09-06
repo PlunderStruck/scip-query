@@ -96,8 +96,8 @@ export function shorthand(value: number): { doubled: number } {
 }
 
 export function guarded(risky: () => string): string {
-  let status = 'start';
-  let finished = '';
+  let status = 'start'; // eslint-disable-line no-useless-assignment -- Initial definition intentionally killed by the branches below.
+  let finished = ''; // eslint-disable-line no-useless-assignment -- Initial definition intentionally killed by finally.
   try {
     risky();
     status = 'done';

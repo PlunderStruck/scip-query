@@ -1,3 +1,4 @@
+import { calleeEvidenceStrength } from '../../symbols/graph/call-graph-evidence.js';
 import { isExportedDefinition } from '../internal/exported-definition.js';
 import { isEntrySurface, rootedSymbolEvidence, type RootedSymbolEvidence } from '../../analysis/file-classifier.js';
 import { groupBy } from '../../domain/group-by.js';
@@ -27,7 +28,7 @@ export interface EntryPointResult {
   documentation: string | null;
   confidence: EntryPointConfidence;
   evidence: EntryPointEvidence[];
-  indexedCallerCount: number;
+  observedCallerCount: number;
 }
 
 export interface EntryPointsOptions {
@@ -93,8 +94,6 @@ export interface EntryMapRegion {
 }
 
 export interface EntryMapCoverage {
-  /** @deprecated Candidate SCIP chunk co-occurrence may also be present. */
-  completeWithinIndexedStaticCallEdges: true;
   completeWithinSelectedStaticEvidence?: true;
   candidateReachabilityIncluded?: boolean;
   dynamicDispatchRepresented: false;
@@ -230,7 +229,6 @@ export function entryCallMap(
     regionEdges: projected.regionEdges,
     unmatchedExpansions,
     coverage: {
-      completeWithinIndexedStaticCallEdges: true,
       completeWithinSelectedStaticEvidence: true,
       candidateReachabilityIncluded: graph.edges.some((edge) => edge.evidenceStrength === 'candidate'),
       dynamicDispatchRepresented: false,
@@ -281,9 +279,9 @@ function classifyEntryPoint(
       startLine: definition.startLine,
       endLine: definition.endLine,
       documentation: definition.documentation,
-      confidence: rooted ? 'root' : 'candidate',
+      confidence: rootEvidence.some((evidence) => evidence !== 'package-public-export') ? 'root' : 'candidate',
       evidence,
-      indexedCallerCount: callerRows.length,
+      observedCallerCount: callerRows.length,
     },
   };
 }
@@ -411,7 +409,7 @@ function symbolEdge(from: IndexedDefinition, to: IndexedDefinition, evidence: Ca
     toShortName: shortenSymbol(to.symbol),
     toFile: to.relativePath,
     source: evidence.source,
-    evidenceStrength: evidence.source === 'scip-chunk' ? 'candidate' : 'exact',
+    evidenceStrength: calleeEvidenceStrength(evidence.source),
   };
 }
 
@@ -424,7 +422,7 @@ function externalCall(from: IndexedDefinition, callee: CalleeRow): EntryMapExter
     toShortName: shortenSymbol(callee.symbol),
     reportedFile: callee.file,
     source: callee.source,
-    evidenceStrength: callee.source === 'scip-chunk' ? 'candidate' : 'exact',
+    evidenceStrength: calleeEvidenceStrength(callee.source),
   };
 }
 

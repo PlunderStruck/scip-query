@@ -187,6 +187,23 @@ describe('frontend recent duplicates', () => {
     }
   });
 
+  it('finds a recent duplicate even when older pairs would fill the candidate budget', () => {
+    const established = Object.fromEntries(
+      Array.from({ length: 6 }, (_, i) => [`src/components/Old${i}Panel.vue`, VUE_ISSUE_PANEL]),
+    );
+    const { db } = createGitFixture({
+      established,
+      recent: { 'src/components/ZRecentPanel.vue': VUE_INCIDENT_PANEL.replace('hasFilters', 'hasRecentFilters') },
+    });
+    try {
+      const result = recentDuplicates(db, { windowCommits: 0, limit: 1 });
+      expect(result.findings).toHaveLength(1);
+      expect(result.findings[0]?.echoFile).toBe('src/components/ZRecentPanel.vue');
+    } finally {
+      db.close();
+    }
+  });
+
   function createGitFixture(input: { established: Record<string, string>; recent: Record<string, string> }): {
     db: ScipDatabase;
     projectRoot: string;

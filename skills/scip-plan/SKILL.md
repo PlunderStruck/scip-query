@@ -20,7 +20,7 @@ metadata:
     - template: 'scip-query architecture'
       when: 'Validate declared structural boundaries.'
     - template: 'scip-query health --full'
-      when: 'Run configured cleanup and quality detectors.'
+      when: 'Find concrete current-source issues; use health --indexed for specialist detectors.'
 ---
 
 # SCIP Plan
@@ -40,7 +40,7 @@ Write a plan that another coding agent can execute without rediscovering the rel
 | `scip-query code <selector>` | Read exact source only when syntax itself can change the decision. |
 | `scip-query diff-impact` | Map changed symbols and downstream consumers after an edit. |
 | `scip-query architecture` | Validate declared structural boundaries. |
-| `scip-query health --full` | Run configured cleanup and quality detectors. |
+| `scip-query health --full` | Find concrete current-source issues; use health --indexed for specialist detectors. |
 
 These commands are controls, not a checklist. Use every capability needed by the task, but make each query answer a distinct question. There is no required sequence or query limit. Run a command's `--help` when you need a flag not shown in its template.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -77,10 +77,12 @@ Do not write a plan for one obvious local edit. Write one when correctness depen
 
 State the observable outcome in one or two sentences. Explain the current behavior with exact symbol and file/line references. Then use this table:
 
-| Step | Code reference | Change | Preserve or retire | Verify |
-| --- | --- | --- | --- | --- |
+| Step                          | Code reference             | Change                                | Preserve or retire                             | Verify                                      |
+| ----------------------------- | -------------------------- | ------------------------------------- | ---------------------------------------------- | ------------------------------------------- |
 | Coherent implementation slice | Exact symbol and file/line | Concrete edit and why it belongs here | Existing behavior to keep or residue to remove | Check that fails when the outcome is absent |
 
 Order the rows so each leaves the repository in a valid state. Include the relevant entry point, behavior owner, downstream consumers, reuse candidates, architecture constraints, migration or cleanup, and validation. Label design choices as choices. Include an open-uncertainty section only when an unresolved repository fact can change the implementation, and name the exact scip-query command that would answer it.
 
 The plan is ready when another agent can implement it without a broad repository rediscovery pass.
+
+After implementation, run `scip-query review --base <commit>`, resolve justified findings, run behavioral checks, and update the plan with preserved exceptions and remaining coverage gaps. Planning does not create another approval gate when implementation is already authorized.

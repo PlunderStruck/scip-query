@@ -1,0 +1,223 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "dependence-slice",
+  "operationRole": "repository-observation",
+  "evidence": "graph-fact",
+  "args": [
+    "src/flow.ts:14"
+  ],
+  "options": {
+    "maxEdges": 200,
+    "variable": "state.value",
+    "json": true,
+    "session": true,
+    "jsonOutput": "/private/tmp/scip-followup-cli/slice-delete.json"
+  },
+  "result": {
+    "kind": "dependence-slice",
+    "direction": "backward",
+    "criterion": "src/flow.ts:14",
+    "variable": "state.value",
+    "resolution": "matched",
+    "candidates": [
+      {
+        "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:435:446:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A337%3Astate.value",
+        "kind": "use",
+        "name": "state.value",
+        "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:337:state.value",
+        "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:306:449",
+        "start": 435,
+        "end": 446,
+        "line": 13,
+        "column": 9
+      }
+    ],
+    "points": [
+      {
+        "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:364:369:parameter-definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A364%3Ainput",
+        "kind": "parameter-definition",
+        "name": "input",
+        "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:364:input",
+        "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:306:449",
+        "start": 364,
+        "end": 369,
+        "line": 10,
+        "column": 58
+      },
+      {
+        "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:383:394:definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A337%3Astate.value",
+        "kind": "definition",
+        "name": "state.value",
+        "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:337:state.value",
+        "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:306:449",
+        "start": 383,
+        "end": 394,
+        "line": 11,
+        "column": 2
+      },
+      {
+        "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:397:402:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A364%3Ainput",
+        "kind": "use",
+        "name": "input",
+        "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:364:input",
+        "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:306:449",
+        "start": 397,
+        "end": 402,
+        "line": 11,
+        "column": 16
+      },
+      {
+        "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:435:446:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A337%3Astate.value",
+        "kind": "use",
+        "name": "state.value",
+        "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:337:state.value",
+        "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:306:449",
+        "start": 435,
+        "end": 446,
+        "line": 13,
+        "column": 9
+      }
+    ],
+    "edges": [
+      {
+        "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A383%3A394%3Adefinition%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A337%253Astate.value:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A435%3A446%3Ause%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A337%253Astate.value",
+        "kind": "reaching-definition",
+        "fromPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:383:394:definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A337%3Astate.value",
+        "toPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:435:446:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A337%3Astate.value",
+        "strength": "exact",
+        "reason": "A CFG path reaches this use without an intervening definition.",
+        "traversalDepth": 1
+      },
+      {
+        "id": "local-flow-edge:value-source:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A397%3A402%3Ause%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A364%253Ainput:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A383%3A394%3Adefinition%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A337%253Astate.value",
+        "kind": "value-source",
+        "fromPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:397:402:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A364%3Ainput",
+        "toPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:383:394:definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A337%3Astate.value",
+        "strength": "exact",
+        "reason": "This right-hand-side use supplies the new definition.",
+        "traversalDepth": 2
+      },
+      {
+        "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A364%3A369%3Aparameter-definition%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A364%253Ainput:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A397%3A402%3Ause%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A364%253Ainput",
+        "kind": "reaching-definition",
+        "fromPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:364:369:parameter-definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A364%3Ainput",
+        "toPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:397:402:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A364%3Ainput",
+        "strength": "exact",
+        "reason": "A CFG path reaches this use without an intervening definition.",
+        "traversalDepth": 3
+      }
+    ],
+    "coverage": {
+      "status": "complete",
+      "basis": "function-local-dependence",
+      "model": {
+        "status": "complete",
+        "basis": "typescript-compiler-cfg-reaching-definitions",
+        "unsupported": []
+      },
+      "omittedEdges": 0,
+      "omittedPoints": 0,
+      "depthLimited": false,
+      "candidateEdges": 0
+    }
+  },
+  "coverage": {
+    "complete": null,
+    "totalKnown": false,
+    "returned": 1
+  },
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "operationRole": "repository-observation",
+    "receipt": {
+      "schemaVersion": 2,
+      "observedAt": "2026-09-06T02:48:28.363Z",
+      "facts": {
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "9ac14a281194a148cf10c602037b09606e09d9ffe44bb4fa89756a4fd7ab8821"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "9ac14a281194a148cf10c602037b09606e09d9ffe44bb4fa89756a4fd7ab8821"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        }
+      ]
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "graph-fact",
+      "coverage": {
+        "complete": null,
+        "totalKnown": false,
+        "returned": 1
+      },
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "compiler-graph",
+        "coverage": {
+          "state": "unknown",
+          "returned": 1,
+          "totalKnown": false
+        },
+        "producerValidation": {
+          "status": "not-evaluated"
+        },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": [
+            "collaborationDomain",
+            "wholeContent",
+            "observationStability"
+          ],
+          "reasons": [
+            "collaborationDomain:unknown",
+            "wholeContent:unknown",
+            "leftIndexAlignment:unknown",
+            "rightIndexAlignment:unknown"
+          ]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": [
+            "No repository action policy was supplied for this claim."
+          ]
+        }
+      }
+    }
+  }
+}

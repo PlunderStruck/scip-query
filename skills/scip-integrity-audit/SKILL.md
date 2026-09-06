@@ -21,8 +21,6 @@ metadata:
       when: 'Check regression artifacts and tests for assertion-free bodies, skip rot, and mock-echo.'
     - template: 'scip-query twin-drift -s <scope> --json'
       when: 'Find same-name or near-name twins whose bodies have silently diverged.'
-    - template: 'scip-query twin-ab <symbolA> <symbolB>'
-      when: 'Scaffold a table-driven comparison of two same-concept twins on a shared input.'
 ---
 
 # scip-integrity-audit
@@ -41,7 +39,6 @@ metadata:
 | `scip-query not-implemented -s <scope> --json` | Shortlist reachable placeholder stubs that a real caller can actually reach. |
 | `scip-query test-quality -s <scope> --json` | Check regression artifacts and tests for assertion-free bodies, skip rot, and mock-echo. |
 | `scip-query twin-drift -s <scope> --json` | Find same-name or near-name twins whose bodies have silently diverged. |
-| `scip-query twin-ab <symbolA> <symbolB>` | Scaffold a table-driven comparison of two same-concept twins on a shared input. |
 
 These commands are controls, not a checklist. Use every capability needed by the task, but make each query answer a distinct question. There is no required sequence or query limit. Run a command's `--help` when you need a flag not shown in its template.
 <!-- END GENERATED SKILL COMMANDS -->
@@ -137,10 +134,9 @@ Where one concept is computed in more than one place, feed both the same
 input and require the same answer. `twin-drift` finds the same-name cases
 mechanically; for same-concept-different-name pairs, project consumers with
 `evidence` execution incoming and compare implementations with `code`. Once
-a pair is identified, `scip-query twin-ab <symbolA> <symbolB>` scaffolds a
-table-driven vitest file that imports both and asserts equal output —
-fill in the input table and run it. Disagreement between twins means at
-least one is wrong — determine which before consolidating.
+a pair is identified, write and run a behavioral comparison in the project test suite.
+Include representative inputs, errors, outputs and effects. Different behavior may
+reflect distinct intended contracts; establish that before consolidating.
 Complete only when every discovered twin pair has been compared on a shared
 input.
 

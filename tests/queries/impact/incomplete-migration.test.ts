@@ -456,18 +456,33 @@ describe('incomplete-migration', () => {
       containment: 1,
       siteCoverage: 0.75,
       uniqueSiteCalleeCount: 1,
-      migrationScope: 'same-scope',
+      migrationScope: 'shared-vocabulary',
     });
     expect(siteB.migrationScopeReasons[0]).toContain('site');
-    expect(siteC.migrationScope).toBe('same-scope');
+    expect(siteC.migrationScope).toBe('shared-vocabulary');
     expect(billing).toMatchObject({
       containment: 1,
       siteCoverage: 1,
       uniqueSiteCalleeCount: 0,
-      migrationScope: 'possible-subtype',
+      migrationScope: 'distinct-vocabulary',
     });
     expect(billing.migrationScopeReasons[0]).toContain('no path/name tokens shared');
     expect(siteB.sharedCallees).toHaveLength(3);
+  });
+
+  it('does not mistake a historical comment mentioning a helper for its declaration', () => {
+    const reader = createBaseContentResultReader({ projectRoot: repoRoot, base: 'HEAD' });
+    const result = incompleteMigration(db, {
+      base: 'HEAD',
+      semantic: false,
+      baseContentResultAt: (file) => {
+        const result = reader(file);
+        return file === 'src/util.ts' && result.state === 'present'
+          ? { state: 'present', content: '// TODO extract formatThing here\n' + result.content }
+          : result;
+      },
+    });
+    expect(result.findings.some((finding) => finding.helperShortName.includes('formatThing'))).toBe(true);
   });
 
   it('reuses a supplied diff plan without changing incomplete-migration findings', () => {
@@ -488,7 +503,7 @@ describe('incomplete-migration', () => {
       leftovers: expect.arrayContaining([
         expect.objectContaining({ file: 'src/site-b.ts', containment: 1, siteCoverage: 0.75 }),
         expect.objectContaining({ file: 'src/site-c.ts', containment: 1, siteCoverage: 1 }),
-        expect.objectContaining({ file: 'src/billing.ts', migrationScope: 'possible-subtype' }),
+        expect.objectContaining({ file: 'src/billing.ts', migrationScope: 'distinct-vocabulary' }),
       ]),
     });
   });
@@ -517,7 +532,7 @@ describe('incomplete-migration', () => {
       leftovers: expect.arrayContaining([
         expect.objectContaining({ file: 'src/site-b.ts', containment: 1, siteCoverage: 0.75 }),
         expect.objectContaining({ file: 'src/site-c.ts', containment: 1, siteCoverage: 1 }),
-        expect.objectContaining({ file: 'src/billing.ts', migrationScope: 'possible-subtype' }),
+        expect.objectContaining({ file: 'src/billing.ts', migrationScope: 'distinct-vocabulary' }),
       ]),
     });
   });

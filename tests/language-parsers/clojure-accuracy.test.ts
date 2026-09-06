@@ -3,15 +3,12 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import { getSourceImports } from '../../src/language-parsers/index.js';
-import { convergence } from '../../src/queries/cleanup/convergence.js';
+import { similarConsolidationPlan } from '../../src/queries/cleanup/similar.js';
 import { affected } from '../../src/queries/graph/affected.js';
 import { callGraph } from '../../src/queries/navigation/call-graph.js';
-import { dataflow } from '../../src/queries/navigation/dataflow.js';
 import { importedBy, imports, unusedImports } from '../../src/queries/navigation/imports.js';
 import { members } from '../../src/queries/navigation/members.js';
 import { methods } from '../../src/queries/navigation/methods.js';
-import { slice } from '../../src/queries/navigation/slice.js';
-import { selfAudit } from '../../src/queries/quality/self-audit.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { getSourceFacts } from '../../src/source/ast.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
@@ -157,19 +154,6 @@ describe('Clojure import parser', () => {
         expect.arrayContaining(['demo.util:format-name', 'demo.shared:normalize']),
       );
       expect(graph.callees.map((callee) => callee.shortName)).not.toContain('demo.other:format-name');
-
-      const flow = dataflow(db, 'demo.core:greet')!;
-      expect(flow.producers.map((producer) => producer.shortName)).toEqual(
-        expect.arrayContaining(['demo.util:format-name', 'demo.shared:normalize']),
-      );
-      expect(flow.consumers.map((consumer) => consumer.shortName)).toContain('demo.consumer:run');
-
-      expect(slice(db, 'demo.core:greet')?.connectedSymbols.map((symbol) => symbol.shortName)).toEqual(
-        expect.arrayContaining(['demo.util:format-name', 'demo.shared:normalize']),
-      );
-      expect(
-        slice(db, 'demo.core:greet', { direction: 'forward' })?.connectedSymbols.map((symbol) => symbol.shortName),
-      ).toContain('demo.consumer:run');
       expect(affected(db, 'demo.core:greet').map((row) => row.shortName)).toContain('demo.consumer:run');
 
       expect(importedBy(db, 'demo.util')).toEqual([
@@ -214,18 +198,13 @@ describe('Clojure import parser', () => {
     });
   });
 
-  it('keeps Clojure macro scaffolding out of the similar plan alias and enables source self-audit', () => {
+  it('keeps Clojure macro scaffolding out of the similar plan alias', () => {
     withClojureParityFixture((db) => {
-      const result = convergence(db, 'alpha', 'beta');
+      const result = similarConsolidationPlan(db, 'alpha', 'beta');
       expect(result).not.toBeNull();
-      expect(result!.sharedCallees).not.toContain('demo.macros:with-log');
-      expect(result!.sharedCallees).not.toContain('hooks.hsx:defc');
+      expect(result!.sharedEvidence).not.toContain('demo.macros:with-log');
+      expect(result!.sharedEvidence).not.toContain('hooks.hsx:defc');
       expect(result!.consolidationStrategy).toContain('shared source-token');
-
-      const audit = selfAudit(db, { samples: 10 });
-      expect(audit.available).toBe(true);
-      expect(audit.oracleKind).toBe('source');
-      expect(audit.oracleCoverage).toBeGreaterThan(0);
     });
   });
 });

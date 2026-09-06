@@ -4,7 +4,7 @@ import type { SyntaxNode } from '../ast/ast-types.js';
 import { extractCallLeaf } from './source-calls.js';
 import { callableFactForNode, callableFactNodeTypes } from './source-callables.js';
 import { getSourceFacts } from './source-facts.js';
-import type { CallSiteKind } from './source-fact-types.js';
+import type { CallSiteKind, SourceCallableOwner } from './source-fact-types.js';
 
 const CALLABLE_FACT_LANGUAGES = new Set<AstLanguage>(['rust', 'typescript', 'tsx', 'javascript', 'python', 'clojure']);
 const AST_CALLABLE_FACT_LANGUAGES = new Set<AstLanguage>(['rust', 'typescript', 'tsx', 'javascript', 'python']);
@@ -29,6 +29,8 @@ export interface CallSite {
   /** True for member/dotted calls like `obj.foo()` where the receiver type is unknown. */
   memberAccess: boolean;
   line: number;
+  targetRange?: { startLine: number; startColumn: number; endLine: number; endColumn: number };
+  owner?: SourceCallableOwner | null;
 }
 
 // scip-query: ignore-wrapper — public callable-site view kept stable while

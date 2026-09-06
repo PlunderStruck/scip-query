@@ -181,21 +181,15 @@ describe('query service fast path', () => {
     });
     expect(
       parseFastPathInvocation(['trace', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact']),
-    ).toEqual({
-      kind: 'trace',
-      symbolPattern: 'queryServiceSessionIdentity',
-    });
+    ).toBeNull();
     expect(
       parseFastPathInvocation(['value-flow', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact']),
-    ).toEqual({
-      kind: 'value-flow',
-      symbolPattern: 'queryServiceSessionIdentity',
-    });
+    ).toBeNull();
     expect(
-      parseFastPathInvocation(['dependence-slice', 'executeRequest', '--json', '--result-only', '--compact']),
+      parseFastPathInvocation(['dependence-slice', 'src/worker.ts:12', '--json', '--result-only', '--compact']),
     ).toEqual({
       kind: 'dependence-slice',
-      criterion: 'executeRequest',
+      criterion: 'src/worker.ts:12',
     });
     expect(
       parseFastPathInvocation([
@@ -205,16 +199,10 @@ describe('query service fast path', () => {
         '--result-only',
         '--compact',
       ]),
-    ).toEqual({
-      kind: 'reference-neighborhood',
-      symbolPattern: 'queryServiceSessionIdentity',
-    });
+    ).toBeNull();
     expect(
       parseFastPathInvocation(['dataflow', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact']),
-    ).toEqual({
-      kind: 'dataflow',
-      symbolPattern: 'queryServiceSessionIdentity',
-    });
+    ).toBeNull();
     expect(
       parseFastPathInvocation([
         'reference-reachability',
@@ -223,16 +211,10 @@ describe('query service fast path', () => {
         '--result-only',
         '--compact',
       ]),
-    ).toEqual({
-      kind: 'reference-reachability',
-      symbolPattern: 'queryServiceSessionIdentity',
-    });
+    ).toBeNull();
     expect(
       parseFastPathInvocation(['slice', 'queryServiceSessionIdentity', '--json', '--result-only', '--compact']),
-    ).toEqual({
-      kind: 'slice',
-      symbolPattern: 'queryServiceSessionIdentity',
-    });
+    ).toBeNull();
     expect(parseFastPathInvocation(['imports', 'src/runtime/cli.ts', '--json', '--result-only', '--compact'])).toEqual({
       kind: 'imports',
       filePattern: 'src/runtime/cli.ts',

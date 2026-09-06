@@ -1,0 +1,1 @@
+{"kind":"scip-query-json-export","schemaVersion":1,"producer":{"name":"scip-query","version":"0.25.0"},"command":"dependence-slice","path":"/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/command-contracts/2026-09-05/cli/dependence-slice.json","bytes":9799,"sha256":"640427dba960aef108ab932bf39713e591b9bca81fb0ee253e3f2ad00d219857"}

@@ -1,5 +1,6 @@
+import { indexedReferenceFileCount } from '../internal/indexed-reference-count.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
+import { resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { resolveIndexedFile } from '../internal/file-resolution.js';
 import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
@@ -31,32 +32,19 @@ export interface FileDependencyOutDegreeResult extends FanResult {
  * High fan-in = widely depended upon = high blast radius for changes.
  */
 export function fanIn(db: ScipDatabase, symbolPattern: string): FanInResult[] {
-  const match = findFirstSymbolMatch(db, symbolPattern);
+  const resolution = resolveSymbol(db, symbolPattern);
+  if (resolution.candidates.length > 0) {
+    throw new Error(`Ambiguous symbol: ${symbolPattern}. Use an exact SCIP symbol or file:line.`);
+  }
+  const match = resolution.match;
   if (!match) {
     return [];
   }
 
-  const row = db.get<{ file_count: number }>(
-    `SELECT COUNT(DISTINCT c.document_id) AS file_count
-     FROM mentions m
-     JOIN chunks c ON m.chunk_id = c.id
-     JOIN (
-       SELECT m2.symbol_id, c2.document_id
-       FROM mentions m2
-       JOIN chunks c2 ON m2.chunk_id = c2.id
-       WHERE m2.role = 1
-       GROUP BY m2.symbol_id
-     ) sym_def ON sym_def.symbol_id = m.symbol_id
-     WHERE m.symbol_id = ?
-       AND m.role != 1
-       AND sym_def.document_id != c.document_id`,
-    match.symbolId,
-  );
-
   return [
     {
       name: shortenSymbol(match.symbol),
-      count: row?.file_count ?? 0,
+      count: indexedReferenceFileCount(db, match.symbolId),
       symbol: match.symbol,
       definedIn: match.relativePath,
     },
@@ -91,7 +79,7 @@ export function externalSymbolFanOut(db: ScipDatabase, filePattern: string): Ext
       AND m.role != 1
       AND def_d.id != d.id
     GROUP BY d.id
-    ORDER BY symbol_count DESC`,
+    ORDER BY symbol_count DESC, d.relative_path`,
     resolvedFile,
   );
 
@@ -154,8 +142,8 @@ function fetchTopFanInRows(
   opts: { limit?: number; scope?: string },
 ): Array<{ symbol: string; file_count: number; defined_in: string }> {
   const { limit = 30, scope } = opts;
-  const scopeFilter = scope ? `AND def_d.relative_path LIKE ?` : '';
-  const scopeParams = scope ? [`%${scope}%`] : [];
+  const scopeFilter = scope ? `AND instr(def_d.relative_path, ?) > 0` : '';
+  const scopeParams = scope ? [scope] : [];
 
   return db.all<{ symbol: string; file_count: number; defined_in: string }>(
     `SELECT gs.symbol,
@@ -178,8 +166,8 @@ function fetchTopFanInRows(
       ${db.symbolNoiseFor('gs')}
       ${scopeFilter}
     GROUP BY gs.id
-    HAVING file_count > 1
-    ORDER BY file_count DESC
+    HAVING file_count > 0
+    ORDER BY file_count DESC, gs.symbol
     LIMIT ?`,
     ...scopeParams,
     limit,
@@ -194,8 +182,8 @@ function fetchTopFanInRows(
 // different question of the same SCIP graph.
 export function topFanOut(db: ScipDatabase, opts: { limit?: number; scope?: string } = {}): FanResult[] {
   const { limit = 30, scope } = opts;
-  const scopeFilter = scope ? `AND d.relative_path LIKE ?` : '';
-  const scopeParams = scope ? [`%${scope}%`] : [];
+  const scopeFilter = scope ? `AND instr(d.relative_path, ?) > 0` : '';
+  const scopeParams = scope ? [scope] : [];
 
   const rows = db.all<{
     relative_path: string;
@@ -220,7 +208,7 @@ export function topFanOut(db: ScipDatabase, opts: { limit?: number; scope?: stri
       ${db.symbolNoiseFor('gs')}
       ${scopeFilter}
     GROUP BY d.id
-    ORDER BY symbol_count DESC
+    ORDER BY symbol_count DESC, d.relative_path
     LIMIT ?`,
     ...scopeParams,
     limit,

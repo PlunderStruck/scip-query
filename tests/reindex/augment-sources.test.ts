@@ -1,6 +1,7 @@
+import { execFileSync } from 'node:child_process';
 import { describe, it, expect } from 'vitest';
 import Database from 'better-sqlite3';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../src/storage/db.js';
@@ -112,6 +113,29 @@ describe('auxiliary source augmentation', () => {
       expect(result).toEqual({ scanned: 1_100, inserted: 1_100, existing: 0 });
     },
   );
+
+  it('retains Git paths containing Unicode, quotes and newlines', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-augment-git-paths-'));
+    const dbPath = join(projectRoot, 'index.db');
+    const paths = ['Café.vue', 'quoted"name.vue', 'line\nbreak.vue'];
+    try {
+      execFileSync('git', ['init', '-q', projectRoot]);
+      for (const file of paths) writeFileSync(join(projectRoot, file), '<template>fixture</template>');
+      createDocumentsOnlyDb(dbPath);
+      expect(augmentAuxiliaryDocuments({ projectRoot, dbPath })).toEqual({ scanned: 3, inserted: 3, existing: 0 });
+      const db = new Database(dbPath);
+      try {
+        const found = db.prepare("SELECT relative_path FROM documents WHERE language = 'vue'").all() as {
+          relative_path: string;
+        }[];
+        expect(found.map((row) => row.relative_path).sort()).toEqual(paths.sort());
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
 
   it('runs auxiliary source augmentation as a post-index stage', () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'scip-query-augment-stage-'));

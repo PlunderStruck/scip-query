@@ -368,12 +368,12 @@ describe('localityCandidates', { timeout: SQLITE_FIXTURE_TIMEOUT_MS }, () => {
       expect(candidate).toMatchObject({
         actionTier: 'signal',
         candidatePath: 'src/shared/horse-format.ts',
-        consumerCoverage: 'exact',
+        consumerCoverage: 'symbol-observations',
         currentDirectory: 'src/shared',
-        nearestCommonOwner: 'src/features/horses',
+        nearestCommonDirectory: 'src/features/horses',
         recommendedTier: 'feature-local-shared',
         suggestedHome: 'src/features/horses/shared',
-        destinationConfidence: 'exact',
+        destinationConfidence: 'candidate',
         whyNoSuggestedHome: null,
         sourceUnit: {
           kind: 'symbol',
@@ -397,7 +397,9 @@ describe('localityCandidates', { timeout: SQLITE_FIXTURE_TIMEOUT_MS }, () => {
         expect.arrayContaining(['shared: src/shared', 'feature: src/features']),
       );
       expect(candidate.counterevidence).toEqual(
-        expect.arrayContaining(['Report-only signal; review ownership before moving files.']),
+        expect.arrayContaining([
+          'Path and observed-consumer heuristic; confirm conceptual ownership, complete consumers and behavior before moving files.',
+        ]),
       );
     });
   });
@@ -410,10 +412,10 @@ describe('localityCandidates', { timeout: SQLITE_FIXTURE_TIMEOUT_MS }, () => {
       expect(results[0]).toMatchObject({
         actionTier: 'signal',
         consumerCoverage: 'file-level',
-        nearestCommonOwner: 'src/features/horses',
+        nearestCommonDirectory: 'src/features/horses',
         recommendedTier: 'feature-local-shared',
         suggestedHome: 'src/features/horses/shared',
-        destinationConfidence: 'exact',
+        destinationConfidence: 'candidate',
         whyNoSuggestedHome: null,
         sourceUnit: {
           kind: 'file',
@@ -437,8 +439,8 @@ describe('localityCandidates', { timeout: SQLITE_FIXTURE_TIMEOUT_MS }, () => {
       expect(results[0]).toMatchObject({
         actionTier: 'signal',
         consumerCoverage: 'none',
-        nearestCommonOwner: null,
-        recommendedTier: 'no-exact-consumers',
+        nearestCommonDirectory: null,
+        recommendedTier: 'no-observed-consumers',
         suggestedHome: null,
         destinationConfidence: 'withheld',
         sourceUnit: {
@@ -461,7 +463,7 @@ describe('localityCandidates', { timeout: SQLITE_FIXTURE_TIMEOUT_MS }, () => {
       expect(horseFormat).toMatchObject({
         candidatePath: 'src/shared/horse-format.ts',
         consumerCoverage: 'file-level',
-        nearestCommonOwner: 'src/features/horses',
+        nearestCommonDirectory: 'src/features/horses',
       });
     });
   });
@@ -474,14 +476,14 @@ describe('localityCandidates', { timeout: SQLITE_FIXTURE_TIMEOUT_MS }, () => {
       expect(results[0]).toMatchObject({
         candidatePath: 'backend/src/prisma.ts',
         consumerCoverage: 'file-level',
-        nearestCommonOwner: 'backend',
+        nearestCommonDirectory: 'backend',
         recommendedTier: 'sibling-folder',
         suggestedHome: null,
         destinationConfidence: 'withheld',
       });
       expect(results[0]!.whyNoSuggestedHome).toContain('outside source root backend/src');
       expect(results[0]!.counterevidence).toEqual(
-        expect.arrayContaining([expect.stringContaining('No exact suggested home')]),
+        expect.arrayContaining([expect.stringContaining('No suggested home')]),
       );
     });
   });
@@ -494,13 +496,13 @@ describe('localityCandidates', { timeout: SQLITE_FIXTURE_TIMEOUT_MS }, () => {
       expect(results[0]).toMatchObject({
         candidatePath: 'backend/src/effect/services.ts',
         consumerCoverage: 'file-level',
-        nearestCommonOwner: 'backend/src',
+        nearestCommonDirectory: 'backend/src',
         recommendedTier: 'sibling-folder',
         suggestedHome: null,
         destinationConfidence: 'withheld',
       });
-      expect(results[0]!.whyNoSuggestedHome).toContain('named architectural boundary');
-      expect(results[0]!.reasons).toEqual(expect.arrayContaining([expect.stringContaining('No exact suggested home')]));
+      expect(results[0]!.whyNoSuggestedHome).toContain('protected directory-name marker');
+      expect(results[0]!.reasons).toEqual(expect.arrayContaining([expect.stringContaining('No suggested home')]));
     });
   });
 
@@ -515,9 +517,9 @@ describe('localityCandidates', { timeout: SQLITE_FIXTURE_TIMEOUT_MS }, () => {
       expect(defaultResults[0]).toMatchObject({
         candidatePath: 'backend/src/policies/accessRules.ts',
         consumerCoverage: 'file-level',
-        nearestCommonOwner: 'backend/src',
+        nearestCommonDirectory: 'backend/src',
         suggestedHome: 'backend/src/shared',
-        destinationConfidence: 'exact',
+        destinationConfidence: 'candidate',
         whyNoSuggestedHome: null,
       });
 
@@ -531,11 +533,11 @@ describe('localityCandidates', { timeout: SQLITE_FIXTURE_TIMEOUT_MS }, () => {
       expect(configuredResults[0]).toMatchObject({
         candidatePath: 'backend/src/policies/accessRules.ts',
         consumerCoverage: 'file-level',
-        nearestCommonOwner: 'backend/src',
+        nearestCommonDirectory: 'backend/src',
         suggestedHome: null,
         destinationConfidence: 'withheld',
       });
-      expect(configuredResults[0]!.whyNoSuggestedHome).toContain('named architectural boundary');
+      expect(configuredResults[0]!.whyNoSuggestedHome).toContain('protected directory-name marker');
     });
   });
 
@@ -550,12 +552,14 @@ describe('localityCandidates', { timeout: SQLITE_FIXTURE_TIMEOUT_MS }, () => {
       expect(results[0]).toMatchObject({
         candidatePath: 'backend/src/middleware/validate.ts',
         consumerCoverage: 'file-level',
-        nearestCommonOwner: 'backend/src/effect',
+        nearestCommonDirectory: 'backend/src/effect',
         recommendedTier: 'sibling-folder',
         suggestedHome: null,
         destinationConfidence: 'withheld',
       });
-      expect(results[0]!.whyNoSuggestedHome).toContain('backend/src/middleware is a named architectural boundary');
+      expect(results[0]!.whyNoSuggestedHome).toContain(
+        'backend/src/middleware matches a protected directory-name marker',
+      );
     });
   });
 
@@ -570,13 +574,13 @@ describe('localityCandidates', { timeout: SQLITE_FIXTURE_TIMEOUT_MS }, () => {
       expect(results[0]).toMatchObject({
         candidatePath: 'backend/src/services/private/serviceSecret.ts',
         consumerCoverage: 'file-level',
-        nearestCommonOwner: 'backend/src/services',
+        nearestCommonDirectory: 'backend/src/services',
         recommendedTier: 'sibling-folder',
         suggestedHome: null,
         destinationConfidence: 'withheld',
       });
       expect(results[0]!.whyNoSuggestedHome).toContain(
-        'backend/src/services/private is a named architectural boundary',
+        'backend/src/services/private matches a protected directory-name marker',
       );
     });
   });
@@ -592,16 +596,16 @@ describe('localityCandidates', { timeout: SQLITE_FIXTURE_TIMEOUT_MS }, () => {
       expect(results[0]).toMatchObject({
         candidatePath: 'src/hooks/useAsyncLoader.ts',
         consumerCoverage: 'file-level',
-        nearestCommonOwner: 'src/components',
+        nearestCommonDirectory: 'src/components',
         suggestedHome: null,
         destinationConfidence: 'withheld',
       });
-      expect(results[0]!.whyNoSuggestedHome).toContain('src/hooks is a named architectural boundary');
+      expect(results[0]!.whyNoSuggestedHome).toContain('src/hooks matches a protected directory-name marker');
       expect(results[0]!.whyNoSuggestedHome).not.toContain('does not exist');
     });
   });
 
-  it('withholds when a candidate already lives at the nearest common owner', () => {
+  it('withholds when a candidate already lives at the nearest common directory', () => {
     withLocalityFixture((db) => {
       const results = localityCandidates(db, {
         target: 'packages/companion/src/agent-command-options.ts',
@@ -612,13 +616,32 @@ describe('localityCandidates', { timeout: SQLITE_FIXTURE_TIMEOUT_MS }, () => {
       expect(results[0]).toMatchObject({
         candidatePath: 'packages/companion/src/agent-command-options.ts',
         consumerCoverage: 'file-level',
-        nearestCommonOwner: 'packages/companion/src',
+        nearestCommonDirectory: 'packages/companion/src',
         suggestedHome: null,
         destinationConfidence: 'withheld',
       });
       expect(results[0]!.whyNoSuggestedHome).toBe(
-        'packages/companion/src is already the nearest common owner for its consumers.',
+        'packages/companion/src is already the nearest common directory for its consumers.',
       );
+    });
+  });
+});
+
+describe('locality command scope and identity contracts', () => {
+  it('includes external consumers when the candidate scope is narrow', () => {
+    withLocalityFixture((db) => {
+      const result = localityCandidates(db, { scope: 'src/shared' });
+      const horse = result.find((entry) => entry.candidatePath === 'src/shared/horse-format.ts');
+      expect(horse?.consumerFiles).toEqual([
+        'src/features/horses/routes/HorseRoute.ts',
+        'src/features/horses/screens/HorseList.ts',
+      ]);
+    });
+  });
+
+  it('rejects ambiguous symbol targets', () => {
+    withLocalityFixture((db) => {
+      expect(() => localityCandidates(db, { target: 'format' })).toThrow(/ambiguous/i);
     });
   });
 });

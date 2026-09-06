@@ -1,0 +1,1 @@
+{"kind":"scip-query-json-export","schemaVersion":1,"producer":{"name":"scip-query","version":"0.25.0"},"command":"dependency-depth","path":"/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/full-tool-audit/2026-09-05/followup/final/dependency-depth.json","bytes":4063,"sha256":"ffca422a08e9bd2cd7fe550035232afbf5a36f9cf9530dfb8a668162f89e9d7d"}

@@ -15,15 +15,21 @@ describe('hierarchy', () => {
       const method = 'scip-typescript npm fixture 1.0.0 src/`widget.ts`/Widget#render().';
       const cls = 'scip-typescript npm fixture 1.0.0 src/`widget.ts`/Widget#';
       const fallbackMethod = 'scip-typescript npm fixture 1.0.0 src/`fallback.ts`/Fallback#run().';
+      const fallbackClass = 'scip-typescript npm fixture 1.0.0 src/`fallback.ts`/Fallback#';
+      const fallbackModule = 'scip-typescript npm fixture 1.0.0 src/`fallback.ts`/';
       evidenceFixtureDb(dbPath)
         .document(1, 'typescript', 'src/widget.ts')
         .document(2, 'typescript', 'src/fallback.ts')
         .symbol(1, method, 'render', 6)
         .symbol(2, cls, 'Widget', 5)
         .symbol(3, fallbackMethod, 'run', 6)
+        .symbol(4, fallbackClass, 'Fallback', 5)
+        .symbol(5, fallbackModule, 'fallback', 1)
         .definition(1, 1, 1, 4, 2, 6, 3)
         .definition(2, 1, 2, 0, 0, 8, 1)
         .definition(3, 2, 3, 1, 2, 2, 3)
+        .definition(4, 2, 4, 0, 0, 3, 1)
+        .definition(5, 2, 5, 0, 0, 3, 1)
         .write();
       const sqliteDb = new Database(dbPath);
       try {
@@ -41,7 +47,11 @@ describe('hierarchy', () => {
           'src:fallback:Fallback:run()',
           'src:fallback:Fallback',
           'src:fallback',
-          'src',
+        ]);
+        expect(hierarchy(db, 'Fallback#run').map((node) => node.symbol)).toEqual([
+          fallbackMethod,
+          fallbackClass,
+          fallbackModule,
         ]);
       } finally {
         db.close();

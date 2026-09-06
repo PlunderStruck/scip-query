@@ -9,12 +9,23 @@ import type { AstLanguage } from '../ast/ast-language.js';
  */
 export type CallSiteKind = 'call' | 'new' | 'jsx-render';
 
+/** The nearest syntactic function, including functions without an indexed symbol. */
+export interface SourceCallableOwner {
+  name: string | null;
+  startLine: number;
+  startColumn: number;
+  endLine: number;
+  endColumn: number;
+}
+
 export interface SourceFacts {
   language: AstLanguage;
   callables: Array<{
     name: string;
     startLine: number;
+    startColumn?: number;
     endLine: number;
+    endColumn?: number;
     /** Branch points inside the callable (nested callables count in both); absent when no AST walk produced it. */
     branches?: number;
     paramCount: number;
@@ -31,6 +42,9 @@ export interface SourceFacts {
     calleeText?: string;
     memberAccess: boolean;
     line: number;
+    targetRange?: { startLine: number; startColumn: number; endLine: number; endColumn: number };
+    /** Null is file scope; absent means this provider does not report lexical ownership. */
+    owner?: SourceCallableOwner | null;
   }>;
   clojureMembers: Array<{
     ownerName: string;

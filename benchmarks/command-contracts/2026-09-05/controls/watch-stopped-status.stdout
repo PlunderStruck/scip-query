@@ -1,0 +1,36 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "watch",
+  "operationRole": "environment-observation",
+  "evidence": "graph-fact",
+  "args": [],
+  "options": {
+    "status": true,
+    "json": true
+  },
+  "result": {
+    "enabled": true,
+    "state": "stopped",
+    "mode": "none",
+    "refreshRequests": {
+      "pending": 0,
+      "claimed": 0,
+      "completed": 0,
+      "expired": 0,
+      "invalid": 0
+    }
+  },
+  "coverage": {
+    "complete": true,
+    "totalKnown": true,
+    "returned": 1,
+    "total": 1,
+    "omitted": 0
+  }
+}

@@ -26,8 +26,7 @@ export interface ArchitectureBoundaryEdge {
   examples: ArchitectureFileEdge[];
   /**
    * True when the entire boundary dependency rests on a single import. Not a
-   * violation — a signal that the edge is incidental rather than load-bearing,
-   * and therefore cheap to remove if it was never intended.
+   * violation. Import count alone does not establish responsibility or removal cost.
    */
   fragile: boolean;
 }
@@ -51,6 +50,8 @@ export interface ArchitectureReciprocalPair {
 }
 
 export interface ArchitectureCycle {
+  fileCycleMembers?: string[];
+  origin?: 'contains-file-cycle' | 'grouping-only';
   boundaries: string[];
   internalEdges: ArchitectureBoundaryEdge[];
   /** Least-broad internal edge(s), useful as inspection points rather than automatic repairs. */
@@ -59,6 +60,8 @@ export interface ArchitectureCycle {
 }
 
 export interface ArchitectureCoverage {
+  scope?: string;
+  limitations?: string[];
   totalFiles: number;
   mappedFiles: number;
   unmappedFiles: string[];
@@ -109,20 +112,23 @@ export interface ArchitectureCoarseBoundary {
   violatesPolicy: boolean;
   subUnits: string[];
   internalEdges: ArchitectureSubUnitEdge[];
-  /** Least-broad internal edge(s) — the cheapest inspection points. */
+  /** Internal edges with the fewest distinct file dependencies; cost is not measured. */
   narrowestEdges: ArchitectureSubUnitEdge[];
 }
 
 export interface ArchitectureReport {
+  dependencyRoles?: { excludedTestEdges: number; basis: 'production-imports-including-types'; cycleMeaning: string };
   configured: boolean;
   boundaries: ArchitectureBoundarySummary[];
   edges: ArchitectureBoundaryEdge[];
   forbiddenEdges: ArchitectureBoundaryEdge[];
+  testEdges?: ArchitectureBoundaryEdge[];
+  testForbiddenEdges?: ArchitectureBoundaryEdge[];
   reciprocalPairs: ArchitectureReciprocalPair[];
   cycles: ArchitectureCycle[];
   /** Boundaries hiding an internal cycle that the boundary graph cannot express. */
   coarseBoundaries: ArchitectureCoarseBoundary[];
-  /** Declared allowances with no observed edge — policy wider than reality. */
+  /** Declared allowances with no observed edge from a boundary with observed source files. */
   staleAllowances: ArchitectureStaleAllowance[];
   /** Boundaries over a configured fan-out or file-count limit. */
   boundaryLimits: ArchitectureBoundaryLimit[];
@@ -157,12 +163,31 @@ export function analyzeArchitectureGraph(
   opts: {
     isModuleHierarchyFile?: (file: string) => boolean;
     testBoundaryViolations?: TestBoundaryViolation[];
+    scope?: string;
   } = {},
 ): ArchitectureReport {
+  const scopeCoverage = opts.scope
+    ? {
+        scope: opts.scope,
+        limitations: [
+          'A file-filtered projection cannot establish repository-wide cycle freedom, size compliance or unused allowances. Rerun architecture without --scope for full policy evaluation.',
+        ],
+      }
+    : {};
+  const allImports = fileGraph;
   const allFiles = allGraphFiles(fileGraph, indexedFiles);
+  const production = productionArchitectureGraph(fileGraph, config);
+  fileGraph = production.graph;
+  const dependencyRoles: ArchitectureReport['dependencyRoles'] = {
+    excludedTestEdges: production.excludedTestEdges,
+    basis: 'production-imports-including-types',
+    cycleMeaning:
+      'Boundary cycles concern declared groups. File cycle members, when present, concern static imports including types; neither establishes a runtime initialization failure.',
+  };
   if (!config || config.boundaries.length === 0) {
     return {
       configured: false,
+      dependencyRoles,
       boundaries: [],
       edges: [],
       forbiddenEdges: [],
@@ -174,9 +199,10 @@ export function analyzeArchitectureGraph(
       fragileEdges: [],
       testBoundaryViolations: [],
       coverage: {
+        ...scopeCoverage,
         totalFiles: allFiles.length,
         mappedFiles: 0,
-        unmappedFiles: [],
+        unmappedFiles: allFiles,
         ambiguousFiles: [],
       },
       policyCoverage: {
@@ -211,28 +237,14 @@ export function analyzeArchitectureGraph(
     }
   }
 
-  const mutableEdges = new Map<string, MutableBoundaryEdge>();
-  for (const [fromFile, dependencies] of fileGraph) {
-    const from = resolved.get(fromFile);
-    if (!from) continue;
-    for (const toFile of dependencies) {
-      const to = resolved.get(toFile);
-      if (!to || from === to) continue;
-      const key = boundaryEdgeKey(from, to);
-      let edge = mutableEdges.get(key);
-      if (!edge) {
-        edge = { from, to, fileEdges: [], importers: new Set(), importedFiles: new Set() };
-        mutableEdges.set(key, edge);
-      }
-      edge.fileEdges.push({ fromFile, toFile });
-      edge.importers.add(fromFile);
-      edge.importedFiles.add(toFile);
-    }
-  }
-
-  const edges = [...mutableEdges.values()]
-    .map((edge) => materializeBoundaryEdge(edge, config))
-    .sort(compareBoundaryEdges);
+  const edges = aggregateArchitectureEdges(fileGraph, resolved, config);
+  const testGraph = new Map(
+    [...allImports].map(([file, targets]) => [
+      file,
+      new Set([...targets].filter((target) => !fileGraph.get(file)?.has(target))),
+    ]),
+  );
+  const testEdges = aggregateArchitectureEdges(testGraph, resolved, config);
   const enforcedEdges = edges;
   const edgeByKey = new Map(enforcedEdges.map((edge) => [boundaryEdgeKey(edge.from, edge.to), edge]));
   const boundaryGraph = new Map(config.boundaries.map((boundary) => [boundary.name, new Set<string>()] as const));
@@ -251,10 +263,25 @@ export function analyzeArchitectureGraph(
     }
   }
 
+  const fileComponents = stronglyConnectedComponents(fileGraph).components.filter(
+    (component) =>
+      component.length > 1 && new Set(component.map((file) => resolved.get(file)).filter(Boolean)).size > 1,
+  );
   const { components } = stronglyConnectedComponents(boundaryGraph);
   const cycles = components
     .filter((component) => component.length > 1)
-    .map((component) => architectureCycle(component, enforcedEdges, config.requireAcyclic === true))
+    .map((component) => {
+      const cycle = architectureCycle(component, enforcedEdges, config.requireAcyclic === true);
+      const members = new Set(component);
+      const fileCycleMembers = fileComponents
+        .filter((files) => files.every((file) => members.has(resolved.get(file) ?? '')))
+        .flat();
+      return {
+        ...cycle,
+        origin: fileCycleMembers.length > 0 ? ('contains-file-cycle' as const) : ('grouping-only' as const),
+        fileCycleMembers: [...new Set(fileCycleMembers)].sort(),
+      };
+    })
     .sort(
       (a, b) =>
         b.boundaries.length - a.boundaries.length || a.boundaries.join('/').localeCompare(b.boundaries.join('/')),
@@ -267,6 +294,9 @@ export function analyzeArchitectureGraph(
     .sort();
   return {
     configured: true,
+    dependencyRoles,
+    testEdges,
+    testForbiddenEdges: testEdges.filter((edge) => edge.policyStatus === 'forbidden'),
     boundaries: config.boundaries
       .map((boundary) => ({
         name: boundary.name,
@@ -279,7 +309,7 @@ export function analyzeArchitectureGraph(
     forbiddenEdges: enforcedEdges.filter((edge) => edge.policyStatus === 'forbidden'),
     reciprocalPairs,
     cycles,
-    staleAllowances: staleAllowances(config, enforcedEdges),
+    staleAllowances: opts.scope ? [] : staleAllowances(config, [...enforcedEdges, ...testEdges], filesByBoundary),
     boundaryLimits: boundaryLimits(config, enforcedEdges, filesByBoundary),
     fragileEdges: enforcedEdges.filter((edge) => edge.fragile),
     testBoundaryViolations: opts.testBoundaryViolations ?? [],
@@ -291,6 +321,7 @@ export function analyzeArchitectureGraph(
       (name) => config.boundaries.find((boundary) => boundary.name === name)?.subUnits ?? 'directory',
     ),
     coverage: {
+      ...scopeCoverage,
       totalFiles: allFiles.length,
       mappedFiles: resolved.size,
       unmappedFiles,
@@ -319,7 +350,8 @@ export function architecture(db: ScipDatabase, opts: { scope?: string } = {}): A
   // Hoisted: this is consulted once per import of every test file, so building
   // it per lookup turns the test-boundary pass into an O(files x imports) scan.
   const sourceFiles = new Set(files);
-  return analyzeArchitectureGraph(graph, files, db.config.architecture, {
+  const report = analyzeArchitectureGraph(graph, files, db.config.architecture, {
+    scope: opts.scope,
     isModuleHierarchyFile: (file) => isModuleHierarchyFile(db, file),
     testBoundaryViolations: testBoundaryViolations(
       db,
@@ -328,6 +360,11 @@ export function architecture(db: ScipDatabase, opts: { scope?: string } = {}): A
       (file) => sourceFiles.has(file),
     ),
   });
+  report.coverage.limitations = [
+    ...(report.coverage.limitations ?? []),
+    'This graph covers indexed documents and observed import/re-export relationships. Unindexed files and unsupported relationships cannot establish repository-wide absence; allowances from boundaries without observed source files are not classified as unused.',
+  ];
+  return report;
 }
 
 /**
@@ -353,10 +390,36 @@ function isModuleHierarchyFile(db: ScipDatabase, file: string): boolean {
  * the ratchet while the same boundary relationship remains.
  */
 export function architectureFindingIdentities(report: ArchitectureReport): string[] {
-  const identities = report.forbiddenEdges.map(
+  const identities = [...report.forbiddenEdges, ...(report.testForbiddenEdges ?? [])].map(
     (edge) =>
       `${ARCHITECTURE_BASELINE_PREFIX}forbidden-edge:${encodeURIComponent(edge.from)}:${encodeURIComponent(edge.to)}`,
   );
+  identities.push(...architecturePolicyGapIdentities(report));
+  for (const violation of report.testBoundaryViolations) {
+    identities.push(
+      `${ARCHITECTURE_BASELINE_PREFIX}test-boundary:${encodeURIComponent(violation.testFile)}:${encodeURIComponent(violation.importedBoundary)}`,
+    );
+  }
+  for (const limit of report.boundaryLimits) {
+    identities.push(
+      `${ARCHITECTURE_BASELINE_PREFIX}boundary-limit:${limit.kind}:${encodeURIComponent(limit.boundary)}`,
+    );
+  }
+  identities.push(...coarseBoundaryIdentities(report.coarseBoundaries));
+  for (const cycle of report.cycles) {
+    if (!cycle.violatesPolicy) continue;
+    identities.push(
+      `${ARCHITECTURE_BASELINE_PREFIX}cycle:${cycle.boundaries
+        .map((boundary) => encodeURIComponent(boundary))
+        .sort()
+        .join('|')}`,
+    );
+  }
+  return [...new Set(identities)].sort();
+}
+
+function architecturePolicyGapIdentities(report: ArchitectureReport): string[] {
+  const identities: string[] = [];
   if (report.policyCoverage.requiresCompletePolicy) {
     for (const boundary of report.policyCoverage.missingRows) {
       identities.push(`${ARCHITECTURE_BASELINE_PREFIX}missing-policy-row:${encodeURIComponent(boundary)}`);
@@ -382,18 +445,14 @@ export function architectureFindingIdentities(report: ArchitectureReport): strin
       );
     }
   }
-  for (const violation of report.testBoundaryViolations) {
-    identities.push(
-      `${ARCHITECTURE_BASELINE_PREFIX}test-boundary:${encodeURIComponent(violation.testFile)}:${encodeURIComponent(violation.importedBoundary)}`,
-    );
-  }
-  for (const limit of report.boundaryLimits) {
-    identities.push(
-      `${ARCHITECTURE_BASELINE_PREFIX}boundary-limit:${limit.kind}:${encodeURIComponent(limit.boundary)}`,
-    );
-  }
+  return identities;
+}
+
+/** Keep component counts stable when their file membership shifts within one declared owner. */
+function coarseBoundaryIdentities(findings: ArchitectureReport['coarseBoundaries']): string[] {
+  const identities: string[] = [];
   const coarseCounts = new Map<string, number>();
-  for (const finding of report.coarseBoundaries) {
+  for (const finding of findings) {
     if (!finding.violatesPolicy) continue;
     coarseCounts.set(finding.boundary, (coarseCounts.get(finding.boundary) ?? 0) + 1);
   }
@@ -407,16 +466,7 @@ export function architectureFindingIdentities(report: ArchitectureReport): strin
       identities.push(`${base}:component:${component}`);
     }
   }
-  for (const cycle of report.cycles) {
-    if (!cycle.violatesPolicy) continue;
-    identities.push(
-      `${ARCHITECTURE_BASELINE_PREFIX}cycle:${cycle.boundaries
-        .map((boundary) => encodeURIComponent(boundary))
-        .sort()
-        .join('|')}`,
-    );
-  }
-  return [...new Set(identities)].sort();
+  return identities;
 }
 
 /** True when configuration contains at least one closed rule worth enforcing. */
@@ -580,13 +630,14 @@ export function detectCoarseBoundaries(
 function staleAllowances(
   config: ArchitectureConfig,
   edges: readonly ArchitectureBoundaryEdge[],
+  filesByBoundary: ReadonlyMap<string, ReadonlySet<string>>,
 ): ArchitectureStaleAllowance[] {
   const observed = new Set(edges.map((edge) => boundaryEdgeKey(edge.from, edge.to)));
   const declared = config.allowedDependencies ?? {};
   const boundaryNames = new Set(config.boundaries.map((boundary) => boundary.name));
   const stale: ArchitectureStaleAllowance[] = [];
   for (const [from, targets] of Object.entries(declared)) {
-    if (!boundaryNames.has(from)) continue;
+    if (!filesByBoundary.get(from)?.size) continue;
     for (const to of targets) {
       if (!boundaryNames.has(to) || observed.has(boundaryEdgeKey(from, to))) continue;
       stale.push({ from, to });
@@ -648,4 +699,56 @@ function boundaryEdgeKey(from: string, to: string): string {
 
 function compareBoundaryEdges(a: ArchitectureBoundaryEdge, b: ArchitectureBoundaryEdge): number {
   return a.from.localeCompare(b.from) || a.to.localeCompare(b.to);
+}
+
+function productionArchitectureGraph(
+  graph: ReadonlyMap<string, ReadonlySet<string>>,
+  config?: ArchitectureConfig,
+): { graph: Map<string, Set<string>>; excludedTestEdges: number } {
+  const tests = new Set(
+    allGraphFiles(graph, []).filter(
+      (file) =>
+        classifyFile(file) === 'test' ||
+        /(^|\/)(fixtures|benchmarks)(\/|$)/.test(file) ||
+        (config?.testPaths ?? []).some((pattern) => matchesPathGlob(pattern, file)),
+    ),
+  );
+  const production = new Map<string, Set<string>>();
+  let excludedTestEdges = 0;
+  for (const [file, targets] of graph) {
+    const retained = new Set<string>();
+    for (const target of targets) {
+      if (tests.has(file) || tests.has(target)) excludedTestEdges++;
+      else retained.add(target);
+    }
+    production.set(file, retained);
+  }
+  return { graph: production, excludedTestEdges };
+}
+
+function aggregateArchitectureEdges(
+  fileGraph: ReadonlyMap<string, ReadonlySet<string>>,
+  resolved: ReadonlyMap<string, string>,
+  config: ArchitectureConfig,
+): ArchitectureBoundaryEdge[] {
+  const mutableEdges = new Map<string, MutableBoundaryEdge>();
+  for (const [fromFile, dependencies] of fileGraph) {
+    const from = resolved.get(fromFile);
+    if (!from) continue;
+    for (const toFile of dependencies) {
+      const to = resolved.get(toFile);
+      if (!to || from === to) continue;
+      const key = boundaryEdgeKey(from, to);
+      let edge = mutableEdges.get(key);
+      if (!edge) {
+        edge = { from, to, fileEdges: [], importers: new Set(), importedFiles: new Set() };
+        mutableEdges.set(key, edge);
+      }
+      edge.fileEdges.push({ fromFile, toFile });
+      edge.importers.add(fromFile);
+      edge.importedFiles.add(toFile);
+    }
+  }
+
+  return [...mutableEdges.values()].map((edge) => materializeBoundaryEdge(edge, config)).sort(compareBoundaryEdges);
 }

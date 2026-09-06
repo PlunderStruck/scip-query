@@ -1,0 +1,33 @@
+{
+  "command": "diff-impact --base HEAD",
+  "counts": {
+    "changedFiles": 189,
+    "unindexedChangedFiles": 958,
+    "changedSymbols": 853,
+    "affectedConsumers": 199
+  },
+  "summary": {
+    "totalChangedFiles": 189,
+    "totalChangedSymbols": 853,
+    "totalAffectedFiles": 199,
+    "note": "958 changed path(s) were omitted from symbol analysis because they are absent or excluded from this index. Reindex supported source or use review for current-source analysis."
+  },
+  "evidenceTiers": [
+    {
+      "tier": "semantic-consumers",
+      "state": "failed",
+      "attemptedSymbols": 862,
+      "reason": "TypeScript reference fragments are cold for 534 of 534 files and no watch service is running; start the service with `scip-query watch --daemon`, then re-run this command."
+    },
+    {
+      "tier": "source-fallback-consumers",
+      "state": "complete",
+      "attemptedSymbols": 862
+    }
+  ],
+  "attributionCounts": {
+    "ast-widened": 167,
+    "unattributed": 210
+  },
+  "limit": "Observed consumers within the stated provider contract; complete semantic impact is not established."
+}

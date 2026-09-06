@@ -118,6 +118,8 @@ export function existingIndexFallbackEligible(commandName: string): boolean {
 }
 
 const SHARED_CACHE_PREPARATION_EXCLUDED_COMMANDS = new Set([
+  'health',
+  'review',
   'capabilities',
   'check-deps',
   'config-validate',

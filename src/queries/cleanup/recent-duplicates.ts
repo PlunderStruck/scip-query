@@ -161,7 +161,7 @@ export function recentDuplicates(
     scanLimit,
     scope,
     semantic: opts.semantic,
-    focusFiles: Number.isFinite(limit) ? undefined : focusFiles,
+    focusFiles,
   });
 
   const findings = candidates
@@ -472,7 +472,7 @@ function withRecentDuplicateGroupKey(finding: RecentDuplicateFinding): RecentDup
 
 function recentDuplicateRootCauseKey(finding: RecentDuplicateFinding): string {
   if (finding.kind === 'echo') {
-    return ['echo', finding.domain, finding.basis, finding.establishedSymbol].join(':');
+    return ['echo', finding.domain, finding.basis, finding.establishedFile, finding.establishedSymbol].join(':');
   }
   const evidence = finding.sharedEvidence.slice().sort().join('|');
   const fallback = [finding.echoSymbol, finding.establishedSymbol].sort().join('|');
@@ -539,9 +539,9 @@ function recentDuplicateRootCauseGroups(findings: readonly RecentDuplicateFindin
 
 function recentDuplicateGroupRecommendation(finding: RecentDuplicateFinding): string {
   if (finding.kind === 'echo') {
-    return 'Review the established side once, then migrate or delete every echo in this group.';
+    return 'Review the established side once; confirm behavior, contracts, and ownership before consolidating these candidates.';
   }
-  return 'Pick one owner for the new twins and consolidate the group before the copies diverge.';
+  return 'Compare these recently added files; confirm shared behavior and ownership before considering consolidation.';
 }
 
 function expandedCandidateLimit(limit: number): number {

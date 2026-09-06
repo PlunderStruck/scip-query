@@ -125,6 +125,7 @@ export interface GraphEvidenceCoverage {
   omittedEdges: number;
   frontierGroups: number;
   unsupportedFrontiers: number;
+  rejectedRelationships?: number;
   blindSpots: string[];
   explanation: string;
 }
@@ -174,27 +175,8 @@ export function graphEvidence(
     throw new Error('evidence requires at least one positional symbol, --symbol, --at, or --search selector.');
   }
 
-  const view = options.view ?? 'causal';
-  const families = normalizeFamilies(options.families, view);
-  const direction = options.direction ?? 'both';
-  const subtypes = uniqueNonEmpty(options.subtypes ?? []);
-  const connecting = options.connecting ?? false;
-  const inventoryOnly = options.inventoryOnly ?? false;
-  const foldIds = uniqueNonEmpty(options.foldIds ?? []);
-  const maxDepth = options.maxDepth ?? DEFAULT_DEPTH;
-  const maxEdges = options.maxEdges ?? DEFAULT_MAX_EDGES;
-  if (!Number.isSafeInteger(maxDepth) || maxDepth < 0) {
-    throw new RangeError(`Evidence depth must be a non-negative safe integer; received ${maxDepth}.`);
-  }
-  if (!Number.isSafeInteger(maxEdges) || maxEdges <= 0) {
-    throw new RangeError(`Evidence max edges must be a positive safe integer; received ${maxEdges}.`);
-  }
-  if (!['incoming', 'outgoing', 'both'].includes(direction)) {
-    throw new Error(`Unsupported graph evidence direction: ${direction}.`);
-  }
-  if (inventoryOnly && foldIds.length > 0) {
-    throw new Error('Evidence fold materialization cannot be combined with --inventory-only.');
-  }
+  const { view, families, direction, subtypes, connecting, inventoryOnly, foldIds, maxDepth, maxEdges } =
+    graphProjectionOptions(options);
 
   const topology = systemMapTopology(db, {
     symbols,
@@ -203,13 +185,7 @@ export function graphEvidence(
     maxTopologyCharacters: TOPOLOGY_CHARACTER_BUDGET,
     relations: relationKindsFor(families),
   });
-  const nodes = new Map(topology.nodes.map((node) => [node.id, node]));
-  const allProjected = topology.edges
-    .filter((edge) => edge.disposition === 'emitted' || edge.disposition === 'folded')
-    .flatMap((edge) => graphEdgesFor(edge, nodes));
-  const projected = allProjected
-    .filter((edge) => families.includes(edge.family))
-    .filter((edge) => subtypes.length === 0 || subtypes.includes(edge.subtype));
+  const { allProjected, projected, rejected } = projectTopologyEdges(topology, families, subtypes);
   const targetNodeIds = new Set(topology.anchors.flatMap((anchor) => anchor.nodeIds));
   if (connecting && targetNodeIds.size < 2) {
     throw new Error('Connecting evidence requires at least two resolved root nodes.');
@@ -223,22 +199,28 @@ export function graphEvidence(
   );
   const both = reachableGraphEdges(allProjected, targetNodeIds, 'both').filter((edge) => selectedIds.has(edge.id));
   const inventory = graphEvidenceInventory(families, subtypes, incoming, outgoing, both);
-  const directed = direction === 'incoming' ? incoming : direction === 'outgoing' ? outgoing : both;
+  const directed = { incoming, outgoing, both }[direction];
   const connected = connecting ? connectingGraphEdges(directed, [...targetNodeIds], direction) : directed;
   const distances = graphDistances(connected, targetNodeIds, direction);
   const matched = [...connected].sort((left, right) => compareGraphEdges(left, right, distances));
-  const recoverableFolds = graphEvidenceFolds(matched, maxEdges);
-  const requestedFoldEdgeIds = selectedFoldEdgeIds(recoverableFolds, foldIds);
-  const eligible = inventoryOnly
-    ? []
-    : foldIds.length > 0
-      ? matched.filter((edge) => requestedFoldEdgeIds.has(edge.id))
-      : matched;
-  const edges = foldIds.length > 0 ? eligible : eligible.slice(0, maxEdges);
-  const folds = foldIds.length > 0 || inventoryOnly ? [] : recoverableFolds;
-  const omittedEdges = Math.max(0, eligible.length - edges.length);
+  const { edges, folds, eligibleCount, omittedEdges } = materializeGraphProjection(
+    matched,
+    maxEdges,
+    foldIds,
+    inventoryOnly,
+  );
   const unsupportedFrontiers = topology.frontiers.filter((frontier) => frontier.disposition === 'unsupported').length;
-  const status = topology.coverage.status === 'incomplete' ? 'incomplete' : omittedEdges > 0 ? 'bounded' : 'accounted';
+  const rejectedRelationships = [...rejected.values()].reduce((total, count) => total + count, 0);
+  const rejectionNotes = [...rejected].map(
+    ([key, count]) =>
+      `Provider rejected ${count} ${key} relationship(s); inspect the selected source before making absence claims.`,
+  );
+  const status =
+    topology.coverage.status === 'incomplete' || rejectedRelationships > 0
+      ? 'incomplete'
+      : omittedEdges > 0
+        ? 'bounded'
+        : 'accounted';
 
   return {
     kind: 'graph',
@@ -262,29 +244,140 @@ export function graphEvidence(
       maxDepth,
       maxEdges,
       matchedEdges: matched.length,
-      eligibleEdges: eligible.length,
+      eligibleEdges: eligibleCount,
       returnedEdges: edges.length,
       omittedEdges,
       frontierGroups: topology.frontiers.length,
       unsupportedFrontiers,
-      blindSpots: uniqueNonEmpty([...topology.coverage.blindSpots, ...graphRelationUnavailableBlindSpots(families)]),
-      explanation: inventoryOnly
-        ? `${matched.length} relationship(s) match the explicit projection; only exact inventory counts were requested.`
-        : foldIds.length > 0
-          ? `Every relationship in ${foldIds.length} explicitly selected recoverable fold(s) was emitted.`
-          : status === 'accounted'
-            ? 'Every selected relationship in the bounded topology was emitted.'
-            : status === 'bounded'
-              ? `${omittedEdges} selected relationship(s) were withheld by the explicit edge budget.`
-              : topology.coverage.explanation,
+      rejectedRelationships,
+      blindSpots: uniqueNonEmpty([
+        ...topology.coverage.blindSpots,
+        ...rejectionNotes,
+        ...graphRelationUnavailableBlindSpots(families),
+      ]),
+      explanation: projectionCoverageExplanation({
+        inventoryOnly,
+        foldCount: foldIds.length,
+        matchedCount: matched.length,
+        status,
+        omittedEdges,
+        topologyExplanation: topology.coverage.explanation,
+        rejectionNotes,
+      }),
     },
   };
+}
+
+function projectionCoverageExplanation(info: {
+  inventoryOnly: boolean;
+  foldCount: number;
+  matchedCount: number;
+  status: GraphEvidenceCoverage['status'];
+  omittedEdges: number;
+  topologyExplanation: string;
+  rejectionNotes: readonly string[];
+}): string {
+  if (info.inventoryOnly)
+    return `${info.matchedCount} relationship(s) match the explicit projection; only exact inventory counts were requested.`;
+  if (info.foldCount > 0)
+    return `Every relationship in ${info.foldCount} explicitly selected recoverable fold(s) was emitted.`;
+  if (info.status === 'accounted') return 'Every selected relationship in the bounded topology was emitted.';
+  if (info.status === 'bounded')
+    return `${info.omittedEdges} selected relationship(s) were withheld by the explicit edge budget.`;
+  return [info.topologyExplanation, ...info.rejectionNotes].join(' ');
+}
+
+function projectTopologyEdges(
+  topology: ReturnType<typeof systemMapTopology>,
+  families: readonly GraphEvidenceFamily[],
+  subtypes: readonly string[],
+) {
+  const nodes = new Map(topology.nodes.map((node) => [node.id, node]));
+  const rejected = new Map<string, number>();
+  const recordRejection = (
+    family: GraphEvidenceFamily,
+    subtype: string,
+    strength: ExplorationEvidenceStrength,
+  ): void => {
+    if (!families.includes(family) || (subtypes.length > 0 && !subtypes.includes(subtype))) return;
+    const key = `${family}/${subtype} (${strength})`;
+    rejected.set(key, (rejected.get(key) ?? 0) + 1);
+  };
+  const allProjected = topology.edges
+    .filter((edge) => edge.disposition === 'emitted' || edge.disposition === 'folded')
+    .flatMap((edge) => graphEdgesFor(edge, nodes, recordRejection));
+  const projected = allProjected
+    .filter((edge) => families.includes(edge.family))
+    .filter((edge) => subtypes.length === 0 || subtypes.includes(edge.subtype));
+  return { allProjected, projected, rejected };
+}
+
+function graphProjectionOptions(options: GraphEvidenceOptions) {
+  const view = options.view ?? 'causal';
+  const families = normalizeFamilies(options.families, view);
+  const direction = options.direction ?? 'both';
+  const subtypes = uniqueNonEmpty(options.subtypes ?? []);
+  const connecting = options.connecting ?? false;
+  const inventoryOnly = options.inventoryOnly ?? false;
+  const foldIds = uniqueNonEmpty(options.foldIds ?? []);
+  const maxDepth = options.maxDepth ?? DEFAULT_DEPTH;
+  const maxEdges = options.maxEdges ?? DEFAULT_MAX_EDGES;
+  validateGraphProjectionControls({ maxDepth, maxEdges, direction, inventoryOnly, foldIds });
+  return { view, families, direction, subtypes, connecting, inventoryOnly, foldIds, maxDepth, maxEdges };
+}
+
+function validateGraphProjectionControls({
+  maxDepth,
+  maxEdges,
+  direction,
+  inventoryOnly,
+  foldIds,
+}: {
+  maxDepth: number;
+  maxEdges: number;
+  direction: GraphProjectionDirection;
+  inventoryOnly: boolean;
+  foldIds: readonly string[];
+}): void {
+  if (!Number.isSafeInteger(maxDepth) || maxDepth < 0) {
+    throw new RangeError(`Evidence depth must be a non-negative safe integer; received ${maxDepth}.`);
+  }
+  if (!Number.isSafeInteger(maxEdges) || maxEdges <= 0) {
+    throw new RangeError(`Evidence max edges must be a positive safe integer; received ${maxEdges}.`);
+  }
+  if (!['incoming', 'outgoing', 'both'].includes(direction)) {
+    throw new Error(`Unsupported graph evidence direction: ${direction}.`);
+  }
+  if (inventoryOnly && foldIds.length > 0) {
+    throw new Error('Evidence fold materialization cannot be combined with --inventory-only.');
+  }
+}
+
+/** Apply inventory, explicit fold recovery, or the ordinary materialization budget. */
+function materializeGraphProjection(
+  matched: GraphEvidenceEdge[],
+  maxEdges: number,
+  foldIds: readonly string[],
+  inventoryOnly: boolean,
+) {
+  const recoverableFolds = graphEvidenceFolds(matched, maxEdges);
+  const requestedFoldEdgeIds = selectedFoldEdgeIds(recoverableFolds, foldIds);
+  const eligible = inventoryOnly
+    ? []
+    : foldIds.length > 0
+      ? matched.filter((edge) => requestedFoldEdgeIds.has(edge.id))
+      : matched;
+  const edges = foldIds.length > 0 ? eligible : eligible.slice(0, maxEdges);
+  const folds = foldIds.length > 0 || inventoryOnly ? [] : recoverableFolds;
+  const omittedEdges = Math.max(0, eligible.length - edges.length);
+  return { edges, folds, eligibleCount: eligible.length, omittedEdges };
 }
 
 function normalizeFamilies(
   families: readonly GraphEvidenceFamily[] | undefined,
   view: GraphEvidenceView,
 ): GraphEvidenceFamily[] {
+  if (!GRAPH_EVIDENCE_VIEWS.includes(view)) throw new Error(`Unsupported graph evidence view: ${view}.`);
   const selected = families && families.length > 0 ? families : VIEW_FAMILIES[view];
   const invalid = selected.filter((family) => !GRAPH_EVIDENCE_FAMILIES.includes(family));
   if (invalid.length > 0) throw new Error(`Unsupported graph evidence family: ${invalid.join(', ')}.`);
@@ -302,6 +395,7 @@ function relationKindsFor(families: readonly GraphEvidenceFamily[]) {
 function graphEdgesFor(
   edge: ExplorationTopologyEdge,
   nodes: ReadonlyMap<string, ExplorationTopologyNode>,
+  rejected: (family: GraphEvidenceFamily, subtype: string, strength: ExplorationEvidenceStrength) => void,
 ): GraphEvidenceEdge[] {
   const from = nodes.get(edge.fromNodeId);
   const to = nodes.get(edge.toNodeId);
@@ -316,7 +410,8 @@ function graphEdgesFor(
     const evidenceStrength = combinedEvidenceStrength(edge);
     if (!providerContract.relation.evidenceStrengths.includes(evidenceStrength)) {
       // Topology construction can attach a lead the selected provider does not
-      // claim. Omit it from the projection instead of aborting the command.
+      // claim. Report the unsupported relationship in projection coverage.
+      rejected(family, semantic.subtype, evidenceStrength);
       return [];
     }
     return [

@@ -1,0 +1,139 @@
+{
+  "acceptedAt": "2026-09-06T07:14:01.340Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "3c4d93cfd7b6f7c0bd9e13f3ca992fdbce1628297a79935c1ea35ec1b5e5ec55",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ArchitectureCoverage changed from interface ArchitectureCoverage { totalFiles: number; mappedFiles: number; unmappedFiles: string[]; ambiguousFiles: ArchitectureAmbiguousFile[]; } to interface ArchitectureCoverage { scope?: string; limitations?: string[]; totalFiles: number; mappedFiles: number; unmappedFiles: string[]; ambiguousFiles: ArchitectureAmbiguousF....",
+      "target": "./queries:ArchitectureCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "LocalityCandidate changed from interface LocalityCandidate { actionTier: LocalityActionTier; sourceUnit: LocalitySourceUnit; candidatePath: string; currentDirectory: string; directoryAncestry: LocalityDirecto... to interface LocalityCandidate { actionTier: LocalityActionTier; sourceUnit: LocalitySourceUnit; candidatePath: string; currentDirectory: string; directoryAncestry: LocalityDirecto....",
+      "target": "./queries:LocalityCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "LocalityConsumerCoverage changed from type LocalityConsumerCoverage = 'exact' | 'file-level' | 'none'; to type LocalityConsumerCoverage = 'symbol-observations' | 'file-level' | 'none';.",
+      "target": "./queries:LocalityConsumerCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "LocalityRecommendedTier changed from type LocalityRecommendedTier = 'same-file' | 'sibling-folder' | 'feature-local-shared' | 'app-level-shared' | 'package-level-shared' | 'repository-level-review' | 'no-exact-cons... to type LocalityRecommendedTier = 'same-file' | 'sibling-folder' | 'feature-local-shared' | 'app-level-shared' | 'package-level-shared' | 'repository-level-review' | 'no-observed-c....",
+      "target": "./queries:LocalityRecommendedTier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SimilarFileResult changed from interface SimilarFileResult { fileA: string; fileB: string; similarity: number; sharedDeps: string[]; uniqueToA: string[]; uniqueToB: string[]; } to interface SimilarFileResult { fileA: string; fileB: string; similarity: number; evidenceBasis: 'filtered-dependency-overlap'; sharedDeps: string[]; uniqueToA: string[]; uniqueTo....",
+      "target": "./queries:SimilarFileResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "analyzeArchitectureGraph changed from declare function analyzeArchitectureGraph(fileGraph: ReadonlyMap<string, ReadonlySet<string>>, indexedFiles: readonly string[], config?: ArchitectureConfig, opts?: { isModuleHie... to declare function analyzeArchitectureGraph(fileGraph: ReadonlyMap<string, ReadonlySet<string>>, indexedFiles: readonly string[], config?: ArchitectureConfig, opts?: { isModuleHie....",
+      "target": "./queries:analyzeArchitectureGraph"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ArchitectureCoverage changed from interface ArchitectureCoverage { totalFiles: number; mappedFiles: number; unmappedFiles: string[]; ambiguousFiles: ArchitectureAmbiguousFile[]; } to interface ArchitectureCoverage { scope?: string; limitations?: string[]; totalFiles: number; mappedFiles: number; unmappedFiles: string[]; ambiguousFiles: ArchitectureAmbiguousF....",
+      "target": "./queries/architecture:ArchitectureCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "analyzeArchitectureGraph changed from declare function analyzeArchitectureGraph(fileGraph: ReadonlyMap<string, ReadonlySet<string>>, indexedFiles: readonly string[], config?: ArchitectureConfig, opts?: { isModuleHie... to declare function analyzeArchitectureGraph(fileGraph: ReadonlyMap<string, ReadonlySet<string>>, indexedFiles: readonly string[], config?: ArchitectureConfig, opts?: { isModuleHie....",
+      "target": "./queries/architecture:analyzeArchitectureGraph"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "definitionSourceSnippet changed from declare function definitionSourceSnippet(db: ScipDatabase, definition: IndexedDefinition): string | null; to declare function definitionSourceSnippet(db: ScipDatabase, definition: Pick<IndexedDefinition, 'symbol' | 'relativePath' | 'startLine' | 'endLine'>): string | null;.",
+      "target": "./queries/duplicate-bodies:definitionSourceSnippet"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "IncompleteMigrationScope changed from type IncompleteMigrationScope = 'same-scope' | 'possible-subtype' | 'unknown'; to type IncompleteMigrationScope = 'shared-vocabulary' | 'distinct-vocabulary' | 'unknown';.",
+      "target": "./queries/incomplete-migration:IncompleteMigrationScope"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ArchitectureCoverage changed from interface ArchitectureCoverage { totalFiles: number; mappedFiles: number; unmappedFiles: string[]; ambiguousFiles: ArchitectureAmbiguousFile[]; } to interface ArchitectureCoverage { scope?: string; limitations?: string[]; totalFiles: number; mappedFiles: number; unmappedFiles: string[]; ambiguousFiles: ArchitectureAmbiguousF....",
+      "target": "./queries/index:ArchitectureCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "LocalityCandidate changed from interface LocalityCandidate { actionTier: LocalityActionTier; sourceUnit: LocalitySourceUnit; candidatePath: string; currentDirectory: string; directoryAncestry: LocalityDirecto... to interface LocalityCandidate { actionTier: LocalityActionTier; sourceUnit: LocalitySourceUnit; candidatePath: string; currentDirectory: string; directoryAncestry: LocalityDirecto....",
+      "target": "./queries/index:LocalityCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "LocalityConsumerCoverage changed from type LocalityConsumerCoverage = 'exact' | 'file-level' | 'none'; to type LocalityConsumerCoverage = 'symbol-observations' | 'file-level' | 'none';.",
+      "target": "./queries/index:LocalityConsumerCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "LocalityRecommendedTier changed from type LocalityRecommendedTier = 'same-file' | 'sibling-folder' | 'feature-local-shared' | 'app-level-shared' | 'package-level-shared' | 'repository-level-review' | 'no-exact-cons... to type LocalityRecommendedTier = 'same-file' | 'sibling-folder' | 'feature-local-shared' | 'app-level-shared' | 'package-level-shared' | 'repository-level-review' | 'no-observed-c....",
+      "target": "./queries/index:LocalityRecommendedTier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SimilarFileResult changed from interface SimilarFileResult { fileA: string; fileB: string; similarity: number; sharedDeps: string[]; uniqueToA: string[]; uniqueToB: string[]; } to interface SimilarFileResult { fileA: string; fileB: string; similarity: number; evidenceBasis: 'filtered-dependency-overlap'; sharedDeps: string[]; uniqueToA: string[]; uniqueTo....",
+      "target": "./queries/index:SimilarFileResult"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "analyzeArchitectureGraph changed from declare function analyzeArchitectureGraph(fileGraph: ReadonlyMap<string, ReadonlySet<string>>, indexedFiles: readonly string[], config?: ArchitectureConfig, opts?: { isModuleHie... to declare function analyzeArchitectureGraph(fileGraph: ReadonlyMap<string, ReadonlySet<string>>, indexedFiles: readonly string[], config?: ArchitectureConfig, opts?: { isModuleHie....",
+      "target": "./queries/index:analyzeArchitectureGraph"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "LocalityCandidate changed from interface LocalityCandidate { actionTier: LocalityActionTier; sourceUnit: LocalitySourceUnit; candidatePath: string; currentDirectory: string; directoryAncestry: LocalityDirecto... to interface LocalityCandidate { actionTier: LocalityActionTier; sourceUnit: LocalitySourceUnit; candidatePath: string; currentDirectory: string; directoryAncestry: LocalityDirecto....",
+      "target": "./queries/locality-candidates:LocalityCandidate"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "LocalityConsumerCoverage changed from type LocalityConsumerCoverage = 'exact' | 'file-level' | 'none'; to type LocalityConsumerCoverage = 'symbol-observations' | 'file-level' | 'none';.",
+      "target": "./queries/locality-candidates:LocalityConsumerCoverage"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "LocalityDestinationConfidence changed from type LocalityDestinationConfidence = 'exact' | 'withheld'; to type LocalityDestinationConfidence = 'candidate' | 'withheld';.",
+      "target": "./queries/locality-candidates:LocalityDestinationConfidence"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "LocalityRecommendedTier changed from type LocalityRecommendedTier = 'same-file' | 'sibling-folder' | 'feature-local-shared' | 'app-level-shared' | 'package-level-shared' | 'repository-level-review' | 'no-exact-cons... to type LocalityRecommendedTier = 'same-file' | 'sibling-folder' | 'feature-local-shared' | 'app-level-shared' | 'package-level-shared' | 'repository-level-review' | 'no-observed-c....",
+      "target": "./queries/locality-candidates:LocalityRecommendedTier"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SimilarFileResult changed from interface SimilarFileResult { fileA: string; fileB: string; similarity: number; sharedDeps: string[]; uniqueToA: string[]; uniqueToB: string[]; } to interface SimilarFileResult { fileA: string; fileB: string; similarity: number; evidenceBasis: 'filtered-dependency-overlap'; sharedDeps: string[]; uniqueToA: string[]; uniqueTo....",
+      "target": "./queries/similar-files:SimilarFileResult"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.25.0",
+  "previousDigest": "23121eefe7013c1bde32b6408d381b49854f628c78a6cef35107813cef2737b7",
+  "reason": "Command contract repairs and qualified report fields; see docs/api/compatibility/2026-09-05-command-contract-pruning.md",
+  "schemaVersion": 1
+}

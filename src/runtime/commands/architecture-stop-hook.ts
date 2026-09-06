@@ -77,8 +77,8 @@ export function renderArchitectureStopOutput(evaluation: ArchitectureStopEvaluat
 }
 
 function listChangedPaths(projectRoot: string): string[] {
-  const tracked = gitLines(projectRoot, ['diff', '--name-only', '--diff-filter=ACMRTUXB', 'HEAD', '--']);
-  const untracked = gitLines(projectRoot, ['ls-files', '--others', '--exclude-standard', '--']);
+  const tracked = gitLines(projectRoot, ['diff', '--name-only', '-z', '--diff-filter=ACDMRTUXB', 'HEAD', '--']);
+  const untracked = gitLines(projectRoot, ['ls-files', '-z', '--others', '--exclude-standard', '--']);
   return [...new Set([...tracked, ...untracked])].sort();
 }
 
@@ -91,8 +91,7 @@ function gitLines(projectRoot: string, args: string[]): string[] {
       maxBuffer: 10 * 1024 * 1024,
       killSignal: 'SIGKILL',
     })
-      .split(/\r?\n/u)
-      .map((line) => line.trim())
+      .split('\0')
       .filter(Boolean);
   } catch (error) {
     throw new Error(`Could not inspect changed files for the architecture Stop hook: ${errorMessage(error)}`, {

@@ -10,6 +10,18 @@ import {
 } from '../../src/symbols/symbol-parser.js';
 
 describe('parseSymbol', () => {
+  it.each([
+    ['[T', [{ name: 'T', suffix: 'type-param' }]],
+    ['`unfinished', [{ name: 'unfinished', suffix: 'term' }]],
+    ['go(disambiguator)', [{ name: 'go', suffix: 'method' }]],
+    ['(arg)', [{ name: 'arg', suffix: 'parameter' }]],
+    ['go(', [{ name: 'go', suffix: 'term' }]],
+    ['``', []],
+    ['`', [{ name: '', suffix: 'term' }]],
+  ])('preserves best-effort descriptor interpretation for %s', (descriptor, expected) => {
+    expect(parseSymbol('scip-typescript npm pkg 1 ' + descriptor)).toMatchObject({ descriptors: expected });
+  });
+
   it('parses a TypeScript class method symbol', () => {
     const raw = 'scip-typescript npm @vega/api 0.1.3 src/modules/auth/`auth.service.ts`/AuthService#login().';
     const result = parseSymbol(raw);

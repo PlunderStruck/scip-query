@@ -4,7 +4,6 @@ import { existsSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
 import { monotonicNowMs } from '../domain/time.js';
 import { codeUnitStableJson } from '../domain/stable-json.js';
 import { decodeObservationReceipt, type ObservationReceiptV2 } from '../domain/observation-receipt.js';
@@ -42,7 +41,7 @@ import { publishedSqliteGenerationIdentity } from '../storage/sqlite-generation.
 import { resolveCliProjectContext } from './cli-context.js';
 import { inspectWatchService, trustedWatchServiceIndexGeneration } from './watch-service.js';
 
-export const QUERY_SERVICE_PROTOCOL_VERSION = 18;
+export const QUERY_SERVICE_PROTOCOL_VERSION = 27;
 export const QUERY_SERVICE_HEARTBEAT_INTERVAL_MS = 1_000;
 const QUERY_SERVICE_FRESH_HEARTBEAT_MAX_AGE_MS = 2 * QUERY_SERVICE_HEARTBEAT_INTERVAL_MS;
 
@@ -50,9 +49,7 @@ const QUERY_SERVICE_POOL_SIZE = 4;
 const QUERY_SERVICE_CATALOG_POOL_SIZE = 4;
 const QUERY_SERVICE_SEMANTIC_NAVIGATION_POOL_SIZE = 5;
 const QUERY_SERVICE_CALL_GRAPH_POOL_SIZE = 3;
-const QUERY_SERVICE_REFERENCE_REACHABILITY_POOL_SIZE = 3;
 const QUERY_SERVICE_SYSTEM_POOL_SIZE = 4;
-const QUERY_SERVICE_VALUE_FLOW_POOL_SIZE = 3;
 const QUERY_SERVICE_DEPENDENCE_SLICE_POOL_SIZE = 3;
 const QUERY_SERVICE_MAX_POOL_SIZE = 8;
 const QUERY_SERVICE_TIMEOUT_MS = 30_000;
@@ -158,30 +155,17 @@ export interface QueryServiceRefsRequest {
   symbolPattern: string;
 }
 
-export interface QueryServiceTraceRequest {
-  kind: 'trace';
-  expectedGeneration: string;
-  symbolPattern: string;
-}
-
-export interface QueryServiceValueFlowRequest {
-  kind: 'value-flow';
-  expectedGeneration: string;
-  symbolPattern: string;
-}
-
 export interface QueryServiceDependenceSliceRequest {
   kind: 'dependence-slice';
   expectedGeneration: string;
   criterion: string;
 }
 
-export type QueryServiceSemanticNeighborhoodRequest =
-  | { kind: 'call-graph'; expectedGeneration: string; symbolPattern: string }
-  | { kind: 'reference-neighborhood'; expectedGeneration: string; symbolPattern: string }
-  | { kind: 'reference-reachability'; expectedGeneration: string; symbolPattern: string }
-  | { kind: 'slice'; expectedGeneration: string; symbolPattern: string }
-  | { kind: 'dataflow'; expectedGeneration: string; symbolPattern: string };
+export type QueryServiceSemanticNeighborhoodRequest = {
+  kind: 'call-graph';
+  expectedGeneration: string;
+  symbolPattern: string;
+};
 
 export interface QueryServiceImportsRequest {
   kind: 'imports';
@@ -221,7 +205,7 @@ export interface QueryServiceEntryPointResult {
   documentation: string | null;
   confidence: 'root' | 'candidate';
   evidence: string[];
-  indexedCallerCount: number;
+  observedCallerCount: number;
 }
 
 export interface QueryServiceFileResult {
@@ -260,8 +244,6 @@ export type QueryServiceRequest =
   | QueryServiceByKindRequest
   | QueryServiceKindCountsRequest
   | QueryServiceRefsRequest
-  | QueryServiceTraceRequest
-  | QueryServiceValueFlowRequest
   | QueryServiceDependenceSliceRequest
   | QueryServiceSemanticNeighborhoodRequest
   | QueryServiceImportsRequest
@@ -390,18 +372,6 @@ export interface QueryServiceKindCountsResult {
 
 export interface QueryServiceRefsResult {
   result: QueryServiceRefsTransportResult;
-  generationIdentity: string;
-  observationReceipt: ObservationReceiptV2;
-}
-
-export interface QueryServiceTraceResult {
-  result: QueryServiceSerializedResult;
-  generationIdentity: string;
-  observationReceipt: ObservationReceiptV2;
-}
-
-export interface QueryServiceValueFlowResult {
-  result: QueryServiceSerializedResult;
   generationIdentity: string;
   observationReceipt: ObservationReceiptV2;
 }
@@ -614,34 +584,6 @@ export function tryRefsWithQueryService(
     (expectedGeneration) => ({ kind: 'refs', expectedGeneration, symbolPattern }),
     isRefsResult,
     'refs result',
-    policy,
-  );
-}
-
-export function tryTraceWithQueryService(
-  projectRoot: string,
-  symbolPattern: string,
-  policy: { allowDefault?: boolean } = {},
-): QueryServiceTraceResult | null {
-  return tryQueryWithService(
-    projectRoot,
-    (expectedGeneration) => ({ kind: 'trace', expectedGeneration, symbolPattern }),
-    isSerializedJsonResult,
-    'trace result',
-    policy,
-  );
-}
-
-export function tryValueFlowWithQueryService(
-  projectRoot: string,
-  symbolPattern: string,
-  policy: { allowDefault?: boolean } = {},
-): QueryServiceValueFlowResult | null {
-  return tryQueryWithService(
-    projectRoot,
-    (expectedGeneration) => ({ kind: 'value-flow', expectedGeneration, symbolPattern }),
-    isSerializedJsonResult,
-    'value-flow result',
     policy,
   );
 }
@@ -1079,8 +1021,8 @@ function isEntryPointResult(value: unknown): value is QueryServiceEntryPointResu
       (record['confidence'] === 'root' || record['confidence'] === 'candidate') &&
       Array.isArray(record['evidence']) &&
       record['evidence'].every((item) => typeof item === 'string') &&
-      Number.isSafeInteger(record['indexedCallerCount']) &&
-      (record['indexedCallerCount'] as number) >= 0
+      Number.isSafeInteger(record['observedCallerCount']) &&
+      (record['observedCallerCount'] as number) >= 0
     );
   });
 }
@@ -1435,21 +1377,11 @@ function configuredPoolSize(): number {
 
 function requestPoolSize(request: QueryServiceRequest): number {
   const configured = configuredPoolSize();
-  if (request.kind === 'value-flow') return Math.min(configured, QUERY_SERVICE_VALUE_FLOW_POOL_SIZE);
+
   if (request.kind === 'dependence-slice') return Math.min(configured, QUERY_SERVICE_DEPENDENCE_SLICE_POOL_SIZE);
   if (request.kind === 'call-graph') return Math.min(configured, QUERY_SERVICE_CALL_GRAPH_POOL_SIZE);
   if (request.kind === 'system') return Math.min(configured, QUERY_SERVICE_SYSTEM_POOL_SIZE);
-  if (request.kind === 'reference-reachability' || request.kind === 'slice') {
-    return Math.min(configured, QUERY_SERVICE_REFERENCE_REACHABILITY_POOL_SIZE);
-  }
-  if (
-    request.kind === 'refs' ||
-    request.kind === 'trace' ||
-    request.kind === 'reference-neighborhood' ||
-    request.kind === 'dataflow' ||
-    request.kind === 'imports' ||
-    request.kind === 'unused-imports'
-  ) {
+  if (request.kind === 'refs' || request.kind === 'imports' || request.kind === 'unused-imports') {
     return Math.min(configured, QUERY_SERVICE_SEMANTIC_NAVIGATION_POOL_SIZE);
   }
   return request.kind === 'imported-by' ||

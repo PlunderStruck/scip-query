@@ -1,0 +1,42 @@
+
+ RUN  v3.2.7 /Users/aydansalois/Documents/GitHub/scip-query
+
+ ✓ tests/semantic/typescript/remote-provider-policy.test.ts (4 tests) 4947ms
+   ✓ service-backed TypeScript provider fallback policy > declines semantic enrichment instead of loading the compiler when the index is large  966ms
+   ✓ service-backed TypeScript provider fallback policy > retries a memory-failed batch as file halves before counting the service as failed  1423ms
+   ✓ service-backed TypeScript provider fallback policy > treats a file-scoped decline as unavailable for that request only  2433ms
+ ✓ tests/semantic/typescript/typescript-semantic-provider.test.ts (9 tests) 2905ms
+   ✓ TypeScript semantic provider > keeps the file-first reference scan exact across override families  309ms
+   ✓ TypeScript semantic provider > compares tsserver-style reference answers against the ts-morph baseline without changing defaults  515ms
+   ✓ TypeScript semantic provider > uses ts-morph import usage and references as shared liveness evidence  455ms
+   ✓ TypeScript semantic provider > uses workspace package imports as cross-project semantic references  418ms
+ ✓ tests/semantic/typescript/typescript-session-mailbox.test.ts (11 tests) 3481ms
+   ✓ TypeScript semantic service mailbox > processes atomic requests and refreshes its host when the publication changes  635ms
+   ✓ TypeScript semantic service mailbox > rejects expired, malformed, and wrong-generation work without accepting a response  546ms
+   ✓ TypeScript semantic service mailbox > rechecks each deadline so a later request cannot execute after an earlier handler advances time  318ms
+   ✓ TypeScript semantic service mailbox > lets a synchronous requester receive a response and rejects a mismatched response identity  303ms
+   ✓ TypeScript semantic service mailbox > rejects old numeric symbol identifiers after publication moves to a conflicting generation  406ms
+ ✓ tests/queries/quality/slice-cohesion.test.ts (6 tests) 1891ms
+   ✓ slice-cohesion > partitions a function whose outputs never share a statement and names the extraction interface  496ms
+   ✓ slice-cohesion > keeps catch-block failure handling with the try block it handles  385ms
+   ✓ slice-cohesion > treats every return statement as one return value and a script root as orchestration  330ms
+ ✓ tests/queries/graph/dependence-slice.test.ts (17 tests) 2072ms
+   ✓ variable occurrence dependence slices > preserves both reaching values across input && (value = input);  473ms
+ ✓ tests/semantic/typescript/typescript-session-host.test.ts (5 tests) 706ms
+   ✓ persistent TypeScript semantic host > keeps Projects across a source generation and recreates them after config change  411ms
+ ✓ tests/queries/quality/slice-cohesion-coverage.test.ts (3 tests) 727ms
+   ✓ slice cohesion coverage boundary > withholds an extraction signal when finally follows return { left, right };  345ms
+(node:27103) [DEP0187] DeprecationWarning: Passing invalid argument types to fs.existsSync is deprecated
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ✓ tests/queries/impact/context-consumer-reuse.test.ts (3 tests) 303ms
+   ✓ context affected-consumer reuse > selects one unambiguous callable for a file target and leaves an ambiguous file unresolved  301ms
+ ✓ tests/semantic/typescript/typescript-indexed-definitions.test.ts (2 tests) 225ms
+ ✓ tests/semantic/typescript/typescript-reference-fragments.test.ts (9 tests) 8ms
+ ✓ tests/semantic/typescript/typescript-semantic-identity.test.ts (11 tests) 4ms
+ ✓ tests/semantic/typescript/semantic-locations.test.ts (1 test) 2ms
+
+ Test Files  12 passed (12)
+      Tests  81 passed (81)
+   Start at  19:26:46
+   Duration  23.07s (transform 1.06s, setup 0ms, collect 4.44s, tests 17.27s, environment 1ms, prepare 276ms)
+

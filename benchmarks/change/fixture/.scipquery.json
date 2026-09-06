@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 2,
+  "watch": { "enabled": false, "autoStart": false },
+  "architecture": {
+    "boundaries": [
+      { "name": "public", "paths": ["src/index.ts"] },
+      { "name": "domain", "paths": ["src/domain/**"] },
+      { "name": "reservations", "paths": ["src/reservations/**"] },
+      { "name": "pricing", "paths": ["src/pricing/**"] },
+      { "name": "notifications", "paths": ["src/notifications/**"] },
+      { "name": "adapters", "paths": ["src/adapters/**"] }
+    ],
+    "allowedDependencies": {
+      "public": ["domain", "reservations", "pricing", "notifications", "adapters"],
+      "domain": [],
+      "reservations": ["domain"],
+      "pricing": [],
+      "notifications": ["domain"],
+      "adapters": ["domain", "reservations", "pricing", "notifications"]
+    },
+    "requireCompletePolicy": true,
+    "requireCompleteCoverage": true,
+    "requireAcyclic": true,
+    "requireResolvedBoundaries": true
+  }
+}

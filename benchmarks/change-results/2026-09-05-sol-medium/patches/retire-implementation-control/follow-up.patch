@@ -1,0 +1,79 @@
+diff --git a/src/notifications/receipt.ts b/src/notifications/receipt.ts
+index fdd58e6..b9f766c 100644
+--- a/src/notifications/receipt.ts
++++ b/src/notifications/receipt.ts
+@@ -1,5 +1,9 @@
+ import type { Order, ReceiptStore } from '../domain/types.js';
+ 
+ export function sendReceipt(order: Order, store: ReceiptStore): void {
++  if (store.events.some((event) => event.orderId === order.id)) {
++    return;
++  }
++
+   store.events.push({ kind: 'receipt.sent', orderId: order.id, to: order.email, transport: 'v2' });
+ }
+diff --git a/test/receipt.test.mjs b/test/receipt.test.mjs
+index a6f3d1e..d6564db 100644
+--- a/test/receipt.test.mjs
++++ b/test/receipt.test.mjs
+@@ -22,8 +22,60 @@ for (const [operationName, receipt] of [
+       },
+     ]);
+   });
++
++  test(`${operationName} sends only once per order in a store`, () => {
++    const store = { events: [] };
++    const order = { id: 'order-42', email: 'buyer@example.com' };
++
++    receipt(order, store);
++    receipt(order, store);
++
++    assert.equal(store.events.length, 1);
++  });
+ }
+ 
++test('route and job retries share idempotency through the supplied store', () => {
++  const store = { events: [] };
++  const order = { id: 'order-42', email: 'buyer@example.com' };
++
++  receiptRoutes.receipt(order, store);
++  receiptJobs.receipt(order, store);
++
++  assert.deepEqual(store.events, [
++    {
++      kind: 'receipt.sent',
++      orderId: 'order-42',
++      to: 'buyer@example.com',
++      transport: 'v2',
++    },
++  ]);
++});
++
++test('different orders each send to the same store', () => {
++  const store = { events: [] };
++
++  receiptRoutes.receipt({ id: 'order-1', email: 'one@example.com' }, store);
++  receiptJobs.receipt({ id: 'order-2', email: 'two@example.com' }, store);
++
++  assert.deepEqual(
++    store.events.map(({ orderId }) => orderId),
++    ['order-1', 'order-2'],
++  );
++});
++
++test('the same order sends once to each independent store', () => {
++  const firstStore = { events: [] };
++  const secondStore = { events: [] };
++  const order = { id: 'order-42', email: 'buyer@example.com' };
++
++  receiptRoutes.receipt(order, firstStore);
++  receiptJobs.receipt(order, secondStore);
++
++  assert.equal(firstStore.events.length, 1);
++  assert.equal(secondStore.events.length, 1);
++  assert.notEqual(firstStore.events[0], secondStore.events[0]);
++});
++
+ test('receipt settings retain only the supported retry limit', () => {
+   assert.deepEqual(settings, { receiptRetryLimit: 3 });
+ });

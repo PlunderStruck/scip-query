@@ -68,8 +68,16 @@ describe('duplicate bodies', () => {
   });
 
   it('normalizes implementation bodies without renaming identifiers', () => {
-    expect(normalizeBody('function a(value: string) { /* c */ return value.trim(); }')).toBe('returnvalue.trim();');
-    expect(normalizeBody('function b(input: string) { return input.trim(); }')).toBe('returninput.trim();');
+    expect(normalizeBody('function a(value: string) { /* c */ return value.trim(); }')).toBe(
+      normalizeBody('function b(value: string) { return value.trim(); }'),
+    );
+    expect(normalizeBody('function a(value: string) { return value.trim(); }')).not.toBe(
+      normalizeBody('function b(input: string) { return input.trim(); }'),
+    );
+    expect(normalizeBody('function a() { return "a b"; }')).not.toBe(normalizeBody('function b() { return "ab"; }'));
+    expect(normalizeBody('function a() { return "allow"; }')).not.toBe(
+      normalizeBody('function b() { return "deny"; }'),
+    );
   });
 
   it('groups exact normalized bodies across files and keeps canonical first', () => {

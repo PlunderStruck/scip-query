@@ -1,0 +1,18 @@
+{
+  "fullSuite": {
+    "passed": 2841,
+    "failed": 0,
+    "skipped": 0,
+    "files": 333
+  },
+  "cliReadCommands": 82,
+  "explicitCliClaims": 44,
+  "firstUseChecks": 7,
+  "build": "passed",
+  "lint": "passed",
+  "typecheck": "passed",
+  "publicApi": "passed",
+  "gitDiffCheck": "passed",
+  "remainingReviewComplexityFindings": 42,
+  "note": "All source includes earlier uncommitted user-authorized work. No global accuracy percentage or agent-outcome improvement is established."
+}

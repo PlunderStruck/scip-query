@@ -40,7 +40,7 @@ description: A skill with no commands frontmatter.
 // Regression fixture: prettier's YAML formatter rewrites frontmatter string
 // quoting to single quotes by default, double only when the value itself
 // contains an apostrophe (mixed quoting in one file, as seen live in
-// a former TLA+ workflow skill after `npm run format`). A `--write` run
+// a workflow skill after `npm run format`). A `--write` run
 // must not silently empty a skill's parsed commands list.
 const SKILL_MD_WITH_MIXED_QUOTES = `---
 name: mixed-quote-skill
@@ -49,8 +49,8 @@ metadata:
   commands:
     - template: 'scip-query refs <symbol>'
       when: 'Find consumers before editing.'
-    - template: 'scip-query tla verify <spec>'
-      when: "Checks the model's Next relation."
+    - template: 'scip-query review --base HEAD'
+      when: "Checks the project's changed functions."
 ---
 
 # mixed-quote-skill
@@ -73,7 +73,7 @@ describe('parseSkillCommands', () => {
     const entries = parseSkillCommands(SKILL_MD_WITH_MIXED_QUOTES, 'skills/mixed-quote-skill/SKILL.md');
     expect(entries).toEqual([
       { template: 'scip-query refs <symbol>', when: 'Find consumers before editing.' },
-      { template: 'scip-query tla verify <spec>', when: "Checks the model's Next relation." },
+      { template: 'scip-query review --base HEAD', when: "Checks the project's changed functions." },
     ]);
   });
 
@@ -113,10 +113,10 @@ describe('validateSkillCommand', () => {
     ).not.toThrow();
   });
 
-  it('accepts a multi-word descriptor command by its first token (tla subcommands)', () => {
+  it('rejects the retired formal-model command in active skill guidance', () => {
     expect(() =>
       validateSkillCommand({ template: 'scip-query tla fetch-tools', when: 'x' }, 'skills/example-skill/SKILL.md'),
-    ).not.toThrow();
+    ).toThrow(/unknown command/);
   });
 
   it('fails on an unknown command', () => {

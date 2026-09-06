@@ -1,0 +1,1 @@
+{"kind":"scip-query-json-export","schemaVersion":1,"producer":{"name":"scip-query","version":"0.25.0"},"command":"slice-cohesion","path":"/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/full-tool-audit/2026-09-05/followup/final/slice-cohesion.json","bytes":6446,"sha256":"b510a66ef85c67cbe33f7f0aa59ef3e8651e0fdc7007de8b1273db9972d5e387"}

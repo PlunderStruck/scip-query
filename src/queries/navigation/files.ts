@@ -1,6 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { normalizeSafeProjectRelativePath } from '../../domain/path-normalization.js';
 import { repositoryProjectPaths } from '../../source/primitives/repository-text.js';
+import { projectFileExists } from '../../source/primitives/project-file-boundary.js';
 
 export interface FileResult {
   relativePath: string;
@@ -14,6 +15,7 @@ export interface PathMatchesGlobOptions {
 export function files(db: ScipDatabase, pattern: string): FileResult[] {
   return repositoryProjectPaths(db)
     .filter((relativePath) => pathMatchesGlob({ pattern, relativePath }))
+    .filter((relativePath) => projectFileExists(db.config.projectRoot, relativePath))
     .map((relativePath) => ({
       relativePath,
     }));

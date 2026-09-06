@@ -1,0 +1,4 @@
+
+> scip-query@0.25.0 typecheck
+> tsc --noEmit && tsc -p tests/fixtures/invocation-coverage-contract/tsconfig.json && tsc -p tests/fixtures/protocol-state-contract/tsconfig.json
+

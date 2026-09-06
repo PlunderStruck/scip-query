@@ -364,6 +364,7 @@ function compilerConfigHost(ts: typeof TsMorphCommon.ts, projectRoot: string): C
 function snapshotDirectoryEntries(
   projectRoot: string,
   snapshotPaths: readonly string[],
+  joinPath: (directory: string, child: string) => string = path.join,
 ): ReadonlyMap<string, { files: string[]; directories: string[] }> {
   const filesByDirectory = new Map<string, Set<string>>();
   const directoriesByDirectory = new Map<string, Set<string>>();
@@ -380,7 +381,7 @@ function snapshotDirectoryEntries(
       const child = parts[index]!;
       ensure(directory);
       directoriesByDirectory.get(directory)!.add(child);
-      directory = path.join(directory, child);
+      directory = joinPath(directory, child);
       ensure(directory);
     }
     filesByDirectory.get(directory)!.add(parts.at(-1)!);
@@ -395,6 +396,44 @@ function snapshotDirectoryEntries(
       },
     ]),
   );
+}
+
+/** Compiler configuration and module reads confined to one captured repository inventory. */
+export function typeScriptSnapshotHost(
+  ts: typeof TsMorphCommon.ts,
+  paths: readonly string[],
+  read: (relativePath: string) => string | undefined,
+): TsMorphCommon.ts.ParseConfigHost & TsMorphCommon.ts.ModuleResolutionHost {
+  const root = '/';
+  const pathSet = new Set(paths);
+  const entries = snapshotDirectoryEntries(root, paths, path.posix.join);
+  const runtime = ts as TypeScriptRuntime;
+  if (typeof runtime.matchFiles !== 'function') throw new Error('TypeScript snapshot file matching is unavailable.');
+  const relativePath = (file: string): string => path.posix.relative(root, path.posix.resolve(root, file));
+  return {
+    useCaseSensitiveFileNames: true,
+    fileExists: (file) => pathSet.has(relativePath(file)),
+    directoryExists: (directory) => entries.has(path.posix.resolve(root, directory)),
+    getDirectories: (directory) => entries.get(path.posix.resolve(root, directory))?.directories ?? [],
+    getCurrentDirectory: () => root,
+    realpath: (file) => path.posix.resolve(root, file),
+    readFile: (file) => {
+      const relative = relativePath(file);
+      return pathSet.has(relative) ? read(relative) : undefined;
+    },
+    readDirectory: (directory, extensions, excludes, includes, depth) =>
+      runtime.matchFiles(
+        path.posix.resolve(root, directory),
+        extensions,
+        excludes,
+        includes,
+        true,
+        root,
+        depth,
+        (directory) => entries.get(path.posix.resolve(root, directory)) ?? { files: [], directories: [] },
+        (file) => file,
+      ),
+  };
 }
 
 function relativeProjectPath(projectRoot: string, projectDir: string): string {

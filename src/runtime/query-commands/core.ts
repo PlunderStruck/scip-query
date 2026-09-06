@@ -12,11 +12,11 @@ const handleStats = dbCommand(({ db, args, opts }) => {
   }
   console.log(`Documents:   ${s.documents}`);
   console.log(`Symbols:     ${s.symbols}`);
-  console.log(`Definitions: ${s.definitions}`);
-  console.log(`References:  ${s.references}`);
+  console.log(`Definition mentions: ${s.definitions}`);
+  console.log(`Reference mentions:  ${s.references}`);
   console.log(`Index size:  ${formatBytes(s.indexSizeBytes)}`);
   if (s.lastBuilt) {
-    console.log(`Last built:  ${s.lastBuilt.toISOString().replace('T', ' ').slice(0, 19)}`);
+    console.log(`Database modified:  ${s.lastBuilt.toISOString().replace('T', ' ').slice(0, 19)}`);
   }
 });
 
@@ -26,8 +26,8 @@ export const coreQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'stats',
     description: 'Show index statistics',
     agent: analysisAgentContract(
-      'How large and fresh is the current index?',
-      'document, symbol, definition, reference, size, and build-time totals',
+      'How many rows does the current index contain, and when was its database file modified?',
+      'document, symbol, definition-mention, reference-mention, file-size, and modification-time totals',
       [],
       'complete',
       'repository',

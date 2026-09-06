@@ -1,0 +1,1 @@
+{"kind":"scip-query-json-export","schemaVersion":1,"producer":{"name":"scip-query","version":"0.25.0"},"command":"fan-out","path":"/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/command-contracts/2026-09-05/cli/fan-out.json","bytes":3300,"sha256":"ac50d082544fa6cf211fbf944db7ee5e54ea8c4b315e27f7f966a9d2a4947046"}

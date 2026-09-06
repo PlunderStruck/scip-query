@@ -1,0 +1,16 @@
+{
+  "checkedAt": "2026-09-06T00:58:27.309556+00:00",
+  "source": "https://api.github.com/repos/tlaplus/tlaplus/releases/tags/v1.8.0",
+  "tag": "v1.8.0",
+  "prerelease": true,
+  "assets": [
+    {
+      "id": 544648411,
+      "name": "tla2tools.jar",
+      "digest": "sha256:b658b4e504fdf0b721caf7066320f6b6fe5805f4dd2f717d0e47baba4097205e",
+      "size": 4487737,
+      "updated_at": "2026-09-04T17:12:07Z",
+      "browser_download_url": "https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar"
+    }
+  ]
+}

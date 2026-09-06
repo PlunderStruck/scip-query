@@ -164,13 +164,8 @@ function benchmarkArguments(): string[] {
     benchmarkCommand === 'hierarchy' ||
     benchmarkCommand === 'by-kind' ||
     benchmarkCommand === 'refs' ||
-    benchmarkCommand === 'trace' ||
     benchmarkCommand === 'call-graph' ||
-    benchmarkCommand === 'slice' ||
-    benchmarkCommand === 'reference-reachability' ||
     benchmarkCommand === 'dependence-slice' ||
-    benchmarkCommand === 'reference-neighborhood' ||
-    benchmarkCommand === 'dataflow' ||
     benchmarkCommand === 'value-flow' ||
     benchmarkCommand === 'imports' ||
     benchmarkCommand === 'unused-imports' ||
@@ -242,13 +237,8 @@ type BenchmarkCommand =
   | 'by-kind'
   | 'kind-counts'
   | 'refs'
-  | 'trace'
   | 'call-graph'
-  | 'slice'
-  | 'reference-reachability'
   | 'dependence-slice'
-  | 'reference-neighborhood'
-  | 'dataflow'
   | 'value-flow'
   | 'imports'
   | 'unused-imports'
@@ -284,13 +274,8 @@ function parseBenchmarkCommand(configured: string | undefined): BenchmarkCommand
     configured === 'by-kind' ||
     configured === 'kind-counts' ||
     configured === 'refs' ||
-    configured === 'trace' ||
     configured === 'call-graph' ||
-    configured === 'reference-neighborhood' ||
-    configured === 'reference-reachability' ||
     configured === 'dependence-slice' ||
-    configured === 'slice' ||
-    configured === 'dataflow' ||
     configured === 'value-flow' ||
     configured === 'imports' ||
     configured === 'unused-imports' ||
@@ -300,6 +285,6 @@ function parseBenchmarkCommand(configured: string | undefined): BenchmarkCommand
     return configured;
   }
   throw new Error(
-    'SCIP_QUERY_BENCH_COMMAND must be search, outline, code, entrypoints, files, stats, members, methods, deps, rdeps, imported-by, hierarchy, by-kind, kind-counts, refs, trace, call-graph, reference-neighborhood, reference-reachability, dependence-slice, slice, dataflow, value-flow, imports, unused-imports, system, or surface.',
+    'SCIP_QUERY_BENCH_COMMAND must be search, outline, code, entrypoints, files, stats, members, methods, deps, rdeps, imported-by, hierarchy, by-kind, kind-counts, refs, call-graph, dependence-slice, imports, unused-imports, system, or surface.',
   );
 }

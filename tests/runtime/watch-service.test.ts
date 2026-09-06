@@ -400,7 +400,8 @@ describe('watch service contract', () => {
       expect(watchServiceAutoStartEligible(commandName, {}), commandName).toBe(false);
     }
     expect(watchServiceAutoStartEligible('refs', {})).toBe(true);
-    expect(watchServiceAutoStartEligible('health', {})).toBe(true);
+    expect(watchServiceAutoStartEligible('health', {})).toBe(false);
+    expect(watchServiceAutoStartEligible('review', {})).toBe(false);
     expect(watchServiceAutoStartEligible('watch', {})).toBe(false);
     expect(watchServiceAutoStartEligible('__health-phase', {})).toBe(false);
     expect(watchServiceAutoStartEligible('refs', { SCIP_QUERY_SKIP_WATCH_SERVICE: '1' })).toBe(false);

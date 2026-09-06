@@ -1,0 +1,128 @@
+Usage: scip-query [options] [command]
+
+Language-agnostic code intelligence CLI powered by SCIP indexes
+
+Options:
+  -V, --version                    output the version number
+  --output-page-size <characters>  Return bounded output pages with an exact continuation command
+  --output-cursor <cursor>         Continue a bounded output page
+  --agent-output                   Emit a bounded JSON projection for model-facing clients (requires --json)
+  --json-output <path>             Atomically write the complete JSON result and print a small receipt
+  --raw-json                       Explicitly retain the legacy unpaged JSON stream (requires --json)
+  --no-session                     Disable the explicit exploration evidence ledger
+  --reemit                         Recovery only: render source and graph evidence again instead of citing session receipts
+  --help-all                       Display every command, including compatibility and deprecated controls
+  -h, --help                       Display this grouped command help
+
+Primary exploration:
+  Locate exact referents, project chosen relationships, and read only named implementation gaps.
+  search <exact-text>  Count current project text matches and preview a bounded, recoverable identity and source manifest
+  outline <file>       Tree view of symbols in a file, with line ranges
+  entrypoints [text]   Find callables where control may enter from outside the indexed call graph
+  evidence             Traverse selected typed relationships around exact referents; recover source separately when needed
+  inspect              Batch related searches, symbols, and source locations into one deduplicated source packet
+  code <selectors...>  Read exact definitions, line ranges, or file export surfaces
+
+Specialized analysis:
+  Run a named graph, impact, or structural analysis when that exact analysis answers the task.
+  files <pattern>                  Find current project files matching a path pattern
+  session                          Show evidence already delivered in this agent exploration session
+  methods <className>              List methods of one exactly resolved class; ambiguity and missing targets fail explicitly
+  refs <symbol>                    Find all files referencing a symbol
+  trace <symbol>                   Trace a symbol: definition + all references
+  deps <file>                      Files this file depends on (internal)
+  rdeps <file>                     Files that depend on this file/module
+  system <module>                  One-hop module summary: matched files, documented symbols, and file reference dependencies
+  surface <module>                 What symbols consumers actually use from this module
+  hotspots                         Rank symbols by cross-file reference count; a reference metric, not runtime contention
+  imports <file>                   What symbols does this file import?
+  imported-by <symbol>             Which files import this symbol?
+  members <symbol>                 All children of a symbol (methods, fields, nested types)
+  fan-in [symbol]                  Count files referencing an exact symbol; top JSON rows include exact symbol identity
+  fan-out [file]                   How many external symbols a file uses (or top fan-out across codebase)
+  coupling [file1] [file2]         Count shared-symbol coupling between two files, or rank file pairs by that metric
+  cycles                           Find every cyclic file-dependency component and show one deterministic witness for each
+  architecture                     Evaluate project-owned architectural boundaries and dependency rules
+  bottlenecks                      Rank coordination hubs by incoming evidence files × outgoing cross-file callable targets
+  by-kind <kind>                   Find symbols by SCIP kind (class, interface, enum, function, etc.)
+  kind-counts                      Histogram of symbol kinds in the codebase
+  dependency-depth                 Find longest paths through the SCC-condensed file dependency graph
+  hierarchy <symbol>               Show indexed lexical owners of a symbol (method → class → module)
+  entry-map <entry>                Map the complete indexed call graph from one detected entry point, collapsed by file
+  call-graph <symbol>              Show static may-call edges with exact/candidate evidence and explicit blind spots
+  affected <symbol>                Conservative reverse caller/reference closure of symbols that may be impacted by a change
+  change-surface <file>            Pre-change briefing: consumers, published API, operational roots, and explained change risk
+  co-change [file]                 Files that change together in git history without a dependency edge — hidden coupling candidates
+  incomplete-migration             Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain
+  reference-neighborhood <symbol>  Show definition/reference sites and incoming/outgoing static calls without value-flow claims
+  value-flow <symbol>              Show only proved argument/parameter and bounded static-value transfers around a symbol
+  dependence-slice <file:line>     Slice one variable occurrence through function-local value and control dependencies
+  reference-reachability <symbol>  Traverse legacy callee or reference-owner reachability without calling it a program slice
+  diff-impact                      Map changed symbols and downstream consumers from the current git diff
+
+Quality and cleanup:
+  Evaluate repository quality, cleanup candidates, and configured architecture findings.
+  dead [scope]                           Find repository-dead code, file-internal symbols, and implicit-usage signals
+  unused-imports <file>                  Find imports not referenced in the same file
+  isolated                               Find completely orphaned symbols (no references at all)
+  similar [symbol] [other]               Find heuristic function similarity candidates from callee fingerprints
+  similar-files [file]                   Find heuristic similar-file candidates from dependency profiles
+  react-component-duplicates [file]      Find heuristic duplicated React component structure candidates from JSX tags, props, events, and bindings
+  react-hook-candidates [file]           Find heuristic React hook extraction candidates from shared state, effects, requests, and handlers
+  react-large-component-pressure [file]  Find heuristic large React component pressure candidates from component lines, JSX structure, and hook behavior
+  vue-component-duplicates [file]        Find heuristic duplicated Vue component structure candidates from template tags, bindings, slots, and directives
+  vue-composable-candidates [file]       Find heuristic Vue composable extraction candidates from shared state, effects, requests, and template bindings
+  vue-large-view-pressure [file]         Find heuristic large Vue view pressure candidates from template, script, style, and external script line counts
+  similar-chains                         Find heuristic similar-chain candidates from dependency flows
+  extract-candidates                     Find extraction candidates: contiguous regions whose callees are used nowhere else in the function
+  locality-candidates [symbol-or-file]   Find directory-locality and ancestry candidates from consumer ownership
+  cleanup-plan                           Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks
+  recent-duplicates                      Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code
+  doc-drift [doc]                        Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped
+  unused-params                          Speculative-generality candidates: trailing parameters no body ever uses (TS/JS)
+  drift [module]                         Detect drift candidates: unused imports and declared architecture violations; pass --architecture for boundary context
+  wrapper-candidates                     Find heuristic wrapper candidates only called by one consumer (high false-positive rate on codebases with intentional layering/ambient types — treat as exploration, not findings)
+  passthrough-candidates                 Find heuristic passthrough candidates that forward to one callee
+  stale-abstractions                     Find heuristic stale abstraction candidates with 0-1 consumers (high false-positive rate on codebases with intentional layering/ambient types — treat as exploration, not findings)
+  complexity-hotspots                    Find heuristic complexity hotspot candidates from LOC x fan-in x fan-out
+  slice-cohesion [symbol]                Find low-cohesion candidates from backward slices: outputs whose statements never meet are separate local computations
+  self-audit                             Score cheap evidence paths against the best available semantic/source oracle on sampled symbols
+  complexity <symbol>                    Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees
+  redundant-reexports                    Find barrel re-exports that nobody imports through
+  duplicate-bodies                       Find exact duplicate small-body candidates across files
+  twin-drift                             Twin drift candidates: same-name (or near-name) functions across files with diverged bodies
+  not-implemented                        Reachable placeholder stub candidates (throw-stub, TODO+return-default, empty body) — production callers can actually reach these; an unreachable stub is dead's job, not this one's
+  decorative-checkers                    Decorative checker candidates: validate*/verify*/check*/assert*/is*/has* callables with no reachable failure exit anywhere in their body
+  test-quality                           Test-quality candidates: assertion-free it/test bodies, a skipped-test ledger with git-blame age, and mock-echo tests that assert the same literal they stubbed into a mock
+  similar-signatures                     Find functions with near-identical type signatures (same shape)
+
+Maintenance:
+  Scan current source, plan changes, review diffs, and maintain the index and local integrations.
+  review            Review current TS/JS changes against a Git commit, including new and untracked functions
+  reindex           Index the codebase and convert to SQLite
+  augment-sources   Add source files skipped by upstream SCIP indexers to the SQLite documents table
+  augment-vue       Add compiler-resolved Vue SFC references to the SQLite index using Volar
+  stats             Show index statistics
+  context <target>  Compiler-backed context for a symbol, file, or module
+  health            Find concrete TS/JS complexity, duplication, and dependency issues without an index
+  install-skills    Install core exploration skills into Claude Code, Codex, and shared agent roots
+  check-deps        Check whether scip-query and the detected language indexers are runnable
+  capabilities      Report which mapping and analysis capabilities are available in this project
+  init              Create a .scipquery.json configuration file for this project
+  config-validate   Validate .scipquery.json, structured suppressions, architecture, and coupling groups
+  suppress <id>     Record an accepted finding under .scipquery/suppressions with a required reason
+  doctor            Diagnose configuration, index freshness, dependencies, and project capabilities
+  setup             Install skills, write agent guidance, refresh the index, and report readiness
+  setup-agent       Write concise scip-query mapping and cleanup guidance to AGENTS.md and CLAUDE.md
+  uninstall         Remove selected scip-query-owned skills or project guidance
+  watch             Watch in the foreground or manage the project refresh service
+  status            Show index status for this project
+
+Compatibility and deprecated controls:
+  Preserved invocation surfaces for existing consumers; do not choose these for new workflows.
+  continue <cursor>          Continue an immutable output snapshot
+  hook-architecture-stop     Internal architecture-only Stop hook
+  __diff-impact-batch        Internal diff-impact batch worker
+  __health-phase             Internal health phase worker
+  __health-semantic-prewarm  Internal health semantic prewarm worker
+Run `scip-query <command> --help` for one control's options and examples.

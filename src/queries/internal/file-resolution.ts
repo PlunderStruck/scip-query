@@ -19,10 +19,14 @@
  * pattern rather than a source-language import specifier.
  */
 import type { ScipDatabase } from '../../storage/db.js';
-import { existsSync as existsSyncFs } from 'node:fs';
-import { isAbsolute as isAbsolutePath, join as pathJoin } from 'node:path';
+import { statSync } from 'node:fs';
+import { isAbsolute as isAbsolutePath, join as pathJoin, relative } from 'node:path';
 import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
-import { resolveIndexedDocumentCandidates, type IndexedDocumentPathCandidate } from '../../storage/scip-documents.js';
+import {
+  indexedDocumentPaths,
+  resolveIndexedDocumentCandidates,
+  type IndexedDocumentPathCandidate,
+} from '../../storage/scip-documents.js';
 
 export { normalizeLookupPath, scoreDocumentPath } from '../../storage/scip-documents.js';
 
@@ -61,12 +65,10 @@ export function resolveOnDiskFile(db: ScipDatabase, filePattern: string): string
   if (!filePattern) return null;
   const normalized = filePattern.replace(/\\/g, '/').replace(/^\.\//, '');
   // Try exact-relative-to-project resolution first.
-  const rel =
-    isAbsolutePath(normalized) && normalized.startsWith(db.config.projectRoot)
-      ? normalized.slice(db.config.projectRoot.length).replace(/^\/+/, '')
-      : normalized;
+  const rel = isAbsolutePath(normalized) ? relative(db.config.projectRoot, normalized) : normalized;
+  if (rel === '..' || rel.startsWith('../') || isAbsolutePath(rel)) return null;
   const abs = pathJoin(db.config.projectRoot, rel);
-  return existsSyncFs(abs) ? rel : null;
+  return statSync(abs, { throwIfNoEntry: false })?.isFile() ? rel : null;
 }
 
 // scip-query: ignore-extract — this function is the ranked file-resolution
@@ -77,6 +79,10 @@ export function resolveDocumentCandidates(
   filePattern: string,
   opts: { allowMultiple: boolean },
 ): IndexedDocumentPathCandidate[] {
+  if (opts.allowMultiple && filePattern.trim()) {
+    const children = resolveIndexedDirectory(db, filePattern);
+    if (children.length) return children;
+  }
   const onDiskFile = resolveOnDiskFile(db, filePattern);
   if (onDiskFile) {
     return resolveIndexedDocumentCandidates(db, onDiskFile, opts).filter(
@@ -90,24 +96,18 @@ export function resolveDocumentCandidates(
     ...opts,
     requirePathMatch: pathIntent,
   });
-  if (indexed.length === 0) {
-    if (pathIntent) return [];
-    // A concrete tracked path is authoritative even when no compiler indexer
-    // emitted a document for it. Falling through to fuzzy symbol lookup can
-    // attach an unrelated same-name symbol's file to Markdown, Vue, generated,
-    // or otherwise unindexed source.
-    const symbolMatch = findFirstSymbolMatch(db, filePattern);
-    if (!symbolMatch || db.isIgnored(symbolMatch.relativePath)) {
-      return [];
-    }
+  if (indexed.length || pathIntent) return indexed;
+  // A path-shaped request cannot degrade to symbol lookup. Exact on-disk paths
+  // were already handled above, including files with no compiler document.
+  const symbolMatch = findFirstSymbolMatch(db, filePattern);
+  if (!symbolMatch || db.isIgnored(symbolMatch.relativePath)) return [];
+  return [{ relativePath: symbolMatch.relativePath, score: 700 }];
+}
 
-    return [
-      {
-        relativePath: symbolMatch.relativePath,
-        score: 700,
-      },
-    ];
-  }
-
-  return indexed;
+function resolveIndexedDirectory(db: ScipDatabase, filePattern: string): IndexedDocumentPathCandidate[] {
+  const path = isAbsolutePath(filePattern) ? relative(db.config.projectRoot, filePattern) : filePattern;
+  const directory = path.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
+  const prefix = directory === '.' || directory === '' ? '' : `${directory}/`;
+  const children = indexedDocumentPaths(db, { includeIgnored: false }).filter((file) => file.startsWith(prefix));
+  return children.map((relativePath) => ({ relativePath, score: 1100 }));
 }

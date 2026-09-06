@@ -55,41 +55,6 @@ export const DETECTOR_EVIDENCE_CONTRACTS: readonly DetectorEvidenceContract[] = 
       'scip-query evidence --symbol <symbol> --edge execution --edge runtime --edge identity --direction both --depth 2 --max-edges 100',
   },
   {
-    id: 'isolated-visible-connectivity',
-    detector: 'isolated',
-    claim:
-      'The callable has no visible non-self caller or callee after entry, framework, and rooted-symbol exclusions.',
-    relationRequirements: [
-      { family: 'execution', subtype: 'call', minimumStrength: 'exact' },
-      { family: 'identity', subtype: 'references', minimumStrength: 'exact' },
-    ],
-    structuralEvidence: ['entry-surface exclusions', 'framework contract exclusions', 'source fallback callers'],
-    calibration: 'mixed',
-    providerCoverage: 'partial',
-    nonClaims: [
-      'Visible graph isolation does not establish runtime unreachability through reflection or generated dispatch.',
-    ],
-    recoverWith:
-      'scip-query evidence --symbol <symbol> --edge execution --edge runtime --edge identity --direction both --depth 2 --max-edges 100',
-  },
-  {
-    id: 'wrapper-indirection-candidate',
-    detector: 'wrapper-candidates',
-    claim:
-      'A small callable has one visible consumer and wrapper-shaped delegation, after boundary evidence is disclosed.',
-    relationRequirements: [
-      { family: 'execution', subtype: 'call', minimumStrength: 'exact' },
-      { family: 'ownership', subtype: 'contains', minimumStrength: 'exact' },
-    ],
-    structuralEvidence: ['callable body shape', 'public and runtime-boundary signals', 'consumer fan-in'],
-    calibration: 'candidate',
-    providerCoverage: 'partial',
-    nonClaims: [
-      'Wrapper shape does not prove that an API, ownership, observability, or compatibility boundary is unnecessary.',
-    ],
-    recoverWith: 'scip-query inspect --symbol <symbol> --view behavior',
-  },
-  {
     id: 'passthrough-forwarding-candidate',
     detector: 'passthrough-candidates',
     claim: 'A small callable visibly forwards to one callee, with public-facade and boundary signals disclosed.',
@@ -102,37 +67,6 @@ export const DETECTOR_EVIDENCE_CONTRACTS: readonly DetectorEvidenceContract[] = 
     providerCoverage: 'partial',
     nonClaims: [
       'Literal forwarding does not prove the callable has no contract, naming, policy, or compatibility role.',
-    ],
-    recoverWith: 'scip-query inspect --symbol <symbol> --view behavior',
-  },
-  {
-    id: 'stale-abstraction-candidate',
-    detector: 'stale-abstractions',
-    claim: 'A type-like abstraction has zero or one visible real consumer after re-export and ownership distinctions.',
-    relationRequirements: [
-      { family: 'identity', subtype: 'references', minimumStrength: 'exact' },
-      { family: 'ownership', subtype: 'contains', minimumStrength: 'exact' },
-    ],
-    structuralEvidence: ['definition kind', 'barrel-only consumer distinction', 'defining-file usage'],
-    calibration: 'mixed',
-    providerCoverage: 'partial',
-    nonClaims: ['Low visible consumer count does not prove a public contract or runtime-registered type is obsolete.'],
-    recoverWith:
-      'scip-query evidence --symbol <symbol> --edge identity --edge ownership --edge contract --direction both --depth 2 --max-edges 100',
-  },
-  {
-    id: 'complexity-control-pressure',
-    detector: 'complexity-hotspots',
-    claim: 'A callable concentrates local branch/control pressure and graph fan-in or fan-out.',
-    relationRequirements: [
-      { family: 'execution', subtype: 'predicate-consequence', minimumStrength: 'exact' },
-      { family: 'execution', subtype: 'call', minimumStrength: 'exact' },
-    ],
-    structuralEvidence: ['AST branch count or disclosed regex fallback', 'call fan-in', 'callee count'],
-    calibration: 'mixed',
-    providerCoverage: 'partial',
-    nonClaims: [
-      'Structural complexity does not establish runtime frequency, latency, defect density, or a required refactor.',
     ],
     recoverWith: 'scip-query inspect --symbol <symbol> --view behavior',
   },

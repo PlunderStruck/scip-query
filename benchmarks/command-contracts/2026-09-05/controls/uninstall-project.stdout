@@ -1,0 +1,43 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "uninstall",
+  "operationRole": "mutation",
+  "evidence": "graph-fact",
+  "args": [],
+  "options": {
+    "project": true,
+    "json": true
+  },
+  "result": {
+    "dryRun": false,
+    "project": {
+      "agentSetup": {
+        "removed": [
+          "AGENTS.md",
+          "CLAUDE.md"
+        ],
+        "unchanged": [
+          ".git/hooks/pre-commit"
+        ],
+        "skipped": []
+      },
+      "left": [
+        ".scipquery.json",
+        ".scipquery/suppressions/ (repository records)"
+      ]
+    }
+  },
+  "coverage": {
+    "complete": true,
+    "totalKnown": true,
+    "returned": 1,
+    "total": 1,
+    "omitted": 0
+  }
+}

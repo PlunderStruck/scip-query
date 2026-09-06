@@ -21,7 +21,8 @@
     "scripts/verify-scip-windows.mjs",
     "skills/**/*.md",
     "skills/**/agents/*.yaml",
-    "skills/**/scripts/*.mjs"
+    "skills/**/scripts/*.mjs",
+    "scripts/record-review-coverage.mjs"
   ],
   "sideEffects": false,
   "exports": {
@@ -40,10 +41,6 @@
     "./queries/architecture": {
       "import": "./dist/queries/architecture.js",
       "types": "./dist/queries/architecture.d.ts"
-    },
-    "./queries/anchors": {
-      "import": "./dist/queries/anchors.js",
-      "types": "./dist/queries/anchors.d.ts"
     },
     "./queries/bottlenecks": {
       "import": "./dist/queries/bottlenecks.js",
@@ -77,14 +74,6 @@
       "import": "./dist/queries/complexity.js",
       "types": "./dist/queries/complexity.d.ts"
     },
-    "./queries/complexity-hotspots": {
-      "import": "./dist/queries/complexity-hotspots.js",
-      "types": "./dist/queries/complexity-hotspots.d.ts"
-    },
-    "./queries/convergence": {
-      "import": "./dist/queries/convergence.js",
-      "types": "./dist/queries/convergence.d.ts"
-    },
     "./queries/coupling": {
       "import": "./dist/queries/coupling.js",
       "types": "./dist/queries/coupling.d.ts"
@@ -92,10 +81,6 @@
     "./queries/cycles": {
       "import": "./dist/queries/cycles.js",
       "types": "./dist/queries/cycles.d.ts"
-    },
-    "./queries/dataflow": {
-      "import": "./dist/queries/dataflow.js",
-      "types": "./dist/queries/dataflow.d.ts"
     },
     "./queries/dependence-slice": {
       "import": "./dist/queries/dependence-slice.js",
@@ -113,17 +98,9 @@
       "import": "./dist/queries/decorative-checkers.js",
       "types": "./dist/queries/decorative-checkers.d.ts"
     },
-    "./queries/deep-chains": {
-      "import": "./dist/queries/deep-chains.js",
-      "types": "./dist/queries/deep-chains.d.ts"
-    },
     "./queries/entry-map": {
       "import": "./dist/queries/entry-map.js",
       "types": "./dist/queries/entry-map.d.ts"
-    },
-    "./queries/system-map": {
-      "import": "./dist/queries/system-map.js",
-      "types": "./dist/queries/system-map.d.ts"
     },
     "./queries/deps": {
       "import": "./dist/queries/deps.js",
@@ -148,10 +125,6 @@
     "./queries/evidence": {
       "import": "./dist/queries/evidence.js",
       "types": "./dist/queries/evidence.d.ts"
-    },
-    "./queries/extract-candidates": {
-      "import": "./dist/queries/extract-candidates.js",
-      "types": "./dist/queries/extract-candidates.d.ts"
     },
     "./queries/fan": {
       "import": "./dist/queries/fan.js",
@@ -185,10 +158,6 @@
       "import": "./dist/queries/index.js",
       "types": "./dist/queries/index.d.ts"
     },
-    "./queries/isolated": {
-      "import": "./dist/queries/isolated.js",
-      "types": "./dist/queries/isolated.d.ts"
-    },
     "./queries/locality-candidates": {
       "import": "./dist/queries/locality-candidates.js",
       "types": "./dist/queries/locality-candidates.d.ts"
@@ -213,10 +182,6 @@
       "import": "./dist/queries/passthrough-candidates.js",
       "types": "./dist/queries/passthrough-candidates.d.ts"
     },
-    "./queries/plan-context": {
-      "import": "./dist/queries/plan-context.js",
-      "types": "./dist/queries/plan-context.d.ts"
-    },
     "./queries/context": {
       "import": "./dist/queries/context.js",
       "types": "./dist/queries/context.d.ts"
@@ -229,29 +194,13 @@
       "import": "./dist/queries/redundant-reexports.js",
       "types": "./dist/queries/redundant-reexports.d.ts"
     },
-    "./queries/reference-neighborhood": {
-      "import": "./dist/queries/reference-neighborhood.js",
-      "types": "./dist/queries/reference-neighborhood.d.ts"
-    },
-    "./queries/reference-reachability": {
-      "import": "./dist/queries/reference-reachability.js",
-      "types": "./dist/queries/reference-reachability.d.ts"
-    },
     "./queries/refs": {
       "import": "./dist/queries/refs.js",
       "types": "./dist/queries/refs.d.ts"
     },
-    "./queries/self-audit": {
-      "import": "./dist/queries/self-audit.js",
-      "types": "./dist/queries/self-audit.d.ts"
-    },
     "./queries/similar": {
       "import": "./dist/queries/similar.js",
       "types": "./dist/queries/similar.d.ts"
-    },
-    "./queries/similar-chains": {
-      "import": "./dist/queries/similar-chains.js",
-      "types": "./dist/queries/similar-chains.d.ts"
     },
     "./queries/similar-files": {
       "import": "./dist/queries/similar-files.js",
@@ -285,10 +234,6 @@
       "import": "./dist/queries/similar-signatures.js",
       "types": "./dist/queries/similar-signatures.d.ts"
     },
-    "./queries/slice": {
-      "import": "./dist/queries/slice.js",
-      "types": "./dist/queries/slice.d.ts"
-    },
     "./queries/slice-cohesion": {
       "import": "./dist/queries/slice-cohesion.js",
       "types": "./dist/queries/slice-cohesion.d.ts"
@@ -300,10 +245,6 @@
     "./queries/source-search": {
       "import": "./dist/queries/source-search.js",
       "types": "./dist/queries/source-search.d.ts"
-    },
-    "./queries/stale-abstractions": {
-      "import": "./dist/queries/stale-abstractions.js",
-      "types": "./dist/queries/stale-abstractions.d.ts"
     },
     "./queries/stats": {
       "import": "./dist/queries/stats.js",
@@ -325,14 +266,6 @@
       "import": "./dist/queries/test-quality.js",
       "types": "./dist/queries/test-quality.d.ts"
     },
-    "./queries/trace": {
-      "import": "./dist/queries/trace.js",
-      "types": "./dist/queries/trace.d.ts"
-    },
-    "./queries/twin-ab": {
-      "import": "./dist/queries/twin-ab.js",
-      "types": "./dist/queries/twin-ab.d.ts"
-    },
     "./queries/twin-drift": {
       "import": "./dist/queries/twin-drift.js",
       "types": "./dist/queries/twin-drift.d.ts"
@@ -341,17 +274,9 @@
       "import": "./dist/queries/unused-params.js",
       "types": "./dist/queries/unused-params.d.ts"
     },
-    "./queries/value-flow": {
-      "import": "./dist/queries/value-flow.js",
-      "types": "./dist/queries/value-flow.d.ts"
-    },
     "./queries/unused-imports": {
       "import": "./dist/queries/unused-imports.js",
       "types": "./dist/queries/unused-imports.d.ts"
-    },
-    "./queries/wrapper-candidates": {
-      "import": "./dist/queries/wrapper-candidates.js",
-      "types": "./dist/queries/wrapper-candidates.d.ts"
     },
     "./reindex": {
       "import": "./dist/reindex.js",
@@ -360,6 +285,10 @@
     "./runtime": {
       "import": "./dist/runtime.js",
       "types": "./dist/runtime.d.ts"
+    },
+    "./queries/review": {
+      "import": "./dist/queries/review.js",
+      "types": "./dist/queries/review.d.ts"
     }
   },
   "scripts": {
@@ -375,7 +304,7 @@
     "api:report": "node scripts/api-surface-contract.mjs report",
     "api:check": "npm run build && node scripts/api-surface-contract.mjs check && tsc -p tests/fixtures/public-api-consumer/tsconfig.json",
     "api:update": "npm run build && node scripts/api-surface-contract.mjs update",
-    "lint": "npm run format:check && eslint src tests tsup.config.ts scripts/api-surface-contract.mjs scripts/audit-production-dependencies.mjs scripts/benchmark-cold-reindex.ts scripts/benchmark-graph-literal.ts scripts/benchmark-query-service.ts scripts/benchmark-reindex-accounting.ts scripts/benchmark-source-search.ts scripts/build-scip-windows.mjs scripts/cache-lifecycle-soak.ts scripts/codex-exploration-sandbox.mjs scripts/codex-exploration-trial-core.mjs scripts/codex-exploration-trial.mjs scripts/compare-exploration-trials.mjs scripts/exploration-benchmark-core.mjs scripts/exploration-benchmark.mjs scripts/npm-release-state.ts scripts/npm-release.ts scripts/publish-scip-windows.ts scripts/release-npm-guard.ts scripts/release-npm.ts scripts/scip-windows-package-identity.ts scripts/scip-windows-provenance.mjs scripts/scip-windows-release.ts scripts/score-detector-labels.ts scripts/verify-identity-collision-cli.mjs scripts/verify-scip-windows.mjs scripts/verify-scip-windows-registry.ts skills/scip-explore/scripts/capture-evidence.mjs && npm run api:check && node scripts/check-skill-links.mjs",
+    "lint": "npm run format:check && eslint src tests tsup.config.ts scripts/api-surface-contract.mjs scripts/audit-production-dependencies.mjs scripts/benchmark-cold-reindex.ts scripts/benchmark-graph-literal.ts scripts/benchmark-query-service.ts scripts/benchmark-reindex-accounting.ts scripts/benchmark-source-search.ts scripts/build-scip-windows.mjs scripts/cache-lifecycle-soak.ts scripts/record-review-coverage.mjs scripts/change-benchmark-core.mjs scripts/codex-change-trial.mjs benchmarks/change/checks.mjs benchmarks/change/reference-patches.mjs scripts/codex-exploration-sandbox.mjs scripts/codex-exploration-trial-core.mjs scripts/codex-exploration-trial.mjs scripts/compare-exploration-trials.mjs scripts/exploration-benchmark-core.mjs scripts/exploration-benchmark.mjs scripts/npm-release-state.ts scripts/npm-release.ts scripts/publish-scip-windows.ts scripts/release-npm-guard.ts scripts/release-npm.ts scripts/scip-windows-package-identity.ts scripts/scip-windows-provenance.mjs scripts/scip-windows-release.ts scripts/score-detector-labels.ts scripts/verify-identity-collision-cli.mjs scripts/verify-scip-windows.mjs scripts/verify-scip-windows-registry.ts skills/scip-explore/scripts/capture-evidence.mjs && npm run api:check && node scripts/check-skill-links.mjs",
     "build:scip-windows": "node scripts/build-scip-windows.mjs",
     "verify:scip-windows": "node scripts/verify-scip-windows.mjs",
     "verify:identity-collision-cli": "node scripts/verify-identity-collision-cli.mjs",
@@ -398,7 +327,8 @@
     "postinstall": "node dist/postinstall.js || true",
     "publish:scip-windows": "vite-node scripts/publish-scip-windows.ts",
     "release:npm": "vite-node scripts/release-npm.ts",
-    "release:npm:dry-run": "vite-node scripts/release-npm.ts --dry-run"
+    "release:npm:dry-run": "vite-node scripts/release-npm.ts --dry-run",
+    "bench:change": "node scripts/codex-change-trial.mjs"
   },
   "keywords": [
     "scip",

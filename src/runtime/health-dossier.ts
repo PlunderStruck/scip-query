@@ -19,9 +19,7 @@ interface HealthDossierReport {
   projectRoot: string;
   verdict: string;
   health: {
-    score: number | null;
-    riskScore: number | null;
-    hygieneScore: number | null;
+    available: boolean;
     unavailableReason?: string;
     issuesNeedAttention: Array<{
       category: string;
@@ -35,7 +33,7 @@ interface HealthDossierReport {
       recommendedNextStep: string;
     }>;
   };
-  smokeTests: Array<{ command: string; status: string; evidence: string }>;
+  smokeTests: Array<{ command: string; status: string; evidence: string; basis?: string }>;
   steps: Array<{ status: string; label: string; message?: string }>;
   indexerRemediation: Array<{
     language: string;
@@ -149,7 +147,7 @@ function renderHealthDossierMarkdown(report: HealthDossierReport): string {
     '',
     `Project: ${report.projectRoot}`,
     `Setup verdict: ${report.verdict}`,
-    `Health score: ${formatHealthScoreSummary(report.health)}`,
+    `Health report: ${formatHealthAvailabilitySummary(report.health)}`,
     `Index generation: ${report.indexGeneration ?? 'unavailable'}`,
     ...(report.attempt
       ? [
@@ -165,9 +163,12 @@ function renderHealthDossierMarkdown(report: HealthDossierReport): string {
     '',
     ...blockedLines(report),
     '',
-    '## Setup Smoke Tests',
+    '## Setup Checks: Operation Results and Readiness',
     '',
-    ...report.smokeTests.map((test) => `- ${test.status.toUpperCase()} \`${test.command}\`: ${test.evidence}`),
+    ...report.smokeTests.map(
+      (test) =>
+        `- ${test.status.toUpperCase()} [${test.basis ?? 'unspecified basis'}] \`${test.command}\`: ${test.evidence}`,
+    ),
     '',
     '## Setup Steps',
     '',
@@ -220,16 +221,14 @@ function indexerLines(report: HealthDossierReport): string[] {
   });
 }
 
-export interface HealthScoreSummary {
-  score: number | null;
-  riskScore: number | null;
-  hygieneScore: number | null;
+export interface HealthAvailabilitySummary {
+  available: boolean;
   unavailableReason?: string;
 }
 
-export function formatHealthScoreSummary(health: HealthScoreSummary): string {
-  if (health.score === null) return `unavailable (${health.unavailableReason ?? 'not checked'})`;
-  return `${health.score} (risk ${health.riskScore}, hygiene ${health.hygieneScore})`;
+export function formatHealthAvailabilitySummary(health: HealthAvailabilitySummary): string {
+  if (!health.available) return `unavailable (${health.unavailableReason ?? 'not checked'})`;
+  return 'available; findings require source confirmation';
 }
 
 function relativeDossierJsonPath(report: HealthDossierReport): string {

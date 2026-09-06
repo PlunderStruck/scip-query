@@ -200,8 +200,6 @@ function publicFacadeEvidence(db: ScipDatabase, sym: IndexedDefinition): string[
 /**
  * Textual export check: does `sym`'s declaration line carry an `export`
  * keyword, or does the file re-export its leaf name via `export { name }`?
- * Reused by `twin-ab` to refuse scaffolding a test against a symbol that
- * cannot actually be imported.
  */
 export { isExportedDefinition } from '../internal/exported-definition.js';
 

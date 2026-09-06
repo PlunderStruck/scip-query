@@ -1,0 +1,114 @@
+{
+  "command": "reindex --force --allow-expensive-rebuild",
+  "languages": [
+    "typescript",
+    "rust",
+    "python"
+  ],
+  "skipped": [],
+  "durationMs": 13546.047333,
+  "lastRefresh": {
+    "trigger": {
+      "kind": "manual-cli",
+      "detail": "scip-query reindex"
+    },
+    "result": "rebuilt",
+    "startedAt": "2026-09-06T17:04:16.662Z",
+    "completedAt": "2026-09-06T17:04:30.209Z",
+    "durationMs": 13546.047333,
+    "indexedLanguages": [
+      "typescript",
+      "rust",
+      "python"
+    ],
+    "skipped": []
+  },
+  "shards": [
+    {
+      "id": "typescript:.",
+      "language": "typescript",
+      "reused": false,
+      "strategy": "full",
+      "missReason": "project inputs changed since last index",
+      "fallbackReason": "forced reindex rebuilds from the compilers",
+      "fingerprint": "3ba12bfb279de3b1",
+      "outputBytes": 33702287,
+      "durationMs": 5561.692209000001
+    },
+    {
+      "id": "typescript:benchmarks/change/fixture",
+      "language": "typescript",
+      "reused": false,
+      "strategy": "full",
+      "missReason": "forced reindex requested",
+      "fallbackReason": "forced reindex rebuilds from the compilers",
+      "fingerprint": "62eb8d2e622dff7f",
+      "outputBytes": 40883,
+      "durationMs": 339.8231249999999
+    },
+    {
+      "id": "typescript:tests/fixtures/exploration-benchmark/identity-collision",
+      "language": "typescript",
+      "reused": false,
+      "strategy": "full",
+      "missReason": "forced reindex requested",
+      "fallbackReason": "forced reindex rebuilds from the compilers",
+      "fingerprint": "c7ec48185450703b",
+      "outputBytes": 2266,
+      "durationMs": 418.8327499999996
+    },
+    {
+      "id": "typescript:tests/fixtures/invocation-coverage-contract",
+      "language": "typescript",
+      "reused": false,
+      "strategy": "full",
+      "missReason": "forced reindex requested",
+      "fallbackReason": "forced reindex rebuilds from the compilers",
+      "fingerprint": "62a67a366b3489bf",
+      "outputBytes": 13725,
+      "durationMs": 426.04333399999996
+    },
+    {
+      "id": "typescript:tests/fixtures/protocol-state-contract",
+      "language": "typescript",
+      "reused": false,
+      "strategy": "full",
+      "missReason": "forced reindex requested",
+      "fallbackReason": "forced reindex rebuilds from the compilers",
+      "fingerprint": "e9141a7c43f01243",
+      "outputBytes": 15063,
+      "durationMs": 618.6627500000004
+    },
+    {
+      "id": "typescript:tests/fixtures/public-api-consumer",
+      "language": "typescript",
+      "reused": false,
+      "strategy": "full",
+      "missReason": "forced reindex requested",
+      "fallbackReason": "forced reindex rebuilds from the compilers",
+      "fingerprint": "345a1bd1cdcc88af",
+      "outputBytes": 26677,
+      "durationMs": 474.74524999999994
+    },
+    {
+      "id": "rust",
+      "language": "rust",
+      "reused": false,
+      "strategy": "full",
+      "missReason": "forced reindex requested",
+      "fingerprint": "8946b5e9bfc842e2",
+      "outputBytes": 87067,
+      "durationMs": 2736.5146670000004
+    },
+    {
+      "id": "python",
+      "language": "python",
+      "reused": false,
+      "strategy": "full",
+      "missReason": "forced reindex requested",
+      "fingerprint": "df94f2fdac89296d",
+      "outputBytes": 401602,
+      "durationMs": 1839.3807500000003
+    }
+  ]
+}

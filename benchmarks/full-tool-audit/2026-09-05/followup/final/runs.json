@@ -1,0 +1,803 @@
+[
+  {
+    "command": "search",
+    "args": [
+      "search",
+      "sum(1, 2)"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "outline",
+    "args": [
+      "outline",
+      "src/service/runner.ts"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "entrypoints",
+    "args": [
+      "entrypoints",
+      "main"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "evidence",
+    "args": [
+      "evidence",
+      "--at",
+      "src/service/runner.ts:3",
+      "--edge",
+      "execution",
+      "--direction",
+      "outgoing",
+      "--depth",
+      "1",
+      "--max-edges",
+      "20"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "inspect",
+    "args": [
+      "inspect",
+      "--symbol",
+      "runJob",
+      "--symbol",
+      "sum",
+      "--view",
+      "behavior"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "code",
+    "args": [
+      "code",
+      "src/service/runner.ts:1-8"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "files",
+    "args": [
+      "files",
+      "src/**/*.ts"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "session",
+    "args": [
+      "session"
+    ],
+    "exitCode": 0,
+    "hasPacket": false,
+    "humanOnly": true
+  },
+  {
+    "command": "methods",
+    "args": [
+      "methods",
+      "Store"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "refs",
+    "args": [
+      "refs",
+      "sum"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "trace",
+    "args": [
+      "trace",
+      "runJob"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "deps",
+    "args": [
+      "deps",
+      "src/service/runner.ts"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "rdeps",
+    "args": [
+      "rdeps",
+      "src/core/math.ts"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "system",
+    "args": [
+      "system",
+      "src/core"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "surface",
+    "args": [
+      "surface",
+      "src/core"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "hotspots",
+    "args": [
+      "hotspots"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "imports",
+    "args": [
+      "imports",
+      "src/service/runner.ts"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "imported-by",
+    "args": [
+      "imported-by",
+      "sum"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "members",
+    "args": [
+      "members",
+      "Store"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "fan-in",
+    "args": [
+      "fan-in",
+      "sum"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "fan-out",
+    "args": [
+      "fan-out",
+      "src/service/runner.ts"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "coupling",
+    "args": [
+      "coupling",
+      "src/service/runner.ts",
+      "src/consumer.ts"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "cycles",
+    "args": [
+      "cycles"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "architecture",
+    "args": [
+      "architecture"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "bottlenecks",
+    "args": [
+      "bottlenecks"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "by-kind",
+    "args": [
+      "by-kind",
+      "function"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "kind-counts",
+    "args": [
+      "kind-counts"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "dependency-depth",
+    "args": [
+      "dependency-depth"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "hierarchy",
+    "args": [
+      "hierarchy",
+      "Store#read()."
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "entry-map",
+    "args": [
+      "entry-map",
+      "main"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "call-graph",
+    "args": [
+      "call-graph",
+      "runJob"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "affected",
+    "args": [
+      "affected",
+      "sum"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "change-surface",
+    "args": [
+      "change-surface",
+      "src/core/math.ts"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "co-change",
+    "args": [
+      "co-change",
+      "src/service/runner.ts"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "incomplete-migration",
+    "args": [
+      "incomplete-migration"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "reference-neighborhood",
+    "args": [
+      "reference-neighborhood",
+      "runJob"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "value-flow",
+    "args": [
+      "value-flow",
+      "sum"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "dependence-slice",
+    "args": [
+      "dependence-slice",
+      "src/service/runner.ts:7",
+      "--variable",
+      "total",
+      "--column",
+      "22"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "reference-reachability",
+    "args": [
+      "reference-reachability",
+      "runJob"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "diff-impact",
+    "args": [
+      "diff-impact",
+      "--base",
+      "HEAD"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "dead",
+    "args": [
+      "dead"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "unused-imports",
+    "args": [
+      "unused-imports",
+      "src/service/runner.ts"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "isolated",
+    "args": [
+      "isolated"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "similar",
+    "args": [
+      "similar",
+      "runJob"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "similar-files",
+    "args": [
+      "similar-files",
+      "src/service/runner.ts"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "react-component-duplicates",
+    "args": [
+      "react-component-duplicates"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "react-hook-candidates",
+    "args": [
+      "react-hook-candidates"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "react-large-component-pressure",
+    "args": [
+      "react-large-component-pressure"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "vue-component-duplicates",
+    "args": [
+      "vue-component-duplicates"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "vue-composable-candidates",
+    "args": [
+      "vue-composable-candidates"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "vue-large-view-pressure",
+    "args": [
+      "vue-large-view-pressure"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "similar-chains",
+    "args": [
+      "similar-chains"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "extract-candidates",
+    "args": [
+      "extract-candidates"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "locality-candidates",
+    "args": [
+      "locality-candidates",
+      "sum"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "cleanup-plan",
+    "args": [
+      "cleanup-plan"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "recent-duplicates",
+    "args": [
+      "recent-duplicates"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "doc-drift",
+    "args": [
+      "doc-drift"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "unused-params",
+    "args": [
+      "unused-params"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "drift",
+    "args": [
+      "drift"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "wrapper-candidates",
+    "args": [
+      "wrapper-candidates"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "passthrough-candidates",
+    "args": [
+      "passthrough-candidates"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "stale-abstractions",
+    "args": [
+      "stale-abstractions"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "complexity-hotspots",
+    "args": [
+      "complexity-hotspots"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "slice-cohesion",
+    "args": [
+      "slice-cohesion",
+      "runJob"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "self-audit",
+    "args": [
+      "self-audit",
+      "--samples",
+      "5"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "complexity",
+    "args": [
+      "complexity",
+      "runJob"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "redundant-reexports",
+    "args": [
+      "redundant-reexports"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "duplicate-bodies",
+    "args": [
+      "duplicate-bodies"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "twin-drift",
+    "args": [
+      "twin-drift"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "not-implemented",
+    "args": [
+      "not-implemented"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "decorative-checkers",
+    "args": [
+      "decorative-checkers"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "test-quality",
+    "args": [
+      "test-quality"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "similar-signatures",
+    "args": [
+      "similar-signatures"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "review",
+    "args": [
+      "review",
+      "--base",
+      "HEAD"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "stats",
+    "args": [
+      "stats"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "context",
+    "args": [
+      "context",
+      "runJob"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "health",
+    "args": [
+      "health"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "check-deps",
+    "args": [
+      "check-deps"
+    ],
+    "exitCode": 0,
+    "hasPacket": false,
+    "humanOnly": true
+  },
+  {
+    "command": "capabilities",
+    "args": [
+      "capabilities"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "config-validate",
+    "args": [
+      "config-validate"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "doctor",
+    "args": [
+      "doctor"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  },
+  {
+    "command": "status",
+    "args": [
+      "status"
+    ],
+    "exitCode": 0,
+    "hasPacket": true,
+    "humanOnly": false
+  }
+]

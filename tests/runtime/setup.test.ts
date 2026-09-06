@@ -38,6 +38,18 @@ afterEach(() => {
 });
 
 describe('skill installation', () => {
+  it('installs only the exploration pair by default', async () => {
+    const { module } = await loadSetup();
+    const result = module.installSkills();
+    expect(result.installed).toEqual([
+      'Claude/scip-query',
+      'Claude/scip-explore',
+      'Codex/scip-query',
+      'Codex/scip-explore',
+      'Agents/scip-query',
+      'Agents/scip-explore',
+    ]);
+  });
   it('keeps the builtin skill list in lockstep with the shipped directories', async () => {
     const { module } = await loadSetup();
     expect([...module.BUILTIN_SKILLS].sort()).toEqual([
@@ -80,9 +92,9 @@ describe('skill installation', () => {
     ]);
   });
 
-  it('installs every bundled skill into Claude, Codex, and shared agent roots', async () => {
+  it('installs every bundled skill when explicitly requested', async () => {
     const { module, symlinkSync } = await loadSetup();
-    const result = module.installSkills({ quiet: true });
+    const result = module.installSkills({ quiet: true, all: true });
 
     for (const skill of [
       'scip-query',
@@ -128,6 +140,23 @@ describe('skill installation', () => {
       if (prior === undefined) delete process.env.SCIP_QUERY_SKILLS_HOME;
       else process.env.SCIP_QUERY_SKILLS_HOME = prior;
     }
+  });
+
+  it('preserves a user-owned symlink with an installable skill name', async () => {
+    const { module, existsSync, readlinkSync, unlinkSync } = await loadSetup();
+    existsSync.mockImplementation(
+      (target: string) =>
+        target.startsWith('/pkg/skills') ||
+        target === '/home/test/.codex' ||
+        target === '/home/test/.codex/skills/scip-query',
+    );
+    readlinkSync.mockImplementation((target: string) => {
+      if (target === '/home/test/.codex/skills/scip-query') return '/user/custom-query';
+      throw new Error('not-a-link');
+    });
+    const result = module.installSkills({ quiet: true });
+    expect(result.skipped).toContain('Codex/scip-query');
+    expect(unlinkSync).not.toHaveBeenCalledWith('/home/test/.codex/skills/scip-query');
   });
 
   it('prunes stale scip-query skill links without touching unrelated links', async () => {

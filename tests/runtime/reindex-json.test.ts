@@ -38,6 +38,27 @@ afterEach(() => {
 });
 
 describe('handleReindex --json', () => {
+  it('rejects unknown requested languages before invoking an indexer', async () => {
+    const projectRoot = createProject();
+    const reindex = vi.fn().mockResolvedValue({ languages: [], skipped: [], durationMs: 0 });
+    vi.doMock('../../src/reindex/index.js', () => ({
+      reindex,
+      detectLanguages: () => ['typescript'],
+      augmentAuxiliaryDocuments: vi.fn(),
+      augmentVueResolvedReferences: vi.fn(),
+    }));
+    const { handleReindex } = await import('../../src/runtime/commands/command-handlers.js');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('test-exit');
+    });
+    await expect(withProjectRoot(projectRoot, () => handleReindex({ language: ['tyepscript'] }))).rejects.toThrow(
+      'test-exit',
+    );
+    expect(reindex).not.toHaveBeenCalled();
+    expect(error.mock.calls.flat().join(' ')).toContain('Unknown language');
+  });
+
   it('emits a JSON envelope containing shard diagnostics', async () => {
     const projectRoot = createProject();
     const fakeResult: ReindexResult = {

@@ -66,7 +66,7 @@ describe('import fallbacks', () => {
       ]),
     );
 
-    expect(importedBy(db, 'CompanionAdapter')).toEqual(
+    expect(importedBy(db, 'scip-java maven . . fixture/CompanionAdapter#')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           fromFile: 'src/RunCoordinator.java',

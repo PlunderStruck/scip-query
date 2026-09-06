@@ -1,0 +1,1 @@
+{"decision":"block","reason":"scip-query found 1 enforced architecture violation(s):\n- architecture:forbidden-edge:ui:core\n\nInspect the boundary graph with: scip-query architecture"}

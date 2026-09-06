@@ -1,0 +1,150 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "methods",
+  "operationRole": "repository-observation",
+  "evidence": "graph-fact",
+  "args": [
+    "Store"
+  ],
+  "options": {
+    "json": true,
+    "session": true,
+    "jsonOutput": "/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/command-contracts/2026-09-05/cli/methods.json"
+  },
+  "result": {
+    "kind": "matched",
+    "query": "Store",
+    "owner": {
+      "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`store.ts`/Store#",
+      "shortName": "src:core:store:Store",
+      "relativePath": "src/core/store.ts",
+      "startLine": 0,
+      "endLine": 4
+    },
+    "methods": [
+      {
+        "startLine": 2,
+        "endLine": 2,
+        "name": "read"
+      },
+      {
+        "startLine": 3,
+        "endLine": 3,
+        "name": "write"
+      }
+    ]
+  },
+  "coverage": {
+    "complete": true,
+    "totalKnown": true,
+    "returned": 2,
+    "total": 2,
+    "omitted": 0,
+    "resolution": {
+      "state": "exact",
+      "totalCandidates": 1
+    }
+  },
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "operationRole": "repository-observation",
+    "receipt": {
+      "schemaVersion": 2,
+      "observedAt": "2026-09-06T07:47:54.308Z",
+      "facts": {
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        }
+      ]
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "graph-fact",
+      "coverage": {
+        "complete": true,
+        "totalKnown": true,
+        "returned": 2,
+        "total": 2,
+        "omitted": 0,
+        "resolution": {
+          "state": "exact",
+          "totalCandidates": 1
+        }
+      },
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "compiler-graph",
+        "coverage": {
+          "state": "complete",
+          "returned": 2,
+          "totalKnown": true,
+          "total": 2,
+          "omitted": 0
+        },
+        "producerValidation": {
+          "status": "not-evaluated"
+        },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": [
+            "collaborationDomain",
+            "wholeContent",
+            "observationStability"
+          ],
+          "reasons": [
+            "collaborationDomain:unknown",
+            "wholeContent:unknown",
+            "leftIndexAlignment:unknown",
+            "rightIndexAlignment:unknown"
+          ]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": [
+            "No repository action policy was supplied for this claim."
+          ]
+        }
+      }
+    }
+  }
+}

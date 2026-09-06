@@ -21,12 +21,12 @@ import {
 } from './config.js';
 import { resolveCliProjectContext } from './cli-context.js';
 import {
-  writeProjectHealthDossier,
-  formatHealthScoreSummary as formatHealthScore,
-  type ProjectSetupHealthDossier,
   beginHealthDossierAttempt,
   finishHealthDossierAttempt,
+  formatHealthAvailabilitySummary,
+  writeProjectHealthDossier,
   type HealthDossierAttempt,
+  type ProjectSetupHealthDossier,
 } from './health-dossier.js';
 import { getIndexFreshness, type IndexFreshness } from './index-freshness.js';
 import { getProjectCapabilities, getProjectReadiness } from './project-readiness.js';
@@ -85,9 +85,7 @@ export interface ProjectSetupIssue {
 }
 
 export interface ProjectSetupHealthSummary {
-  score: number | null;
-  riskScore: number | null;
-  hygieneScore: number | null;
+  available: boolean;
   issuesNeedAttention: ProjectSetupIssue[];
   warnings: string[];
   unavailableReason?: string;
@@ -110,6 +108,7 @@ export interface ProjectSetupSmokeTest {
   status: ProjectSetupSmokeStatus;
   optional?: boolean;
   evidence: string;
+  basis: 'operation-result' | 'readiness';
 }
 
 // scip-query: ignore-stale — exported setup report envelope consumed by the CLI
@@ -837,7 +836,7 @@ export function renderProjectSetupReport(report: ProjectSetupReport): void {
   console.log('scip-query setup');
   console.log(`Project: ${report.projectRoot}`);
   console.log(`Verdict: ${report.verdict}`);
-  console.log(`Health score: ${formatHealthScore(report.health)}`);
+  console.log(`Health report: ${formatHealthAvailabilitySummary(report.health)}`);
   console.log('');
 
   if (report.health.issuesNeedAttention.length === 0) {
@@ -875,9 +874,9 @@ export function renderProjectSetupReport(report: ProjectSetupReport): void {
   }
 
   console.log('');
-  console.log('Smoke tests:');
+  console.log('Setup checks (operation results and readiness):');
   for (const test of report.smokeTests) {
-    console.log(`  ${test.status.toUpperCase()} ${test.command} - ${test.evidence}`);
+    console.log(`  ${test.status.toUpperCase()} [${test.basis}] ${test.command} - ${test.evidence}`);
   }
 
   if (report.indexerRemediation.length > 0) {
@@ -917,7 +916,7 @@ function buildSetupSmokeTests(opts: {
   const reindexStep = opts.steps.find((step) => step.id === 'reindex');
   const agentStep = opts.steps.find((step) => step.id === 'agent-guidance');
   const watchStep = opts.steps.find((step) => step.id === 'watch-refresh');
-  return [
+  const checks: Omit<ProjectSetupSmokeTest, 'basis'>[] = [
     {
       id: 'reindex',
       command: 'scip-query reindex',
@@ -949,7 +948,7 @@ function buildSetupSmokeTests(opts: {
     },
     {
       id: 'capability-matrix',
-      command: 'scip-query capability-matrix --json',
+      command: 'scip-query capabilities --matrix',
       status: opts.capabilities.matrix.length > 0 ? 'pass' : 'unavailable',
       evidence:
         opts.capabilities.matrix.length > 0
@@ -958,13 +957,12 @@ function buildSetupSmokeTests(opts: {
     },
     {
       id: 'health',
-      command: 'scip-query health',
-      status: opts.health.score === null ? 'unavailable' : 'pass',
+      command: 'scip-query health --indexed --full',
+      status: !opts.health.available ? 'unavailable' : 'pass',
       optional: !opts.healthSelected,
-      evidence:
-        opts.health.score === null
-          ? (opts.health.unavailableReason ?? 'Health report was not available.')
-          : `Health score ${opts.health.score}.`,
+      evidence: !opts.health.available
+        ? (opts.health.unavailableReason ?? 'Health report was not available.')
+        : `Health report available: ${opts.health.issuesNeedAttention.length} review candidate(s).`,
     },
     {
       id: 'diff-impact',
@@ -1011,6 +1009,11 @@ function buildSetupSmokeTests(opts: {
         : (agentStep?.message ?? 'Project agent guidance was not written.'),
     },
   ];
+  const readinessIds = new Set(['capabilities', 'capability-matrix', 'diff-impact', 'cleanup-verification']);
+  return checks.map((check) => ({
+    ...check,
+    basis: readinessIds.has(check.id) ? 'readiness' : 'operation-result',
+  }));
 }
 
 function smokeStepStatus(smokeTests: readonly ProjectSetupSmokeTest[]): ProjectSetupStepStatus {
@@ -1176,7 +1179,7 @@ async function runSetupHealth(dbPath: string, steps: ProjectSetupStep[]): Promis
       id: 'health',
       label: 'Health audit',
       status: 'ok',
-      message: `Health score ${report.score}. ${report.actions.length} prioritized action(s).`,
+      message: `Health report available: ${report.actions.length} review candidate(s).`,
     });
     return healthSummary(report);
   } catch (error) {
@@ -1192,16 +1195,15 @@ async function runSetupHealth(dbPath: string, steps: ProjectSetupStep[]): Promis
 }
 
 function skippedSetupHealth(steps: ProjectSetupStep[]): ProjectSetupHealthSummary {
-  const reason = 'Skipped by setup choice; run `scip-query health --full` when wanted.';
+  const reason =
+    'Indexed health skipped by setup choice; run `scip-query health` for current-source scanning or `scip-query health --indexed --full` for the indexed specialists.';
   addStep(steps, { id: 'health', label: 'Health audit', status: 'skipped', optional: true, message: reason });
   return emptyHealthSummary(reason);
 }
 
 function healthSummary(report: HealthReport): ProjectSetupHealthSummary {
   return {
-    score: report.score,
-    riskScore: report.riskScore,
-    hygieneScore: report.hygieneScore,
+    available: true,
     issuesNeedAttention: report.actions.map(projectSetupIssue),
     warnings: report.warnings ?? [],
   };
@@ -1225,9 +1227,7 @@ function projectSetupIssue(action: HealthAction): ProjectSetupIssue {
 
 function emptyHealthSummary(unavailableReason: string): ProjectSetupHealthSummary {
   return {
-    score: null,
-    riskScore: null,
-    hygieneScore: null,
+    available: false,
     issuesNeedAttention: [],
     warnings: [],
     unavailableReason,

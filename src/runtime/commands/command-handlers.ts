@@ -2,7 +2,6 @@ import { existsSync } from 'node:fs';
 import { externalScipConverterSelected } from '../../platform/scip-cli.js';
 import { dirname, join } from 'node:path';
 import type { SupportedLanguage } from '../../domain/types.js';
-import { GRAPH_RELATION_UNAVAILABLE_FRONTIERS } from '../../domain/graph-relation-providers.js';
 import { resolveIndexStoragePaths } from '../../platform/cache-layout.js';
 import * as queries from '../../queries/index.js';
 import { augmentAuxiliaryDocuments, augmentVueResolvedReferencesAsync, detectLanguages } from '../../reindex/index.js';
@@ -51,6 +50,7 @@ import { inspectSharedCacheStatus, type SharedCacheStatus } from '../repository-
 import { pruneOrphanWatchServices } from '../watch-service-prune.js';
 import { rustSemanticSessionStatus } from '../../semantic/rust/lsp-session.js';
 import { healthPhases } from '../../queries/health/health.js';
+import { handleSourceHealth } from '../query-commands/maintenance.js';
 import { discloseHealthCapabilities } from '../health-capability-disclosure.js';
 import {
   buildAutomatedSuppressionDecision,
@@ -93,7 +93,10 @@ import {
 import { printIsolatedAnalysisResult } from '../isolated-analysis-runner.js';
 import { GENERATED_EXPLORATION_CONTROLS } from '../generated-agent-command-catalog.js';
 import { explorationRelationshipManualRows } from '../command-kit/exploration-manual.js';
-import { GRAPH_EVIDENCE_STRENGTH_DEFINITIONS } from '../../domain/graph-relation-providers.js';
+import {
+  GRAPH_EVIDENCE_STRENGTH_DEFINITIONS,
+  GRAPH_RELATION_UNAVAILABLE_FRONTIERS,
+} from '../../domain/graph-relation-providers.js';
 import { reindexConfiguredProject } from '../project-reindex.js';
 import { evaluateArchitectureStop, renderArchitectureStopOutput } from './architecture-stop-hook.js';
 
@@ -116,7 +119,10 @@ export const handleArchitectureStopHook = dbCommand(({ db }) => {
 });
 
 function supportedLanguages(values: readonly string[]): SupportedLanguage[] {
-  return values.filter((value): value is SupportedLanguage => SUPPORTED_LANGUAGE_SET.has(value as SupportedLanguage));
+  const invalid = values.filter((value) => !SUPPORTED_LANGUAGE_SET.has(value as SupportedLanguage));
+  if (invalid.length > 0)
+    throw new Error(`Unknown language: ${invalid.join(', ')}. Supported languages: ${SUPPORTED_LANGUAGES.join(', ')}.`);
+  return [...new Set(values)] as SupportedLanguage[];
 }
 
 // scip-query: ignore-extract — side-effect command lifecycle: option decoding,
@@ -205,8 +211,10 @@ export async function handleAugmentVue(rawOpts: unknown): Promise<void> {
 
 export function handleDiffImpactBatch(rawOpts: unknown): void {
   const opts = commandOptions(rawOpts);
+  const files: unknown = JSON.parse(process.env['SCIP_QUERY_DIFF_IMPACT_FILES'] ?? '[]');
+  if (!Array.isArray(files) || !files.every((file) => typeof file === 'string' && file.length > 0))
+    throw new Error('SCIP_QUERY_DIFF_IMPACT_FILES must be a JSON array of nonempty file paths.');
   withDb((db) => {
-    const files = JSON.parse(process.env['SCIP_QUERY_DIFF_IMPACT_FILES'] ?? '[]') as string[];
     const plan = queries.diffImpactPlan(db, { base: stringOptionValue(opts, 'base') });
     const result = queries.diffImpactPartial(db, files, plan.changedFiles, plan.changedRanges);
     printIsolatedAnalysisResult(DIFF_IMPACT_BATCH_COMMAND, result);
@@ -232,18 +240,15 @@ export async function handleDiffImpact(rawOpts: unknown): Promise<void> {
 
 export function handleHealthPhase(phase: unknown, rawOpts: unknown): void {
   const opts = commandOptions(rawOpts);
-  const phases = String(phase)
-    .split(',')
-    .filter((entry) => entry.length > 0);
-  withDb((db) => {
-    const validPhases: Array<(typeof queries.HEALTH_PHASES)[number]> = [];
-    for (const entry of phases) {
-      if (!queries.HEALTH_PHASES.includes(entry as (typeof queries.HEALTH_PHASES)[number])) {
-        console.error(`error: Unknown health phase: ${entry}`);
-        process.exit(1);
-      }
+  if (typeof phase !== 'string' || phase.length === 0) throw new Error('At least one health phase is required.');
+  const validPhases: Array<(typeof queries.HEALTH_PHASES)[number]> = [];
+  for (const entry of phase.split(',')) {
+    if (!queries.HEALTH_PHASES.includes(entry as (typeof queries.HEALTH_PHASES)[number]))
+      throw new Error(`Unknown health phase: ${entry}`);
+    if (!validPhases.includes(entry as (typeof queries.HEALTH_PHASES)[number]))
       validPhases.push(entry as (typeof queries.HEALTH_PHASES)[number]);
-    }
+  }
+  withDb((db) => {
     const phaseOpts = {
       scope: stringOptionValue(opts, 'scope'),
       full: booleanOptionValue(opts, 'full'),
@@ -258,17 +263,8 @@ export function handleHealthPhase(phase: unknown, rawOpts: unknown): void {
 
 export async function handleHealthSemanticPrewarm(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
+  const shard = parseHealthPrewarmShard(opts);
   await withDbAsync(async (db) => {
-    const shardIndex = Number.parseInt(stringOptionValue(opts, 'shardIndex') ?? '', 10);
-    const shardCount = Number.parseInt(stringOptionValue(opts, 'shardCount') ?? '', 10);
-    const shard =
-      Number.isSafeInteger(shardIndex) &&
-      Number.isSafeInteger(shardCount) &&
-      shardCount > 1 &&
-      shardIndex >= 0 &&
-      shardIndex < shardCount
-        ? { index: shardIndex, count: shardCount }
-        : undefined;
     const result = await prewarmHealthSemanticEvidence(db, {
       scope: stringOptionValue(opts, 'scope'),
       full: booleanOptionValue(opts, 'full'),
@@ -278,10 +274,35 @@ export async function handleHealthSemanticPrewarm(rawOpts: unknown): Promise<voi
   });
 }
 
+function parseHealthPrewarmShard(opts: Record<string, unknown>): { index: number; count: number } | undefined {
+  const rawIndex = stringOptionValue(opts, 'shardIndex');
+  const rawCount = stringOptionValue(opts, 'shardCount');
+  if (rawIndex === undefined && rawCount === undefined) return undefined;
+  const index = unsignedDecimalOption(rawIndex);
+  const count = unsignedDecimalOption(rawCount);
+  if (index === undefined || count === undefined || count < 1 || index >= count) {
+    throw new Error(
+      'Prewarm requires both --shard-index and --shard-count, with 0 <= index < count and positive count.',
+    );
+  }
+  return { index, count };
+}
+
+function unsignedDecimalOption(raw: string | undefined): number | undefined {
+  if (raw === undefined || !/^\d+$/.test(raw)) return undefined;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) ? value : undefined;
+}
+
 export async function handleHealth(rawOpts: unknown): Promise<void> {
   const opts = commandOptions(rawOpts);
+  validateHealthModeOptions(opts);
   if (booleanOptionValue(opts, 'writeBaseline') || booleanOptionValue(opts, 'baseline')) {
     handleHealthBaseline(opts);
+    return;
+  }
+  if (!booleanOptionValue(opts, 'indexed')) {
+    handleSourceHealth(rawOpts);
     return;
   }
   try {
@@ -308,6 +329,27 @@ export async function handleHealth(rawOpts: unknown): Promise<void> {
   }
 }
 
+function validateHealthModeOptions(opts: Record<string, unknown>): void {
+  if (booleanOptionValue(opts, 'baseline') && booleanOptionValue(opts, 'writeBaseline')) {
+    throw new Error('Choose --baseline to compare or --write-baseline to replace the snapshot, not both.');
+  }
+  if (['indexed', 'baseline', 'writeBaseline'].some((name) => booleanOptionValue(opts, name))) {
+    const sourceOption = [
+      'coverage',
+      'includeTests',
+      'includeReferences',
+      'includeGenerated',
+      'maxFiles',
+      'limit',
+      'check',
+    ].find((name) => opts[name] !== undefined && opts[name] !== false);
+    if (sourceOption)
+      throw new Error(
+        `The ${sourceOption} option belongs to current-source health; do not combine it with --indexed or indexed baseline options.`,
+      );
+  }
+}
+
 // The ratchet: `--write-baseline` snapshots finding identities;
 // `--baseline` exits 1 when findings appear that the snapshot lacks.
 // "Don't get worse" is the objective CI gate — absolute scores are not.
@@ -316,10 +358,16 @@ function handleHealthBaseline(opts: Record<string, unknown>): void {
   withDb((db) => {
     if (booleanOptionValue(opts, 'writeBaseline')) {
       const result = queries.writeHealthBaseline(db, { scope });
-      console.log(`Baseline written to ${result.path} (${result.findingCount} finding(s)).`);
+      if (booleanOptionValue(opts, 'json')) printJsonEnvelope('health', [], opts, result);
+      else console.log(`Baseline written to ${result.path} (${result.findingCount} finding(s)).`);
       return;
     }
     const comparison = queries.checkHealthBaseline(db, { scope });
+    if (booleanOptionValue(opts, 'json')) {
+      printJsonEnvelope('health', [], opts, comparison);
+      if (comparison.newFindings.length > 0) process.exitCode = 1;
+      return;
+    }
     if (comparison.fixedFindings.length > 0) {
       console.log(
         `${comparison.fixedFindings.length} finding(s) fixed since baseline. Re-run --write-baseline to ratchet down.`,
@@ -339,8 +387,9 @@ function handleHealthBaseline(opts: Record<string, unknown>): void {
   });
 }
 
-export function handleInstallSkills(): void {
-  const result = installSkills();
+export function handleInstallSkills(rawOpts: unknown): void {
+  const opts = commandOptions(rawOpts);
+  const result = installSkills({ all: booleanOptionValue(opts, 'all') });
   const total = result.installed.length + result.alreadyLinked.length;
   console.log(
     `\n${result.installed.length} installed, ${result.alreadyLinked.length} already linked, ${result.pruned.length} pruned, ${result.skipped.length} skipped.`,
@@ -482,6 +531,7 @@ export function handleSuppress(id: unknown, rawOpts: unknown): void {
   try {
     const projectRoot = resolveProjectRoot();
     const observation = (() => {
+      if (!evidence.some((entry) => entry.startsWith('graph:'))) return undefined;
       try {
         return withDb(() => currentCliIndexGenerationObservationReceipt());
       } catch {

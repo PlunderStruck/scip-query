@@ -248,18 +248,11 @@ describe('orderHealthPhaseTasksByCost', () => {
         ['cycles'],
         ['drift'],
         ['dead'],
-        ['similar', 'extract-candidates'],
-        ['wrapper-candidates'],
+        ['similar'],
+        ['passthrough-candidates'],
         ['git-evidence'],
       ]),
-    ).toEqual([
-      ['similar', 'extract-candidates'],
-      ['wrapper-candidates'],
-      ['dead'],
-      ['cycles'],
-      ['drift'],
-      ['git-evidence'],
-    ]);
+    ).toEqual([['passthrough-candidates'], ['similar'], ['dead'], ['cycles'], ['drift'], ['git-evidence']]);
   });
 });
 
@@ -769,13 +762,12 @@ describe('frontend health phase pruning', () => {
         'vue-component-duplicates',
         'vue-composable-candidates',
         'vue-large-view-pressure',
-        'extract-candidates',
         'suppressions',
       ]),
     ).toEqual([
       ['dead'],
       ['cycles'],
-      ['similar', 'extract-candidates'],
+      ['similar'],
       ['react-component-duplicates', 'react-hook-candidates', 'react-large-component-pressure'],
       ['vue-component-duplicates', 'vue-composable-candidates', 'vue-large-view-pressure', 'suppressions'],
     ]);
@@ -823,14 +815,6 @@ describe('frontend health phase pruning', () => {
     expect(deferredHealthPhaseResult('twin-drift', 30000, 'slow')).toMatchObject({
       phase: 'twin-drift',
       twinDrift: { count: 0, loc: 0, files: [] },
-    });
-    expect(deferredHealthPhaseResult('complexity-hotspots', 30000, 'slow')).toMatchObject({
-      phase: 'complexity-hotspots',
-      complexity: { top: [], extremeCount: 0 },
-    });
-    expect(deferredHealthPhaseResult('stale-abstractions', 30000, 'slow')).toMatchObject({
-      phase: 'stale-abstractions',
-      stale: { count: 0, loc: 0, files: [], unused: 0, singleUse: 0 },
     });
   });
 

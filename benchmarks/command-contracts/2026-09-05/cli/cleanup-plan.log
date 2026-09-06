@@ -1,0 +1,1 @@
+{"kind":"scip-query-json-export","schemaVersion":1,"producer":{"name":"scip-query","version":"0.25.0"},"command":"cleanup-plan","path":"/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/command-contracts/2026-09-05/cli/cleanup-plan.json","bytes":11081,"sha256":"1ce53ef335280aecda48f24ad01a7fa7cf9f493a1dc827c62440bb9791a1f310"}

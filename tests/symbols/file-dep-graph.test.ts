@@ -37,7 +37,7 @@ function restoreProfileEnv(snapshot: Record<(typeof PROFILE_ENV_KEYS)[number], s
 }
 
 function graphShape(graph: Map<string, Set<string>>): Array<[string, string[]]> {
-  return [...graph].map(([file, deps]) => [file, [...deps]]);
+  return [...graph].sort(([a], [b]) => a.localeCompare(b)).map(([file, deps]) => [file, [...deps].sort()]);
 }
 
 describe('file dependency graph evidence', () => {
@@ -145,7 +145,10 @@ describe('file dependency graph evidence', () => {
 
       const planningDb = openDb();
       try {
-        expect(graphShape(captureTypeScriptPlanningDependencyGraph(planningDb).graph)).toEqual(firstShape!);
+        expect(graphShape(captureTypeScriptPlanningDependencyGraph(planningDb).graph)).toEqual([
+          ['src/a.ts', ['src/b.ts']],
+          ['src/c.ts', ['src/b.ts']],
+        ]);
       } finally {
         planningDb.close();
       }
@@ -153,6 +156,7 @@ describe('file dependency graph evidence', () => {
       expect(secondShape).toEqual(firstShape!);
       expect(secondShape).toEqual([
         ['src/a.ts', ['src/b.ts']],
+        ['src/barrel.ts', ['src/b.ts']],
         ['src/c.ts', ['src/b.ts']],
       ]);
 
@@ -163,26 +167,26 @@ describe('file dependency graph evidence', () => {
       const productEvents = events.filter((event) => event.name === 'file-dep-graph.product');
 
       expect(productEvents).toHaveLength(3);
-      expect(productEvents[0]).toMatchObject({ hit: false, available: true, graphFiles: 2 });
-      expect(productEvents[1]).toMatchObject({ hit: true, available: true, graphFiles: 2 });
+      expect(productEvents[0]).toMatchObject({ hit: false, available: true, graphFiles: 3 });
+      expect(productEvents[1]).toMatchObject({ hit: true, available: true, graphFiles: 3 });
       expect(productEvents[2]).toMatchObject({ hit: false, sourceEdgeMode: 'none', graphFiles: 2 });
       expect(events.filter((event) => event.name === 'file-dep-graph.source-imports')).toHaveLength(1);
       expect(events.filter((event) => event.name === 'file-dep-graph.scip-edges')).toHaveLength(2);
     });
   });
 
-  it('includes re-exports only in the opt-in source edge mode and isolates both cache identities', () => {
+  it('includes re-exports by default and isolates the explicit imports-only cache identity', () => {
     withFixture((openDb) => {
       const db1 = openDb();
       try {
-        expect(graphShape(buildFileDepGraph(db1))).toEqual([
+        expect(graphShape(buildFileDepGraph(db1, undefined, { sourceEdges: 'imports-only' }))).toEqual([
           ['src/a.ts', ['src/b.ts']],
           ['src/c.ts', ['src/b.ts']],
         ]);
         expect(graphShape(buildFileDepGraph(db1, undefined, { sourceEdges: 'imports-and-reexports' }))).toEqual([
           ['src/a.ts', ['src/b.ts']],
-          ['src/c.ts', ['src/b.ts']],
           ['src/barrel.ts', ['src/b.ts']],
+          ['src/c.ts', ['src/b.ts']],
         ]);
       } finally {
         db1.close();
@@ -194,7 +198,10 @@ describe('file dependency graph evidence', () => {
           'src/barrel.ts',
           ['src/b.ts'],
         ]);
-        expect(graphShape(buildFileDepGraph(db2))).not.toContainEqual(['src/barrel.ts', ['src/b.ts']]);
+        expect(graphShape(buildFileDepGraph(db2, undefined, { sourceEdges: 'imports-only' }))).not.toContainEqual([
+          'src/barrel.ts',
+          ['src/b.ts'],
+        ]);
       } finally {
         db2.close();
       }
@@ -238,6 +245,7 @@ describe('file dependency graph evidence', () => {
       try {
         expect(graphShape(buildFileDepGraph(db3))).toEqual([
           ['src/a.ts', ['src/b.ts']],
+          ['src/barrel.ts', ['src/b.ts']],
           ['src/c.ts', ['src/a.ts']],
         ]);
       } finally {
@@ -249,7 +257,7 @@ describe('file dependency graph evidence', () => {
         .split('\n')
         .map((line) => JSON.parse(line) as Record<string, unknown>)
         .filter((event) => event.name === 'file-dep-graph.product');
-      expect(productEvents.at(-1)).toMatchObject({ hit: true, construction: 'carried', graphFiles: 2 });
+      expect(productEvents.at(-1)).toMatchObject({ hit: true, construction: 'carried', graphFiles: 3 });
     });
   });
 

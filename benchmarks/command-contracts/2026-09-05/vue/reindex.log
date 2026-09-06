@@ -1,0 +1,12 @@
+Detected languages: typescript
+Project fingerprint used full scan: change-journal-unavailable
+Indexing typescript with /opt/homebrew/bin/scip-typescript...
+Converting to SQLite...
+Augmented SQLite documents with 4 auxiliary source files (0 already present).
+Extracted 4 runtime-boundary observation(s), 0 link(s), and 4 unresolved frontier(s).
+Runtime-boundary phases: direct-extraction 4ms, http-summary 1ms, http-mount 1ms, carrier 67ms, relations 0ms, links 0ms, frontiers 0ms.
+Added SQLite query indexes: idx_mentions_definitions
+Removed redundant SQLite indexes: idx_global_symbols_symbol, idx_chunks_doc_id
+Affected-set shadow unavailable: no-input-changes.
+Done in 0.6s
+Indexed typescript in 0.6s

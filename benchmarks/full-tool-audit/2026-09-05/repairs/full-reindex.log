@@ -1,0 +1,19 @@
+Detected languages: typescript, rust, python
+Project fingerprint used full scan: change-journal-unavailable
+Reusing cached typescript SCIP shard (language inputs unchanged).
+Indexing rust with /Users/aydansalois/.cargo/bin/rust-analyzer...
+Indexing python with /opt/homebrew/bin/scip-python-plus...
+Reused 1 cached language shard(s): typescript
+Materializing the deferred whole TypeScript SCIP companion for complete publication...
+Merging 3 language indexes...
+Sanitized 10 invalid definition occurrences across 4 documents before SQLite conversion.
+Merged and sanitized SCIP indexes in 729ms.
+Converting to SQLite...
+Augmented SQLite documents with 0 auxiliary source files (0 already present).
+Extracted 657 runtime-boundary observation(s), 1 link(s), and 249 unresolved frontier(s).
+Runtime-boundary phases: direct-extraction 4153ms, http-summary 88ms, http-mount 76ms, carrier 0ms, relations 1ms, links 0ms, frontiers 3ms.
+Added SQLite query indexes: idx_mentions_definitions
+Removed redundant SQLite indexes: idx_global_symbols_symbol, idx_chunks_doc_id
+Affected-set shadow: 100.0% recall; 552 predicted, 6 changed.
+Done in 12.6s
+Indexed typescript, rust, python in 12.6s

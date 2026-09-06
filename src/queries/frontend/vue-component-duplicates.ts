@@ -141,8 +141,8 @@ function compareVueComponentProfiles(
     actionTier: evidence.actionTier,
     evidenceClassReasons: evidence.reasons,
     recommendation: evidence.recommendation,
-    uniqueToA: sortedTokens(difference(a.tokens, b.tokens)).slice(0, 25),
-    uniqueToB: sortedTokens(difference(b.tokens, a.tokens)).slice(0, 25),
+    uniqueToA: sortedTokens(difference(a.tokens, b.tokens)),
+    uniqueToB: sortedTokens(difference(b.tokens, a.tokens)),
     locA: a.loc,
     locB: b.loc,
   };

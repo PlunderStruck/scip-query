@@ -21,6 +21,7 @@ export interface EvidenceRelatedSymbol extends SourceSnippet {
   symbol: string;
   shortName: string;
   omittedLines: number;
+  evidenceStrength: 'exact' | 'candidate';
 }
 
 export interface EvidenceReferenceWindow {
@@ -129,8 +130,8 @@ export function qualifiedEvidence(
     parts,
     definition: parts.includes('definition') ? code(db, match.symbol) : null,
     referenceWindows: parts.includes('references') ? mergeReferenceWindows(db, traced.referencedBy) : [],
-    callers: parts.includes('callers') ? relatedSymbols(db, graph?.callers ?? [], relatedSourceLines) : [],
-    callees: parts.includes('callees') ? relatedSymbols(db, graph?.callees ?? [], relatedSourceLines) : [],
+    callers: parts.includes('callers') ? relatedSymbols(db, graph?.callerEvidence ?? [], relatedSourceLines) : [],
+    callees: parts.includes('callees') ? relatedSymbols(db, graph?.calleeEvidence ?? [], relatedSourceLines) : [],
     dependencies: parts.includes('dependencies') ? deps(db, match.relativePath) : [],
     consumers: parts.includes('consumers') ? rdeps(db, match.relativePath) : [],
     referenceEvidence: traced.referenceEvidence,
@@ -196,7 +197,7 @@ function normalizeEvidenceParts(parts: readonly EvidencePart[] | undefined): Evi
 
 function relatedSymbols(
   db: ScipDatabase,
-  rows: ReadonlyArray<{ symbol: string; shortName: string; file: string }>,
+  rows: ReadonlyArray<{ symbol: string; shortName: string; file: string; evidenceStrength: 'exact' | 'candidate' }>,
   maxLines: number,
 ): EvidenceRelatedSymbol[] {
   const out: EvidenceRelatedSymbol[] = [];
@@ -221,6 +222,7 @@ function relatedSymbols(
       ...snippet,
       symbol: row.symbol,
       shortName: row.shortName,
+      evidenceStrength: row.evidenceStrength,
       omittedLines: Math.max(0, definition.endLine - snippet.endLine),
     });
   }

@@ -47,21 +47,21 @@ interface SurfaceRow {
 }
 
 function loadExternalSurfaceRows(db: ScipDatabase, matchedPaths: string[]): SurfaceRow[] {
-  const placeholders = matchedPaths.map(() => '?').join(', ');
   return db.all<SurfaceRow>(
-    `SELECT DISTINCT d1.relative_path, gs.symbol
+    `WITH selected_paths(path) AS (SELECT value FROM json_each(?))
+    SELECT DISTINCT d1.relative_path, gs.symbol
     FROM mentions m
     JOIN chunks c ON m.chunk_id = c.id
     JOIN documents d1 ON c.document_id = d1.id
     JOIN global_symbols gs ON m.symbol_id = gs.id
-    WHERE d1.relative_path NOT IN (${placeholders})
+    WHERE d1.relative_path NOT IN (SELECT path FROM selected_paths)
       AND (
         EXISTS (
           SELECT 1
           FROM defn_enclosing_ranges der
           JOIN documents d2 ON der.document_id = d2.id
           WHERE der.symbol_id = gs.id
-            AND d2.relative_path IN (${placeholders})
+            AND d2.relative_path IN (SELECT path FROM selected_paths)
         )
         OR EXISTS (
           SELECT 1
@@ -70,16 +70,14 @@ function loadExternalSurfaceRows(db: ScipDatabase, matchedPaths: string[]): Surf
           JOIN documents d2 ON def_c.document_id = d2.id
           WHERE def_m.symbol_id = gs.id
             AND def_m.role = 1
-            AND d2.relative_path IN (${placeholders})
+            AND d2.relative_path IN (SELECT path FROM selected_paths)
         )
       )
       AND m.role != 1
       AND ${db.localSymbolPredicate}
       ${db.pathExclusionsFor('d1')}
-    ORDER BY d1.relative_path`,
-    ...matchedPaths,
-    ...matchedPaths,
-    ...matchedPaths,
+    ORDER BY d1.relative_path, gs.symbol`,
+    JSON.stringify(matchedPaths),
   );
 }
 

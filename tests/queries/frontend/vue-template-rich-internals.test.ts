@@ -264,7 +264,7 @@ describe('Vue template rich internals', () => {
           evidenceClass: 'mixed',
           actionTier: 'signal',
           evidenceClassReasons: expect.arrayContaining([
-            expect.stringContaining('shared composable has domain term(s): useToast'),
+            expect.stringContaining('shared composable has name(s) outside the generic vocabulary: useToast'),
           ]),
           recommendation: expect.stringContaining('domain-specific behavior'),
           sharedComposables: expect.arrayContaining(['useResource', 'useToast']),
@@ -298,15 +298,6 @@ describe('Vue template rich internals', () => {
       const report = health(db, { full: true });
       expect(report.findings.vueComposableCandidatePairs).toBe(1);
       expect(report.findings.vueComposableCandidateScoreCount).toBe(0.5);
-      expect(report.scoreBreakdown).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            axis: 'vue-composable-candidates',
-            detail: expect.stringContaining('0.5 score-weighted'),
-            kind: 'hygiene',
-          }),
-        ]),
-      );
     } finally {
       db.close();
     }
@@ -384,14 +375,6 @@ describe('Vue template rich internals', () => {
       const report = health(db, { full: true });
       expect(report.findings.vueComponentDuplicatePairs).toBe(1);
       expect(report.actions.map((action) => action.category)).toContain('Duplicated Vue components');
-      expect(report.scoreBreakdown).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            axis: 'vue-component-duplicates',
-            kind: 'hygiene',
-          }),
-        ]),
-      );
     } finally {
       db.close();
     }

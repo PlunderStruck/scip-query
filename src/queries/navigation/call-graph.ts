@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
-import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
+import { resolveSymbol } from '../../symbols/symbol-lookup.js';
+import { getCalleeRowsForSymbol, calleeEvidenceStrength } from '../../symbols/graph/call-graph-evidence.js';
 import { getCallerRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
 import { isFunctionLikeSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
@@ -10,7 +10,7 @@ export interface CallGraphEvidenceRow {
   symbol: string;
   shortName: string;
   file: string;
-  relationship: 'resolved-call' | 'reference-candidate' | 'chunk-candidate';
+  relationship: 'resolved-call' | 'source-call-candidate' | 'reference-candidate' | 'chunk-candidate';
   evidenceStrength: 'exact' | 'candidate';
   evidenceSource: string;
   /** `render` when the edge is a rendered component element (`<Child />`) rather than a call expression. */
@@ -53,7 +53,9 @@ export function callGraph(
   opts: { semantic?: boolean } = {},
 ): CallGraphResult | null {
   // Find the target symbol and its definition range
-  const target = findFirstSymbolMatch(db, symbolPattern);
+  const resolution = resolveSymbol(db, symbolPattern);
+  if (resolution.candidates.length > 0) throw new Error(`Ambiguous symbol: ${symbolPattern}. Use an exact symbol.`);
+  const target = resolution.match;
 
   if (!target) return null;
 
@@ -64,19 +66,20 @@ export function callGraph(
   const callerRows = getCallerRowsForSymbol(db, target, {
     semantic: includeSemantic,
     semanticEvidence: symbolSemanticEvidence,
-  })
-    .filter((caller) => isFunctionLikeSymbol(caller.symbol))
-    .slice(0, 50);
+  }).filter((caller) => isFunctionLikeSymbol(caller.symbol));
 
   // CALLEES: symbols referenced within our target's definition range.
   const calleeRows = uniqueSymbolFileRows(
     getCalleeRowsForSymbol(db, target, {
-      limit: 50,
       additive: true,
       callableOnly: true,
       semantic: includeSemantic,
       semanticEvidence: symbolSemanticEvidence,
-    }),
+    }).sort(
+      (left, right) =>
+        Number(calleeEvidenceStrength(right.source) === 'exact') -
+        Number(calleeEvidenceStrength(left.source) === 'exact'),
+    ),
   );
 
   const callerEvidence: CallGraphEvidenceRow[] = callerRows.map((r) => ({
@@ -88,16 +91,23 @@ export function callGraph(
         ? 'reference-candidate'
         : r.callEvidence === 'scip-chunk'
           ? 'chunk-candidate'
-          : 'resolved-call',
-    evidenceStrength: r.source === 'caller-map-inversion' && r.callEvidence !== 'scip-chunk' ? 'exact' : 'candidate',
+          : calleeEvidenceStrength(r.callEvidence) === 'exact'
+            ? 'resolved-call'
+            : 'source-call-candidate',
+    evidenceStrength: r.source === 'caller-map-inversion' ? calleeEvidenceStrength(r.callEvidence) : 'candidate',
     evidenceSource: r.callEvidence ?? r.source,
   }));
   const calleeEvidence: CallGraphEvidenceRow[] = calleeRows.map((r) => ({
     symbol: r.symbol,
     shortName: shortenSymbol(r.symbol),
     file: r.file,
-    relationship: r.source === 'scip-chunk' ? 'chunk-candidate' : 'resolved-call',
-    evidenceStrength: r.source === 'scip-chunk' ? 'candidate' : 'exact',
+    relationship:
+      r.source === 'scip-chunk'
+        ? 'chunk-candidate'
+        : calleeEvidenceStrength(r.source) === 'exact'
+          ? 'resolved-call'
+          : 'source-call-candidate',
+    evidenceStrength: calleeEvidenceStrength(r.source),
     evidenceSource: r.source,
     ...(r.kind === 'jsx-render' ? { interaction: 'render' as const } : {}),
   }));
@@ -113,7 +123,7 @@ export function callGraph(
       blindSpots: [
         'unresolved dynamic dispatch and reflection',
         'external or unindexed callees without a resolved symbol identity',
-        'SCIP chunk co-occurrence is retained only as candidate call evidence',
+        'SCIP chunk co-occurrence and source-name resolution are candidate call evidence',
       ],
     },
   };

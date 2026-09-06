@@ -1,3 +1,4 @@
+import { ts } from '@ts-morph/common';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
@@ -11,7 +12,7 @@ import { stripCommentsAndStrings } from '../../source/primitives/source-stripper
 import { hasSuppressionCommentCategory } from '../../source/primitives/source-text.js';
 import { scipFunctionLikeKindNumbers } from '../../symbols/symbol-kind.js';
 import { applyScanLimit, definitionLoc } from '../query-utils.js';
-import { definitionSourceSnippet, extractImplementationBody } from './duplicate-bodies.js';
+import { definitionSourceSnippet, extractImplementationBody, normalizeBody } from './duplicate-bodies.js';
 
 const SCIP_FUNCTION_LIKE_KINDS = new Set(scipFunctionLikeKindNumbers());
 
@@ -25,7 +26,7 @@ const SCIP_FUNCTION_LIKE_KINDS = new Set(scipFunctionLikeKindNumbers());
  * - similar requires callee-set overlap (any names).
  * - similar-signatures requires the same type shape (any names).
  *
- * This one is the missing "same concept, drifted implementation" case:
+ * This is a candidate search by names and source tokens; shared conceptual ownership requires review:
  * React/Vue helper families with drifted thresholds, escapeRegex vs
  * escapeRegExp, etc.
  */
@@ -388,10 +389,11 @@ function twinDriftRecord(db: ScipDatabase, definition: IndexedDefinition): TwinD
   // An abstract member and its overrides are one polymorphic contract; their
   // bodies differ by design.
   if (isAbstractOrOverrideDeclaration(snippet, definition.leaf)) return null;
-  const strippedBody = stripCommentsAndStrings(extractImplementationBody(snippet));
-  const normalizedBody = strippedBody.replace(/\s+/g, '');
+  const body = extractImplementationBody(snippet);
+  const strippedBody = stripCommentsAndStrings(body);
+  const normalizedBody = normalizeBody(snippet);
   if (!normalizedBody || normalizedBody.length < 8) return null;
-  const tokens = strippedBody.match(TOKEN_PATTERN) ?? [];
+  const tokens = twinBodyTokens(body, definition.relativePath);
   if (tokens.length === 0) return null;
   return {
     leaf: definition.leaf,
@@ -443,6 +445,15 @@ function isTopLevelArrowFunctionSnippet(snippet: string, leaf: string): boolean 
   ).test(snippet);
 }
 
+// Preserve literal contents in the comparison; masking strings erases changed behavior.
+function twinBodyTokens(body: string, file: string): string[] {
+  if (!/\.[cm]?[jt]sx?$/i.test(file)) return body.match(TOKEN_PATTERN) ?? [];
+  const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, ts.LanguageVariant.Standard, body);
+  const tokens: string[] = [];
+  while (scanner.scan() !== ts.SyntaxKind.EndOfFileToken) tokens.push(scanner.getTokenText());
+  return tokens;
+}
+
 const TOKEN_PATTERN = /[A-Za-z_$][A-Za-z0-9_$]*|\d+(?:\.\d+)?|[^\sA-Za-z0-9_$]/g;
 
 function toTwinMember(record: TwinDriftRecord): TwinMember {
@@ -480,7 +491,7 @@ function firstDivergentRun(a: readonly string[], b: readonly string[]): string {
 }
 
 /**
- * Cluster leaf names that are "the same concept": exact match after
+ * Cluster leaf names by textual similarity: exact match after
  * case-folding, or edit-distance <= 2 for names long enough (>= 8 chars)
  * that a small edit is unlikely to be coincidental (catches escapeRegex vs
  * escapeRegExp without also merging unrelated short names like `get`/`set`).

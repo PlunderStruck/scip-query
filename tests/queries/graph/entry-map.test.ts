@@ -35,7 +35,7 @@ describe('entry-rooted call maps', () => {
     expect(start).toMatchObject({
       file: advancedFixture.files.entry,
       confidence: 'candidate',
-      indexedCallerCount: 0,
+      observedCallerCount: 0,
       evidence: ['entry-surface-without-indexed-caller'],
     });
     expect(results.some((result) => result.symbol === advancedFixture.symbols.process)).toBe(false);
@@ -52,7 +52,7 @@ describe('entry-rooted call maps', () => {
 
     expect(result.kind).toBe('matched');
     if (result.kind !== 'matched') return;
-    expect(result.coverage.completeWithinIndexedStaticCallEdges).toBe(true);
+    expect(result.coverage.completeWithinSelectedStaticEvidence).toBe(true);
     expect(result.coverage.dynamicDispatchRepresented).toBe(false);
     expect(result.regions.map((region) => region.file)).toEqual(
       expect.arrayContaining([
@@ -119,7 +119,7 @@ describe('entry-rooted call maps', () => {
     }
   });
 
-  it('recognizes an actual exported callable on a package surface as a root', () => {
+  it('recognizes an actual exported callable on a package surface as an entry candidate', () => {
     const packageFixture = openPackageSurfaceFixture('export function handle() { return 1; }\n');
     try {
       const result = entryPoints(packageFixture.db).find(
@@ -127,7 +127,7 @@ describe('entry-rooted call maps', () => {
       );
 
       expect(result).toMatchObject({
-        confidence: 'root',
+        confidence: 'candidate',
         evidence: ['package-public-export'],
       });
     } finally {
@@ -143,7 +143,7 @@ describe('entry-rooted call maps', () => {
       );
 
       expect(result).toMatchObject({
-        confidence: 'root',
+        confidence: 'candidate',
         evidence: ['package-public-export'],
       });
     } finally {

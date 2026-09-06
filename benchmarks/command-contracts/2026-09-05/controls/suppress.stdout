@@ -1,0 +1,35 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "suppress",
+  "operationRole": "mutation",
+  "evidence": "graph-fact",
+  "args": [
+    "fixture-finding"
+  ],
+  "options": {
+    "evidence": [
+      "source:src/math.ts"
+    ],
+    "reason": "This forwarding function maintains the public compatibility contract.",
+    "reasonCode": "compatibility-shim",
+    "json": true
+  },
+  "result": {
+    "path": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/.scipquery/suppressions/fixture-finding.json",
+    "disposition": "created",
+    "revision": "d3287275e312936453d13a46c5da0c13ea07e4384c9446c2b71fbab16d0eec49"
+  },
+  "coverage": {
+    "complete": true,
+    "totalKnown": true,
+    "returned": 1,
+    "total": 1,
+    "omitted": 0
+  }
+}

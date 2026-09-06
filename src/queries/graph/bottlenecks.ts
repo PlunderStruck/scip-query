@@ -1,3 +1,4 @@
+import { calleeEvidenceStrength } from '../../symbols/graph/call-graph-evidence.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
 import { getCallerRowsMapForSymbols } from '../../symbols/graph/call-graph-evidence.js';
@@ -74,7 +75,6 @@ export function bottlenecks(
   );
   const semantic = opts.semantic !== false;
   const callerRows = getCallerRowsMapForSymbols(db, definitions, {
-    limit: 500,
     semantic,
     semanticEvidence: symbolSemanticEvidence,
   });
@@ -109,28 +109,34 @@ function bottleneckRowFor(
   semantic: boolean,
   callerRows: readonly CallerRow[],
 ): BottleneckResult {
-  const callerFiles = [...new Set(callerRows.map((row) => row.file))].sort();
+  const externalCallers = callerRows.filter((row) => row.file !== definition.relativePath);
+  const callerFiles = [...new Set(externalCallers.map((row) => row.file))].sort();
   const candidateCallerFiles = [
     ...new Set(
-      callerRows
-        .filter((row) => row.source !== 'caller-map-inversion' || row.callEvidence === 'scip-chunk')
+      externalCallers
+        .filter(
+          (row) => row.source !== 'caller-map-inversion' || calleeEvidenceStrength(row.callEvidence) === 'candidate',
+        )
         .map((row) => row.file),
     ),
   ].sort();
   const externalCalleeByIdentity = new Map<string, CoordinationHubCalleeEvidence>();
   for (const row of getCalleeRowsForSymbol(db, definition, {
-    limit: 500,
     semantic,
     semanticEvidence: symbolSemanticEvidence,
   })) {
     if (row.file === definition.relativePath) continue;
     const identity = `${row.symbol}|${row.file}`;
-    if (!externalCalleeByIdentity.has(identity)) {
+    if (
+      !externalCalleeByIdentity.has(identity) ||
+      (externalCalleeByIdentity.get(identity)!.evidenceStrength === 'candidate' &&
+        calleeEvidenceStrength(row.source) === 'exact')
+    ) {
       externalCalleeByIdentity.set(identity, {
         symbol: row.symbol,
         shortName: shortenSymbol(row.symbol),
         file: row.file,
-        evidenceStrength: row.source === 'scip-chunk' ? 'candidate' : 'exact',
+        evidenceStrength: calleeEvidenceStrength(row.source),
         evidenceSource: row.source,
       });
     }
@@ -161,7 +167,7 @@ function bottleneckRowFor(
     riskKind: 'coordination-hotspot',
     evidenceReasons: [
       `${fanIn} incoming file(s) reference this symbol`,
-      `${fanOut} distinct cross-file callee symbol(s) are reached from it`,
+      `${fanOut} distinct cross-file callee target(s) are observed; candidate targets do not establish reachability`,
       `centrality score is ${score} (fan-in * fan-out)`,
       `${candidateCallerFiles.length} incoming file(s) and ${candidateExternalCallees.length} outgoing target(s) rely on candidate rather than exact call evidence`,
     ],

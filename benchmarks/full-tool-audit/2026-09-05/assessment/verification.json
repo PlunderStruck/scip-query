@@ -1,0 +1,34 @@
+{
+  "assessedAt": "2026-09-06T01:04:50.121761+00:00",
+  "scope": "Assessment of the existing ten findings; production repairs remain open.",
+  "productionInputs": {
+    "compared": 523,
+    "changed": [],
+    "originalSourceTreeSha256": "39c17d737bc8cabe19cc370088a2ba80548c12fdf50340c872e9ba7db1836a5f"
+  },
+  "libraryRerun": {
+    "command": "./node_modules/.bin/vite-node benchmarks/full-tool-audit/2026-09-05/library-probes.ts /tmp/scip-assessment-library.json",
+    "exitCode": 1,
+    "passed": 7,
+    "failed": 11,
+    "sameNamedOutcomes": true
+  },
+  "historicalFailureAssessment": {
+    "reproduced-behavioral-defect": 13,
+    "metric-contract-comparison": 2,
+    "inadequate-acceptance-test": 2,
+    "desired-product-workflow": 2
+  },
+  "notRerun": [
+    "full 2900-test suite",
+    "83 CLI query captures",
+    "live formal checker",
+    "LaunchPoint backend scan",
+    "agent-outcome benchmark"
+  ],
+  "artifacts": {
+    "assertion-assessment.json": "c8334eef73b1190932492257ccadfaeb41f4f5af3cfb6b345addc19ab52a14cc",
+    "library.json": "7bf100e6c6782af3bc9cee43b9af61ea041ce98f0065ddc7166d421fe7a8bc19",
+    "tla-release.json": "ac5f32650d2ccd09a0d48b7f4d8284e5305708d3b10ca014b14fae19797796d9"
+  }
+}

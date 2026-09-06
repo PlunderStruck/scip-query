@@ -1,0 +1,24 @@
+diff --git a/src/adapters/shipping.ts b/src/adapters/shipping.ts
+index a72d2dc..cf5de90 100644
+--- a/src/adapters/shipping.ts
++++ b/src/adapters/shipping.ts
+@@ -1,5 +1,6 @@
+ import { shippingCost } from '../domain/shipping.js';
++import { webShippingRate } from './web-config.js';
+ 
+ export function webShippingQuote(weight: number): number {
+-  return shippingCost(weight);
++  return shippingCost(weight, webShippingRate);
+ }
+diff --git a/src/domain/shipping.ts b/src/domain/shipping.ts
+index 987e41e..ebf9c5e 100644
+--- a/src/domain/shipping.ts
++++ b/src/domain/shipping.ts
+@@ -1,5 +1,3 @@
+-import { webShippingRate } from '../adapters/web-config.js';
+-
+-export function shippingCost(weight: number): number {
+-  return weight * webShippingRate;
++export function shippingCost(weight: number, rate: number): number {
++  return weight * rate;
+ }

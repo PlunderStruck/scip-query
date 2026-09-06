@@ -1,0 +1,169 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "locality-candidates",
+  "operationRole": "repository-observation",
+  "evidence": "heuristic",
+  "args": [
+    "sum"
+  ],
+  "options": {
+    "minConsumers": 1,
+    "limit": 20,
+    "json": true,
+    "session": true,
+    "jsonOutput": "/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/command-contracts/2026-09-05/cli/locality-candidates.json"
+  },
+  "result": [
+    {
+      "actionTier": "signal",
+      "sourceUnit": {
+        "kind": "symbol",
+        "file": "src/core/math.ts",
+        "shortName": "src:core:math:sum()",
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/core/`math.ts`/sum().",
+        "startLine": 0,
+        "endLine": 0
+      },
+      "candidatePath": "src/core/math.ts",
+      "currentDirectory": "src/core",
+      "directoryAncestry": [
+        {
+          "path": "src",
+          "depth": 0,
+          "markers": [
+            "source-root"
+          ]
+        },
+        {
+          "path": "src/core",
+          "depth": 1,
+          "markers": [
+            "source-root"
+          ]
+        }
+      ],
+      "consumerFiles": [
+        "src/service/runner.ts"
+      ],
+      "consumerCoverage": "symbol-observations",
+      "nearestCommonDirectory": "src/service",
+      "boundaryMarkers": [
+        "source-root: src",
+        "service: src/service"
+      ],
+      "recommendedTier": "sibling-folder",
+      "suggestedHome": "src/service",
+      "destinationConfidence": "candidate",
+      "whyNoSuggestedHome": null,
+      "counterevidence": [
+        "Path and observed-consumer heuristic; confirm conceptual ownership, complete consumers and behavior before moving files.",
+        "Only one consumer was found; inlining or same-folder placement may be better than shared extraction."
+      ],
+      "reasons": [
+        "src:core:math:sum() currently lives in src/core.",
+        "1 consumer file(s) share src/service as their nearest common directory.",
+        "Suggested home is src/service."
+      ],
+      "recommendation": "Review whether symbol usage supports moving or extracting toward src/service."
+    }
+  ],
+  "coverage": {
+    "complete": null,
+    "totalKnown": false,
+    "returned": 1
+  },
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "operationRole": "repository-observation",
+    "receipt": {
+      "schemaVersion": 2,
+      "observedAt": "2026-09-06T07:48:07.955Z",
+      "facts": {
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        }
+      ]
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "heuristic",
+      "coverage": {
+        "complete": null,
+        "totalKnown": false,
+        "returned": 1
+      },
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "heuristic",
+        "coverage": {
+          "state": "unknown",
+          "returned": 1,
+          "totalKnown": false
+        },
+        "producerValidation": {
+          "status": "not-evaluated"
+        },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": [
+            "collaborationDomain",
+            "wholeContent",
+            "observationStability"
+          ],
+          "reasons": [
+            "collaborationDomain:unknown",
+            "wholeContent:unknown",
+            "leftIndexAlignment:unknown",
+            "rightIndexAlignment:unknown"
+          ]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": [
+            "No repository action policy was supplied for this claim."
+          ]
+        }
+      }
+    }
+  }
+}

@@ -6,14 +6,14 @@ import type { SymbolResult } from './symbols.js';
 
 export interface SystemResult {
   files: string[];
-  symbols: SymbolResult[];
+  symbols: Array<SymbolResult & { relativePath: string }>;
   dependsOn: string[];
   dependedOnBy: string[];
 }
 
 /** Full system map for a module path: files, symbols, deps in/out.
  *
- * Exported-symbol ranges come from getDefinitionsForFile so they are
+ * Symbol ranges come from getDefinitionsForFile so they are
  * source-corrected and match `scip symbols` output.
  */
 export function system(db: ScipDatabase, modulePattern: string): SystemResult {
@@ -22,19 +22,8 @@ export function system(db: ScipDatabase, modulePattern: string): SystemResult {
     return { files: [], symbols: [], dependsOn: [], dependedOnBy: [] };
   }
 
-  const placeholders = matchedPaths.map(() => '?').join(', ');
-  const fileRows = db.all<{ relative_path: string }>(
-    `SELECT relative_path FROM documents
-     WHERE relative_path IN (${placeholders})
-     ORDER BY relative_path`,
-    ...matchedPaths,
-  );
-  const files = fileRows.map((r) => r.relative_path).filter((p) => !db.isIgnored(p));
-
-  // Exported symbols: corrected ranges + documentation filter.
-  const symbols: SymbolResult[] = loadFileSymbols(db, files, { onlyDocumented: true, sort: true }).map(
-    ({ relativePath: _r, ...rest }) => rest,
-  );
+  const files = matchedPaths.filter((path) => !db.isIgnored(path)).sort();
+  const symbols = loadFileSymbols(db, files, { sort: true });
 
   const dependsOn = fileDependencyPaths(db, 'forward', matchedPaths).filter((path) => !db.isIgnored(path));
   const dependedOnBy = fileDependencyPaths(db, 'reverse', matchedPaths).filter((path) => !db.isIgnored(path));

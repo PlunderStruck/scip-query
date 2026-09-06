@@ -57,7 +57,7 @@ export interface DriftSummary {
  * Three types of drift, each detecting a real problem:
  *
  * 1. **Unused imports** — file depends on a module but never references
- *    any of its symbols. Dead dependency, safe to remove.
+ *    any of its symbols. Inspect unused bindings and module-initialization side effects.
  *
  * 2. **Architecture violations** — one or more files cross a project-owned
  *    boundary whose declared dependency row rejects the target boundary.
@@ -158,7 +158,8 @@ function unusedImportDrift(
         `dependency edge exists from ${file} to ${dep}`,
         'no semantic, source, type-only, side-effect, or Vue-template usage survived the conservative skip gates',
       ],
-      recommendation: 'Remove the unused import or dependency edge after running the project checks.',
+      recommendation:
+        'Review unused bindings; preserve module-initialization side effects and verify the change with project checks.',
     });
   }
   return results;
@@ -324,7 +325,7 @@ function scipSymbolRefEdges(db: ScipDatabase, scope?: string): Array<{ from_file
      ) sym_def ON sym_def.symbol_id = gs.id
      JOIN documents d2 ON sym_def.document_id = d2.id
      WHERE d1.id != d2.id
-	       AND m.role != 1
+	       AND m.role = 0
 	       ${db.pathExclusionsFor('d1', 'd2')}
 	       ${scopeFilter}`,
     ...scopeParams,
@@ -352,6 +353,16 @@ function addSourceScannedSymbolRefEdges(
     },
     (hit) => {
       if (hit.target.relativePath === hit.sourceFile) return;
+      if (
+        hit.occurrences <= 1 &&
+        getSourceImports(db, hit.sourceFile).some(
+          (entry) =>
+            entry.sourcePath === hit.target.relativePath &&
+            !entry.used &&
+            (entry.localName === hit.name || entry.importedName === hit.name),
+        )
+      )
+        return;
       if (db.isIgnored(hit.target.relativePath)) return;
       addSymbolRefEdge(db, graph, hit.sourceFile, hit.target.relativePath);
     },

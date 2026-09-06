@@ -1,0 +1,12 @@
+═══ REQUEST ═══
+  resolved-selector=src/math.ts:1-1
+
+═══ OBSERVED FACTS ═══
+src/math.ts:1-1  [source previously emitted: session #1 via code; not repeated]
+
+═══ EVIDENCE CALIBRATION ═══
+  Source bodies are exact working-tree bytes; compiler identity and bindings are limited to reported semantic coverage.
+  Freshness: 1/1 text current; semantics 1 aligned, 0 stale, 0 unavailable.
+
+═══ COVERAGE ═══
+  One exact selector resolved to the complete source body shown; callers and runtime relationships are not implied.

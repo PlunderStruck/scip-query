@@ -1,0 +1,2540 @@
+{
+  "readCommands": [
+    {
+      "command": "search",
+      "args": [
+        "search",
+        "sum(1, 2)"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "outline",
+      "args": [
+        "outline",
+        "src/service/runner.ts"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "entrypoints",
+      "args": [
+        "entrypoints",
+        "main"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "evidence",
+      "args": [
+        "evidence",
+        "--at",
+        "src/service/runner.ts:3",
+        "--edge",
+        "execution",
+        "--direction",
+        "outgoing",
+        "--depth",
+        "1",
+        "--max-edges",
+        "20"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "inspect",
+      "args": [
+        "inspect",
+        "--symbol",
+        "runJob",
+        "--symbol",
+        "sum",
+        "--view",
+        "behavior"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "code",
+      "args": [
+        "code",
+        "src/service/runner.ts:1-8"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "files",
+      "args": [
+        "files",
+        "src/**/*.ts"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "session",
+      "args": [
+        "session"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": false,
+      "humanOnly": true
+    },
+    {
+      "command": "methods",
+      "args": [
+        "methods",
+        "Store"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "refs",
+      "args": [
+        "refs",
+        "sum"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "deps",
+      "args": [
+        "deps",
+        "src/service/runner.ts"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "rdeps",
+      "args": [
+        "rdeps",
+        "src/core/math.ts"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "system",
+      "args": [
+        "system",
+        "src/core"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "surface",
+      "args": [
+        "surface",
+        "src/core"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "hotspots",
+      "args": [
+        "hotspots"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "imports",
+      "args": [
+        "imports",
+        "src/service/runner.ts"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "imported-by",
+      "args": [
+        "imported-by",
+        "sum"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "members",
+      "args": [
+        "members",
+        "Store"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "fan-in",
+      "args": [
+        "fan-in",
+        "sum"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "fan-out",
+      "args": [
+        "fan-out",
+        "src/service/runner.ts"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "coupling",
+      "args": [
+        "coupling",
+        "src/service/runner.ts",
+        "src/consumer.ts"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "cycles",
+      "args": [
+        "cycles"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "architecture",
+      "args": [
+        "architecture"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "bottlenecks",
+      "args": [
+        "bottlenecks"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "by-kind",
+      "args": [
+        "by-kind",
+        "function"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "kind-counts",
+      "args": [
+        "kind-counts"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "dependency-depth",
+      "args": [
+        "dependency-depth"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "hierarchy",
+      "args": [
+        "hierarchy",
+        "Store#read()."
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "entry-map",
+      "args": [
+        "entry-map",
+        "main"
+      ],
+      "exitCode": 1,
+      "expectedExitCode": 1,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "call-graph",
+      "args": [
+        "call-graph",
+        "runJob"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "affected",
+      "args": [
+        "affected",
+        "sum"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "change-surface",
+      "args": [
+        "change-surface",
+        "src/core/math.ts"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "co-change",
+      "args": [
+        "co-change",
+        "src/service/runner.ts"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "incomplete-migration",
+      "args": [
+        "incomplete-migration"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "dependence-slice",
+      "args": [
+        "dependence-slice",
+        "src/service/runner.ts:7",
+        "--variable",
+        "total",
+        "--column",
+        "22"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "diff-impact",
+      "args": [
+        "diff-impact",
+        "--base",
+        "HEAD"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "dead",
+      "args": [
+        "dead"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "unused-imports",
+      "args": [
+        "unused-imports",
+        "src/service/runner.ts"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "similar",
+      "args": [
+        "similar",
+        "runJob"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "similar-files",
+      "args": [
+        "similar-files",
+        "src/service/runner.ts"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "react-component-duplicates",
+      "args": [
+        "react-component-duplicates"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "react-hook-candidates",
+      "args": [
+        "react-hook-candidates"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "react-large-component-pressure",
+      "args": [
+        "react-large-component-pressure"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "vue-component-duplicates",
+      "args": [
+        "vue-component-duplicates"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "vue-composable-candidates",
+      "args": [
+        "vue-composable-candidates"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "vue-large-view-pressure",
+      "args": [
+        "vue-large-view-pressure"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "locality-candidates",
+      "args": [
+        "locality-candidates",
+        "sum"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "cleanup-plan",
+      "args": [
+        "cleanup-plan"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "recent-duplicates",
+      "args": [
+        "recent-duplicates"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "doc-drift",
+      "args": [
+        "doc-drift"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "unused-params",
+      "args": [
+        "unused-params"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "drift",
+      "args": [
+        "drift"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "passthrough-candidates",
+      "args": [
+        "passthrough-candidates"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "slice-cohesion",
+      "args": [
+        "slice-cohesion",
+        "runJob"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "complexity",
+      "args": [
+        "complexity",
+        "runJob"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "redundant-reexports",
+      "args": [
+        "redundant-reexports"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "duplicate-bodies",
+      "args": [
+        "duplicate-bodies"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "twin-drift",
+      "args": [
+        "twin-drift"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "not-implemented",
+      "args": [
+        "not-implemented"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "decorative-checkers",
+      "args": [
+        "decorative-checkers"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "test-quality",
+      "args": [
+        "test-quality"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "similar-signatures",
+      "args": [
+        "similar-signatures"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "review",
+      "args": [
+        "review",
+        "--base",
+        "HEAD"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "stats",
+      "args": [
+        "stats"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "context",
+      "args": [
+        "context",
+        "runJob"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "health",
+      "args": [
+        "health"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "check-deps",
+      "args": [
+        "check-deps"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": false,
+      "humanOnly": true
+    },
+    {
+      "command": "capabilities",
+      "args": [
+        "capabilities"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "config-validate",
+      "args": [
+        "config-validate"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "doctor",
+      "args": [
+        "doctor"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    },
+    {
+      "command": "status",
+      "args": [
+        "status"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "passed": true,
+      "hasPacket": true,
+      "humanOnly": false
+    }
+  ],
+  "claims": {
+    "scope": "hand-written 13-file TypeScript compiler fixture",
+    "passed": 42,
+    "total": 42,
+    "checks": [
+      {
+        "command": "inventory",
+        "claim": "71 retained read commands ran with expected outcomes",
+        "passed": true,
+        "actual": 71,
+        "expected": 71
+      },
+      {
+        "command": "inventory",
+        "claim": "no unexpected invocation failures",
+        "passed": true,
+        "actual": [],
+        "expected": []
+      },
+      {
+        "command": "code",
+        "claim": "exact current source bytes excluding terminal newline",
+        "passed": true,
+        "actual": "import { sum } from '../core/math';\nimport { Store } from '../core/store';\nexport function runJob() {\n  const store = new Store();\n  const total = sum(1, 2);\n  store.write(total);\n  return total > 0 ? total : 0;\n}",
+        "expected": "import { sum } from '../core/math';\nimport { Store } from '../core/store';\nexport function runJob() {\n  const store = new Store();\n  const total = sum(1, 2);\n  store.write(total);\n  return total > 0 ? total : 0;\n}"
+      },
+      {
+        "command": "files",
+        "claim": "complete TS file inventory",
+        "passed": true,
+        "actual": [
+          "src/calls.ts",
+          "src/consumer.ts",
+          "src/core/math.ts",
+          "src/core/store.ts",
+          "src/cycle/a.ts",
+          "src/cycle/b.ts",
+          "src/duplicate/a.ts",
+          "src/duplicate/b.ts",
+          "src/first.ts",
+          "src/flow.ts",
+          "src/new.ts",
+          "src/second.ts",
+          "src/service/runner.ts"
+        ],
+        "expected": [
+          "src/calls.ts",
+          "src/consumer.ts",
+          "src/core/math.ts",
+          "src/core/store.ts",
+          "src/cycle/a.ts",
+          "src/cycle/b.ts",
+          "src/duplicate/a.ts",
+          "src/duplicate/b.ts",
+          "src/first.ts",
+          "src/flow.ts",
+          "src/new.ts",
+          "src/second.ts",
+          "src/service/runner.ts"
+        ]
+      },
+      {
+        "command": "search",
+        "claim": "literal match counts",
+        "passed": true,
+        "actual": [
+          1,
+          1
+        ],
+        "expected": [
+          1,
+          1
+        ]
+      },
+      {
+        "command": "search",
+        "claim": "literal occurrence position",
+        "passed": true,
+        "actual": [
+          [
+            "src/service/runner.ts",
+            4
+          ]
+        ],
+        "expected": [
+          [
+            "src/service/runner.ts",
+            4
+          ]
+        ]
+      },
+      {
+        "command": "methods",
+        "claim": "method names and lines exclude field",
+        "passed": true,
+        "actual": [
+          [
+            "read",
+            2
+          ],
+          [
+            "write",
+            3
+          ]
+        ],
+        "expected": [
+          [
+            "read",
+            2
+          ],
+          [
+            "write",
+            3
+          ]
+        ]
+      },
+      {
+        "command": "members",
+        "claim": "field and methods with exact identifier/declaration lines",
+        "passed": true,
+        "actual": [
+          [
+            "value.",
+            1
+          ],
+          [
+            "read().",
+            2
+          ],
+          [
+            "write().",
+            3
+          ]
+        ],
+        "expected": [
+          [
+            "value.",
+            1
+          ],
+          [
+            "read().",
+            2
+          ],
+          [
+            "write().",
+            3
+          ]
+        ]
+      },
+      {
+        "command": "hierarchy",
+        "claim": "all ancestry identities are full indexed symbols",
+        "passed": true,
+        "actual": true,
+        "expected": true
+      },
+      {
+        "command": "hierarchy",
+        "claim": "indexed owner order",
+        "passed": true,
+        "actual": [
+          "Store#read().",
+          "Store#",
+          ""
+        ],
+        "expected": [
+          "Store#read().",
+          "Store#",
+          ""
+        ]
+      },
+      {
+        "command": "system",
+        "claim": "exact directory membership",
+        "passed": true,
+        "actual": [
+          "src/core/math.ts",
+          "src/core/store.ts"
+        ],
+        "expected": [
+          "src/core/math.ts",
+          "src/core/store.ts"
+        ]
+      },
+      {
+        "command": "system",
+        "claim": "external consumer direction",
+        "passed": true,
+        "actual": [
+          "src/service/runner.ts"
+        ],
+        "expected": [
+          "src/service/runner.ts"
+        ]
+      },
+      {
+        "command": "system",
+        "claim": "no outgoing internal-repository dependency from core",
+        "passed": true,
+        "actual": [],
+        "expected": []
+      },
+      {
+        "command": "surface",
+        "claim": "only observed external consumer",
+        "passed": true,
+        "actual": [
+          "src/service/runner.ts"
+        ],
+        "expected": [
+          "src/service/runner.ts"
+        ]
+      },
+      {
+        "command": "surface",
+        "claim": "unused read method absent; used write method present",
+        "passed": true,
+        "actual": [
+          false,
+          true
+        ],
+        "expected": [
+          false,
+          true
+        ]
+      },
+      {
+        "command": "locality-candidates",
+        "claim": "sum symbol not consumer filename substring",
+        "passed": true,
+        "actual": [
+          [
+            "symbol",
+            "src/core/math.ts"
+          ]
+        ],
+        "expected": [
+          [
+            "symbol",
+            "src/core/math.ts"
+          ]
+        ]
+      },
+      {
+        "command": "deps",
+        "claim": "outgoing files",
+        "passed": true,
+        "actual": [
+          "src/core/math.ts",
+          "src/core/store.ts"
+        ],
+        "expected": [
+          "src/core/math.ts",
+          "src/core/store.ts"
+        ]
+      },
+      {
+        "command": "rdeps",
+        "claim": "incoming files",
+        "passed": true,
+        "actual": [
+          "src/service/runner.ts"
+        ],
+        "expected": [
+          "src/service/runner.ts"
+        ]
+      },
+      {
+        "command": "imports",
+        "claim": "imported bindings",
+        "passed": true,
+        "actual": [
+          [
+            "Store",
+            "src/core/store.ts"
+          ],
+          [
+            "sum",
+            "src/core/math.ts"
+          ]
+        ],
+        "expected": [
+          [
+            "Store",
+            "src/core/store.ts"
+          ],
+          [
+            "sum",
+            "src/core/math.ts"
+          ]
+        ]
+      },
+      {
+        "command": "refs",
+        "claim": "import and call references remain distinct",
+        "passed": true,
+        "actual": [
+          [
+            "src/service/runner.ts",
+            0
+          ],
+          [
+            "src/service/runner.ts",
+            4
+          ]
+        ],
+        "expected": [
+          [
+            "src/service/runner.ts",
+            0
+          ],
+          [
+            "src/service/runner.ts",
+            4
+          ]
+        ]
+      },
+      {
+        "command": "fan-in",
+        "claim": "one reference file, not two occurrences",
+        "passed": true,
+        "actual": [
+          1
+        ],
+        "expected": [
+          1
+        ]
+      },
+      {
+        "command": "cycles",
+        "claim": "one real component, closed witness",
+        "passed": true,
+        "actual": [
+          [
+            [
+              "src/cycle/a.ts",
+              "src/cycle/b.ts"
+            ],
+            [
+              "src/cycle/a.ts",
+              "src/cycle/b.ts",
+              "src/cycle/a.ts"
+            ]
+          ]
+        ],
+        "expected": [
+          [
+            [
+              "src/cycle/a.ts",
+              "src/cycle/b.ts"
+            ],
+            [
+              "src/cycle/a.ts",
+              "src/cycle/b.ts",
+              "src/cycle/a.ts"
+            ]
+          ]
+        ]
+      },
+      {
+        "command": "architecture",
+        "claim": "declared service to core edge",
+        "passed": true,
+        "actual": [
+          [
+            "service",
+            "core",
+            "allowed",
+            2
+          ]
+        ],
+        "expected": [
+          [
+            "service",
+            "core",
+            "allowed",
+            2
+          ]
+        ]
+      },
+      {
+        "command": "architecture",
+        "claim": "partial policy file coverage is disclosed",
+        "passed": true,
+        "actual": [
+          13,
+          5,
+          8
+        ],
+        "expected": [
+          13,
+          5,
+          8
+        ]
+      },
+      {
+        "command": "entrypoints",
+        "claim": "export named main alone is not an external entrypoint",
+        "passed": true,
+        "actual": [],
+        "expected": []
+      },
+      {
+        "command": "entry-map",
+        "claim": "non-entry callable explicitly refused",
+        "passed": true,
+        "actual": "not-entry",
+        "expected": "not-entry"
+      },
+      {
+        "command": "call-graph",
+        "claim": "three exact direct targets, no unused read",
+        "passed": true,
+        "actual": [
+          [
+            "src:core:math:sum()",
+            "exact"
+          ],
+          [
+            "src:core:store:Store",
+            "exact"
+          ],
+          [
+            "src:core:store:Store:write()",
+            "exact"
+          ]
+        ],
+        "expected": [
+          [
+            "src:core:math:sum()",
+            "exact"
+          ],
+          [
+            "src:core:store:Store",
+            "exact"
+          ],
+          [
+            "src:core:store:Store:write()",
+            "exact"
+          ]
+        ]
+      },
+      {
+        "command": "affected",
+        "claim": "two downstream levels",
+        "passed": true,
+        "actual": [
+          [
+            "src/service/runner.ts",
+            1
+          ],
+          [
+            "src/consumer.ts",
+            2
+          ]
+        ],
+        "expected": [
+          [
+            "src/service/runner.ts",
+            1
+          ],
+          [
+            "src/consumer.ts",
+            2
+          ]
+        ]
+      },
+      {
+        "command": "complexity",
+        "claim": "one conditional and three actual call targets",
+        "passed": true,
+        "actual": [
+          1,
+          2,
+          3,
+          0
+        ],
+        "expected": [
+          1,
+          2,
+          3,
+          0
+        ]
+      },
+      {
+        "command": "diff-impact",
+        "claim": "modified and untracked symbols",
+        "passed": true,
+        "actual": [
+          "src:new:newFunction()",
+          "src:service:runner:runJob()"
+        ],
+        "expected": [
+          "src:new:newFunction()",
+          "src:service:runner:runJob()"
+        ]
+      },
+      {
+        "command": "diff-impact",
+        "claim": "downstream consumer",
+        "passed": true,
+        "actual": [
+          "src/consumer.ts"
+        ],
+        "expected": [
+          "src/consumer.ts"
+        ]
+      },
+      {
+        "command": "review",
+        "claim": "changed function status",
+        "passed": true,
+        "actual": [
+          [
+            "newFunction",
+            "added"
+          ],
+          [
+            "runJob",
+            "modified"
+          ]
+        ],
+        "expected": [
+          [
+            "newFunction",
+            "added"
+          ],
+          [
+            "runJob",
+            "modified"
+          ]
+        ]
+      },
+      {
+        "command": "review",
+        "claim": "modified complexity deltas",
+        "passed": true,
+        "actual": {
+          "cyclomatic": 1,
+          "cognitive": 1
+        },
+        "expected": {
+          "cyclomatic": 1,
+          "cognitive": 1
+        }
+      },
+      {
+        "command": "review",
+        "claim": "missing measured coverage remains unavailable",
+        "passed": true,
+        "actual": [
+          "unavailable",
+          "unavailable"
+        ],
+        "expected": [
+          "unavailable",
+          "unavailable"
+        ]
+      },
+      {
+        "command": "review",
+        "claim": "missing coverage does not produce CRAP numbers",
+        "passed": true,
+        "actual": false,
+        "expected": false
+      },
+      {
+        "command": "health",
+        "claim": "cycle detected without an index-dependent graph call",
+        "passed": true,
+        "actual": [
+          "dependency-cycle"
+        ],
+        "expected": [
+          "dependency-cycle"
+        ]
+      },
+      {
+        "command": "health",
+        "claim": "all TS files/functions analyzed",
+        "passed": true,
+        "actual": [
+          13,
+          28,
+          []
+        ],
+        "expected": [
+          13,
+          28,
+          []
+        ]
+      },
+      {
+        "command": "duplicate-bodies",
+        "claim": "exact small body pair",
+        "passed": true,
+        "actual": [
+          [
+            "src:duplicate:a:formatOne()",
+            "src:duplicate:b:formatTwo()"
+          ]
+        ],
+        "expected": [
+          [
+            "src:duplicate:a:formatOne()",
+            "src:duplicate:b:formatTwo()"
+          ]
+        ]
+      },
+      {
+        "command": "evidence",
+        "claim": "requested family and direction",
+        "passed": true,
+        "actual": [
+          [
+            "execution"
+          ],
+          "outgoing"
+        ],
+        "expected": [
+          [
+            "execution"
+          ],
+          "outgoing"
+        ]
+      },
+      {
+        "command": "dependence-slice",
+        "claim": "exact occurrence is selected",
+        "passed": true,
+        "actual": "matched",
+        "expected": "matched"
+      },
+      {
+        "command": "dependence-slice",
+        "claim": "slice excludes unrelated store state",
+        "passed": true,
+        "actual": [
+          "sum",
+          "total"
+        ],
+        "expected": [
+          "sum",
+          "total"
+        ]
+      },
+      {
+        "command": "config-validate",
+        "claim": "valid architecture config accepted",
+        "passed": true,
+        "actual": [],
+        "expected": []
+      }
+    ]
+  },
+  "separateChecks": {
+    "controls": [
+      {
+        "case": "init",
+        "args": [
+          "init"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true
+      },
+      {
+        "case": "init-repeat",
+        "args": [
+          "init"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true
+      },
+      {
+        "claim": "init preserves existing configuration bytes",
+        "passed": true
+      },
+      {
+        "case": "setup-agent",
+        "args": [
+          "setup-agent"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true
+      },
+      {
+        "case": "setup-agent-repeat",
+        "args": [
+          "setup-agent"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true
+      },
+      {
+        "claim": "setup-agent preserves user text and is idempotent",
+        "passed": true
+      },
+      {
+        "case": "skills",
+        "args": [
+          "install-skills",
+          "--all"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true
+      },
+      {
+        "claim": "install-skills preserves foreign symlinks",
+        "passed": true
+      },
+      {
+        "claim": "install-skills installs owned links",
+        "passed": true
+      },
+      {
+        "case": "uninstall-conflict",
+        "args": [
+          "uninstall",
+          "--global",
+          "--project"
+        ],
+        "exit": 1,
+        "expectedExit": 1,
+        "passed": true
+      },
+      {
+        "case": "uninstall-global-dry",
+        "args": [
+          "uninstall",
+          "--global",
+          "--dry-run",
+          "--json"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      },
+      {
+        "case": "uninstall-project-dry",
+        "args": [
+          "uninstall",
+          "--project",
+          "--dry-run",
+          "--json"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      },
+      {
+        "claim": "uninstall dry-run does not remove integration",
+        "passed": true
+      },
+      {
+        "case": "reindex-invalid-language",
+        "args": [
+          "reindex",
+          "--language",
+          "typecript"
+        ],
+        "exit": 1,
+        "expectedExit": 1,
+        "passed": true
+      },
+      {
+        "case": "reindex",
+        "args": [
+          "reindex",
+          "--language",
+          "typescript",
+          "--force",
+          "--trust-project-tools",
+          "--json"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      },
+      {
+        "case": "worker-phase",
+        "args": [
+          "__health-phase",
+          "overview"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      },
+      {
+        "case": "worker-invalid-phase",
+        "args": [
+          "__health-phase",
+          "bogus"
+        ],
+        "exit": 1,
+        "expectedExit": 1,
+        "passed": true
+      },
+      {
+        "case": "worker-empty-phase",
+        "args": [
+          "__health-phase",
+          ""
+        ],
+        "exit": 1,
+        "expectedExit": 1,
+        "passed": true
+      },
+      {
+        "case": "worker-diff-wrong-shape",
+        "args": [
+          "__diff-impact-batch"
+        ],
+        "exit": 1,
+        "expectedExit": 1,
+        "passed": true
+      },
+      {
+        "case": "worker-diff",
+        "args": [
+          "__diff-impact-batch"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      },
+      {
+        "case": "worker-prewarm",
+        "args": [
+          "__health-semantic-prewarm",
+          "--shard-index",
+          "0",
+          "--shard-count",
+          "1"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      },
+      {
+        "case": "worker-invalid-shard",
+        "args": [
+          "__health-semantic-prewarm",
+          "--shard-index",
+          "0junk",
+          "--shard-count",
+          "1"
+        ],
+        "exit": 1,
+        "expectedExit": 1,
+        "passed": true
+      },
+      {
+        "case": "worker-incomplete-shard",
+        "args": [
+          "__health-semantic-prewarm",
+          "--shard-count",
+          "2"
+        ],
+        "exit": 1,
+        "expectedExit": 1,
+        "passed": true
+      },
+      {
+        "case": "baseline-write",
+        "args": [
+          "health",
+          "--write-baseline",
+          "--json"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      },
+      {
+        "case": "baseline-compare",
+        "args": [
+          "health",
+          "--baseline",
+          "--json"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      },
+      {
+        "case": "baseline-conflict",
+        "args": [
+          "health",
+          "--baseline",
+          "--write-baseline"
+        ],
+        "exit": 1,
+        "expectedExit": 1,
+        "passed": true
+      },
+      {
+        "case": "augment-sources",
+        "args": [
+          "augment-sources"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true
+      },
+      {
+        "claim": "augment-sources inserts exact auxiliary file bytes",
+        "passed": true
+      },
+      {
+        "case": "augment-vue-unavailable",
+        "args": [
+          "augment-vue",
+          "--project",
+          "tsconfig.json"
+        ],
+        "exit": 1,
+        "expectedExit": 1,
+        "passed": true
+      },
+      {
+        "claim": "augment-vue states missing provider dependency",
+        "passed": true
+      },
+      {
+        "case": "suppress-invalid",
+        "args": [
+          "suppress",
+          "fixture-finding"
+        ],
+        "exit": 1,
+        "expectedExit": 1,
+        "passed": true
+      },
+      {
+        "case": "suppress",
+        "args": [
+          "suppress",
+          "fixture-finding",
+          "--reason",
+          "This forwarding function maintains the public compatibility contract.",
+          "--reason-code",
+          "compatibility-shim",
+          "--evidence",
+          "source:src/math.ts",
+          "--json"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      },
+      {
+        "claim": "suppress writes a decision record",
+        "passed": true
+      },
+      {
+        "case": "hook",
+        "args": [
+          "hook-architecture-stop"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true
+      },
+      {
+        "case": "setup",
+        "args": [
+          "setup",
+          "--yes",
+          "--no-skills",
+          "--no-parsers",
+          "--json"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      },
+      {
+        "case": "watch-start",
+        "args": [
+          "watch",
+          "--daemon",
+          "--json"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      },
+      {
+        "case": "watch-status",
+        "args": [
+          "watch",
+          "--status",
+          "--json"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      },
+      {
+        "claim": "watch status observes running daemon",
+        "passed": true
+      },
+      {
+        "case": "watch-conflict",
+        "args": [
+          "watch",
+          "--status",
+          "--stop"
+        ],
+        "exit": 1,
+        "expectedExit": 1,
+        "passed": true
+      },
+      {
+        "case": "watch-stop",
+        "args": [
+          "watch",
+          "--stop",
+          "--json"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      },
+      {
+        "case": "watch-stopped-status",
+        "args": [
+          "watch",
+          "--status",
+          "--json"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      },
+      {
+        "claim": "watch stop terminates daemon",
+        "passed": true
+      },
+      {
+        "case": "uninstall-global",
+        "args": [
+          "uninstall",
+          "--global",
+          "--json"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      },
+      {
+        "case": "uninstall-project",
+        "args": [
+          "uninstall",
+          "--project",
+          "--json"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      },
+      {
+        "claim": "uninstall preserves user instructions",
+        "passed": true
+      },
+      {
+        "claim": "uninstall removes managed guidance",
+        "passed": true
+      },
+      {
+        "claim": "uninstall removes only owned skill links",
+        "passed": true
+      },
+      {
+        "case": "cleanup-watch",
+        "args": [
+          "watch",
+          "--stop",
+          "--json"
+        ],
+        "exit": 0,
+        "expectedExit": 0,
+        "passed": true,
+        "validJson": true
+      }
+    ],
+    "transport": [
+      {
+        "case": "cursor-first",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-1",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-2",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-3",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-4",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-5",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-6",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-7",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-8",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-9",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-10",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-11",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-12",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-13",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-14",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-15",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-16",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-17",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-18",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-19",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-20",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-21",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-22",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-23",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-24",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-25",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-26",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-27",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-28",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-29",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-30",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-31",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-32",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-33",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-34",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-35",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-36",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-37",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-38",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-39",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-40",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-41",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-42",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-43",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "cursor-44",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "oversized source emits a continuation",
+        "passed": true
+      },
+      {
+        "claim": "continuation drains immutable original output",
+        "passed": true
+      },
+      {
+        "claim": "last page has no remaining cursor",
+        "passed": true
+      },
+      {
+        "case": "session-reset",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "source-first",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "source-second",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "session",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "session reports delivered source",
+        "passed": true
+      },
+      {
+        "claim": "first source invocation emits actual function",
+        "passed": true
+      },
+      {
+        "claim": "repeated source emits a receipt",
+        "passed": true
+      },
+      {
+        "case": "session-reset-again",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "source-after-reset",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "session reset restores source emission",
+        "passed": true
+      }
+    ],
+    "vue": [
+      {
+        "case": "index-with-vue-provider",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "import-and-call",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "Vue import and invocation both bind to actual indexed sum",
+        "passed": true,
+        "rows": [
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            2
+          ]
+        ]
+      },
+      {
+        "case": "unchanged",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "repeated augmentation preserves reference identities without duplicates",
+        "passed": true
+      },
+      {
+        "case": "local-shadow",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "local same-name function cannot retain foreign references",
+        "passed": true
+      }
+    ],
+    "frontend": [
+      {
+        "case": "reindex",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "augment",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "react-component-duplicates",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "react-component-duplicates returns a positive finding for the intended files",
+        "passed": true
+      },
+      {
+        "claim": "react-component-duplicates accounts for all shared and unique tokens",
+        "passed": true
+      },
+      {
+        "claim": "react-component-duplicates reports reproducible Jaccard similarity",
+        "passed": true
+      },
+      {
+        "case": "react-component-duplicates-missing",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "react-component-duplicates excludes unrelated files",
+        "passed": true
+      },
+      {
+        "case": "react-hook-candidates",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "react-hook-candidates returns a positive finding for the intended files",
+        "passed": true
+      },
+      {
+        "claim": "react-hook-candidates accounts for all shared and unique tokens",
+        "passed": true
+      },
+      {
+        "case": "react-hook-candidates-missing",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "react-hook-candidates excludes unrelated files",
+        "passed": true
+      },
+      {
+        "case": "react-large-component-pressure",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "react-large-component-pressure returns a positive finding for the intended files",
+        "passed": true
+      },
+      {
+        "claim": "React pressure reports the exact constructed component and file line counts",
+        "passed": true
+      },
+      {
+        "case": "react-large-component-pressure-missing",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "react-large-component-pressure excludes unrelated files",
+        "passed": true
+      },
+      {
+        "case": "vue-component-duplicates",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "vue-component-duplicates returns a positive finding for the intended files",
+        "passed": true
+      },
+      {
+        "claim": "vue-component-duplicates accounts for all shared and unique tokens",
+        "passed": true
+      },
+      {
+        "claim": "vue-component-duplicates reports reproducible Jaccard similarity",
+        "passed": true
+      },
+      {
+        "case": "vue-component-duplicates-missing",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "vue-component-duplicates excludes unrelated files",
+        "passed": true
+      },
+      {
+        "case": "vue-composable-candidates",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "vue-composable-candidates returns a positive finding for the intended files",
+        "passed": true
+      },
+      {
+        "claim": "vue-composable-candidates accounts for all shared and unique tokens",
+        "passed": true
+      },
+      {
+        "case": "vue-composable-candidates-missing",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "vue-composable-candidates excludes unrelated files",
+        "passed": true
+      },
+      {
+        "case": "vue-large-view-pressure",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "vue-large-view-pressure returns a positive finding for the intended files",
+        "passed": true
+      },
+      {
+        "claim": "Vue pressure reports the exact constructed SFC and style line counts",
+        "passed": true
+      },
+      {
+        "case": "vue-large-view-pressure-missing",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "vue-large-view-pressure excludes unrelated files",
+        "passed": true
+      }
+    ],
+    "architecture": [
+      {
+        "case": "index-clean",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "hook-clean",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "clean committed architecture allows stop",
+        "passed": true
+      },
+      {
+        "case": "index-violation",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "case": "hook-forbidden-edge",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "quoted Unicode changed path triggers declared forbidden-edge enforcement",
+        "passed": true
+      },
+      {
+        "case": "architecture",
+        "passed": true,
+        "exit": 0
+      },
+      {
+        "claim": "architecture reports actual ui to core policy violation",
+        "passed": true
+      }
+    ],
+    "retirements": [
+      {
+        "command": "trace",
+        "exitCode": 1,
+        "stderr": "error: unknown command 'trace'\n(Did you mean surface?)\n",
+        "passed": true
+      },
+      {
+        "command": "reference-neighborhood",
+        "exitCode": 1,
+        "stderr": "error: unknown command 'reference-neighborhood'\n",
+        "passed": true
+      },
+      {
+        "command": "value-flow",
+        "exitCode": 1,
+        "stderr": "error: unknown command 'value-flow'\n",
+        "passed": true
+      },
+      {
+        "command": "reference-reachability",
+        "exitCode": 1,
+        "stderr": "error: unknown command 'reference-reachability'\n",
+        "passed": true
+      },
+      {
+        "command": "isolated",
+        "exitCode": 1,
+        "stderr": "error: unknown command 'isolated'\n",
+        "passed": true
+      },
+      {
+        "command": "similar-chains",
+        "exitCode": 1,
+        "stderr": "error: unknown command 'similar-chains'\n",
+        "passed": true
+      },
+      {
+        "command": "extract-candidates",
+        "exitCode": 1,
+        "stderr": "error: unknown command 'extract-candidates'\n",
+        "passed": true
+      },
+      {
+        "command": "wrapper-candidates",
+        "exitCode": 1,
+        "stderr": "error: unknown command 'wrapper-candidates'\n",
+        "passed": true
+      },
+      {
+        "command": "stale-abstractions",
+        "exitCode": 1,
+        "stderr": "error: unknown command 'stale-abstractions'\n",
+        "passed": true
+      },
+      {
+        "command": "complexity-hotspots",
+        "exitCode": 1,
+        "stderr": "error: unknown command 'complexity-hotspots'\n",
+        "passed": true
+      },
+      {
+        "command": "self-audit",
+        "exitCode": 1,
+        "stderr": "error: unknown command 'self-audit'\n",
+        "passed": true
+      }
+    ]
+  },
+  "timing": "Read commands, factual assertions, and architecture-hook checks ran after the final build. Other separate checks ran before the final unused-allowance coverage correction; their unchanged source behavior is also covered by the final full suite."
+}

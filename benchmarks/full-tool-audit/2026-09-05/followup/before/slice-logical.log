@@ -1,0 +1,1 @@
+{"kind":"scip-query-json-export","schemaVersion":1,"producer":{"name":"scip-query","version":"0.25.0"},"command":"dependence-slice","path":"/private/tmp/scip-followup-cli/slice-logical.json","bytes":24249,"sha256":"df70bc11b491d1a68f645e2ceea041d1f1eb8185395b62b5d1fdad09a46a0dd7"}

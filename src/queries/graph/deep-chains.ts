@@ -41,7 +41,7 @@ export function dependencyDepth(
   const graph = buildFileDepGraph(
     db,
     scope,
-    edgeBasis === 'imports' ? { scipEdges: 'imports-only', sourceEdges: 'imports-only' } : undefined,
+    edgeBasis === 'imports' ? { scipEdges: 'imports-only', sourceEdges: 'imports-and-reexports' } : undefined,
   );
 
   // 1. Condense mutually reachable files into dependency components.
@@ -110,15 +110,6 @@ export function dependencyDepth(
 
   results.sort((a, b) => b.depth - a.depth || a.chain.join('\0').localeCompare(b.chain.join('\0')));
   return dedupeSuffixChains(results).slice(0, limit);
-}
-
-/** @deprecated Prefer `dependencyDepth`, which names the computed graph property. */
-// scip-query: ignore-passthrough — deprecated public alias remains for callers while dependencyDepth owns the calculation.
-export function deepChains(
-  db: ScipDatabase,
-  opts: { limit?: number; scope?: string; minDepth?: number } = {},
-): DeepChainResult[] {
-  return dependencyDepth(db, opts);
 }
 
 function compareComponentPaths(

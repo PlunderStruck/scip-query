@@ -44,6 +44,31 @@ function commitIn(root: string, message: string, files: Record<string, string>):
 }
 
 describe('doc-drift', () => {
+  it('counts only scanned docs and retains every stale subject of a selected doc', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-doc-subject-coverage-'));
+    try {
+      gitIn(root, 'init');
+      const subjects = Object.fromEntries(
+        Array.from({ length: 10 }, (_, i) => [`src/item${i}.ts`, 'export const value = 0;\n']),
+      );
+      commitIn(root, 'document subjects', {
+        ...subjects,
+        'docs/guide.md': Object.keys(subjects).join('\n'),
+        'docs/unselected.md': 'A separate document.\n',
+      });
+      commitIn(
+        root,
+        'change every subject',
+        Object.fromEntries(Object.keys(subjects).map((p) => [p, 'export const value = 1;\n'])),
+      );
+      const result = docDrift(fakeDb(root), { doc: 'docs/guide.md' });
+      expect(result.docsScanned).toBe(1);
+      expect(result.findings[0]?.subjects).toHaveLength(10);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('reports stale cited files with line references and shared citation-kind policy', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-doc-drift-dedicated-'));
     try {

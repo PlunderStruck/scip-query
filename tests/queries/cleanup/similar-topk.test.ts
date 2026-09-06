@@ -114,7 +114,7 @@ describe('similarAll top-k collector', () => {
       expect.objectContaining({
         evidenceClass: 'domain-behavior',
         actionTier: 'direct',
-        recommendation: expect.stringContaining('extract/reuse'),
+        recommendation: expect.stringContaining('compare behavior'),
       }),
     );
   });

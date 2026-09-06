@@ -1,0 +1,655 @@
+{
+  "scope": "hand-written 13-file TypeScript compiler fixture",
+  "passed": 42,
+  "total": 42,
+  "checks": [
+    {
+      "command": "inventory",
+      "claim": "71 retained read commands ran with expected outcomes",
+      "passed": true,
+      "actual": 71,
+      "expected": 71
+    },
+    {
+      "command": "inventory",
+      "claim": "no unexpected invocation failures",
+      "passed": true,
+      "actual": [],
+      "expected": []
+    },
+    {
+      "command": "code",
+      "claim": "exact current source bytes excluding terminal newline",
+      "passed": true,
+      "actual": "import { sum } from '../core/math';\nimport { Store } from '../core/store';\nexport function runJob() {\n  const store = new Store();\n  const total = sum(1, 2);\n  store.write(total);\n  return total > 0 ? total : 0;\n}",
+      "expected": "import { sum } from '../core/math';\nimport { Store } from '../core/store';\nexport function runJob() {\n  const store = new Store();\n  const total = sum(1, 2);\n  store.write(total);\n  return total > 0 ? total : 0;\n}"
+    },
+    {
+      "command": "files",
+      "claim": "complete TS file inventory",
+      "passed": true,
+      "actual": [
+        "src/calls.ts",
+        "src/consumer.ts",
+        "src/core/math.ts",
+        "src/core/store.ts",
+        "src/cycle/a.ts",
+        "src/cycle/b.ts",
+        "src/duplicate/a.ts",
+        "src/duplicate/b.ts",
+        "src/first.ts",
+        "src/flow.ts",
+        "src/new.ts",
+        "src/second.ts",
+        "src/service/runner.ts"
+      ],
+      "expected": [
+        "src/calls.ts",
+        "src/consumer.ts",
+        "src/core/math.ts",
+        "src/core/store.ts",
+        "src/cycle/a.ts",
+        "src/cycle/b.ts",
+        "src/duplicate/a.ts",
+        "src/duplicate/b.ts",
+        "src/first.ts",
+        "src/flow.ts",
+        "src/new.ts",
+        "src/second.ts",
+        "src/service/runner.ts"
+      ]
+    },
+    {
+      "command": "search",
+      "claim": "literal match counts",
+      "passed": true,
+      "actual": [
+        1,
+        1
+      ],
+      "expected": [
+        1,
+        1
+      ]
+    },
+    {
+      "command": "search",
+      "claim": "literal occurrence position",
+      "passed": true,
+      "actual": [
+        [
+          "src/service/runner.ts",
+          4
+        ]
+      ],
+      "expected": [
+        [
+          "src/service/runner.ts",
+          4
+        ]
+      ]
+    },
+    {
+      "command": "methods",
+      "claim": "method names and lines exclude field",
+      "passed": true,
+      "actual": [
+        [
+          "read",
+          2
+        ],
+        [
+          "write",
+          3
+        ]
+      ],
+      "expected": [
+        [
+          "read",
+          2
+        ],
+        [
+          "write",
+          3
+        ]
+      ]
+    },
+    {
+      "command": "members",
+      "claim": "field and methods with exact identifier/declaration lines",
+      "passed": true,
+      "actual": [
+        [
+          "value.",
+          1
+        ],
+        [
+          "read().",
+          2
+        ],
+        [
+          "write().",
+          3
+        ]
+      ],
+      "expected": [
+        [
+          "value.",
+          1
+        ],
+        [
+          "read().",
+          2
+        ],
+        [
+          "write().",
+          3
+        ]
+      ]
+    },
+    {
+      "command": "hierarchy",
+      "claim": "all ancestry identities are full indexed symbols",
+      "passed": true,
+      "actual": true,
+      "expected": true
+    },
+    {
+      "command": "hierarchy",
+      "claim": "indexed owner order",
+      "passed": true,
+      "actual": [
+        "Store#read().",
+        "Store#",
+        ""
+      ],
+      "expected": [
+        "Store#read().",
+        "Store#",
+        ""
+      ]
+    },
+    {
+      "command": "system",
+      "claim": "exact directory membership",
+      "passed": true,
+      "actual": [
+        "src/core/math.ts",
+        "src/core/store.ts"
+      ],
+      "expected": [
+        "src/core/math.ts",
+        "src/core/store.ts"
+      ]
+    },
+    {
+      "command": "system",
+      "claim": "external consumer direction",
+      "passed": true,
+      "actual": [
+        "src/service/runner.ts"
+      ],
+      "expected": [
+        "src/service/runner.ts"
+      ]
+    },
+    {
+      "command": "system",
+      "claim": "no outgoing internal-repository dependency from core",
+      "passed": true,
+      "actual": [],
+      "expected": []
+    },
+    {
+      "command": "surface",
+      "claim": "only observed external consumer",
+      "passed": true,
+      "actual": [
+        "src/service/runner.ts"
+      ],
+      "expected": [
+        "src/service/runner.ts"
+      ]
+    },
+    {
+      "command": "surface",
+      "claim": "unused read method absent; used write method present",
+      "passed": true,
+      "actual": [
+        false,
+        true
+      ],
+      "expected": [
+        false,
+        true
+      ]
+    },
+    {
+      "command": "locality-candidates",
+      "claim": "sum symbol not consumer filename substring",
+      "passed": true,
+      "actual": [
+        [
+          "symbol",
+          "src/core/math.ts"
+        ]
+      ],
+      "expected": [
+        [
+          "symbol",
+          "src/core/math.ts"
+        ]
+      ]
+    },
+    {
+      "command": "deps",
+      "claim": "outgoing files",
+      "passed": true,
+      "actual": [
+        "src/core/math.ts",
+        "src/core/store.ts"
+      ],
+      "expected": [
+        "src/core/math.ts",
+        "src/core/store.ts"
+      ]
+    },
+    {
+      "command": "rdeps",
+      "claim": "incoming files",
+      "passed": true,
+      "actual": [
+        "src/service/runner.ts"
+      ],
+      "expected": [
+        "src/service/runner.ts"
+      ]
+    },
+    {
+      "command": "imports",
+      "claim": "imported bindings",
+      "passed": true,
+      "actual": [
+        [
+          "Store",
+          "src/core/store.ts"
+        ],
+        [
+          "sum",
+          "src/core/math.ts"
+        ]
+      ],
+      "expected": [
+        [
+          "Store",
+          "src/core/store.ts"
+        ],
+        [
+          "sum",
+          "src/core/math.ts"
+        ]
+      ]
+    },
+    {
+      "command": "refs",
+      "claim": "import and call references remain distinct",
+      "passed": true,
+      "actual": [
+        [
+          "src/service/runner.ts",
+          0
+        ],
+        [
+          "src/service/runner.ts",
+          4
+        ]
+      ],
+      "expected": [
+        [
+          "src/service/runner.ts",
+          0
+        ],
+        [
+          "src/service/runner.ts",
+          4
+        ]
+      ]
+    },
+    {
+      "command": "fan-in",
+      "claim": "one reference file, not two occurrences",
+      "passed": true,
+      "actual": [
+        1
+      ],
+      "expected": [
+        1
+      ]
+    },
+    {
+      "command": "cycles",
+      "claim": "one real component, closed witness",
+      "passed": true,
+      "actual": [
+        [
+          [
+            "src/cycle/a.ts",
+            "src/cycle/b.ts"
+          ],
+          [
+            "src/cycle/a.ts",
+            "src/cycle/b.ts",
+            "src/cycle/a.ts"
+          ]
+        ]
+      ],
+      "expected": [
+        [
+          [
+            "src/cycle/a.ts",
+            "src/cycle/b.ts"
+          ],
+          [
+            "src/cycle/a.ts",
+            "src/cycle/b.ts",
+            "src/cycle/a.ts"
+          ]
+        ]
+      ]
+    },
+    {
+      "command": "architecture",
+      "claim": "declared service to core edge",
+      "passed": true,
+      "actual": [
+        [
+          "service",
+          "core",
+          "allowed",
+          2
+        ]
+      ],
+      "expected": [
+        [
+          "service",
+          "core",
+          "allowed",
+          2
+        ]
+      ]
+    },
+    {
+      "command": "architecture",
+      "claim": "partial policy file coverage is disclosed",
+      "passed": true,
+      "actual": [
+        13,
+        5,
+        8
+      ],
+      "expected": [
+        13,
+        5,
+        8
+      ]
+    },
+    {
+      "command": "entrypoints",
+      "claim": "export named main alone is not an external entrypoint",
+      "passed": true,
+      "actual": [],
+      "expected": []
+    },
+    {
+      "command": "entry-map",
+      "claim": "non-entry callable explicitly refused",
+      "passed": true,
+      "actual": "not-entry",
+      "expected": "not-entry"
+    },
+    {
+      "command": "call-graph",
+      "claim": "three exact direct targets, no unused read",
+      "passed": true,
+      "actual": [
+        [
+          "src:core:math:sum()",
+          "exact"
+        ],
+        [
+          "src:core:store:Store",
+          "exact"
+        ],
+        [
+          "src:core:store:Store:write()",
+          "exact"
+        ]
+      ],
+      "expected": [
+        [
+          "src:core:math:sum()",
+          "exact"
+        ],
+        [
+          "src:core:store:Store",
+          "exact"
+        ],
+        [
+          "src:core:store:Store:write()",
+          "exact"
+        ]
+      ]
+    },
+    {
+      "command": "affected",
+      "claim": "two downstream levels",
+      "passed": true,
+      "actual": [
+        [
+          "src/service/runner.ts",
+          1
+        ],
+        [
+          "src/consumer.ts",
+          2
+        ]
+      ],
+      "expected": [
+        [
+          "src/service/runner.ts",
+          1
+        ],
+        [
+          "src/consumer.ts",
+          2
+        ]
+      ]
+    },
+    {
+      "command": "complexity",
+      "claim": "one conditional and three actual call targets",
+      "passed": true,
+      "actual": [
+        1,
+        2,
+        3,
+        0
+      ],
+      "expected": [
+        1,
+        2,
+        3,
+        0
+      ]
+    },
+    {
+      "command": "diff-impact",
+      "claim": "modified and untracked symbols",
+      "passed": true,
+      "actual": [
+        "src:new:newFunction()",
+        "src:service:runner:runJob()"
+      ],
+      "expected": [
+        "src:new:newFunction()",
+        "src:service:runner:runJob()"
+      ]
+    },
+    {
+      "command": "diff-impact",
+      "claim": "downstream consumer",
+      "passed": true,
+      "actual": [
+        "src/consumer.ts"
+      ],
+      "expected": [
+        "src/consumer.ts"
+      ]
+    },
+    {
+      "command": "review",
+      "claim": "changed function status",
+      "passed": true,
+      "actual": [
+        [
+          "newFunction",
+          "added"
+        ],
+        [
+          "runJob",
+          "modified"
+        ]
+      ],
+      "expected": [
+        [
+          "newFunction",
+          "added"
+        ],
+        [
+          "runJob",
+          "modified"
+        ]
+      ]
+    },
+    {
+      "command": "review",
+      "claim": "modified complexity deltas",
+      "passed": true,
+      "actual": {
+        "cyclomatic": 1,
+        "cognitive": 1
+      },
+      "expected": {
+        "cyclomatic": 1,
+        "cognitive": 1
+      }
+    },
+    {
+      "command": "review",
+      "claim": "missing measured coverage remains unavailable",
+      "passed": true,
+      "actual": [
+        "unavailable",
+        "unavailable"
+      ],
+      "expected": [
+        "unavailable",
+        "unavailable"
+      ]
+    },
+    {
+      "command": "review",
+      "claim": "missing coverage does not produce CRAP numbers",
+      "passed": true,
+      "actual": false,
+      "expected": false
+    },
+    {
+      "command": "health",
+      "claim": "cycle detected without an index-dependent graph call",
+      "passed": true,
+      "actual": [
+        "dependency-cycle"
+      ],
+      "expected": [
+        "dependency-cycle"
+      ]
+    },
+    {
+      "command": "health",
+      "claim": "all TS files/functions analyzed",
+      "passed": true,
+      "actual": [
+        13,
+        28,
+        []
+      ],
+      "expected": [
+        13,
+        28,
+        []
+      ]
+    },
+    {
+      "command": "duplicate-bodies",
+      "claim": "exact small body pair",
+      "passed": true,
+      "actual": [
+        [
+          "src:duplicate:a:formatOne()",
+          "src:duplicate:b:formatTwo()"
+        ]
+      ],
+      "expected": [
+        [
+          "src:duplicate:a:formatOne()",
+          "src:duplicate:b:formatTwo()"
+        ]
+      ]
+    },
+    {
+      "command": "evidence",
+      "claim": "requested family and direction",
+      "passed": true,
+      "actual": [
+        [
+          "execution"
+        ],
+        "outgoing"
+      ],
+      "expected": [
+        [
+          "execution"
+        ],
+        "outgoing"
+      ]
+    },
+    {
+      "command": "dependence-slice",
+      "claim": "exact occurrence is selected",
+      "passed": true,
+      "actual": "matched",
+      "expected": "matched"
+    },
+    {
+      "command": "dependence-slice",
+      "claim": "slice excludes unrelated store state",
+      "passed": true,
+      "actual": [
+        "sum",
+        "total"
+      ],
+      "expected": [
+        "sum",
+        "total"
+      ]
+    },
+    {
+      "command": "config-validate",
+      "claim": "valid architecture config accepted",
+      "passed": true,
+      "actual": [],
+      "expected": []
+    }
+  ]
+}

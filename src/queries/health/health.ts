@@ -1,7 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { isEntrySurface, isRootedSymbol } from '../../analysis/file-classifier.js';
 import { dead } from '../cleanup/dead.js';
-import { isolated } from '../cleanup/isolated.js';
 import { cycles, dependencyCycles, type CycleResult } from '../graph/cycles.js';
 import { similarAllCount } from '../cleanup/similar.js';
 import { duplicateBodyScan } from '../cleanup/duplicate-bodies.js';
@@ -15,34 +14,27 @@ import { reactLargeComponentPressureScan } from '../frontend/react-large-compone
 import { vueComponentDuplicates } from '../frontend/vue-component-duplicates.js';
 import { vueComposableCandidates } from '../frontend/vue-composable-candidates.js';
 import { vueLargeViewPressure } from '../frontend/vue-large-view-pressure.js';
-import { extractCandidates } from '../cleanup/extract-candidates.js';
 import { gitProvenance } from '../../analysis/git-provenance.js';
 import { readSqliteGenerationState } from '../../storage/sqlite-generation.js';
-import { wrapperCandidates, type WrapperCandidate } from '../cleanup/wrapper-candidates.js';
 import { passthroughCandidates } from '../cleanup/passthrough-candidates.js';
-import { staleAbstractions } from '../cleanup/stale-abstractions.js';
 import { drift } from '../cleanup/drift.js';
-import { complexityHotspots } from '../quality/complexity-hotspots.js';
 import { stats } from '../navigation/stats.js';
 import { coChange, type CoChangeFinding } from '../cleanup/co-change.js';
-import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import type { GitHistoryMode } from '../../analysis/git-history.js';
+import { gitEvidenceProduct } from '../../analysis/git-history.js';
 import { getSuppressionInventory } from '../../analysis/suppressions.js';
 import { evaluateCoverageContracts } from '../cleanup/coverage-contracts.js';
-import { buildHealthReport } from './health-report.js';
 import { HEALTH_DETECTOR_PROFILES } from '../internal/health-detector-profiles.js';
 import { clearWholeProjectEvidenceCaches } from '../internal/cache-invalidation.js';
 import { requestGarbageCollection } from './health-cache-control.js';
 import type { HealthProvenance, HealthReport } from './health-report.js';
-
+import { buildHealthReport } from './health-report.js';
 import type {
-  ComplexitySummary,
   CountLocSummary,
   DriftSummary,
   GitEvidenceSummary,
   HealthAnalyses,
   PolicyExclusionSummary,
-  StaleSummary,
   SuppressionSummary,
 } from './health-types.js';
 import { assessDetectorEvidenceContracts } from './detector-evidence-contracts.js';
@@ -50,24 +42,18 @@ import { assessDetectorEvidenceContracts } from './detector-evidence-contracts.j
 interface HealthBudget {
   candidateScanLimit: number | undefined;
   candidateResultLimit: number;
-  complexityResultLimit: number;
   semantic: boolean;
   gitHistoryMode: GitHistoryMode;
   releaseCachesBetweenPhases: boolean;
   warnings: string[];
 }
-
-const EXTREME_COMPLEXITY_SCORE = 50;
-const EXTREME_COMPLEXITY_MIN_BRANCHES = 10;
 const LARGE_HEALTH_SYMBOL_THRESHOLD = 25_000;
 const LARGE_HEALTH_DOCUMENT_THRESHOLD = 2_500;
 const DEFAULT_HEALTH_CANDIDATE_SCAN_LIMIT = 2_500;
 const DEFAULT_HEALTH_CANDIDATE_RESULT_LIMIT = 50;
-const DEFAULT_HEALTH_COMPLEXITY_RESULT_LIMIT = 10;
 export const HEALTH_PHASES = [
   'overview',
   'dead',
-  'isolated',
   'cycles',
   'similar',
   'duplicate-bodies',
@@ -78,12 +64,8 @@ export const HEALTH_PHASES = [
   'vue-component-duplicates',
   'vue-composable-candidates',
   'vue-large-view-pressure',
-  'extract-candidates',
-  'wrapper-candidates',
   'passthrough-candidates',
-  'stale-abstractions',
   'drift',
-  'complexity-hotspots',
   'git-evidence',
   'suppressions',
   'coverage-contracts',
@@ -94,7 +76,6 @@ export type HealthPhaseName = (typeof HEALTH_PHASES)[number];
 type HealthPhaseResult =
   | { phase: 'overview'; statsResult: ReturnType<typeof stats>; warnings: string[] }
   | { phase: 'dead'; dead: CountLocSummary }
-  | { phase: 'isolated'; isolated: CountLocSummary }
   | { phase: 'cycles'; realCycleCount: number; cycleExclusions: PolicyExclusionSummary[] }
   | { phase: 'similar'; similarCount: number }
   | { phase: 'duplicate-bodies'; duplicateBodies: CountLocSummary }
@@ -105,12 +86,8 @@ type HealthPhaseResult =
   | { phase: 'vue-component-duplicates'; vueComponentDuplicates: CountLocSummary }
   | { phase: 'vue-composable-candidates'; vueComposableCandidates: CountLocSummary }
   | { phase: 'vue-large-view-pressure'; vueLargeViewPressure: CountLocSummary }
-  | { phase: 'extract-candidates'; extractCount: number; extractExclusions: PolicyExclusionSummary[] }
-  | { phase: 'wrapper-candidates'; wrappers: CountLocSummary }
   | { phase: 'passthrough-candidates'; passthroughs: CountLocSummary }
-  | { phase: 'stale-abstractions'; stale: StaleSummary }
   | { phase: 'drift'; drift: DriftSummary }
-  | { phase: 'complexity-hotspots'; complexity: ComplexitySummary }
   | { phase: 'git-evidence'; gitEvidence: GitEvidenceSummary | null }
   | { phase: 'suppressions'; suppressions: SuppressionSummary }
   | { phase: 'coverage-contracts'; coverageContracts: CountLocSummary };
@@ -123,18 +100,21 @@ type HealthPhaseRunner = (
 ) => HealthPhaseResult;
 
 const HEALTH_PHASE_RUNNERS: Record<HealthPhaseName, HealthPhaseRunner> = {
-  overview: (_db, _scope, budget, statsResult) => ({
+  overview: (_db, scope, budget, statsResult) => ({
     phase: 'overview',
     statsResult,
-    warnings: budget.warnings,
+    warnings: [
+      ...budget.warnings,
+      ...(scope
+        ? [
+            'Scope filters detector candidates; repository statistics, history and coverage contracts remain global. A scoped graph cannot establish repository-wide cycle freedom.',
+          ]
+        : []),
+    ],
   }),
   dead: (db, scope, budget) => ({
     phase: 'dead',
     dead: summarizeHealthDead(db, scope, budget),
-  }),
-  isolated: (db, scope, budget) => ({
-    phase: 'isolated',
-    isolated: summarizeHealthIsolated(db, scope, budget),
   }),
   cycles: (db, scope, budget) => ({
     phase: 'cycles',
@@ -176,29 +156,13 @@ const HEALTH_PHASE_RUNNERS: Record<HealthPhaseName, HealthPhaseRunner> = {
     phase: 'vue-large-view-pressure',
     vueLargeViewPressure: summarizeVueLargeViewPressure(db, scope, budget),
   }),
-  'extract-candidates': (db, scope, budget) => ({
-    phase: 'extract-candidates',
-    ...summarizeExtractionCandidates(db, scope, budget),
-  }),
-  'wrapper-candidates': (db, scope, budget) => ({
-    phase: 'wrapper-candidates',
-    wrappers: summarizeHealthWrappers(db, scope, budget),
-  }),
   'passthrough-candidates': (db, scope, budget) => ({
     phase: 'passthrough-candidates',
     passthroughs: summarizeHealthPassthroughs(db, scope, budget),
   }),
-  'stale-abstractions': (db, scope, budget) => ({
-    phase: 'stale-abstractions',
-    stale: summarizeHealthStaleAbstractions(db, scope, budget),
-  }),
   drift: (db, scope, budget) => ({
     phase: 'drift',
     drift: summarizeHealthDrift(db, scope, budget),
-  }),
-  'complexity-hotspots': (db, scope, budget) => ({
-    phase: 'complexity-hotspots',
-    complexity: summarizeHealthComplexity(db, scope, budget),
   }),
   'git-evidence': (db, _scope, budget) => ({
     phase: 'git-evidence',
@@ -296,7 +260,6 @@ function healthAnalysesFromPhases(phaseResults: readonly HealthPhaseResult[]): H
     warnings: overview.warnings,
     detectorEvidence: assessDetectorEvidenceContracts(),
     dead: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'dead' }>>(phaseResults, 'dead').dead,
-    isolated: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'isolated' }>>(phaseResults, 'isolated').isolated,
     realCycleCount: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'cycles' }>>(phaseResults, 'cycles')
       .realCycleCount,
     cycleExclusions: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'cycles' }>>(phaseResults, 'cycles')
@@ -332,31 +295,11 @@ function healthAnalysesFromPhases(phaseResults: readonly HealthPhaseResult[]): H
       phaseResults,
       'vue-large-view-pressure',
     ).vueLargeViewPressure,
-    extractCount: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'extract-candidates' }>>(
-      phaseResults,
-      'extract-candidates',
-    ).extractCount,
-    extractExclusions: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'extract-candidates' }>>(
-      phaseResults,
-      'extract-candidates',
-    ).extractExclusions,
-    wrappers: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'wrapper-candidates' }>>(
-      phaseResults,
-      'wrapper-candidates',
-    ).wrappers,
     passthroughs: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'passthrough-candidates' }>>(
       phaseResults,
       'passthrough-candidates',
     ).passthroughs,
-    stale: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'stale-abstractions' }>>(
-      phaseResults,
-      'stale-abstractions',
-    ).stale,
     drift: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'drift' }>>(phaseResults, 'drift').drift,
-    complexity: requiredHealthPhase<Extract<HealthPhaseResult, { phase: 'complexity-hotspots' }>>(
-      phaseResults,
-      'complexity-hotspots',
-    ).complexity,
     // Optional phases — older phase orchestrations may not run them.
     gitEvidence:
       optionalHealthPhase<Extract<HealthPhaseResult, { phase: 'git-evidence' }>>(phaseResults, 'git-evidence')
@@ -425,24 +368,13 @@ function summarizeHealthDead(db: ScipDatabase, scope: string | undefined, budget
   });
 }
 
-function summarizeHealthIsolated(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): CountLocSummary {
-  return runHealthPhase(db, budget, 'isolated', () => {
-    const isolatedResult = isolated(db, {
-      scope,
-      ...HEALTH_DETECTOR_PROFILES.isolated,
-      scanLimit: budget.candidateScanLimit,
-      semantic: budget.semantic,
-    });
-    return summarizeLoc(filterHealthIsolatedSymbols(db, isolatedResult));
-  });
-}
-
 /**
  * Health counts cycles on the import graph: a file that imports a file that
- * imports it back is a runtime dependency cycle a reader can break. The
+ * imports or re-exports it back is a static module-dependency cycle. This
+ * includes type-only imports and does not establish a runtime fault. The
  * default `cycles` command keeps the wider symbol-reference basis, where
  * type references also form components; a component that cycles only there
- * is disclosed as a policy exclusion instead of counted against the score.
+ * is disclosed as a policy exclusion instead of reported as an import cycle.
  */
 function countRealHealthCycles(
   db: ScipDatabase,
@@ -450,8 +382,8 @@ function countRealHealthCycles(
   budget: HealthBudget,
 ): { realCycleCount: number; cycleExclusions: PolicyExclusionSummary[] } {
   return runHealthPhase(db, budget, 'cycles', () => {
-    const importCycles = dependencyCycles(db, { scope, edgeBasis: 'imports' }).filter((cycle) => cycle.kind === 'real');
-    const referenceCycles = cycles(db, { scope }).filter((cycle) => cycle.kind === 'real');
+    const importCycles = dependencyCycles(db, { scope, edgeBasis: 'imports' });
+    const referenceCycles = cycles(db, { scope });
     const importFiles = new Set(importCycles.flatMap((cycle) => cycle.component ?? cycle.path));
     const referenceOnly = referenceCycles.filter(
       (cycle: CycleResult) => !(cycle.component ?? cycle.path).some((file) => importFiles.has(file)),
@@ -482,41 +414,6 @@ function countSimilarHealthCandidates(db: ScipDatabase, scope: string | undefine
     }),
   );
   return Math.min(count, budget.candidateResultLimit);
-}
-
-/**
- * Signal-tier seams count; wide-interface regions are listed by the command
- * at support tier and disclosed here as a policy exclusion.
- */
-function summarizeExtractionCandidates(
-  db: ScipDatabase,
-  scope: string | undefined,
-  budget: HealthBudget,
-): { extractCount: number; extractExclusions: PolicyExclusionSummary[] } {
-  return runHealthPhase(db, budget, 'extract-candidates', () => {
-    const results = extractCandidates(db, {
-      scope,
-      ...HEALTH_DETECTOR_PROFILES.extract,
-      limit: budget.candidateResultLimit,
-      scanLimit: budget.candidateScanLimit,
-      semantic: budget.semantic,
-    });
-    const support = results.filter((candidate) => candidate.actionTier === 'support').length;
-    return {
-      extractCount: results.length - support,
-      extractExclusions:
-        support > 0
-          ? [
-              {
-                reason: 'wide-interface-regions',
-                detail:
-                  'selected region would take more than five locals in or hand more than two back; listed by extract-candidates at support tier',
-                count: support,
-              },
-            ]
-          : [],
-    };
-  });
 }
 
 function summarizeDuplicateBodies(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): CountLocSummary {
@@ -693,37 +590,6 @@ function summarizeVueLargeViewPressure(
   });
 }
 
-function summarizeHealthWrappers(db: ScipDatabase, scope: string | undefined, budget: HealthBudget): CountLocSummary {
-  return runHealthPhase(db, budget, 'wrapper-candidates', () => {
-    const results = wrapperCandidates(db, {
-      scope,
-      ...HEALTH_DETECTOR_PROFILES.wrappers,
-      limit: budget.candidateResultLimit,
-      scanLimit: budget.candidateScanLimit,
-      semantic: budget.semantic,
-    });
-    // The wrapper claim is "one consumer and wrapper-shaped delegation"; a
-    // single-consumer helper that computes something satisfies only half of
-    // it, so it stays a disclosed review lead rather than a counted finding.
-    const forwarding = results.filter((candidate) => candidate.bodyShape === 'forwarding');
-    const helpers = results.length - forwarding.length;
-    return {
-      ...summarizeLocWithScore(forwarding, wrapperHealthScore),
-      exclusions:
-        helpers > 0
-          ? [
-              {
-                reason: 'single-consumer-helpers',
-                detail:
-                  'single-consumer callables whose body computes or branches instead of forwarding one call; listed by wrapper-candidates as signal tier',
-                count: helpers,
-              },
-            ]
-          : [],
-    };
-  });
-}
-
 function summarizeHealthPassthroughs(
   db: ScipDatabase,
   scope: string | undefined,
@@ -738,30 +604,6 @@ function summarizeHealthPassthroughs(
       semantic: budget.semantic,
     });
     return summarizeLocWithScore(results, passthroughHealthScore);
-  });
-}
-
-function summarizeHealthStaleAbstractions(
-  db: ScipDatabase,
-  scope: string | undefined,
-  budget: HealthBudget,
-): StaleSummary {
-  return runHealthPhase(db, budget, 'stale-abstractions', () => {
-    const staleResult = staleAbstractions(db, {
-      scope,
-      ...HEALTH_DETECTOR_PROFILES.stale,
-      limit: budget.candidateResultLimit,
-      scanLimit: budget.candidateScanLimit,
-      semantic: budget.semantic,
-    });
-    const unused = staleResult.filter((s) => s.consumers === 0).length;
-    return {
-      count: staleResult.length,
-      loc: staleResult.reduce((sum, r) => sum + r.loc, 0),
-      files: [...new Set(staleResult.map((r) => r.file))],
-      unused,
-      singleUse: staleResult.length - unused,
-    };
   });
 }
 
@@ -871,75 +713,32 @@ function summarizeHealthDrift(db: ScipDatabase, scope: string | undefined, budge
   });
 }
 
-function summarizeHealthComplexity(
-  db: ScipDatabase,
-  scope: string | undefined,
-  budget: HealthBudget,
-): ComplexitySummary {
-  return runHealthPhase(db, budget, 'complexity-hotspots', () => {
-    const complexResult = complexityHotspots(db, {
-      scope,
-      minLoc: 10,
-      limit: budget.complexityResultLimit,
-      scanLimit: budget.candidateScanLimit,
-      semantic: budget.semantic,
-    });
-    // The score multiplies fan-in, so a 50-line primitive that every file
-    // imports outranks genuinely tangled code. "Extreme" is reserved for
-    // callables that also carry branch pressure; a popular leaf is a hot
-    // dependency, not a complexity hotspot.
-    const extreme = complexResult.filter(
-      (r) => r.score > EXTREME_COMPLEXITY_SCORE && r.branches >= EXTREME_COMPLEXITY_MIN_BRANCHES,
-    );
-    const popularLeaves = complexResult.filter(
-      (r) => r.score > EXTREME_COMPLEXITY_SCORE && r.branches < EXTREME_COMPLEXITY_MIN_BRANCHES,
-    ).length;
-    return {
-      top: complexResult.slice(0, 5).map((r) => ({
-        symbol: r.shortName,
-        score: r.score,
-        file: r.file,
-      })),
-      extremeCount: extreme.length,
-      exclusions:
-        popularLeaves > 0
-          ? [
-              {
-                reason: 'popular-low-branch-callables',
-                detail: `callables above the extreme score only through fan-in, with fewer than ${EXTREME_COMPLEXITY_MIN_BRANCHES} branches`,
-                count: popularLeaves,
-              },
-            ]
-          : [],
-    };
-  });
-}
-
 function healthBudget(statsResult: ReturnType<typeof stats>, full: boolean): HealthBudget {
   const isLargeIndex =
     statsResult.symbols >= LARGE_HEALTH_SYMBOL_THRESHOLD || statsResult.documents >= LARGE_HEALTH_DOCUMENT_THRESHOLD;
   const candidateResultLimit = full ? Number.POSITIVE_INFINITY : DEFAULT_HEALTH_CANDIDATE_RESULT_LIMIT;
-  const complexityResultLimit = full ? Number.POSITIVE_INFINITY : DEFAULT_HEALTH_COMPLEXITY_RESULT_LIMIT;
 
   if (!isLargeIndex || full) {
     return {
       candidateScanLimit: undefined,
       candidateResultLimit,
-      complexityResultLimit,
       semantic: true,
       gitHistoryMode: full ? 'full' : 'bounded',
       releaseCachesBetweenPhases: true,
       warnings:
         full && isLargeIndex
           ? ['Large index detected; running health without candidate scan or result caps because full mode is enabled.']
-          : [],
+          : full
+            ? []
+            : [
+                `Candidate result counts are capped at ${DEFAULT_HEALTH_CANDIDATE_RESULT_LIMIT}; history uses a bounded window. Enable full mode for unbounded analysis.`,
+              ],
     };
   }
 
   return {
     candidateScanLimit: DEFAULT_HEALTH_CANDIDATE_SCAN_LIMIT,
     candidateResultLimit,
-    complexityResultLimit,
     semantic: false,
     gitHistoryMode: 'bounded',
     releaseCachesBetweenPhases: true,
@@ -978,15 +777,6 @@ function filterHealthDeadSymbols(
       !isEntrySurface(db, symbol.relativePath) &&
       !isRootedSymbol(db, symbol.symbol, symbol.relativePath) &&
       symbol.kind === 'dead-code',
-  );
-}
-
-function filterHealthIsolatedSymbols(
-  db: ScipDatabase,
-  symbols: Array<{ relativePath: string; symbol: string; loc: number }>,
-): Array<{ loc: number; relativePath: string }> {
-  return symbols.filter(
-    (symbol) => !isEntrySurface(db, symbol.relativePath) && !isRootedSymbol(db, symbol.symbol, symbol.relativePath),
   );
 }
 
@@ -1222,10 +1012,6 @@ function normalizeBehaviorName(name: string): string {
     .toLowerCase();
 }
 
-function wrapperHealthScore(candidate: WrapperCandidate): number {
-  return candidate.actionTier === 'signal' ? 0.25 : 1;
-}
-
 function passthroughHealthScore(candidate: { actionTier?: 'direct' | 'signal' }): number {
   return candidate.actionTier === 'signal' ? 0.25 : 1;
 }
@@ -1238,7 +1024,7 @@ function hiddenCouplingHealthScore(finding: Pick<CoChangeFinding, 'commitScope' 
 }
 
 /**
- * Whether a co-change pair is hidden coupling in the sense the score claims:
+ * Whether a co-change pair is a candidate for hidden coupling:
  * two source units that implement one concept without a visible link. A
  * document that changes alongside the code it describes is documentation
  * kept in sync (doc-drift owns the failure mode); a generated artifact

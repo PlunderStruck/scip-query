@@ -8,10 +8,8 @@ import { health } from '../../../src/queries/health/health.js';
 import { cycles } from '../../../src/queries/graph/cycles.js';
 import { dead } from '../../../src/queries/cleanup/dead.js';
 import { duplicateBodies } from '../../../src/queries/cleanup/duplicate-bodies.js';
-import { extractCandidates } from '../../../src/queries/cleanup/extract-candidates.js';
 import { passthroughCandidates } from '../../../src/queries/cleanup/passthrough-candidates.js';
 import { twinDrift } from '../../../src/queries/cleanup/twin-drift.js';
-import { wrapperCandidates } from '../../../src/queries/cleanup/wrapper-candidates.js';
 import { reactComponentDuplicates } from '../../../src/queries/frontend/react-component-duplicates.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fixture.js';
 
@@ -282,23 +280,11 @@ describe('seeded defect recall', () => {
         expect.arrayContaining([expect.stringContaining('outerWork')]),
       );
 
-      expect(wrapperCandidates(db, { semantic: false })).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ shortName: expect.stringContaining('relayNormalize'), bodyShape: 'forwarding' }),
-        ]),
-      );
-
       expect(
         reactComponentDuplicates(db, { minSimilarity: 0.6, minTokens: 6 }).map((pair) =>
           [pair.componentA, pair.componentB].sort().join('+'),
         ),
       ).toEqual(['IncidentPanel+IssuePanel']);
-
-      const seams = extractCandidates(db, { semantic: false });
-      expect(seams.map((candidate) => candidate.shortName)).toEqual(['src:seam/orchestrate:orchestrateImport()']);
-      expect(seams[0]!.regions.map((region) => [region.startLine, region.endLine, region.callees.length])).toEqual([
-        [6, 13, 6],
-      ]);
 
       const report = health(db, { full: true });
       expect(report.findings).toEqual(
@@ -306,13 +292,13 @@ describe('seeded defect recall', () => {
           cycles: 1,
           twinDriftGroups: 1,
           reactComponentDuplicatePairs: 1,
-          extractionCandidates: 1,
         }),
       );
       expect(report.findings.duplicateBodyGroups).toBeGreaterThanOrEqual(1);
       expect(report.findings.deadSymbols).toBeGreaterThanOrEqual(1);
       expect(report.findings.passthroughs).toBeGreaterThanOrEqual(1);
-      expect(report.findings.wrappers).toBeGreaterThanOrEqual(1);
+      expect(report.findings).not.toHaveProperty('wrappers');
+      expect(report.findings).not.toHaveProperty('extractionCandidates');
     } finally {
       db.close();
     }

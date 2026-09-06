@@ -53,12 +53,8 @@
         "paths": ["src/queries/cleanup/**"]
       },
       {
-        "name": "queries-compatibility",
-        "paths": ["src/queries/compatibility/**"]
-      },
-      {
         "name": "queries-facade",
-        "paths": ["src/queries/index.ts", "src/queries/public-query-entries.ts"]
+        "paths": ["src/queries/index.ts", "src/queries/public-query-entries.ts", "src/queries/service-queries.ts"]
       },
       {
         "name": "queries-frontend",
@@ -149,7 +145,6 @@
           "src/runtime/health-report-cache.ts",
           "src/runtime/index-freshness.ts",
           "src/runtime/isolated-analysis-runner.ts",
-          "src/runtime/navigation-session.ts",
           "src/runtime/observation-receipt.ts",
           "src/runtime/output-pagination.ts",
           "src/runtime/project-readiness.ts",
@@ -222,7 +217,11 @@
       {
         "name": "source",
         "paths": ["src/source/**", "src/language-parsers/**"],
-        "maxFiles": 61
+        "maxFiles": 67
+      },
+      {
+        "name": "benchmark-fixture",
+        "paths": ["benchmarks/change/fixture/src/**"]
       },
       {
         "name": "storage",
@@ -241,11 +240,107 @@
         "paths": ["src/symbols/references/**"]
       },
       {
-        "name": "tla",
-        "paths": ["src/tla/**"]
+        "name": "agent-evaluation-tools",
+        "paths": [
+          "scripts/change-benchmark-core.mjs",
+          "scripts/codex-change-trial.mjs",
+          "scripts/codex-exploration-sandbox.mjs",
+          "scripts/codex-exploration-trial-core.mjs"
+        ],
+        "subUnits": "file",
+        "maxFiles": 4
+      },
+      {
+        "name": "coverage-recorder",
+        "paths": ["scripts/record-review-coverage.mjs"],
+        "subUnits": "file",
+        "maxFiles": 1
+      },
+      {
+        "name": "build-configuration",
+        "paths": ["eslint.config.js", "tsup.config.ts", "vitest.config.ts"]
+      },
+      {
+        "name": "release-tooling",
+        "paths": [
+          "scripts/build-scip-windows.mjs",
+          "scripts/npm-release-state.ts",
+          "scripts/npm-release.ts",
+          "scripts/publish-scip-windows.ts",
+          "scripts/release-npm-guard.ts",
+          "scripts/release-npm.ts",
+          "scripts/scip-windows-package-identity.ts",
+          "scripts/scip-windows-provenance.mjs",
+          "scripts/scip-windows-release.ts",
+          "scripts/verify-scip-windows-registry.ts",
+          "scripts/verify-scip-windows.mjs"
+        ]
+      },
+      {
+        "name": "performance-tooling",
+        "paths": [
+          "scripts/bench-native-symbol-leaf.mjs",
+          "scripts/benchmark-agent-output.ts",
+          "scripts/benchmark-cold-reindex.ts",
+          "scripts/benchmark-edit-latency.ts",
+          "scripts/benchmark-graph-literal.ts",
+          "scripts/benchmark-query-service.ts",
+          "scripts/benchmark-reindex-accounting.ts",
+          "scripts/benchmark-source-search.ts",
+          "scripts/cache-lifecycle-soak.ts",
+          "scripts/profile-scoreboard.mjs"
+        ]
+      },
+      {
+        "name": "contract-tooling",
+        "paths": [
+          "scripts/affected-set-shadow-contract.mjs",
+          "scripts/api-surface-contract.mjs",
+          "scripts/audit-production-dependencies.mjs",
+          "scripts/evidence-product-contract.mjs",
+          "scripts/incremental-freshness-contract.mjs",
+          "scripts/probe-rust-scip-boundary.mjs",
+          "scripts/verify-identity-collision-cli.mjs"
+        ]
+      },
+      {
+        "name": "detector-calibration-tools",
+        "paths": [
+          "scripts/accuracy-calibration-core.mjs",
+          "scripts/accuracy-calibration.mjs",
+          "scripts/score-detector-labels.ts",
+          "scripts/semantic-command-calibration.mjs",
+          "scripts/typescript-semantic-provider-comparison.mjs"
+        ]
+      },
+      {
+        "name": "agent-exploration-evaluation",
+        "paths": [
+          "scripts/codex-exploration-trial.mjs",
+          "scripts/compare-exploration-trials.mjs",
+          "scripts/exploration-benchmark-core.mjs",
+          "scripts/exploration-benchmark.mjs"
+        ]
+      },
+      {
+        "name": "documentation-tooling",
+        "paths": [
+          "scripts/check-evidence-manifest-doc.mjs",
+          "scripts/check-skill-links.mjs",
+          "scripts/render-command-reference.ts"
+        ]
+      },
+      {
+        "name": "agent-evidence-capture",
+        "paths": ["skills/scip-explore/scripts/capture-evidence.mjs"]
+      },
+      {
+        "name": "command-audit-tools",
+        "paths": ["benchmarks/command-contracts/**", "benchmarks/full-tool-audit/**"]
       }
     ],
     "allowedDependencies": {
+      "benchmark-fixture": [],
       "analysis": ["domain", "source", "storage", "symbols-core", "symbols-graph", "symbols-references"],
       "domain": [],
       "filesystem": [],
@@ -267,10 +362,8 @@
         "symbols-graph",
         "symbols-references"
       ],
-      "queries-compatibility": ["domain"],
       "queries-facade": [
         "queries-cleanup",
-        "queries-compatibility",
         "queries-frontend",
         "queries-graph",
         "queries-health",
@@ -299,8 +392,8 @@
         "queries-graph",
         "queries-internal",
         "queries-navigation",
-        "queries-quality",
-        "storage"
+        "storage",
+        "source"
       ],
       "queries-impact": [
         "analysis",
@@ -341,15 +434,7 @@
         "symbols-graph",
         "symbols-references"
       ],
-      "queries-quality": [
-        "domain",
-        "queries-internal",
-        "semantic-core",
-        "source",
-        "storage",
-        "symbols-core",
-        "symbols-references"
-      ],
+      "queries-quality": ["domain", "queries-internal", "semantic-core", "source", "storage", "symbols-core"],
       "queries-utils": ["domain", "symbols-core"],
       "reindex": [
         "analysis",
@@ -363,7 +448,7 @@
         "storage",
         "symbols-graph"
       ],
-      "reindex-augmentation": ["filesystem", "source"],
+      "reindex-augmentation": ["domain", "filesystem", "source"],
       "reindex-vue": ["platform", "reindex-augmentation"],
       "runtime-command-kit": ["domain", "runtime-services", "storage"],
       "runtime-commands": [
@@ -386,8 +471,7 @@
         "runtime-command-kit",
         "runtime-services",
         "storage",
-        "symbols-core",
-        "tla"
+        "symbols-core"
       ],
       "runtime-services": [
         "domain",
@@ -446,7 +530,25 @@
       "symbols-graph": ["domain", "instrumentation", "source", "storage", "symbols-core", "symbols-references"],
       "symbols-references": ["domain", "instrumentation", "source", "storage", "symbols-core"],
       "test-fixtures": ["platform", "runtime-command-kit", "runtime-services", "semantic-contracts"],
-      "tla": ["domain", "platform", "queries-navigation", "source", "storage", "symbols-core"]
+      "agent-evaluation-tools": [],
+      "coverage-recorder": [],
+      "build-configuration": ["queries-facade"],
+      "release-tooling": ["platform", "storage"],
+      "performance-tooling": [
+        "domain",
+        "platform",
+        "queries-graph",
+        "queries-navigation",
+        "reindex",
+        "runtime-services",
+        "storage"
+      ],
+      "contract-tooling": [],
+      "detector-calibration-tools": [],
+      "agent-exploration-evaluation": ["agent-evaluation-tools"],
+      "documentation-tooling": ["queries-health", "runtime-command-kit", "runtime-commands", "runtime-services"],
+      "agent-evidence-capture": [],
+      "command-audit-tools": []
     },
     "requireCompletePolicy": true,
     "requireCompleteCoverage": true,
@@ -480,16 +582,11 @@
       "name": "cleanup detector family",
       "reason": "These query files implement the cleanup and maintainability detectors that share candidate, evidence, and health policy changes.",
       "files": [
-        "src/queries/quality/complexity-hotspots.ts",
         "src/queries/cleanup/dead.ts",
         "src/queries/cleanup/drift.ts",
-        "src/queries/cleanup/extract-candidates.ts",
-        "src/queries/cleanup/isolated.ts",
         "src/queries/cleanup/passthrough-candidates.ts",
         "src/queries/cleanup/redundant-reexports.ts",
-        "src/queries/cleanup/similar.ts",
-        "src/queries/cleanup/stale-abstractions.ts",
-        "src/queries/cleanup/wrapper-candidates.ts"
+        "src/queries/cleanup/similar.ts"
       ]
     },
     {

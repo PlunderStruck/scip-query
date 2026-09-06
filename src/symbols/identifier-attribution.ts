@@ -16,6 +16,7 @@
  * receive the answer, not raw candidates.
  */
 import type { ScipDatabase } from '../storage/db.js';
+import { referenceOccurrenceLines } from '../storage/scip-rows.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from './definition-catalog.js';
 import { getFullSymbolMatch } from './symbol-lookup.js';
 import { getGlobalLeafIndex } from './leaf-symbol-index.js';
@@ -43,6 +44,7 @@ interface SymbolRef {
 
 export interface SourceReferenceTarget {
   symbolId: number;
+  symbol: string;
   relativePath: string;
   startLine: number;
   endLine: number;
@@ -168,12 +170,7 @@ export function findReferences(
       enclosingSymbol: null,
     });
     if (semanticSites.length > 0) {
-      const semanticLines = new Map<string, number[]>();
-      for (const site of semanticSites) {
-        const bucket = semanticLines.get(site.file) ?? [];
-        bucket.push(site.line);
-        semanticLines.set(site.file, bucket);
-      }
+      const semanticLines = compilerPreferredReferenceLines(db, match.symbol, semanticSites);
       return materializeReferenceSites(db, semanticLines);
     }
   }
@@ -185,6 +182,26 @@ export function findReferences(
   }
 
   return materializeReferenceSites(db, fileLines);
+}
+
+function compilerPreferredReferenceLines(
+  db: ScipDatabase,
+  symbol: string,
+  semanticSites: readonly { file: string; line: number }[],
+): Map<string, number[]> {
+  const semanticLines = new Map<string, number[]>();
+  for (const site of semanticSites) {
+    const bucket = semanticLines.get(site.file) ?? [];
+    bucket.push(site.line);
+    semanticLines.set(site.file, bucket);
+  }
+  // A compiler-bound file overrides name-attributed or provider-enriched
+  // locations, including empty results, aliases and recursive references.
+  for (const file of getSourceFiles(db)) {
+    const indexed = referenceOccurrenceLines(db, file, symbol);
+    if (indexed !== null) semanticLines.set(file, indexed);
+  }
+  return semanticLines;
 }
 
 /**
@@ -199,6 +216,7 @@ export function sourceReferenceTarget(db: ScipDatabase, symbol: SymbolLocation):
   if (!identifier) return null;
   return {
     symbolId: match.symbolId,
+    symbol: match.symbol,
     relativePath: match.relativePath,
     startLine: match.startLine,
     endLine: match.endLine,
@@ -212,6 +230,8 @@ export function sourceReferenceTarget(db: ScipDatabase, symbol: SymbolLocation):
  * keyset pagination, so their attribution policy cannot drift.
  */
 export function sourceReferenceLinesForFile(db: ScipDatabase, target: SourceReferenceTarget, file: string): number[] {
+  const indexed = referenceOccurrenceLines(db, file, target.symbol);
+  if (indexed !== null) return indexed;
   const source = getSourceText(db, file);
   if (!source || source.indexOf(target.identifier) === -1) return [];
 

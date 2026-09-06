@@ -1,0 +1,74 @@
+diff --git a/src/adapters/receipt-jobs.ts b/src/adapters/receipt-jobs.ts
+index c22210f..2596617 100644
+--- a/src/adapters/receipt-jobs.ts
++++ b/src/adapters/receipt-jobs.ts
+@@ -1,3 +1,3 @@
+-import { sendLegacyReceipt } from '../notifications/legacy-receipt.js';
++import { sendReceipt } from '../notifications/receipt.js';
+ 
+-export const receiptJobs = { receipt: sendLegacyReceipt };
++export const receiptJobs = { receipt: sendReceipt };
+diff --git a/src/adapters/receipt-routes.ts b/src/adapters/receipt-routes.ts
+index 9d9e460..9b0eeba 100644
+--- a/src/adapters/receipt-routes.ts
++++ b/src/adapters/receipt-routes.ts
+@@ -1,3 +1,3 @@
+-import { sendLegacyReceipt } from '../notifications/legacy-receipt.js';
++import { sendReceipt } from '../notifications/receipt.js';
+ 
+-export const receiptRoutes = { receipt: sendLegacyReceipt };
++export const receiptRoutes = { receipt: sendReceipt };
+diff --git a/src/adapters/settings.ts b/src/adapters/settings.ts
+index 663a796..bec47e6 100644
+--- a/src/adapters/settings.ts
++++ b/src/adapters/settings.ts
+@@ -1 +1 @@
+-export const settings = { legacyReceiptEnabled: true, receiptRetryLimit: 3 };
++export const settings = { receiptRetryLimit: 3 };
+diff --git a/src/notifications/legacy-receipt.ts b/src/notifications/legacy-receipt.ts
+deleted file mode 100644
+index d43260a..0000000
+--- a/src/notifications/legacy-receipt.ts
++++ /dev/null
+@@ -1,5 +0,0 @@
+-import type { Order, ReceiptStore } from '../domain/types.js';
+-
+-export function sendLegacyReceipt(order: Order, store: ReceiptStore): void {
+-  store.events.push({ kind: 'receipt.sent', orderId: order.id, to: order.email, transport: 'v1' });
+-}
+diff --git a/test/receipt-transport.test.mjs b/test/receipt-transport.test.mjs
+new file mode 100644
+index 0000000..f974fd0
+--- /dev/null
++++ b/test/receipt-transport.test.mjs
+@@ -0,0 +1,30 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++
++import { receiptJobs, receiptRoutes, sendReceipt, settings } from '../build/index.js';
++
++test('receipt entry points use the current transport with caller-owned stores', () => {
++  assert.equal(receiptRoutes.receipt, sendReceipt);
++  assert.equal(receiptJobs.receipt, sendReceipt);
++
++  const order = { id: 'order-17', email: 'buyer@example.com' };
++  const routeStore = { events: [] };
++  const jobStore = { events: [] };
++
++  receiptRoutes.receipt(order, routeStore);
++  receiptJobs.receipt(order, jobStore);
++
++  const event = {
++    kind: 'receipt.sent',
++    orderId: order.id,
++    to: order.email,
++    transport: 'v2',
++  };
++  assert.deepEqual(routeStore.events, [event]);
++  assert.deepEqual(jobStore.events, [event]);
++  assert.notEqual(routeStore.events, jobStore.events);
++});
++
++test('receipt settings retain only the current retry limit', () => {
++  assert.deepEqual(settings, { receiptRetryLimit: 3 });
++});

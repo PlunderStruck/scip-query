@@ -1,0 +1,3804 @@
+[
+  {
+    "command": "search",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/source-search-batch.ts",
+      "src/queries/navigation/source-search.ts"
+    ],
+    "claims": [
+      "Line-based current text literal/regex search with ownership freshness and explicit omission counts."
+    ],
+    "positiveCases": [
+      "matches native filesystem oracle across indexed, unindexed and extensionless files; CRLF retained"
+    ],
+    "negativeCases": [
+      "binary/unreadable/oversized paths disclosed; stale text loses compiler owner"
+    ],
+    "decision": "Retain after producer and fixture review; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/navigation/lossless-source-sensor.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/search.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/lossless-source-sensor.test.ts",
+        "passed": 6,
+        "total": 6
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/search.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "outline",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/outline.ts"
+    ],
+    "claims": [
+      "Compiler ownership tree for a current aligned file; cyclic ownership fails explicitly."
+    ],
+    "positiveCases": [
+      "nested class/field/method fixture"
+    ],
+    "negativeCases": [
+      "cyclic compiler graph rejected; stale ownership rejected; missing path does not become fuzzy symbol"
+    ],
+    "decision": "Retain after producer and fixture review; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/navigation/navigation-contracts.test.ts",
+      "tests/queries/navigation/exact-file-intent.test.ts",
+      "tests/queries/navigation/lossless-source-sensor.test.ts",
+      "tests/queries/navigation/outline.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/outline.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/navigation-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      },
+      {
+        "file": "tests/queries/navigation/exact-file-intent.test.ts",
+        "passed": 10,
+        "total": 10
+      },
+      {
+        "file": "tests/queries/navigation/lossless-source-sensor.test.ts",
+        "passed": 6,
+        "total": 6
+      },
+      {
+        "file": "tests/queries/navigation/outline.test.ts",
+        "passed": 1,
+        "total": 1
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/outline.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "entrypoints",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/graph/entry-map.ts",
+      "src/runtime/query-commands/graph.ts"
+    ],
+    "claims": [
+      "Detected external roots and candidate entry surfaces, with observed static caller count."
+    ],
+    "positiveCases": [
+      "entry.ts uncalled function; public package export and namespace export candidate"
+    ],
+    "negativeCases": [
+      "private package helper excluded; ordinary internal callable excluded"
+    ],
+    "decision": "Retain after producer and fixture review; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/graph/entry-map.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/entrypoints.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/graph/entry-map.test.ts",
+        "passed": 8,
+        "total": 8
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/entrypoints.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "evidence",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/graph/graph-evidence.ts",
+      "src/queries/graph/system-map.ts",
+      "src/domain/graph-relation-providers.ts"
+    ],
+    "claims": [
+      "Shared call targets now use exact compiler token positions; source-name and chunk inference must remain candidates."
+    ],
+    "positiveCases": [
+      "Explicit execution, data and ownership projections preserve typed relationship evidence."
+    ],
+    "negativeCases": [
+      "Provider rejection stays incomplete; ambiguous roots do not become exact relationships."
+    ],
+    "decision": "Retain explicit typed graph projection. AST name matches remain candidates; provider rejection produces incomplete coverage. Package subpath now uses CLI producer. See validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/graph/system-map.test.ts",
+      "tests/queries/graph/evidence-rejection-contract.test.ts",
+      "tests/queries/graph/system-map-edge-semantics.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/evidence.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/graph/system-map.test.ts",
+        "passed": 58,
+        "total": 58
+      },
+      {
+        "file": "tests/queries/graph/evidence-rejection-contract.test.ts",
+        "passed": 1,
+        "total": 1
+      },
+      {
+        "file": "tests/queries/graph/system-map-edge-semantics.test.ts",
+        "passed": 5,
+        "total": 5
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/evidence.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "inspect",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/source-inspection.ts",
+      "src/queries/navigation/evidence.ts",
+      "src/queries/navigation/trace.ts"
+    ],
+    "claims": [
+      "Shared call targets now use exact compiler token positions; source-name and chunk inference must remain candidates."
+    ],
+    "positiveCases": [
+      "Batched symbols/locations produce complete related source units and real reference-site syntax."
+    ],
+    "negativeCases": [
+      "Ambiguity and oversized units remain disclosed; incomplete invocation context cannot certify all-callsite predicates."
+    ],
+    "decision": "Retain related source assembly. Preserves candidate call qualification in data and source reasons. Internal source bundles do not certify all-call or absence claims. See validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/navigation/source-evidence.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/inspect.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/source-evidence.test.ts",
+        "passed": 35,
+        "total": 35
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/inspect.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "code",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/code.ts"
+    ],
+    "claims": [
+      "Current exact file/range bytes; named definition rejected when its compiler generation is known stale; per-selector ambiguity and omission accounting."
+    ],
+    "positiveCases": [
+      "native byte equality, CRLF, unindexed files, bounded symbol and file surfaces"
+    ],
+    "negativeCases": [
+      "missing/binary files; bad ranges; stale named definition; ambiguous selector"
+    ],
+    "decision": "Retain after producer and fixture review; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/navigation/lossless-source-sensor.test.ts",
+      "tests/runtime/code-cli-contract.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/code.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/lossless-source-sensor.test.ts",
+        "passed": 6,
+        "total": 6
+      },
+      {
+        "file": "tests/runtime/code-cli-contract.test.ts",
+        "passed": 20,
+        "total": 20
+      }
+    ],
+    "integrationArtifacts": [
+      "transport/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "files",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/files.ts"
+    ],
+    "claims": [
+      "Existing repository paths matching declared substring/glob semantics."
+    ],
+    "positiveCases": [
+      "unindexed docs, extensionless and binary file paths included"
+    ],
+    "negativeCases": [
+      "missing and outside-project paths excluded"
+    ],
+    "decision": "Retain after producer and fixture review; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/navigation/lossless-source-sensor.test.ts",
+      "tests/queries/navigation/exact-file-intent.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/files.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/lossless-source-sensor.test.ts",
+        "passed": 6,
+        "total": 6
+      },
+      {
+        "file": "tests/queries/navigation/exact-file-intent.test.ts",
+        "passed": 10,
+        "total": 10
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/files.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "session",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/query-commands/direct-navigation.ts"
+    ],
+    "claims": [
+      "source/graph delivery receipts within explicit session"
+    ],
+    "positiveCases": [
+      "actual session summary counts one delivered source line",
+      "reset restores source emission"
+    ],
+    "negativeCases": [
+      "repeat exact source emits prior-delivery receipt"
+    ],
+    "decision": "Retain session observation/reset; graph receipt coverage still covered by existing unit fixtures.",
+    "overlap": null,
+    "builtCliCase": {
+      "artifact": "cli/session.log",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/source-emission-session.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/source-emission-session.test.ts",
+        "passed": 8,
+        "total": 8
+      }
+    ],
+    "integrationArtifacts": [
+      "transport/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "methods",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/methods.ts",
+      "src/runtime/query-commands/graph.ts",
+      "src/runtime/query-commands/navigation.ts",
+      "src/runtime/query-commands/direct-navigation.ts"
+    ],
+    "claims": [
+      "Direct callable children of the exact owner plus Clojure method declarations."
+    ],
+    "positiveCases": [
+      "Client -> own; OtherClient -> foreign"
+    ],
+    "negativeCases": [
+      "excludes useClient and OtherClient members; missing owner rejected"
+    ],
+    "decision": "Retain: tested described producer cases; see validation-summary.json.",
+    "overlap": null,
+    "builtCliCase": {
+      "artifact": "cli/methods.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/navigation/metric-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/metric-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/methods.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "refs",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/refs.ts",
+      "src/storage/scip-rows.ts",
+      "src/symbols/identifier-attribution.ts",
+      "src/runtime/refs-pagination.ts"
+    ],
+    "claims": [
+      "Compiler occurrence lines first; fallback rows labeled candidates. Coordinates belong to the index generation."
+    ],
+    "positiveCases": [
+      "alias, shadowing, recursion, and page/full parity"
+    ],
+    "negativeCases": [
+      "Ruby same-name instance variable is not a reference; no implicit absence proof"
+    ],
+    "decision": "Retain after correction; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/navigation/reference-binding-contract.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/refs.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/reference-binding-contract.test.ts",
+        "passed": 1,
+        "total": 1
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/refs.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "trace",
+    "status": "removed",
+    "implementationRead": [],
+    "claims": [],
+    "positiveCases": [],
+    "negativeCases": [],
+    "decision": "Retire overlapping definition/reference CLI and service fast path; refs/code/inspect/evidence cover its work without the unsupported all-call predicate guarantee. Internal source assembly remains for context/inspect, ineligible for absence and universal callsite claims.",
+    "overlap": null,
+    "previousEvidence": "Previous sweep regression links are leads; not command-level verification."
+  },
+  {
+    "command": "deps",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/deps.ts",
+      "src/runtime/query-commands/graph.ts",
+      "src/runtime/query-commands/navigation.ts",
+      "src/runtime/query-commands/direct-navigation.ts"
+    ],
+    "claims": [
+      "Direct internal file edges from SCIP references plus resolved source imports."
+    ],
+    "positiveCases": [
+      "b->a; independent existing graph-risk fixture a->b->c->d"
+    ],
+    "negativeCases": [
+      "a has no outgoing edge; unknown path empty"
+    ],
+    "decision": "Retain: tested described producer cases; see validation-summary.json.",
+    "overlap": null,
+    "builtCliCase": {
+      "artifact": "cli/deps.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/navigation/metric-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/metric-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/deps.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "rdeps",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/deps.ts",
+      "src/runtime/query-commands/graph.ts",
+      "src/runtime/query-commands/navigation.ts",
+      "src/runtime/query-commands/direct-navigation.ts"
+    ],
+    "claims": [
+      "Reverse of direct internal file dependencies."
+    ],
+    "positiveCases": [
+      "a consumers are b and c, not transitive callers"
+    ],
+    "negativeCases": [
+      "zero has no consumer; no transitive traversal claim"
+    ],
+    "decision": "Retain: tested described producer cases; see validation-summary.json.",
+    "overlap": null,
+    "builtCliCase": {
+      "artifact": "cli/rdeps.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/navigation/metric-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/metric-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/rdeps.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "system",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/system.ts"
+    ],
+    "claims": [
+      "Directory membership, all indexed definitions including undocumented ones, each with owner path, direct dependencies."
+    ],
+    "positiveCases": [
+      "multi-file module and exact owner paths"
+    ],
+    "negativeCases": [
+      "unknown module empty; unrelated file omitted"
+    ],
+    "decision": "Retain after correction; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/navigation/metric-contracts.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/system.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/metric-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/system.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "surface",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/surface.ts"
+    ],
+    "claims": [
+      "Observed external symbol references, not guaranteed runtime use or exported API."
+    ],
+    "positiveCases": [
+      "two symbols, two consumer files; compiler fixture method consumer"
+    ],
+    "negativeCases": [
+      "unreferenced method and unrelated module omitted"
+    ],
+    "decision": "Retain after correction; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/navigation/metric-contracts.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/surface.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/metric-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/surface.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "hotspots",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/graph/hotspots.ts",
+      "src/runtime/query-commands/graph.ts",
+      "src/runtime/query-commands/navigation.ts",
+      "src/runtime/query-commands/direct-navigation.ts"
+    ],
+    "claims": [
+      "Counts distinct referencing chunks, with separately named source-evidence-row fallback."
+    ],
+    "positiveCases": [
+      "first=2 chunks/2 files, second=1/1, although first has 3 invocation occurrences"
+    ],
+    "negativeCases": [
+      "zero-reference symbol absent; repeated occurrences within a chunk do not count twice"
+    ],
+    "decision": "Retain: tested described producer cases; see validation-summary.json.",
+    "overlap": null,
+    "builtCliCase": {
+      "artifact": "cli/hotspots.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/navigation/metric-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/metric-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/hotspots.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "imports",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/imports.ts"
+    ],
+    "claims": [
+      "Union of indexed bindings and uncovered source/semantic imports with provenance."
+    ],
+    "positiveCases": [
+      "partially indexed two-binding import still yields both"
+    ],
+    "negativeCases": [
+      "missing source-only compiler identity is labeled candidate"
+    ],
+    "decision": "Retain after producer and fixture review; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/navigation/navigation-contracts.test.ts",
+      "tests/queries/navigation/import-fallbacks.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/imports.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/navigation-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      },
+      {
+        "file": "tests/queries/navigation/import-fallbacks.test.ts",
+        "passed": 2,
+        "total": 2
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/imports.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "imported-by",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/imports.ts"
+    ],
+    "claims": [
+      "Exact symbol selection; indexed importers plus source candidates; direct JS/TS default and renamed export recovery."
+    ],
+    "positiveCases": [
+      "two importers with only one indexed; renamed/default imports"
+    ],
+    "negativeCases": [
+      "ambiguous target rejected; side effects do not establish symbol import; indirect re-export gaps remain"
+    ],
+    "decision": "Retain after producer and fixture review; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/navigation/navigation-contracts.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/imported-by.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/navigation-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/imported-by.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "members",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/members.ts",
+      "src/runtime/query-commands/graph.ts",
+      "src/runtime/query-commands/navigation.ts",
+      "src/runtime/query-commands/direct-navigation.ts"
+    ],
+    "claims": [
+      "Direct compiler/descriptor children with occurrence range fallback."
+    ],
+    "positiveCases": [
+      "Client contains exact own symbol; prior Clojure protocol and record witnesses"
+    ],
+    "negativeCases": [
+      "excludes OtherClient; not transitive descendants"
+    ],
+    "decision": "Retain: tested described producer cases; see validation-summary.json.",
+    "overlap": null,
+    "builtCliCase": {
+      "artifact": "cli/members.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/navigation/metric-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/metric-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/members.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "fan-in",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/graph/fan.ts",
+      "src/runtime/query-commands/graph.ts",
+      "src/runtime/query-commands/navigation.ts",
+      "src/runtime/query-commands/direct-navigation.ts"
+    ],
+    "claims": [
+      "Distinct cross-file referencing files, not calls. Removed undisclosed >1 ranking threshold; ambiguous roots throw."
+    ],
+    "positiveCases": [
+      "2 files for first, 1 for second, 0 for zero; top/scalar agree"
+    ],
+    "negativeCases": [
+      "unknown root empty; ambiguous same-name root rejected"
+    ],
+    "decision": "Retain: tested described producer cases; see validation-summary.json.",
+    "overlap": null,
+    "builtCliCase": {
+      "artifact": "cli/fan-in.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/navigation/metric-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/metric-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/fan-in.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "fan-out",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/graph/fan.ts",
+      "src/runtime/query-commands/graph.ts",
+      "src/runtime/query-commands/navigation.ts",
+      "src/runtime/query-commands/direct-navigation.ts"
+    ],
+    "claims": [
+      "Distinct repository-defined symbols referenced by a file; file dependencies are a different unit."
+    ],
+    "positiveCases": [
+      "b references 2 symbols, c references 1; top/scalar agree"
+    ],
+    "negativeCases": [
+      "unresolved path empty; repeated invocation does not increase symbol count"
+    ],
+    "decision": "Retain: tested described producer cases; see validation-summary.json.",
+    "overlap": null,
+    "builtCliCase": {
+      "artifact": "cli/fan-out.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/navigation/metric-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/metric-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/fan-out.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "coupling",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/graph/coupling.ts",
+      "src/runtime/query-commands/graph.ts",
+      "src/runtime/query-commands/navigation.ts",
+      "src/runtime/query-commands/direct-navigation.ts"
+    ],
+    "claims": [
+      "Distinct union of symbols defined in either selected file and referenced by the other."
+    ],
+    "positiveCases": [
+      "a/b=2, b/a=2, a/c=1; top/pair agree"
+    ],
+    "negativeCases": [
+      "b/c=0 despite both using a; unresolved or self pair rejected"
+    ],
+    "decision": "Retain: tested described producer cases; see validation-summary.json.",
+    "overlap": null,
+    "builtCliCase": {
+      "artifact": "cli/coupling.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/navigation/metric-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/metric-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/coupling.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "cycles",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/graph/cycles.ts",
+      "src/symbols/graph/file-dep-graph.ts"
+    ],
+    "claims": [
+      "Cyclic components of selected static edges, including re-exports and type-only imports."
+    ],
+    "positiveCases": [
+      "re-export cycle retained in standalone query, health and baseline"
+    ],
+    "negativeCases": [
+      "acyclic barrel; explicit SCIP-only planning graph remains distinct"
+    ],
+    "decision": "Retain after correction; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/health/import-cycle-contract.test.ts",
+      "tests/symbols/file-dep-graph.test.ts",
+      "tests/queries/graph/cycles.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/cycles.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/health/import-cycle-contract.test.ts",
+        "passed": 2,
+        "total": 2
+      },
+      {
+        "file": "tests/symbols/file-dep-graph.test.ts",
+        "passed": 9,
+        "total": 9
+      },
+      {
+        "file": "tests/queries/graph/cycles.test.ts",
+        "passed": 4,
+        "total": 4
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/cycles.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "architecture",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/graph/architecture.ts"
+    ],
+    "claims": [
+      "Declared file groups and permitted dependency directions, observed group edges/cycles, size rules and unmapped-file coverage."
+    ],
+    "positiveCases": [
+      "Configured ui-to-core dependency violation appears in both architecture and the actual Stop hook."
+    ],
+    "negativeCases": [
+      "Unmapped and ambiguous files remain visible; bounded/scoped output does not prove global policy clean."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Unmapped files, all cycle witnesses, ambiguous groups and scoped unused allowances tested; configured ui-to-core violation blocks the real Stop hook.",
+    "builtCliCase": {
+      "artifact": "cli/architecture.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/graph/architecture.test.ts",
+      "tests/queries/health/source-review.test.ts",
+      "tests/runtime/architecture-cli-contract.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/graph/architecture.test.ts",
+        "passed": 31,
+        "total": 31
+      },
+      {
+        "file": "tests/queries/health/source-review.test.ts",
+        "passed": 32,
+        "total": 32
+      },
+      {
+        "file": "tests/runtime/architecture-cli-contract.test.ts",
+        "passed": 1,
+        "total": 1
+      }
+    ],
+    "integrationArtifacts": [
+      "architecture/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "bottlenecks",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/graph/bottlenecks.ts"
+    ],
+    "claims": [
+      "Shared call targets now use exact compiler token positions; source-name and chunk inference must remain candidates."
+    ],
+    "positiveCases": [
+      "Known chain and graph-risk fixture verifies topology and displayed score arithmetic."
+    ],
+    "negativeCases": [
+      "Observed reference topology is not asserted to be runtime execution frequency."
+    ],
+    "decision": "Retain fan-in files times distinct external callees; candidate constituents disclosed. No articulation-point, ownership or runtime contention claim.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/graph/graph-risk-output.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/bottlenecks.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/graph/graph-risk-output.test.ts",
+        "passed": 6,
+        "total": 6
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/bottlenecks.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "by-kind",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/by-kind.ts",
+      "src/runtime/query-commands/graph.ts",
+      "src/runtime/query-commands/navigation.ts",
+      "src/runtime/query-commands/direct-navigation.ts"
+    ],
+    "claims": [
+      "Enumerates normalized SCIP/descriptor-derived kinds from the definition catalog."
+    ],
+    "positiveCases": [
+      "5 functions including one mention-only definition; scope a has 2"
+    ],
+    "negativeCases": [
+      "class empty; malformed numeric and empty kind rejected"
+    ],
+    "decision": "Retain: tested described producer cases; see validation-summary.json.",
+    "overlap": null,
+    "builtCliCase": {
+      "artifact": "cli/by-kind.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/navigation/metric-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/metric-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/by-kind.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "kind-counts",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/by-kind.ts",
+      "src/runtime/query-commands/graph.ts",
+      "src/runtime/query-commands/navigation.ts",
+      "src/runtime/query-commands/direct-navigation.ts"
+    ],
+    "claims": [
+      "Counts the same normalized definition set as by-kind."
+    ],
+    "positiveCases": [
+      "5 functions repository, 2 in a; prior SQL path omitted mention-only definition"
+    ],
+    "negativeCases": [
+      "no class count when class enumeration empty"
+    ],
+    "decision": "Retain: tested described producer cases; see validation-summary.json.",
+    "overlap": null,
+    "builtCliCase": {
+      "artifact": "cli/kind-counts.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/navigation/metric-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/metric-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/kind-counts.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "dependency-depth",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/graph/deep-chains.ts"
+    ],
+    "claims": [],
+    "positiveCases": [
+      "Known chain verifies reachable maximum depth."
+    ],
+    "negativeCases": [
+      "Cycles terminate and remain disclosed; missing roots do not fabricate graph nodes."
+    ],
+    "decision": "Retain condensed dependency depth, explicit cycle membership and edge basis; no fabricated linear edges within cycles.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/graph/graph-risk-output.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/dependency-depth.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/graph/graph-risk-output.test.ts",
+        "passed": 6,
+        "total": 6
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/dependency-depth.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "hierarchy",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/hierarchy.ts",
+      "src/runtime/query-commands/graph.ts",
+      "src/runtime/query-commands/navigation.ts",
+      "src/runtime/query-commands/direct-navigation.ts"
+    ],
+    "claims": [
+      "Indexed lexical owner chain, not inheritance."
+    ],
+    "positiveCases": [
+      "24-level chain returned in inner-to-outer order"
+    ],
+    "negativeCases": [
+      "corrupt cycle terminates at unique 24 owners"
+    ],
+    "decision": "Retain: tested described producer cases; see validation-summary.json.",
+    "overlap": null,
+    "builtCliCase": {
+      "artifact": "cli/hierarchy.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/navigation/metric-contracts.test.ts",
+      "tests/queries/navigation/hierarchy.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/metric-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      },
+      {
+        "file": "tests/queries/navigation/hierarchy.test.ts",
+        "passed": 1,
+        "total": 1
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/hierarchy.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "entry-map",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/graph/entry-map.ts"
+    ],
+    "claims": [
+      "Selected static call evidence closure collapsed by file; source/chunk candidate strengths retained; no dynamic execution proof.",
+      "Shared call targets now use exact compiler token positions; source-name and chunk inference must remain candidates."
+    ],
+    "positiveCases": [
+      "seven-file reachable closure; multi-region expansion"
+    ],
+    "negativeCases": [
+      "non-entry/missing/ambiguous root; unrecognized region expansion disclosed"
+    ],
+    "decision": "Retain after producer and fixture review; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/graph/entry-map.test.ts",
+      "tests/symbols/call-occurrence-contract.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/entry-map.json",
+      "exitCode": 1,
+      "scope": "Deliberate non-entry root rejection. Positive reachable closure is covered by the linked regression suite.",
+      "expectedExitCode": 1
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/graph/entry-map.test.ts",
+        "passed": 8,
+        "total": 8
+      },
+      {
+        "file": "tests/symbols/call-occurrence-contract.test.ts",
+        "passed": 6,
+        "total": 6
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/entry-map.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "call-graph",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/call-graph.ts",
+      "src/runtime/query-commands/graph.ts",
+      "src/runtime/query-commands/navigation.ts",
+      "src/runtime/query-commands/direct-navigation.ts"
+    ],
+    "claims": [
+      "Static observed callable targets with exact/candidate evidence and blind spots.",
+      "Shared call targets now use exact compiler token positions; source-name and chunk inference must remain candidates."
+    ],
+    "positiveCases": [
+      "55 distinct outgoing leaves; leaf54 incoming root"
+    ],
+    "negativeCases": [
+      "missing symbol null; nested-call ownership and unrelated-member tests passed"
+    ],
+    "decision": "Retain: tested described producer cases; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/symbols/call-occurrence-contract.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/call-graph.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/symbols/call-occurrence-contract.test.ts",
+        "passed": 6,
+        "total": 6
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/call-graph.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "affected",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/graph/affected.ts"
+    ],
+    "claims": [
+      "Bounded reverse call/reference closure of possible consumers; exact type-reference owner or explicit file-only uncertainty."
+    ],
+    "positiveCases": [
+      "compiler fixture two downstream levels; type-reference actual owner"
+    ],
+    "negativeCases": [
+      "first unrelated function is never invented as owner; missing and ambiguous roots"
+    ],
+    "decision": "Retain after correction; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/navigation/navigation-contracts.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/affected.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/navigation-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/affected.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "change-surface",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/impact/change-surface.ts"
+    ],
+    "claims": [
+      "Per-symbol distinct consumer files and a deduplicated file-wide total; risk is heuristic."
+    ],
+    "positiveCases": [
+      "two symbols share consumer b; overall unique total=2 not 3"
+    ],
+    "negativeCases": [
+      "ignored consumers filtered; missing file null"
+    ],
+    "decision": "Retain after correction; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/navigation/metric-contracts.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/change-surface.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/metric-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/change-surface.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "co-change",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/co-change.ts"
+    ],
+    "claims": [],
+    "positiveCases": [
+      "Git history fixture and requested partner filtering return observed co-change pairs."
+    ],
+    "negativeCases": [
+      "Generated files, sweep-only histories and shared workspace names do not establish feature ownership."
+    ],
+    "decision": "Retain historical pair counts; path/subject classifications are candidates. Requested file now filters before scan budget. Real Git witnesses passed.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/impact/co-change-partner-labels.test.ts",
+      "tests/queries/cleanup/co-change-tiers.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/co-change.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/impact/co-change-partner-labels.test.ts",
+        "passed": 5,
+        "total": 5
+      },
+      {
+        "file": "tests/queries/cleanup/co-change-tiers.test.ts",
+        "passed": 3,
+        "total": 3
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/co-change.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "incomplete-migration",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/impact/incomplete-migration.ts"
+    ],
+    "claims": [
+      "diff-discovered helper candidates and asymmetric callee overlap with untouched sites",
+      "vocabulary comparison is path/name text only"
+    ],
+    "positiveCases": [
+      "real Git extraction fixture finds leftover sites",
+      "historical comment does not hide a new TS/JS helper"
+    ],
+    "negativeCases": [
+      "unavailable Git history is not clean",
+      "existing helper/dead helper/generic callee gates"
+    ],
+    "decision": "Retain asymmetric diff candidate scan; remove five-leftover cap and semantic scope/subtype guessing.",
+    "overlap": null,
+    "builtCliCase": {
+      "artifact": "cli/incomplete-migration.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/impact/incomplete-migration.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/impact/incomplete-migration.test.ts",
+        "passed": 15,
+        "total": 15
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/incomplete-migration.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "reference-neighborhood",
+    "status": "removed",
+    "implementationRead": [
+      "src/queries/navigation/reference-neighborhood.ts:79"
+    ],
+    "claims": [
+      "Incoming-call fallback relabels reference owners as callers; fixed limit 30 and stripped exact/candidate evidence. Overlaps typed evidence and trace."
+    ],
+    "positiveCases": [
+      "Retained context, call graph, health and protocol regression cases rerun while removing these products."
+    ],
+    "negativeCases": [
+      "Built CLI invocation rejects retired command with exit 1; see retired-cli.json."
+    ],
+    "decision": "remove",
+    "overlap": "trace; call-graph; evidence",
+    "previousEvidence": "Previous sweep regression links are leads; not command-level verification.",
+    "cliVerification": "retired-cli.json: built CLI rejects removed command"
+  },
+  {
+    "command": "value-flow",
+    "status": "removed",
+    "implementationRead": [
+      "src/queries/graph/value-flow.ts",
+      "src/runtime/query-commands/navigation.ts"
+    ],
+    "claims": [],
+    "positiveCases": [],
+    "negativeCases": [],
+    "decision": "Remove redundant dataflow projection wrapper. Its only-proved description contradicts candidate edges passed through from graphEvidence. Retain evidence --edge dataflow with explicit direction/depth and dependence-slice.",
+    "overlap": null,
+    "previousEvidence": "Previous sweep regression links are leads; not command-level verification.",
+    "cliVerification": "retired-cli.json: built CLI rejects removed command"
+  },
+  {
+    "command": "dependence-slice",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/graph/dependence-slice.ts"
+    ],
+    "claims": [
+      "Function-local variable occurrence traversal of exact value/control dependence; model gaps retained."
+    ],
+    "positiveCases": [
+      "reassignment kills overwritten value; control branch and forward/backward directions"
+    ],
+    "negativeCases": [
+      "closures, aliases, syntax errors and finally gaps; zero budgets; ambiguous same-line roots"
+    ],
+    "decision": "Retain after correction; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/graph/dependence-slice.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/dependence-slice.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/graph/dependence-slice.test.ts",
+        "passed": 24,
+        "total": 24
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/dependence-slice.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "reference-reachability",
+    "status": "removed",
+    "implementationRead": [
+      "src/queries/navigation/reference-reachability.ts:51"
+    ],
+    "claims": [
+      "Legacy backward direction traverses outgoing callees; forward path silently stops at 30, ignores requested depth, strips evidence distinctions."
+    ],
+    "positiveCases": [
+      "Retained context, call graph, health and protocol regression cases rerun while removing these products."
+    ],
+    "negativeCases": [
+      "Built CLI invocation rejects retired command with exit 1; see retired-cli.json."
+    ],
+    "decision": "remove",
+    "overlap": "evidence with explicit family/direction/depth",
+    "previousEvidence": "Previous sweep regression links are leads; not command-level verification.",
+    "cliVerification": "retired-cli.json: built CLI rejects removed command"
+  },
+  {
+    "command": "diff-impact",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/impact/diff-impact.ts"
+    ],
+    "claims": [
+      "Changed indexed symbols and the union of observed consumer files; omitted unindexed paths and failed provider tiers remain visible."
+    ],
+    "positiveCases": [
+      "Exact changed hunks, distinct union of consumer tiers, quoted Unicode paths and staged-then-reverted changes."
+    ],
+    "negativeCases": [
+      "Unindexed changed paths and failed semantic tiers are disclosed; nearby unchanged siblings are excluded."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Changed hunks exclude siblings; provider-union, unique fan-in, reverted staged edits and quoted Unicode Git paths have regression witnesses.",
+    "builtCliCase": {
+      "artifact": "cli/diff-impact.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/impact/diff-impact-accuracy.test.ts",
+      "tests/runtime/cli-support.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/impact/diff-impact-accuracy.test.ts",
+        "passed": 10,
+        "total": 10
+      },
+      {
+        "file": "tests/runtime/cli-support.test.ts",
+        "passed": 46,
+        "total": 46
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/diff-impact.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "dead",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/dead.ts"
+    ],
+    "claims": [
+      "Definitions with no observed references after configured source/framework exclusions; these are deletion candidates."
+    ],
+    "positiveCases": [
+      "Known unreferenced production callable appears as a candidate."
+    ],
+    "negativeCases": [
+      "Observed Vue consumers, library roots, implicit and framework uses prevent false deletion advice."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Known-used, source-only workspace consumer, implicit/framework entry and excluded-file cases exercised; no runtime absence guarantee.",
+    "builtCliCase": {
+      "artifact": "cli/dead.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/cleanup/dead-output.test.ts",
+      "tests/queries/cleanup/dead-vue-script-setup.test.ts",
+      "tests/queries/internal/dead-candidate-gate.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/cleanup/dead-output.test.ts",
+        "passed": 4,
+        "total": 4
+      },
+      {
+        "file": "tests/queries/cleanup/dead-vue-script-setup.test.ts",
+        "passed": 1,
+        "total": 1
+      },
+      {
+        "file": "tests/queries/internal/dead-candidate-gate.test.ts",
+        "passed": 7,
+        "total": 7
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/dead.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "unused-imports",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/imports.ts"
+    ],
+    "claims": [
+      "Imported local bindings without observed source use."
+    ],
+    "positiveCases": [
+      "Unused local import binding is reported."
+    ],
+    "negativeCases": [
+      "Default/renamed/re-exported bindings and source-only consumers are preserved."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Source binding/alias fixtures and actual runner import results; import side effects still require review.",
+    "builtCliCase": {
+      "artifact": "cli/unused-imports.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/navigation/queries-advanced.test.ts",
+      "tests/queries/navigation/reference-binding-contract.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/queries-advanced.test.ts",
+        "passed": 7,
+        "total": 7
+      },
+      {
+        "file": "tests/queries/navigation/reference-binding-contract.test.ts",
+        "passed": 1,
+        "total": 1
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/unused-imports.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "isolated",
+    "status": "removed",
+    "implementationRead": [
+      "src/queries/cleanup/isolated.ts",
+      "src/queries/health/health-report.ts"
+    ],
+    "claims": [],
+    "positiveCases": [],
+    "negativeCases": [],
+    "decision": "Remove: unused-code subset with no distinct action; overlapping health counts, and missing same-file strict callers. Use dead and explicit evidence projections.",
+    "overlap": "dead, evidence",
+    "previousEvidence": "Previous sweep regression links are leads; not command-level verification."
+  },
+  {
+    "command": "similar",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/similar.ts"
+    ],
+    "claims": [
+      "Weighted observed callee overlap, or explicitly labeled lexical tokens from complete callable source."
+    ],
+    "positiveCases": [
+      "Complete selected callable source and hand-computed dependency overlap determine the reported score."
+    ],
+    "negativeCases": [
+      "Same-line siblings do not contaminate the selected body; ambiguous roots are rejected."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Long-function tail, same-line sibling, ambiguous target, cached corpus, callee weighting and consolidation-context cases tested.",
+    "builtCliCase": {
+      "artifact": "cli/similar.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/cleanup/source-fingerprint-cache.test.ts",
+      "tests/queries/cleanup/similar-topk.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/cleanup/source-fingerprint-cache.test.ts",
+        "passed": 3,
+        "total": 3
+      },
+      {
+        "file": "tests/queries/cleanup/similar-topk.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/similar.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "similar-files",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/similar-files.ts"
+    ],
+    "claims": [
+      "Filtered dependency-set overlap using repository-wide popularity; shared dependencies do not establish common behavior."
+    ],
+    "positiveCases": [
+      "Explicit minimum of three dependencies is honored."
+    ],
+    "negativeCases": [
+      "Scoped candidates still use global dependency popularity; similarity does not prove interchangeable modules."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Three-dependency minimum and global popularity under scoped candidates both failed before repair and pass after.",
+    "builtCliCase": {
+      "artifact": "cli/similar-files.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/cleanup/similar-files-contract.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/cleanup/similar-files-contract.test.ts",
+        "passed": 2,
+        "total": 2
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/similar-files.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "react-component-duplicates",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/frontend/react-component-duplicates.ts"
+    ],
+    "claims": [
+      "Source-profile candidate comparison or line/vocabulary pressure with explicit thresholds; no behavior-equivalence claim."
+    ],
+    "positiveCases": [
+      "Constructed repeated frontend components yield the expected structural/identifier similarity candidate."
+    ],
+    "negativeCases": [
+      "Identifier vocabulary is not behavior equivalence; full selected-file/component token sets are used and missing scope yields no invented component."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Real CLI positive and missing-scope cases; exact line counts, complete token accounting and reproducible structural Jaccard checks; source profile and policy counterexamples in tests.",
+    "builtCliCase": {
+      "artifact": "cli/react-component-duplicates.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/frontend/frontend-command-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/frontend/frontend-command-contracts.test.ts",
+        "passed": 3,
+        "total": 3
+      }
+    ],
+    "integrationArtifacts": [
+      "frontend/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "react-hook-candidates",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/frontend/react-hook-candidates.ts"
+    ],
+    "claims": [
+      "Source-profile candidate comparison or line/vocabulary pressure with explicit thresholds; no behavior-equivalence claim."
+    ],
+    "positiveCases": [
+      "Constructed repeated frontend components yield the expected structural/identifier similarity candidate."
+    ],
+    "negativeCases": [
+      "Identifier vocabulary is not behavior equivalence; full selected-file/component token sets are used and missing scope yields no invented component."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Real CLI positive and missing-scope cases; exact line counts, complete token accounting and reproducible structural Jaccard checks; source profile and policy counterexamples in tests.",
+    "builtCliCase": {
+      "artifact": "cli/react-hook-candidates.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/frontend/frontend-command-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/frontend/frontend-command-contracts.test.ts",
+        "passed": 3,
+        "total": 3
+      }
+    ],
+    "integrationArtifacts": [
+      "frontend/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "react-large-component-pressure",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/frontend/react-large-component-pressure.ts"
+    ],
+    "claims": [
+      "Source-profile candidate comparison or line/vocabulary pressure with explicit thresholds; no behavior-equivalence claim."
+    ],
+    "positiveCases": [
+      "Full component/SFC size is measured, including the 320-line React and 836-line Vue examples."
+    ],
+    "negativeCases": [
+      "Component size is distinguished from whole-file size and large style-only content; pressure is a candidate metric."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Real CLI positive and missing-scope cases; exact line counts, complete token accounting and reproducible structural Jaccard checks; source profile and policy counterexamples in tests.",
+    "builtCliCase": {
+      "artifact": "cli/react-large-component-pressure.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/frontend/frontend-command-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/frontend/frontend-command-contracts.test.ts",
+        "passed": 3,
+        "total": 3
+      }
+    ],
+    "integrationArtifacts": [
+      "frontend/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "vue-component-duplicates",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/frontend/vue-component-duplicates.ts"
+    ],
+    "claims": [
+      "Source-profile candidate comparison or line/vocabulary pressure with explicit thresholds; no behavior-equivalence claim."
+    ],
+    "positiveCases": [
+      "Constructed repeated frontend components yield the expected structural/identifier similarity candidate."
+    ],
+    "negativeCases": [
+      "Identifier vocabulary is not behavior equivalence; full selected-file/component token sets are used and missing scope yields no invented component."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Real CLI positive and missing-scope cases; exact line counts, complete token accounting and reproducible structural Jaccard checks; source profile and policy counterexamples in tests.",
+    "builtCliCase": {
+      "artifact": "cli/vue-component-duplicates.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/frontend/frontend-command-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/frontend/frontend-command-contracts.test.ts",
+        "passed": 3,
+        "total": 3
+      }
+    ],
+    "integrationArtifacts": [
+      "frontend/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "vue-composable-candidates",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/frontend/vue-composable-candidates.ts"
+    ],
+    "claims": [
+      "Source-profile candidate comparison or line/vocabulary pressure with explicit thresholds; no behavior-equivalence claim."
+    ],
+    "positiveCases": [
+      "Constructed repeated frontend components yield the expected structural/identifier similarity candidate."
+    ],
+    "negativeCases": [
+      "Identifier vocabulary is not behavior equivalence; full selected-file/component token sets are used and missing scope yields no invented component."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Real CLI positive and missing-scope cases; exact line counts, complete token accounting and reproducible structural Jaccard checks; source profile and policy counterexamples in tests.",
+    "builtCliCase": {
+      "artifact": "cli/vue-composable-candidates.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/frontend/frontend-command-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/frontend/frontend-command-contracts.test.ts",
+        "passed": 3,
+        "total": 3
+      }
+    ],
+    "integrationArtifacts": [
+      "frontend/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "vue-large-view-pressure",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/frontend/vue-large-view-pressure.ts"
+    ],
+    "claims": [
+      "Source-profile candidate comparison or line/vocabulary pressure with explicit thresholds; no behavior-equivalence claim."
+    ],
+    "positiveCases": [
+      "Full component/SFC size is measured, including the 320-line React and 836-line Vue examples."
+    ],
+    "negativeCases": [
+      "Component size is distinguished from whole-file size and large style-only content; pressure is a candidate metric."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Real CLI positive and missing-scope cases; exact line counts, complete token accounting and reproducible structural Jaccard checks; source profile and policy counterexamples in tests.",
+    "builtCliCase": {
+      "artifact": "cli/vue-large-view-pressure.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/frontend/frontend-command-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/frontend/frontend-command-contracts.test.ts",
+        "passed": 3,
+        "total": 3
+      }
+    ],
+    "integrationArtifacts": [
+      "frontend/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "similar-chains",
+    "status": "removed",
+    "implementationRead": [
+      "src/queries/cleanup/similar-chains.ts"
+    ],
+    "claims": [],
+    "positiveCases": [],
+    "negativeCases": [
+      "Built CLI rejection pending rebuild"
+    ],
+    "decision": "Scores filtered dependency paths but renders original paths/divergence offsets; undisclosed 500-chain and limit*10 pair enumeration. Explicit dependency evidence and dependency-depth provide actual structural facts.",
+    "overlap": "See decision",
+    "previousEvidence": "Previous sweep regression links are leads; not command-level verification.",
+    "cliVerification": "retired-cli.json: built CLI rejects removed command"
+  },
+  {
+    "command": "extract-candidates",
+    "status": "removed",
+    "implementationRead": [
+      "src/queries/cleanup/extract-candidates.ts"
+    ],
+    "claims": [],
+    "positiveCases": [],
+    "negativeCases": [
+      "Built CLI rejection pending rebuild"
+    ],
+    "decision": "Occurrence-range regionLocalFlow cannot prove extraction inputs/outputs across branches, scopes and aliases; recommendations assert exact parameter counts. Use dependence-slice and slice-cohesion within their disclosed local model.",
+    "overlap": "See decision",
+    "previousEvidence": "Previous sweep regression links are leads; not command-level verification.",
+    "cliVerification": "retired-cli.json: built CLI rejects removed command"
+  },
+  {
+    "command": "locality-candidates",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/locality-candidates.ts"
+    ],
+    "claims": [
+      "Candidate definitions, global observed consumers and their nearest common directory."
+    ],
+    "positiveCases": [
+      "Observed consumer directories provide a candidate common directory."
+    ],
+    "negativeCases": [
+      "Missing consumers, conflicting boundaries and ambiguous identities withhold relocation advice."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Scoped external consumers retained; ambiguous target rejected; directory suggestions remain candidates.",
+    "builtCliCase": {
+      "artifact": "cli/locality-candidates.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/cleanup/locality-candidates.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/cleanup/locality-candidates.test.ts",
+        "passed": 13,
+        "total": 13
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/locality-candidates.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "cleanup-plan",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/cleanup-plan.ts",
+      "src/runtime/cleanup-verify.ts"
+    ],
+    "claims": [
+      "Original-coordinate cumulative batches; blocked candidate re-evaluation; verification proves checker compatibility, not behavior."
+    ],
+    "positiveCases": [
+      "converging five-function cascade; same-file two-batch deletion exact remaining bytes"
+    ],
+    "negativeCases": [
+      "dirty/unavailable checkers; candidate output does not promise empty files or safe deletion"
+    ],
+    "decision": "Retain after producer and fixture review; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/cleanup/cleanup-cascade-contract.test.ts",
+      "tests/queries/cleanup/cleanup-plan.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/cleanup-plan.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/cleanup/cleanup-cascade-contract.test.ts",
+        "passed": 1,
+        "total": 1
+      },
+      {
+        "file": "tests/queries/cleanup/cleanup-plan.test.ts",
+        "passed": 20,
+        "total": 20
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/cleanup-plan.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "recent-duplicates",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/recent-duplicates.ts"
+    ],
+    "claims": [],
+    "positiveCases": [
+      "Changed callable is compared with existing implementations outside the diff."
+    ],
+    "negativeCases": [
+      "Focus is applied before pair budget; absent frameworks and trait-required implementations are excluded."
+    ],
+    "decision": "Retain directional similarity by file age; cannot date function creation. Recent files now filter before finite candidate budget. No equivalence/deletion guarantee.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/frontend/frontend-recent-duplicates.test.ts",
+      "tests/queries/cleanup/recent-duplicates-pruning.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/recent-duplicates.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/frontend/frontend-recent-duplicates.test.ts",
+        "passed": 2,
+        "total": 2
+      },
+      {
+        "file": "tests/queries/cleanup/recent-duplicates-pruning.test.ts",
+        "passed": 2,
+        "total": 2
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/recent-duplicates.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "doc-drift",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/doc-drift.ts"
+    ],
+    "claims": [],
+    "positiveCases": [
+      "Known stale citations retain every stale subject for each selected document."
+    ],
+    "negativeCases": [
+      "Snapshot exclusions, absent history and filesystem fallback remain explicit."
+    ],
+    "decision": "Retain historical staleness/citation candidates; docsScanned counts examined docs and selected documents retain every subject. Line citations are recorded, not verified against old text.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/cleanup/doc-drift.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/doc-drift.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/cleanup/doc-drift.test.ts",
+        "passed": 6,
+        "total": 6
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/doc-drift.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "unused-params",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/unused-params.ts"
+    ],
+    "claims": [
+      "Trailing simple parameters without reads of their exact lexical bindings; dynamic arguments/eval excluded."
+    ],
+    "positiveCases": [
+      "unused and shadowed outer parameter"
+    ],
+    "negativeCases": [
+      "same-line use, arguments, defaults and underscore-preserving exclusions"
+    ],
+    "decision": "Retain after correction; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/cleanup/cleanup-identity-contracts.test.ts",
+      "tests/queries/cleanup/unused-params.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/unused-params.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/cleanup/cleanup-identity-contracts.test.ts",
+        "passed": 4,
+        "total": 4
+      },
+      {
+        "file": "tests/queries/cleanup/unused-params.test.ts",
+        "passed": 4,
+        "total": 4
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/unused-params.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "drift",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/drift.ts"
+    ],
+    "claims": [
+      "Declared dependency violations, unused import candidates and opt-in sibling-pattern deviations."
+    ],
+    "positiveCases": [
+      "Import-use and vocabulary comparisons report their actual source evidence."
+    ],
+    "negativeCases": [
+      "An import declaration alone is not use; Vue component usage is retained."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Import declarations cannot count as use; actual usage, policy rules and optional deviation thresholds tested.",
+    "builtCliCase": {
+      "artifact": "cli/drift.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [],
+    "unitValidation": [],
+    "integrationArtifacts": [
+      "cli/drift.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "wrapper-candidates",
+    "status": "removed",
+    "implementationRead": [
+      "src/queries/cleanup/wrapper-candidates.ts:163"
+    ],
+    "claims": [
+      "Small single-consumer wrapper plus thresholded caller fan-in does not establish unnecessary indirection; direct inline advice lacks a behavioral equivalence proof."
+    ],
+    "positiveCases": [
+      "Retained context, call graph, health and protocol regression cases rerun while removing these products."
+    ],
+    "negativeCases": [
+      "Built CLI invocation rejects retired command with exit 1; see retired-cli.json."
+    ],
+    "decision": "remove",
+    "overlap": "inspect/code plus exact caller evidence",
+    "previousEvidence": "Previous sweep regression links are leads; not command-level verification.",
+    "cliVerification": "retired-cli.json: built CLI rejects removed command"
+  },
+  {
+    "command": "passthrough-candidates",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/passthrough-candidates.ts"
+    ],
+    "claims": [
+      "Literal forwarding shape with observed callee and explicit public/boundary evidence."
+    ],
+    "positiveCases": [
+      "Actual forwarding structure is detected and classified with facade evidence."
+    ],
+    "negativeCases": [
+      "Boundary-shaped forwarding is not presented as automatic inlining authority."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Forwarding versus transformed/defaulted arguments, facade families and public boundaries tested; behavior-safe inlining is not established.",
+    "builtCliCase": {
+      "artifact": "cli/passthrough-candidates.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [],
+    "unitValidation": [],
+    "integrationArtifacts": [
+      "cli/passthrough-candidates.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "stale-abstractions",
+    "status": "removed",
+    "implementationRead": [
+      "src/queries/cleanup/stale-abstractions.ts:657"
+    ],
+    "claims": [
+      "One consumer and a type name do not establish a stale abstraction or correct owner; scoreConfidence explicitly asserts relocation from consumer count."
+    ],
+    "positiveCases": [
+      "Retained context, call graph, health and protocol regression cases rerun while removing these products."
+    ],
+    "negativeCases": [
+      "Built CLI invocation rejects retired command with exit 1; see retired-cli.json."
+    ],
+    "decision": "remove",
+    "overlap": "refs/evidence plus source-based ownership review",
+    "previousEvidence": "Previous sweep regression links are leads; not command-level verification.",
+    "cliVerification": "retired-cli.json: built CLI rejects removed command"
+  },
+  {
+    "command": "complexity-hotspots",
+    "status": "removed",
+    "implementationRead": [
+      "src/queries/quality/complexity-hotspots.ts:85"
+    ],
+    "claims": [
+      "Composite score multiplies LOC/fan-in/out and branch proxies; agent contract falsely promises churn evidence. Actual function metrics are already exposed by complexity and review."
+    ],
+    "positiveCases": [
+      "Retained context, call graph, health and protocol regression cases rerun while removing these products."
+    ],
+    "negativeCases": [
+      "Built CLI invocation rejects retired command with exit 1; see retired-cli.json."
+    ],
+    "decision": "remove",
+    "overlap": "complexity; health/review",
+    "previousEvidence": "Previous sweep regression links are leads; not command-level verification.",
+    "cliVerification": "retired-cli.json: built CLI rejects removed command"
+  },
+  {
+    "command": "slice-cohesion",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/quality/slice-cohesion.ts"
+    ],
+    "claims": [
+      "Heuristic output partitions over a local flow model; observed inputs are not a proved extraction signature."
+    ],
+    "positiveCases": [
+      "independent outputs, guards, React hook/state clusters"
+    ],
+    "negativeCases": [
+      "unknown closure order stays partial and support-tier; ambiguous root rejected"
+    ],
+    "decision": "Retain after correction; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/quality/slice-cohesion-coverage.test.ts",
+      "tests/queries/quality/slice-cohesion.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/slice-cohesion.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/quality/slice-cohesion-coverage.test.ts",
+        "passed": 4,
+        "total": 4
+      },
+      {
+        "file": "tests/queries/quality/slice-cohesion.test.ts",
+        "passed": 6,
+        "total": 6
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/slice-cohesion.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "self-audit",
+    "status": "removed",
+    "implementationRead": [
+      "src/queries/quality/self-audit.ts"
+    ],
+    "claims": [],
+    "positiveCases": [],
+    "negativeCases": [
+      "Built CLI rejection pending rebuild"
+    ],
+    "decision": "Measures file-set agreement between overlapping evidence providers, not symbol correctness; two wrong targets in the same file can agree. Independent known-answer tests replace the accuracy claim.",
+    "overlap": "See decision",
+    "previousEvidence": "Previous sweep regression links are leads; not command-level verification.",
+    "cliVerification": "retired-cli.json: built CLI rejects removed command"
+  },
+  {
+    "command": "complexity",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/quality/complexity.ts",
+      "src/queries/internal/indexed-reference-count.ts"
+    ],
+    "claims": [
+      "Current-source branch estimate with named rule set and resolved/candidate calls separate."
+    ],
+    "positiveCases": [
+      "TS local nullish branch=2; nested body excluded; real fixture=2 and 3 callees"
+    ],
+    "negativeCases": [
+      "ambiguous identity and missing source rejected; non-call references not calls"
+    ],
+    "decision": "Retain after correction; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/quality/function-complexity-contract.test.ts",
+      "tests/queries/navigation/metric-contracts.test.ts",
+      "tests/queries/quality/complexity.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/complexity.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/quality/function-complexity-contract.test.ts",
+        "passed": 6,
+        "total": 6
+      },
+      {
+        "file": "tests/queries/navigation/metric-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      },
+      {
+        "file": "tests/queries/quality/complexity.test.ts",
+        "passed": 1,
+        "total": 1
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/complexity.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "redundant-reexports",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/redundant-reexports.ts"
+    ],
+    "claims": [
+      "Source re-export declarations without resolved local import/re-export consumers; review candidates only."
+    ],
+    "positiveCases": [
+      "unused Rust pub use, named TS export, public API caveat"
+    ],
+    "negativeCases": [
+      "used intermediary re-export retained; executable index not a re-export"
+    ],
+    "decision": "Retain after correction; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/cleanup/cleanup-identity-contracts.test.ts",
+      "tests/queries/cleanup/redundant-reexports-fallback.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/redundant-reexports.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/cleanup/cleanup-identity-contracts.test.ts",
+        "passed": 4,
+        "total": 4
+      },
+      {
+        "file": "tests/queries/cleanup/redundant-reexports-fallback.test.ts",
+        "passed": 5,
+        "total": 5
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/redundant-reexports.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "duplicate-bodies",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/duplicate-bodies.ts"
+    ],
+    "claims": [],
+    "positiveCases": [
+      "Complete AST-selected normalized bodies match across files."
+    ],
+    "negativeCases": [
+      "Same-line siblings, changed source, renamed identifiers and literal differences do not become exact matches."
+    ],
+    "decision": "Retain syntax comparison; same-line named TS/JS functions selected by actual offsets and stale definitions withheld. No behavioral interchangeability claim.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/cleanup/cleanup-identity-contracts.test.ts",
+      "tests/queries/cleanup/duplicate-bodies-policy.test.ts",
+      "tests/queries/cleanup/duplicate-bodies.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/duplicate-bodies.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/cleanup/cleanup-identity-contracts.test.ts",
+        "passed": 4,
+        "total": 4
+      },
+      {
+        "file": "tests/queries/cleanup/duplicate-bodies-policy.test.ts",
+        "passed": 1,
+        "total": 1
+      },
+      {
+        "file": "tests/queries/cleanup/duplicate-bodies.test.ts",
+        "passed": 5,
+        "total": 5
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/duplicate-bodies.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "twin-drift",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/twin-drift.ts"
+    ],
+    "claims": [
+      "Near-name groups with divergent source tokens; this does not prove common conceptual ownership."
+    ],
+    "positiveCases": [
+      "Related callable bodies with different string literals remain divergent."
+    ],
+    "negativeCases": [
+      "Identical bodies, unrelated homonyms, delegates and framework conventions are excluded."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Literal-only differences, identical bodies, unrelated names, delegation and framework convention cases tested.",
+    "builtCliCase": {
+      "artifact": "cli/twin-drift.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/cleanup/twin-drift.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/cleanup/twin-drift.test.ts",
+        "passed": 41,
+        "total": 41
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/twin-drift.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "not-implemented",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/not-implemented.ts"
+    ],
+    "claims": [
+      "Placeholder syntax with observed consumer/entry evidence, not proof of executable reachability."
+    ],
+    "positiveCases": [
+      "throw, TODO+default, empty body; base stub via super retained"
+    ],
+    "negativeCases": [
+      "default-object and truncated arrow are not empty stubs"
+    ],
+    "decision": "Retain after correction; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/cleanup/not-implemented.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/not-implemented.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/cleanup/not-implemented.test.ts",
+        "passed": 8,
+        "total": 8
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/not-implemented.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "decorative-checkers",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/decorative-checkers.ts"
+    ],
+    "claims": [
+      "Checker-shaped code whose observed syntax does not enforce the implied result; suggestions require behavior review."
+    ],
+    "positiveCases": [
+      "A constant-true input validator is flagged."
+    ],
+    "negativeCases": [
+      "Throwing, boolean-expression, delegated failure and later failure paths are retained."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Validator returns, external same-name imports, assertion and delegation counterexamples exercised.",
+    "builtCliCase": {
+      "artifact": "cli/decorative-checkers.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/cleanup/decorative-checkers.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/cleanup/decorative-checkers.test.ts",
+        "passed": 17,
+        "total": 17
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/decorative-checkers.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "test-quality",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/test-quality.ts"
+    ],
+    "claims": [
+      "recognized assertion syntax, skipped declarations and age, repeated-literal mock candidates"
+    ],
+    "positiveCases": [
+      "aliased and namespace assertions",
+      "skipped tests and syntax-based mock literal controls"
+    ],
+    "negativeCases": [
+      "Vitest vi.fn and namespace mocks are not assertions",
+      "function declarations and regex .test are not test invocations"
+    ],
+    "decision": "Retain candidate scanner; syntax does not prove reachable assertions or behavioral mock echo.",
+    "overlap": null,
+    "builtCliCase": {
+      "artifact": "cli/test-quality.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/cleanup/test-quality.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/cleanup/test-quality.test.ts",
+        "passed": 18,
+        "total": 18
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/test-quality.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "similar-signatures",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/cleanup/similar-signatures.ts",
+      "src/semantic/typescript/ts-morph-provider.ts"
+    ],
+    "claims": [
+      "Normalized signature text groups; shared type identity/responsibility is not established."
+    ],
+    "positiveCases": [
+      "matching parameter/return text; object return shape"
+    ],
+    "negativeCases": [
+      "case-sensitive types and literal whitespace stay distinct; noncallables omitted"
+    ],
+    "decision": "Retain after correction; see validation-summary.json.",
+    "overlap": null,
+    "tests": [
+      "tests/queries/cleanup/cleanup-identity-contracts.test.ts",
+      "tests/queries/cleanup/similar-signatures-fallback.test.ts"
+    ],
+    "builtCliCase": {
+      "artifact": "cli/similar-signatures.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "unitValidation": [
+      {
+        "file": "tests/queries/cleanup/cleanup-identity-contracts.test.ts",
+        "passed": 4,
+        "total": 4
+      },
+      {
+        "file": "tests/queries/cleanup/similar-signatures-fallback.test.ts",
+        "passed": 3,
+        "total": 3
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/similar-signatures.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "review",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/health/source-review.ts",
+      "src/runtime/query-commands/maintenance.ts",
+      "src/queries/health/health.ts",
+      "src/queries/health/health-report.ts"
+    ],
+    "claims": [
+      "Current-versus-base TS/JS function metrics and maintenance findings, with changed importers and source-matched coverage when supplied."
+    ],
+    "positiveCases": [
+      "New, changed, removed and untracked TS/JS functions receive current/base metrics and finding status."
+    ],
+    "negativeCases": [
+      "Missing or mismatched coverage cannot produce a CRAP value; incomparable history and stale suppressions remain explicit."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "New/untracked/removed functions, changed contracts, missing or mismatched coverage, incomparable history, suppressions and check exit statuses tested.",
+    "builtCliCase": {
+      "artifact": "cli/review.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/health/source-review.test.ts",
+      "tests/runtime/source-review-cli.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/health/source-review.test.ts",
+        "passed": 32,
+        "total": 32
+      },
+      {
+        "file": "tests/runtime/source-review-cli.test.ts",
+        "passed": 5,
+        "total": 5
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/review.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "reindex",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/commands/command-handlers.ts"
+    ],
+    "claims": [
+      "Build and publish a compiler index for detected or explicitly selected supported languages."
+    ],
+    "positiveCases": [
+      "Actual temporary TypeScript project indexes successfully."
+    ],
+    "negativeCases": [
+      "Unknown language and missing provider failures are explicit; temporary config ownership is preserved."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Real TypeScript indexing, malformed language rejection and readiness/reindex integration cases tested; other language support remains provider-dependent.",
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/reindex/indexer-runner-temporary-config.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/reindex/indexer-runner-temporary-config.test.ts",
+        "passed": 7,
+        "total": 7
+      }
+    ],
+    "integrationArtifacts": [
+      "controls/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "augment-sources",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/reindex/augmentation/augment.ts"
+    ],
+    "claims": [
+      "insert auxiliary current source documents, not compiler bindings"
+    ],
+    "positiveCases": [
+      "Vue document insertion and 1100-file batching"
+    ],
+    "negativeCases": [
+      "quoted Unicode/newline filenames preserved through NUL-delimited Git output"
+    ],
+    "decision": "Retain auxiliary document index operation; positive built quoted-path case pending rebuild.",
+    "overlap": null,
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/reindex/augment-sources.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/reindex/augment-sources.test.ts",
+        "passed": 6,
+        "total": 6
+      }
+    ],
+    "integrationArtifacts": [
+      "controls/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "augment-vue",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/reindex/vue/augment-vue.ts",
+      "src/reindex/vue/augment-vue-runtime.ts",
+      "src/reindex/augmentation/indexed-symbol-lookup.ts",
+      "src/domain/scip-symbol.ts",
+      "src/domain/scip-range.ts"
+    ],
+    "claims": [
+      "Volar source-mapped cross-file symbol references"
+    ],
+    "positiveCases": [
+      "nullable compiler display names resolve through symbol identity",
+      "same-line same-name definitions use columns"
+    ],
+    "negativeCases": [
+      "missing dependencies explicit",
+      "unrelated enclosing/property definition rejected"
+    ],
+    "decision": "Retain provider-backed augmentation; real positive compiler fixture failed before lookup repair, rebuild proof pending.",
+    "overlap": null,
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/reindex/augment-vue-reference-task.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/reindex/augment-vue-reference-task.test.ts",
+        "passed": 5,
+        "total": 5
+      }
+    ],
+    "integrationArtifacts": [
+      "controls/results.json",
+      "vue/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "stats",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/navigation/stats.ts",
+      "src/runtime/query-commands/graph.ts",
+      "src/runtime/query-commands/navigation.ts",
+      "src/runtime/query-commands/direct-navigation.ts"
+    ],
+    "claims": [
+      "Stored document/symbol/definition-mention/reference-mention row counts and database file stat; mtime is not source freshness."
+    ],
+    "positiveCases": [
+      "4 documents/5 symbols/5 definition mentions/3 reference mentions"
+    ],
+    "negativeCases": [
+      "two calls in one chunk do not become two mention rows"
+    ],
+    "decision": "Retain: tested described producer cases; see validation-summary.json.",
+    "overlap": null,
+    "builtCliCase": {
+      "artifact": "cli/stats.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/navigation/metric-contracts.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/metric-contracts.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/stats.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "context",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/impact/context.ts"
+    ],
+    "claims": [
+      "A bounded assembly of source, qualified calls, consumers, metrics, history and reuse candidates for a selected target."
+    ],
+    "positiveCases": [
+      "An exact selected symbol receives related source and structural context."
+    ],
+    "negativeCases": [
+      "Bounded context does not certify complete invocation arguments or whole-program behavior."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Consumer reuse and source-packet limits tested; inherited source/call limitations remain; ambiguity is rejected by the target resolver.",
+    "builtCliCase": {
+      "artifact": "cli/context.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/navigation/source-evidence.test.ts",
+      "tests/queries/navigation/queries-advanced.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/navigation/source-evidence.test.ts",
+        "passed": 35,
+        "total": 35
+      },
+      {
+        "file": "tests/queries/navigation/queries-advanced.test.ts",
+        "passed": 7,
+        "total": 7
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/context.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "health",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/queries/health/source-review.ts",
+      "src/runtime/query-commands/maintenance.ts",
+      "src/queries/health/health.ts",
+      "src/queries/health/health-report.ts"
+    ],
+    "claims": [
+      "Default current-source TS/JS maintenance findings and module/dependency inventory; indexed mode combines separately qualified specialist candidates."
+    ],
+    "positiveCases": [
+      "A repository without an index receives source-based module, dependency, duplication and complexity findings."
+    ],
+    "negativeCases": [
+      "Missing coverage, unsupported files, scoped global facts and capped indexed candidate lists remain disclosed."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "First-use source, changed modules, missing coverage, policy scope, bounded indexed counts and uncapped baseline identity cases tested.",
+    "builtCliCase": {
+      "artifact": "cli/health.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/queries/health/source-modules.test.ts",
+      "tests/queries/health/source-review.test.ts",
+      "tests/queries/health/health-full.test.ts",
+      "tests/queries/health/baseline-completeness-contract.test.ts",
+      "tests/runtime/source-review-cli.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/queries/health/source-modules.test.ts",
+        "passed": 4,
+        "total": 4
+      },
+      {
+        "file": "tests/queries/health/source-review.test.ts",
+        "passed": 32,
+        "total": 32
+      },
+      {
+        "file": "tests/queries/health/health-full.test.ts",
+        "passed": 2,
+        "total": 2
+      },
+      {
+        "file": "tests/queries/health/baseline-completeness-contract.test.ts",
+        "passed": 1,
+        "total": 1
+      },
+      {
+        "file": "tests/runtime/source-review-cli.test.ts",
+        "passed": 5,
+        "total": 5
+      }
+    ],
+    "integrationArtifacts": [
+      "controls/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "install-skills",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/setup.ts",
+      "src/runtime/commands/command-handlers.ts"
+    ],
+    "claims": [
+      "install shipped skill links into existing supported agent roots"
+    ],
+    "positiveCases": [
+      "isolated home receives owned links"
+    ],
+    "negativeCases": [
+      "foreign symlink preserved",
+      "regular files preserved"
+    ],
+    "decision": "Retain explicit installation; skips unowned destinations.",
+    "overlap": null,
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/setup.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/setup.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "controls/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "check-deps",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/commands/command-handlers.ts"
+    ],
+    "claims": [
+      "Detected indexer executability and optional semantic dependency readiness."
+    ],
+    "positiveCases": [
+      "The actual fixture reports a runnable TypeScript indexer."
+    ],
+    "negativeCases": [
+      "Missing optional Vue provider is disclosed as unavailable."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Real fixture detects a runnable TypeScript indexer; missing optional Vue semantic provider is disclosed, not treated as available.",
+    "builtCliCase": {
+      "artifact": "cli/check-deps.log",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/project-setup.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/project-setup.test.ts",
+        "passed": 21,
+        "total": 21
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/check-deps.log"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "capabilities",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/commands/command-handlers.ts"
+    ],
+    "claims": [
+      "Configured provider readiness and supported relationship families, not a guarantee every repository construct is mapped."
+    ],
+    "positiveCases": [
+      "Actual provider readiness and supported families are reported."
+    ],
+    "negativeCases": [
+      "Availability is not substituted for per-request coverage; provider rejection remains explicit."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Actual indexed fixture and provider matrix/rejection tests; graph packets retain per-request coverage.",
+    "builtCliCase": {
+      "artifact": "cli/capabilities.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/health-capability-disclosure.test.ts",
+      "tests/queries/graph/evidence-rejection-contract.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/health-capability-disclosure.test.ts",
+        "passed": 2,
+        "total": 2
+      },
+      {
+        "file": "tests/queries/graph/evidence-rejection-contract.test.ts",
+        "passed": 1,
+        "total": 1
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/capabilities.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "init",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/commands/command-handlers.ts"
+    ],
+    "claims": [
+      "create starter project configuration"
+    ],
+    "positiveCases": [
+      "actual temporary Git project config creation"
+    ],
+    "negativeCases": [
+      "second init preserves exact existing bytes"
+    ],
+    "decision": "Retain small standalone configuration mutation.",
+    "overlap": null,
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/runtime-config.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/runtime-config.test.ts",
+        "passed": 64,
+        "total": 64
+      }
+    ],
+    "integrationArtifacts": [
+      "controls/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "config-validate",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/commands/command-handlers.ts"
+    ],
+    "claims": [
+      "Configuration and structured suppression diagnostics, with errors causing a failing exit."
+    ],
+    "positiveCases": [
+      "Valid project configuration passes."
+    ],
+    "negativeCases": [
+      "Malformed values, unknown architecture references and invalid regular expressions are diagnosed."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Valid fixture and configuration/suppression compatibility regression suites exercised.",
+    "builtCliCase": {
+      "artifact": "cli/config-validate.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/runtime-config.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/runtime-config.test.ts",
+        "passed": 64,
+        "total": 64
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/config-validate.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "suppress",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/commands/command-handlers.ts"
+    ],
+    "claims": [
+      "A revision-aware persisted decision record with reason and evidence; it does not automatically establish that the finding was false."
+    ],
+    "positiveCases": [
+      "A reasoned, evidenced decision record is written and subsequently adjudicated."
+    ],
+    "negativeCases": [
+      "Missing reason, stale cited bytes, wrong scope and conflicting decisions cannot silently suppress findings."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Missing decision evidence rejected; real record created; ownership/compatibility/replacement tests cover persistence.",
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/domain/suppression-adjudication.test.ts",
+      "tests/storage/suppression-store.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/domain/suppression-adjudication.test.ts",
+        "passed": 6,
+        "total": 6
+      },
+      {
+        "file": "tests/storage/suppression-store.test.ts",
+        "passed": 27,
+        "total": 27
+      }
+    ],
+    "integrationArtifacts": [
+      "controls/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "doctor",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/commands/command-handlers.ts"
+    ],
+    "claims": [
+      "Configuration, index freshness and dependency readiness diagnostics."
+    ],
+    "positiveCases": [
+      "Actual fixture returns configuration, dependency and freshness diagnostics."
+    ],
+    "negativeCases": [
+      "A stale-index warning is distinguished from a fatal indexing/setup failure."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Real indexed fixture and missing/stale index diagnostic tests; a stale warning is distinct from an indexing failure exit.",
+    "builtCliCase": {
+      "artifact": "cli/doctor.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/runtime-config.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/runtime-config.test.ts",
+        "passed": 64,
+        "total": 64
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/doctor.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "setup",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/commands/command-handlers.ts"
+    ],
+    "claims": [
+      "Install selected integration, index the repository and return readiness outcomes."
+    ],
+    "positiveCases": [
+      "Actual isolated guided setup completes supported project integration."
+    ],
+    "negativeCases": [
+      "Partial installation/readiness failures and optional skipped components are disclosed."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Real isolated setup, skipped optional parsers, existing guidance preservation and failure/partial setup tests exercised.",
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/project-setup.test.ts",
+      "tests/runtime/setup.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/project-setup.test.ts",
+        "passed": 21,
+        "total": 21
+      },
+      {
+        "file": "tests/runtime/setup.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "controls/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "setup-agent",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/commands/command-handlers.ts",
+      "src/runtime/agent-setup.ts"
+    ],
+    "claims": [
+      "managed guidance blocks within user instruction files"
+    ],
+    "positiveCases": [
+      "actual guidance generation"
+    ],
+    "negativeCases": [
+      "repeat byte idempotence",
+      "user text preserved"
+    ],
+    "decision": "Retain project-only integration operation.",
+    "overlap": null,
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/agent-setup.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/agent-setup.test.ts",
+        "passed": 8,
+        "total": 8
+      }
+    ],
+    "integrationArtifacts": [
+      "controls/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "uninstall",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/setup.ts",
+      "src/runtime/commands/command-handlers.ts"
+    ],
+    "claims": [
+      "remove selected owned skill links or project guidance"
+    ],
+    "positiveCases": [
+      "isolated project and global removal"
+    ],
+    "negativeCases": [
+      "dry-run preserves bytes",
+      "foreign links and user text preserved",
+      "conflicting scopes rejected"
+    ],
+    "decision": "Retain ownership-preserving counterpart of installation.",
+    "overlap": null,
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/uninstall.test.ts",
+      "tests/runtime/setup.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/uninstall.test.ts",
+        "passed": 4,
+        "total": 4
+      },
+      {
+        "file": "tests/runtime/setup.test.ts",
+        "passed": 9,
+        "total": 9
+      }
+    ],
+    "integrationArtifacts": [
+      "controls/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "watch",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/commands/command-handlers.ts"
+    ],
+    "claims": [
+      "explicit background watcher lifecycle"
+    ],
+    "positiveCases": [
+      "real isolated daemon starts and status observes running",
+      "stop followed by status observes stopped"
+    ],
+    "negativeCases": [
+      "conflicting modes rejected"
+    ],
+    "decision": "Retain lifecycle control; isolated daemon always stopped by harness cleanup.",
+    "overlap": null,
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/runtime-config.test.ts",
+      "tests/runtime/watch.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/runtime-config.test.ts",
+        "passed": 64,
+        "total": 64
+      },
+      {
+        "file": "tests/runtime/watch.test.ts",
+        "passed": 47,
+        "total": 47
+      }
+    ],
+    "integrationArtifacts": [
+      "controls/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "status",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/commands/command-handlers.ts"
+    ],
+    "claims": [
+      "Observed index generations, freshness, watch service and optional semantic-session state."
+    ],
+    "positiveCases": [
+      "Current project/index and watcher state is reported."
+    ],
+    "negativeCases": [
+      "Malformed configuration diagnostics remain visible; stopped service is not described as running."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Real fixture plus watcher start/status/stop and generation lifecycle tests exercised.",
+    "builtCliCase": {
+      "artifact": "cli/status.json",
+      "exitCode": 0,
+      "scope": "Real compiler fixture; successful invocation alone is smoke evidence."
+    },
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/runtime-config.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/runtime-config.test.ts",
+        "passed": 64,
+        "total": 64
+      }
+    ],
+    "integrationArtifacts": [
+      "cli/status.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "continue",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/output-pagination.ts"
+    ],
+    "claims": [
+      "drain immutable rendered output without repository requery"
+    ],
+    "positiveCases": [
+      "pagination suite reconstructs complete multibyte results"
+    ],
+    "negativeCases": [
+      "exact printed command must have no trailing metadata character"
+    ],
+    "decision": "Retain required output transport. Built immutable-source mutation case pending rebuild.",
+    "overlap": null,
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/output-pagination.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/output-pagination.test.ts",
+        "passed": 30,
+        "total": 30
+      }
+    ],
+    "integrationArtifacts": [
+      "transport/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "hook-architecture-stop",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/commands/architecture-stop-hook.ts"
+    ],
+    "claims": [
+      "Evaluate declared architecture policy after changed source, emitting the hook protocol block decision."
+    ],
+    "positiveCases": [
+      "Modified/deleted indexed source triggers actual configured policy enforcement."
+    ],
+    "negativeCases": [
+      "No change or clean policy does not block; quoted Unicode paths do not bypass detection."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Real forbidden-edge fixture, clean stop, policy edits, new/deleted source and quoted Unicode Git path tests pass.",
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/architecture-stop-hook.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/architecture-stop-hook.test.ts",
+        "passed": 7,
+        "total": 7
+      }
+    ],
+    "integrationArtifacts": [
+      "controls/results.json",
+      "architecture/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "__diff-impact-batch",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/commands/command-handlers.ts"
+    ],
+    "claims": [
+      "Internal worker returning one indexed impact batch."
+    ],
+    "positiveCases": [
+      "Actual valid worker payload returns an impact batch."
+    ],
+    "negativeCases": [
+      "Wrong JSON shape is rejected before opening the index."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Real valid payload; wrong JSON shape and unsupported input rejected before opening the index.",
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/cli-support.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/cli-support.test.ts",
+        "passed": 46,
+        "total": 46
+      }
+    ],
+    "integrationArtifacts": [
+      "controls/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "__health-phase",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/commands/command-handlers.ts"
+    ],
+    "claims": [
+      "Internal worker returning explicitly selected indexed health phases."
+    ],
+    "positiveCases": [
+      "Actual overview phase returns valid worker output."
+    ],
+    "negativeCases": [
+      "Unknown or empty phase is rejected."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Real overview phase; invalid and empty phase names rejected before opening the index.",
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/cli-support.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/cli-support.test.ts",
+        "passed": 46,
+        "total": 46
+      }
+    ],
+    "integrationArtifacts": [
+      "controls/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  },
+  {
+    "command": "__health-semantic-prewarm",
+    "status": "verified-within-contract",
+    "implementationRead": [
+      "src/runtime/commands/command-handlers.ts"
+    ],
+    "claims": [
+      "Internal worker preparing a valid semantic shard."
+    ],
+    "positiveCases": [
+      "Actual shard 0 of 1 completes with valid worker output."
+    ],
+    "negativeCases": [
+      "Malformed or incomplete shard arguments are rejected."
+    ],
+    "decision": "Retain within the stated evidence and coverage contract.",
+    "overlap": null,
+    "assessedCases": "Real shard 0/1; malformed numbers and incomplete shard options rejected.",
+    "auditPass": "2026-09-06 command contract sweep",
+    "validationLimit": "Listed fixtures and producer review; no exhaustive language/framework accuracy or demonstrated improvement in agent outcomes.",
+    "tests": [
+      "tests/runtime/cli-support.test.ts"
+    ],
+    "unitValidation": [
+      {
+        "file": "tests/runtime/cli-support.test.ts",
+        "passed": 46,
+        "total": 46
+      }
+    ],
+    "integrationArtifacts": [
+      "controls/results.json"
+    ],
+    "validationSummary": "validation-summary.json"
+  }
+]

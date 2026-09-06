@@ -7,7 +7,6 @@ export type CommandPanelId =
   | 'specialized-analysis'
   | 'quality-cleanup'
   | 'maintenance'
-  | 'formal-modeling'
   | 'compatibility';
 
 export interface CommandPanel {
@@ -26,11 +25,11 @@ const MAINTENANCE_CATEGORIES = new Set(['Indexing', 'Core', 'Maintenance']);
 export function commandPanelId(descriptor: CommandDescriptor): CommandPanelId {
   if (descriptor.hidden || descriptor.agent?.semantic?.compatibility === 'deprecated') return 'compatibility';
   if (PRIMARY_IDS.has(descriptor.id)) return 'primary-exploration';
+  if (['health', 'review', 'context'].includes(descriptor.id)) return 'maintenance';
   const category = descriptor.docs?.category;
   if (category && SPECIALIZED_CATEGORIES.has(category)) return 'specialized-analysis';
   if (category && QUALITY_CATEGORIES.has(category)) return 'quality-cleanup';
   if (category && MAINTENANCE_CATEGORIES.has(category)) return 'maintenance';
-  if (category === 'Formal Models') return 'formal-modeling';
   throw new Error(`Visible command ${descriptor.id} has no cockpit panel (docs category: ${category ?? 'missing'}).`);
 }
 
@@ -57,12 +56,7 @@ export function commandPanels(
     {
       id: 'maintenance',
       title: 'Maintenance',
-      purpose: 'Build, inspect, configure, and maintain the project index and local integrations.',
-    },
-    {
-      id: 'formal-modeling',
-      title: 'Formal modeling',
-      purpose: 'Create, verify, and check explicit state-machine models and traces.',
+      purpose: 'Scan current source, plan changes, review diffs, and maintain the index and local integrations.',
     },
     {
       id: 'compatibility',

@@ -1,6 +1,7 @@
 import type { AstLanguage } from '../ast/ast-language.js';
 import type { SyntaxNode } from '../ast/ast-types.js';
 import { isCommentNode } from './source-node-kinds.js';
+import type { SourceCallableOwner } from './source-fact-types.js';
 
 const JAVASCRIPT_NAMED_CALLABLE_TYPES = [
   'function_declaration',
@@ -20,6 +21,7 @@ const PYTHON_CALLABLE_FACT_NODE_TYPES = ['function_definition'] as const;
 const NO_CALLABLE_FACT_NODE_TYPES: readonly string[] = [];
 
 const JAVASCRIPT_FUNCTION_VALUE_TYPES = new Set(['arrow_function', 'function_expression', 'generator_function']);
+const ANONYMOUS_CALLABLE_TYPES = new Set([...JAVASCRIPT_FUNCTION_VALUE_TYPES, 'closure_expression', 'lambda']);
 
 // scip-query: ignore-wrapper — this is the authoritative language-to-callable-node compatibility mapping.
 export function callableFactNodeTypes(language: AstLanguage): readonly string[] {
@@ -44,7 +46,9 @@ export function callableFactForNode(node: SyntaxNode, language: AstLanguage) {
     return {
       name: named.name,
       startLine: named.definitionNode.startPosition.row,
+      startColumn: named.definitionNode.startPosition.column,
       endLine: named.definitionNode.endPosition.row,
+      endColumn: named.definitionNode.endPosition.column,
       paramCount: parameterCount(named.functionNode),
       params: parameterFacts(named.functionNode),
       paramsEndLine: parametersEndLine(named.functionNode),
@@ -62,7 +66,9 @@ export function callableFactForNode(node: SyntaxNode, language: AstLanguage) {
   return {
     name: nameNode.text,
     startLine: node.startPosition.row,
+    startColumn: node.startPosition.column,
     endLine: node.endPosition.row,
+    endColumn: node.endPosition.column,
     paramCount: parameterCount(node),
     params: parameterFacts(node),
     paramsEndLine: parametersEndLine(node),
@@ -73,6 +79,24 @@ export function callableFactForNode(node: SyntaxNode, language: AstLanguage) {
 
 function parametersNode(fnNode: SyntaxNode): SyntaxNode | undefined {
   return fnNode.namedChildren.find((child) => child.type === 'parameters' || child.type === 'formal_parameters');
+}
+
+export function callSiteOwner(node: SyntaxNode, language: AstLanguage): SourceCallableOwner | null {
+  for (let parent = node.parent; parent; parent = parent.parent) {
+    const named = isNamedCallableType(parent.type, language);
+    const functionValue = JAVASCRIPT_FUNCTION_VALUE_TYPES.has(parent.type);
+    if (!named && !ANONYMOUS_CALLABLE_TYPES.has(parent.type)) continue;
+    const binding = functionValue && parent.parent ? namedCallableNode(parent.parent, language) : null;
+    const declaration = binding?.functionNode.startIndex === parent.startIndex ? binding.definitionNode : parent;
+    return {
+      name: declaration !== parent ? binding!.name : named ? (parent.childForFieldName('name')?.text ?? null) : null,
+      startLine: declaration.startPosition.row,
+      startColumn: declaration.startPosition.column,
+      endLine: declaration.endPosition.row,
+      endColumn: declaration.endPosition.column,
+    };
+  }
+  return null;
 }
 
 /** Ordered parameter facts; patterns/rest params are marked non-simple. */

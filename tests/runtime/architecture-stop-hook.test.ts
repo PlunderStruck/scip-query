@@ -1,5 +1,10 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { evidenceFixtureDb } from '../fixtures/evidence-fixture.js';
 import { describe, expect, it, vi } from 'vitest';
-import type { ScipDatabase } from '../../src/storage/db.js';
+import { ScipDatabase } from '../../src/storage/db.js';
 import {
   evaluateArchitectureStop,
   renderArchitectureStopOutput,
@@ -76,5 +81,31 @@ describe('architecture Stop hook', () => {
     );
 
     expect(result.checkedSourceFiles).toEqual(['src/new.vue']);
+  });
+});
+
+describe('architecture hook Git path transport', () => {
+  it.each(['modified', 'deleted'] as const)('observes a %s quoted Unicode source path', (change) => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-hook-paths-'));
+    const file = 'Café".ts';
+    try {
+      writeFileSync(join(root, file), 'export const value = 1;\n');
+      const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'ignore' });
+      git('init', '-q');
+      git('add', '--', file);
+      git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'fixture');
+      if (change === 'deleted') rmSync(join(root, file));
+      else writeFileSync(join(root, file), 'export const value = 2;\n');
+      const dbPath = join(root, 'index.db');
+      evidenceFixtureDb(dbPath).write();
+      const db = new ScipDatabase({ dbPath, projectRoot: root });
+      try {
+        expect(evaluateArchitectureStop(root, db).checkedSourceFiles).toEqual([file]);
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

@@ -1,0 +1,786 @@
+[
+  {
+    "command": "search",
+    "syntax": "search <exact-text>",
+    "group": "Primary exploration",
+    "description": "Count current project text matches and preview a bounded, recoverable identity and source manifest",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "outline",
+    "syntax": "outline <file>",
+    "group": "Primary exploration",
+    "description": "Tree view of symbols in a file, with line ranges",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "entrypoints",
+    "syntax": "entrypoints [text]",
+    "group": "Primary exploration",
+    "description": "Find callables where control may enter from outside the indexed call graph",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "evidence",
+    "syntax": "evidence",
+    "group": "Primary exploration",
+    "description": "Traverse selected typed relationships around exact referents; recover source separately when needed",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "inspect",
+    "syntax": "inspect",
+    "group": "Primary exploration",
+    "description": "Batch related searches, symbols, and source locations into one deduplicated source packet",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "code",
+    "syntax": "code <selectors...>",
+    "group": "Primary exploration",
+    "description": "Read exact definitions, line ranges, or file export surfaces",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "files",
+    "syntax": "files <pattern>",
+    "group": "Specialized analysis",
+    "description": "Find current project files matching a path pattern",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "session",
+    "syntax": "session",
+    "group": "Specialized analysis",
+    "description": "Show evidence already delivered in this agent exploration session",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "methods",
+    "syntax": "methods <className>",
+    "group": "Specialized analysis",
+    "description": "List methods of one exactly resolved class; ambiguity and missing targets fail explicitly",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "refs",
+    "syntax": "refs <symbol>",
+    "group": "Specialized analysis",
+    "description": "Find all files referencing a symbol",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "trace",
+    "syntax": "trace <symbol>",
+    "group": "Specialized analysis",
+    "description": "Trace a symbol: definition + all references",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "deps",
+    "syntax": "deps <file>",
+    "group": "Specialized analysis",
+    "description": "Files this file depends on (internal)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "rdeps",
+    "syntax": "rdeps <file>",
+    "group": "Specialized analysis",
+    "description": "Files that depend on this file/module",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "system",
+    "syntax": "system <module>",
+    "group": "Specialized analysis",
+    "description": "One-hop module summary: matched files, documented symbols, and file reference dependencies",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "surface",
+    "syntax": "surface <module>",
+    "group": "Specialized analysis",
+    "description": "What symbols consumers actually use from this module",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "hotspots",
+    "syntax": "hotspots",
+    "group": "Specialized analysis",
+    "description": "Rank symbols by cross-file reference count; a reference metric, not runtime contention",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "imports",
+    "syntax": "imports <file>",
+    "group": "Specialized analysis",
+    "description": "What symbols does this file import?",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "imported-by",
+    "syntax": "imported-by <symbol>",
+    "group": "Specialized analysis",
+    "description": "Which files import this symbol?",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "members",
+    "syntax": "members <symbol>",
+    "group": "Specialized analysis",
+    "description": "All children of a symbol (methods, fields, nested types)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "fan-in",
+    "syntax": "fan-in [symbol]",
+    "group": "Specialized analysis",
+    "description": "Count files referencing an exact symbol; top JSON rows include exact symbol identity",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "fan-out",
+    "syntax": "fan-out [file]",
+    "group": "Specialized analysis",
+    "description": "How many external symbols a file uses (or top fan-out across codebase)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "coupling",
+    "syntax": "coupling [file1] [file2]",
+    "group": "Specialized analysis",
+    "description": "Count shared-symbol coupling between two files, or rank file pairs by that metric",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "cycles",
+    "syntax": "cycles",
+    "group": "Specialized analysis",
+    "description": "Find every cyclic file-dependency component and show one deterministic witness for each",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "architecture",
+    "syntax": "architecture",
+    "group": "Specialized analysis",
+    "description": "Evaluate project-owned architectural boundaries and dependency rules",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "bottlenecks",
+    "syntax": "bottlenecks",
+    "group": "Specialized analysis",
+    "description": "Rank coordination hubs by incoming evidence files \u00d7 outgoing cross-file callable targets",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "by-kind",
+    "syntax": "by-kind <kind>",
+    "group": "Specialized analysis",
+    "description": "Find symbols by SCIP kind (class, interface, enum, function, etc.)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "kind-counts",
+    "syntax": "kind-counts",
+    "group": "Specialized analysis",
+    "description": "Histogram of symbol kinds in the codebase",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "dependency-depth",
+    "syntax": "dependency-depth",
+    "group": "Specialized analysis",
+    "description": "Find longest paths through the SCC-condensed file dependency graph",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "hierarchy",
+    "syntax": "hierarchy <symbol>",
+    "group": "Specialized analysis",
+    "description": "Show a symbol's ancestry chain (method \u2192 class \u2192 module)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "entry-map",
+    "syntax": "entry-map <entry>",
+    "group": "Specialized analysis",
+    "description": "Map the complete indexed call graph from one detected entry point, collapsed by file",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "call-graph",
+    "syntax": "call-graph <symbol>",
+    "group": "Specialized analysis",
+    "description": "Show static may-call edges with exact/candidate evidence and explicit blind spots",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "affected",
+    "syntax": "affected <symbol>",
+    "group": "Specialized analysis",
+    "description": "Conservative reverse caller/reference closure of symbols that may be impacted by a change",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "change-surface",
+    "syntax": "change-surface <file>",
+    "group": "Specialized analysis",
+    "description": "Pre-change briefing: consumers, published API, operational roots, and explained change risk",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "co-change",
+    "syntax": "co-change [file]",
+    "group": "Specialized analysis",
+    "description": "Files that change together in git history without a dependency edge \u2014 hidden coupling candidates",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "incomplete-migration",
+    "syntax": "incomplete-migration",
+    "group": "Specialized analysis",
+    "description": "Partially-completed extraction candidates: new helpers in the diff wired into some sites while similar un-migrated sites remain",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "reference-neighborhood",
+    "syntax": "reference-neighborhood <symbol>",
+    "group": "Specialized analysis",
+    "description": "Show definition/reference sites and incoming/outgoing static calls without value-flow claims",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "value-flow",
+    "syntax": "value-flow <symbol>",
+    "group": "Specialized analysis",
+    "description": "Show only proved argument/parameter and bounded static-value transfers around a symbol",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "dependence-slice",
+    "syntax": "dependence-slice <file:line>",
+    "group": "Specialized analysis",
+    "description": "Slice one variable occurrence through function-local value and control dependencies",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "reference-reachability",
+    "syntax": "reference-reachability <symbol>",
+    "group": "Specialized analysis",
+    "description": "Traverse legacy callee or reference-owner reachability without calling it a program slice",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "diff-impact",
+    "syntax": "diff-impact",
+    "group": "Specialized analysis",
+    "description": "Map changed symbols and downstream consumers from the current git diff",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "dead",
+    "syntax": "dead [scope]",
+    "group": "Quality and cleanup",
+    "description": "Find repository-dead code, file-internal symbols, and implicit-usage signals",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "unused-imports",
+    "syntax": "unused-imports <file>",
+    "group": "Quality and cleanup",
+    "description": "Find imports not referenced in the same file",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "isolated",
+    "syntax": "isolated",
+    "group": "Quality and cleanup",
+    "description": "Find completely orphaned symbols (no references at all)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "similar",
+    "syntax": "similar [symbol] [other]",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic function similarity candidates from callee fingerprints",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "similar-files",
+    "syntax": "similar-files [file]",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic similar-file candidates from dependency profiles",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "react-component-duplicates",
+    "syntax": "react-component-duplicates [file]",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic duplicated React component structure candidates from JSX tags, props, events, and bindings",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "react-hook-candidates",
+    "syntax": "react-hook-candidates [file]",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic React hook extraction candidates from shared state, effects, requests, and handlers",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "react-large-component-pressure",
+    "syntax": "react-large-component-pressure [file]",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic large React component pressure candidates from component lines, JSX structure, and hook behavior",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "vue-component-duplicates",
+    "syntax": "vue-component-duplicates [file]",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic duplicated Vue component structure candidates from template tags, bindings, slots, and directives",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "vue-composable-candidates",
+    "syntax": "vue-composable-candidates [file]",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic Vue composable extraction candidates from shared state, effects, requests, and template bindings",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "vue-large-view-pressure",
+    "syntax": "vue-large-view-pressure [file]",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic large Vue view pressure candidates from template, script, style, and external script line counts",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "similar-chains",
+    "syntax": "similar-chains",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic similar-chain candidates from dependency flows",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "extract-candidates",
+    "syntax": "extract-candidates",
+    "group": "Quality and cleanup",
+    "description": "Find extraction candidates: contiguous regions whose callees are used nowhere else in the function",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "locality-candidates",
+    "syntax": "locality-candidates [symbol-or-file]",
+    "group": "Quality and cleanup",
+    "description": "Find directory-locality and ancestry candidates from consumer ownership",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "cleanup-plan",
+    "syntax": "cleanup-plan",
+    "group": "Quality and cleanup",
+    "description": "Ordered, batched deletion plan: graph-fact dead code plus the cascade candidates it unlocks",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "recent-duplicates",
+    "syntax": "recent-duplicates",
+    "group": "Quality and cleanup",
+    "description": "Directional duplicate candidates: recent code that re-implements established callable, React, or Vue code",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "doc-drift",
+    "syntax": "doc-drift [doc]",
+    "group": "Quality and cleanup",
+    "description": "Stale-doc candidates: code the doc references or co-changed with kept changing after the doc stopped",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "unused-params",
+    "syntax": "unused-params",
+    "group": "Quality and cleanup",
+    "description": "Speculative-generality candidates: trailing parameters no body ever uses (TS/JS)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "drift",
+    "syntax": "drift [module]",
+    "group": "Quality and cleanup",
+    "description": "Detect drift candidates: unused imports and declared architecture violations; pass --architecture for boundary context",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "wrapper-candidates",
+    "syntax": "wrapper-candidates",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic wrapper candidates only called by one consumer (high false-positive rate on codebases with intentional layering/ambient types \u2014 treat as exploration, not findings)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "passthrough-candidates",
+    "syntax": "passthrough-candidates",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic passthrough candidates that forward to one callee",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "stale-abstractions",
+    "syntax": "stale-abstractions",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic stale abstraction candidates with 0-1 consumers (high false-positive rate on codebases with intentional layering/ambient types \u2014 treat as exploration, not findings)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "complexity-hotspots",
+    "syntax": "complexity-hotspots",
+    "group": "Quality and cleanup",
+    "description": "Find heuristic complexity hotspot candidates from LOC x fan-in x fan-out",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "slice-cohesion",
+    "syntax": "slice-cohesion [symbol]",
+    "group": "Quality and cleanup",
+    "description": "Find low-cohesion candidates from backward slices: outputs whose statements never meet are separate local computations",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "self-audit",
+    "syntax": "self-audit",
+    "group": "Quality and cleanup",
+    "description": "Score cheap evidence paths against the best available semantic/source oracle on sampled symbols",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "complexity",
+    "syntax": "complexity <symbol>",
+    "group": "Quality and cleanup",
+    "description": "Per-symbol complexity: branches, cyclomatic estimate, fan-in/out, callees",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "redundant-reexports",
+    "syntax": "redundant-reexports",
+    "group": "Quality and cleanup",
+    "description": "Find barrel re-exports that nobody imports through",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "duplicate-bodies",
+    "syntax": "duplicate-bodies",
+    "group": "Quality and cleanup",
+    "description": "Find exact duplicate small-body candidates across files",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "twin-drift",
+    "syntax": "twin-drift",
+    "group": "Quality and cleanup",
+    "description": "Twin drift candidates: same-name (or near-name) functions across files with diverged bodies",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "not-implemented",
+    "syntax": "not-implemented",
+    "group": "Quality and cleanup",
+    "description": "Reachable placeholder stub candidates (throw-stub, TODO+return-default, empty body) \u2014 production callers can actually reach these; an unreachable stub is dead's job, not this one's",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "decorative-checkers",
+    "syntax": "decorative-checkers",
+    "group": "Quality and cleanup",
+    "description": "Decorative checker candidates: validate*/verify*/check*/assert*/is*/has* callables with no reachable failure exit anywhere in their body",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "test-quality",
+    "syntax": "test-quality",
+    "group": "Quality and cleanup",
+    "description": "Test-quality candidates: assertion-free it/test bodies, a skipped-test ledger with git-blame age, and mock-echo tests that assert the same literal they stubbed into a mock",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "similar-signatures",
+    "syntax": "similar-signatures",
+    "group": "Quality and cleanup",
+    "description": "Find functions with near-identical type signatures (same shape)",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "review",
+    "syntax": "review",
+    "group": "Maintenance",
+    "description": "Review current TS/JS changes against a Git commit, including new and untracked functions",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "reindex",
+    "syntax": "reindex",
+    "group": "Maintenance",
+    "description": "Index the codebase and convert to SQLite",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "augment-sources",
+    "syntax": "augment-sources",
+    "group": "Maintenance",
+    "description": "Add source files skipped by upstream SCIP indexers to the SQLite documents table",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "augment-vue",
+    "syntax": "augment-vue",
+    "group": "Maintenance",
+    "description": "Add compiler-resolved Vue SFC references to the SQLite index using Volar",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "stats",
+    "syntax": "stats",
+    "group": "Maintenance",
+    "description": "Show index statistics",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "context",
+    "syntax": "context <target>",
+    "group": "Maintenance",
+    "description": "Compiler-backed context for a symbol, file, or module",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "health",
+    "syntax": "health",
+    "group": "Maintenance",
+    "description": "Find concrete TS/JS complexity, duplication, and dependency issues without an index",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "install-skills",
+    "syntax": "install-skills",
+    "group": "Maintenance",
+    "description": "Install core exploration skills into Claude Code, Codex, and shared agent roots",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "check-deps",
+    "syntax": "check-deps",
+    "group": "Maintenance",
+    "description": "Check whether scip-query and the detected language indexers are runnable",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "capabilities",
+    "syntax": "capabilities",
+    "group": "Maintenance",
+    "description": "Report which mapping and analysis capabilities are available in this project",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "init",
+    "syntax": "init",
+    "group": "Maintenance",
+    "description": "Create a .scipquery.json configuration file for this project",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "config-validate",
+    "syntax": "config-validate",
+    "group": "Maintenance",
+    "description": "Validate .scipquery.json, structured suppressions, architecture, and coupling groups",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "suppress",
+    "syntax": "suppress <id>",
+    "group": "Maintenance",
+    "description": "Record an accepted finding under .scipquery/suppressions with a required reason",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "doctor",
+    "syntax": "doctor",
+    "group": "Maintenance",
+    "description": "Diagnose configuration, index freshness, dependencies, and project capabilities",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "setup",
+    "syntax": "setup",
+    "group": "Maintenance",
+    "description": "Install skills, write agent guidance, refresh the index, and report readiness",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "setup-agent",
+    "syntax": "setup-agent",
+    "group": "Maintenance",
+    "description": "Write concise scip-query mapping and cleanup guidance to AGENTS.md and CLAUDE.md",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "uninstall",
+    "syntax": "uninstall",
+    "group": "Maintenance",
+    "description": "Remove selected scip-query-owned skills or project guidance",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "watch",
+    "syntax": "watch",
+    "group": "Maintenance",
+    "description": "Watch in the foreground or manage the project refresh service",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "status",
+    "syntax": "status",
+    "group": "Maintenance",
+    "description": "Show index status for this project",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "tla",
+    "syntax": "tla <operation> [spec]",
+    "group": "Formal modeling",
+    "description": "TLA+ model workflow: verify a model and mapping contract, scaffold a draft model from indexed code, generate a trace recorder, or check a recorded trace against the next-state relation",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "continue",
+    "syntax": "continue <cursor>",
+    "group": "Compatibility and deprecated controls",
+    "description": "Continue an immutable output snapshot",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "hook-architecture-stop",
+    "syntax": "hook-architecture-stop",
+    "group": "Compatibility and deprecated controls",
+    "description": "Internal architecture-only Stop hook",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "__diff-impact-batch",
+    "syntax": "__diff-impact-batch",
+    "group": "Compatibility and deprecated controls",
+    "description": "Internal diff-impact batch worker",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "__health-phase",
+    "syntax": "__health-phase",
+    "group": "Compatibility and deprecated controls",
+    "description": "Internal health phase worker",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  },
+  {
+    "command": "__health-semantic-prewarm",
+    "syntax": "__health-semantic-prewarm",
+    "group": "Compatibility and deprecated controls",
+    "description": "Internal health semantic prewarm worker",
+    "helpExitCode": 0,
+    "helpShowsUsage": true
+  }
+]

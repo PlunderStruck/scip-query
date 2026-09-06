@@ -1,0 +1,246 @@
+{
+  "numTotalTests": 52,
+  "numPassedTests": 52,
+  "numFailedTests": 0,
+  "success": true,
+  "files": [
+    {
+      "file": "tests/symbols/definition-catalog.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "definition catalog line ownership returns the smallest containing definition while preserving equal-span ties",
+          "status": "passed"
+        },
+        {
+          "name": "scoped matched definition cache reuses an exact matcher/scope query without exposing the cached array to mutation",
+          "status": "passed"
+        },
+        {
+          "name": "definition catalog Rust impl range correction matches repeated impl method names by owner type instead of fallback chunk start",
+          "status": "passed"
+        },
+        {
+          "name": "definition catalog evidence cache serves cached definitions to a fresh connection",
+          "status": "passed"
+        },
+        {
+          "name": "definition catalog evidence cache rejects cached definitions from a different project fingerprint",
+          "status": "passed"
+        },
+        {
+          "name": "getDefinitionsForFile includeClassMemberFallbacks (catalog-members K1) default call (opt-in absent) returns byte-for-byte the same rows as before the opt-in existed",
+          "status": "passed"
+        },
+        {
+          "name": "getDefinitionsForFile includeClassMemberFallbacks (catalog-members K1) default call with includeClassMemberFallbacks: false matches the opt-in-absent call exactly",
+          "status": "passed"
+        },
+        {
+          "name": "getDefinitionsForFile includeClassMemberFallbacks (catalog-members K1) opted-in call additionally returns the class-member fallback row with its mention-derived range",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "file": "tests/queries/graph/dependence-slice.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "variable occurrence dependence slices preserves both reaching values across input && (value = input);",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices preserves both reaching values across input || (value = input);",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices preserves both reaching values across input ?? (value = input);",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices preserves both reaching values across input ? (value = input) : 0;",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices discloses 'Object alias' rather than complete dependence coverage",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices discloses 'Object alias' rather than complete dependence coverage",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices discloses 'Object alias' rather than complete dependence coverage",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices discloses 'Object alias' rather than complete dependence coverage",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices discloses 'Object alias' rather than complete dependence coverage",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices discloses 'Object alias' rather than complete dependence coverage",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices discloses 'Nested increment/decrement' rather than complete dependence coverage",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices discloses 'Nested increment/decrement' rather than complete dependence coverage",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices discloses 'syntax error' rather than complete dependence coverage",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices invalidates stale values at delete state.value;",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices invalidates stale values at const removed = delete state.value;",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices does not treat a fresh object containing scalar values as an object alias",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices keeps cross-callable closure candidates outside the proved slice",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices discloses unsupported abrupt-finally sequencing in a selected variable slice",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices follows the reaching assignment and its RHS, excluding overwritten values and unrelated statements",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices keeps both reaching branch definitions and the condition that controls them",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices follows a selected input forward to the returned use without including sibling computations",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices requires an exact occurrence when the same variable is read twice on one line",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices reports output and depth bounds without claiming a complete slice",
+          "status": "passed"
+        },
+        {
+          "name": "variable occurrence dependence slices rejects symbol summaries and reports missing criteria explicitly",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "file": "tests/queries/quality/function-complexity-contract.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "function complexity evidence contract does not attribute an unindexed nested invocation to its outer callable: function nested() { return helper(); } return nested;",
+          "status": "passed"
+        },
+        {
+          "name": "function complexity evidence contract does not attribute an unindexed nested invocation to its outer callable: const nested = () => helper(); return nested;",
+          "status": "passed"
+        },
+        {
+          "name": "function complexity evidence contract does not attribute an unindexed nested invocation to its outer callable: return [1].map(() => helper());",
+          "status": "passed"
+        },
+        {
+          "name": "function complexity evidence contract does not attribute an unindexed nested invocation to its outer callable: return () => helper();",
+          "status": "passed"
+        },
+        {
+          "name": "function complexity evidence contract does not attribute an unindexed nested invocation to its outer callable: function outer() { return helper(); } return outer;",
+          "status": "passed"
+        },
+        {
+          "name": "function complexity evidence contract shares function-local metrics and keeps chunk neighbors out of resolved call counts",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "file": "tests/queries/navigation/command-identity-regressions.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "command identities on mixed SCIP definitions locates a symbol before a filename substring and includes fields without enclosing ranges",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "file": "tests/queries/navigation/queries-advanced.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "advanced queries finds declared architecture drift and unique deps",
+          "status": "passed"
+        },
+        {
+          "name": "advanced queries honors the minimum sibling threshold for pattern deviations",
+          "status": "passed"
+        },
+        {
+          "name": "advanced queries does not include pattern deviations by default (21.2: opt-in via --patterns)",
+          "status": "passed"
+        },
+        {
+          "name": "advanced queries can skip pattern deviations for health-style drift summaries",
+          "status": "passed"
+        },
+        {
+          "name": "advanced queries caps results with -n/--limit and reports totalResults when truncated (21.2)",
+          "status": "passed"
+        },
+        {
+          "name": "advanced queries reports definition, reference, and call neighborhoods",
+          "status": "passed"
+        },
+        {
+          "name": "advanced queries reports backward callee reachability",
+          "status": "passed"
+        },
+        {
+          "name": "advanced queries reports forward reference-owner reachability",
+          "status": "passed"
+        },
+        {
+          "name": "advanced queries finds stale abstractions with low cross-file reuse",
+          "status": "passed"
+        },
+        {
+          "name": "advanced queries ranks the hot service function as a complexity hotspot",
+          "status": "passed"
+        },
+        {
+          "name": "advanced queries finds structurally similar files by dependency profile",
+          "status": "passed"
+        },
+        {
+          "name": "advanced queries reference-owner enclosing attribution agrees with findEnclosingDefinition",
+          "status": "passed"
+        },
+        {
+          "name": "advanced queries reference evidence records the selected provenance mode",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

@@ -2,10 +2,7 @@ import { Help, program } from 'commander';
 import { existsSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { cliVersion, renderHeuristicNotice } from './cli-support.js';
-import {
-  loadInvocationCommandDescriptors,
-  normalizeLegacyEvidenceInvocation,
-} from './commands/invocation-command-descriptors.js';
+import { loadInvocationCommandDescriptors } from './commands/invocation-command-descriptors.js';
 import { registerCommandDescriptors } from './commands/command-registry.js';
 import { renderRootCommandHelp } from './commands/command-panels.js';
 import {
@@ -60,7 +57,6 @@ program
   .option('--reemit', 'Recovery only: render source and graph evidence again instead of citing session receipts')
   .option('--help-all', 'Display every command, including compatibility and deprecated controls');
 
-if (cliEntrypoint) normalizeLegacyEvidenceInvocation(process.argv);
 const commandDescriptors = await loadInvocationCommandDescriptors(cliEntrypoint ? process.argv[2] : undefined);
 registerCommandDescriptors(program, commandDescriptors);
 let releaseProjectFileListingCache: (() => void) | undefined;

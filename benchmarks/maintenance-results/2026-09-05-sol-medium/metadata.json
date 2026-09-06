@@ -1,0 +1,37 @@
+{
+  "model": "gpt-5.6-sol",
+  "reasoning": "medium",
+  "purpose": "bounded current-source review on real repository snapshot",
+  "repository": "/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-maintenance-sol-medium-zsrcre_y/repository",
+  "cliFrozen": true,
+  "inputPatchSha256": "4fef42c8aaea5011816ffa7dd952080c32594858daf52f83a40ce7d2b87ac857",
+  "usage": {
+    "input_tokens": 668537,
+    "cached_input_tokens": 620928,
+    "cache_write_input_tokens": 0,
+    "output_tokens": 12990,
+    "reasoning_output_tokens": 9200
+  },
+  "status": "completed",
+  "evaluation": "Three reproducible defects confirmed; regression tests and fixes applied after this frozen run.",
+  "trackedDiffUnchanged": true,
+  "untrackedSourceSha256": {
+    "src/queries/health/source-findings.ts": "b840459d9f13f88b53229b5c0f549e0ba19ff81e2d3d03e1756b969986dc98f8",
+    "src/queries/health/source-review.ts": "0f238bffebc50ea65bb2b98bf0fe8b2c4926bb219362780c731d35b0f541e494",
+    "src/queries/navigation/reference-neighborhood.ts": "9e7494a2e2cd053db0c46a821a891385ce2a961395e15eb84e653476b238a34b",
+    "src/queries/navigation/reference-reachability.ts": "da9975b3be9bc5a8119cb0456939d93cef1e3044fa42a38d30bd52252123b400",
+    "src/runtime/query-commands/maintenance.ts": "dcb913125b3faa060246a3be90f0f9cc76bbfc2d2bab073ad474a6a02b026cbf",
+    "src/source/ast/function-metrics.ts": "09b99ac8f11a1263d26a39b17f0a3a4156c32f53b221f9720c9d84d72f4d332b",
+    "src/source/ast/maintenance-imports.ts": "d30f23586b2aa5d72b870b214e8f9641b7d19ced296bf91ff68f8660635437be",
+    "src/source/maintenance-coverage.ts": "ef5b6b8793f12dd4be6334ed921c38a9ee25fdf9d9db0316ee2d37e9f72c39df",
+    "src/source/maintenance-snapshot.ts": "38d428e196b5e4d6dc9275e6cfe5231c8bc54e0c97c1f7e6321e271330a0b5ba"
+  },
+  "originalBaseCommit": "80c94fb737719962989fb97f492dc5e5bcec5ea1",
+  "observedElapsedSeconds": 262.2,
+  "completedCommands": 29,
+  "toolDigest": "5dc8b340ad58a8a4f60e372ff9da8c69509840a7c84e84e33e3ba27c1011edeb",
+  "runtime": {
+    "node": "v26.8.1",
+    "codex": "codex-cli 0.153.4"
+  }
+}

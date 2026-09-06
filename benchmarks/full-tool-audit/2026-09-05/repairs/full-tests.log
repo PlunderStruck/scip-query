@@ -1,0 +1,540 @@
+
+ RUN  v3.2.7 /Users/aydansalois/Documents/GitHub/scip-query
+
+ ✓ tests/queries/graph/dependence-slice.test.ts (17 tests) 445ms
+ ✓ tests/runtime/code-cli-contract.test.ts (20 tests) 49636ms
+   ✓ code CLI output contract > renders source hierarchically with preserved indentation and one-based line numbers  1717ms
+   ✓ code CLI output contract > keeps the stable envelope for plain JSON consumers  1711ms
+   ✓ code CLI output contract > emits only minimal, line-oriented source data for --result-only  1689ms
+   ✓ code CLI output contract > renders an explicit file range with the requested one-based lines only  1672ms
+   ✓ code CLI output contract > rejects zero-based or reversed explicit source ranges  3066ms
+   ✓ code CLI output contract > expands source context without losing line identity  1518ms
+   ✓ code CLI output contract > reads several exact definitions in one complete packet  1565ms
+   ✓ code CLI output contract > completes an exact range with statically attributed same-file callable definitions  1538ms
+   ✓ code CLI output contract > returns citation-ready exported source and complete file coverage for an exact indexed file path  1510ms
+   ✓ code CLI output contract > discloses unreturned file-local definitions through a compact exact-range ledger  1545ms
+   ✓ code CLI output contract > falls back to a useful top-level surface when a file has no explicit exports  1534ms
+   ✓ code CLI output contract > paginates an oversized code packet through one immutable continuation  1712ms
+   ✓ code CLI output contract > returns the complete file only when --members all is explicit  1650ms
+   ✓ code CLI output contract > keeps missing-symbol output concise and free of result metadata  1638ms
+   ✓ code CLI output contract > returns every small ambiguous candidate instead of silently choosing the first  1699ms
+   ✓ code CLI output contract > rejects more selectors than one complete packet can account for  1704ms
+   ✓ code CLI output contract > keeps agent-readable output smaller than structured modes  4994ms
+   ✓ code CLI output contract > rejects partial and negative context values instead of silently changing the range  3065ms
+   ✓ code CLI output contract > requires JSON before every structured-output modifier  9216ms
+   ✓ code CLI output contract > rejects contradictory JSON transport controls  4878ms
+ ✓ tests/runtime/search-cli-contract.test.ts (13 tests) 30402ms
+   ✓ search CLI identity and materialization contract > reports every identity while materializing only the requested representative windows  1633ms
+   ✓ search CLI identity and materialization contract > keeps the default locator view small while preserving the complete identity manifest  1666ms
+   ✓ search CLI identity and materialization contract > centers overlong human source previews on the match without changing JSON evidence  3289ms
+   ✓ search CLI identity and materialization contract > keeps machine-readable identity coverage separate from source materialization  1733ms
+   ✓ search CLI identity and materialization contract > uses --full only to materialize every already-known identity  1675ms
+   ✓ search CLI identity and materialization contract > bounds an accidentally broad identity selector before transport while preserving exact recovery scopes  1673ms
+   ✓ search CLI identity and materialization contract > keeps graph traversal graph-sized when source inclusion was requested  1928ms
+   ✓ search CLI identity and materialization contract > reports bounded machine-readable coverage for a broad selector  1708ms
+   ✓ search CLI identity and materialization contract > keeps legacy JSON exhaustive while agent JSON selects the bounded command projection  3383ms
+   ✓ search CLI identity and materialization contract > attributes an unindexed object method to its exact source callable instead of the module  1627ms
+   ✓ search CLI identity and materialization contract > replaces repeated behavior projections with session evidence receipts  3346ms
+   ✓ search CLI identity and materialization contract > refuses an accidentally broad exact-source inspect before transport and preserves compact recovery  3368ms
+   ✓ search CLI identity and materialization contract > requires an interior focus for oversized behavior and does not let --full bypass the contract  3241ms
+ ✓ tests/reindex/shared-worktree-cache.integration.test.ts (6 tests) 19283ms
+   ✓ shared Git worktree cache integration > coordinates simultaneous cold worktrees through one published generation  1281ms
+   ✓ shared Git worktree cache integration > publishes once, attaches a linked worktree, and keeps dirty updates private  2126ms
+   ✓ shared Git worktree cache integration > forks the committed baseline when a linked worktree is dirty before its first reindex  2128ms
+   ✓ shared Git worktree cache integration > imports a stable primary cache even after the primary files become dirty  1133ms
+   ✓ shared Git worktree cache integration > rejects a primary cache that contains changes absent from the new worktree HEAD  1433ms
+   ✓ shared Git worktree cache integration > plateaus after repeated committed disposable-worktree generations age out  11183ms
+ ✓ tests/queries/graph/system-map.test.ts (58 tests) 16520ms
+   ✓ explicit-anchor system maps > projects several exact roots into one compact typed evidence packet  380ms
+   ✓ explicit-anchor system maps > rejects connecting projections that do not resolve at least two roots  353ms
+   ✓ explicit-anchor system maps > keeps compatibility selection terms from changing graph or recovery membership  538ms
+   ✓ explicit-anchor system maps > joins compiler-resolved argument and return flow to call edges in the first system map  441ms
+   ✓ explicit-anchor system maps > keeps proved value flow distinct from reference and call neighborhoods  473ms
+   ✓ explicit-anchor system maps > retains embedded and test-only literal matches without letting them seed default traversal  444ms
+   ✓ explicit-anchor system maps > crosses an automatically extracted HTTP boundary from one symbol anchor  504ms
+   ✓ explicit-anchor system maps > retains an exact database state effect when its runtime peer is unresolved  471ms
+   ✓ explicit-anchor system maps > materializes a source-backed runtime participant when the consumer has no compiler symbol  442ms
+   ✓ explicit-anchor system maps > does not traverse an unrelated runtime observation merely because its file was reached  459ms
+   ✓ explicit-anchor system maps > anchors a registry literal to its anonymous handler instead of the containing module  534ms
+   ✓ explicit-anchor system maps > uses an unindexed source callable as a literal anchor and preserves its exact imported call as graph evidence  450ms
+   ✓ explicit-anchor system maps > attributes a reverse reference to its source callable when SCIP only identifies the module  439ms
+   ✓ explicit-anchor system maps > recursively reverse-expands proven callers without propagating ordinary references  484ms
+   ✓ explicit-anchor system maps > populates the universal topology with typed compiler and runtime evidence  478ms
+   ✓ explicit-anchor system maps > returns connector-ordered behavior with evidence for every transition  532ms
+   ✓ explicit-anchor system maps > keeps a decisive branch predicate in the connected behavior representation  457ms
+   ✓ explicit-anchor system maps > traverses only the requested relation families  453ms
+   ✓ explicit-anchor system maps > traverses exact named-capability references to their unique handlers  355ms
+   ✓ explicit-anchor system maps > uses the evidence floor to exclude derived runtime crossings  510ms
+   ✓ explicit-anchor system maps > makes source-scope inclusion explicit without losing excluded literal matches  422ms
+   ✓ explicit-anchor system maps > keeps collapsed regions compact and expands several selected regions together  520ms
+   ✓ explicit-anchor system maps > reports missing anchors and an untraversed frontier instead of implying completeness  476ms
+   ✓ explicit-anchor system maps > never emits more drill anchors than one inspect command accepts  482ms
+   ✓ explicit-anchor system maps > bounds the first topology view while retaining a recoverable withheld manifest  327ms
+   ✓ explicit-anchor system maps > gives each expanded region a drill anchor before spending a second selector in one region  482ms
+   ✓ explicit-anchor system maps > withholds a broad literal before graph traversal while preserving exact recovery  426ms
+ ✓ tests/reindex/reindex-reliability.test.ts (46 tests) 10771ms
+   ✓ reindex cache cleanup > removes only abandoned real reindex workspaces while holding the reindex lock  382ms
+   ✓ reindex reliability > reuses unchanged per-language SCIP shards across mixed-language reindexes  366ms
+   ✓ reindex reliability > rebuilds every language on a forced reindex instead of serving cached shards  370ms
+   ✓ reindex reliability > does not reuse a future metadata version as current reindex state  330ms
+   ✓ reindex reliability > reports shard diagnostics distinguishing reused and rerun languages (plan6 6.5.2)  314ms
+   ✓ reindex reliability > publishes affected TypeScript documents through the incremental SQLite patcher  313ms
+   ✓ reindex reliability > publishes repeated changed-document SQLite generations while preserving a deferred whole SCIP companion  569ms
+   ✓ reindex reliability > reuses a deferred TypeScript shard when only another language changed  439ms
+   ✓ reindex reliability > upgrades missing SQLite layout metadata from cached language shards exactly once  428ms
+   ✓ reindex reliability > migrates legacy operational config fingerprints without rerunning indexers  323ms
+   ✓ reindex reliability > reruns cached language shards when the accepted SQLite generation omits a fingerprinted source file  325ms
+   ✓ reindex reliability > reruns only the language shard whose dependency lock changed  476ms
+   ✓ reindex reliability > serves an unchanged TypeScript workspace project shard from cache while re-running only the edited project  332ms
+   ✓ reindex reliability > reruns a dependent project when its cross-project dependency changes  330ms
+   ✓ reindex reliability > reruns a project when its cached shard file is missing despite matching metadata  345ms
+   ✓ reindex reliability > re-runs every project when metadata predates per-project shard caching, without crashing  339ms
+   ✓ reindex reliability > removes the TypeScript project shard cache directory when switching from workspace to single mode  326ms
+ ✓ tests/reindex/shared-generation-store.test.ts (28 tests) 7806ms
+   ✓ shared generation store > selects the newest valid exact-HEAD baseline for a dirty worktree  519ms
+   ✓ shared generation store > forks a matching HEAD generation into a dirty worktree that has no local database  443ms
+   ✓ shared generation store > forks the closest compatible generation into a clean cold worktree on a newer tree  491ms
+   ✓ shared generation store > keeps an existing dirty local database instead of overlaying a shared HEAD generation  319ms
+   ✓ shared generation store > restores the complete previous cache when hydration fails after handoff starts  301ms
+   ✓ shared generation store > does not trust a warm-cache lease after the worktree changes committed trees  618ms
+   ✓ shared generation store > trusts only a complete managed generation bound to the live clean tree  347ms
+   ✓ shared generation store > serializes concurrent touches and never regresses lastSeenAt  501ms
+   ✓ shared generation store > rejects dirty publication before inspecting project fingerprint inputs  888ms
+   ✓ shared generation store > rejects future reindex metadata before shared-generation publication  723ms
+ ✓ tests/runtime/methods-cli-contract.test.ts (3 tests) 4751ms
+   ✓ methods CLI resolution contract > emits a JSON missing result with a nonzero exit status  1567ms
+   ✓ methods CLI resolution contract > emits structured JSON candidates for ambiguity  1583ms
+   ✓ methods CLI resolution contract > keeps human ambiguity output concise and actionable  1586ms
+ ✓ tests/scripts/change-benchmark-core.test.ts (14 tests) 4877ms
+   ✓ change benchmark obligations > shared-rule: accepts valid initial and follow-up implementations  468ms
+   ✓ change benchmark obligations > shared-rule: rejects unchanged code and deliberately flawed patches in both phases  568ms
+   ✓ change benchmark obligations > separate-responsibilities: accepts valid initial and follow-up implementations  389ms
+   ✓ change benchmark obligations > separate-responsibilities: rejects unchanged code and deliberately flawed patches in both phases  588ms
+   ✓ change benchmark obligations > retire-implementation: accepts valid initial and follow-up implementations  367ms
+   ✓ change benchmark obligations > retire-implementation: rejects unchanged code and deliberately flawed patches in both phases  534ms
+   ✓ change benchmark obligations > dependency-direction: accepts valid initial and follow-up implementations  349ms
+   ✓ change benchmark obligations > dependency-direction: rejects unchanged code and deliberately flawed patches in both phases  527ms
+   ✓ change benchmark obligations > detects stale agent-added tests and permits updating them for the follow-up requirement  548ms
+ ✓ tests/runtime/source-review-cli.test.ts (5 tests) 4377ms
+   ✓ source maintenance CLI without an index > records and applies a source exception before indexing, then reopens it when evidence changes  1786ms
+   ✓ source maintenance CLI without an index > provides first-use findings without indexing or starting a watcher  385ms
+   ✓ source maintenance CLI without an index > fails the derived-finding gate on a newly complex function  480ms
+   ✓ source maintenance CLI without an index > fails incomplete requested coverage and misspelled scopes explicitly  748ms
+   ✓ shows concise source groups and honors reference inclusion without an index  977ms
+ ✓ tests/semantic/typescript/remote-provider-policy.test.ts (4 tests) 3887ms
+   ✓ service-backed TypeScript provider fallback policy > declines semantic enrichment instead of loading the compiler when the index is large  1515ms
+   ✓ service-backed TypeScript provider fallback policy > retries a memory-failed batch as file halves before counting the service as failed  1090ms
+   ✓ service-backed TypeScript provider fallback policy > treats a file-scoped decline as unavailable for that request only  1168ms
+ ✓ tests/queries/health/source-review.test.ts (31 tests) 3878ms
+ ✓ tests/reindex/sqlite-generation-store.test.ts (29 tests) 3825ms
+   ✓ SQLite generation handoff > keeps current, previous, and live-reader generations while enforcing retention after close  356ms
+Preparing worktree (detached HEAD 1f3588d)
+Preparing worktree (detached HEAD 85ce0a7)
+Preparing worktree (detached HEAD 4b08ed1)
+ ✓ tests/runtime/worktree-watch-service.integration.test.ts (3 tests) 2623ms
+   ✓ per-worktree watch service > keeps primary and linked nested-project lifecycle and unstaged source refreshes local  1021ms
+   ✓ per-worktree watch service > subscribes each linked worktree watcher to its own source tree  535ms
+   ✓ per-worktree watch service > polls nested primary and linked Git indexes from paths resolved against each project  1066ms
+ ✓ tests/storage/bounded-mailbox.test.ts (18 tests) 3015ms
+   ✓ bounded filesystem mailbox > serializes admission and reports typed item, byte, and per-item backpressure  376ms
+ ✓ tests/analysis/git-history.test.ts (18 tests) 2745ms
+   ✓ git history evidence > classifies co-change-only historical notes as support  324ms
+   ✓ git history evidence > classifies broad-sweep and stale co-change history  441ms
+ ✓ tests/reindex/typescript-fragment-store.test.ts (3 tests) 2592ms
+   ✓ TypeScript fragment store > persists, validates, assembles, and prunes exact document generations  886ms
+   ✓ TypeScript fragment store > layers multiple changed-document generations over one immutable base shard  608ms
+   ✓ TypeScript fragment store > inserts an added TypeScript document into the assembled index and overlay  1097ms
+ ✓ tests/scripts/codex-change-trial.test.ts (3 tests) 2456ms
+   ✓ Codex change trial execution > grades source instead of a claimed successful answer, captures usage, and removes private worktrees  1258ms
+   ✓ Codex change trial execution > keeps failed executions and their raw logs visible  494ms
+   ✓ Codex change trial execution > terminates an overdue model process without dropping the failed trial  703ms
+ ✓ tests/queries/navigation/source-evidence.test.ts (35 tests) 4502ms
+   ✓ related source evidence > shows definition source and source centered on real reference sites  363ms
+ ✓ tests/analysis/runtime-boundaries.test.ts (30 tests) 2623ms
+ ✓ tests/runtime/repository-cache-lifecycle.test.ts (15 tests) 1584ms
+   ✓ repository cache lifecycle policy > waits for a live local build before deleting a removed worktree cache  393ms
+   ✓ repository cache lifecycle policy > revisits repository namespaces left behind by deleted independent clones  487ms
+ ✓ tests/runtime/architecture-cli-contract.test.ts (1 test) 1661ms
+   ✓ architecture CLI enforcement contract > fails when a required-minimal policy contains a stale permission  1643ms
+ ✓ tests/runtime/watch.test.ts (47 tests) 1821ms
+ ✓ tests/reindex/typescript-index-mailbox.test.ts (13 tests) 1891ms
+   ✓ TypeScript index service mailbox > processes a cold request and a warm requester update with exact identities  587ms
+   ✓ TypeScript index service mailbox > rejects malformed/expired work and bounds requester crash and timeout paths  341ms
+ ✓ tests/scripts/scip-explore-capture-evidence.test.ts (5 tests) 2039ms
+   ✓ scip-explore external evidence capture > projects every search identity losslessly and interns a repeated observation checkpoint  405ms
+   ✓ scip-explore external evidence capture > reuses exact observations and covered code while returning only uncovered overlap selectors  515ms
+   ✓ scip-explore external evidence capture > refuses incomplete or overlarge projections without shortening the raw packet  543ms
+ ✓ tests/semantic/rust/rust-semantic-cache-gate.test.ts (5 tests) 447ms
+ ✓ tests/platform/bounded-process.test.ts (10 tests) 1690ms
+   ✓ runBoundedProcess > terminates descendants that outlive the direct child  491ms
+   ✓ runBoundedProcess > keeps nested children in an inherited process group and still reaps them  489ms
+ ✓ tests/source/source-backed-accuracy.test.ts (15 tests) 335ms
+ ✓ tests/semantic/typescript/typescript-session-mailbox.test.ts (11 tests) 1614ms
+ ✓ tests/reindex/typescript-document-emitter.test.ts (3 tests) 1620ms
+   ✓ TypeScriptDocumentEmitter > retains exact full documents and exact affected documents across repeated edits  1287ms
+   ✓ TypeScriptDocumentEmitter > initializes a cold compiler without emitting unrelated documents  332ms
+ ✓ tests/semantic/typescript/typescript-semantic-provider.test.ts (9 tests) 1624ms
+   ✓ TypeScript semantic provider > compares tsserver-style reference answers against the ts-morph baseline without changing defaults  373ms
+ ✓ tests/queries/impact/incomplete-migration.test.ts (14 tests) 1751ms
+ ✓ tests/queries/cleanup/locality-candidates.test.ts (11 tests) 1529ms
+ ✓ tests/runtime/isolated-analysis-runner.test.ts (8 tests) 1338ms
+   ✓ analysis scheduler > terminates and reaps an asynchronous isolated child at its deadline  1163ms
+Preparing worktree (detached HEAD a2826f1)
+Preparing worktree (detached HEAD 920792c)
+ ✓ tests/platform/git-worktree.test.ts (20 tests) 1747ms
+   ✓ Git worktree identity > gives linked worktrees one repository identity and distinct worktree identities  306ms
+ ✓ tests/storage/evidence-cache.test.ts (26 tests) 273ms
+ ✓ tests/source/maintenance-snapshot.test.ts (1 test) 1212ms
+   ✓ covers an ordinary source inventory larger than the former 5000-file default  1211ms
+ ✓ tests/runtime/output-pagination.test.ts (30 tests) 1477ms
+ ✓ tests/source/source-facts.test.ts (12 tests) 257ms
+ ✓ tests/queries/navigation/lossless-source-sensor.test.ts (6 tests) 266ms
+ ✓ tests/semantic/rust/rust-lsp-batch-worker.test.ts (6 tests) 1089ms
+   ✓ Rust LSP batch worker > retains one bounded retry for an explicit content-modified response  1007ms
+ ✓ tests/platform/project-observation-snapshot.test.ts (5 tests) 1355ms
+   ✓ fixed project observation snapshots > captures clone-independent repository content and redirects project reads to fixed bytes  459ms
+   ✓ fixed project observation snapshots > keeps concurrent command snapshots isolated  349ms
+ ✓ tests/tla/trace-spec.test.ts (15 tests) 1207ms
+   ✓ TLA trace-check end-to-end (real TLC) > accepts a legal trace and pinpoints the divergent step of an illegal one  612ms
+   ✓ TLA trace-check end-to-end (real TLC) > selects among named next-state relations in a dual-spec model (P5.5 / followup #21)  586ms
+ ✓ tests/semantic/rust/rust-durable-session.test.ts (28 tests) 1037ms
+ ✓ tests/runtime/runtime-config.test.ts (64 tests) 1031ms
+ ✓ tests/semantic/rust/rust-semantic-callee-cache-gate.test.ts (2 tests) 194ms
+ ✓ tests/queries/impact/co-change-partner-labels.test.ts (4 tests) 773ms
+   ✓ co-change partner labels > classifies repeated contract-like pairs and suggests declared coupling  385ms
+   ✓ co-change partner labels > honors scanLimit by keeping only the highest-priority pairs (followup #6)  384ms
+ ✓ tests/queries/frontend/frontend-recent-duplicates.test.ts (1 test) 270ms
+(node:56670) [DEP0187] DeprecationWarning: Passing invalid argument types to fs.existsSync is deprecated
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ✓ tests/reindex/affected-shadow.test.ts (22 tests) 137ms
+ ✓ tests/native/symbol-leaf-kernel.test.ts (2 tests) 705ms
+   ✓ native symbol leaf kernel > matches the TypeScript leafName implementation on SCIP fixtures  456ms
+ ✓ tests/platform/project-files.test.ts (37 tests) 822ms
+ ✓ tests/storage/suppression-store.test.ts (27 tests) 804ms
+ ✓ tests/queries/cleanup/wrapper-candidates.test.ts (5 tests) 184ms
+ ✓ tests/queries/cleanup/doc-drift.test.ts (5 tests) 657ms
+ ✓ tests/tla/conformance.test.ts (32 tests) 589ms
+ ✓ tests/queries/cleanup/dead-output.test.ts (4 tests) 222ms
+ ✓ tests/queries/frontend/react-profile-policy.test.ts (4 tests) 288ms
+ ✓ tests/runtime/revisioned-file.test.ts (9 tests) 231ms
+ ✓ tests/queries/navigation/queries.test.ts (20 tests) 131ms
+Preparing worktree (detached HEAD c72ab23)
+ ✓ tests/runtime/git-worktree-context-cache.test.ts (4 tests) 607ms
+ ✓ tests/reindex/incremental-sqlite-publication.test.ts (7 tests) 249ms
+ ✓ tests/runtime/reindex-json.test.ts (4 tests) 652ms
+   ✓ handleReindex --json > emits a JSON envelope containing shard diagnostics  422ms
+ ✓ tests/runtime/invocation-command-descriptors.test.ts (2 tests) 512ms
+   ✓ invocation command descriptors > loads one independently-backed descriptor for direct navigation commands  361ms
+ ✓ tests/queries/quality/slice-cohesion-coverage.test.ts (3 tests) 298ms
+ ✓ tests/queries/cleanup/stale-abstractions-accuracy.test.ts (11 tests) 489ms
+ ✓ tests/queries/cleanup/cleanup-plan.test.ts (19 tests) 493ms
+   ✓ cleanup patch and apply helpers > verifies from committed HEAD without writing linked-worktree metadata  351ms
+ ✓ tests/storage/watch-refresh-requests.test.ts (10 tests) 621ms
+ ✓ tests/queries/quality/slice-cohesion.test.ts (6 tests) 521ms
+ ✓ tests/queries/cleanup/coverage-contracts.test.ts (14 tests) 105ms
+ ✓ tests/language-parsers/clojure-accuracy.test.ts (7 tests) 165ms
+ ✓ tests/queries/navigation/command-accuracy.test.ts (24 tests) 445ms
+ ✓ tests/queries/health/health-full.test.ts (2 tests) 318ms
+ ✓ tests/queries/cleanup/extract-candidates-output.test.ts (1 test) 169ms
+ ✓ tests/semantic/typescript/typescript-session-host.test.ts (5 tests) 432ms
+   ✓ persistent TypeScript semantic host > keeps Projects across a source generation and recreates them after config change  325ms
+ ✓ tests/reindex/augment-sources.test.ts (5 tests) 256ms
+ ✓ tests/queries/health/health-provenance.test.ts (2 tests) 345ms
+   ✓ health provenance > names the index generation and the git commit a report was computed from  322ms
+ ✓ tests/queries/impact/co-change-locale-exemption.test.ts (1 test) 411ms
+   ✓ co-change locale/i18n sibling exemption > exempts locales/** pairs, sibling-locale-dir same-basename json pairs, but not an unrelated pair  411ms
+ ✓ tests/platform/subprocess-budget-contract.test.ts (2 tests) 445ms
+   ✓ subprocess budget contract > requires every production child boundary to have a finite budget or an exact lifetime-owner review  441ms
+ ✓ tests/runtime/watch-service.test.ts (27 tests) 474ms
+ ✓ tests/scripts/record-review-coverage.test.ts (3 tests) 219ms
+ ✓ tests/queries/internal/next-anchor-candidates.test.ts (6 tests) 176ms
+ ✓ tests/runtime/index-freshness.test.ts (12 tests) 411ms
+ ✓ tests/platform/verified-binary-fetch.test.ts (18 tests) 412ms
+ ✓ tests/runtime/source-emission-session.test.ts (8 tests) 414ms
+ ✓ tests/reindex/rotating-jsonl.test.ts (13 tests) 390ms
+ ✓ tests/runtime/agent-setup.test.ts (8 tests) 432ms
+ ✓ tests/queries/health/health-twin-drift.test.ts (3 tests) 410ms
+ ✓ tests/queries/graph/entry-map.test.ts (8 tests) 191ms
+ ✓ tests/queries/impact/newly-unreferenced-residue.test.ts (2 tests) 449ms
+ ✓ tests/queries/health/seeded-defect-recall.test.ts (1 test) 544ms
+   ✓ seeded defect recall > still reports every planted finding kind after the detector policies  544ms
+ ✓ tests/queries/cleanup/test-quality.test.ts (17 tests) 341ms
+ ✓ tests/queries/impact/diff-impact-accuracy.test.ts (6 tests) 382ms
+ ✓ tests/queries/frontend/vue-template-rich-internals.test.ts (6 tests) 361ms
+ ✓ tests/queries/frontend/react-frontend-rich-internals.test.ts (5 tests) 336ms
+ ✓ tests/reindex/reindex-activity.test.ts (21 tests) 388ms
+ ✓ tests/queries/graph/graph-risk-output.test.ts (6 tests) 378ms
+ ✓ tests/runtime/watch-refresh-coordinator.test.ts (4 tests) 291ms
+ ✓ tests/reindex/project-tool-execution.test.ts (2 tests) 261ms
+ ✓ tests/runtime/cli-context.test.ts (6 tests) 327ms
+ ✓ tests/queries/cleanup/passthrough-candidates-output.test.ts (3 tests) 154ms
+ ✓ tests/queries/navigation/queries-advanced.test.ts (13 tests) 259ms
+ ✓ tests/source/workspace-package-import-resolver.test.ts (7 tests) 135ms
+ ✓ tests/queries/graph/cycles.test.ts (4 tests) 67ms
+ ✓ tests/symbols/scip-occurrence-callees.test.ts (2 tests) 54ms
+ ✓ tests/queries/cleanup/similar-sibling-saturation.test.ts (5 tests) 209ms
+ ✓ tests/semantic/typescript-local-flow.test.ts (7 tests) 252ms
+ ✓ tests/queries/graph/graph-provider-calibration.test.ts (4 tests) 70ms
+ ✓ tests/language-parsers/python-accuracy.test.ts (6 tests) 110ms
+ ✓ tests/queries/impact/change-surface-risk.test.ts (4 tests) 69ms
+ ✓ tests/source/source-fileset.test.ts (3 tests) 91ms
+ ✓ tests/queries/health/debloat-health.test.ts (8 tests) 158ms
+ ✓ tests/symbols/file-dep-graph.test.ts (9 tests) 228ms
+ ✓ tests/platform/process-file-lock.test.ts (14 tests) 207ms
+ ✓ tests/runtime/watch-reindex-runner.test.ts (4 tests) 201ms
+ ✓ tests/semantic/rust/rust-semantic-provider.test.ts (19 tests) 57ms
+ ✓ tests/queries/internal/file-resolution.test.ts (5 tests) 58ms
+ ✓ tests/queries/quality/complexity-hotspots.test.ts (2 tests) 65ms
+ ✓ tests/runtime/project-setup.test.ts (21 tests) 157ms
+ ✓ tests/queries/cleanup/duplicate-bodies-policy.test.ts (1 test) 93ms
+ ✓ tests/queries/navigation/exact-file-intent.test.ts (10 tests) 204ms
+(node:73239) [DEP0187] DeprecationWarning: Passing invalid argument types to fs.existsSync is deprecated
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ✓ tests/queries/impact/context-consumer-reuse.test.ts (3 tests) 106ms
+ ✓ tests/reindex/indexer-runner-temporary-config.test.ts (7 tests) 178ms
+ ✓ tests/reindex/augment-vue-workers.test.ts (10 tests) 182ms
+ ✓ tests/queries/health/health-cycle-basis.test.ts (1 test) 137ms
+ ✓ tests/tla/scaffold.test.ts (6 tests) 113ms
+ ✓ tests/semantic/rust/rust-process-ownership.test.ts (2 tests) 151ms
+ ✓ tests/scripts/codex-exploration-sandbox.test.ts (1 test) 176ms
+ ✓ tests/platform/source-import-cycle-contract.test.ts (1 test) 111ms
+ ✓ tests/analysis/framework-task-surface.test.ts (3 tests) 50ms
+ ✓ tests/symbols/member-call-targets.test.ts (12 tests) 188ms
+ ✓ tests/source/import-path-alias-resolver.test.ts (5 tests) 139ms
+(node:74819) [DEP0187] DeprecationWarning: Passing invalid argument types to fs.existsSync is deprecated
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ✓ tests/queries/cleanup/duplicate-bodies.test.ts (5 tests) 94ms
+ ✓ tests/platform/typescript-semantic-hash.test.ts (6 tests) 156ms
+ ✓ tests/semantic/rust/rust-default-impl-references.test.ts (6 tests) 87ms
+ ✓ tests/scripts/npm-release.test.ts (34 tests) 151ms
+ ✓ tests/source/source-evidence.test.ts (2 tests) 50ms
+ ✓ tests/symbols/jsx-render-callees.test.ts (1 test) 63ms
+ ✓ tests/scripts/scip-windows-registry-identity.test.ts (21 tests) 148ms
+ ✓ tests/queries/cleanup/redundant-reexports-fallback.test.ts (5 tests) 56ms
+(node:75213) [DEP0187] DeprecationWarning: Passing invalid argument types to fs.existsSync is deprecated
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ✓ tests/queries/cleanup/twin-drift.test.ts (40 tests) 121ms
+ ✓ tests/queries/cleanup/source-fingerprint-cache.test.ts (1 test) 140ms
+(node:75273) [DEP0187] DeprecationWarning: Passing invalid argument types to fs.existsSync is deprecated
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ✓ tests/queries/cleanup/isolated-query.test.ts (2 tests) 61ms
+ ✓ tests/resolution/symbol-resolution.test.ts (6 tests) 119ms
+ ✓ tests/queries/frontend/vue-large-view-pressure-delegation.test.ts (3 tests) 111ms
+ ✓ tests/queries/cleanup/not-implemented.test.ts (8 tests) 107ms
+ ✓ tests/symbols/definition-catalog.test.ts (8 tests) 114ms
+ ✓ tests/symbols/scip-occurrence-call-targets.test.ts (1 test) 51ms
+ ✓ tests/semantic/rust/rust-callee-symbol-resolution.test.ts (2 tests) 66ms
+ ✓ tests/queries/quality/function-complexity-contract.test.ts (1 test) 58ms
+ ✓ tests/reindex/reindex-detect.test.ts (8 tests) 126ms
+ ✓ tests/queries/cleanup/decorative-checkers.test.ts (16 tests) 113ms
+ ✓ tests/platform/cache-ownership.test.ts (15 tests) 152ms
+ ✓ tests/queries/cleanup/similarity-fingerprint-product.test.ts (1 test) 43ms
+ ✓ tests/domain/observation-receipt.test.ts (13 tests) 108ms
+ ✓ tests/semantic/rust/rust-engine-identity.test.ts (2 tests) 29ms
+ ✓ tests/runtime/architecture-hook-setup.test.ts (3 tests) 121ms
+ ✓ tests/semantic/rust/rust-lsp-client.test.ts (39 tests) 99ms
+(node:76456) [DEP0187] DeprecationWarning: Passing invalid argument types to fs.existsSync is deprecated
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ✓ tests/queries/cleanup/unused-params.test.ts (4 tests) 34ms
+ ✓ tests/reindex/indexer-runner-cancellation.test.ts (1 test) 103ms
+(node:76798) [DEP0187] DeprecationWarning: Passing invalid argument types to fs.existsSync is deprecated
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ✓ tests/queries/navigation/definition-fallback.test.ts (2 tests) 50ms
+ ✓ tests/runtime/health-dossier.test.ts (3 tests) 122ms
+ ✓ tests/analysis/framework-patterns.test.ts (10 tests) 103ms
+ ✓ tests/symbols/file-wide-caller-fallback.test.ts (3 tests) 58ms
+ ✓ tests/queries/navigation/outline.test.ts (1 test) 39ms
+ ✓ tests/queries/internal/consumer-evidence.test.ts (1 test) 38ms
+ ✓ tests/runtime/refs-pagination.test.ts (2 tests) 81ms
+2026/09/05 19:33:16 WARN found multiple documents with identical relative path; ignoring duplicates path=src/a.ts firstIndex=0 duplicateIndex=2
+ ✓ tests/reindex/scip-sqlite-converter.test.ts (4 tests) 37ms
+ ✓ tests/semantic/rust/rust-lsp-session.test.ts (22 tests) 85ms
+ ✓ tests/symbols/identifier-attribution.test.ts (6 tests) 47ms
+ ✓ tests/queries/cleanup/drift-accuracy.test.ts (1 test) 67ms
+ ✓ tests/runtime/watch-service-prune.test.ts (4 tests) 77ms
+ ✓ tests/platform/typescript-projects.test.ts (4 tests) 75ms
+ ✓ tests/semantic/rust/rust-scip-occurrence-callees.test.ts (2 tests) 41ms
+ ✓ tests/scripts/scip-windows-provenance.test.ts (13 tests) 50ms
+ ✓ tests/language-parsers/multilanguage-smoke.test.ts (1 test) 49ms
+ ✓ tests/queries/health/source-modules.test.ts (4 tests) 57ms
+ ✓ tests/storage/atomic-file.test.ts (11 tests) 64ms
+ ✓ tests/runtime/watch-server.test.ts (10 tests) 57ms
+ ✓ tests/source/vue-profile.test.ts (1 test) 53ms
+(node:77822) [DEP0187] DeprecationWarning: Passing invalid argument types to fs.existsSync is deprecated
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ✓ tests/queries/cleanup/similar-signatures-fallback.test.ts (3 tests) 47ms
+ ✓ tests/resolution/case-sensitive-resolution.test.ts (2 tests) 35ms
+ ✓ tests/platform/artifact-budget-contract.test.ts (1 test) 15ms
+ ✓ tests/platform/scip-cli.test.ts (15 tests) 39ms
+ ✓ tests/semantic/typescript/typescript-indexed-definitions.test.ts (2 tests) 41ms
+ ✓ tests/tla/tool-runner.test.ts (8 tests) 38ms
+ ✓ tests/tla/instrument.test.ts (2 tests) 34ms
+ ✓ tests/queries/cleanup/recent-duplicates-pruning.test.ts (2 tests) 33ms
+(node:78095) [DEP0187] DeprecationWarning: Passing invalid argument types to fs.existsSync is deprecated
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ✓ tests/queries/impact/coverage-contract-check.test.ts (3 tests) 32ms
+ ✓ tests/runtime/cli-contract.test.ts (43 tests) 24ms
+ ✓ tests/queries/navigation/import-fallbacks.test.ts (2 tests) 35ms
+ ✓ tests/analysis/runtime-boundary-object-members.test.ts (1 test) 32ms
+ ✓ tests/queries/cleanup/dead-vue-script-setup.test.ts (1 test) 28ms
+ ✓ tests/scripts/api-surface-contract.test.ts (14 tests) 29ms
+ ✓ tests/semantic/rust/rust-scip-occurrence-references.test.ts (2 tests) 30ms
+ ✓ tests/storage/db-path-exclusions.test.ts (3 tests) 28ms
+ ✓ tests/analysis/suppression-inventory.test.ts (1 test) 27ms
+stdout | tests/runtime/setup.test.ts > skill installation > installs only the exploration pair by default
+  done: scip-query → Claude
+  done: scip-explore → Claude
+  done: scip-query → Codex
+  done: scip-explore → Codex
+  done: scip-query → Agents
+  done: scip-explore → Agents
+
+ ✓ tests/runtime/setup.test.ts (8 tests) 28ms
+ ✓ tests/source/function-metrics.test.ts (5 tests) 23ms
+ ✓ tests/source/maintenance-project.test.ts (7 tests) 22ms
+ ✓ tests/queries/navigation/hierarchy.test.ts (1 test) 22ms
+ ✓ tests/runtime/uninstall.test.ts (4 tests) 20ms
+ ✓ tests/reindex/sqlite-index-maintenance.test.ts (5 tests) 19ms
+ ✓ tests/source/clojure-reader-primitives.test.ts (4 tests) 21ms
+ ✓ tests/platform/indexer-toolchain.test.ts (4 tests) 20ms
+ ✓ tests/analysis/config-referenced-files.test.ts (1 test) 22ms
+ ✓ tests/storage/db-lifecycle.test.ts (10 tests) 17ms
+ ✓ tests/tla/model-contract.test.ts (42 tests) 12ms
+ ✓ tests/storage/scip-documents.test.ts (1 test) 20ms
+ ✓ tests/reindex/typescript-incremental-index.test.ts (18 tests) 13ms
+ ✓ tests/reindex/typescript-projects.test.ts (4 tests) 11ms
+ ✓ tests/queries/navigation/exploration-topology.test.ts (20 tests) 14ms
+ ✓ tests/reindex/project-shards.test.ts (21 tests) 12ms
+ ✓ tests/runtime/project-readiness.test.ts (8 tests) 12ms
+ ✓ tests/runtime/cli-support.test.ts (46 tests) 12ms
+ ✓ tests/queries/graph/architecture.test.ts (29 tests) 11ms
+ ✓ tests/scripts/accuracy-calibration-core.test.ts (20 tests) 10ms
+ ✓ tests/reindex/typescript-compiler-shards.test.ts (18 tests) 11ms
+ ✓ tests/analysis/package-surface.test.ts (9 tests) 10ms
+ ✓ tests/queries/navigation/causal-corridor.test.ts (12 tests) 10ms
+ ✓ tests/semantic/rust/rust-reference-mapping.test.ts (5 tests) 9ms
+ ✓ tests/runtime/query-service.test.ts (80 tests) 10ms
+ ✓ tests/platform/project-tool-trust.test.ts (3 tests) 8ms
+ ✓ tests/queries/quality/complexity.test.ts (1 test) 8ms
+ ✓ tests/semantic/typescript/typescript-reference-fragments.test.ts (9 tests) 7ms
+ ✓ tests/domain/residue.test.ts (4 tests) 7ms
+ ✓ tests/source/ast-node-index.test.ts (3 tests) 7ms
+ ✓ tests/domain/stable-json.test.ts (4 tests) 7ms
+ ✓ tests/source/ast-parser-fallback.test.ts (1 test) 9ms
+ ✓ tests/reindex/reindex-merge.test.ts (6 tests) 6ms
+ ✓ tests/runtime/cli-json-envelope.test.ts (10 tests) 6ms
+ ✓ tests/reindex/install.test.ts (4 tests) 6ms
+ ✓ tests/domain/graph-relation-providers.test.ts (5 tests) 5ms
+ ✓ tests/reindex/reindex-sanitize.test.ts (10 tests) 6ms
+ ✓ tests/platform/process-identity.test.ts (7 tests) 6ms
+ ✓ tests/platform/file-clone.test.ts (7 tests) 5ms
+ ✓ tests/semantic/rust/rust-lsp-session-readiness.test.ts (34 tests) 5ms
+ ✓ tests/scripts/codex-exploration-trial-core.test.ts (12 tests) 5ms
+ ✓ tests/reindex/index-coverage.test.ts (2 tests) 5ms
+ ✓ tests/source/gitignore-filter.test.ts (5 tests) 5ms
+ ✓ tests/runtime/profile.test.ts (5 tests) 4ms
+ ✓ tests/runtime/evidence-command-freshness.test.ts (12 tests) 5ms
+ ✓ tests/analysis/rust-package-surface.test.ts (3 tests) 5ms
+ ✓ tests/scripts/runtime-support-contract.test.ts (2 tests) 4ms
+ ✓ tests/reindex/reindex-indexers.test.ts (13 tests) 4ms
+ ✓ tests/queries/impact/co-change-generated-artifacts.test.ts (3 tests) 4ms
+ ✓ tests/analysis/glob-match.test.ts (6 tests) 5ms
+ ✓ tests/reindex/index-artifacts.test.ts (2 tests) 4ms
+ ✓ tests/scripts/npm-release-state.test.ts (7 tests) 4ms
+ ✓ tests/reindex/affected-set.test.ts (36 tests) 3ms
+ ✓ tests/queries/cleanup/co-change-tiers.test.ts (3 tests) 3ms
+ ✓ tests/source/project-source-boundary.test.ts (4 tests) 3ms
+ ✓ tests/storage/scip-mentions.test.ts (2 tests) 3ms
+ ✓ tests/filesystem/bounded-file.test.ts (5 tests) 4ms
+ ✓ tests/domain/native-gc.test.ts (3 tests) 4ms
+ ✓ tests/runtime/health-report-cache.test.ts (2 tests) 4ms
+ ✓ tests/semantic/typescript/typescript-semantic-identity.test.ts (11 tests) 4ms
+ ✓ tests/reindex/post-index-augmentation.test.ts (5 tests) 4ms
+ ✓ tests/reindex/augment-vue-reference-task.test.ts (4 tests) 3ms
+ ✓ tests/runtime/worker-request-lane.test.ts (11 tests) 4ms
+ ✓ tests/semantic/rust/rust-session-registry.test.ts (7 tests) 3ms
+ ✓ tests/queries/internal/pairwise-profiles.test.ts (5 tests) 3ms
+ ✓ tests/runtime/cli-error-boundary.test.ts (2 tests) 4ms
+ ✓ tests/semantic/rust/durable-session-protocol.test.ts (7 tests) 3ms
+ ✓ tests/platform/fingerprint-stat-cache.test.ts (2 tests) 3ms
+ ✓ tests/runtime/update-notice.test.ts (6 tests) 3ms
+ ✓ tests/reindex/reindex-metadata-identities.test.ts (10 tests) 3ms
+ ✓ tests/symbols/symbol-parser.test.ts (22 tests) 3ms
+ ✓ tests/queries/internal/candidate-scan.test.ts (3 tests) 3ms
+ ✓ tests/storage/atomic-file-crash.test.ts (16 tests) 3ms
+ ✓ tests/scripts/render-command-reference.test.ts (12 tests) 3ms
+ ✓ tests/scripts/windows-sidecar-doc.test.ts (4 tests) 2ms
+ ✓ tests/platform/watch-service-state.test.ts (3 tests) 2ms
+ ✓ tests/scripts/exploration-benchmark-core.test.ts (6 tests) 2ms
+ ✓ tests/queries/cleanup/similar-topk.test.ts (9 tests) 2ms
+ ✓ tests/runtime/ast-parser-setup.test.ts (4 tests) 2ms
+ ✓ tests/platform/worktree-liveness.test.ts (4 tests) 2ms
+ ✓ tests/queries/internal/dead-candidate-gate.test.ts (7 tests) 2ms
+ ✓ tests/runtime/exploration-manual.test.ts (4 tests) 2ms
+ ✓ tests/runtime/command-panels.test.ts (2 tests) 3ms
+ ✓ tests/domain/reindex-metadata.test.ts (25 tests) 3ms
+ ✓ tests/runtime/claim-qualification.test.ts (4 tests) 2ms
+ ✓ tests/runtime/precomputed-command.test.ts (2 tests) 2ms
+ ✓ tests/domain/project-config.test.ts (6 tests) 2ms
+ ✓ tests/analysis/similarity.test.ts (23 tests) 2ms
+ ✓ tests/queries/health/health-report.test.ts (4 tests) 2ms
+ ✓ tests/platform/project-file-inventory-context.test.ts (9 tests) 2ms
+ ✓ tests/queries/health/detector-evidence-contracts.test.ts (3 tests) 2ms
+ ✓ tests/runtime/render-security.test.ts (2 tests) 2ms
+ ✓ tests/analysis/framework-entrypoints.test.ts (2 tests) 2ms
+ ✓ tests/platform/process-tree.test.ts (7 tests) 2ms
+ ✓ tests/runtime/watch-test-contract.test.ts (1 test) 1ms
+ ✓ tests/scripts/dependency-security.test.ts (5 tests) 2ms
+ ✓ tests/platform/structured-concurrency.test.ts (4 tests) 2ms
+ ✓ tests/tla/sany-facts.test.ts (6 tests) 2ms
+ ✓ tests/runtime/architecture-stop-hook.test.ts (5 tests) 2ms
+ ✓ tests/runtime/setup-wizard.test.ts (3 tests) 2ms
+ ✓ tests/runtime/context-decision-packet.test.ts (1 test) 2ms
+ ✓ tests/platform/parent-process-monitor.test.ts (3 tests) 2ms
+ ✓ tests/runtime/result-pagination.test.ts (4 tests) 2ms
+ ✓ tests/semantic/session-manager.test.ts (1 test) 2ms
+ ✓ tests/storage/evidence-products.test.ts (3 tests) 2ms
+ ✓ tests/platform/process-liveness.test.ts (3 tests) 2ms
+ ✓ tests/runtime/health-capability-disclosure.test.ts (2 tests) 2ms
+ ✓ tests/filesystem/durable-file.test.ts (3 tests) 2ms
+ ✓ tests/queries/graph/program-data-edges.test.ts (2 tests) 2ms
+ ✓ tests/domain/suppression-adjudication.test.ts (5 tests) 2ms
+ ✓ tests/runtime/command-spec-builders.test.ts (3 tests) 2ms
+ ✓ tests/platform/terminal-output.test.ts (5 tests) 2ms
+ ✓ tests/filesystem/durable-path.test.ts (4 tests) 2ms
+ ✓ tests/analysis/frontend-route-conventions.test.ts (3 tests) 1ms
+ ✓ tests/runtime/binary.test.ts (9 tests) 1ms
+ ✓ tests/semantic/typescript/semantic-locations.test.ts (1 test) 1ms
+ ✓ tests/queries/internal/frontend-behavior-evidence.test.ts (4 tests) 1ms
+ ✓ tests/queries/graph/system-map-edge-semantics.test.ts (5 tests) 1ms
+ ✓ tests/platform/bounded-regexp.test.ts (3 tests) 1ms
+ ✓ tests/scripts/score-detector-labels.test.ts (2 tests) 1ms
+ ✓ tests/platform/abort-signal.test.ts (3 tests) 1ms
+ ✓ tests/storage/cache-registry.test.ts (5 tests) 1ms
+ ✓ tests/domain/record-compatibility.test.ts (2 tests) 1ms
+ ✓ tests/domain/record-validation.test.ts (6 tests) 1ms
+ ✓ tests/queries/cleanup/extract-single-statement.test.ts (4 tests) 1ms
+ ✓ tests/runtime/command-operation.test.ts (2 tests) 1ms
+ ✓ tests/analysis/strongly-connected-components.test.ts (2 tests) 1ms
+ ✓ tests/source/source-identifier-prefilter.test.ts (5 tests) 1ms
+ ✓ tests/symbols/source-reference-scan.test.ts (4 tests) 1ms
+ ✓ tests/scripts/check-evidence-manifest-doc.test.ts (2 tests) 1ms
+ ✓ tests/domain/project-input.test.ts (2 tests) 1ms
+ ✓ tests/platform/node-options.test.ts (2 tests) 1ms
+ ✓ tests/domain/project-input-change-journal.test.ts (2 tests) 1ms
+ ✓ tests/scripts/profile-scoreboard.test.ts (1 test) 1ms
+ ✓ tests/runtime/cli-invocation.test.ts (3 tests) 1ms
+ ✓ tests/queries/internal/plan-source-candidates.test.ts (1 test) 1ms
+ ✓ tests/queries/cleanup/similar-sibling-promotion.test.ts (3 tests) 1ms
+ ✓ tests/semantic/semantic-availability-contract.test.ts (1 test) 1ms
+ ✓ tests/domain/time.test.ts (3 tests) 1ms
+ ✓ tests/queries/cleanup/doc-citation-context.test.ts (2 tests) 1ms
+ ✓ tests/runtime/typescript-worker-heap.test.ts (2 tests) 1ms
+ ✓ tests/queries/cleanup/doc-terms.test.ts (1 test) 1ms
+ ✓ tests/platform/shell-arguments.test.ts (3 tests) 1ms
+
+ Test Files  339 passed (339)
+      Tests  2936 passed (2936)
+   Start at  19:28:41
+   Duration  299.32s (transform 2.52s, setup 0ms, collect 26.71s, tests 243.67s, environment 18ms, prepare 6.66s)
+

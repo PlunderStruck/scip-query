@@ -1,0 +1,165 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "watch",
+  "operationRole": "composite",
+  "evidence": "graph-fact",
+  "args": [],
+  "options": {
+    "daemon": true,
+    "json": true
+  },
+  "result": {
+    "disposition": "started",
+    "state": {
+      "version": 1,
+      "protocolVersion": 6,
+      "pid": 93593,
+      "processIdentity": {
+        "version": 1,
+        "pid": 93593,
+        "platform": "darwin",
+        "startToken": "Sun Sep  6 00:14:22 2026"
+      },
+      "projectRoot": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9",
+      "worktreeId": "a6989a5aa686ad70cf643265",
+      "cliVersion": "0.25.0",
+      "startedAt": "2026-09-06T07:14:22.299Z",
+      "heartbeatAt": "2026-09-06T07:14:22.482Z",
+      "lastActivityAt": "2026-09-06T07:14:22.482Z",
+      "idleDeadlineAt": "2026-09-06T07:29:22.482Z",
+      "watcher": {
+        "state": "idle"
+      },
+      "indexGeneration": "46cab3598436f7e4a902f77e1ba00955d7a7127b9c97a569a8f24b106ede0f04",
+      "lastRefresh": {
+        "trigger": {
+          "kind": "setup",
+          "detail": "scip-query setup"
+        },
+        "result": "reused",
+        "startedAt": "2026-09-06T07:14:21.650Z",
+        "completedAt": "2026-09-06T07:14:21.725Z",
+        "durationMs": 75.31774999999999,
+        "indexedLanguages": [
+          "typescript"
+        ],
+        "skipped": []
+      },
+      "reindexActivity": {
+        "confidence": "complete",
+        "recordsRead": 3,
+        "invalidRecords": 0,
+        "skippedRecords": 0,
+        "readErrors": 0,
+        "ignoredPartialTailBytes": 0,
+        "windowStartedAt": "2026-09-05T07:14:22.299Z",
+        "windowEndedAt": "2026-09-06T07:14:22.299Z",
+        "runs": 3,
+        "rebuilt": 2,
+        "fullRebuilds": 1,
+        "reused": 1,
+        "failed": 0,
+        "suppressed": 0,
+        "estimatedLogicalOutputBytes": 242329,
+        "estimatedWriteBytes": 240742,
+        "reflinkedBytes": 1587,
+        "fallbackCopiedBytes": 0,
+        "languageAttribution": "complete",
+        "attributedRuns": 3,
+        "unattributedRuns": 0,
+        "invalidLanguageDetails": 0,
+        "byLanguage": {
+          "typescript": {
+            "runs": 3,
+            "rebuilt": 1,
+            "reused": 2,
+            "producedOutputBytes": 1587,
+            "durationMs": 396.292833
+          }
+        },
+        "byTrigger": {
+          "manual-cli": 1,
+          "watch-demand": 1,
+          "setup": 1
+        },
+        "automatic": {
+          "runs": 1,
+          "rebuilt": 1,
+          "fullRebuilds": 0,
+          "estimatedWriteBytes": 120371,
+          "oldestWriteAt": "2026-09-06T07:14:20.245Z"
+        },
+        "oldestRebuildAt": "2026-09-06T07:14:15.660Z",
+        "oldestWriteAt": "2026-09-06T07:14:15.660Z"
+      },
+      "refreshRequests": {
+        "pending": 0,
+        "claimed": 0,
+        "completed": 0,
+        "expired": 0,
+        "invalid": 0
+      },
+      "typescriptSemantic": {
+        "protocolVersion": 3,
+        "state": "idle",
+        "requests": 0,
+        "sessionsCreated": 0,
+        "sessionsReused": 0,
+        "sessionsRefreshed": 0,
+        "sessionsReplaced": 0,
+        "projectsCreated": 0,
+        "softMemoryLimitBytes": 5797576704,
+        "retireRequested": false,
+        "heapUsedBytes": 0,
+        "mailbox": {
+          "pending": 0,
+          "inflight": 0,
+          "responses": 0,
+          "deadLetters": 0,
+          "invalid": 0,
+          "totalItems": 0,
+          "totalBytes": 0
+        }
+      },
+      "typescriptIndex": {
+        "protocolVersion": 5,
+        "state": "idle",
+        "requests": 0,
+        "sessionsCreated": 0,
+        "sessionsReplaced": 0,
+        "sessionsEvicted": 0,
+        "activeSessions": 0,
+        "maxActiveSessions": 8,
+        "softMemoryLimitBytes": 5797576704,
+        "retireRequested": false,
+        "initializations": 0,
+        "programUpdates": 0,
+        "documentsEmitted": 0,
+        "documentsRemoved": 0,
+        "heapUsedBytes": 0,
+        "mailbox": {
+          "pending": 0,
+          "inflight": 0,
+          "responses": 0,
+          "deadLetters": 0,
+          "invalid": 0,
+          "totalItems": 0,
+          "totalBytes": 0
+        }
+      }
+    }
+  },
+  "coverage": {
+    "complete": true,
+    "totalKnown": true,
+    "returned": 1,
+    "total": 1,
+    "omitted": 0
+  }
+}

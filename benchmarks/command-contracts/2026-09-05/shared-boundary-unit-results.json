@@ -1,0 +1,301 @@
+{
+  "passed": 629,
+  "failed": 0,
+  "suites": [
+    {
+      "file": "tests/reindex/affected-set.test.ts",
+      "passed": 36,
+      "total": 36
+    },
+    {
+      "file": "tests/reindex/affected-shadow.test.ts",
+      "passed": 22,
+      "total": 22
+    },
+    {
+      "file": "tests/reindex/augment-sources.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/reindex/augment-vue-reference-task.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/reindex/augment-vue-workers.test.ts",
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "file": "tests/reindex/incremental-sqlite-publication.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/reindex/index-artifacts.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/reindex/index-coverage.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/reindex/indexer-runner-cancellation.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/reindex/indexer-runner-temporary-config.test.ts",
+      "passed": 7,
+      "total": 7
+    },
+    {
+      "file": "tests/reindex/install.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/reindex/post-index-augmentation.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/reindex/project-shards.test.ts",
+      "passed": 21,
+      "total": 21
+    },
+    {
+      "file": "tests/reindex/project-tool-execution.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/reindex/reindex-activity.test.ts",
+      "passed": 21,
+      "total": 21
+    },
+    {
+      "file": "tests/reindex/reindex-detect.test.ts",
+      "passed": 8,
+      "total": 8
+    },
+    {
+      "file": "tests/reindex/reindex-indexers.test.ts",
+      "passed": 13,
+      "total": 13
+    },
+    {
+      "file": "tests/reindex/reindex-merge.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/reindex/reindex-metadata-identities.test.ts",
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "file": "tests/reindex/reindex-reliability.test.ts",
+      "passed": 46,
+      "total": 46
+    },
+    {
+      "file": "tests/reindex/reindex-sanitize.test.ts",
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "file": "tests/reindex/rotating-jsonl.test.ts",
+      "passed": 13,
+      "total": 13
+    },
+    {
+      "file": "tests/reindex/scip-sqlite-converter.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/reindex/shared-generation-store.test.ts",
+      "passed": 28,
+      "total": 28
+    },
+    {
+      "file": "tests/reindex/shared-worktree-cache.integration.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/reindex/sqlite-generation-store.test.ts",
+      "passed": 29,
+      "total": 29
+    },
+    {
+      "file": "tests/reindex/sqlite-index-maintenance.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/reindex/typescript-compiler-shards.test.ts",
+      "passed": 18,
+      "total": 18
+    },
+    {
+      "file": "tests/reindex/typescript-document-emitter.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/reindex/typescript-fragment-store.test.ts",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "file": "tests/reindex/typescript-incremental-index.test.ts",
+      "passed": 18,
+      "total": 18
+    },
+    {
+      "file": "tests/reindex/typescript-index-mailbox.test.ts",
+      "passed": 13,
+      "total": 13
+    },
+    {
+      "file": "tests/reindex/typescript-projects.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/symbols/call-occurrence-contract.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/symbols/definition-catalog.test.ts",
+      "passed": 8,
+      "total": 8
+    },
+    {
+      "file": "tests/symbols/file-dep-graph.test.ts",
+      "passed": 9,
+      "total": 9
+    },
+    {
+      "file": "tests/symbols/file-wide-caller-fallback.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/symbols/identifier-attribution.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/symbols/jsx-render-callees.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/symbols/member-call-targets.test.ts",
+      "passed": 12,
+      "total": 12
+    },
+    {
+      "file": "tests/symbols/scip-occurrence-call-targets.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/symbols/scip-occurrence-callees.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/symbols/source-reference-scan.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/symbols/symbol-parser.test.ts",
+      "passed": 22,
+      "total": 22
+    },
+    {
+      "file": "tests/queries/graph/architecture.test.ts",
+      "passed": 31,
+      "total": 31
+    },
+    {
+      "file": "tests/queries/graph/cycles.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/queries/graph/dependence-slice.test.ts",
+      "passed": 24,
+      "total": 24
+    },
+    {
+      "file": "tests/queries/graph/entry-map.test.ts",
+      "passed": 8,
+      "total": 8
+    },
+    {
+      "file": "tests/queries/graph/evidence-rejection-contract.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/graph/graph-provider-calibration.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/queries/graph/graph-risk-output.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/queries/graph/program-data-edges.test.ts",
+      "passed": 2,
+      "total": 2
+    },
+    {
+      "file": "tests/queries/graph/system-map-edge-semantics.test.ts",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "file": "tests/queries/graph/system-map.test.ts",
+      "passed": 58,
+      "total": 58
+    },
+    {
+      "file": "tests/queries/quality/complexity.test.ts",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "file": "tests/queries/quality/function-complexity-contract.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/queries/quality/slice-cohesion-coverage.test.ts",
+      "passed": 4,
+      "total": 4
+    },
+    {
+      "file": "tests/queries/quality/slice-cohesion.test.ts",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "file": "tests/queries/navigation/metric-contracts.test.ts",
+      "passed": 9,
+      "total": 9
+    }
+  ]
+}

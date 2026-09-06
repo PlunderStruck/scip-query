@@ -1,0 +1,45 @@
+  done: scip-query → Claude
+  done: scip-plan → Claude
+  done: scip-setup → Claude
+  done: scip-integrity-audit → Claude
+  done: scip-explore → Claude
+  done: principal-maintainability-review → Claude
+  done: scip-system-compression → Claude
+  done: scip-root-cause → Claude
+  done: scip-claim-audit → Claude
+  done: scip-probe-reachability → Claude
+  done: scip-twin-drift → Claude
+  done: scip-calibrate → Claude
+  done: conductor → Claude
+  done: concrete-plan → Claude
+  skip: scip-query → Codex (symlink outside this scip-query package)
+  done: scip-plan → Codex
+  done: scip-setup → Codex
+  done: scip-integrity-audit → Codex
+  done: scip-explore → Codex
+  done: principal-maintainability-review → Codex
+  done: scip-system-compression → Codex
+  done: scip-root-cause → Codex
+  done: scip-claim-audit → Codex
+  done: scip-probe-reachability → Codex
+  done: scip-twin-drift → Codex
+  done: scip-calibrate → Codex
+  done: conductor → Codex
+  done: concrete-plan → Codex
+  done: scip-query → Agents
+  done: scip-plan → Agents
+  done: scip-setup → Agents
+  done: scip-integrity-audit → Agents
+  done: scip-explore → Agents
+  done: principal-maintainability-review → Agents
+  done: scip-system-compression → Agents
+  done: scip-root-cause → Agents
+  done: scip-claim-audit → Agents
+  done: scip-probe-reachability → Agents
+  done: scip-twin-drift → Agents
+  done: scip-calibrate → Agents
+  done: conductor → Agents
+  done: concrete-plan → Agents
+
+41 installed, 0 already linked, 0 pruned, 1 skipped.
+Skills will be available in your next Claude Code / Codex session.

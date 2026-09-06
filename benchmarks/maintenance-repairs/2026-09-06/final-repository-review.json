@@ -1,0 +1,861 @@
+{
+  "command": "review --base HEAD --full",
+  "base": "80c94fb737719962989fb97f492dc5e5bcec5ea1",
+  "current": "732509da2ade263e155945ce6527f97d2ec0517ae64f44345c6a50cc60d89e49",
+  "counts": {
+    "architecture:resolved": 49,
+    "duplication:existing": 7,
+    "complexity:resolved": 97,
+    "complexity:existing": 642,
+    "complexity:uncomparable": 10
+  },
+  "activeFindings": [],
+  "blockingFindingIds": [],
+  "coverage": {
+    "status": "accounted",
+    "analyzedFiles": 558,
+    "eligibleFiles": 558,
+    "excludedFiles": 2492,
+    "exclusions": {
+      "unsupported-language": 2097,
+      "test": 395
+    },
+    "dependencies": {
+      "resolutions": {
+        "internal": 2968,
+        "external": 74,
+        "builtin": 575,
+        "excluded": 2,
+        "missing": 0,
+        "ambiguous": 0,
+        "dynamic": 1
+      },
+      "typeOnly": 791,
+      "test": 0,
+      "deferredOrCommonJs": 32,
+      "unresolved": [
+        {
+          "file": "scripts/bench-native-symbol-leaf.mjs",
+          "line": 19,
+          "specifier": "`file://${distIndex}`",
+          "kind": "value",
+          "role": "production",
+          "syntax": "dynamic-import",
+          "configs": [
+            "tsconfig.json"
+          ],
+          "resolution": "dynamic"
+        }
+      ],
+      "excluded": [
+        {
+          "file": "scripts/accuracy-calibration.mjs",
+          "line": 48,
+          "specifier": "../dist/queries/index.js",
+          "kind": "value",
+          "role": "production",
+          "syntax": "import",
+          "configs": [
+            "tsconfig.json"
+          ],
+          "resolution": "excluded",
+          "excludedReason": "Requested managed output dist/queries/index.js; build/install existence is not established by the source inventory."
+        },
+        {
+          "file": "scripts/accuracy-calibration.mjs",
+          "line": 49,
+          "specifier": "../dist/index.js",
+          "kind": "value",
+          "role": "production",
+          "syntax": "import",
+          "configs": [
+            "tsconfig.json"
+          ],
+          "resolution": "excluded",
+          "excludedReason": "Requested managed output dist/index.js; build/install existence is not established by the source inventory."
+        }
+      ]
+    },
+    "analyzedFunctions": 12091,
+    "unresolvedImports": 0,
+    "testCoverage": {
+      "requested": false,
+      "available": 0,
+      "unavailable": 1185,
+      "reasons": [
+        "No source-matched coverage artifact supplied."
+      ]
+    },
+    "problems": [],
+    "limits": [
+      "TS/JS implemented functions; metric rules typescript-function-local-v1. Cognitive counts structural nesting and logical sequences; recursion and interprocedural behavior are not measured.",
+      "Duplication compares whole function body tokens (at least 60 tokens), retaining literals and property names. Renamed local bindings are candidates; similarity does not prove interchangeable behavior or justify deletion.",
+      "Dependencies use compiler resolution over captured source and project configuration, including aliases, repository package exports, literal dynamic imports and unshadowed CommonJS calls. External packages, excluded targets and unresolved imports are distinguished. Production file cycles use static value imports; type/test/deferred relationships remain separate. Runtime handoffs and custom loaders are not inferred.",
+      "Ownership and mixed responsibilities require evidence about callers, state and business rules; this scan does not infer a correct owner or an architectural grade.",
+      "Default exclusions: tests/fixtures/benchmarks, reference/vendor copies, generated files, declarations and build output. Use --include-tests, --include-references or --include-generated for the corresponding source roles.",
+      "Diff is the selected Git commit versus current files, including untracked files; staged-only review and inferred rename/split identity are not claimed.",
+      "Coverage without matching source hashes is unavailable, never zero. Base CRAP is unavailable unless independently measured against that base.",
+      "Affected files are transitive importers in the covered source graph. Use fresh diff-impact/evidence for symbol consumers and runtime effects."
+    ]
+  },
+  "architecture": {
+    "configured": true,
+    "boundaries": [
+      {
+        "name": "agent-evaluation-tools",
+        "paths": [
+          "scripts/change-benchmark-core.mjs",
+          "scripts/codex-change-trial.mjs",
+          "scripts/codex-exploration-sandbox.mjs",
+          "scripts/codex-exploration-trial-core.mjs"
+        ],
+        "fileCount": 4,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "agent-evidence-capture",
+        "paths": [
+          "skills/scip-explore/scripts/capture-evidence.mjs"
+        ],
+        "fileCount": 1,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "agent-exploration-evaluation",
+        "paths": [
+          "scripts/codex-exploration-trial.mjs",
+          "scripts/compare-exploration-trials.mjs",
+          "scripts/exploration-benchmark-core.mjs",
+          "scripts/exploration-benchmark.mjs"
+        ],
+        "fileCount": 4,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "analysis",
+        "paths": [
+          "src/analysis/**"
+        ],
+        "fileCount": 29,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "benchmark-fixture",
+        "paths": [
+          "benchmarks/change/fixture/src/**"
+        ],
+        "fileCount": 0,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "build-configuration",
+        "paths": [
+          "eslint.config.js",
+          "tsup.config.ts",
+          "vitest.config.ts"
+        ],
+        "fileCount": 3,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "command-audit-tools",
+        "paths": [
+          "benchmarks/command-contracts/**",
+          "benchmarks/full-tool-audit/**"
+        ],
+        "fileCount": 0,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "contract-tooling",
+        "paths": [
+          "scripts/affected-set-shadow-contract.mjs",
+          "scripts/api-surface-contract.mjs",
+          "scripts/audit-production-dependencies.mjs",
+          "scripts/evidence-product-contract.mjs",
+          "scripts/incremental-freshness-contract.mjs",
+          "scripts/probe-rust-scip-boundary.mjs",
+          "scripts/verify-identity-collision-cli.mjs"
+        ],
+        "fileCount": 7,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "coverage-recorder",
+        "paths": [
+          "scripts/record-review-coverage.mjs"
+        ],
+        "fileCount": 1,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "detector-calibration-tools",
+        "paths": [
+          "scripts/accuracy-calibration-core.mjs",
+          "scripts/accuracy-calibration.mjs",
+          "scripts/score-detector-labels.ts",
+          "scripts/semantic-command-calibration.mjs",
+          "scripts/typescript-semantic-provider-comparison.mjs"
+        ],
+        "fileCount": 5,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "documentation-tooling",
+        "paths": [
+          "scripts/check-evidence-manifest-doc.mjs",
+          "scripts/check-skill-links.mjs",
+          "scripts/render-command-reference.ts"
+        ],
+        "fileCount": 3,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "domain",
+        "paths": [
+          "src/domain/**"
+        ],
+        "fileCount": 34,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "filesystem",
+        "paths": [
+          "src/filesystem/**"
+        ],
+        "fileCount": 4,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "instrumentation",
+        "paths": [
+          "src/instrumentation/**"
+        ],
+        "fileCount": 1,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "performance-tooling",
+        "paths": [
+          "scripts/bench-native-symbol-leaf.mjs",
+          "scripts/benchmark-agent-output.ts",
+          "scripts/benchmark-cold-reindex.ts",
+          "scripts/benchmark-edit-latency.ts",
+          "scripts/benchmark-graph-literal.ts",
+          "scripts/benchmark-query-service.ts",
+          "scripts/benchmark-reindex-accounting.ts",
+          "scripts/benchmark-source-search.ts",
+          "scripts/cache-lifecycle-soak.ts",
+          "scripts/profile-scoreboard.mjs"
+        ],
+        "fileCount": 10,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "platform",
+        "paths": [
+          "src/platform/**"
+        ],
+        "fileCount": 33,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "public-api",
+        "paths": [
+          "src/index.ts"
+        ],
+        "fileCount": 1,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "queries-cleanup",
+        "paths": [
+          "src/queries/cleanup/**"
+        ],
+        "fileCount": 25,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "queries-facade",
+        "paths": [
+          "src/queries/index.ts",
+          "src/queries/public-query-entries.ts",
+          "src/queries/service-queries.ts"
+        ],
+        "fileCount": 3,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "queries-frontend",
+        "paths": [
+          "src/queries/frontend/**"
+        ],
+        "fileCount": 6,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "queries-graph",
+        "paths": [
+          "src/queries/graph/**"
+        ],
+        "fileCount": 18,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "queries-health",
+        "paths": [
+          "src/queries/health/**"
+        ],
+        "fileCount": 12,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "queries-impact",
+        "paths": [
+          "src/queries/impact/**"
+        ],
+        "fileCount": 5,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "queries-internal",
+        "paths": [
+          "src/queries/internal/**"
+        ],
+        "fileCount": 27,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "queries-navigation",
+        "paths": [
+          "src/queries/navigation/**"
+        ],
+        "fileCount": 25,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "queries-quality",
+        "paths": [
+          "src/queries/quality/**"
+        ],
+        "fileCount": 2,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "queries-utils",
+        "paths": [
+          "src/queries/query-utils.ts"
+        ],
+        "fileCount": 1,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "reindex",
+        "paths": [
+          "src/reindex/*"
+        ],
+        "fileCount": 34,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "reindex-augmentation",
+        "paths": [
+          "src/reindex/augmentation/**"
+        ],
+        "fileCount": 3,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "reindex-vue",
+        "paths": [
+          "src/reindex/vue/**"
+        ],
+        "fileCount": 5,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "release-tooling",
+        "paths": [
+          "scripts/build-scip-windows.mjs",
+          "scripts/npm-release-state.ts",
+          "scripts/npm-release.ts",
+          "scripts/publish-scip-windows.ts",
+          "scripts/release-npm-guard.ts",
+          "scripts/release-npm.ts",
+          "scripts/scip-windows-package-identity.ts",
+          "scripts/scip-windows-provenance.mjs",
+          "scripts/scip-windows-release.ts",
+          "scripts/verify-scip-windows-registry.ts",
+          "scripts/verify-scip-windows.mjs"
+        ],
+        "fileCount": 11,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "runtime-command-kit",
+        "paths": [
+          "src/runtime/command-kit/**"
+        ],
+        "fileCount": 6,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "runtime-commands",
+        "paths": [
+          "src/runtime/commands/**"
+        ],
+        "fileCount": 8,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "runtime-entry",
+        "paths": [
+          "src/runtime/cli.ts",
+          "src/runtime/cli-error-boundary.ts",
+          "src/runtime/cli-main.ts",
+          "src/runtime/index.ts",
+          "src/runtime/postinstall.ts"
+        ],
+        "fileCount": 5,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "runtime-query-commands",
+        "paths": [
+          "src/runtime/query-commands/**"
+        ],
+        "fileCount": 15,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "runtime-services",
+        "paths": [
+          "src/runtime/agent-setup.ts",
+          "src/runtime/ast-parser-setup.ts",
+          "src/runtime/claim-qualification.ts",
+          "src/runtime/cleanup-verify.ts",
+          "src/runtime/cli-context.ts",
+          "src/runtime/cli-invocation.ts",
+          "src/runtime/cli-json-envelope.ts",
+          "src/runtime/cli-support.ts",
+          "src/runtime/command-operation.ts",
+          "src/runtime/config.ts",
+          "src/runtime/cursor-codec.ts",
+          "src/runtime/evidence-command-freshness.ts",
+          "src/runtime/file-product-warm.ts",
+          "src/runtime/generated-agent-command-catalog.ts",
+          "src/runtime/git-worktree-context-cache.ts",
+          "src/runtime/health-capability-disclosure.ts",
+          "src/runtime/health-dossier.ts",
+          "src/runtime/health-report-cache.ts",
+          "src/runtime/index-freshness.ts",
+          "src/runtime/isolated-analysis-runner.ts",
+          "src/runtime/observation-receipt.ts",
+          "src/runtime/output-pagination.ts",
+          "src/runtime/project-readiness.ts",
+          "src/runtime/project-reindex.ts",
+          "src/runtime/project-setup.ts",
+          "src/runtime/query-service-fastpath.ts",
+          "src/runtime/query-service-server.ts",
+          "src/runtime/query-service.ts",
+          "src/runtime/refs-pagination.ts",
+          "src/runtime/render.ts",
+          "src/runtime/repository-cache-lifecycle.ts",
+          "src/runtime/result-pagination.ts",
+          "src/runtime/revisioned-file.ts",
+          "src/runtime/setup-wizard.ts",
+          "src/runtime/setup.ts",
+          "src/runtime/source-emission-session.ts",
+          "src/runtime/suppression-writer.ts",
+          "src/runtime/typescript-mailbox-lanes.ts",
+          "src/runtime/typescript-mailbox-worker.ts",
+          "src/runtime/uninstall.ts",
+          "src/runtime/update-notice.ts",
+          "src/runtime/watch-refresh-coordinator.ts",
+          "src/runtime/watch-server.ts",
+          "src/runtime/watch-service-prune.ts",
+          "src/runtime/watch-service.ts",
+          "src/runtime/watch.ts",
+          "src/runtime/worker-request-lane.ts"
+        ],
+        "fileCount": 47,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "rust-kernels",
+        "paths": [
+          "crates/scip-query-kernels/**"
+        ],
+        "fileCount": 0,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "semantic-contracts",
+        "paths": [
+          "src/semantic/types.ts"
+        ],
+        "fileCount": 1,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "semantic-core",
+        "paths": [
+          "src/semantic/definition-groups.ts",
+          "src/semantic/index.ts",
+          "src/semantic/local-flow.ts",
+          "src/semantic/provider-cache.ts",
+          "src/semantic/session-manager.ts",
+          "src/semantic/shared-primitives.ts",
+          "src/semantic/symbol-evidence.ts"
+        ],
+        "fileCount": 7,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "semantic-rust",
+        "paths": [
+          "src/semantic/rust/**"
+        ],
+        "fileCount": 22,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "semantic-typescript",
+        "paths": [
+          "src/semantic/typescript/**"
+        ],
+        "fileCount": 23,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "source",
+        "paths": [
+          "src/source/**",
+          "src/language-parsers/**"
+        ],
+        "fileCount": 67,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "storage",
+        "paths": [
+          "src/storage/**"
+        ],
+        "fileCount": 17,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "symbols-core",
+        "paths": [
+          "src/symbols/*"
+        ],
+        "fileCount": 11,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "symbols-graph",
+        "paths": [
+          "src/symbols/graph/**"
+        ],
+        "fileCount": 8,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "symbols-references",
+        "paths": [
+          "src/symbols/references/**"
+        ],
+        "fileCount": 4,
+        "dependencyPolicyDeclared": true
+      },
+      {
+        "name": "test-fixtures",
+        "paths": [
+          "tests/fixtures/exploration-benchmark/identity-collision/src/push.ts",
+          "tests/fixtures/exploration-benchmark/identity-collision/src/slice.ts",
+          "tests/fixtures/exploration-benchmark/identity-collision/src/source.ts",
+          "tests/fixtures/invocation-coverage-contract/index.ts",
+          "tests/fixtures/protocol-state-contract/index.ts",
+          "tests/fixtures/public-api-consumer/index.ts"
+        ],
+        "fileCount": 0,
+        "dependencyPolicyDeclared": true
+      }
+    ],
+    "coverage": {
+      "totalFiles": 558,
+      "mappedFiles": 558,
+      "unmappedFiles": [],
+      "ambiguousFiles": []
+    },
+    "policyCoverage": {
+      "declaredRows": 47,
+      "totalBoundaries": 47,
+      "missingRows": [],
+      "requiresCompletePolicy": true,
+      "requiresCompleteCoverage": true,
+      "requiresMinimalPolicy": true
+    },
+    "dependencyRoles": {
+      "excludedTestEdges": 0,
+      "basis": "production-imports-including-types",
+      "cycleMeaning": "Boundary cycles concern declared groups. File cycle members, when present, concern static imports including types; neither establishes a runtime initialization failure."
+    },
+    "cycles": []
+  },
+  "uncomparableFindings": [
+    {
+      "id": "complexity:src/queries/cleanup/similar.ts:similarAll.<callback:profileSpan:1>.<callback:profileSpan:1>",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "similarAll.<callback:profileSpan:1>.<callback:profileSpan:1>: cyclomatic 21, cognitive 49.",
+      "sites": [
+        {
+          "file": "src/queries/cleanup/similar.ts",
+          "line": 389,
+          "name": "similarAll.<callback:profileSpan:1>.<callback:profileSpan:1>"
+        }
+      ],
+      "score": 3.2666666666666666,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/queries/cleanup/similar.ts:395:13 ForOfStatement: +2 cognitive",
+        "src/queries/cleanup/similar.ts:397:15 if: +3 cognitive",
+        "src/queries/cleanup/similar.ts:398:15 ForOfStatement: +3 cognitive",
+        "src/queries/cleanup/similar.ts:399:17 if: +4 cognitive",
+        "src/queries/cleanup/similar.ts:400:17 if: +4 cognitive",
+        "src/queries/cleanup/similar.ts:404:13 if: +2 cognitive",
+        "src/queries/cleanup/similar.ts:406:15 if: +3 cognitive",
+        "src/queries/cleanup/similar.ts:409:13 ForOfStatement: +2 cognitive",
+        "src/queries/cleanup/similar.ts:412:15 if: +3 cognitive",
+        "src/queries/cleanup/similar.ts:413:17 if: +4 cognitive",
+        "src/queries/cleanup/similar.ts:417:15 if: +3 cognitive",
+        "src/queries/cleanup/similar.ts:418:17 if: +4 cognitive",
+        "src/queries/cleanup/similar.ts:422:15 if: +3 cognitive",
+        "src/queries/cleanup/similar.ts:431:15 if: +3 cognitive",
+        "src/queries/cleanup/similar.ts:433:15 if: +3 cognitive"
+      ],
+      "status": "uncomparable"
+    },
+    {
+      "id": "complexity:src/semantic/symbol-evidence.ts:materializeSemanticCalleeCache.<callback:profileSpan:1>",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "materializeSemanticCalleeCache.<callback:profileSpan:1>: cyclomatic 14, cognitive 36.",
+      "sites": [
+        {
+          "file": "src/semantic/symbol-evidence.ts",
+          "line": 86,
+          "name": "materializeSemanticCalleeCache.<callback:profileSpan:1>"
+        }
+      ],
+      "score": 2.4,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/semantic/symbol-evidence.ts:88:9 if: +2 cognitive",
+        "src/semantic/symbol-evidence.ts:89:11 if: +3 cognitive",
+        "src/semantic/symbol-evidence.ts:93:9 if: +2 cognitive",
+        "src/semantic/symbol-evidence.ts:94:11 if: +3 cognitive",
+        "src/semantic/symbol-evidence.ts:100:9 if: +2 cognitive",
+        "src/semantic/symbol-evidence.ts:105:9 ForOfStatement: +2 cognitive",
+        "src/semantic/symbol-evidence.ts:107:11 if: +3 cognitive",
+        "src/semantic/symbol-evidence.ts:109:13 if: +4 cognitive",
+        "src/semantic/symbol-evidence.ts:110:15 if: +5 cognitive",
+        "src/semantic/symbol-evidence.ts:111:15 if: +5 cognitive",
+        "src/semantic/symbol-evidence.ts:114:13 if: +4 cognitive"
+      ],
+      "status": "uncomparable"
+    },
+    {
+      "id": "complexity:src/runtime/cli-main.ts:<callback:program.hook:1>",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "<callback:program.hook:1>: cyclomatic 22, cognitive 25.",
+      "sites": [
+        {
+          "file": "src/runtime/cli-main.ts",
+          "line": 68,
+          "name": "<callback:program.hook:1>"
+        }
+      ],
+      "score": 2.2,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/runtime/cli-main.ts:104:7 CatchClause: +2 cognitive",
+        "src/runtime/cli-main.ts:105:7 if: +3 cognitive",
+        "src/runtime/cli-main.ts:106:23 ConditionalExpression: +3 cognitive",
+        "src/runtime/cli-main.ts:113:5 if: +2 cognitive",
+        "src/runtime/cli-main.ts:116:5 if: +2 cognitive",
+        "src/runtime/cli-main.ts:119:5 if: +2 cognitive"
+      ],
+      "status": "uncomparable"
+    },
+    {
+      "id": "complexity:src/semantic/shared-primitives.ts:materializeSemanticReferenceBatch.<callback:profileSpan:1>",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "materializeSemanticReferenceBatch.<callback:profileSpan:1>: cyclomatic 13, cognitive 28.",
+      "sites": [
+        {
+          "file": "src/semantic/shared-primitives.ts",
+          "line": 466,
+          "name": "materializeSemanticReferenceBatch.<callback:profileSpan:1>"
+        }
+      ],
+      "score": 1.8666666666666667,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/semantic/shared-primitives.ts:469:9 ForOfStatement: +2 cognitive",
+        "src/semantic/shared-primitives.ts:470:11 if: +3 cognitive",
+        "src/semantic/shared-primitives.ts:478:9 if: +2 cognitive",
+        "src/semantic/shared-primitives.ts:484:9 if: +2 cognitive",
+        "src/semantic/shared-primitives.ts:485:11 ForOfStatement: +3 cognitive",
+        "src/semantic/shared-primitives.ts:486:13 if: +4 cognitive",
+        "src/semantic/shared-primitives.ts:494:9 ForOfStatement: +2 cognitive",
+        "src/semantic/shared-primitives.ts:496:11 if: +3 cognitive",
+        "src/semantic/shared-primitives.ts:498:13 if: +4 cognitive"
+      ],
+      "status": "uncomparable"
+    },
+    {
+      "id": "complexity:src/analysis/runtime-boundaries/http-summaries.ts:propagateCompilerResolvedHttpSummaries.<callback:recordSpan:1>",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "propagateCompilerResolvedHttpSummaries.<callback:recordSpan:1>: cyclomatic 12, cognitive 27.",
+      "sites": [
+        {
+          "file": "src/analysis/runtime-boundaries/http-summaries.ts",
+          "line": 166,
+          "name": "propagateCompilerResolvedHttpSummaries.<callback:recordSpan:1>"
+        }
+      ],
+      "score": 1.8,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/analysis/runtime-boundaries/http-summaries.ts:168:11 if: +2 cognitive",
+        "src/analysis/runtime-boundaries/http-summaries.ts:171:13 if: +2 cognitive",
+        "src/analysis/runtime-boundaries/http-summaries.ts:173:13 ForOfStatement: +2 cognitive",
+        "src/analysis/runtime-boundaries/http-summaries.ts:175:15 if: +3 cognitive",
+        "src/analysis/runtime-boundaries/http-summaries.ts:179:15 if: +3 cognitive",
+        "src/analysis/runtime-boundaries/http-summaries.ts:182:15 if: +3 cognitive",
+        "src/analysis/runtime-boundaries/http-summaries.ts:199:23 ConditionalExpression: +3 cognitive",
+        "src/analysis/runtime-boundaries/http-summaries.ts:206:15 if: +3 cognitive",
+        "src/analysis/runtime-boundaries/http-summaries.ts:208:13 CatchClause: +2 cognitive",
+        "src/analysis/runtime-boundaries/http-summaries.ts:210:122 ConditionalExpression: +3 cognitive"
+      ],
+      "status": "uncomparable"
+    },
+    {
+      "id": "complexity:scripts/change-benchmark-core.mjs:checkStructure.visit",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "checkStructure.visit: cyclomatic 15, cognitive 21.",
+      "sites": [
+        {
+          "file": "scripts/change-benchmark-core.mjs",
+          "line": 228,
+          "name": "checkStructure.visit"
+        }
+      ],
+      "score": 1.5,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "scripts/change-benchmark-core.mjs:231:9 if: +2 cognitive",
+        "scripts/change-benchmark-core.mjs:238:11 if: +3 cognitive",
+        "scripts/change-benchmark-core.mjs:243:13 if: +4 cognitive"
+      ],
+      "status": "uncomparable"
+    },
+    {
+      "id": "complexity:src/runtime/commands/command-registry.ts:registerCommandDescriptors.<callback:descriptors.map:0>",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "registerCommandDescriptors.<callback:descriptors.map:0>: cyclomatic 14, cognitive 17.",
+      "sites": [
+        {
+          "file": "src/runtime/commands/command-registry.ts",
+          "line": 48,
+          "name": "registerCommandDescriptors.<callback:descriptors.map:0>"
+        }
+      ],
+      "score": 1.4,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/runtime/commands/command-registry.ts:60:7 if: +2 cognitive",
+        "src/runtime/commands/command-registry.ts:62:9 if: +3 cognitive",
+        "src/runtime/commands/command-registry.ts:63:9 if: +3 cognitive"
+      ],
+      "status": "uncomparable"
+    },
+    {
+      "id": "complexity:src/symbols/graph/file-dep-graph.ts:materializeCarriedFileDependencyGraph.<callback:profileSpan:1>",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "materializeCarriedFileDependencyGraph.<callback:profileSpan:1>: cyclomatic 9, cognitive 21.",
+      "sites": [
+        {
+          "file": "src/symbols/graph/file-dep-graph.ts",
+          "line": 297,
+          "name": "materializeCarriedFileDependencyGraph.<callback:profileSpan:1>"
+        }
+      ],
+      "score": 1.4,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/symbols/graph/file-dep-graph.ts:299:7 if: +2 cognitive",
+        "src/symbols/graph/file-dep-graph.ts:300:7 if: +2 cognitive",
+        "src/symbols/graph/file-dep-graph.ts:301:9 ForOfStatement: +3 cognitive",
+        "src/symbols/graph/file-dep-graph.ts:302:11 if: +4 cognitive",
+        "src/symbols/graph/file-dep-graph.ts:305:7 if: +2 cognitive",
+        "src/symbols/graph/file-dep-graph.ts:306:9 ForOfStatement: +3 cognitive",
+        "src/symbols/graph/file-dep-graph.ts:307:11 if: +4 cognitive"
+      ],
+      "status": "uncomparable"
+    },
+    {
+      "id": "complexity:src/reindex/index.ts:publishFreshReindexArtifacts.<callback:profileSpan:1>",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "publishFreshReindexArtifacts.<callback:profileSpan:1>: cyclomatic 12, cognitive 16.",
+      "sites": [
+        {
+          "file": "src/reindex/index.ts",
+          "line": 1911,
+          "name": "publishFreshReindexArtifacts.<callback:profileSpan:1>"
+        }
+      ],
+      "score": 1.2,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/reindex/index.ts:1927:13 ConditionalExpression: +2 cognitive",
+        "src/reindex/index.ts:1937:13 ConditionalExpression: +2 cognitive",
+        "src/reindex/index.ts:1953:13 ConditionalExpression: +2 cognitive",
+        "src/reindex/index.ts:1960:58 ConditionalExpression: +2 cognitive"
+      ],
+      "status": "uncomparable"
+    },
+    {
+      "id": "complexity:src/symbols/graph/file-dep-graph.ts:materializeCarriedFileDependencyGraph.<callback:profileSpan:1>",
+      "rule": "complexity",
+      "evidence": "derived",
+      "summary": "materializeCarriedFileDependencyGraph.<callback:profileSpan:1>: cyclomatic 8, cognitive 16.",
+      "sites": [
+        {
+          "file": "src/symbols/graph/file-dep-graph.ts",
+          "line": 279,
+          "name": "materializeCarriedFileDependencyGraph.<callback:profileSpan:1>"
+        }
+      ],
+      "score": 1.0666666666666667,
+      "details": [
+        "Review branching and nesting while preserving decisions, effects, and error handling.",
+        "src/symbols/graph/file-dep-graph.ts:281:7 ForOfStatement: +2 cognitive",
+        "src/symbols/graph/file-dep-graph.ts:282:9 if: +3 cognitive",
+        "src/symbols/graph/file-dep-graph.ts:285:7 ForOfStatement: +2 cognitive",
+        "src/symbols/graph/file-dep-graph.ts:286:9 if: +3 cognitive",
+        "src/symbols/graph/file-dep-graph.ts:287:9 ForOfStatement: +3 cognitive"
+      ],
+      "status": "uncomparable"
+    }
+  ]
+}

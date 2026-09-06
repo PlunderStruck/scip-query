@@ -1,0 +1,44 @@
+[
+  {
+    "case": "index-with-vue-provider",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "import-and-call",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "Vue import and invocation both bind to actual indexed sum",
+    "passed": true,
+    "rows": [
+      [
+        1,
+        1
+      ],
+      [
+        2,
+        2
+      ]
+    ]
+  },
+  {
+    "case": "unchanged",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "repeated augmentation preserves reference identities without duplicates",
+    "passed": true
+  },
+  {
+    "case": "local-shadow",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "local same-name function cannot retain foreign references",
+    "passed": true
+  }
+]

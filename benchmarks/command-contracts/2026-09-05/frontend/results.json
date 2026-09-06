@@ -1,0 +1,152 @@
+[
+  {
+    "case": "reindex",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "augment",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "case": "react-component-duplicates",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "react-component-duplicates returns a positive finding for the intended files",
+    "passed": true
+  },
+  {
+    "claim": "react-component-duplicates accounts for all shared and unique tokens",
+    "passed": true
+  },
+  {
+    "claim": "react-component-duplicates reports reproducible Jaccard similarity",
+    "passed": true
+  },
+  {
+    "case": "react-component-duplicates-missing",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "react-component-duplicates excludes unrelated files",
+    "passed": true
+  },
+  {
+    "case": "react-hook-candidates",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "react-hook-candidates returns a positive finding for the intended files",
+    "passed": true
+  },
+  {
+    "claim": "react-hook-candidates accounts for all shared and unique tokens",
+    "passed": true
+  },
+  {
+    "case": "react-hook-candidates-missing",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "react-hook-candidates excludes unrelated files",
+    "passed": true
+  },
+  {
+    "case": "react-large-component-pressure",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "react-large-component-pressure returns a positive finding for the intended files",
+    "passed": true
+  },
+  {
+    "claim": "React pressure reports the exact constructed component and file line counts",
+    "passed": true
+  },
+  {
+    "case": "react-large-component-pressure-missing",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "react-large-component-pressure excludes unrelated files",
+    "passed": true
+  },
+  {
+    "case": "vue-component-duplicates",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "vue-component-duplicates returns a positive finding for the intended files",
+    "passed": true
+  },
+  {
+    "claim": "vue-component-duplicates accounts for all shared and unique tokens",
+    "passed": true
+  },
+  {
+    "claim": "vue-component-duplicates reports reproducible Jaccard similarity",
+    "passed": true
+  },
+  {
+    "case": "vue-component-duplicates-missing",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "vue-component-duplicates excludes unrelated files",
+    "passed": true
+  },
+  {
+    "case": "vue-composable-candidates",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "vue-composable-candidates returns a positive finding for the intended files",
+    "passed": true
+  },
+  {
+    "claim": "vue-composable-candidates accounts for all shared and unique tokens",
+    "passed": true
+  },
+  {
+    "case": "vue-composable-candidates-missing",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "vue-composable-candidates excludes unrelated files",
+    "passed": true
+  },
+  {
+    "case": "vue-large-view-pressure",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "vue-large-view-pressure returns a positive finding for the intended files",
+    "passed": true
+  },
+  {
+    "claim": "Vue pressure reports the exact constructed SFC and style line counts",
+    "passed": true
+  },
+  {
+    "case": "vue-large-view-pressure-missing",
+    "passed": true,
+    "exit": 0
+  },
+  {
+    "claim": "vue-large-view-pressure excludes unrelated files",
+    "passed": true
+  }
+]

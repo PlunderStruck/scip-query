@@ -1,0 +1,236 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "value-flow",
+  "operationRole": "repository-observation",
+  "evidence": "graph-fact",
+  "args": [
+    "helper"
+  ],
+  "options": {
+    "depth": 2,
+    "maxEdges": 48,
+    "json": true,
+    "session": true,
+    "jsonOutput": "/private/tmp/scip-followup-cli/value-flow.json"
+  },
+  "result": {
+    "kind": "value-flow",
+    "targets": [
+      {
+        "kind": "symbol",
+        "query": "helper",
+        "status": "matched",
+        "nodeIds": [
+          "symbol:scip-typescript%20npm%20accuracy-followup%201.0.0%20src%2F%60calls.ts%60%2Fhelper()."
+        ],
+        "omittedCandidates": 0
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge:typescript-local-flow:src%2Fcalls.ts:local-flow-edge%3Areaching-definition%3Aflow-point%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fcalls.ts%253A23%253A28%253Aparameter-definition%253Asymbol%25253A%2525252Fprivate%2525252Fvar%2525252Ffolders%2525252F4c%2525252Fwsjvhgw90t7f31d7s68ddhtc0000gn%2525252FT%2525252Fscip-followup-audit-0q1jojzy%2525252Fsrc%2525252Fcalls.ts%25253A23%25253Avalue%3Aflow-point%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fcalls.ts%253A47%253A52%253Ause%253Asymbol%25253A%2525252Fprivate%2525252Fvar%2525252Ffolders%2525252F4c%2525252Fwsjvhgw90t7f31d7s68ddhtc0000gn%2525252FT%2525252Fscip-followup-audit-0q1jojzy%2525252Fsrc%2525252Fcalls.ts%25253A23%25253Avalue:0:dataflow",
+        "family": "dataflow",
+        "semanticFamily": "data",
+        "subtype": "definition-to-use",
+        "from": {
+          "id": "local-flow-point:src%2Fcalls.ts:23:28:parameter-definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fcalls.ts%3A23%3Avalue",
+          "kind": "local-definition",
+          "label": "value",
+          "symbol": null,
+          "location": {
+            "file": "src/calls.ts",
+            "line": 0,
+            "endLine": 0
+          }
+        },
+        "to": {
+          "id": "local-flow-point:src%2Fcalls.ts:47:52:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fcalls.ts%3A23%3Avalue",
+          "kind": "local-use",
+          "label": "value",
+          "symbol": null,
+          "location": {
+            "file": "src/calls.ts",
+            "line": 0,
+            "endLine": 0
+          }
+        },
+        "sourceKind": "data-transfer",
+        "providerId": "typescript-local-dependence",
+        "supportCeiling": "partial",
+        "establishes": "The definition reaches the reported read on a feasible local control-flow path.",
+        "nonClaims": [
+          "Local reaching definitions do not establish heap aliasing, exceptional flow, or the runtime order of closure invocation."
+        ],
+        "recoverWith": [
+          "value-flow",
+          "dependence-slice",
+          "inspect",
+          "code"
+        ],
+        "evidenceStrength": "exact",
+        "evidenceMethods": [
+          "typescript-compiler-cfg-reaching-definitions"
+        ],
+        "evidenceConstituents": [
+          {
+            "method": "typescript-compiler-cfg-reaching-definitions",
+            "strength": "exact"
+          }
+        ],
+        "context": null,
+        "attributes": null
+      }
+    ],
+    "coverage": {
+      "status": "accounted",
+      "basis": "proved-bounded-static-value-flow",
+      "analysisBasis": "partial-system-definition-use",
+      "providers": [
+        "bounded-static-value-flow",
+        "typescript-local-dependence"
+      ],
+      "supportedRelations": [
+        "compiler-identified local definitions reaching local reads through a TypeScript control-flow graph",
+        "right-hand-side local reads supplying assignments and declarations",
+        "candidate closure captures and bounded same-owner field flow with explicit evidence strength",
+        "direct argument-to-parameter forwarding at compiler-resolved calls",
+        "bounded mechanically derived static arguments",
+        "callee return value to a consumed compiler-resolved call result"
+      ],
+      "unsupportedRelations": [
+        "general heap alias and cross-instance field points-to flow",
+        "exceptional control and value flow",
+        "closure invocation order",
+        "downstream local definition-use after a call result",
+        "dynamic calls not resolved by the semantic provider"
+      ],
+      "graph": {
+        "status": "accounted",
+        "topologyStatus": "accounted",
+        "scope": "explicit anchors; relations call, contract-symbol, import, reference, runtime-boundary; depth 2; evidence floor derived; source scopes production",
+        "maxDepth": 2,
+        "maxEdges": 48,
+        "matchedEdges": 1,
+        "eligibleEdges": 1,
+        "returnedEdges": 1,
+        "omittedEdges": 0,
+        "frontierGroups": 2,
+        "unsupportedFrontiers": 0,
+        "blindSpots": [
+          "Built-in runtime-boundary extractors traverse direct and replayably derived links; heuristic candidates, unsupported frameworks, reflection, generated names, and dependency wiring not recoverable from compiler occurrences or constructor assignments remain disclosed frontiers.",
+          "Literal matches outside the included source scopes (production) remain visible as match-only evidence and do not seed traversal.",
+          "Literal traversal is bounded to the smallest parser-delimited source construct; parser gaps may reduce an owner to one source line and leave its continuation untraversed.",
+          "Member calls use compiler occurrences, exact constructor-assigned fields, bounded unique service providers, direct factory-return members, and compiler-resolved object-literal callbacks when available. Ambiguous providers remain candidate frontiers; callback values routed through mutation, reflection, or unsupported dependency containers remain unrepresented.",
+          "Region labels are structural path groupings, not inferred runtime or architectural boundaries.",
+          "Reverse references do not recursively expand from discovered callers or callees.",
+          "Schema consumers stay within forward-flow regions; cross-workspace contracts may discover consumers in other workspaces. Add an explicit symbol anchor to widen either scope.",
+          "Traversal stops after depth 2; nonzero frontier counts identify evidence that was discovered but not traversed.",
+          "[general-interprocedural-value-flow] Whole-program definition-use flow through arbitrary calls and returns is unavailable. Missing dataflow edges cannot establish that a value never crosses an unmodeled call. Recover selected paths with: scip-query value-flow, scip-query dependence-slice, scip-query inspect, scip-query code.",
+          "[heap-aliasing] Heap points-to and cross-instance alias analysis are unavailable. Missing field or state edges cannot establish that two references never reach the same object. Recover selected paths with: scip-query value-flow, scip-query dependence-slice, scip-query inspect, scip-query code.",
+          "[exceptional-flow] Interprocedural exception propagation and finally completion flow are unavailable. Normal-path reachability and ordering do not establish behavior after a throw or rejection. Recover selected paths with: scip-query dependence-slice, scip-query inspect, scip-query code.",
+          "[unsupported-framework-adapters] Framework runtime crossings without a registered source adapter are unavailable. Missing boundary edges cannot establish that no producer, consumer, state effect, or ordering exists. Recover selected paths with: scip-query search, scip-query inspect, scip-query code."
+        ],
+        "explanation": "Every selected relationship in the bounded topology was emitted."
+      }
+    }
+  },
+  "coverage": {
+    "complete": null,
+    "totalKnown": false,
+    "returned": 1
+  },
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "operationRole": "repository-observation",
+    "receipt": {
+      "schemaVersion": 2,
+      "observedAt": "2026-09-06T02:48:32.039Z",
+      "facts": {
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "9ac14a281194a148cf10c602037b09606e09d9ffe44bb4fa89756a4fd7ab8821"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "9ac14a281194a148cf10c602037b09606e09d9ffe44bb4fa89756a4fd7ab8821"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        }
+      ]
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "graph-fact",
+      "coverage": {
+        "complete": null,
+        "totalKnown": false,
+        "returned": 1
+      },
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "compiler-graph",
+        "coverage": {
+          "state": "unknown",
+          "returned": 1,
+          "totalKnown": false
+        },
+        "producerValidation": {
+          "status": "not-evaluated"
+        },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": [
+            "collaborationDomain",
+            "wholeContent",
+            "observationStability"
+          ],
+          "reasons": [
+            "collaborationDomain:unknown",
+            "wholeContent:unknown",
+            "leftIndexAlignment:unknown",
+            "rightIndexAlignment:unknown"
+          ]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": [
+            "No repository action policy was supplied for this claim."
+          ]
+        }
+      }
+    }
+  }
+}

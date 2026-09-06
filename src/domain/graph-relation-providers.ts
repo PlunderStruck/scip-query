@@ -213,7 +213,7 @@ export const GRAPH_RELATION_PROVIDER_CONTRACTS: readonly GraphRelationProviderCo
       relation('identity', 'references', 'The occurrence resolves to the identified compiler-owned symbol.', {
         supportCeiling: 'exact',
         nonClaims: ['A reference does not establish execution or value transfer.'],
-        recoverWith: ['refs', 'trace', 'inspect'],
+        recoverWith: ['refs', 'inspect'],
       }),
       relation('ownership', 'contains', 'The owner contains the identified program construct.', {
         supportCeiling: 'exact',

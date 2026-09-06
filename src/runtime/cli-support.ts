@@ -92,7 +92,7 @@ const VUE_HEALTH_PHASES = new Set<HealthPhaseName>([
   'vue-large-view-pressure',
 ]);
 const VUE_HEALTH_TASK_PHASES = new Set<HealthPhaseName>([...VUE_HEALTH_PHASES, 'suppressions']);
-const SIMILAR_EXTRACT_HEALTH_PHASES = new Set<HealthPhaseName>(['similar', 'extract-candidates']);
+const SIMILAR_EXTRACT_HEALTH_PHASES = new Set<HealthPhaseName>(['similar']);
 const HEALTH_SEMANTIC_PREWARM_MARKER_VERSION = 2;
 
 export interface HealthSemanticPrewarmMarker {
@@ -1076,14 +1076,9 @@ export function healthPhaseTasks(phases: readonly HealthPhaseName[]): HealthPhas
  * worker from finishing alone (longest-processing-time-first scheduling).
  */
 const HEALTH_PHASE_COST_WEIGHT: Partial<Record<HealthPhaseName, number>> = {
-  'wrapper-candidates': 49,
-  'complexity-hotspots': 35,
   'passthrough-candidates': 31,
-  'stale-abstractions': 30,
-  'extract-candidates': 29,
   similar: 29,
   dead: 20,
-  isolated: 12,
   'react-component-duplicates': 10,
   'react-hook-candidates': 10,
   cycles: 8,
@@ -1225,8 +1220,6 @@ export function deferredHealthPhaseResult(
       throw new Error('Overview health phase cannot be deferred.');
     case 'dead':
       return { phase, dead: { count: 0, loc: 0, files: [] }, ...meta };
-    case 'isolated':
-      return { phase, isolated: { count: 0, loc: 0, files: [] }, ...meta };
     case 'cycles':
       return { phase, realCycleCount: 0, cycleExclusions: [], ...meta };
     case 'similar':
@@ -1247,14 +1240,8 @@ export function deferredHealthPhaseResult(
       return { ...skippedHealthPhaseResult(phase), ...meta };
     case 'vue-large-view-pressure':
       return { ...skippedHealthPhaseResult(phase), ...meta };
-    case 'extract-candidates':
-      return { phase, extractCount: 0, extractExclusions: [], ...meta };
-    case 'wrapper-candidates':
-      return { phase, wrappers: { count: 0, loc: 0, files: [] }, ...meta };
     case 'passthrough-candidates':
       return { phase, passthroughs: { count: 0, loc: 0, files: [] }, ...meta };
-    case 'stale-abstractions':
-      return { phase, stale: { count: 0, loc: 0, files: [], unused: 0, singleUse: 0 }, ...meta };
     case 'drift':
       return {
         phase,
@@ -1268,8 +1255,6 @@ export function deferredHealthPhaseResult(
         },
         ...meta,
       };
-    case 'complexity-hotspots':
-      return { phase, complexity: { top: [], extremeCount: 0 }, ...meta };
     case 'git-evidence':
       return { phase, gitEvidence: null, ...meta };
     case 'suppressions':
@@ -1307,9 +1292,6 @@ export function describeHealthProvenance(provenance: HealthProvenance): string {
 }
 
 export function renderHealthReport(report: HealthReport): void {
-  console.log(`\n  Codebase Health Score: ${report.score}/100`);
-  console.log(`    Risk:    ${report.riskScore}/100  (risk-oriented graph facts + change graph)`);
-  console.log(`    Hygiene: ${report.hygieneScore}/100  (tidiness candidates)\n`);
   console.log(
     `  ${report.overview.documents} files | ${report.overview.symbols} symbols | ${formatBytes(report.overview.indexSizeBytes)}`,
   );
@@ -1326,7 +1308,6 @@ export function renderHealthReport(report: HealthReport): void {
   console.log('  Findings:');
   const f = report.findings;
   if (f.deadSymbols > 0) console.log(`    Dead code:            ${f.deadSymbols} symbols (${f.deadLoc} LOC)`);
-  if (f.isolatedSymbols > 0) console.log(`    Isolated symbols:     ${f.isolatedSymbols} (${f.isolatedLoc} LOC)`);
   if (f.cycles > 0) console.log(`    Circular deps:        ${f.cycles}`);
   if (f.similarPairs > 0) console.log(`    Similar pairs:        ${f.similarPairs}`);
   if (f.twinDriftGroups > 0) console.log(`    Drifted twins:        ${f.twinDriftGroups} group(s)`);
@@ -1347,13 +1328,8 @@ export function renderHealthReport(report: HealthReport): void {
     );
   }
   if (f.vueLargeViewPressureFiles > 0) console.log(`    Vue large views:      ${f.vueLargeViewPressureFiles} file(s)`);
-  if (f.extractionCandidates > 0) console.log(`    Extract candidates:   ${f.extractionCandidates}`);
-  if (f.wrappers > 0)
-    console.log(`    Wrapper functions:    ${formatScoreAwareCount(f.wrappers, f.wrapperScoreCount)}`);
   if (f.passthroughs > 0) console.log(`    Passthroughs:         ${f.passthroughs}`);
-  if (f.staleTypes > 0) console.log(`    Stale abstractions:   ${f.staleTypes}`);
   if (f.driftedFiles > 0) console.log(`    Pattern drift:        ${f.driftedFiles} files`);
-  if (f.complexityHotspotCount > 0) console.log(`    Complexity hotspots:  ${f.complexityHotspotCount}`);
 
   const policyExclusions = report.policyExclusions ?? [];
   if (policyExclusions.length > 0) {
@@ -1372,13 +1348,6 @@ export function renderHealthReport(report: HealthReport): void {
     }
   }
 
-  if (report.topComplexity.length > 0) {
-    console.log('\n  Top Complexity Hotspots:');
-    for (const c of report.topComplexity) {
-      console.log(`    ${c.score.toFixed(1).padStart(6)}  ${c.symbol}`);
-    }
-  }
-
   if (report.detectorEvidence.length > 0) {
     console.log('\n  Detector Evidence Calibration:');
     for (const contract of report.detectorEvidence) {
@@ -1392,20 +1361,12 @@ export function renderHealthReport(report: HealthReport): void {
   }
 
   renderHealthAxes(report);
-  renderHealthPressure(report);
-
-  if (report.scoreBreakdown.length > 0) {
-    console.log('\n  Score Breakdown (100 minus the following):');
-    for (const deduction of report.scoreBreakdown) {
-      console.log(`    -${String(deduction.points).padStart(2)}  ${deduction.axis}: ${deduction.detail}`);
-    }
-  }
 
   if (report.actions.length === 0) {
     console.log(
       report.warnings && report.warnings.length > 0
         ? '\n  No findings from completed analyses. Review warnings before interpreting this result as clean.'
-        : '\n  No issues found. Codebase is clean.',
+        : '\n  No findings from completed analyses. Review coverage before drawing conclusions.',
     );
   }
 }
@@ -1417,17 +1378,6 @@ function formatScoreAwareCount(rawCount: number, scoreCount: number): string {
 
 function formatCompactNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
-}
-
-function renderHealthPressure(report: HealthReport): void {
-  if (report.pressure.length === 0) return;
-  console.log('\n  Maintenance Pressure:');
-  for (const pressure of report.pressure) {
-    console.log(
-      `    ${pressure.category}: ${pressure.count} / ${pressure.threshold} threshold ` +
-        `(${pressure.ratio}x, -${pressure.extraPenalty} ${pressure.kind})`,
-    );
-  }
 }
 
 function renderHealthAxes(report: HealthReport): void {
@@ -1447,14 +1397,6 @@ function renderHealthAxes(report: HealthReport): void {
     for (const pair of axes.hiddenCoupling.top.slice(0, 3)) {
       console.log(
         `      ${pair.fileA} <-> ${pair.fileB}  (${pair.together}x together, ${Math.round(pair.confidence * 100)}%)`,
-      );
-    }
-  }
-  if (axes.churnWeightedComplexity && axes.churnWeightedComplexity.length > 0) {
-    const top = axes.churnWeightedComplexity[0]!;
-    if (top.weighted > 0) {
-      console.log(
-        `    Churn x complexity:   hottest is ${top.symbol} (${top.changes} changes, weighted ${top.weighted})`,
       );
     }
   }
@@ -1511,6 +1453,7 @@ export async function runIsolatedDiffImpactReportWithEvidence(
     result: queries.mergeDiffImpactPartials(
       plan.plan.changedFiles,
       partials.map((partial) => partial.result),
+      plan.plan.changedFileLines.filter((file) => !plan.plan.changedFiles.includes(file)),
     ),
     observationReceipt: operationObservationReceipt(
       [planObservation.anchor],

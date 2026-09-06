@@ -1,0 +1,170 @@
+{
+  "scip-symbol-after-tests.json": {
+    "numTotalTests": 37,
+    "numPassedTests": 37,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 10,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-slice-query-after-tests.json": {
+    "numTotalTests": 41,
+    "numPassedTests": 41,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 10,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-metrics-after-tests.json": {
+    "numTotalTests": 49,
+    "numPassedTests": 49,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 10,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-cleanup-after-tests.json": {
+    "numTotalTests": 252,
+    "numPassedTests": 252,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 115,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-last-repairs-after-tests.json": {
+    "numTotalTests": 147,
+    "numPassedTests": 147,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 59,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-flow-after-tests.json": {
+    "numTotalTests": 45,
+    "numPassedTests": 45,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 8,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-evaluation-after-tests.json": {
+    "numTotalTests": 225,
+    "numPassedTests": 218,
+    "numFailedTests": 7,
+    "numPassedTestSuites": 54,
+    "numFailedTestSuites": 2,
+    "success": false
+  },
+  "scip-binding-after-tests.json": {
+    "numTotalTests": 284,
+    "numPassedTests": 284,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 82,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-renderers-after-tests.json": {
+    "numTotalTests": 44,
+    "numPassedTests": 44,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 10,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-runtime-occurrences-after-tests.json": {
+    "numTotalTests": 31,
+    "numPassedTests": 31,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 14,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-navigation-after-tests.json": {
+    "numTotalTests": 161,
+    "numPassedTests": 161,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 46,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-config-after-tests.json": {
+    "numTotalTests": 72,
+    "numPassedTests": 72,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 10,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-graph-impact-after-tests.json": {
+    "numTotalTests": 189,
+    "numPassedTests": 189,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 42,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-quality-after-tests.json": {
+    "numTotalTests": 52,
+    "numPassedTests": 52,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 12,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-health-after-tests.json": {
+    "numTotalTests": 74,
+    "numPassedTests": 74,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 31,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-query-boundaries-after-tests.json": {
+    "numTotalTests": 194,
+    "numPassedTests": 194,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 52,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-source-impact-after-tests.json": {
+    "numTotalTests": 193,
+    "numPassedTests": 193,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 81,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-classifier-after-tests.json": {
+    "numTotalTests": 65,
+    "numPassedTests": 65,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 15,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-graph-projection-after-tests.json": {
+    "numTotalTests": 189,
+    "numPassedTests": 189,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 42,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-suppression-after-tests.json": {
+    "numTotalTests": 76,
+    "numPassedTests": 76,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 10,
+    "numFailedTestSuites": 0,
+    "success": true
+  },
+  "scip-snapshot-after-tests.json": {
+    "numTotalTests": 47,
+    "numPassedTests": 47,
+    "numFailedTests": 0,
+    "numPassedTestSuites": 10,
+    "numFailedTestSuites": 0,
+    "success": true
+  }
+}

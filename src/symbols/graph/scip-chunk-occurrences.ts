@@ -1,3 +1,6 @@
+import { normalizeOccurrenceRange, type OccurrenceSourceRange } from '../../domain/scip-range.js';
+export { normalizeOccurrenceRange, type OccurrenceSourceRange } from '../../domain/scip-range.js';
+import { getSourceLines } from '../../source/primitives/source-text.js';
 import { fromBinary } from '@bufbuild/protobuf';
 import { DocumentSchema, SymbolRole } from '@c4312/scip';
 import { zstdDecompressSync } from 'node:zlib';
@@ -10,6 +13,7 @@ import { leafName } from '../symbol-parser.js';
 /** One compiler-resolved reference to an indexed definition on a source line. */
 export interface ChunkOccurrenceTarget {
   sourceLine: number;
+  sourceRange?: OccurrenceSourceRange;
   definition: IndexedDefinition;
 }
 
@@ -35,6 +39,7 @@ export interface FileOccurrenceTargets {
    * at such a key must not be guessed onto a same-named repository symbol.
    */
   externalLeafKeys: Set<string>;
+  externalRanges?: OccurrenceSourceRange[];
   /** Function-scoped bindings the indexer emitted, in document order; empty when the indexer emits none. */
   locals: LocalOccurrence[];
 }
@@ -94,7 +99,10 @@ export function occurrenceLeafKey(line: number, leaf: string): string {
 }
 
 function decodeFileOccurrences(db: ScipDatabase, relativePath: string): ChunkOccurrenceLookup {
-  const document = db.get<{ id: number }>('SELECT id FROM documents WHERE relative_path = ?', relativePath);
+  const document = db.get<{ id: number; position_encoding: string | null }>(
+    'SELECT id, position_encoding FROM documents WHERE relative_path = ?',
+    relativePath,
+  );
   if (!document) return { available: false, reason: 'no-document' };
   const rows = db.all<{ occurrences: Uint8Array | null }>(
     'SELECT occurrences FROM chunks WHERE document_id = ? ORDER BY chunk_index',
@@ -109,9 +117,13 @@ function decodeFileOccurrences(db: ScipDatabase, relativePath: string): ChunkOcc
     db,
     () => new Map(getAllDefinitions(db).map((definition) => [definition.symbol, definition])),
   );
-  const targets: ChunkOccurrenceTarget[] = [];
-  const externalLeafKeys = new Set<string>();
-  const locals: LocalOccurrence[] = [];
+  const result: FileOccurrenceTargets & { externalRanges: OccurrenceSourceRange[] } = {
+    targets: [],
+    externalLeafKeys: new Set(),
+    locals: [],
+    externalRanges: [],
+  };
+  const sourceLines = getSourceLines(db, relativePath);
   try {
     for (const row of rows) {
       const blob = row.occurrences;
@@ -120,27 +132,40 @@ function decodeFileOccurrences(db: ScipDatabase, relativePath: string): ChunkOcc
       }
       const decoded = fromBinary(DocumentSchema, new Uint8Array(zstdDecompressSync(blob)));
       for (const occurrence of decoded.occurrences) {
-        if (!occurrence.symbol) continue;
-        const sourceLine = occurrence.range[0];
-        if (!Number.isInteger(sourceLine)) continue;
-        if (occurrence.symbol.startsWith('local ')) {
-          locals.push(localOccurrence(occurrence.symbol, occurrence.range, occurrence.symbolRoles));
-          continue;
-        }
-        if ((occurrence.symbolRoles & SymbolRole.Definition) !== 0) continue;
-        const definition = definitions.get(occurrence.symbol);
-        if (definition) {
-          targets.push({ sourceLine: sourceLine!, definition });
-          continue;
-        }
-        const leaf = externalSymbolLeaf(occurrence.symbol);
-        if (leaf) externalLeafKeys.add(occurrenceLeafKey(sourceLine!, leaf));
+        appendChunkOccurrence(occurrence, document.position_encoding, sourceLines, definitions, result);
       }
     }
   } catch {
     return { available: false, reason: 'no-occurrence-data' };
   }
-  return { available: true, targets, externalLeafKeys, locals };
+  return { available: true, ...result };
+}
+
+function appendChunkOccurrence(
+  occurrence: { symbol: string; range: number[]; symbolRoles: number },
+  encoding: string | null,
+  sourceLines: Parameters<typeof normalizeOccurrenceRange>[2],
+  definitions: ReadonlyMap<string, IndexedDefinition>,
+  result: FileOccurrenceTargets & { externalRanges: OccurrenceSourceRange[] },
+): void {
+  if (!occurrence.symbol) return;
+  const sourceLine = occurrence.range[0];
+  if (!Number.isInteger(sourceLine)) return;
+  const sourceRange = normalizeOccurrenceRange(occurrence.range, encoding, sourceLines);
+  if (occurrence.symbol.startsWith('local ')) {
+    if (sourceRange) result.externalRanges.push(sourceRange);
+    result.locals.push(localOccurrence(occurrence.symbol, occurrence.range, occurrence.symbolRoles));
+    return;
+  }
+  if ((occurrence.symbolRoles & SymbolRole.Definition) !== 0) return;
+  const definition = definitions.get(occurrence.symbol);
+  if (definition) {
+    result.targets.push({ sourceLine: sourceLine!, ...(sourceRange ? { sourceRange } : {}), definition });
+    return;
+  }
+  if (sourceRange) result.externalRanges.push(sourceRange);
+  const leaf = externalSymbolLeaf(occurrence.symbol);
+  if (leaf) result.externalLeafKeys.add(occurrenceLeafKey(sourceLine!, leaf));
 }
 
 /** SCIP ranges are `[line, start, end]` on one line or `[startLine, start, endLine, end]` across lines. */
@@ -166,4 +191,18 @@ function externalSymbolLeaf(symbol: string): string | null {
   } catch {
     return null;
   }
+}
+
+export function sameOccurrenceRange(
+  left: OccurrenceSourceRange | undefined,
+  right: OccurrenceSourceRange | undefined,
+): boolean {
+  return Boolean(
+    left &&
+    right &&
+    left.startLine === right.startLine &&
+    left.startColumn === right.startColumn &&
+    left.endLine === right.endLine &&
+    left.endColumn === right.endColumn,
+  );
 }

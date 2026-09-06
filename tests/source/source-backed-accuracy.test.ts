@@ -6,12 +6,11 @@ import { tmpdir } from 'node:os';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { callGraph } from '../../src/queries/navigation/call-graph.js';
 import { code } from '../../src/queries/navigation/code.js';
-import { dataflow } from '../../src/queries/navigation/dataflow.js';
+import { callGraph } from '../../src/queries/navigation/call-graph.js';
 import { inspectSource } from '../../src/queries/navigation/source-inspection.js';
 import { symbols } from '../../src/queries/navigation/symbols.js';
 import { trace } from '../../src/queries/navigation/trace.js';
 import { byKind, kindCounts } from '../../src/queries/navigation/by-kind.js';
-import { complexityHotspots } from '../../src/queries/quality/complexity-hotspots.js';
 import {
   buildAstCalleeMap,
   buildCalleeMap,
@@ -668,65 +667,6 @@ describe('source-backed accuracy regressions', () => {
           { kind: 17, kindName: 'Function', count: 2 },
           { kind: 61, kindName: 'Variable', count: 1 },
         ]);
-        expect(complexityHotspots(db, { minLoc: 1, limit: 10 }).map((result) => result.shortName)).toEqual([
-          'demo.core:greet',
-          'demo.core:helper',
-        ]);
-      },
-    );
-  });
-
-  it('requires source-callable evidence for Clojure complexity hotspots', () => {
-    withFixture(
-      'clojure-hotspot-source-callable',
-      {
-        'src/demo/core.clj': [
-          '(ns demo.core)',
-          '',
-          '(def large-value',
-          '  {:a 1',
-          '   :b 2',
-          '   :c 3})',
-          '',
-          '(defn actual-callable [x]',
-          '  (helper x))',
-          '',
-          '(defn helper [x]',
-          '  x)',
-          '',
-        ].join('\n'),
-      },
-      (sqliteDb) => {
-        sqliteDb.exec(`
-          INSERT INTO documents (id, language, relative_path) VALUES
-            (1, 'Clojure', 'src/demo/core.clj');
-
-          INSERT INTO global_symbols (id, symbol, display_name, kind, documentation) VALUES
-            (1, 'scip-clojure deps.edn demo . \`demo.core\`/large-value.', 'large-value', 17, 'large-value'),
-            (2, 'scip-clojure deps.edn demo . \`demo.core\`/actual-callable.', 'actual-callable', 17, 'actual-callable'),
-            (3, 'scip-clojure deps.edn demo . \`demo.core\`/helper.', 'helper', 17, 'helper');
-
-          INSERT INTO defn_enclosing_ranges (id, document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES
-            (1, 1, 1, 2, 0, 5, 10),
-            (2, 1, 2, 7, 0, 8, 13),
-            (3, 1, 3, 10, 0, 11, 4);
-
-          INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES
-            (1, 1, 0, 2, 5, X'00'),
-            (2, 1, 1, 7, 8, X'00'),
-            (3, 1, 2, 10, 11, X'00');
-
-          INSERT INTO mentions (chunk_id, symbol_id, role) VALUES
-            (1, 1, 1),
-            (2, 2, 1),
-            (3, 3, 1);
-        `);
-      },
-      (db) => {
-        expect(complexityHotspots(db, { minLoc: 1, limit: 10 }).map((result) => result.shortName)).toEqual([
-          'demo.core:actual-callable',
-          'demo.core:helper',
-        ]);
       },
     );
   });
@@ -1023,8 +963,8 @@ describe('source-backed accuracy regressions', () => {
         `);
       },
       (db) => {
-        const result = dataflow(db, 'createUser');
-        expect(result?.producers.map((row) => row.shortName)).not.toContain('src:wizard:create()');
+        const result = callGraph(db, 'createUser');
+        expect(result?.callees.map((row) => row.shortName)).not.toContain('src:wizard:create()');
       },
     );
   });

@@ -36,8 +36,7 @@ export interface DetectorLabelSet {
    * Action tiers the detector counts as findings. When absent, `support`
    * rows and, for detectors that use `direct | signal`, `signal` rows are
    * treated as demoted. A detector whose `signal` rows are counted findings
-   * (stale-abstractions lists single-consumer types at signal tier and
-   * health counts them) names its counted tiers explicitly.
+   * names its counted tiers explicitly.
    */
   countedTiers?: string[];
   labels: DetectorLabel[];

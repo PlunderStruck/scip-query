@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { describe, expect, it, vi } from 'vitest';
 import { bottlenecks } from '../../../src/queries/graph/bottlenecks.js';
 import { coupling, topCoupling } from '../../../src/queries/graph/coupling.js';
-import { deepChains } from '../../../src/queries/graph/deep-chains.js';
+import { dependencyDepth } from '../../../src/queries/graph/deep-chains.js';
 import { TARGET_COUPLING_SQL } from '../../../src/queries/internal/target-coupling.js';
 import { externalSymbolFanOut, fileDependencyOutDegree, topFanIn, topFanOut } from '../../../src/queries/graph/fan.js';
 import { hotspots } from '../../../src/queries/graph/hotspots.js';
@@ -264,8 +264,8 @@ describe('graph-risk output classification', () => {
         fanOut: 2,
         score: 4,
         callerFiles: ['src/caller-one.ts', 'src/caller-two.ts'],
-        candidateCallerFiles: [],
-        candidateExternalCallees: [],
+        candidateCallerFiles: ['src/caller-one.ts', 'src/caller-two.ts'],
+        candidateExternalCallees: [sym('dep-one.ts', 'depOne'), sym('dep-two.ts', 'depTwo')],
         inputBasis: 'mixed-static-call-or-reference-evidence',
         externalCallees: [
           {
@@ -283,7 +283,7 @@ describe('graph-risk output classification', () => {
       expect(central?.evidenceReasons).toEqual(
         expect.arrayContaining([
           '2 incoming file(s) reference this symbol',
-          '2 distinct cross-file callee symbol(s) are reached from it',
+          '2 distinct cross-file callee target(s) are observed; candidate targets do not establish reachability',
         ]),
       );
       expect(central?.recommendation).toContain('do not refactor solely from graph centrality');
@@ -321,7 +321,7 @@ describe('graph-risk output classification', () => {
         fileCount: 2,
         definedIn: 'src/central.ts',
         basis: 'scip-cross-file-mentions',
-        countUnit: 'reference-occurrences',
+        countUnit: 'referencing-chunks',
       });
 
       const pair = coupling(db, 'src/model.ts', 'src/view.ts');
@@ -353,7 +353,7 @@ describe('graph-risk output classification', () => {
 
   it('deduplicates deep-chain suffixes and marks chains as signal risk', () => {
     withGraphFixture((db) => {
-      const chains = deepChains(db, { minDepth: 2, limit: 10 });
+      const chains = dependencyDepth(db, { minDepth: 2, limit: 10 });
       const rendered = chains.map((result) => result.chain.join(' > '));
 
       expect(rendered).toContain('src/a.ts > src/b.ts > src/c.ts > src/d.ts');
@@ -369,7 +369,7 @@ describe('graph-risk output classification', () => {
 
   it('counts a dependency cycle as one condensed depth component', () => {
     withCycleChainFixture((db) => {
-      const [chain] = deepChains(db, { minDepth: 2, limit: 10 });
+      const [chain] = dependencyDepth(db, { minDepth: 2, limit: 10 });
 
       expect(chain).toMatchObject({
         chain: ['src/cycle-a.ts', 'src/tail.ts'],

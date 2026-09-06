@@ -1,6 +1,6 @@
 ---
 name: scip-calibrate
-description: Calibrate scip-query's detectors against a repository before trusting them. Use when adopting scip-query in a new or foreign codebase, after major detector changes, or when a health score or detector output seems too noisy or too clean.
+description: Calibrate scip-query's detectors against a repository before trusting them. Use when adopting scip-query in a new or foreign codebase, after major detector changes, or when a health report or detector output seems too noisy or too clean.
 metadata:
   commands:
     - template: 'scip-query capabilities --matrix'
@@ -44,7 +44,7 @@ Use this skill to measure whether scip-query's detectors tell the truth about a 
 
 ## The Stance
 
-A health score you have not calibrated is a number, not a fact. Never present detector output from an uncalibrated repo as findings; present it as candidate findings pending classification. The score must EARN trust the same way a checker earns it in `$scip-integrity-audit`: by being witnessed telling the truth on samples you verified yourself.
+Treat detector output as candidate findings until source review establishes the claimed defect. Validate each detector on representative examples and counterexamples; aggregate quality grades are not part of the health report.
 
 ## Protocol
 

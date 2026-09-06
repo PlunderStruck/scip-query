@@ -1,0 +1,1 @@
+{"kind":"scip-query-json-export","schemaVersion":1,"producer":{"name":"scip-query","version":"0.25.0"},"command":"locality-candidates","path":"/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/full-tool-audit/2026-09-05/followup/final/locality-candidates.json","bytes":4708,"sha256":"8182e2eb09eb7c0c2195e630b9c082cf14e76cd99f72da95a4deda7f5ed6fed1"}

@@ -1,0 +1,55 @@
+diff --git a/src/pricing/charge-fee.ts b/src/pricing/charge-fee.ts
+index 18da59a..63e9f19 100644
+--- a/src/pricing/charge-fee.ts
++++ b/src/pricing/charge-fee.ts
+@@ -1,3 +1,3 @@
+ export function chargeFee(amount: number): number {
+-  return Math.max(1, Math.round(amount * 0.02));
++  return Math.max(2, Math.round(amount * 0.03));
+ }
+diff --git a/src/pricing/quote.ts b/src/pricing/quote.ts
+index 9fb9ae1..e3059c3 100644
+--- a/src/pricing/quote.ts
++++ b/src/pricing/quote.ts
+@@ -1,3 +1,8 @@
+-export function quote(unitPrice: number, quantity: number): number {
+-  return Math.round(unitPrice * quantity * 100) / 100;
++export function quote(
++  unitPrice: number,
++  quantity: number,
++  discountPercent = 0,
++): number {
++  const discountedTotal = unitPrice * quantity * (1 - discountPercent / 100);
++  return Math.round(discountedTotal * 100) / 100;
+ }
+diff --git a/test/quote.test.mjs b/test/quote.test.mjs
+index c526e01..ba3a2df 100644
+--- a/test/quote.test.mjs
++++ b/test/quote.test.mjs
+@@ -21,13 +21,20 @@ test('public quote operations use the shared cent-rounded calculation', () => {
+   }
+ });
+ 
++test('public quote operations apply discounts before rounding to cents', () => {
++  for (const quote of [checkoutQuote, supportQuote]) {
++    assert.equal(quote(10.25, 2, 25), 15.38);
++    assert.equal(quote(0.335, 1, 10), 0.3);
++  }
++});
++
+ test('charge and refund fees retain their independent public behavior', () => {
+-  for (const { amount, expected } of [
+-    { amount: 10, expected: 1 },
+-    { amount: 100, expected: 2 },
+-    { amount: 125, expected: 3 },
++  for (const { amount, expectedCharge, expectedRefund } of [
++    { amount: 10, expectedCharge: 2, expectedRefund: 1 },
++    { amount: 100, expectedCharge: 3, expectedRefund: 2 },
++    { amount: 125, expectedCharge: 4, expectedRefund: 3 },
+   ]) {
+-    assert.equal(chargeFee(amount), expected);
+-    assert.equal(refundFee(amount), expected);
++    assert.equal(chargeFee(amount), expectedCharge);
++    assert.equal(refundFee(amount), expectedRefund);
+   }
+ });

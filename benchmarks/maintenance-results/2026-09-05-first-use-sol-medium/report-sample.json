@@ -1,0 +1,89 @@
+{
+  "sourceFindings": [
+    {
+      "id": "dependency-cycle:src/lib/client-access/index.ts|src/lib/client-access/operations/campaign-workspace-location.ts|src/lib/clients/index.ts|src/lib/clients/queries.ts",
+      "rule": "dependency-cycle",
+      "evidence": "derived",
+      "summary": "4 production files form a circular component of static value imports.",
+      "score": 4,
+      "sites": [
+        {
+          "file": "src/lib/client-access/index.ts",
+          "line": 51
+        },
+        {
+          "file": "src/lib/client-access/operations/campaign-workspace-location.ts",
+          "line": 6
+        },
+        {
+          "file": "src/lib/clients/index.ts",
+          "line": 1
+        },
+        {
+          "file": "src/lib/clients/queries.ts",
+          "line": 39
+        }
+      ],
+      "details": [
+        "src/lib/client-access/index.ts:51 \u2192 src/lib/client-access/operations/campaign-workspace-location.ts (reexport, value)",
+        "src/lib/client-access/operations/campaign-workspace-location.ts:6 \u2192 src/lib/clients/index.ts (import, value)",
+        "src/lib/clients/index.ts:1 \u2192 src/lib/clients/queries.ts (reexport, value)",
+        "src/lib/clients/queries.ts:39 \u2192 src/lib/client-access/index.ts (import, value)"
+      ]
+    },
+    {
+      "id": "duplication:5dc360a7cf18e2a0513781e4a1716a4df585f411c74b1f2fd05c81cc99e44ac9",
+      "rule": "duplication",
+      "evidence": "candidate",
+      "summary": "3 functions share identical body tokens.",
+      "sites": [
+        {
+          "file": "src/app/api/buy/analytics/stats/entities/route.ts",
+          "line": 34,
+          "name": "parseCreatorIds"
+        },
+        {
+          "file": "src/app/api/buy/campaigns/[id]/account-post-counts/route.ts",
+          "line": 16,
+          "name": "parseCreatorIds"
+        },
+        {
+          "file": "src/app/api/buy/creators/account-health/route.ts",
+          "line": 13,
+          "name": "parseCreatorIds"
+        }
+      ],
+      "score": 3,
+      "details": [
+        "67 tokens per body; comments and whitespace excluded; literals retained.",
+        "Read both contracts and callers. If these implementations own the same rule, reuse one owner; otherwise retain the separate responsibilities."
+      ]
+    }
+  ],
+  "indexedArchitecture": {
+    "mappedFiles": 7825,
+    "files": 7825,
+    "declaredPolicyRows": 1,
+    "boundaries": 2344,
+    "excludedTestEdges": 5083,
+    "cycles": [
+      {
+        "groups": 628,
+        "origin": "grouping-only"
+      },
+      {
+        "groups": 13,
+        "origin": "grouping-only"
+      },
+      {
+        "groups": 5,
+        "origin": "grouping-only"
+      }
+    ]
+  },
+  "developmentNotes": [
+    "Source sample predates the asset import fix; these selected cycle/duplicate findings were source-confirmed and remain unchanged.",
+    "Responsibility detector found no qualifying candidates in LaunchPoint under its conservative threshold.",
+    "The final full source export exceeded a 32M-character safety bound when it embedded redundant graph details; a compact policy context is being verified."
+  ]
+}

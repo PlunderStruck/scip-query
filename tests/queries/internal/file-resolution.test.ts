@@ -85,6 +85,17 @@ function withPathFixture(run: (db: ScipDatabase, root: string) => void): void {
 }
 
 describe('path resolver', () => {
+  it('expands an exact directory without treating it as an exact file or broad substring', () => {
+    withPathFixture((db, root) => {
+      mkdirSync(join(root, 'backend/src/routes'), { recursive: true });
+      const expected = ['backend/src/routes/horses.ts', 'backend/src/routes/onboarding/horses.ts'];
+      for (const path of ['backend/src/routes', './backend/src/routes/', join(root, 'backend/src/routes')]) {
+        expect(resolveIndexedPaths(db, path)).toEqual(expected);
+      }
+      expect(resolveIndexedPaths(db, 'missing/src/routes')).toEqual([]);
+      expect(resolveIndexedPaths(db, 'backend/src/routes/horses.ts')).toEqual([expected[0]]);
+    });
+  });
   it('keeps full path matches from broadening to same-basename files', () => {
     withPathFixture((db) => {
       expect(resolveIndexedPaths(db, 'shared/src/contracts/horses.ts')).toEqual(['shared/src/contracts/horses.ts']);

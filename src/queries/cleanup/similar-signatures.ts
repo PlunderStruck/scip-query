@@ -273,8 +273,8 @@ function normalizeSignature(raw: string): string | null {
 
   sig = sig.slice(parenIdx);
 
-  // Normalize: strip all whitespace, lowercase
-  sig = sig.replace(/\s+/g, '').toLowerCase();
+  // Ignore formatting outside literals; preserve case-sensitive names and literal values.
+  sig = compactSignatureText(sig);
 
   // Must have meaningful content after normalization
   if (sig.length < 3) return null; // e.g. "()" alone is too generic
@@ -285,7 +285,7 @@ function normalizeSignature(raw: string): string | null {
 function normalizeSourceSignature(raw: string | null, leaf: string): string | null {
   if (!raw || !raw.trim()) return null;
 
-  const declaration = raw.replace(/\s+/g, ' ').trim();
+  const declaration = raw.trim();
   const parenIdx = declaration.indexOf('(');
   if (parenIdx === -1) return null;
 
@@ -308,14 +308,13 @@ function normalizeSourceSignature(raw: string | null, leaf: string): string | nu
     .replace(/\)\s*=\s*[\s\S]*$/, ')')
     .replace(/\s+throws\s+[^={]+$/i, '')
     .replace(/\s+where\s+.+$/i, '')
-    .replace(/\s+/g, ' ')
     .trim();
 
   if (!suffix.startsWith('(')) {
     return null;
   }
 
-  const normalized = `${prefix ? `${prefix} ` : ''}${suffix}`.replace(/\s+/g, '').toLowerCase();
+  const normalized = compactSignatureText(`${prefix ? `${prefix} ` : ''}${suffix}`);
 
   return normalized.length >= 3 ? normalized : null;
 }
@@ -403,4 +402,11 @@ function declarationStartLines(lines: string[], startLine: number, endLine: numb
   }
 
   return candidates;
+}
+
+/** Remove formatting whitespace without changing string-literal type values. */
+function compactSignatureText(text: string): string {
+  return text.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\s+/g, (token) =>
+    /^\s/.test(token) ? '' : token,
+  );
 }

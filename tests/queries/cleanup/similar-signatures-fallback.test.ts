@@ -211,7 +211,7 @@ describe('similar-signatures source fallback', () => {
       group.functions.some((fn) => fn.shortName === 'src:BulkIssueService:BulkIssueService:bulkArchive()'),
     );
 
-    expect(bulkGroup?.signature).toBe('(issueids:string[],userid:string):promise<{updated:number}>');
+    expect(bulkGroup?.signature).toBe('(issueIds:string[],userId:string):Promise<{updated:number}>');
     expect(bulkGroup?.functions.map((fn) => fn.shortName)).toEqual(
       expect.arrayContaining([
         'src:BulkIssueService:BulkIssueService:bulkArchive()',

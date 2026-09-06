@@ -1,0 +1,43 @@
+diff --git a/src/adapters/shipping.ts b/src/adapters/shipping.ts
+index cf5de90..874d991 100644
+--- a/src/adapters/shipping.ts
++++ b/src/adapters/shipping.ts
+@@ -4,3 +4,7 @@ import { webShippingRate } from './web-config.js';
+ export function webShippingQuote(weight: number): number {
+   return shippingCost(weight, webShippingRate);
+ }
++
++export function batchShippingQuote(weight: number, rate: number): number {
++  return shippingCost(weight, rate);
++}
+diff --git a/src/index.ts b/src/index.ts
+index 25f7432..87e0490 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -13,4 +13,4 @@ export { sendReceipt } from './notifications/receipt.js';
+ export { receiptRoutes } from './adapters/receipt-routes.js';
+ export { receiptJobs } from './adapters/receipt-jobs.js';
+ export { settings } from './adapters/settings.js';
+-export { webShippingQuote } from './adapters/shipping.js';
++export { batchShippingQuote, webShippingQuote } from './adapters/shipping.js';
+diff --git a/test/shipping.test.mjs b/test/shipping.test.mjs
+new file mode 100644
+index 0000000..2c313f8
+--- /dev/null
++++ b/test/shipping.test.mjs
+@@ -0,0 +1,15 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import { batchShippingQuote, webShippingQuote } from '../build/index.js';
++
++test('batch shipping quotes use each caller-supplied rate independently', () => {
++  assert.equal(batchShippingQuote(2, 3), 6);
++  assert.equal(batchShippingQuote(2, 11), 22);
++  assert.equal(batchShippingQuote(2, 3), 6);
++});
++
++test('batch shipping quotes do not change the web shipping rate', () => {
++  batchShippingQuote(2, 11);
++
++  assert.equal(webShippingQuote(2), 14);
++});

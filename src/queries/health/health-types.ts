@@ -17,8 +17,7 @@ export interface HealthAnalyses {
   warnings: string[];
   detectorEvidence: DetectorEvidenceAssessment[];
   dead: CountLocSummary;
-  isolated: CountLocSummary;
-  /** Real cycles on the import graph; symbol-reference-only components are disclosed in `cycleExclusions`. */
+  /** Cyclic components on the import/re-export graph, including type-only dependencies; symbol-reference-only components are disclosed in `cycleExclusions`. */
   realCycleCount: number;
   /** Components that cycle through type or symbol references but not through imports; not counted. */
   cycleExclusions: PolicyExclusionSummary[];
@@ -32,14 +31,8 @@ export interface HealthAnalyses {
   vueComponentDuplicates: CountLocSummary;
   vueComposableCandidates: CountLocSummary;
   vueLargeViewPressure: CountLocSummary;
-  extractCount: number;
-  /** Wide-interface regions listed by extract-candidates at support tier and not counted. */
-  extractExclusions: PolicyExclusionSummary[];
-  wrappers: CountLocSummary;
   passthroughs: CountLocSummary;
-  stale: StaleSummary;
   drift: DriftSummary;
-  complexity: ComplexitySummary;
   /** Git change-graph evidence; null when git history is unavailable. */
   gitEvidence: GitEvidenceSummary | null;
   /** User-suppression inventory; null when the phase didn't run. */
@@ -72,11 +65,6 @@ export interface PolicyExclusionSummary {
   count: number;
 }
 
-export interface StaleSummary extends CountLocSummary {
-  unused: number;
-  singleUse: number;
-}
-
 export interface DriftSummary {
   count: number;
   unusedImports: number;
@@ -85,13 +73,6 @@ export interface DriftSummary {
   layerViolations: number;
   direct: number;
   signal: number;
-}
-
-export interface ComplexitySummary {
-  top: Array<{ symbol: string; score: number; file?: string }>;
-  extremeCount: number;
-  /** Hotspots above the extreme score that policy did not count (disclosed). */
-  exclusions?: PolicyExclusionSummary[];
 }
 
 export interface GitEvidenceSummary {

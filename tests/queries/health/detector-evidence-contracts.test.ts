@@ -22,7 +22,7 @@ describe('health detector evidence contracts', () => {
 
   it('reports missing provider requirements as unsupported rather than as negative evidence', () => {
     const assessed = assessDetectorEvidenceContracts(new Set());
-    expect(assessed.find((row) => row.id === 'isolated-visible-connectivity')).toEqual(
+    expect(assessed.find((row) => row.id === 'dead-visible-references')).toEqual(
       expect.objectContaining({ status: 'unsupported', unavailableRequirements: ['indexed-graph'] }),
     );
     expect(assessed.find((row) => row.id === 'duplicate-structural-candidate')?.status).toBe('candidate');

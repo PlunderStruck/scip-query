@@ -1,0 +1,67 @@
+{
+  "acceptedAt": "2026-09-05T22:53:10.518Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "db0fa1367950a015cc5a53e342d8fd27294be519b6d2cd3dd0697b42cf435bab",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ArchitectureCycle changed from interface ArchitectureCycle { boundaries: string[]; internalEdges: ArchitectureBoundaryEdge[]; narrowestEdges: ArchitectureBoundaryEdge[]; violatesPolicy: boolean; } to interface ArchitectureCycle { fileCycleMembers?: string[]; origin?: 'contains-file-cycle' | 'grouping-only'; boundaries: string[]; internalEdges: ArchitectureBoundaryEdge[]; nar....",
+      "target": "./queries:ArchitectureCycle"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ArchitectureReport changed from interface ArchitectureReport { configured: boolean; boundaries: ArchitectureBoundarySummary[]; edges: ArchitectureBoundaryEdge[]; forbiddenEdges: ArchitectureBoundaryEdge[]; rec... to interface ArchitectureReport { dependencyRoles?: { excludedTestEdges: number; basis: 'production-imports-including-types'; cycleMeaning: string; }; configured: boolean; boundari....",
+      "target": "./queries:ArchitectureReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SourceMaintenanceReport changed from interface SourceMaintenanceReport { mode: 'health' | 'review'; base?: string; current: string; metricRules: string; changedFiles: string[]; functions: FunctionChange[]; findings... to interface SourceMaintenanceReport { mode: 'health' | 'review'; base?: string; current: string; metricRules: string; changedFiles: string[]; configurationChanges: string[]; relat....",
+      "target": "./queries:SourceMaintenanceReport"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ArchitectureCycle changed from interface ArchitectureCycle { boundaries: string[]; internalEdges: ArchitectureBoundaryEdge[]; narrowestEdges: ArchitectureBoundaryEdge[]; violatesPolicy: boolean; } to interface ArchitectureCycle { fileCycleMembers?: string[]; origin?: 'contains-file-cycle' | 'grouping-only'; boundaries: string[]; internalEdges: ArchitectureBoundaryEdge[]; nar....",
+      "target": "./queries/architecture:ArchitectureCycle"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ArchitectureReport changed from interface ArchitectureReport { configured: boolean; boundaries: ArchitectureBoundarySummary[]; edges: ArchitectureBoundaryEdge[]; forbiddenEdges: ArchitectureBoundaryEdge[]; rec... to interface ArchitectureReport { dependencyRoles?: { excludedTestEdges: number; basis: 'production-imports-including-types'; cycleMeaning: string; }; configured: boolean; boundari....",
+      "target": "./queries/architecture:ArchitectureReport"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ArchitectureCycle changed from interface ArchitectureCycle { boundaries: string[]; internalEdges: ArchitectureBoundaryEdge[]; narrowestEdges: ArchitectureBoundaryEdge[]; violatesPolicy: boolean; } to interface ArchitectureCycle { fileCycleMembers?: string[]; origin?: 'contains-file-cycle' | 'grouping-only'; boundaries: string[]; internalEdges: ArchitectureBoundaryEdge[]; nar....",
+      "target": "./queries/index:ArchitectureCycle"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ArchitectureReport changed from interface ArchitectureReport { configured: boolean; boundaries: ArchitectureBoundarySummary[]; edges: ArchitectureBoundaryEdge[]; forbiddenEdges: ArchitectureBoundaryEdge[]; rec... to interface ArchitectureReport { dependencyRoles?: { excludedTestEdges: number; basis: 'production-imports-including-types'; cycleMeaning: string; }; configured: boolean; boundari....",
+      "target": "./queries/index:ArchitectureReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SourceMaintenanceReport changed from interface SourceMaintenanceReport { mode: 'health' | 'review'; base?: string; current: string; metricRules: string; changedFiles: string[]; functions: FunctionChange[]; findings... to interface SourceMaintenanceReport { mode: 'health' | 'review'; base?: string; current: string; metricRules: string; changedFiles: string[]; configurationChanges: string[]; relat....",
+      "target": "./queries/index:SourceMaintenanceReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "SourceMaintenanceReport changed from interface SourceMaintenanceReport { mode: 'health' | 'review'; base?: string; current: string; metricRules: string; changedFiles: string[]; functions: FunctionChange[]; findings... to interface SourceMaintenanceReport { mode: 'health' | 'review'; base?: string; current: string; metricRules: string; changedFiles: string[]; configurationChanges: string[]; relat....",
+      "target": "./queries/review:SourceMaintenanceReport"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.25.0",
+  "previousDigest": "87f1d21f6198ca72e3f33c01e006ec3a44ba1ea158093d460ffb89213c9f709a",
+  "reason": "First-use source reports add compiler-snapshot import coverage, configuration-only change records and module subjects; architecture reports separate test edges and identify grouping-only cycles. See docs/REVIEW.md and the first-use scanner reliability plan.",
+  "schemaVersion": 1
+}

@@ -1,0 +1,1 @@
+{"kind":"scip-query-json-export","schemaVersion":1,"producer":{"name":"scip-query","version":"0.25.0"},"command":"stale-abstractions","path":"/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/full-tool-audit/2026-09-05/followup/final/stale-abstractions.json","bytes":3101,"sha256":"f6f68c7768b0040084b0756b22d10e3f2d01aeba435296c560eb7a3681124636"}

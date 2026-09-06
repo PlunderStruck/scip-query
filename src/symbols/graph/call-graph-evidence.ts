@@ -1,5 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { detectAstLanguage, getCallSites } from '../../source/ast.js';
+import { getSourceFacts } from '../../source/facts/source-facts.js';
+import type { SourceCallableOwner } from '../../source/facts/source-fact-types.js';
 import { findNamedSourceImportBinding, getSourceImports } from '../../language-parsers/index.js';
 import { createPerDbValue } from '../../storage/per-db-cache.js';
 import { getIdentifiersByLine } from '../identifier-index.js';
@@ -16,7 +18,7 @@ import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from
 import type { GlobalLeafCandidate } from '../leaf-symbol-index.js';
 import { scipFunctionLikeKindNumbers, scipTypeLikeKindNumbers } from '../symbol-kind.js';
 import { scipOccurrenceTargetsForFile } from './scip-occurrence-call-targets.js';
-import { occurrenceLeafKey, type FileOccurrenceTargets } from './scip-chunk-occurrences.js';
+import { occurrenceLeafKey, type FileOccurrenceTargets, type OccurrenceSourceRange } from './scip-chunk-occurrences.js';
 import { pathsResolveSame } from '../../domain/path-normalization.js';
 import type { SymbolSemanticEvidencePort } from '../semantic-evidence-port.js';
 import { fileDependencyPaths } from './file-dep-graph.js';
@@ -330,7 +332,7 @@ export function buildCalleeMap(
   }
 
   const merged = new Map<number, CalleeRow[]>();
-  const seenBySymbolId = new Map<number, Set<string>>();
+  const seenBySymbolId = new Map<number, Map<string, CalleeRow>>();
   const addAll = (src: Map<number, CalleeRow[]>): void => {
     for (const [id, list] of src) {
       let bucket = merged.get(id);
@@ -340,14 +342,20 @@ export function buildCalleeMap(
       }
       let seen = seenBySymbolId.get(id);
       if (!seen) {
-        seen = new Set();
+        seen = new Map();
         seenBySymbolId.set(id, seen);
       }
       for (const c of list) {
         const key = `${c.symbol}|${c.chunkId}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        bucket.push(c);
+        const existing = seen.get(key);
+        if (existing) {
+          if (calleeEvidenceStrength(existing.source) === 'candidate' && calleeEvidenceStrength(c.source) === 'exact')
+            Object.assign(existing, c);
+          continue;
+        }
+        const copy = { ...c };
+        seen.set(key, copy);
+        bucket.push(copy);
       }
     }
   };
@@ -365,13 +373,10 @@ export function buildCalleeMap(
 /**
  * AST-based callee detection. For each definition's file:
  *   1. Walk callsites (cached AST query).
- *   2. Match each callsite to its enclosing definition by line containment
- *      against the file's known definitions sorted by start line.
+ *   2. Match the nearest syntactic function to its indexed definition. Nested
+ *      and anonymous functions remain separate even when they are not indexed.
  *   3. Resolve the callee leaf to a SCIP symbol via the global leaf index.
  */
-// scip-query: ignore-extract — this is the AST callee fallback builder:
-// per-file definitions, callsites, leaf index lookup, and innermost-caller
-// attribution are one source-scan pass.
 export function buildAstCalleeMap(db: ScipDatabase, definitions: ReadonlyArray<SymbolMatch>): Map<number, CalleeRow[]> {
   const result = new Map<number, CalleeRow[]>();
   const byFile = definitionsByFile(definitions, result);
@@ -381,73 +386,132 @@ export function buildAstCalleeMap(db: ScipDatabase, definitions: ReadonlyArray<S
     const callsites = getCallSites(db, file);
     if (!callsites) continue; // Source unreadable — defs return empty callee arrays.
     const ownerByLine = createDefinitionLineIndex(fileDefs);
+    const lexicalOwners = lexicalCallOwners(db, file, fileDefs);
     const occurrences = occurrenceCalleeIndex(scipOccurrenceTargetsForFile(db, file));
 
     for (const site of callsites) {
-      const owner = ownerByLine.get(site.line);
+      const owner = site.owner === undefined ? ownerByLine.get(site.line) : lexicalOwners.get(ownerKey(site.owner));
       if (!owner) continue;
 
-      // Tier 1: the indexer bound this line-and-leaf to exactly one repository
-      // definition. Tier 2: a leaf-name resolution, skipped when the indexer
-      // bound the same key to a symbol outside the repository.
-      const occurrencePick = occurrences ? pickOccurrenceCallee(occurrences, site) : null;
-      const pick =
-        occurrencePick ??
-        (occurrences?.externalLeafKeys.has(occurrenceLeafKey(site.line, site.calleeLeaf))
-          ? null
-          : resolveAstCalleeCandidate(db, file, leafIndex, site));
-      if (!pick) continue;
-      if (pick.symbol === owner.symbol) continue; // skip self-recursion
-
-      result.get(owner.symbolId)!.push({
-        symbol: pick.symbol,
-        file: pick.file,
-        chunkId: site.line,
-        source: occurrencePick ? 'scip-occurrence' : 'ast-callsite',
-        callsiteLine: site.line,
-        ...(site.kind === 'jsx-render' ? { kind: 'jsx-render' as const } : {}),
-      });
+      const row = astCallsiteRow(db, file, leafIndex, site, occurrences);
+      if (row) result.get(owner.symbolId)!.push(row);
     }
   }
 
   return result;
 }
 
+/** A token's compiler binding takes precedence over candidate resolution by source name. */
+function astCallsiteRow(
+  db: ScipDatabase,
+  file: string,
+  leafIndex: ReturnType<typeof getGlobalLeafIndex>,
+  site: NonNullable<ReturnType<typeof getCallSites>>[number],
+  occurrences: ReturnType<typeof occurrenceCalleeIndex>,
+): CalleeRow | null {
+  const targetKey = site.targetRange ? occurrenceRangeKey(site.targetRange) : null;
+  if (occurrences && targetKey) {
+    const pick = pickOccurrenceCallee(occurrences, targetKey);
+    if (pick) return callsiteRow(pick, site, site.owner !== undefined ? 'scip-occurrence' : 'ast-callsite');
+    if (occurrences.targetsByRange.has(targetKey) || occurrences.externalRanges.has(targetKey)) return null;
+  }
+  if (occurrences?.externalLeafKeys.has(occurrenceLeafKey(site.line, site.calleeLeaf))) return null;
+  const candidate = resolveAstCalleeCandidate(db, file, leafIndex, site);
+  return candidate ? callsiteRow(candidate, site, 'ast-callsite') : null;
+}
+
+function callsiteRow(
+  pick: { symbol: string; file: string },
+  site: NonNullable<ReturnType<typeof getCallSites>>[number],
+  source: CalleeEvidenceSource,
+): CalleeRow {
+  return {
+    symbol: pick.symbol,
+    file: pick.file,
+    chunkId: site.line,
+    source,
+    callsiteLine: site.line,
+    ...(site.kind === 'jsx-render' ? { kind: 'jsx-render' as const } : {}),
+  };
+}
+
+function ownerKey(owner: SourceCallableOwner | null): string {
+  return owner ? `${owner.startLine}:${owner.startColumn}:${owner.endLine}:${owner.endColumn}` : '';
+}
+
+function lexicalCallOwners(
+  db: ScipDatabase,
+  file: string,
+  definitions: readonly SymbolMatch[],
+): Map<string, SymbolMatch> {
+  const callables = getSourceFacts(db, file)?.callables ?? [];
+  const owners = new Map<string, SymbolMatch>();
+  const ambiguous = new Set<string>();
+  for (const definition of definitions) {
+    // A definition may contain many functions, including another with the same
+    // name. Its first matching declaration owns it; a nested call cannot climb
+    // to an outer definition merely because the requested set omitted its owner.
+    const callable = callables.find(
+      (candidate) =>
+        candidate.name === leafName(definition.symbol) &&
+        candidate.startLine >= definition.startLine &&
+        candidate.endLine <= definition.endLine &&
+        (candidate.startLine !== definition.startLine ||
+          candidate.startColumn === undefined ||
+          candidate.startColumn >= (definition.startChar ?? 0)),
+    );
+    if (!callable || callable.startColumn === undefined || callable.endColumn === undefined) continue;
+    const key = ownerKey({ ...callable, startColumn: callable.startColumn, endColumn: callable.endColumn });
+    if (owners.has(key)) ambiguous.add(key);
+    else owners.set(key, definition);
+  }
+  for (const key of ambiguous) owners.delete(key);
+  return owners;
+}
+
 interface OccurrenceCalleeIndex {
-  targetsByLine: Map<number, IndexedDefinition[]>;
+  targetsByRange: Map<string, IndexedDefinition[]>;
   externalLeafKeys: Set<string>;
+  externalRanges: Set<string>;
+}
+
+function occurrenceRangeKey(range: OccurrenceSourceRange): string {
+  return `${range.startLine}:${range.startColumn}:${range.endLine}:${range.endColumn}`;
 }
 
 function occurrenceCalleeIndex(fileTargets: FileOccurrenceTargets | null): OccurrenceCalleeIndex | null {
   if (!fileTargets) return null;
-  const targetsByLine = new Map<number, IndexedDefinition[]>();
+  const targetsByRange = new Map<string, IndexedDefinition[]>();
   for (const target of fileTargets.targets) {
-    const bucket = targetsByLine.get(target.sourceLine);
-    if (bucket) bucket.push(target.definition);
-    else targetsByLine.set(target.sourceLine, [target.definition]);
+    if (!target.sourceRange) continue;
+    const key = occurrenceRangeKey(target.sourceRange);
+    const bucket = targetsByRange.get(key) ?? [];
+    bucket.push(target.definition);
+    targetsByRange.set(key, bucket);
   }
-  return { targetsByLine, externalLeafKeys: fileTargets.externalLeafKeys };
+  return {
+    targetsByRange,
+    externalLeafKeys: fileTargets.externalLeafKeys,
+    externalRanges: new Set((fileTargets.externalRanges ?? []).map(occurrenceRangeKey)),
+  };
 }
 
-/**
- * The indexer's binding for one call site: the definitions it resolved on
- * that line whose leaf is the called name. One distinct definition is an
- * exact edge; several (two same-named targets on one line) stay unresolved
- * rather than guessed.
- */
+/** A direct call requires the compiler binding at the callee token itself.
+ * Other references on the same line, including arguments, cannot establish it. */
 function pickOccurrenceCallee(
   occurrences: OccurrenceCalleeIndex,
-  site: { line: number; calleeLeaf: string },
+  key: string,
 ): { symbol: string; file: string } | null {
-  const onLine = occurrences.targetsByLine.get(site.line);
-  if (!onLine) return null;
-  let pick: IndexedDefinition | null = null;
-  for (const definition of onLine) {
-    if (definition.leaf !== site.calleeLeaf) continue;
-    if (pick && pick.symbol !== definition.symbol) return null;
-    pick = definition;
-  }
-  return pick ? { symbol: pick.symbol, file: pick.relativePath } : null;
+  const targets = occurrences.targetsByRange.get(key);
+  if (!targets?.length) return null;
+  const pick = targets[0]!;
+  if (targets.some((target) => target.symbol !== pick.symbol)) return null;
+  return { symbol: pick.symbol, file: pick.relativePath };
+}
+
+/** Source name resolution is a candidate; a compiler binding establishes identity. */
+export function calleeEvidenceStrength(source: CalleeEvidenceSource | undefined): 'exact' | 'candidate' {
+  return source === 'scip-occurrence' || source === 'semantic-callee' ? 'exact' : 'candidate';
 }
 
 function definitionsByFile(

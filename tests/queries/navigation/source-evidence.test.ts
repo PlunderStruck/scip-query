@@ -56,7 +56,8 @@ describe('related source evidence', () => {
           sourceKind: 'complete-call-expression',
         }),
       );
-      expect(traced.claimSupport?.callsitePredicates.status).toBe('eligible');
+      expect(traced.claimSupport?.callsitePredicates.status).toBe('ineligible');
+      expect(traced.claimSupport?.referenceAbsence.status).toBe('ineligible');
     } finally {
       db.close();
     }
@@ -299,6 +300,9 @@ describe('related source evidence', () => {
         ]),
       );
       expect(defaultPacket.units?.some((unit) => unit.roles.includes('reference'))).toBe(false);
+      expect(
+        defaultPacket.units?.some((unit) => unit.reasons.some((reason) => reason.startsWith('candidate-caller:'))),
+      ).toBe(true);
       expect(defaultPacket.packetCoverage?.channels?.['test-reference']).toMatchObject({
         candidateUnits: 0,
         returnedUnits: 0,
@@ -957,7 +961,7 @@ describe('related source evidence', () => {
       );
       expect(traced.claimSupport?.callsitePredicates).toMatchObject({
         status: 'ineligible',
-        reason: expect.stringContaining('lack one unambiguous complete call expression'),
+        reason: expect.stringContaining('callee binding'),
         followup: expect.stringContaining("--at 'src/ambiguous-calls.ts:1'"),
       });
     } finally {

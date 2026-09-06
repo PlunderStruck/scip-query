@@ -1,0 +1,2327 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "setup",
+  "operationRole": "composite",
+  "evidence": "graph-fact",
+  "args": [],
+  "options": {
+    "skills": false,
+    "parsers": false,
+    "yes": true,
+    "json": true
+  },
+  "result": {
+    "projectRoot": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9",
+    "dbPath": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/.cache/index.db",
+    "configuredDbPath": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/.cache/index.db",
+    "scipCliInstalled": true,
+    "languages": [
+      "typescript"
+    ],
+    "steps": [
+      {
+        "id": "collaboration-domain-config",
+        "label": "Collaboration domain",
+        "status": "ok",
+        "message": "The committed collaboration-domain identity is already present."
+      },
+      {
+        "id": "automatic-indexing-config",
+        "label": "Automatic indexing config",
+        "status": "ok",
+        "message": "Demand-started automatic incremental indexing is already enabled."
+      },
+      {
+        "id": "scip-cli",
+        "label": "scip CLI",
+        "status": "ok",
+        "message": "scip CLI is available."
+      },
+      {
+        "id": "skills",
+        "label": "Agent skills",
+        "status": "skipped",
+        "message": "Skipped by setup choice.",
+        "details": []
+      },
+      {
+        "id": "config",
+        "label": "Project config",
+        "status": "ok",
+        "message": "Config OK.",
+        "details": []
+      },
+      {
+        "id": "readiness",
+        "label": "Indexer readiness",
+        "status": "ok",
+        "message": "Detected languages: typescript",
+        "details": [
+          "OK typescript: scip-typescript"
+        ]
+      },
+      {
+        "id": "ast-parsers",
+        "label": "AST parser packages",
+        "status": "ok",
+        "message": "1/1 selected language parser(s) available; nothing to install.",
+        "details": []
+      },
+      {
+        "id": "indexer-remediation",
+        "label": "Indexer remediation",
+        "status": "ok",
+        "message": "Nothing to install: every detected language has a runnable indexer."
+      },
+      {
+        "id": "reindex",
+        "label": "Index refresh",
+        "status": "ok",
+        "message": "Reused typescript in 0.1s.",
+        "details": [
+          "Detected languages: typescript",
+          "Project fingerprint used full scan: change-journal-unavailable",
+          "Augmented SQLite documents with 0 auxiliary source files (1 already present).",
+          "Reused 0 cached runtime-boundary observation(s) and 0 link(s).",
+          "Index unchanged; reused existing SQLite index in 0.1s"
+        ]
+      },
+      {
+        "id": "watch-refresh",
+        "label": "Automatic indexing service",
+        "status": "ok",
+        "optional": true,
+        "message": "Demand-started: the service starts with the first query that needs it (watch.autoStart=false); run scip-query watch --daemon to start it now."
+      },
+      {
+        "id": "capabilities",
+        "label": "Capability matrix",
+        "status": "ok",
+        "message": "1/1 language(s) have available indexing."
+      },
+      {
+        "id": "health",
+        "label": "Health audit",
+        "status": "skipped",
+        "optional": true,
+        "message": "Indexed health skipped by setup choice; run `scip-query health` for current-source scanning or `scip-query health --indexed --full` for the indexed specialists."
+      },
+      {
+        "id": "rust-semantic-session",
+        "label": "Rust semantic session",
+        "status": "skipped",
+        "optional": true,
+        "message": "Skipped because Rust was not detected."
+      },
+      {
+        "id": "agent-guidance",
+        "label": "Project agent guidance",
+        "status": "ok",
+        "message": "0 written, 2 already wired, 0 skipped.",
+        "details": []
+      },
+      {
+        "id": "smoke-tests",
+        "label": "Setup smoke tests",
+        "status": "ok",
+        "message": "8 passed, 3 unavailable, 0 failed.",
+        "details": [
+          "scip-query reindex: pass - typescript indexed from cache.",
+          "scip-query status: pass - Index freshness is fresh: Index metadata fingerprint matches current source files.",
+          "scip-query config-validate: pass - Config OK.",
+          "scip-query capabilities: pass - 1 language capability row(s) available.",
+          "scip-query capabilities --matrix: pass - 1 language row(s), 0 with unavailable capability cells.",
+          "scip-query health --indexed --full: unavailable - Indexed health skipped by setup choice; run `scip-query health` for current-source scanning or `scip-query health --indexed --full` for the indexed specialists.",
+          "scip-query diff-impact --json: pass - Git is available and index freshness is fresh: Index metadata fingerprint matches current source files. Last refresh: reused by setup at 2026-09-06T07:14:21.725Z.",
+          "scip-query cleanup-plan --verify: pass - 1 available, 0 partial, 0 unavailable cleanup-verification row(s).",
+          "scip-query status --json: unavailable - Demand-started: the service starts with the first query that needs it (watch.autoStart=false); run scip-query watch --daemon to start it now.",
+          "scip-query status --json: unavailable - Rust was not detected.",
+          "scip-query setup-agent: pass - 0 written, 2 already wired, 0 skipped."
+        ]
+      },
+      {
+        "id": "health-dossier",
+        "label": "Health dossier",
+        "status": "skipped",
+        "optional": true,
+        "message": "Skipped because the optional health audit was not selected."
+      }
+    ],
+    "skills": {
+      "installed": [],
+      "skipped": [],
+      "alreadyLinked": [],
+      "pruned": []
+    },
+    "astParsers": {
+      "supportedLanguages": [
+        "typescript"
+      ],
+      "availableBefore": [
+        "typescript"
+      ],
+      "installed": [],
+      "availableAfter": [
+        "typescript"
+      ],
+      "unavailable": [],
+      "attempted": false
+    },
+    "initialReadiness": {
+      "languages": [
+        "typescript"
+      ],
+      "indexers": [
+        {
+          "language": "typescript",
+          "binaryLabel": "scip-typescript",
+          "installed": true,
+          "runnable": true,
+          "resolvedBinary": "/opt/homebrew/bin/scip-typescript"
+        }
+      ],
+      "semantics": [
+        {
+          "language": "typescript",
+          "available": true,
+          "dependencyAvailable": true,
+          "tsconfigPath": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/tsconfig.json",
+          "tsconfigPaths": [
+            "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/tsconfig.json"
+          ]
+        }
+      ],
+      "semantic": {
+        "language": "typescript",
+        "available": true,
+        "dependencyAvailable": true,
+        "tsconfigPath": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/tsconfig.json",
+        "tsconfigPaths": [
+          "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/tsconfig.json"
+        ]
+      },
+      "checkers": [
+        {
+          "label": "tsc --noEmit",
+          "coversExtensions": [
+            ".ts",
+            ".tsx",
+            ".mts",
+            ".cts",
+            ".js",
+            ".jsx",
+            ".vue"
+          ],
+          "strength": "reference-aware"
+        }
+      ],
+      "gitAvailable": true
+    },
+    "indexerRemediation": [],
+    "readiness": {
+      "languages": [
+        "typescript"
+      ],
+      "indexers": [
+        {
+          "language": "typescript",
+          "binaryLabel": "scip-typescript",
+          "installed": true,
+          "runnable": true,
+          "resolvedBinary": "/opt/homebrew/bin/scip-typescript"
+        }
+      ],
+      "semantics": [
+        {
+          "language": "typescript",
+          "available": true,
+          "dependencyAvailable": true,
+          "tsconfigPath": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/tsconfig.json",
+          "tsconfigPaths": [
+            "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/tsconfig.json"
+          ]
+        }
+      ],
+      "semantic": {
+        "language": "typescript",
+        "available": true,
+        "dependencyAvailable": true,
+        "tsconfigPath": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/tsconfig.json",
+        "tsconfigPaths": [
+          "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/tsconfig.json"
+        ]
+      },
+      "checkers": [
+        {
+          "label": "tsc --noEmit",
+          "coversExtensions": [
+            ".ts",
+            ".tsx",
+            ".mts",
+            ".cts",
+            ".js",
+            ".jsx",
+            ".vue"
+          ],
+          "strength": "reference-aware"
+        }
+      ],
+      "gitAvailable": true
+    },
+    "capabilities": {
+      "languages": [
+        "typescript"
+      ],
+      "matrix": [
+        {
+          "language": "typescript",
+          "indexing": {
+            "id": "indexing",
+            "label": "SCIP indexing",
+            "status": "available",
+            "evidence": "graph-fact",
+            "reason": "scip-typescript is runnable at /opt/homebrew/bin/scip-typescript."
+          },
+          "sourceFacts": {
+            "id": "source-facts",
+            "label": "Source fallback",
+            "status": "available",
+            "evidence": "heuristic",
+            "reason": "AST/source fallback covers typescript imports and source-backed evidence."
+          },
+          "semantic": {
+            "id": "semantic",
+            "label": "Semantic provider",
+            "status": "available",
+            "evidence": "semantic",
+            "reason": "ts-morph can load the configured TypeScript project."
+          },
+          "detectors": {
+            "id": "detectors",
+            "label": "Cleanup detectors",
+            "status": "available",
+            "evidence": "heuristic",
+            "reason": "Graph-backed cleanup detectors can analyze this language; source and semantic precision depends on the rows above."
+          },
+          "cleanupVerification": {
+            "id": "cleanup-verification",
+            "label": "Cleanup verification",
+            "status": "available",
+            "evidence": "checker",
+            "reason": "tsc --noEmit"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "family": "execution",
+          "establishes": "Static may-call reachability between resolved program constructs.",
+          "nonClaims": [
+            "A may-call edge does not prove that a runtime invocation occurred."
+          ],
+          "providers": [
+            "SCIP/compiler identity and source ownership",
+            "parser-proved intraprocedural control dependence",
+            "TypeScript compiler identities, control-flow graph, and reaching definitions"
+          ],
+          "relations": [
+            {
+              "family": "execution",
+              "subtype": "call",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "candidate",
+                "mixed"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The source construct may call the resolved target.",
+              "nonClaims": [
+                "Static may-call reachability does not prove that an invocation occurred at runtime."
+              ],
+              "recoverWith": [
+                "call-graph",
+                "inspect",
+                "code"
+              ],
+              "providerId": "indexed-program-identity",
+              "providerLabel": "SCIP/compiler identity and source ownership"
+            },
+            {
+              "family": "execution",
+              "subtype": "result-callback",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "mixed"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The referenced callable can produce the result consumed by this path.",
+              "nonClaims": [
+                "A callback relationship does not prove invocation order or runtime selection."
+              ],
+              "recoverWith": [
+                "call-graph",
+                "inspect",
+                "code"
+              ],
+              "providerId": "indexed-program-identity",
+              "providerLabel": "SCIP/compiler identity and source ownership"
+            },
+            {
+              "family": "execution",
+              "subtype": "predicate-consequence",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The outcome is control-dependent on the reported predicate or handler.",
+              "nonClaims": [
+                "Local control dependence does not establish that the containing function executes."
+              ],
+              "recoverWith": [
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-control-dependence",
+              "providerLabel": "parser-proved intraprocedural control dependence"
+            },
+            {
+              "family": "execution",
+              "subtype": "predicate-alternative",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The outcome is control-dependent on the reported predicate or handler.",
+              "nonClaims": [
+                "Local control dependence does not establish that the containing function executes."
+              ],
+              "recoverWith": [
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-control-dependence",
+              "providerLabel": "parser-proved intraprocedural control dependence"
+            },
+            {
+              "family": "execution",
+              "subtype": "predicate-fallthrough",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The outcome is control-dependent on the reported predicate or handler.",
+              "nonClaims": [
+                "Local control dependence does not establish that the containing function executes."
+              ],
+              "recoverWith": [
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-control-dependence",
+              "providerLabel": "parser-proved intraprocedural control dependence"
+            },
+            {
+              "family": "execution",
+              "subtype": "predicate-case",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The outcome is control-dependent on the reported predicate or handler.",
+              "nonClaims": [
+                "Local control dependence does not establish that the containing function executes."
+              ],
+              "recoverWith": [
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-control-dependence",
+              "providerLabel": "parser-proved intraprocedural control dependence"
+            },
+            {
+              "family": "execution",
+              "subtype": "predicate-default",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The outcome is control-dependent on the reported predicate or handler.",
+              "nonClaims": [
+                "Local control dependence does not establish that the containing function executes."
+              ],
+              "recoverWith": [
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-control-dependence",
+              "providerLabel": "parser-proved intraprocedural control dependence"
+            },
+            {
+              "family": "execution",
+              "subtype": "predicate-return",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The outcome is control-dependent on the reported predicate or handler.",
+              "nonClaims": [
+                "Local control dependence does not establish that the containing function executes."
+              ],
+              "recoverWith": [
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-control-dependence",
+              "providerLabel": "parser-proved intraprocedural control dependence"
+            },
+            {
+              "family": "execution",
+              "subtype": "predicate-throw",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The outcome is control-dependent on the reported predicate or handler.",
+              "nonClaims": [
+                "Local control dependence does not establish that the containing function executes."
+              ],
+              "recoverWith": [
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-control-dependence",
+              "providerLabel": "parser-proved intraprocedural control dependence"
+            },
+            {
+              "family": "execution",
+              "subtype": "loop-iteration",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The outcome is control-dependent on the reported predicate or handler.",
+              "nonClaims": [
+                "Local control dependence does not establish that the containing function executes."
+              ],
+              "recoverWith": [
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-control-dependence",
+              "providerLabel": "parser-proved intraprocedural control dependence"
+            },
+            {
+              "family": "execution",
+              "subtype": "loop-exit",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The outcome is control-dependent on the reported predicate or handler.",
+              "nonClaims": [
+                "Local control dependence does not establish that the containing function executes."
+              ],
+              "recoverWith": [
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-control-dependence",
+              "providerLabel": "parser-proved intraprocedural control dependence"
+            },
+            {
+              "family": "execution",
+              "subtype": "exception-handler",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The outcome is control-dependent on the reported predicate or handler.",
+              "nonClaims": [
+                "Local control dependence does not establish that the containing function executes."
+              ],
+              "recoverWith": [
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-control-dependence",
+              "providerLabel": "parser-proved intraprocedural control dependence"
+            },
+            {
+              "family": "execution",
+              "subtype": "finally-cleanup",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The outcome is control-dependent on the reported predicate or handler.",
+              "nonClaims": [
+                "Local control dependence does not establish that the containing function executes."
+              ],
+              "recoverWith": [
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-control-dependence",
+              "providerLabel": "parser-proved intraprocedural control dependence"
+            },
+            {
+              "family": "execution",
+              "subtype": "handler-return",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The outcome is control-dependent on the reported predicate or handler.",
+              "nonClaims": [
+                "Local control dependence does not establish that the containing function executes."
+              ],
+              "recoverWith": [
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-control-dependence",
+              "providerLabel": "parser-proved intraprocedural control dependence"
+            },
+            {
+              "family": "execution",
+              "subtype": "handler-throw",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The outcome is control-dependent on the reported predicate or handler.",
+              "nonClaims": [
+                "Local control dependence does not establish that the containing function executes."
+              ],
+              "recoverWith": [
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-control-dependence",
+              "providerLabel": "parser-proved intraprocedural control dependence"
+            },
+            {
+              "family": "execution",
+              "subtype": "returns",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The selected construct contains the reported return terminal.",
+              "nonClaims": [
+                "A local return terminal does not establish that the containing callable executes."
+              ],
+              "recoverWith": [
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-control-dependence",
+              "providerLabel": "parser-proved intraprocedural control dependence"
+            },
+            {
+              "family": "execution",
+              "subtype": "throws",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The selected construct contains the reported throw terminal.",
+              "nonClaims": [
+                "A local throw terminal does not establish propagation, handling, or callable execution."
+              ],
+              "recoverWith": [
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-control-dependence",
+              "providerLabel": "parser-proved intraprocedural control dependence"
+            },
+            {
+              "family": "execution",
+              "subtype": "control-dependence",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "Execution of the reported statement depends on the outcome of the predicate.",
+              "nonClaims": [
+                "Intraprocedural control dependence does not establish that the containing callable executes."
+              ],
+              "recoverWith": [
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "typescript-local-dependence",
+              "providerLabel": "TypeScript compiler identities, control-flow graph, and reaching definitions"
+            }
+          ],
+          "status": "partial",
+          "providerCapabilities": [
+            {
+              "id": "indexed-program-identity",
+              "label": "SCIP/compiler identity and source ownership",
+              "status": "partial",
+              "requirements": [
+                "indexed-graph"
+              ],
+              "subtypes": [
+                "call",
+                "result-callback"
+              ],
+              "languages": [
+                {
+                  "language": "typescript",
+                  "status": "partial",
+                  "reason": "SCIP/compiler identity and source ownership is available; subtype coverage is partial."
+                }
+              ],
+              "reason": "partial support for typescript; analytical ceiling is declared per subtype."
+            },
+            {
+              "id": "parser-control-dependence",
+              "label": "parser-proved intraprocedural control dependence",
+              "status": "partial",
+              "requirements": [
+                "indexed-graph",
+                "source-facts"
+              ],
+              "subtypes": [
+                "predicate-consequence",
+                "predicate-alternative",
+                "predicate-fallthrough",
+                "predicate-case",
+                "predicate-default",
+                "predicate-return",
+                "predicate-throw",
+                "loop-iteration",
+                "loop-exit",
+                "exception-handler",
+                "finally-cleanup",
+                "handler-return",
+                "handler-throw",
+                "returns",
+                "throws"
+              ],
+              "languages": [
+                {
+                  "language": "typescript",
+                  "status": "partial",
+                  "reason": "parser-proved intraprocedural control dependence is available; subtype coverage is partial."
+                }
+              ],
+              "reason": "partial support for typescript; analytical ceiling is declared per subtype."
+            },
+            {
+              "id": "typescript-local-dependence",
+              "label": "TypeScript compiler identities, control-flow graph, and reaching definitions",
+              "status": "partial",
+              "requirements": [
+                "typescript-semantic"
+              ],
+              "subtypes": [
+                "control-dependence"
+              ],
+              "languages": [
+                {
+                  "language": "typescript",
+                  "status": "partial",
+                  "reason": "TypeScript compiler identities, control-flow graph, and reaching definitions is available; subtype coverage is partial."
+                }
+              ],
+              "reason": "partial support for typescript; analytical ceiling is declared per subtype."
+            }
+          ],
+          "reason": "Supported by bounded static providers; unresolved and unsupported constructs remain explicitly reported."
+        },
+        {
+          "family": "runtime",
+          "establishes": "A source-grounded handoff between producer and consumer participants through a runtime mechanism.",
+          "nonClaims": [
+            "An unresolved or candidate join does not prove a runtime handoff."
+          ],
+          "providers": [
+            "source-grounded runtime-boundary joins"
+          ],
+          "relations": [
+            {
+              "family": "runtime",
+              "subtype": "runtime-handoff",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "candidate",
+                "mixed"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "A producer and consumer share a source-grounded runtime rendezvous.",
+              "nonClaims": [
+                "A candidate or unresolved join does not prove a runtime handoff."
+              ],
+              "recoverWith": [
+                "evidence",
+                "inspect",
+                "code"
+              ],
+              "providerId": "runtime-boundary-join",
+              "providerLabel": "source-grounded runtime-boundary joins"
+            },
+            {
+              "family": "runtime",
+              "subtype": "discriminator-dispatch",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "mixed"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "A serialized discriminator selects the reported consumer.",
+              "nonClaims": [
+                "The dispatch edge does not prove delivery, retry, or successful handling."
+              ],
+              "recoverWith": [
+                "evidence",
+                "inspect",
+                "code"
+              ],
+              "providerId": "runtime-boundary-join",
+              "providerLabel": "source-grounded runtime-boundary joins"
+            }
+          ],
+          "status": "partial",
+          "providerCapabilities": [
+            {
+              "id": "runtime-boundary-join",
+              "label": "source-grounded runtime-boundary joins",
+              "status": "partial",
+              "requirements": [
+                "indexed-graph",
+                "source-facts"
+              ],
+              "subtypes": [
+                "runtime-handoff",
+                "discriminator-dispatch"
+              ],
+              "languages": [
+                {
+                  "language": "typescript",
+                  "status": "partial",
+                  "reason": "source-grounded runtime-boundary joins is available; subtype coverage is partial."
+                }
+              ],
+              "reason": "partial support for typescript; analytical ceiling is declared per subtype."
+            }
+          ],
+          "reason": "Supported by bounded static providers; unresolved and unsupported constructs remain explicitly reported."
+        },
+        {
+          "family": "dataflow",
+          "establishes": "A value, definition, argument, parameter, return, or statically resolved value may flow to another construct.",
+          "nonClaims": [
+            "Current partial providers do not establish general interprocedural definition-use coverage."
+          ],
+          "providers": [
+            "source-grounded runtime-boundary joins",
+            "compiler callsites and bounded static value evaluation",
+            "TypeScript compiler identities, control-flow graph, and reaching definitions",
+            "parser-proved local state and temporal facts"
+          ],
+          "relations": [
+            {
+              "family": "dataflow",
+              "subtype": "serialized-discriminator-transfer",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "mixed"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The producer serializes the discriminator consumed by dispatch.",
+              "nonClaims": [
+                "This edge does not establish the flow of every payload field."
+              ],
+              "recoverWith": [
+                "value-flow",
+                "inspect",
+                "code"
+              ],
+              "providerId": "runtime-boundary-join",
+              "providerLabel": "source-grounded runtime-boundary joins"
+            },
+            {
+              "family": "dataflow",
+              "subtype": "argument-to-parameter",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "mixed"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported value may reach the target through the evidenced callsite transfer.",
+              "nonClaims": [
+                "This provider does not establish general local definition-use, alias, field, or heap flow."
+              ],
+              "recoverWith": [
+                "value-flow",
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "bounded-static-value-flow",
+              "providerLabel": "compiler callsites and bounded static value evaluation"
+            },
+            {
+              "family": "dataflow",
+              "subtype": "constant-to-parameter",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "mixed"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported value may reach the target through the evidenced callsite transfer.",
+              "nonClaims": [
+                "This provider does not establish general local definition-use, alias, field, or heap flow."
+              ],
+              "recoverWith": [
+                "value-flow",
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "bounded-static-value-flow",
+              "providerLabel": "compiler callsites and bounded static value evaluation"
+            },
+            {
+              "family": "dataflow",
+              "subtype": "property-to-parameter",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "mixed"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported value may reach the target through the evidenced callsite transfer.",
+              "nonClaims": [
+                "This provider does not establish general local definition-use, alias, field, or heap flow."
+              ],
+              "recoverWith": [
+                "value-flow",
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "bounded-static-value-flow",
+              "providerLabel": "compiler callsites and bounded static value evaluation"
+            },
+            {
+              "family": "dataflow",
+              "subtype": "return-to-parameter",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "mixed"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported value may reach the target through the evidenced callsite transfer.",
+              "nonClaims": [
+                "This provider does not establish general local definition-use, alias, field, or heap flow."
+              ],
+              "recoverWith": [
+                "value-flow",
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "bounded-static-value-flow",
+              "providerLabel": "compiler callsites and bounded static value evaluation"
+            },
+            {
+              "family": "dataflow",
+              "subtype": "return-to-call-result",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "mixed"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported value may reach the target through the evidenced callsite transfer.",
+              "nonClaims": [
+                "This provider does not establish general local definition-use, alias, field, or heap flow."
+              ],
+              "recoverWith": [
+                "value-flow",
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "bounded-static-value-flow",
+              "providerLabel": "compiler callsites and bounded static value evaluation"
+            },
+            {
+              "family": "dataflow",
+              "subtype": "definition-to-use",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The definition reaches the reported read on a feasible local control-flow path.",
+              "nonClaims": [
+                "Local reaching definitions do not establish heap aliasing, exceptional flow, or the runtime order of closure invocation."
+              ],
+              "recoverWith": [
+                "value-flow",
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "typescript-local-dependence",
+              "providerLabel": "TypeScript compiler identities, control-flow graph, and reaching definitions"
+            },
+            {
+              "family": "dataflow",
+              "subtype": "value-to-definition",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported right-hand-side read supplies the assigned local definition.",
+              "nonClaims": [
+                "A local assignment edge does not establish field or heap points-to flow."
+              ],
+              "recoverWith": [
+                "value-flow",
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "typescript-local-dependence",
+              "providerLabel": "TypeScript compiler identities, control-flow graph, and reaching definitions"
+            },
+            {
+              "family": "dataflow",
+              "subtype": "closure-capture",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "candidate"
+              ],
+              "supportCeiling": "candidate",
+              "establishes": "The nested callable reads the reported binding from an enclosing callable.",
+              "nonClaims": [
+                "Closure capture does not establish whether or when the nested callable executes."
+              ],
+              "recoverWith": [
+                "call-graph",
+                "inspect",
+                "code"
+              ],
+              "providerId": "typescript-local-dependence",
+              "providerLabel": "TypeScript compiler identities, control-flow graph, and reaching definitions"
+            },
+            {
+              "family": "dataflow",
+              "subtype": "field-definition-to-use",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "candidate"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported same-owner field definition can reach the field read.",
+              "nonClaims": [
+                "Field-name identity does not establish whole-program heap aliasing or cross-instance flow."
+              ],
+              "recoverWith": [
+                "value-flow",
+                "dependence-slice",
+                "inspect",
+                "code"
+              ],
+              "providerId": "typescript-local-dependence",
+              "providerLabel": "TypeScript compiler identities, control-flow graph, and reaching definitions"
+            },
+            {
+              "family": "dataflow",
+              "subtype": "captured-value-to-state",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported source value is assigned into the identified state resource.",
+              "nonClaims": [
+                "The edge does not establish alias, heap, or later read flow."
+              ],
+              "recoverWith": [
+                "value-flow",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-state-temporal",
+              "providerLabel": "parser-proved local state and temporal facts"
+            },
+            {
+              "family": "dataflow",
+              "subtype": "constant-to-state",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported source value is assigned into the identified state resource.",
+              "nonClaims": [
+                "The edge does not establish alias, heap, or later read flow."
+              ],
+              "recoverWith": [
+                "value-flow",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-state-temporal",
+              "providerLabel": "parser-proved local state and temporal facts"
+            },
+            {
+              "family": "dataflow",
+              "subtype": "expression-to-state",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported source value is assigned into the identified state resource.",
+              "nonClaims": [
+                "The edge does not establish alias, heap, or later read flow."
+              ],
+              "recoverWith": [
+                "value-flow",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-state-temporal",
+              "providerLabel": "parser-proved local state and temporal facts"
+            },
+            {
+              "family": "dataflow",
+              "subtype": "property-to-state",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported source value is assigned into the identified state resource.",
+              "nonClaims": [
+                "The edge does not establish alias, heap, or later read flow."
+              ],
+              "recoverWith": [
+                "value-flow",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-state-temporal",
+              "providerLabel": "parser-proved local state and temporal facts"
+            },
+            {
+              "family": "dataflow",
+              "subtype": "return-to-state",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported source value is assigned into the identified state resource.",
+              "nonClaims": [
+                "The edge does not establish alias, heap, or later read flow."
+              ],
+              "recoverWith": [
+                "value-flow",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-state-temporal",
+              "providerLabel": "parser-proved local state and temporal facts"
+            },
+            {
+              "family": "dataflow",
+              "subtype": "value-to-state",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported source value is assigned into the identified state resource.",
+              "nonClaims": [
+                "The edge does not establish alias, heap, or later read flow."
+              ],
+              "recoverWith": [
+                "value-flow",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-state-temporal",
+              "providerLabel": "parser-proved local state and temporal facts"
+            }
+          ],
+          "status": "partial",
+          "providerCapabilities": [
+            {
+              "id": "runtime-boundary-join",
+              "label": "source-grounded runtime-boundary joins",
+              "status": "partial",
+              "requirements": [
+                "indexed-graph",
+                "source-facts"
+              ],
+              "subtypes": [
+                "serialized-discriminator-transfer"
+              ],
+              "languages": [
+                {
+                  "language": "typescript",
+                  "status": "partial",
+                  "reason": "source-grounded runtime-boundary joins is available; subtype coverage is partial."
+                }
+              ],
+              "reason": "partial support for typescript; analytical ceiling is declared per subtype."
+            },
+            {
+              "id": "bounded-static-value-flow",
+              "label": "compiler callsites and bounded static value evaluation",
+              "status": "partial",
+              "requirements": [
+                "indexed-graph",
+                "source-facts"
+              ],
+              "subtypes": [
+                "argument-to-parameter",
+                "constant-to-parameter",
+                "property-to-parameter",
+                "return-to-parameter",
+                "return-to-call-result"
+              ],
+              "languages": [
+                {
+                  "language": "typescript",
+                  "status": "partial",
+                  "reason": "compiler callsites and bounded static value evaluation is available; subtype coverage is partial."
+                }
+              ],
+              "reason": "partial support for typescript; analytical ceiling is declared per subtype."
+            },
+            {
+              "id": "typescript-local-dependence",
+              "label": "TypeScript compiler identities, control-flow graph, and reaching definitions",
+              "status": "partial",
+              "requirements": [
+                "typescript-semantic"
+              ],
+              "subtypes": [
+                "definition-to-use",
+                "value-to-definition",
+                "closure-capture",
+                "field-definition-to-use"
+              ],
+              "languages": [
+                {
+                  "language": "typescript",
+                  "status": "partial",
+                  "reason": "TypeScript compiler identities, control-flow graph, and reaching definitions is available; subtype coverage is partial."
+                }
+              ],
+              "reason": "partial support for typescript; analytical ceiling is declared per subtype."
+            },
+            {
+              "id": "parser-state-temporal",
+              "label": "parser-proved local state and temporal facts",
+              "status": "partial",
+              "requirements": [
+                "indexed-graph",
+                "source-facts"
+              ],
+              "subtypes": [
+                "captured-value-to-state",
+                "constant-to-state",
+                "expression-to-state",
+                "property-to-state",
+                "return-to-state",
+                "value-to-state"
+              ],
+              "languages": [
+                {
+                  "language": "typescript",
+                  "status": "partial",
+                  "reason": "parser-proved local state and temporal facts is available; subtype coverage is partial."
+                }
+              ],
+              "reason": "partial support for typescript; analytical ceiling is declared per subtype."
+            }
+          ],
+          "reason": "Supported by bounded static providers; unresolved and unsupported constructs remain explicitly reported."
+        },
+        {
+          "family": "state",
+          "establishes": "A construct reads, writes, creates, deletes, or otherwise changes an identified state resource.",
+          "nonClaims": [
+            "A state edge does not prove transactionality, durability, or exclusive ownership unless qualified."
+          ],
+          "providers": [
+            "parser-proved local state and temporal facts"
+          ],
+          "relations": [
+            {
+              "family": "state",
+              "subtype": "writes-resource",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported construct performs the named operation on the identified resource.",
+              "nonClaims": [
+                "A state operation does not establish transactionality, durability, or exclusive ownership."
+              ],
+              "recoverWith": [
+                "evidence",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-state-temporal",
+              "providerLabel": "parser-proved local state and temporal facts"
+            },
+            {
+              "family": "state",
+              "subtype": "deletes-resource",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported construct performs the named operation on the identified resource.",
+              "nonClaims": [
+                "A state operation does not establish transactionality, durability, or exclusive ownership."
+              ],
+              "recoverWith": [
+                "evidence",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-state-temporal",
+              "providerLabel": "parser-proved local state and temporal facts"
+            },
+            {
+              "family": "state",
+              "subtype": "reads-resource",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported construct performs the named operation on the identified resource.",
+              "nonClaims": [
+                "A state operation does not establish transactionality, durability, or exclusive ownership."
+              ],
+              "recoverWith": [
+                "evidence",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-state-temporal",
+              "providerLabel": "parser-proved local state and temporal facts"
+            },
+            {
+              "family": "state",
+              "subtype": "enqueues-resource",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported construct performs the named operation on the identified resource.",
+              "nonClaims": [
+                "A state operation does not establish transactionality, durability, or exclusive ownership."
+              ],
+              "recoverWith": [
+                "evidence",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-state-temporal",
+              "providerLabel": "parser-proved local state and temporal facts"
+            },
+            {
+              "family": "state",
+              "subtype": "consumes-resource",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported construct performs the named operation on the identified resource.",
+              "nonClaims": [
+                "A state operation does not establish transactionality, durability, or exclusive ownership."
+              ],
+              "recoverWith": [
+                "evidence",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-state-temporal",
+              "providerLabel": "parser-proved local state and temporal facts"
+            }
+          ],
+          "status": "partial",
+          "providerCapabilities": [
+            {
+              "id": "parser-state-temporal",
+              "label": "parser-proved local state and temporal facts",
+              "status": "partial",
+              "requirements": [
+                "indexed-graph",
+                "source-facts"
+              ],
+              "subtypes": [
+                "writes-resource",
+                "deletes-resource",
+                "reads-resource",
+                "enqueues-resource",
+                "consumes-resource"
+              ],
+              "languages": [
+                {
+                  "language": "typescript",
+                  "status": "partial",
+                  "reason": "parser-proved local state and temporal facts is available; subtype coverage is partial."
+                }
+              ],
+              "reason": "partial support for typescript; analytical ceiling is declared per subtype."
+            }
+          ],
+          "reason": "Supported by bounded static providers; unresolved and unsupported constructs remain explicitly reported."
+        },
+        {
+          "family": "temporal",
+          "establishes": "One observed construct is locally ordered before or after another under the reported source evidence.",
+          "nonClaims": [
+            "Source order does not imply cross-process happens-before or durability."
+          ],
+          "providers": [
+            "source-grounded runtime-boundary joins",
+            "parser-proved local state and temporal facts"
+          ],
+          "relations": [
+            {
+              "family": "temporal",
+              "subtype": "enqueue-before-consume",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "mixed"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported enqueue precedes a possible consume through the queue.",
+              "nonClaims": [
+                "Queue order does not establish delivery time, uniqueness, retry count, or durability."
+              ],
+              "recoverWith": [
+                "evidence",
+                "inspect",
+                "code"
+              ],
+              "providerId": "runtime-boundary-join",
+              "providerLabel": "source-grounded runtime-boundary joins"
+            },
+            {
+              "family": "temporal",
+              "subtype": "await-completion-before",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported source constructs have the named local ordering relationship.",
+              "nonClaims": [
+                "Local source order does not establish cross-process happens-before or durable completion."
+              ],
+              "recoverWith": [
+                "evidence",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-state-temporal",
+              "providerLabel": "parser-proved local state and temporal facts"
+            },
+            {
+              "family": "temporal",
+              "subtype": "awaits-completion",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported source constructs have the named local ordering relationship.",
+              "nonClaims": [
+                "Local source order does not establish cross-process happens-before or durable completion."
+              ],
+              "recoverWith": [
+                "evidence",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-state-temporal",
+              "providerLabel": "parser-proved local state and temporal facts"
+            },
+            {
+              "family": "temporal",
+              "subtype": "inside-lock-scope",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported source constructs have the named local ordering relationship.",
+              "nonClaims": [
+                "Local source order does not establish cross-process happens-before or durable completion."
+              ],
+              "recoverWith": [
+                "evidence",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-state-temporal",
+              "providerLabel": "parser-proved local state and temporal facts"
+            },
+            {
+              "family": "temporal",
+              "subtype": "lexical-successor",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The reported source constructs have the named local ordering relationship.",
+              "nonClaims": [
+                "Local source order does not establish cross-process happens-before or durable completion."
+              ],
+              "recoverWith": [
+                "evidence",
+                "inspect",
+                "code"
+              ],
+              "providerId": "parser-state-temporal",
+              "providerLabel": "parser-proved local state and temporal facts"
+            }
+          ],
+          "status": "partial",
+          "providerCapabilities": [
+            {
+              "id": "runtime-boundary-join",
+              "label": "source-grounded runtime-boundary joins",
+              "status": "partial",
+              "requirements": [
+                "indexed-graph",
+                "source-facts"
+              ],
+              "subtypes": [
+                "enqueue-before-consume"
+              ],
+              "languages": [
+                {
+                  "language": "typescript",
+                  "status": "partial",
+                  "reason": "source-grounded runtime-boundary joins is available; subtype coverage is partial."
+                }
+              ],
+              "reason": "partial support for typescript; analytical ceiling is declared per subtype."
+            },
+            {
+              "id": "parser-state-temporal",
+              "label": "parser-proved local state and temporal facts",
+              "status": "partial",
+              "requirements": [
+                "indexed-graph",
+                "source-facts"
+              ],
+              "subtypes": [
+                "await-completion-before",
+                "awaits-completion",
+                "inside-lock-scope",
+                "lexical-successor"
+              ],
+              "languages": [
+                {
+                  "language": "typescript",
+                  "status": "partial",
+                  "reason": "parser-proved local state and temporal facts is available; subtype coverage is partial."
+                }
+              ],
+              "reason": "partial support for typescript; analytical ceiling is declared per subtype."
+            }
+          ],
+          "reason": "Supported by bounded static providers; unresolved and unsupported constructs remain explicitly reported."
+        },
+        {
+          "family": "contract",
+          "establishes": "A program construct implements, constrains, or is typed by an identified contract.",
+          "nonClaims": [
+            "Contract identity does not prove runtime invocation or conformance outside reported checks."
+          ],
+          "providers": [
+            "SCIP/compiler identity and source ownership"
+          ],
+          "relations": [
+            {
+              "family": "contract",
+              "subtype": "uses-contract-symbol",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "mixed"
+              ],
+              "supportCeiling": "exact",
+              "establishes": "The source construct refers to the identified contract symbol.",
+              "nonClaims": [
+                "Contract identity does not prove runtime invocation or behavioral conformance."
+              ],
+              "recoverWith": [
+                "hierarchy",
+                "inspect",
+                "code"
+              ],
+              "providerId": "indexed-program-identity",
+              "providerLabel": "SCIP/compiler identity and source ownership"
+            }
+          ],
+          "status": "exact",
+          "providerCapabilities": [
+            {
+              "id": "indexed-program-identity",
+              "label": "SCIP/compiler identity and source ownership",
+              "status": "exact",
+              "requirements": [
+                "indexed-graph"
+              ],
+              "subtypes": [
+                "uses-contract-symbol"
+              ],
+              "languages": [
+                {
+                  "language": "typescript",
+                  "status": "exact",
+                  "reason": "SCIP/compiler identity and source ownership is available; subtype coverage is exact."
+                }
+              ],
+              "reason": "exact support for typescript; analytical ceiling is declared per subtype."
+            }
+          ],
+          "reason": "Exact within indexed compiler/source identity coverage; dynamic or unindexed constructs remain outside scope."
+        },
+        {
+          "family": "identity",
+          "establishes": "Two observations refer to the same compiler-owned or source-owned program entity.",
+          "nonClaims": [
+            "Shared identity does not establish execution or value transfer."
+          ],
+          "providers": [
+            "SCIP/compiler identity and source ownership"
+          ],
+          "relations": [
+            {
+              "family": "identity",
+              "subtype": "references",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "mixed"
+              ],
+              "supportCeiling": "exact",
+              "establishes": "The occurrence resolves to the identified compiler-owned symbol.",
+              "nonClaims": [
+                "A reference does not establish execution or value transfer."
+              ],
+              "recoverWith": [
+                "refs",
+                "inspect"
+              ],
+              "providerId": "indexed-program-identity",
+              "providerLabel": "SCIP/compiler identity and source ownership"
+            }
+          ],
+          "status": "exact",
+          "providerCapabilities": [
+            {
+              "id": "indexed-program-identity",
+              "label": "SCIP/compiler identity and source ownership",
+              "status": "exact",
+              "requirements": [
+                "indexed-graph"
+              ],
+              "subtypes": [
+                "references"
+              ],
+              "languages": [
+                {
+                  "language": "typescript",
+                  "status": "exact",
+                  "reason": "SCIP/compiler identity and source ownership is available; subtype coverage is exact."
+                }
+              ],
+              "reason": "exact support for typescript; analytical ceiling is declared per subtype."
+            }
+          ],
+          "reason": "Exact within indexed compiler/source identity coverage; dynamic or unindexed constructs remain outside scope."
+        },
+        {
+          "family": "ownership",
+          "establishes": "A source construct, symbol, runtime observation, or state resource is contained or owned by another program entity.",
+          "nonClaims": [
+            "Structural ownership does not establish lifetime, singleton scope, or runtime execution unless qualified."
+          ],
+          "providers": [
+            "SCIP/compiler identity and source ownership"
+          ],
+          "relations": [
+            {
+              "family": "ownership",
+              "subtype": "contains",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "mixed"
+              ],
+              "supportCeiling": "exact",
+              "establishes": "The owner contains the identified program construct.",
+              "nonClaims": [
+                "Structural containment does not establish runtime lifetime or sharing scope."
+              ],
+              "recoverWith": [
+                "outline",
+                "inspect"
+              ],
+              "providerId": "indexed-program-identity",
+              "providerLabel": "SCIP/compiler identity and source ownership"
+            },
+            {
+              "family": "ownership",
+              "subtype": "contains-",
+              "match": "prefix",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "mixed"
+              ],
+              "supportCeiling": "exact",
+              "establishes": "The owner contains the identified program construct.",
+              "nonClaims": [
+                "Structural containment does not establish runtime lifetime or sharing scope."
+              ],
+              "recoverWith": [
+                "outline",
+                "inspect"
+              ],
+              "providerId": "indexed-program-identity",
+              "providerLabel": "SCIP/compiler identity and source ownership"
+            },
+            {
+              "family": "ownership",
+              "subtype": "owns-",
+              "match": "prefix",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "mixed"
+              ],
+              "supportCeiling": "exact",
+              "establishes": "The owner owns the identified source or runtime observation.",
+              "nonClaims": [
+                "Observation ownership does not establish singleton lifetime or exclusive ownership."
+              ],
+              "recoverWith": [
+                "inspect",
+                "code"
+              ],
+              "providerId": "indexed-program-identity",
+              "providerLabel": "SCIP/compiler identity and source ownership"
+            }
+          ],
+          "status": "exact",
+          "providerCapabilities": [
+            {
+              "id": "indexed-program-identity",
+              "label": "SCIP/compiler identity and source ownership",
+              "status": "exact",
+              "requirements": [
+                "indexed-graph"
+              ],
+              "subtypes": [
+                "contains",
+                "contains-",
+                "owns-"
+              ],
+              "languages": [
+                {
+                  "language": "typescript",
+                  "status": "exact",
+                  "reason": "SCIP/compiler identity and source ownership is available; subtype coverage is exact."
+                }
+              ],
+              "reason": "exact support for typescript; analytical ceiling is declared per subtype."
+            }
+          ],
+          "reason": "Exact within indexed compiler/source identity coverage; dynamic or unindexed constructs remain outside scope."
+        },
+        {
+          "family": "dependencies",
+          "establishes": "A file, module, or symbol statically relies on another indexed entity.",
+          "nonClaims": [
+            "A dependency edge does not establish that the depended-on code executes."
+          ],
+          "providers": [
+            "SCIP/compiler identity and source ownership"
+          ],
+          "relations": [
+            {
+              "family": "dependencies",
+              "subtype": "imports",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "mixed"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The source file or module statically imports the indexed target.",
+              "nonClaims": [
+                "An import does not establish that imported code executes."
+              ],
+              "recoverWith": [
+                "imports",
+                "deps",
+                "code"
+              ],
+              "providerId": "indexed-program-identity",
+              "providerLabel": "SCIP/compiler identity and source ownership"
+            },
+            {
+              "family": "dependencies",
+              "subtype": "imports-external",
+              "directions": [
+                "incoming",
+                "outgoing",
+                "both"
+              ],
+              "evidenceStrengths": [
+                "exact",
+                "derived",
+                "mixed"
+              ],
+              "supportCeiling": "partial",
+              "establishes": "The source region statically imports an external package.",
+              "nonClaims": [
+                "An external import does not establish which package behavior executes."
+              ],
+              "recoverWith": [
+                "imports",
+                "code"
+              ],
+              "providerId": "indexed-program-identity",
+              "providerLabel": "SCIP/compiler identity and source ownership"
+            }
+          ],
+          "status": "partial",
+          "providerCapabilities": [
+            {
+              "id": "indexed-program-identity",
+              "label": "SCIP/compiler identity and source ownership",
+              "status": "partial",
+              "requirements": [
+                "indexed-graph"
+              ],
+              "subtypes": [
+                "imports",
+                "imports-external"
+              ],
+              "languages": [
+                {
+                  "language": "typescript",
+                  "status": "partial",
+                  "reason": "SCIP/compiler identity and source ownership is available; subtype coverage is partial."
+                }
+              ],
+              "reason": "partial support for typescript; analytical ceiling is declared per subtype."
+            }
+          ],
+          "reason": "Supported by bounded static providers; unresolved and unsupported constructs remain explicitly reported."
+        }
+      ],
+      "capabilities": [
+        {
+          "id": "indexing",
+          "label": "SCIP indexing",
+          "status": "available",
+          "evidence": "graph-fact",
+          "reason": "All detected/configured language indexers are runnable."
+        },
+        {
+          "id": "semantic-typescript",
+          "label": "TypeScript semantic provider",
+          "status": "available",
+          "evidence": "semantic",
+          "reason": "ts-morph can load the configured TypeScript project."
+        },
+        {
+          "id": "heuristic-detectors",
+          "label": "Heuristic cleanup detectors",
+          "status": "available",
+          "evidence": "heuristic",
+          "reason": "Similarity, migration, wrapper, stale-abstraction, and doc-drift detectors can run over the index."
+        },
+        {
+          "id": "cleanup-verification",
+          "label": "Project cleanup verification",
+          "status": "available",
+          "evidence": "checker",
+          "reason": "typescript: available (tsc --noEmit)"
+        },
+        {
+          "id": "diff-impact",
+          "label": "Git change mapping",
+          "status": "available",
+          "evidence": "git",
+          "reason": "Git diff data is available for changed-symbol and downstream-consumer mapping."
+        }
+      ]
+    },
+    "freshness": {
+      "state": "fresh",
+      "checkedAt": "2026-09-06T07:14:21.795Z",
+      "metaPath": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/.cache/meta.json",
+      "updatedAt": "2026-09-06T07:14:20.245Z",
+      "lastRefresh": {
+        "trigger": {
+          "kind": "setup",
+          "detail": "scip-query setup"
+        },
+        "result": "reused",
+        "startedAt": "2026-09-06T07:14:21.650Z",
+        "completedAt": "2026-09-06T07:14:21.725Z",
+        "durationMs": 75.31774999999999,
+        "indexedLanguages": [
+          "typescript"
+        ],
+        "skipped": []
+      },
+      "reason": "Index metadata fingerprint matches current source files."
+    },
+    "reindex": {
+      "languages": [
+        "typescript"
+      ],
+      "indexPath": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/.cache/index.scip",
+      "dbPath": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/.cache/index.db",
+      "durationMs": 75.22366599999998,
+      "reused": true,
+      "skipped": [],
+      "lastRefresh": {
+        "trigger": {
+          "kind": "setup",
+          "detail": "scip-query setup"
+        },
+        "result": "reused",
+        "startedAt": "2026-09-06T07:14:21.650Z",
+        "completedAt": "2026-09-06T07:14:21.725Z",
+        "durationMs": 75.31774999999999,
+        "indexedLanguages": [
+          "typescript"
+        ],
+        "skipped": []
+      },
+      "shards": [
+        {
+          "id": "typescript",
+          "language": "typescript",
+          "reused": true,
+          "strategy": "reused",
+          "fingerprint": "7c6796231f03296e",
+          "outputBytes": null,
+          "durationMs": 0
+        }
+      ]
+    },
+    "automaticRefreshConfig": null,
+    "watchService": null,
+    "rustSemanticSession": null,
+    "health": {
+      "available": false,
+      "issuesNeedAttention": [],
+      "warnings": [],
+      "unavailableReason": "Indexed health skipped by setup choice; run `scip-query health` for current-source scanning or `scip-query health --indexed --full` for the indexed specialists."
+    },
+    "smokeTests": [
+      {
+        "id": "reindex",
+        "command": "scip-query reindex",
+        "status": "pass",
+        "evidence": "typescript indexed from cache.",
+        "basis": "operation-result"
+      },
+      {
+        "id": "status",
+        "command": "scip-query status",
+        "status": "pass",
+        "evidence": "Index freshness is fresh: Index metadata fingerprint matches current source files.",
+        "basis": "operation-result"
+      },
+      {
+        "id": "config-validate",
+        "command": "scip-query config-validate",
+        "status": "pass",
+        "evidence": "Config OK.",
+        "basis": "operation-result"
+      },
+      {
+        "id": "capabilities",
+        "command": "scip-query capabilities",
+        "status": "pass",
+        "evidence": "1 language capability row(s) available.",
+        "basis": "readiness"
+      },
+      {
+        "id": "capability-matrix",
+        "command": "scip-query capabilities --matrix",
+        "status": "pass",
+        "evidence": "1 language row(s), 0 with unavailable capability cells.",
+        "basis": "readiness"
+      },
+      {
+        "id": "health",
+        "command": "scip-query health --indexed --full",
+        "status": "unavailable",
+        "optional": true,
+        "evidence": "Indexed health skipped by setup choice; run `scip-query health` for current-source scanning or `scip-query health --indexed --full` for the indexed specialists.",
+        "basis": "operation-result"
+      },
+      {
+        "id": "diff-impact",
+        "command": "scip-query diff-impact --json",
+        "status": "pass",
+        "evidence": "Git is available and index freshness is fresh: Index metadata fingerprint matches current source files. Last refresh: reused by setup at 2026-09-06T07:14:21.725Z.",
+        "basis": "readiness"
+      },
+      {
+        "id": "cleanup-verification",
+        "command": "scip-query cleanup-plan --verify",
+        "status": "pass",
+        "evidence": "1 available, 0 partial, 0 unavailable cleanup-verification row(s).",
+        "basis": "readiness"
+      },
+      {
+        "id": "watch-refresh",
+        "command": "scip-query status --json",
+        "status": "unavailable",
+        "optional": true,
+        "evidence": "Demand-started: the service starts with the first query that needs it (watch.autoStart=false); run scip-query watch --daemon to start it now.",
+        "basis": "operation-result"
+      },
+      {
+        "id": "rust-semantic-session",
+        "command": "scip-query status --json",
+        "status": "unavailable",
+        "optional": true,
+        "evidence": "Rust was not detected.",
+        "basis": "operation-result"
+      },
+      {
+        "id": "setup-agent",
+        "command": "scip-query setup-agent",
+        "status": "pass",
+        "evidence": "0 written, 2 already wired, 0 skipped.",
+        "basis": "operation-result"
+      }
+    ],
+    "healthDossier": null,
+    "setupAgent": {
+      "written": [],
+      "unchanged": [
+        "AGENTS.md",
+        "CLAUDE.md"
+      ],
+      "skipped": []
+    },
+    "changeScopes": {
+      "repository": [],
+      "checkout": [],
+      "user": []
+    },
+    "filesWritten": [],
+    "verdict": "partial"
+  },
+  "coverage": {
+    "complete": true,
+    "totalKnown": true,
+    "returned": 1,
+    "total": 1,
+    "omitted": 0
+  }
+}

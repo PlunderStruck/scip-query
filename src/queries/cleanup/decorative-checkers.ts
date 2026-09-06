@@ -67,7 +67,7 @@ const CALLABLE_SHAPE_PATTERN = /\bfunction\b|=>|\)\s*(?::\s*[^{;=]+)?\s*\{/;
 // fixed — Zod `.superRefine()`/`.refine()` validators reporting failure via
 // `ctx.addIssue({...})`, and hand-rolled validators pushing onto an
 // `errors`/`diagnostics`/`findings` array parameter (this repo's own
-// src/runtime/config.ts and src/tla/conformance.ts do exactly this).
+// src/runtime/config.ts does exactly this).
 const DIAGNOSTIC_SINK_PATTERN = /\.(?:addIssue|push)\s*\(/;
 
 export function decorativeCheckers(

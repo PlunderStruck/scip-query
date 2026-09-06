@@ -105,7 +105,7 @@ interface CachedSemanticSignature {
 }
 
 const TYPESCRIPT_IMPORT_USAGE_SCHEMA = 'typescript-import-usage-v1';
-const TYPESCRIPT_SIGNATURE_SCHEMA = 'typescript-signatures-v1';
+const TYPESCRIPT_SIGNATURE_SCHEMA = 'typescript-signatures-v2';
 
 const PREFETCHED_SEMANTIC_CALLEES = createPerDbValue<Map<number, SemanticCallee[]>>('semantic-prefetched-callees', {
   clearGroups: ['whole-project', 'source-file', 'semantic-provider'],
@@ -167,7 +167,7 @@ export function semanticConsumerReadiness(
     ready: false,
     reason:
       `TypeScript reference fragments are cold for ${coverage.missing} of ${coverage.files} files and no watch ` +
-      'service is running; run `scip-query health --full` once or start the service with `scip-query watch --daemon`, ' +
+      'service is running; start the service with `scip-query watch --daemon`, ' +
       'then re-run this command.',
   };
 }

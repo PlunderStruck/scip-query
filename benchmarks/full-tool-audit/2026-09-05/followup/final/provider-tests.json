@@ -1,0 +1,84 @@
+{
+  "numTotalTests": 16,
+  "numPassedTests": 16,
+  "numFailedTests": 0,
+  "success": true,
+  "files": [
+    {
+      "file": "tests/semantic/typescript-local-flow.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "TypeScript local definition-use and control dependence meets the preregistered assignment, alias, argument, and return obligations",
+          "status": "passed"
+        },
+        {
+          "name": "TypeScript local definition-use and control dependence keeps both branch-reaching definitions and derives predicate control dependence",
+          "status": "passed"
+        },
+        {
+          "name": "TypeScript local definition-use and control dependence distinguishes closure and cross-callable field candidates from exact local flow",
+          "status": "passed"
+        },
+        {
+          "name": "TypeScript local definition-use and control dependence orders same-statement aliases and preserves a property receiver use",
+          "status": "passed"
+        },
+        {
+          "name": "TypeScript local definition-use and control dependence routes exceptional flow through the catch block so both handlers reach the return",
+          "status": "passed"
+        },
+        {
+          "name": "TypeScript local definition-use and control dependence binds the catch variable, lets a raise skip the rest of the try block, and sequences finally",
+          "status": "passed"
+        },
+        {
+          "name": "TypeScript local definition-use and control dependence reports cross-callable field flow as a candidate instead of an exact local fact",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "file": "tests/semantic/typescript/typescript-semantic-provider.test.ts",
+      "status": "passed",
+      "tests": [
+        {
+          "name": "TypeScript semantic provider accounts for every call site as repository, external, or unresolved",
+          "status": "passed"
+        },
+        {
+          "name": "TypeScript semantic provider answers callees from a file-scoped project and declines project-wide references",
+          "status": "passed"
+        },
+        {
+          "name": "TypeScript semantic provider keeps the file-first reference scan exact across override families",
+          "status": "passed"
+        },
+        {
+          "name": "TypeScript semantic provider compares tsserver-style reference answers against the ts-morph baseline without changing defaults",
+          "status": "passed"
+        },
+        {
+          "name": "TypeScript semantic provider warms only the files of a shard when a file slice is given",
+          "status": "passed"
+        },
+        {
+          "name": "TypeScript semantic provider warms TypeScript reference fragments without assembling the project reference map",
+          "status": "passed"
+        },
+        {
+          "name": "TypeScript semantic provider lets a bounded command run semantic consumers only when fragments are warm or a service can compute them",
+          "status": "passed"
+        },
+        {
+          "name": "TypeScript semantic provider uses ts-morph import usage and references as shared liveness evidence",
+          "status": "passed"
+        },
+        {
+          "name": "TypeScript semantic provider uses workspace package imports as cross-project semantic references",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

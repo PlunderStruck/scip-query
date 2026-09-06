@@ -1,0 +1,109 @@
+{
+  "scope": "Every retained registered command; evidence is bounded by the per-command contract and fixtures.",
+  "inventory": {
+    "original": 97,
+    "removed": 11,
+    "retained": 86,
+    "public": 81,
+    "internal": 5
+  },
+  "checks": {
+    "fullUnitSuite": {
+      "passed": 2870,
+      "failed": 0,
+      "skipped": 0,
+      "artifact": "unit-results.json",
+      "timing": "Before final shared decoder/count relocation"
+    },
+    "affectedSuitesAfterRelocation": {
+      "passed": 629,
+      "failed": 0,
+      "artifact": "shared-boundary-unit-results.json"
+    },
+    "readCli": {
+      "passed": 71,
+      "unexpectedExits": 0,
+      "successfulExits": 70,
+      "expectedNotEntryRejections": 1,
+      "artifact": "cli-invocations.json"
+    },
+    "fixtureClaimAssertions": {
+      "passed": 42,
+      "total": 42,
+      "runner": "assert-cli-cases.py"
+    },
+    "typecheck": "passed",
+    "formatAndEslint": "passed",
+    "build": "passed",
+    "publicApiCompatibility": "passed",
+    "publicApiConsumerTypecheck": "passed",
+    "skillLinks": "passed",
+    "controls": {
+      "passed": 48,
+      "total": 48,
+      "artifact": "controls/results.json",
+      "countingUnit": "Recorded invocations and assertions; not independent test cases."
+    },
+    "transport": {
+      "passed": 58,
+      "total": 58,
+      "artifact": "transport/results.json",
+      "countingUnit": "Recorded invocations and assertions; not independent test cases."
+    },
+    "vue": {
+      "passed": 7,
+      "total": 7,
+      "artifact": "vue/results.json",
+      "countingUnit": "Recorded invocations and assertions; not independent test cases."
+    },
+    "frontend": {
+      "passed": 34,
+      "total": 34,
+      "artifact": "frontend/results.json",
+      "countingUnit": "Recorded invocations and assertions; not independent test cases."
+    },
+    "architecture": {
+      "passed": 8,
+      "total": 8,
+      "artifact": "architecture/results.json",
+      "countingUnit": "Recorded invocations and assertions; not independent test cases."
+    },
+    "retiredCommands": {
+      "passed": 11,
+      "total": 11,
+      "artifact": "retired-cli.json"
+    },
+    "fixtureRecreation": {
+      "passed": true,
+      "cliExpectedOutcomes": 71,
+      "claimAssertions": 42,
+      "fixture": "cli-fixture.json",
+      "runner": "make-cli-fixture.py"
+    }
+  },
+  "selfReview": {
+    "base": "HEAD",
+    "analyzedFiles": 557,
+    "newOrWorsenedArchitecture": 0,
+    "existingArchitecture": 47,
+    "openNewOrWorsenedComplexity": 67,
+    "artifact": "self-review-findings.json",
+    "assessment": "Whole uncommitted checkout including earlier work and relocated functions. Remaining maintainability findings are not waived or fixed by this command audit."
+  },
+  "impact": {
+    "changedIndexedFiles": 181,
+    "changedSymbols": 800,
+    "observedAffectedFiles": 159,
+    "unindexedChangedPaths": 947,
+    "semanticConsumers": "unavailable: 539 cold files and watcher disabled",
+    "sourceFallbackConsumers": "complete within provider contract",
+    "claim": "Observed consumers only; complete impact is not established."
+  },
+  "limits": [
+    "No exhaustive correctness claim across languages, dynamic behavior or arbitrary repositories.",
+    "Similarity, drift, ownership pressure and cleanup suggestions still require source review.",
+    "CRAP requires matching coverage; missing coverage is unknown, not zero.",
+    "No causal evidence yet that the tool improves coding-agent outcomes."
+  ],
+  "builtCliSha256": "d56bf5ce21789b267d05655c71b01624457ee3f06525b52a4dfeaf12eff1d623"
+}

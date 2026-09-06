@@ -34,7 +34,6 @@ const handleContext = budgetedDbCommand('context', ({ db, args, opts, budget }) 
   const result = queries.repositoryContext(db, stringArg(args, 0), {
     semantic: budget.semantic,
     impactDepth: definedNumberOption(opts, 'impactDepth', 3),
-    sliceDepth: definedNumberOption(opts, 'sliceDepth', 3),
     scope: stringOptionValue(opts, 'scope'),
     ...(gitHead ? { gitHead } : {}),
   });
@@ -76,13 +75,7 @@ const handleContext = budgetedDbCommand('context', ({ db, args, opts, budget }) 
 
   const sections = booleanOptionValue(opts, 'detail')
     ? detailedRepositoryContextSections(result, limit)
-    : repositoryContextDecisionSections(
-        result,
-        stringArg(args, 0),
-        limit,
-        definedNumberOption(opts, 'impactDepth', 3),
-        definedNumberOption(opts, 'sliceDepth', 3),
-      );
+    : repositoryContextDecisionSections(result, stringArg(args, 0), limit, definedNumberOption(opts, 'impactDepth', 3));
 
   render.sectionedReport(sections);
 });
@@ -94,7 +87,6 @@ export const planningQueryCommandDescriptors: CommandDescriptor[] = [
     description: 'Compiler-backed context for a symbol, file, or module',
     options: withCompactJsonOptions([
       option('--impact-depth <n>', 'Maximum affected traversal depth', parseInteger, 3),
-      option('--slice-depth <n>', 'Maximum backward slice depth', parseInteger, 3),
       option('-s, --scope <path>', 'Limit downstream impact to files matching path'),
       option('-n, --limit <n>', 'Rows per section', parseInteger, 20),
       option('--detail', 'Render every planning component instead of the compact decision packet'),
@@ -105,7 +97,6 @@ export const planningQueryCommandDescriptors: CommandDescriptor[] = [
       ['index-generation', 'live-workspace'],
       [
         fixedClaimFamily('compiler-graph', 'trace', 'compiler-graph'),
-        fixedClaimFamily('semantic-flow', 'dataflow', 'semantic-analysis'),
         fixedClaimFamily('change-history', 'history', 'change-history'),
         fixedClaimFamily('planning-notes', 'warnings[]', 'heuristic'),
       ],
@@ -120,8 +111,6 @@ export const planningQueryCommandDescriptors: CommandDescriptor[] = [
       returns: [
         'definitions and references',
         'callers and callees',
-        'dataflow producers and consumers',
-        'backward and forward slices',
         'affected symbols',
         'change-surface risk',
         'dependencies and reverse dependencies',
@@ -136,7 +125,7 @@ export const planningQueryCommandDescriptors: CommandDescriptor[] = [
       ],
       inputs: [['symbol', 'file', 'module']],
       // Every section is capped by --limit (default 20), and traversal by
-      // --impact-depth / --slice-depth (default 3). Always disclose the caps.
+      // --impact-depth / --reference-depth (default 3). Always disclose the caps.
       coverage: 'bounded',
       semantic: analysisSemanticContract(
         'Assemble bounded compiler, semantic, history, and heuristic context around one explicit target.',
@@ -149,7 +138,7 @@ export const planningQueryCommandDescriptors: CommandDescriptor[] = [
         {
           command: 'change-surface',
           distinction:
-            'change-surface is the exports/consumers/risk briefing alone; context includes flow, slices, history, and reuse signals.',
+            'change-surface is the exports/consumers/risk briefing alone; context also includes reference and call relationships, history, and reuse signals.',
         },
       ],
     },
@@ -164,11 +153,10 @@ export function repositoryContextDecisionSections(
   target: string,
   limit: number,
   impactDepth: number,
-  sliceDepth: number,
 ) {
   return [
     { title: 'TARGET', rows: targetRows(result) },
-    { title: 'CURRENT FLOW', rows: currentFlowRows(result, limit), skipIfEmpty: true },
+    { title: 'CURRENT RELATIONSHIPS', rows: currentRelationshipRows(result, limit), skipIfEmpty: true },
     { title: 'AFFECTED CONSUMERS', rows: decisionConsumerRows(result, limit), skipIfEmpty: true },
     { title: 'SIMILARITY CANDIDATES', rows: similarityCandidateRows(result, Math.min(limit, 12)), skipIfEmpty: true },
     { title: 'CHANGE CONSTRAINTS', rows: changeConstraintRows(result, limit), skipIfEmpty: true },
@@ -176,7 +164,7 @@ export function repositoryContextDecisionSections(
     { title: 'SOURCE PACKET', rows: sourcePacketRows(result), skipIfEmpty: true },
     {
       title: 'COVERAGE AND RECOVERY',
-      rows: decisionCoverageRows(result, target, impactDepth, sliceDepth),
+      rows: decisionCoverageRows(result, target, impactDepth),
     },
   ];
 }
@@ -187,7 +175,6 @@ function detailedRepositoryContextSections(result: queries.RepositoryContextResu
     { title: 'DEFINITIONS', rows: definitionRows(result, limit), skipIfEmpty: true },
     { title: 'REFERENCES', rows: referenceRows(result, limit), skipIfEmpty: true },
     { title: 'CALL GRAPH', rows: callGraphRows(result, limit), skipIfEmpty: true },
-    { title: 'DATAFLOW', rows: dataflowRows(result, limit), skipIfEmpty: true },
     { title: 'SIMILARITY CANDIDATES', rows: similarityCandidateRows(result, limit), skipIfEmpty: true },
     { title: 'SOURCE PACKET', rows: sourcePacketRows(result), skipIfEmpty: true },
     { title: 'DEPENDENCIES', rows: dependencyRows(result, limit), skipIfEmpty: true },
@@ -199,12 +186,9 @@ function detailedRepositoryContextSections(result: queries.RepositoryContextResu
   ];
 }
 
-function currentFlowRows(result: queries.RepositoryContextResult, limit: number): string[] {
+function currentRelationshipRows(result: queries.RepositoryContextResult, limit: number): string[] {
   return withOmitted(
-    cappedRows(
-      [...definitionRows(result, Math.min(limit, 12)), ...callGraphRows(result, limit), ...dataflowRows(result, limit)],
-      limit,
-    ),
+    cappedRows([...definitionRows(result, Math.min(limit, 12)), ...callGraphRows(result, limit)], limit),
   );
 }
 
@@ -251,16 +235,11 @@ function relatedSourceIdentityRows(result: queries.RepositoryContextResult, limi
   );
 }
 
-function decisionCoverageRows(
-  result: queries.RepositoryContextResult,
-  target: string,
-  impactDepth: number,
-  sliceDepth: number,
-): string[] {
+function decisionCoverageRows(result: queries.RepositoryContextResult, target: string, impactDepth: number): string[] {
   const reuse = repositoryContextConsumerReuse(result).coverage;
   const rows = [
     `  Direct compiler references observed: ${result.trace.referencedBy.length}.`,
-    `  Downstream and slice evidence is bounded at impact depth ${impactDepth} and slice depth ${sliceDepth}.`,
+    `  Downstream impact is bounded at depth ${impactDepth}.`,
     `  Affected-consumer reuse scan: ${reuse.analyzedConsumers}/${reuse.totalConsumers} analyzed; ${reuse.omittedConsumers} omitted.`,
   ];
   if (result.sourcePacket) {
@@ -304,11 +283,6 @@ function repositoryContextReturnedUnits(result: queries.RepositoryContextResult)
     result.trace.referencedBy.length +
     (result.callGraph?.callers.length ?? 0) +
     (result.callGraph?.callees.length ?? 0) +
-    (result.dataflow?.producers.length ?? 0) +
-    (result.dataflow?.consumers.length ?? 0) +
-    (result.dataflow?.usageSites.length ?? 0) +
-    (result.backwardSlice?.connectedSymbols.length ?? 0) +
-    (result.forwardSlice?.connectedSymbols.length ?? 0) +
     result.affected.length +
     result.deps.length +
     result.rdeps.length +
@@ -334,10 +308,6 @@ function repositoryContextAgentResult(result: queries.RepositoryContextResult) {
       references: result.trace.referencedBy.length,
       callers: result.callGraph?.callers.length ?? 0,
       callees: result.callGraph?.callees.length ?? 0,
-      producers: result.dataflow?.producers.length ?? 0,
-      consumers: result.dataflow?.consumers.length ?? 0,
-      backwardSlice: result.backwardSlice?.connectedSymbols.length ?? 0,
-      forwardSlice: result.forwardSlice?.connectedSymbols.length ?? 0,
       affected: result.affected.length,
       dependencies: result.deps.length,
       reverseDependencies: result.rdeps.length,
@@ -458,20 +428,6 @@ function callGraphRows(result: queries.RepositoryContextResult, limit: number): 
   return withOmitted(cappedRows([...callerRows, ...calleeRows], limit));
 }
 
-function dataflowRows(result: queries.RepositoryContextResult, limit: number): string[] {
-  if (!result.dataflow) return [];
-  const producerRows = result.dataflow.producers.map(
-    (producer) => `  producer  ${producer.file}  ${producer.shortName}`,
-  );
-  const consumerRows = result.dataflow.consumers.map(
-    (consumer) => `  consumer  ${consumer.file}  ${consumer.shortName}`,
-  );
-  const usageRows = result.dataflow.usageSites.map(
-    (usage) => `  usage     ${usage.file}:${displayLine(usage.line)}  in ${usage.enclosingShort}`,
-  );
-  return withOmitted(cappedRows([...producerRows, ...consumerRows, ...usageRows], limit));
-}
-
 function dependencyRows(result: queries.RepositoryContextResult, limit: number): string[] {
   const rows = [
     ...result.deps.map((dep) => `  file depends on      ${dep.relativePath}`),
@@ -538,7 +494,9 @@ function riskRows(result: queries.RepositoryContextResult, limit: number): strin
     rows.push(`  LOC: ${result.complexity.loc}`);
     rows.push(`  Branches: ${result.complexity.branches}`);
     rows.push(`  Cyclomatic estimate: ${result.complexity.cyclomaticEstimate}`);
+    rows.push(`  Metric rules: ${result.complexity.metricRules}`);
     rows.push(`  Callees: ${result.complexity.calleeCount}`);
+    rows.push(`  Candidate targets: ${result.complexity.candidateCalleeCount}`);
     rows.push(`  Fan-in: ${result.complexity.fanIn}`);
     rows.push(`  Fan-out: ${result.complexity.fanOut}`);
   }

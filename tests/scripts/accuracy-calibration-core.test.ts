@@ -87,7 +87,6 @@ describe('accuracy calibration core', () => {
       'recent-duplicates',
       'similar',
       'similar-files',
-      'similar-chains',
       'similar-signatures',
       'twin-drift',
     ]);
@@ -106,14 +105,7 @@ describe('accuracy calibration core', () => {
       seed: 'typescript-architecture-v1',
       roots: ['/repos/a', '/repos/b'],
     });
-    expect(all.detectors).toEqual([
-      'co-change',
-      'doc-drift',
-      'drift',
-      'wrapper-candidates',
-      'passthrough-candidates',
-      'stale-abstractions',
-    ]);
+    expect(all.detectors).toEqual(['co-change', 'doc-drift', 'drift', 'passthrough-candidates']);
     expect(
       parseArchitectureCalibrationOptions(
         ['--detector', 'drift', '--detector', 'drift', '--sample-size', '6', '/repos/custom'],
@@ -133,12 +125,10 @@ describe('accuracy calibration core', () => {
       roots: ['/repos/a', '/repos/b'],
     });
     expect(all.detectors).toEqual([
-      'extract-candidates',
       'locality-candidates',
       'coupling',
       'bottlenecks',
       'deep-chains',
-      'complexity-hotspots',
       'hotspots',
       'fan-in',
       'fan-out',

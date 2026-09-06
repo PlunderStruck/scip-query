@@ -1,0 +1,5 @@
+  ok:   AGENTS.md (already wired)
+  ok:   CLAUDE.md (already wired)
+
+Project agent guidance is configured for every selected target.
+Configured agents can use compiler-backed exploration, impact, architecture, and health evidence. When declared architecture rules are ready, setup also installs the local architecture-only Stop hook.

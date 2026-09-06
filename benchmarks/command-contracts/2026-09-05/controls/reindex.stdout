@@ -1,0 +1,71 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "reindex",
+  "operationRole": "composite",
+  "evidence": "graph-fact",
+  "args": [],
+  "options": {
+    "language": [
+      "typescript"
+    ],
+    "force": true,
+    "trustProjectTools": true,
+    "json": true
+  },
+  "result": {
+    "languages": [
+      "typescript"
+    ],
+    "indexPath": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/.cache/index.scip",
+    "dbPath": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/.cache/index.db",
+    "durationMs": 511.554709,
+    "reused": false,
+    "skipped": [],
+    "lastRefresh": {
+      "trigger": {
+        "kind": "manual-cli",
+        "detail": "scip-query reindex"
+      },
+      "result": "rebuilt",
+      "startedAt": "2026-09-06T07:14:15.149Z",
+      "completedAt": "2026-09-06T07:14:15.660Z",
+      "durationMs": 511.554709,
+      "indexedLanguages": [
+        "typescript"
+      ],
+      "skipped": []
+    },
+    "shards": [
+      {
+        "id": "typescript",
+        "language": "typescript",
+        "reused": false,
+        "strategy": "full",
+        "missReason": "no reindex metadata found",
+        "fallbackReason": "forced reindex rebuilds from the compilers",
+        "fingerprint": "7c6796231f03296e",
+        "outputBytes": 1587,
+        "durationMs": 396.292833,
+        "command": "/opt/homebrew/bin/scip-typescript index --output /private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-control-contract-1qiflik9/.cache/reindex-yAM8Cf/index.scip --no-progress-bar --no-global-caches"
+      }
+    ],
+    "writeTelemetry": {
+      "reflinkedBytes": 1587,
+      "fallbackCopiedBytes": 0,
+      "incrementalWrittenBytes": 0
+    }
+  },
+  "coverage": {
+    "complete": true,
+    "totalKnown": true,
+    "returned": 1,
+    "total": 1,
+    "omitted": 0
+  }
+}

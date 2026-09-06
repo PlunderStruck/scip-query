@@ -10,7 +10,7 @@ import { UnsafeProjectPathError } from '../../source/primitives/project-file-bou
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { buildCalleeMap } from '../../symbols/graph/call-graph-evidence.js';
-import { findFirstSymbolMatch, nearestSymbolNames, resolveSymbol } from '../../symbols/symbol-lookup.js';
+import { nearestSymbolNames, resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../../domain/source-inspection-limits.js';
 import {
@@ -93,7 +93,7 @@ export interface CodeBatchEntry {
   suggestions: string[];
   fileCoverage?: CodeFileCoverage;
   rangeCoverage?: CodeRangeCoverage;
-  reason?: 'definition-source-unreadable' | 'definition-not-found';
+  reason?: 'definition-source-unreadable' | 'definition-not-found' | 'definition-index-stale';
 }
 
 /**
@@ -129,17 +129,20 @@ export function code(db: ScipDatabase, symbolPattern: string, opts: { context?: 
 
   const exactFile = exactRepositoryTextFile(db, symbolPattern);
   if (exactFile) return readWholeFile(db, exactFile);
+  if (explicitFileSelector(symbolPattern)) return null;
 
-  const match = findFirstSymbolMatch(db, symbolPattern);
-  if (!match) return null;
-  return readSymbolRange(db, match, context);
+  const resolution = resolveSymbol(db, symbolPattern);
+  if (resolution.candidates.length > 0)
+    throw new Error(`Ambiguous symbol: ${symbolPattern}. Use an exact selector or codeBatch.`);
+  if (!resolution.match) return null;
+  return readSymbolRange(db, resolution.match, context);
 }
 
 /** Read up to 24 selectors with complete, per-selector resolution accounting. */
 export function codeBatch(
   db: ScipDatabase,
   selectors: readonly string[],
-  opts: { context?: number; members?: CodeFileMemberMode } = {},
+  opts: { context?: number; members?: CodeFileMemberMode; localCalls?: boolean } = {},
 ): CodeBatchResult {
   if (selectors.length === 0) throw new RangeError('code requires at least one selector.');
   if (selectors.length > SOURCE_INSPECTION_MAX_SELECTORS) {
@@ -149,7 +152,7 @@ export function codeBatch(
   }
   const context = opts.context ?? 0;
   const members = opts.members ?? 'exported';
-  const entries = selectors.map((selector) => codeBatchEntry(db, selector, context, members));
+  const entries = selectors.map((selector) => codeBatchEntry(db, selector, context, members, opts.localCalls ?? false));
   const results = entries.flatMap((entry) => entry.results);
   const coveredRanges: CoveredSourceRange[] = results.map((result) => ({
     relativePath: result.relativePath,
@@ -174,46 +177,60 @@ function codeBatchEntry(
   selector: string,
   context: number,
   members: CodeFileMemberMode,
+  localCalls: boolean,
 ): CodeBatchEntry {
   const directRange = parseFileLineRange(selector);
   if (directRange) {
     const result = readFileRange(db, directRange.filePath, directRange.startLine, directRange.endLine, context);
-    return result
-      ? rangeSourceEntry(db, selector, result, context)
-      : missingSourceEntry(db, selector, 'definition-source-unreadable');
+    if (!result) return missingSourceEntry(db, selector, 'definition-source-unreadable');
+    return localCalls ? rangeSourceEntry(db, selector, result, context) : matchedSourceEntry(selector, result);
   }
 
   const exactFile = exactRepositoryTextFile(db, selector);
   if (exactFile) return fileSourceEntry(db, selector, exactFile, context, members);
+  if (explicitFileSelector(selector)) return missingSourceEntry(db, selector, 'definition-not-found');
 
   const resolution = resolveSymbol(db, selector);
   if (!resolution.match) return missingSourceEntry(db, selector, 'definition-not-found');
-  const candidates = resolvedCandidateMatches(db, resolution);
-  const candidateEvidence = candidates.map(codeResolutionCandidate);
-  if (resolution.total > 1) {
-    const returnAllSources = resolution.total <= 4 && candidates.length === resolution.total;
-    return {
-      selector,
-      status: 'ambiguous',
-      kind: 'source',
-      totalCandidates: resolution.total,
-      results: returnAllSources
-        ? candidates.flatMap((candidate) => {
-            const result = readSymbolRange(db, candidate, context);
-            return result ? [result] : [];
-          })
-        : [],
-      definitions: [],
-      candidates: candidateEvidence,
-      omittedCandidates: Math.max(0, resolution.total - candidateEvidence.length),
-      suggestions: [],
-    };
-  }
+  if (resolution.total > 1) return ambiguousSourceEntry(db, selector, resolution, context);
 
   const result = readSymbolRange(db, resolution.match, context);
   return result
     ? matchedSourceEntry(selector, result)
-    : missingSourceEntry(db, selector, 'definition-source-unreadable');
+    : missingSourceEntry(
+        db,
+        selector,
+        readRepositoryTextFile(db, resolution.match.relativePath)?.freshness.semantic.state === 'stale'
+          ? 'definition-index-stale'
+          : 'definition-source-unreadable',
+      );
+}
+
+function ambiguousSourceEntry(
+  db: ScipDatabase,
+  selector: string,
+  resolution: ReturnType<typeof resolveSymbol>,
+  context: number,
+): CodeBatchEntry {
+  const candidates = resolvedCandidateMatches(db, resolution);
+  const candidateEvidence = candidates.map(codeResolutionCandidate);
+  const returnAllSources = resolution.total <= 4 && candidates.length === resolution.total;
+  return {
+    selector,
+    status: 'ambiguous',
+    kind: 'source',
+    totalCandidates: resolution.total,
+    results: returnAllSources
+      ? candidates.flatMap((candidate) => {
+          const result = readSymbolRange(db, candidate, context);
+          return result ? [result] : [];
+        })
+      : [],
+    definitions: [],
+    candidates: candidateEvidence,
+    omittedCandidates: Math.max(0, resolution.total - candidateEvidence.length),
+    suggestions: [],
+  };
 }
 
 function rangeSourceEntry(
@@ -302,7 +319,7 @@ function fileSourceEntry(
   members: CodeFileMemberMode,
 ): CodeBatchEntry {
   const relativePath = file.relativePath;
-  const definitionTree = fileDefinitionTree(db, relativePath);
+  const definitionTree = semanticFactsUsable(file.freshness) ? fileDefinitionTree(db, relativePath) : [];
   const allDefinitions = semanticFactsUsable(file.freshness)
     ? getDefinitionsForFile(db, relativePath).filter((definition) => !isFileModuleDefinition(definition, relativePath))
     : [];
@@ -537,6 +554,18 @@ function missingSourceEntry(
   };
 }
 
+function explicitFileSelector(selector: string): boolean {
+  // Full SCIP identities have scheme, manager, package, version and descriptor fields.
+  if (/^\S+ \S+ \S+ \S+ /.test(selector)) return false;
+  if (/^(?:\.{1,2}[/\\]|[/\\]|[A-Za-z]:[/\\])/.test(selector)) return true;
+  // Preserve path-qualified symbol selectors such as src/file.ts:method.
+  if (selector.includes(':')) return false;
+  if (/[/\\]/.test(selector)) return true;
+  return /\.(?:[cm]?[jt]sx?|jsonc?|mdx?|ya?ml|toml|xml|html|css|scss|sql|py|rs|go|java|kt|clj[cs]?|txt|sh)$/i.test(
+    selector,
+  );
+}
+
 function exactRepositoryTextFile(db: ScipDatabase, selector: string): RepositoryTextFile | null {
   try {
     return readRepositoryTextFile(db, selector);
@@ -598,11 +627,7 @@ function parseFileLineRange(symbolPattern: string): {
   };
 }
 
-function readSymbolRange(
-  db: ScipDatabase,
-  match: NonNullable<ReturnType<typeof findFirstSymbolMatch>>,
-  context: number,
-): CodeResult | null {
+function readSymbolRange(db: ScipDatabase, match: SymbolMatch, context: number): CodeResult | null {
   // Get the language from the documents table
   const doc = db.get<{ language: string | null }>(
     `SELECT language FROM documents WHERE relative_path = ?`,
@@ -611,7 +636,7 @@ function readSymbolRange(
 
   // Read the file
   const file = readRepositoryTextFile(db, match.relativePath);
-  if (!file) return null;
+  if (!file || file.freshness.semantic.state === 'stale') return null;
   const fileContent = file.text;
 
   const lines = fileContent.split('\n');
@@ -619,8 +644,10 @@ function readSymbolRange(
     match.endLine <= match.startLine
       ? enclosingSourceUnitSnippet(db, match.relativePath, match.startLine, Number.MAX_SAFE_INTEGER)
       : null;
-  const definitionStart = recoveredUnit?.unitType ? recoveredUnit.unitStartLine : match.startLine;
-  const definitionEnd = recoveredUnit?.unitType ? recoveredUnit.unitEndLine : match.endLine;
+  const [definitionStart, definitionEnd] = recoveredUnit?.unitType
+    ? ([recoveredUnit.unitStartLine, recoveredUnit.unitEndLine] as const)
+    : ([match.startLine, match.endLine] as const);
+  if (definitionStart < 0 || definitionStart >= lines.length || definitionEnd < definitionStart) return null;
   const startLine = Math.max(0, definitionStart - context);
   const endLine = Math.min(lines.length - 1, definitionEnd + context);
   const source = lines.slice(startLine, endLine + 1).join('\n');

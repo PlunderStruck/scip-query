@@ -193,8 +193,10 @@ function classifyNames(
       genericNames.push(name);
     }
   }
-  if (domainNames.length) domainReasons.push(`${label} has domain term(s): ${domainNames.slice(0, 6).join(', ')}`);
-  if (genericNames.length) fallbackReasons.push(`${label} is generic workflow: ${genericNames.slice(0, 6).join(', ')}`);
+  if (domainNames.length)
+    domainReasons.push(`${label} has name(s) outside the generic vocabulary: ${domainNames.slice(0, 6).join(', ')}`);
+  if (genericNames.length)
+    fallbackReasons.push(`${label} matches the generic-name vocabulary: ${genericNames.slice(0, 6).join(', ')}`);
 }
 
 function behaviorWords(name: string, stripPrefixes: readonly RegExp[]): string[] {

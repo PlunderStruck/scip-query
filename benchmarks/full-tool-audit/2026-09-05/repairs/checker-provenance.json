@@ -1,0 +1,14 @@
+{
+  "release": "https://github.com/tlaplus/tlaplus/releases/tag/v1.7.4",
+  "releaseId": 168523867,
+  "tag": "v1.7.4",
+  "target": "v1.7.4",
+  "prerelease": false,
+  "publishedAt": "2024-08-05T20:16:41Z",
+  "assetId": 184694200,
+  "assetUrl": "https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar",
+  "assetUpdatedAt": "2024-08-08T13:30:40Z",
+  "releaseNotesSha1": "bee4a54f3ee3d4afc347c3240ec2d9e93b075104",
+  "sha256": "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88",
+  "manifest": "Manifest-Version: 1.0\r\nAnt-Version: Apache Ant 1.9.4\r\nCreated-By: 11.0.3+7-LTS (Azul Systems, Inc.)\r\nBuilt-By: runner\r\nBuild-Tag: ${env.BUILD_TAG}\r\nBuild-Rev: ${Build-Rev}\r\nImplementation-Title: TLA+ Tools\r\nImplementation-Version: 2.0 2024-08-08\r\nImplementation-Vendor: Microsoft Corp.\r\nMain-class: tlc2.TLC\r\nX-Git-Branch: v1.7.4\r\nX-Git-Tag: v1.7.4\r\nX-Git-Revision: 5a47802b5c391f59ecdd44117981f4ff8c0656ba\r\nX-Git-ShortRevision: 5a47802\r\nX-Git-BuildNumber: v1.7.4_v1.7.4_5a47802\r\nX-Git-Commits-Count: 7425\r\nApplication-Name: TLC\r\npermissions: all-permissions\r\nClass-Path: CommunityModules.jar\r\n\r\n"
+}

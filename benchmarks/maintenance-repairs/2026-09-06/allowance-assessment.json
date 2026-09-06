@@ -1,0 +1,412 @@
+{
+  "problems": [],
+  "sourceStaleAllowances": [],
+  "sourceCoarseBoundaries": [],
+  "sourcePolicyCoverage": {
+    "declaredRows": 47,
+    "totalBoundaries": 47,
+    "missingRows": [],
+    "requiresCompletePolicy": true,
+    "requiresCompleteCoverage": true,
+    "requiresMinimalPolicy": true
+  },
+  "allowanceAssessment": [
+    {
+      "from": "agent-exploration-evaluation",
+      "to": "agent-evaluation-tools",
+      "sourceEdges": [
+        {
+          "from": "agent-exploration-evaluation",
+          "to": "agent-evaluation-tools",
+          "policyStatus": "allowed",
+          "fileEdgeCount": 3,
+          "importerCount": 2,
+          "importedFileCount": 2,
+          "examples": [
+            {
+              "fromFile": "scripts/codex-exploration-trial.mjs",
+              "toFile": "scripts/codex-exploration-sandbox.mjs"
+            },
+            {
+              "fromFile": "scripts/codex-exploration-trial.mjs",
+              "toFile": "scripts/codex-exploration-trial-core.mjs"
+            },
+            {
+              "fromFile": "scripts/compare-exploration-trials.mjs",
+              "toFile": "scripts/codex-exploration-trial-core.mjs"
+            }
+          ],
+          "fragile": false
+        }
+      ]
+    },
+    {
+      "from": "build-configuration",
+      "to": "queries-facade",
+      "sourceEdges": [
+        {
+          "from": "build-configuration",
+          "to": "queries-facade",
+          "policyStatus": "allowed",
+          "fileEdgeCount": 1,
+          "importerCount": 1,
+          "importedFileCount": 1,
+          "examples": [
+            {
+              "fromFile": "tsup.config.ts",
+              "toFile": "src/queries/public-query-entries.ts"
+            }
+          ],
+          "fragile": true
+        }
+      ]
+    },
+    {
+      "from": "documentation-tooling",
+      "to": "queries-health",
+      "sourceEdges": [
+        {
+          "from": "documentation-tooling",
+          "to": "queries-health",
+          "policyStatus": "allowed",
+          "fileEdgeCount": 1,
+          "importerCount": 1,
+          "importedFileCount": 1,
+          "examples": [
+            {
+              "fromFile": "scripts/render-command-reference.ts",
+              "toFile": "src/queries/health/detector-evidence-contracts.ts"
+            }
+          ],
+          "fragile": true
+        }
+      ]
+    },
+    {
+      "from": "documentation-tooling",
+      "to": "runtime-command-kit",
+      "sourceEdges": [
+        {
+          "from": "documentation-tooling",
+          "to": "runtime-command-kit",
+          "policyStatus": "allowed",
+          "fileEdgeCount": 3,
+          "importerCount": 1,
+          "importedFileCount": 3,
+          "examples": [
+            {
+              "fromFile": "scripts/render-command-reference.ts",
+              "toFile": "src/runtime/command-kit/command-descriptor-types.ts"
+            },
+            {
+              "fromFile": "scripts/render-command-reference.ts",
+              "toFile": "src/runtime/command-kit/command-docs.ts"
+            },
+            {
+              "fromFile": "scripts/render-command-reference.ts",
+              "toFile": "src/runtime/command-kit/exploration-manual.ts"
+            }
+          ],
+          "fragile": false
+        }
+      ]
+    },
+    {
+      "from": "documentation-tooling",
+      "to": "runtime-commands",
+      "sourceEdges": [
+        {
+          "from": "documentation-tooling",
+          "to": "runtime-commands",
+          "policyStatus": "allowed",
+          "fileEdgeCount": 1,
+          "importerCount": 1,
+          "importedFileCount": 1,
+          "examples": [
+            {
+              "fromFile": "scripts/render-command-reference.ts",
+              "toFile": "src/runtime/commands/command-descriptors.ts"
+            }
+          ],
+          "fragile": true
+        }
+      ]
+    },
+    {
+      "from": "documentation-tooling",
+      "to": "runtime-services",
+      "sourceEdges": [
+        {
+          "from": "documentation-tooling",
+          "to": "runtime-services",
+          "policyStatus": "allowed",
+          "fileEdgeCount": 1,
+          "importerCount": 1,
+          "importedFileCount": 1,
+          "examples": [
+            {
+              "fromFile": "scripts/render-command-reference.ts",
+              "toFile": "src/runtime/command-operation.ts"
+            }
+          ],
+          "fragile": true
+        }
+      ]
+    },
+    {
+      "from": "performance-tooling",
+      "to": "domain",
+      "sourceEdges": [
+        {
+          "from": "performance-tooling",
+          "to": "domain",
+          "policyStatus": "allowed",
+          "fileEdgeCount": 2,
+          "importerCount": 2,
+          "importedFileCount": 2,
+          "examples": [
+            {
+              "fromFile": "scripts/benchmark-cold-reindex.ts",
+              "toFile": "src/domain/config-types.ts"
+            },
+            {
+              "fromFile": "scripts/benchmark-edit-latency.ts",
+              "toFile": "src/domain/project-input.ts"
+            }
+          ],
+          "fragile": false
+        }
+      ]
+    },
+    {
+      "from": "performance-tooling",
+      "to": "platform",
+      "sourceEdges": [
+        {
+          "from": "performance-tooling",
+          "to": "platform",
+          "policyStatus": "allowed",
+          "fileEdgeCount": 9,
+          "importerCount": 6,
+          "importedFileCount": 6,
+          "examples": [
+            {
+              "fromFile": "scripts/benchmark-agent-output.ts",
+              "toFile": "src/platform/terminal-output.ts"
+            },
+            {
+              "fromFile": "scripts/benchmark-cold-reindex.ts",
+              "toFile": "src/platform/process-tree.ts"
+            },
+            {
+              "fromFile": "scripts/benchmark-edit-latency.ts",
+              "toFile": "src/platform/project-files.ts"
+            },
+            {
+              "fromFile": "scripts/benchmark-graph-literal.ts",
+              "toFile": "src/platform/cache-layout.ts"
+            },
+            {
+              "fromFile": "scripts/benchmark-source-search.ts",
+              "toFile": "src/platform/cache-layout.ts"
+            }
+          ],
+          "fragile": false
+        }
+      ]
+    },
+    {
+      "from": "performance-tooling",
+      "to": "queries-graph",
+      "sourceEdges": [
+        {
+          "from": "performance-tooling",
+          "to": "queries-graph",
+          "policyStatus": "allowed",
+          "fileEdgeCount": 1,
+          "importerCount": 1,
+          "importedFileCount": 1,
+          "examples": [
+            {
+              "fromFile": "scripts/benchmark-graph-literal.ts",
+              "toFile": "src/queries/graph/graph-evidence.ts"
+            }
+          ],
+          "fragile": true
+        }
+      ]
+    },
+    {
+      "from": "performance-tooling",
+      "to": "queries-navigation",
+      "sourceEdges": [
+        {
+          "from": "performance-tooling",
+          "to": "queries-navigation",
+          "policyStatus": "allowed",
+          "fileEdgeCount": 1,
+          "importerCount": 1,
+          "importedFileCount": 1,
+          "examples": [
+            {
+              "fromFile": "scripts/benchmark-source-search.ts",
+              "toFile": "src/queries/navigation/source-search.ts"
+            }
+          ],
+          "fragile": true
+        }
+      ]
+    },
+    {
+      "from": "performance-tooling",
+      "to": "reindex",
+      "sourceEdges": [
+        {
+          "from": "performance-tooling",
+          "to": "reindex",
+          "policyStatus": "allowed",
+          "fileEdgeCount": 9,
+          "importerCount": 4,
+          "importedFileCount": 6,
+          "examples": [
+            {
+              "fromFile": "scripts/benchmark-cold-reindex.ts",
+              "toFile": "src/reindex/detect.ts"
+            },
+            {
+              "fromFile": "scripts/benchmark-cold-reindex.ts",
+              "toFile": "src/reindex/index.ts"
+            },
+            {
+              "fromFile": "scripts/benchmark-edit-latency.ts",
+              "toFile": "src/reindex/detect.ts"
+            },
+            {
+              "fromFile": "scripts/benchmark-reindex-accounting.ts",
+              "toFile": "src/reindex/index.ts"
+            },
+            {
+              "fromFile": "scripts/benchmark-reindex-accounting.ts",
+              "toFile": "src/reindex/reindex-activity.ts"
+            }
+          ],
+          "fragile": false
+        }
+      ]
+    },
+    {
+      "from": "performance-tooling",
+      "to": "runtime-services",
+      "sourceEdges": [
+        {
+          "from": "performance-tooling",
+          "to": "runtime-services",
+          "policyStatus": "allowed",
+          "fileEdgeCount": 5,
+          "importerCount": 5,
+          "importedFileCount": 2,
+          "examples": [
+            {
+              "fromFile": "scripts/benchmark-cold-reindex.ts",
+              "toFile": "src/runtime/config.ts"
+            },
+            {
+              "fromFile": "scripts/benchmark-edit-latency.ts",
+              "toFile": "src/runtime/config.ts"
+            },
+            {
+              "fromFile": "scripts/benchmark-graph-literal.ts",
+              "toFile": "src/runtime/config.ts"
+            },
+            {
+              "fromFile": "scripts/benchmark-source-search.ts",
+              "toFile": "src/runtime/config.ts"
+            },
+            {
+              "fromFile": "scripts/cache-lifecycle-soak.ts",
+              "toFile": "src/runtime/repository-cache-lifecycle.ts"
+            }
+          ],
+          "fragile": false
+        }
+      ]
+    },
+    {
+      "from": "performance-tooling",
+      "to": "storage",
+      "sourceEdges": [
+        {
+          "from": "performance-tooling",
+          "to": "storage",
+          "policyStatus": "allowed",
+          "fileEdgeCount": 2,
+          "importerCount": 2,
+          "importedFileCount": 1,
+          "examples": [
+            {
+              "fromFile": "scripts/benchmark-graph-literal.ts",
+              "toFile": "src/storage/db.ts"
+            },
+            {
+              "fromFile": "scripts/benchmark-source-search.ts",
+              "toFile": "src/storage/db.ts"
+            }
+          ],
+          "fragile": false
+        }
+      ]
+    },
+    {
+      "from": "queries-health",
+      "to": "queries-quality",
+      "sourceEdges": []
+    },
+    {
+      "from": "queries-quality",
+      "to": "symbols-references",
+      "sourceEdges": []
+    },
+    {
+      "from": "release-tooling",
+      "to": "platform",
+      "sourceEdges": [
+        {
+          "from": "release-tooling",
+          "to": "platform",
+          "policyStatus": "allowed",
+          "fileEdgeCount": 1,
+          "importerCount": 1,
+          "importedFileCount": 1,
+          "examples": [
+            {
+              "fromFile": "scripts/npm-release.ts",
+              "toFile": "src/platform/process-file-lock.ts"
+            }
+          ],
+          "fragile": true
+        }
+      ]
+    },
+    {
+      "from": "release-tooling",
+      "to": "storage",
+      "sourceEdges": [
+        {
+          "from": "release-tooling",
+          "to": "storage",
+          "policyStatus": "allowed",
+          "fileEdgeCount": 1,
+          "importerCount": 1,
+          "importedFileCount": 1,
+          "examples": [
+            {
+              "fromFile": "scripts/npm-release.ts",
+              "toFile": "src/storage/atomic-file.ts"
+            }
+          ],
+          "fragile": true
+        }
+      ]
+    }
+  ]
+}

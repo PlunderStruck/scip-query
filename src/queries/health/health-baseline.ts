@@ -23,36 +23,20 @@ import {
   type HealthBaselineFile,
 } from '../internal/baseline-file.js';
 import { architecture, architectureFindingIdentities } from '../graph/architecture.js';
-import { cycles } from '../graph/cycles.js';
+import { dependencyCycles } from '../graph/cycles.js';
 import { dead } from '../cleanup/dead.js';
 import { drift } from '../cleanup/drift.js';
 import { duplicateBodies } from '../cleanup/duplicate-bodies.js';
-import { extractCandidates } from '../cleanup/extract-candidates.js';
-import { isolated } from '../cleanup/isolated.js';
 import { passthroughCandidates } from '../cleanup/passthrough-candidates.js';
 import { similarAll } from '../cleanup/similar.js';
-import { staleAbstractions } from '../cleanup/stale-abstractions.js';
-import { stats } from '../navigation/stats.js';
-import { wrapperCandidates } from '../cleanup/wrapper-candidates.js';
 
-// Mirror health's large-index budget so baseline runs stay bounded.
-const LARGE_BASELINE_SYMBOL_THRESHOLD = 25_000;
-const LARGE_BASELINE_DOCUMENT_THRESHOLD = 2_500;
-const LARGE_BASELINE_SCAN_LIMIT = 2_500;
-
-function baselineScanLimit(db: ScipDatabase): number | undefined {
-  const overview = stats(db);
-  const isLarge =
-    overview.symbols >= LARGE_BASELINE_SYMBOL_THRESHOLD || overview.documents >= LARGE_BASELINE_DOCUMENT_THRESHOLD;
-  return isLarge ? LARGE_BASELINE_SCAN_LIMIT : undefined;
-}
-
+// Baseline identities are exhaustive within the detector policies; display and scan
+// budgets must not silently change the population compared on the next run.
 export function collectBaselineFindings(db: ScipDatabase, opts: { scope?: string } = {}): string[] {
   const { scope } = opts;
-  const scanLimit = baselineScanLimit(db);
   const findings: string[] = [];
 
-  const deadResult = dead(db, { scope, ...HEALTH_DETECTOR_PROFILES.dead, scanLimit });
+  const deadResult = dead(db, { scope, ...HEALTH_DETECTOR_PROFILES.dead });
   for (const symbol of deadResult.symbols) {
     if (isEntrySurface(db, symbol.relativePath)) continue;
     if (isRootedSymbol(db, symbol.symbol, symbol.relativePath)) continue;
@@ -60,25 +44,18 @@ export function collectBaselineFindings(db: ScipDatabase, opts: { scope?: string
     findings.push(`dead:${symbol.relativePath}:${symbol.shortName}`);
   }
 
-  for (const symbol of isolated(db, { scope, ...HEALTH_DETECTOR_PROFILES.isolated, scanLimit })) {
-    if (isEntrySurface(db, symbol.relativePath)) continue;
-    if (isRootedSymbol(db, symbol.symbol, symbol.relativePath)) continue;
-    findings.push(`isolated:${symbol.relativePath}:${symbol.shortName}`);
-  }
-
-  for (const cycle of cycles(db, { scope })) {
-    if (cycle.kind !== 'real') continue;
+  for (const cycle of dependencyCycles(db, { scope, edgeBasis: 'imports' })) {
     findings.push(`cycle:${canonicalCycleKey(cycle.path)}`);
   }
 
-  for (const pair of similarAll(db, { scope, ...HEALTH_DETECTOR_PROFILES.similar, scanLimit })) {
+  for (const pair of similarAll(db, { scope, ...HEALTH_DETECTOR_PROFILES.similar, limit: Number.POSITIVE_INFINITY })) {
     findings.push(`similar:${[pair.symbolA, pair.symbolB].sort().join('|')}`);
   }
 
   for (const group of duplicateBodies(db, {
     scope,
     ...HEALTH_DETECTOR_PROFILES.duplicateBodies,
-    scanLimit,
+    limit: Number.POSITIVE_INFINITY,
   })) {
     findings.push(
       `duplicate-bodies:${group.hash}:${group.functions
@@ -88,20 +65,12 @@ export function collectBaselineFindings(db: ScipDatabase, opts: { scope?: string
     );
   }
 
-  for (const candidate of extractCandidates(db, { scope, ...HEALTH_DETECTOR_PROFILES.extract, scanLimit })) {
-    findings.push(`extract:${candidate.relativePath}:${candidate.shortName}`);
-  }
-
-  for (const candidate of wrapperCandidates(db, { scope, ...HEALTH_DETECTOR_PROFILES.wrappers, scanLimit })) {
-    findings.push(`wrapper:${candidate.file}:${candidate.shortName}`);
-  }
-
-  for (const candidate of passthroughCandidates(db, { scope, ...HEALTH_DETECTOR_PROFILES.passthroughs, scanLimit })) {
+  for (const candidate of passthroughCandidates(db, {
+    scope,
+    ...HEALTH_DETECTOR_PROFILES.passthroughs,
+    limit: Number.POSITIVE_INFINITY,
+  })) {
     findings.push(`passthrough:${candidate.file}:${candidate.shortName}`);
-  }
-
-  for (const candidate of staleAbstractions(db, { scope, ...HEALTH_DETECTOR_PROFILES.stale, scanLimit })) {
-    findings.push(`stale:${candidate.file}:${candidate.shortName}`);
   }
 
   // Baseline finding identities must cover every result, not just the CLI's

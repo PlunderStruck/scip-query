@@ -34,6 +34,33 @@ function expectEdge(
 }
 
 describe('TypeScript local definition-use and control dependence', () => {
+  it.each([
+    { loop: 'while (flag) { value = input; break; }', retainsInitial: true },
+    { loop: 'do { value = input; } while (flag);', retainsInitial: false },
+    { loop: 'for (; flag;) { value = input; continue; }', retainsInitial: true },
+    { loop: 'for (;;) { value = input; break; }', retainsInitial: false },
+  ])('preserves entry and exit paths through $loop', ({ loop, retainsInitial }) => {
+    const source = [
+      'function select(input: number, fallback: number, flag: boolean) {',
+      '  let value = fallback;',
+      `  ${loop}`,
+      '  return value;',
+      '}',
+    ].join('\n');
+    const result = analyzeTypeScriptLocalFlow(source, 'loop.ts');
+    const initial = pointAt(result.points, 'value', 'definition', 1);
+    const assigned = pointAt(result.points, 'value', 'definition', 2);
+    const returned = pointAt(result.points, 'value', 'use', 3);
+    expect(result.coverage.status).toBe('complete');
+    expectEdge(result.edges, 'reaching-definition', assigned, returned);
+    expect(
+      result.edges.some(
+        (edge) =>
+          edge.kind === 'reaching-definition' && edge.fromPointId === initial.id && edge.toPointId === returned.id,
+      ),
+    ).toBe(retainsInitial);
+  });
+
   it('meets the preregistered assignment, alias, argument, and return obligations', () => {
     const result = analyzeTypeScriptLocalFlow(source, fixturePath);
 

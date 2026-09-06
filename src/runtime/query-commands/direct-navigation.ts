@@ -43,7 +43,6 @@ import {
   symbolResolutionEmptyMessage,
   withSymbolResolutionJson,
 } from './symbol-resolution.js';
-import { assertNavigationDetailAllowed } from '../navigation-session.js';
 import {
   codeBatchResultOnlyJson,
   codeResultOnlyJson,
@@ -143,7 +142,10 @@ const handleRefs = budgetedDbCommand('refs', ({ db, args, opts, budget }) => {
   }
   if (rows.length === 0) return render.empty(symbolResolutionEmptyMessage(db, target, 'No references found.'));
   symbolResolutionBefore(db, target);
-  render.groupedByFile(rows, (reference) => `  line ${displayLine(reference.line)}`);
+  render.groupedByFile(
+    rows,
+    (reference) => `  line ${displayLine(reference.line)} [${reference.evidence ?? 'source-or-chunk-candidate'}]`,
+  );
   if (page.pagination.producer === 'complete-only' && !unpaginated) {
     console.error(
       '\nThis evidence provider required complete analysis; --limit bounded the returned rows, not analysis work.',
@@ -285,11 +287,10 @@ function keysetReferencePage(
 }
 
 const handleCode = dbCommand(({ db, args, opts }) => {
-  assertNavigationDetailAllowed(db.config.projectRoot, 'code', opts['session'] !== false);
   const selectors = stringArrayArg(args, 0);
   const context = definedNumberOption(opts, 'context', 0);
   const members = codeFileMemberMode(opts);
-  const result = codeBatch(db, selectors, { context, members });
+  const result = codeBatch(db, selectors, { context, members, localCalls: booleanOptionValue(opts, 'localCalls') });
   const single = singleExactCodeResult(result);
   if (booleanOptionValue(opts, 'json')) {
     if (single) {
@@ -551,13 +552,14 @@ function appendCodeBindingClosure(lines: string[], closure: CodeResult['bindingC
 }
 
 function appendCodeCoverage(lines: string[], result: CodeBatchResult): void {
+  const resolved = result.entries.filter((entry) => entry.status === 'matched').length;
   const fileCoverage = result.entries.flatMap((entry) => (entry.fileCoverage ? [entry.fileCoverage] : []));
   const rangeCoverage = result.entries.flatMap((entry) => (entry.rangeCoverage ? [entry.rangeCoverage] : []));
   if (fileCoverage.length === 0 && rangeCoverage.length === 0) {
     lines.push(
       '',
       '═══ COVERAGE ═══',
-      `  ${result.requested}/${result.requested} selector(s) resolved to shown source bodies; referenced definitions and runtime relationships are not claimed. Source lines use absolute file line numbers and are citation-ready.`,
+      `  ${resolved}/${result.requested} selector(s) resolved to shown source bodies; referenced definitions and runtime relationships are not claimed. Source lines use absolute file line numbers and are citation-ready.`,
     );
     return;
   }
@@ -586,7 +588,7 @@ function appendCodeCoverage(lines: string[], result: CodeBatchResult): void {
   lines.push(
     '',
     '═══ COVERAGE ═══',
-    `  ${result.requested}/${result.requested} selectors resolved; ${details.join('; ')}. Source lines use absolute file line numbers and are citation-ready.`,
+    `  ${resolved}/${result.requested} selectors resolved; ${details.join('; ')}. Source lines use absolute file line numbers and are citation-ready.`,
   );
 }
 
@@ -637,9 +639,11 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
       // Semantic analysis is budgeted on large indexes; --full lifts the cap.
       coverage: 'bounded',
       semantic: analysisSemanticContract(
-        'Resolve the exact reference sites attributed to one compiler symbol identity.',
+        'Locate compiler-bound references and explicitly marked source/chunk candidates for one symbol identity.',
         'Referencing file paths and reference line numbers grouped by file.',
-        ['Reference sites do not establish runtime execution, data flow, or task relevance.'],
+        [
+          'Source/chunk candidates require confirmation; non-callable symbols include their definition site. Reference sites do not establish runtime execution or complete absence of uses.',
+        ],
       ),
       contrasts: [
         {
@@ -649,7 +653,8 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
         },
         {
           command: 'affected',
-          distinction: 'refs is one hop out; affected is the transitive closure of what could break.',
+          distinction:
+            'refs lists observed locations; affected follows indexed dependency paths and does not prove that a consumer will break.',
         },
       ],
     },
@@ -700,11 +705,11 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
   {
     id: 'code',
     command: 'code <selectors...>',
-    description: 'Read exact definitions, ranges with local call closure, or file export surfaces',
+    description: 'Read exact definitions, line ranges, or file export surfaces',
     agent: {
       ...agentContract(
         'What exact source defines these symbols, ranges, or file surfaces?',
-        'per-selector resolution, complete definition source, exact ranges with statically attributed same-file call closure, file export surfaces, omitted-local ledgers, and line ranges',
+        'per-selector resolution, complete definition source, exact ranges, optional same-file call closure, file export surfaces, and omitted-local ledgers',
         [['symbol', 'file']],
         'complete',
         undefined,
@@ -735,6 +740,7 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
     },
     options: withJsonOption([
       option('-C, --context <n>', 'Extra lines of context above/below', parseNonNegativeInteger, 0),
+      option('--local-calls', 'Also read statically attributed same-file callees of a selected line range'),
       option(
         '--members <exported|all>',
         'For file selectors, return the exported surface or the complete file',

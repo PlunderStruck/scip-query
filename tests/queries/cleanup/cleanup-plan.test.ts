@@ -36,6 +36,36 @@ describe('cleanup plan removed-range index', () => {
 });
 
 describe('verification line deletion', () => {
+  it('keeps later batch ranges relative to the original source in the same file', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-cleanup-batch-lines-'));
+    try {
+      const path = join(root, 'functions.ts');
+      writeFileSync(
+        path,
+        'const keepA = 1;\nconst removeA = 2;\nconst keepB = 3;\nconst removeB = 4;\nconst keepC = 5;\n',
+      );
+      const batches: CleanupBatch[] = [1, 3].map((line, depth) => ({
+        depth,
+        loc: 1,
+        filesEmptied: [],
+        entries: [
+          {
+            symbol: `remove${depth}`,
+            shortName: `remove${depth}`,
+            file: 'functions.ts',
+            startLine: line,
+            endLine: line,
+            loc: 1,
+            evidence: 'graph-fact',
+          },
+        ],
+      }));
+      applyCleanupBatches(root, batches);
+      expect(readFileSync(path, 'utf8')).toBe('const keepA = 1;\nconst keepB = 3;\nconst keepC = 5;\n');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
   it('removes inclusive 0-indexed ranges, handling overlap and out-of-bounds', () => {
     const content = ['l0', 'l1', 'l2', 'l3', 'l4', 'l5'].join('\n');
 

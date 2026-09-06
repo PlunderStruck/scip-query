@@ -1,32 +1,16 @@
 ---
 name: scip-query
-description: Use FIRST for codebase work when compiler-resolved identity, runtime boundaries, callers, dependencies, consumers, architecture, change impact, or cleanup relationships can affect the answer. It exposes exact referents, explicit typed-graph projections, and source evidence; it does not infer task relevance. Pair it with scip-explore when the task is to understand a repository system end to end.
+description: Explore code, plan changes around existing owners and patterns, and review actual changes for complexity, duplication and dependency problems. Use exact source and explicit relationship evidence; preserve behavior and disclose unsupported claims.
 metadata:
   commands:
-    - template: 'scip-query watch --daemon'
-      when: 'When the user explicitly asks to use scip-query, make sure the background watcher for the exact target worktree is running before the first exploration command.'
-    - template: 'scip-query watch --status'
-      when: 'Check whether the watcher for the current worktree is running, refreshing, idle, or failed.'
-    - template: 'scip-query watch --stop'
-      when: 'Stop the watcher owned by the current worktree when the user asks to turn it off.'
-    - template: 'scip-query search <text>'
-      when: 'Locate exact repository text, a runtime key, or a compiler symbol; use `scip-query search -- <text>` when the literal starts with a dash.'
-    - template: 'scip-query outline <file>'
-      when: 'Locate compiler-owned constructs in a known file.'
-    - template: 'scip-query entrypoints <text>'
-      when: 'Locate an external callable root when its entry surface is known.'
-    - template: 'scip-query evidence --symbol <symbol> --edge <family> --direction <direction> --depth <n> --max-edges <n>'
-      when: 'Project explicitly selected typed relationships from one exact root.'
-    - template: 'scip-query inspect --at <file:line> --view behavior'
-      when: 'Read connected behavior for a named implementation gap.'
-    - template: 'scip-query code <selector>'
-      when: 'Read exact source only when syntax itself can change the decision.'
+    - template: 'scip-query health'
+      when: 'Find concrete TS/JS issues in current source, including on first use without an index.'
+    - template: 'scip-query context <symbol>'
+      when: 'Gather existing implementations, reuse candidates and consumers before planning a change.'
+    - template: 'scip-query review --base HEAD'
+      when: 'Review every changed or new function and current-source findings before handing off a change.'
     - template: 'scip-query diff-impact'
-      when: 'Map changed symbols and downstream consumers after an edit.'
-    - template: 'scip-query architecture'
-      when: 'Validate declared structural boundaries.'
-    - template: 'scip-query health --full'
-      when: 'Run configured cleanup and quality detectors.'
+      when: 'Map changed symbols and downstream consumers after confirming index freshness.'
 ---
 
 # scip-query
@@ -36,68 +20,35 @@ metadata:
 
 | Command syntax | Question it answers |
 | --- | --- |
-| `scip-query watch --daemon` | When the user explicitly asks to use scip-query, make sure the background watcher for the exact target worktree is running before the first exploration command. |
-| `scip-query watch --status` | Check whether the watcher for the current worktree is running, refreshing, idle, or failed. |
-| `scip-query watch --stop` | Stop the watcher owned by the current worktree when the user asks to turn it off. |
-| `scip-query search <text>` | Locate exact repository text, a runtime key, or a compiler symbol; use \`scip-query search -- <text>\` when the literal starts with a dash. |
-| `scip-query outline <file>` | Locate compiler-owned constructs in a known file. |
-| `scip-query entrypoints <text>` | Locate an external callable root when its entry surface is known. |
-| `scip-query evidence --symbol <symbol> --edge <family> --direction <direction> --depth <n> --max-edges <n>` | Project explicitly selected typed relationships from one exact root. |
-| `scip-query inspect --at <file:line> --view behavior` | Read connected behavior for a named implementation gap. |
-| `scip-query code <selector>` | Read exact source only when syntax itself can change the decision. |
-| `scip-query diff-impact` | Map changed symbols and downstream consumers after an edit. |
-| `scip-query architecture` | Validate declared structural boundaries. |
-| `scip-query health --full` | Run configured cleanup and quality detectors. |
+| `scip-query health` | Find concrete TS/JS issues in current source, including on first use without an index. |
+| `scip-query context <symbol>` | Gather existing implementations, reuse candidates and consumers before planning a change. |
+| `scip-query review --base HEAD` | Review every changed or new function and current-source findings before handing off a change. |
+| `scip-query diff-impact` | Map changed symbols and downstream consumers after confirming index freshness. |
 
 These commands are controls, not a checklist. Use every capability needed by the task, but make each query answer a distinct question. There is no required sequence or query limit. Run a command's `--help` when you need a flag not shown in its template.
 <!-- END GENERATED SKILL COMMANDS -->
 
-## Watcher lifecycle
+scip-query is a code analysis tool that links source locations to measured structure and observed relationships. A finding identifies concrete code and evidence of a possible problem. A candidate requires investigation; it does not authorize a refactor. An owner is the implementation responsible for enforcing a rule or controlling a resource, established from its behavior and consumers.
 
-The scip-query watcher is a project-scoped background refresh service: one process owned by one worktree that observes that worktree's configured compiler inputs and keeps its index current after relevant changes. It is not a global service, and starting it in one worktree must not start watchers for sibling worktrees.
+## Work loop
 
-When the user explicitly names scip-query, invokes `$scip-query`, or asks the agent to use it, run `scip-query watch --daemon` from the exact target project root before the first exploration command. Treat both a newly started watcher and an already-running watcher as success; reuse the existing process instead of starting another. This automatic start applies only to an explicit request to use scip-query. Merely opening a repository or shell must not start it.
+1. **Orient.** On first adoption or an explicit cleanup task, run `scip-query health`. It reads current TS/JS source without requiring an index or baseline. Read its grouped subjects, source exclusions, import-resolution counts and missing architecture-policy rows. Directory membership is location evidence; mixed-responsibility findings require confirming the actual contracts. Use `health --indexed` for existing language, framework, drift and cleanup specialists when those questions matter. Do not run every detector as a ritual.
+2. **Explore.** State the material facts needed for the task. Locate exact text with `scip-query search`, symbols in a known file with `outline`, or an external root with `entrypoints`. Read existing implementations, sibling outcomes, and consumers before choosing an owner. `context <symbol>` gathers reuse and impact candidates; confirm their contracts in source.
+3. **Plan.** For a nontrivial change, write a concise plan in the repository's normal documentation location. Cite exact owners and consumers, existing patterns to reuse, behavior and state effects to preserve, dependencies to change, obsolete code to remove, and checks that could detect a regression. Record uncertain ownership explicitly. Continue implementation when the user has authorized it; writing a plan does not create another approval gate.
+4. **Implement.** Follow the plan and revise it when evidence changes the design. Keep authorization, error handling, side effects, operation identity, ordering, cleanup, and concurrency guarantees intact. Consolidate implementations only after comparing their actual contracts.
+5. **Review.** Run `scip-query review --base <commit>` after edits, normally against `HEAD`. It compares the chosen commit to current files, including untracked files and new functions in old files. Read all changed-function records and candidate sites. Review duplication against existing code, complexity changes, cycles and declared dependencies. Include configuration-only relationship changes. Distinguish production value cycles from type/test dependencies and grouping-only boundary cycles. Use fresh `diff-impact` or explicit evidence when symbol consumers or runtime effects matter. Inspect unsupported portions directly using a reported recovery or native tools for that named gap.
+6. **Verify and finish.** Simplify justified problems, run relevant behavioral tests and required repository checks, then rerun review. Explain retained candidates and material coverage gaps. A lower complexity number, passing compiler, empty report, or generated test scaffold does not establish behavioral correctness. Do not commit unless authorized.
 
-Use the normal command without `CHOKIDAR_USEPOLLING` or another forced polling override. If startup fails, report the exact failure; do not silently start a watcher in another worktree, force polling, or substitute an unbounded full rebuild.
+## Evidence and freshness
 
-Run `scip-query watch --status` from the same project root to inspect the watcher. Run `scip-query watch --stop` from that root when the user asks to stop it. The stop command targets only that worktree's watcher; do not stop watchers owned by other worktrees unless the user names them.
+For relationships use repeated `--symbol`, `--at`, or `--search` roots with `scip-query evidence --edge <family> --direction <incoming|outgoing|both> --depth <n> --max-edges <n>`. Choose only relationships needed for the claim: execution for callers/callees; dataflow for value origins/uses; runtime for producer/consumer handoffs; state for resource reads/writes; temporal for ordering; contract for constraints; identity for entity identity; ownership for containment; dependencies for static reliance. Containment alone does not establish responsibility for a business rule.
 
-<!-- BEGIN GENERATED EXPLORATION MANUAL -->
-### Choose a relationship deliberately
+Use `scip-query inspect --view behavior` for several named behavior gaps, and `code <symbol-or-file:range>` for exact source. Range reads stay local; `code --local-calls` explicitly includes statically attributed same-file callees. Batch independent questions. Do not reread evidence already received. Load `$scip-explore` for a complex end-to-end explanation requiring a private evidence ledger.
 
-| Question | Evidence family | Direction |
-|---|---|---|
-| Who can call or reach this? | `execution` | `incoming` |
-| What can this call or reach? | `execution` | `outgoing` |
-| Where can this value come from? | `dataflow` | `incoming` |
-| Where can this value go? | `dataflow` | `outgoing` |
-| Which producer and consumer rendezvous? | `runtime` | `both` |
-| What resource is observed or changed? | `state` | `both` |
-| What occurs before or after this? | `temporal` | `both` |
-| What interface constrains this? | `contract` | `both` |
-| Are these observations the same entity? | `identity` | `both` |
-| What contains or owns this? | `ownership` | `both` |
-| What does this statically rely on? | `dependencies` | `outgoing` |
+Source health/review always read current bytes. Compiler-backed relationships require a current index. Inspect reported freshness after edits. If watching is configured, reuse the watcher for this worktree; `watch --status` shows its state. Respect disabled watching and failed startup. Use the normal bounded refresh or the printed recovery; do not repeatedly start a disabled watcher or silently substitute an expensive rebuild. A missing newly created root is unresolved evidence, not proof that no callers exist.
 
-Use exact evidence as an observed fact only within its coverage. Derived evidence is deterministically computed; candidate evidence is a lead; mixed evidence must retain its constituent strengths; unknown evidence cannot support a stronger claim. Missing output is not evidence of absence.
+Exact evidence is directly observed; derived evidence is deterministically calculated; candidate evidence needs confirmation. Accounted coverage accounts for the requested supported projection, not the whole task. Missing, bounded or unsupported output cannot establish absence. Do not treat references, imports or value relationships as executable calls.
 
-The controls above are complete for ordinary exploration. Run `scip-query capabilities --matrix` only when a named claim depends on uncertain provider support; do not run it for routine orientation.
-<!-- END GENERATED EXPLORATION MANUAL -->
+CRAP combines cyclomatic complexity (a count of independent decision paths under the printed rules) and measured test coverage. Supply `review --coverage .scipquery/coverage.json` only after recording a real Istanbul test run with the shipped `scripts/record-review-coverage.mjs`. Missing, stale or unmappable coverage is unavailable, never zero. Cognitive complexity measures structural nesting and flow interruptions under the versioned rules; the current source metric does not measure recursion. Read `docs/REVIEW.md` for exact rules and coverage recording.
 
-scip-query is a repository exploration surface: an indexed code reader that joins exact current text to compiler-owned identities and typed relationships. Native text and file tools expose matches and slices; scip-query additionally exposes how code units call, carry data, cross runtime boundaries, observe or change state, occur in order, satisfy contracts, share identity, contain one another, and depend on one another. It performs the control you select; it does not infer task relevance or decide what the user meant.
-
-For end-to-end system understanding, load `$scip-explore` alongside this skill. `scip-explore` owns the material-fact model, evidence integration, answer audit, and stopping judgment; this skill remains the calibrated sensing and source-reading surface.
-
-Use scip-query as the primary exploration surface for tracked repository text. Treat its commands as controls, not a checklist. Use every capability needed by the task, but make each query answer a distinct repository question. There is no mandatory sequence, required anchor phase, or query-count limit. Thoroughness means understanding the relevant system end to end, not exhausting the repository.
-
-Use one discriminating exact `search`, `outline`, or `entrypoints` locator, then reuse every returned symbol or `file:line` as an `evidence` root. Do not repeat generic synonym searches after usable candidates exist. Locator ordering does not establish relevance. When several implementations match the same vocabulary, do not select one by path, naming, apparent recency, or result order. Compare their entry surfaces, incoming execution, ownership, callers, or runtime connections; if the repository does not establish one as authoritative, explain the alternatives and their scopes.
-
-An evidence projection accepts repeated `--symbol`, `--at`, or `--search` roots and repeated `--edge <family>` flags; always choose `--direction incoming|outgoing|both`, `--depth <n>`, and `--max-edges <n>` explicitly. Use `--subtype <subtype>` to narrow a family, `--connecting` when the selected roots themselves must be connected, and `--inventory-only` when counts alone can choose the next bounded projection.
-
-Read each command's request, observed facts, evidence calibration, coverage, and recovery together. Exact observations are facts only within their reported coverage. Derived observations are deterministic computations. Candidate observations require confirmation. Missing or bounded output is not evidence of absence.
-
-An emitted `Continue exactly:` command is a cursor: a next-page read from one immutable rendered result. It is required transport, not optional evidence expansion. Run the emitted command unchanged and repeat until no continuation remains before interpreting that command's complete result. Do not rerun the original query or alter cursor flags. Continuation reads saved output without repository preparation, reindexing, or watcher startup. Printed recovery and expansion commands are different: run those only when their omitted evidence matters.
-
-Prefer human output for agent reading. If a model-facing consumer genuinely needs JSON, add `--json --agent-output`; add `--result-only` only when the common envelope is unnecessary, and drain every emitted cursor before interpreting the result. Never send raw `--json` output through a model-facing terminal or tool. When a program needs the exhaustive machine payload, use `--json --json-output <path>` and inspect that file programmatically instead of injecting its complete contents into model context.
-
-`inspect --view behavior` returns connected behavior for named units; `code` returns exact source. Treat source rendered by either command as already read. Batch independent roots and source gaps when practical. Use native tools only for edits, checks, binary content, or a specific unsupported gap reported by scip-query. After edits, use `diff-impact` when downstream consumers matter, `architecture` for declared boundaries, and `health` for configured quality or cleanup detectors.
+Prefer human output. For a program, write exhaustive JSON with `--json --json-output <path>`; for model-facing JSON use `--json --agent-output`. Never rerun a successful human command solely to change encoding. Every emitted `Continue exactly:` command is required transport: run it unchanged until no continuation remains. Printed recovery commands are optional expansions only when the omitted fact matters. Stop exploring when the material claims are established.

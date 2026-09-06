@@ -1,0 +1,1 @@
+error: SCIP_QUERY_DIFF_IMPACT_FILES must be a JSON array of nonempty file paths.

@@ -1,0 +1,200 @@
+[
+  {
+    "name": "bounded slice discloses omissions",
+    "passed": true
+  },
+  {
+    "name": "straight: executed behavior oracle",
+    "passed": true
+  },
+  {
+    "name": "shortCircuit: complete slice retains conditional fallback",
+    "passed": false,
+    "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  (slice.coverage.status !== \"complete\" || slice.points.some((point) => point.name === \"fallback\"))\n"
+  },
+  {
+    "name": "shortCircuit: executed behavior oracle",
+    "passed": true
+  },
+  {
+    "name": "ternaryWrite: complete slice retains conditional fallback",
+    "passed": false,
+    "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  (slice.coverage.status !== \"complete\" || slice.points.some((point) => point.name === \"fallback\"))\n"
+  },
+  {
+    "name": "ternaryWrite: executed behavior oracle",
+    "passed": true
+  },
+  {
+    "name": "alias: complete slice retains input written through alias",
+    "passed": false,
+    "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  (slice.coverage.status !== \"complete\" || slice.points.some((point) => point.name === \"input\"))\n"
+  },
+  {
+    "name": "alias: executed behavior oracle",
+    "passed": true
+  },
+  {
+    "name": "nested increment: complete slice retains mutation",
+    "passed": false,
+    "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  (\n"
+  },
+  {
+    "name": "nestedIncrement: executed behavior oracle",
+    "passed": true
+  },
+  {
+    "name": "files excludes tracked deletion",
+    "passed": false,
+    "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n1 !== 0\n"
+  },
+  {
+    "name": "missing file cannot become an unrelated symbol",
+    "passed": false,
+    "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n1 !== 0\n"
+  },
+  {
+    "name": "nested: source and indexed cyclomatic measurements agree",
+    "passed": false,
+    "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n2 !== 1\n"
+  },
+  {
+    "name": "nullish: source and indexed cyclomatic measurements agree",
+    "passed": false,
+    "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n1 !== 2\n"
+  },
+  {
+    "name": "branch: source and indexed cyclomatic measurements agree",
+    "passed": true
+  },
+  {
+    "name": "malformed source cannot produce complete dependence coverage",
+    "passed": false,
+    "error": "AssertionError [ERR_ASSERTION]: Expected \"actual\" to be strictly unequal to:\n\n'complete'"
+  },
+  {
+    "name": "source finding suppression survives write/read round trip",
+    "passed": false,
+    "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n0 !== 1\n"
+  },
+  {
+    "name": "suppression ID cannot escape its storage directory",
+    "passed": false,
+    "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  (!relativePath.startsWith(\"..\"))\n"
+  },
+  {
+    "name": "F05: call-free choose has zero callees",
+    "expected": 0,
+    "actual": 3,
+    "passed": false
+  },
+  {
+    "name": "F08: declaration is not a test invocation",
+    "expected": [
+      1
+    ],
+    "actual": [
+      0,
+      1
+    ],
+    "passed": false
+  },
+  {
+    "name": "F04: mapping-declared missing trace fails",
+    "expected": 1,
+    "actual": 0,
+    "passed": false
+  },
+  {
+    "name": "TLA explicit missing trace fails",
+    "expected": 1,
+    "actual": 1,
+    "passed": true
+  },
+  {
+    "name": "F03: nonexistent command is not marked passed",
+    "expected": false,
+    "actual": true,
+    "passed": false
+  },
+  {
+    "name": "F07: suppressions are acknowledged by source health",
+    "expected": true,
+    "actual": false,
+    "passed": false
+  },
+  {
+    "name": "F07: accepted suppression does not remain an undisclosed gate blocker",
+    "expected": false,
+    "actual": true,
+    "passed": false
+  },
+  {
+    "name": "F10: ordinary help shows current-source health",
+    "expected": true,
+    "actual": false,
+    "passed": false
+  },
+  {
+    "name": "F10: ordinary help shows change review",
+    "expected": true,
+    "actual": false,
+    "passed": false
+  },
+  {
+    "name": "coverage-full: recomputed CRAP",
+    "expected": 2,
+    "actual": 2,
+    "passed": true
+  },
+  {
+    "name": "coverage-half: recomputed CRAP",
+    "expected": 2.5,
+    "actual": 2.5,
+    "passed": true
+  },
+  {
+    "name": "coverage-none: recomputed CRAP",
+    "expected": 6,
+    "actual": 6,
+    "passed": true
+  },
+  {
+    "name": "coverage-malformed: unavailable rather than invented score",
+    "expected": "unavailable",
+    "actual": "unavailable",
+    "passed": true
+  },
+  {
+    "name": "coverage-stale: unavailable rather than invented score",
+    "expected": "unavailable",
+    "actual": "unavailable",
+    "passed": true
+  },
+  {
+    "name": "compiler entry map has one actual call edge",
+    "expected": 1,
+    "actual": 1,
+    "passed": true
+  },
+  {
+    "name": "actual stub detected",
+    "expected": [
+      "throw-stub"
+    ],
+    "actual": [
+      "throw-stub"
+    ],
+    "passed": true
+  },
+  {
+    "name": "always-true checker detected",
+    "expected": [
+      "direct"
+    ],
+    "actual": [
+      "direct"
+    ],
+    "passed": true
+  }
+]

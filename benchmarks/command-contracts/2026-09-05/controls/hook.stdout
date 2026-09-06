@@ -1,0 +1,1 @@
+{"decision":"block","reason":"Architecture policy changed in the same worktree as the implementation. Keep .scipquery.json policy changes in a separate reviewed change, then stop again."}

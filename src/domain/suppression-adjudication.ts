@@ -13,6 +13,8 @@ export interface SuppressionAdjudicationFinding {
   evidence: string;
   actionTier?: string;
   file?: string;
+  /** Every file whose contents participate in a multi-site finding. */
+  targetFiles?: readonly string[];
 }
 
 export interface SuppressionAdjudicationRuntime {
@@ -67,25 +69,60 @@ export function evaluateSuppressionAdjudication(
   if (suppression.expiresAt && Date.parse(suppression.expiresAt) <= runtime.now) {
     return { kind: 'expired', reasons: ['suppression-expired'] };
   }
-
-  const reasons: string[] = [];
-  if (suppression.id !== finding.id) reasons.push('exact-finding-id-required');
+  const reasons: string[] = suppression.id === finding.id ? [] : ['exact-finding-id-required'];
   const decision = suppression.decision;
   if (!decision) return { kind: 'escalated', reasons: [...reasons, 'legacy-unadjudicated'] };
+  reasons.push(...decisionPolicyReasons(decision));
+
+  const contentEvidence = decision.evidence.filter(hasContentReferent);
+  reasons.push(...missingContentEvidenceReasons(decision, finding, contentEvidence));
+  const content = evaluateContentFreshness(contentEvidence, runtime);
+  if (content.invalidated.length > 0) return { kind: 'invalidated', reasons: content.invalidated };
+  reasons.push(...content.missingHashes);
+  if (requiresDirectCounterevidence(finding) && !decision.evidence.some(isDirectCounterevidence)) {
+    reasons.push('direct-counterevidence-required');
+  }
+  return reasons.length === 0 ? { kind: 'accepted' } : { kind: 'escalated', reasons: [...new Set(reasons)] };
+}
+
+function decisionPolicyReasons(decision: SuppressionDecision): string[] {
+  const reasons: string[] = [];
   if (decision.kind !== 'automated-adjudication') reasons.push('unsupported-decision-kind');
   if (decision.policyVersion !== 1) reasons.push('unsupported-policy-version');
   if (!SUPPRESSION_REASON_CODES.includes(decision.reasonCode)) reasons.push('unsupported-reason-code');
   if (decision.evidence.length === 0) reasons.push('counterevidence-required');
   if (!decision.invalidateOn.detectorMajorChange) reasons.push('detector-change-invalidation-required');
+  return reasons;
+}
 
-  const contentEvidence = decision.evidence.filter(hasContentReferent);
+function missingContentEvidenceReasons(
+  decision: SuppressionDecision,
+  finding: SuppressionAdjudicationFinding,
+  contentEvidence: SuppressionCounterevidence[],
+): string[] {
+  const reasons: string[] = [];
   if (decision.invalidateOn.targetContentChange && contentEvidence.length === 0) {
     reasons.push('content-invalidation-evidence-required');
   }
+  const targetFiles = new Set(finding.targetFiles ?? (finding.file ? [finding.file] : []));
+  const coveredFiles = new Set(
+    contentEvidence.filter((evidence) => evidence.contentHash).map((evidence) => evidence.referent),
+  );
+  for (const file of targetFiles) {
+    if (!coveredFiles.has(file)) reasons.push(`target-content-evidence-required:${file}`);
+  }
+  return reasons;
+}
+
+function evaluateContentFreshness(
+  contentEvidence: SuppressionCounterevidence[],
+  runtime: SuppressionAdjudicationRuntime,
+): { missingHashes: string[]; invalidated: string[] } {
+  const missingHashes: string[] = [];
   const invalidated: string[] = [];
   for (const evidence of contentEvidence) {
     if (!evidence.contentHash) {
-      reasons.push(`counterevidence-content-hash-required:${evidence.referent}`);
+      missingHashes.push(`counterevidence-content-hash-required:${evidence.referent}`);
       continue;
     }
     const current = runtime.contentHash(evidence.referent);
@@ -93,12 +130,7 @@ export function evaluateSuppressionAdjudication(
       invalidated.push(`counterevidence-content-changed:${evidence.referent}`);
     }
   }
-  if (invalidated.length > 0) return { kind: 'invalidated', reasons: invalidated };
-
-  if (requiresDirectCounterevidence(finding) && !decision.evidence.some(isDirectCounterevidence)) {
-    reasons.push('direct-counterevidence-required');
-  }
-  return reasons.length === 0 ? { kind: 'accepted' } : { kind: 'escalated', reasons: [...new Set(reasons)] };
+  return { missingHashes, invalidated };
 }
 
 function hasContentReferent(evidence: SuppressionCounterevidence): boolean {

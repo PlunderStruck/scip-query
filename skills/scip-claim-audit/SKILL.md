@@ -9,8 +9,8 @@ metadata:
       when: 'Classify: find every producer and consumer of a status-bearing function.'
     - template: 'scip-query code <selector>'
       when: 'Classify: read the producing function to see whether it computes or asserts.'
-    - template: 'scip-query trace <symbol>'
-      when: 'Classify: definition plus every reference for a status field or constant.'
+    - template: 'scip-query refs <symbol>'
+      when: 'Classify: observed references within reported coverage for a status field or constant.'
     - template: 'scip-query capabilities --matrix'
       when: 'Spot-check: a known derived-status surface to calibrate what derived looks like here.'
 ---
@@ -25,7 +25,7 @@ metadata:
 | `scip-query search <text>` | Inventory: locate every status word and the renderer or JSON field that surfaces it. |
 | `scip-query refs <symbol>` | Classify: find every producer and consumer of a status-bearing function. |
 | `scip-query code <selector>` | Classify: read the producing function to see whether it computes or asserts. |
-| `scip-query trace <symbol>` | Classify: definition plus every reference for a status field or constant. |
+| `scip-query refs <symbol>` | Classify: observed references within reported coverage for a status field or constant. |
 | `scip-query capabilities --matrix` | Spot-check: a known derived-status surface to calibrate what derived looks like here. |
 
 These commands are controls, not a checklist. Use every capability needed by the task, but make each query answer a distinct question. There is no required sequence or query limit. Run a command's `--help` when you need a flag not shown in its template.
@@ -65,7 +65,7 @@ For each status word's producing function:
 ```bash
 scip-query refs <producing-function>
 scip-query code <producing-function>
-scip-query trace <status-field-or-constant>
+scip-query refs <status-field-or-constant>
 ```
 
 Read the function body. Classify:

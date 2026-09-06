@@ -12,7 +12,7 @@ export interface HotspotResult {
   fileCount: number;
   definedIn: string;
   basis?: 'scip-cross-file-mentions' | 'source-backed-incoming-evidence';
-  countUnit?: 'reference-occurrences' | 'distinct-incoming-evidence-rows';
+  countUnit?: 'referencing-chunks' | 'distinct-incoming-evidence-rows';
 }
 
 /**
@@ -24,8 +24,8 @@ export interface HotspotResult {
 export function hotspots(db: ScipDatabase, opts: { limit?: number; scope?: string } = {}): HotspotResult[] {
   const { limit = 30, scope } = opts;
 
-  const scopeFilter = scope ? `AND def_d.relative_path LIKE ?` : '';
-  const scopeParams = scope ? [`%${scope}%`] : [];
+  const scopeFilter = scope ? `AND instr(def_d.relative_path, ?) > 0` : '';
+  const scopeParams = scope ? [scope] : [];
 
   const rows = db.all<{
     symbol: string;
@@ -35,7 +35,7 @@ export function hotspots(db: ScipDatabase, opts: { limit?: number; scope?: strin
   }>(
     `SELECT
       gs.symbol,
-      COUNT(*) AS ref_count,
+      COUNT(DISTINCT m.chunk_id) AS ref_count,
       COUNT(DISTINCT ref_d.id) AS file_count,
       def_d.relative_path AS defined_in
     FROM mentions m
@@ -56,7 +56,7 @@ export function hotspots(db: ScipDatabase, opts: { limit?: number; scope?: strin
       ${db.symbolNoiseFor('gs')}
       ${scopeFilter}
     GROUP BY gs.id
-    ORDER BY ref_count DESC
+    ORDER BY ref_count DESC, gs.symbol
     LIMIT ?`,
     ...scopeParams,
     limit,
@@ -71,7 +71,7 @@ export function hotspots(db: ScipDatabase, opts: { limit?: number; scope?: strin
       fileCount: r.file_count,
       definedIn: r.defined_in,
       basis: 'scip-cross-file-mentions' as const,
-      countUnit: 'reference-occurrences' as const,
+      countUnit: 'referencing-chunks' as const,
     }));
 
   if (indexedResults.length > 0) {
@@ -97,7 +97,6 @@ function hotspotsByDefinitionFallback(db: ScipDatabase, scope: string | undefine
 
 function hotspotRowFor(db: ScipDatabase, definition: IndexedDefinition): HotspotResult {
   const callerRows = getCallerRowsForSymbol(db, definition, {
-    limit: 500,
     semanticEvidence: symbolSemanticEvidence,
   });
   const crossFileCallers = callerRows.filter((row) => row.file !== definition.relativePath);

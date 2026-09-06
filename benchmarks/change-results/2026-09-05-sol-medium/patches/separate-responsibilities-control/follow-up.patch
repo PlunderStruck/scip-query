@@ -1,0 +1,92 @@
+diff --git a/src/adapters/checkout-quote.ts b/src/adapters/checkout-quote.ts
+index 966df50..6a3d3de 100644
+--- a/src/adapters/checkout-quote.ts
++++ b/src/adapters/checkout-quote.ts
+@@ -1,5 +1,5 @@
+ import { calculateQuote } from '../pricing/quote.js';
+ 
+-export function checkoutQuote(unitPrice: number, quantity: number): number {
+-  return calculateQuote(unitPrice, quantity);
++export function checkoutQuote(unitPrice: number, quantity: number, discountPercent = 0): number {
++  return calculateQuote(unitPrice, quantity, discountPercent);
+ }
+diff --git a/src/adapters/support-quote.ts b/src/adapters/support-quote.ts
+index 4a12f3a..27a669b 100644
+--- a/src/adapters/support-quote.ts
++++ b/src/adapters/support-quote.ts
+@@ -1,5 +1,5 @@
+ import { calculateQuote } from '../pricing/quote.js';
+ 
+-export function supportQuote(unitPrice: number, quantity: number): number {
+-  return calculateQuote(unitPrice, quantity);
++export function supportQuote(unitPrice: number, quantity: number, discountPercent = 0): number {
++  return calculateQuote(unitPrice, quantity, discountPercent);
+ }
+diff --git a/src/pricing/charge-fee.ts b/src/pricing/charge-fee.ts
+index 18da59a..63e9f19 100644
+--- a/src/pricing/charge-fee.ts
++++ b/src/pricing/charge-fee.ts
+@@ -1,3 +1,3 @@
+ export function chargeFee(amount: number): number {
+-  return Math.max(1, Math.round(amount * 0.02));
++  return Math.max(2, Math.round(amount * 0.03));
+ }
+diff --git a/src/pricing/quote.ts b/src/pricing/quote.ts
+index f0f49ec..f9833fc 100644
+--- a/src/pricing/quote.ts
++++ b/src/pricing/quote.ts
+@@ -1,3 +1,4 @@
+-export function calculateQuote(unitPrice: number, quantity: number): number {
+-  return Math.round(unitPrice * quantity * 100) / 100;
++export function calculateQuote(unitPrice: number, quantity: number, discountPercent = 0): number {
++  const discountedTotal = unitPrice * quantity * (1 - discountPercent / 100);
++  return Math.round(discountedTotal * 100) / 100;
+ }
+diff --git a/test/pricing-quotes.test.mjs b/test/pricing-quotes.test.mjs
+index 9e62cc4..5936f79 100644
+--- a/test/pricing-quotes.test.mjs
++++ b/test/pricing-quotes.test.mjs
+@@ -3,7 +3,7 @@ import test from 'node:test';
+ 
+ import { chargeFee, checkoutQuote, refundFee, supportQuote } from '../build/index.js';
+ 
+-test('checkout and support quotes use the same cent-rounded price', () => {
++test('two-argument checkout and support quotes retain the undiscounted price', () => {
+   const cases = [
+     { unitPrice: 10.25, quantity: 2, expected: 20.5 },
+     { unitPrice: 1.234, quantity: 1, expected: 1.23 },
+@@ -16,13 +16,32 @@ test('checkout and support quotes use the same cent-rounded price', () => {
+   }
+ });
+ 
+-test('charge and refund fees retain their separate existing behavior', () => {
++test('checkout and support quotes apply the discount before rounding to cents', () => {
++  for (const [unitPrice, quantity, discountPercent, expected] of [
++    [10.25, 2, 25, 15.38],
++    [1.235, 1, 10, 1.11],
++  ]) {
++    assert.equal(checkoutQuote(unitPrice, quantity, discountPercent), expected);
++    assert.equal(supportQuote(unitPrice, quantity, discountPercent), expected);
++  }
++});
++
++test('charge fee has its own three-percent policy and two-unit minimum', () => {
++  for (const [amount, expected] of [
++    [0, 2],
++    [100, 3],
++    [175, 5],
++  ]) {
++    assert.equal(chargeFee(amount), expected);
++  }
++});
++
++test('refund fee retains its two-percent policy and one-unit minimum', () => {
+   for (const [amount, expected] of [
+     [0, 1],
+     [100, 2],
+     [175, 4],
+   ]) {
+-    assert.equal(chargeFee(amount), expected);
+     assert.equal(refundFee(amount), expected);
+   }
+ });

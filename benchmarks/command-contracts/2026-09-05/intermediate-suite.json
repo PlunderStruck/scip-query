@@ -1,0 +1,28 @@
+{
+  "passed": 2814,
+  "failed": 5,
+  "total": 2819,
+  "failures": [
+    {
+      "name": "case-sensitive symbol resolution keeps refs aligned with the resolved symbol intent",
+      "message": "AssertionError: expected [ { …(3) }, { …(3) } ] to deeply equal ArrayContaining{…}"
+    },
+    {
+      "name": "public API declaration contract keeps the committed manifest and acceptance record aligned with package exports",
+      "message": "AssertionError: expected [ '.', './queries', …(75) ] to deeply equal [ '.', './queries', …(67) ]"
+    },
+    {
+      "name": "orderHealthPhaseTasksByCost starts the heaviest isolated tasks first and keeps the original order for ties",
+      "message": "AssertionError: expected [ [ 'passthrough-candidates' ], …(5) ] to deeply equal [ [ 'passthrough-candidates' ], …(5) ]"
+    },
+    {
+      "name": "TypeScript semantic provider uses ts-morph import usage and references as shared liveness evidence",
+      "message": "TypeError: (0 , staleAbstractions) is not a function"
+    },
+    {
+      "name": "TypeScript semantic provider uses workspace package imports as cross-project semantic references",
+      "message": "TypeError: (0 , staleAbstractions) is not a function"
+    }
+  ],
+  "note": "Intermediate run during command pruning/reference changes. Five failures include stale tests/API manifest; final run still required."
+}

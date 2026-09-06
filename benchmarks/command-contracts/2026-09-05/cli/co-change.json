@@ -1,0 +1,171 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "co-change",
+  "operationRole": "repository-observation",
+  "evidence": "mixed",
+  "args": [
+    "src/service/runner.ts"
+  ],
+  "options": {
+    "minTogether": 4,
+    "limit": 30,
+    "json": true,
+    "session": true,
+    "jsonOutput": "/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/command-contracts/2026-09-05/cli/co-change.json"
+  },
+  "result": {
+    "available": true,
+    "commitsAnalyzed": 4,
+    "findings": []
+  },
+  "coverage": {
+    "complete": null,
+    "totalKnown": false,
+    "returned": 1
+  },
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "operationRole": "repository-observation",
+    "receipt": {
+      "schemaVersion": 2,
+      "observedAt": "2026-09-06T07:48:02.669Z",
+      "facts": {
+        "workspaceInstance": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:workspace-instance",
+            "version": 1
+          },
+          "digest": "79bdf8eb98bfe2ced4a15e01f73803092ffaad71c553be86cf075a087d708ce9"
+        },
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          }
+        },
+        {
+          "kind": "live-workspace",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:workspace-instance",
+              "version": 1
+            },
+            "digest": "79bdf8eb98bfe2ced4a15e01f73803092ffaad71c553be86cf075a087d708ce9"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        },
+        {
+          "source": "live-workspace",
+          "kind": "not-established"
+        }
+      ],
+      "diagnostics": {
+        "clean": false,
+        "headCommit": "f28ecc119966b2ef4c341a7acd97c330973a92c9",
+        "treeOid": "d8f0952781eb5a5d17b19994295902cf0e015410"
+      }
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "mixed",
+      "coverage": {
+        "complete": null,
+        "totalKnown": false,
+        "returned": 1
+      },
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "mixed",
+        "coverage": {
+          "state": "unknown",
+          "returned": 1,
+          "totalKnown": false
+        },
+        "producerValidation": {
+          "status": "not-evaluated"
+        },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": [
+            "collaborationDomain",
+            "wholeContent",
+            "observationStability"
+          ],
+          "reasons": [
+            "collaborationDomain:unknown",
+            "wholeContent:unknown",
+            "observationStability:unknown",
+            "leftIndexAlignment:unknown",
+            "rightIndexAlignment:unknown"
+          ]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": [
+            "No repository action policy was supplied for this claim."
+          ]
+        },
+        "families": [
+          {
+            "id": "historical-pairs",
+            "selector": "findings[]",
+            "origin": {
+              "kind": "fixed",
+              "origin": "change-history"
+            }
+          },
+          {
+            "id": "structural-link-classification",
+            "selector": "findings[].structurallyLinked",
+            "origin": {
+              "kind": "fixed",
+              "origin": "compiler-graph"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

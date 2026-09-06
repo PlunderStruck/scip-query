@@ -2,7 +2,6 @@ import { createHash, randomUUID } from 'node:crypto';
 import { rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-
 import { boundedExponentialLoopDelayMs, monotonicNowMs } from '../domain/time.js';
 import { createPathChangeWake } from '../platform/path-change-wake.js';
 import { readProcessIdentity } from '../platform/process-identity.js';
@@ -37,7 +36,6 @@ const DEFAULT_IDLE_TIMEOUT_MS = 30_000;
 const POLL_INTERVAL_MS = 5;
 const MAX_IDLE_POLL_INTERVAL_MS = 100;
 const SERIALIZED_RESULT_CACHE_MAX_BYTES = 1024 * 1024;
-const TRACE_SERIALIZED_RESULT_CACHE_MAX_BYTES = 1280 * 1024;
 const MAILBOX_LIMITS: Partial<BoundedMailboxLimits> = {
   maxItems: 64,
   maxBytes: 128 * 1024 * 1024,
@@ -214,7 +212,7 @@ async function executeRequest(
   if (request.kind === 'source-search') return searchSource(db, request.pattern, request.options);
   if (request.kind === 'outline') return outline(db, request.filePattern);
   if (request.kind === 'entrypoints') {
-    const { entryPoints } = await import('../queries/graph/entry-map.js');
+    const { entryPoints } = await import('../queries/service-queries.js');
     return entryPoints(db, request.options);
   }
   if (request.kind === 'files') {
@@ -247,7 +245,7 @@ async function executeRequest(
   if (request.kind === 'hierarchy') {
     const [{ hierarchy }, { withSymbolResolutionJson }] = await Promise.all([
       import('../queries/navigation/hierarchy.js'),
-      import('./query-commands/symbol-resolution.js'),
+      import('../queries/navigation/code-result-json.js'),
     ]);
     return withSymbolResolutionJson(db, request.symbolPattern, hierarchy(db, request.symbolPattern), 'hierarchy');
   }
@@ -259,7 +257,7 @@ async function executeRequest(
     const [{ refs }, { compareReferenceKey }, { withSymbolResolutionJson }] = await Promise.all([
       import('../queries/navigation/refs.js'),
       import('./refs-pagination.js'),
-      import('./query-commands/symbol-resolution.js'),
+      import('../queries/navigation/code-result-json.js'),
     ]);
     const semantic = defaultSemanticEnrichment(db);
     const rows = refs(db, request.symbolPattern, { semantic }).sort(compareReferenceKey);
@@ -268,47 +266,10 @@ async function executeRequest(
       pagination: { cursorVersion: 2, producer: 'complete-only', semanticEnrichment: semantic },
     };
   }
-  if (request.kind === 'trace') {
-    const semantic = defaultSemanticEnrichment(db);
-    if (!semantic) {
-      const cached = cachedSerializedResult(db, request.kind, request.symbolPattern);
-      if (cached) return cached;
-    }
-    const [{ qualifiedTraceEvidence }, { symbolResolutionJson }] = await Promise.all([
-      import('../queries/navigation/trace.js'),
-      import('./query-commands/symbol-resolution.js'),
-    ]);
-    const serializedJson = JSON.stringify({
-      ...symbolResolutionJson(db, request.symbolPattern),
-      ...qualifiedTraceEvidence(db, request.symbolPattern, { semantic }),
-    });
-    const result = {
-      serializedJson,
-      sha256: createHash('sha256').update(serializedJson).digest('hex'),
-    };
-    if (!semantic) {
-      retainSerializedResult(db, request.kind, request.symbolPattern, result, TRACE_SERIALIZED_RESULT_CACHE_MAX_BYTES);
-    }
-    return result;
-  }
-  if (request.kind === 'value-flow') {
-    const cached = cachedSerializedResult(db, request.kind, request.symbolPattern);
-    if (cached) return cached;
-    const { valueFlow } = await import('../queries/graph/value-flow.js');
-    const serializedJson = JSON.stringify(
-      valueFlow(db, { symbols: [request.symbolPattern] }, { maxDepth: 2, maxEdges: 48 }),
-    );
-    const result = {
-      serializedJson,
-      sha256: createHash('sha256').update(serializedJson).digest('hex'),
-    };
-    retainSerializedResult(db, request.kind, request.symbolPattern, result);
-    return result;
-  }
   if (request.kind === 'dependence-slice') {
     const cached = cachedSerializedResult(db, request.kind, request.criterion);
     if (cached) return cached;
-    const { dependenceSlice } = await import('../queries/graph/dependence-slice.js');
+    const { dependenceSlice } = await import('../queries/service-queries.js');
     const serializedJson = JSON.stringify(dependenceSlice(db, request.criterion));
     const result = {
       serializedJson,
@@ -320,7 +281,7 @@ async function executeRequest(
   if (request.kind === 'call-graph') {
     const [{ callGraph }, { symbolResolutionJson }] = await Promise.all([
       import('../queries/navigation/call-graph.js'),
-      import('./query-commands/symbol-resolution.js'),
+      import('../queries/navigation/code-result-json.js'),
     ]);
     const serializedJson = JSON.stringify({
       ...symbolResolutionJson(db, request.symbolPattern),
@@ -330,55 +291,6 @@ async function executeRequest(
       serializedJson,
       sha256: createHash('sha256').update(serializedJson).digest('hex'),
     };
-  }
-  if (request.kind === 'reference-neighborhood' || request.kind === 'dataflow') {
-    const semantic = defaultSemanticEnrichment(db);
-    const cacheable = request.kind === 'reference-neighborhood' && !semantic;
-    if (cacheable) {
-      const cached = cachedSerializedResult(db, request.kind, request.symbolPattern);
-      if (cached) return cached;
-    }
-    const [{ dataflow, referenceNeighborhood }, { symbolResolutionJson }] = await Promise.all([
-      import('../queries/navigation/dataflow.js'),
-      import('./query-commands/symbol-resolution.js'),
-    ]);
-    const payload =
-      request.kind === 'dataflow'
-        ? dataflow(db, request.symbolPattern, { semantic })
-        : referenceNeighborhood(db, request.symbolPattern, { semantic });
-    const serializedJson = JSON.stringify({
-      ...symbolResolutionJson(db, request.symbolPattern),
-      [request.kind]: payload,
-    });
-    const result = {
-      serializedJson,
-      sha256: createHash('sha256').update(serializedJson).digest('hex'),
-    };
-    if (cacheable) retainSerializedResult(db, request.kind, request.symbolPattern, result);
-    return result;
-  }
-  if (request.kind === 'reference-reachability' || request.kind === 'slice') {
-    const semantic = defaultSemanticEnrichment(db);
-    if (!semantic) {
-      const cached = cachedSerializedResult(db, request.kind, request.symbolPattern);
-      if (cached) return cached;
-    }
-    const [{ referenceReachability }, { symbolResolutionJson }] = await Promise.all([
-      import('../queries/navigation/slice.js'),
-      import('./query-commands/symbol-resolution.js'),
-    ]);
-    const serializedJson = JSON.stringify({
-      ...symbolResolutionJson(db, request.symbolPattern),
-      [request.kind]: referenceReachability(db, request.symbolPattern, {
-        semantic,
-      }),
-    });
-    const result = {
-      serializedJson,
-      sha256: createHash('sha256').update(serializedJson).digest('hex'),
-    };
-    if (!semantic) retainSerializedResult(db, request.kind, request.symbolPattern, result);
-    return result;
   }
   if (request.kind === 'imports') {
     const { imports } = await import('../queries/navigation/imports.js');
@@ -539,13 +451,7 @@ function parseEnvelope(raw: string, expectedSessionIdentity: string): QueryServi
     requestRecord['kind'] === 'imported-by' ||
     requestRecord['kind'] === 'hierarchy' ||
     requestRecord['kind'] === 'refs' ||
-    requestRecord['kind'] === 'trace' ||
-    requestRecord['kind'] === 'value-flow' ||
-    requestRecord['kind'] === 'call-graph' ||
-    requestRecord['kind'] === 'reference-neighborhood' ||
-    requestRecord['kind'] === 'reference-reachability' ||
-    requestRecord['kind'] === 'slice' ||
-    requestRecord['kind'] === 'dataflow'
+    requestRecord['kind'] === 'call-graph'
   ) {
     if (typeof requestRecord['symbolPattern'] !== 'string') {
       throw new Error(`Invalid query service ${requestRecord['kind']} request.`);
@@ -719,14 +625,7 @@ function requiredNonNegativeInteger(value: unknown, name: string): number {
 }
 
 const semanticEnrichmentByDb = new WeakMap<object, boolean>();
-type SerializedResultCacheKind =
-  | 'dependence-slice'
-  | 'reference-neighborhood'
-  | 'reference-reachability'
-  | 'slice'
-  | 'system'
-  | 'trace'
-  | 'value-flow';
+type SerializedResultCacheKind = 'dependence-slice' | 'system';
 const serializedResultByDb = new WeakMap<
   object,
   {

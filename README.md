@@ -1,31 +1,31 @@
 # scip-query
 
-scip-query is a compiler-backed repository-understanding system for coding
-agents.
+For the normal **explore → plan → implement → review** workflow, start with `scip-query health` and use `scip-query review --base HEAD` after edits. Both inspect current TS/JS source without an index. See [review and coverage](docs/REVIEW.md) and the [product vision](docs/PRODUCT_VISION.md).
 
-A repository-understanding system turns indexed code facts into accurate,
-navigable abstractions of the systems in a codebase. Its essential service is
-structure-preserving compression: an agent can see the relevant regions and
-relationships before an edit, drill into several material regions together,
-and keep exact source identities for its plan without reading every
-implementation. scip-query differs from text search because it uses
-compiler-produced SCIP indexes: two matching words count as the same symbol
-only when the language tooling resolves them to the same definition. It also
-reports coverage gaps, so omitted evidence is not mistaken for evidence that a
-relationship does not exist.
+scip-query helps coding agents inspect code relationships and review changes.
+It uses compiler-produced symbol identities to distinguish definitions that happen
+to share a name, then attaches source locations and coverage to the relationships
+it reports.
 
-The tool helps an agent answer four practical questions:
+The core workflow is to locate the code, inspect the relationships relevant to a
+change, make the change, and check its consumers and declared architectural rules.
+The tool supplies evidence; design decisions still require understanding the
+project's responsibilities and verifying behavior with tests.
 
-- What is this code connected to?
-- Which systems participate in this behavior from entry to final effect?
-- Who consumes it, and what could a change affect?
-- Does the repository declare a structural rule for this dependency?
-- Where do React, Vue, duplication, drift, complexity, or cleanup detectors
-  point to code worth inspecting?
+| Question | Evidence to use |
+| --- | --- |
+| Which definition does this reference mean? | Search, outline, references, exact source |
+| What can call this, or be called by it? | Execution relationships |
+| Where does a value come from? | Value transfers and function-local dependence slices |
+| What state or external boundary does this operation touch? | State and runtime relationships, with provider limits |
+| Which dependencies are permitted? | Explicit architecture rules |
+| What might my edit affect? | Changed symbols and downstream consumers from diff-impact |
+| Which code warrants review? | Individual health findings, exclusions, and analysis coverage |
 
-The agent still owns the task, plan, implementation, tests, and final judgment.
-scip-query does not create goals, act as an acceptance test, or decide that work
-is complete.
+Containment identifies where a symbol is declared. Domain ownership identifies
+which module is responsible for enforcing a rule or controlling a resource;
+containment alone cannot establish that responsibility. Neither a dependency count
+nor a detector finding establishes architectural quality.
 
 ## Install
 
@@ -49,7 +49,7 @@ allow-scripts=... --location=user` command npm prints; `--allow-scripts` is
 rejected inside a project directory by design.
 
 Setup detects supported languages, installs or checks their indexers, builds
-the local index, installs the bundled skills, and writes concise agent guidance.
+the local index, installs the core exploration skills, and writes concise agent guidance.
 When the repository declares valid architecture rules, setup also installs one
 checkout-local Stop hook that checks those rules after indexed source changes.
 It does not install a completion gate, pre-commit gate, or CI enforcement.
@@ -115,7 +115,7 @@ reported.
 ```bash
 scip-query search work_session_stream_events
 scip-query inspect --search sessionStreamEvents --search work_session_stream_events --view behavior
-scip-query evidence appendWorkSessionStreamEvents --include definition,references,callers,callees
+scip-query inspect --symbol appendWorkSessionStreamEvents --view behavior
 ```
 
 `inspect --view behavior` returns the cheapest faithful syntax-derived view of
@@ -124,14 +124,15 @@ hierarchical outlines only when that representation is materially smaller;
 every source statement is represented, and unsupported or
 compression-sensitive statements are copied verbatim. Coverage reports the
 represented, copied, and omitted counts. Exact source can be requested for any
-unit whose complete implementation matters. `inspect --symbol` includes definitions,
-references, callers, callees, dependencies, and consumers by default.
+unit whose complete implementation matters. `inspect --symbol` includes the definition and related caller/callee source by
+default. Candidate relationships remain qualified in the source reasons; use
+`--include` to request reference, dependency, or consumer source.
 
 Search, location, and relationship evidence is deduplicated into one ranked
 packet. Exact locations and definitions rank first; later units must add new
 file, role, scope, symbol, or behavior coverage. A default packet materializes
 at most 12 matching lines per text selector, then applies a soft ceiling of 48
-units or 60,000 displayed-evidence characters without clipping a returned
+units or 20,000 displayed-evidence characters without clipping a returned
 syntax unit. Its omission ledger groups everything withheld by scope and role,
 reports what each group contains, and gives an exact command for drilling into
 that group. Drill into several relevant groups together; use `--full` only when
@@ -146,7 +147,7 @@ scip-query context RetryPolicy
 ```
 
 `context` returns a bounded evidence packet for a symbol, file, or module. It
-combines definitions, references, calls, data flow, dependencies, consumers,
+combines definitions, references, call neighborhoods, dependencies, consumers,
 change risk, history, suppressions, and possible reuse sites. A bounded packet
 is a deliberately limited result: it is useful for a decision but does not
 claim to contain every possible relationship.
@@ -221,7 +222,6 @@ scip-query incomplete-migration --full
 scip-query doc-drift --full
 scip-query unused-params --full
 scip-query dead --full
-scip-query isolated --full
 scip-query cycles --full
 scip-query co-change --full
 ```
@@ -244,14 +244,12 @@ still pass.
 
 ## Focused graph queries
 
-Use the aggregate `context` command first for ordinary planning. Reach for a
-focused query when one unresolved relationship can change the decision:
+Choose a focused query when one unresolved relationship can change the decision:
 
 ```bash
 scip-query refs SomeSymbol --full
-scip-query trace SomeSymbol
 scip-query call-graph SomeSymbol
-scip-query value-flow SomeSymbol
+scip-query evidence --symbol SomeSymbol --edge dataflow --direction both --depth 2 --max-edges 48
 scip-query affected SomeSymbol --full
 scip-query system src/payments
 scip-query surface src/payments
@@ -261,6 +259,43 @@ scip-query rdeps src/payments/service.ts
 
 Do not repeat an unchanged query after context compaction. Re-run when source,
 the index generation, the command input, or the required coverage changed.
+
+## Value flow and slicing
+
+A value transfer connects a particular value-producing occurrence to an occurrence
+that receives it. `evidence --edge dataflow` reports supported static transfer relationships,
+including argument-to-parameter and consumed return-value relationships. Each
+edge distinguishes confirmed evidence from candidates and reports provider limits.
+
+A backward slice identifies the source occurrences that can affect a chosen
+variable occurrence through assignments, value use, or conditions governing
+execution. A forward slice follows those dependencies toward affected occurrences.
+`dependence-slice` computes these within one TypeScript or JavaScript callable:
+
+```bash
+scip-query dependence-slice src/payments/service.ts:42 --variable total
+scip-query dependence-slice src/payments/service.ts:42 --variable total --column 10
+scip-query dependence-slice src/payments/service.ts:12 --variable amount --forward
+```
+
+Lines and columns in command arguments are one-based. Ambiguous occurrences are
+listed for refinement. The default traverses the local graph to completion;
+`--depth` limits hops and `--max-edges` bounds rendered edges. Coverage distinguishes
+output bounds from an incomplete analysis. Calls into other functions, general heap
+aliasing (different references to the same stored object), closure invocation order,
+and unsupported exception behavior require separate evidence. This is a dependency
+slice, not a proof that extracting its statements into a function preserves behavior.
+
+`slice-cohesion` compares slices for a function's different outputs to suggest
+possible separations. Its suggestions require source confirmation and tests; partial
+models cannot earn an extraction signal. Health reports retain the individual
+findings and coverage without aggregate quality grades.
+
+## Optional skills
+
+Setup and `install-skills` install `scip-query` and `scip-explore` by default.
+Use `scip-query install-skills --all` to install the shipped specialist workflows.
+Existing specialist installations and user-owned skill directories are preserved.
 
 ## Suppressions
 

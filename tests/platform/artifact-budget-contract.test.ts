@@ -20,11 +20,7 @@ describe('production artifact budget contract', () => {
       .map((path) => relative(process.cwd(), path).replaceAll('\\', '/'))
       .sort();
 
-    expect(owners).toEqual([
-      'src/filesystem/bounded-file.ts',
-      'src/platform/project-files.ts',
-      'src/tla/instrument.ts',
-    ]);
+    expect(owners).toEqual(['src/filesystem/bounded-file.ts', 'src/platform/project-files.ts']);
 
     const boundedFile = readFileSync(join(sourceRoot, 'filesystem', 'bounded-file.ts'), 'utf8');
     expect(boundedFile).toContain('assertReadableIdentity(before');
@@ -34,10 +30,5 @@ describe('production artifact budget contract', () => {
     expect(projectFiles).toContain('before.size > maxBytes');
     expect(projectFiles).toContain("'changed-during-read'");
     expect(projectFiles).toContain('readFileSync(descriptor)');
-
-    const generatedRecorder = readFileSync(join(sourceRoot, 'tla', 'instrument.ts'), 'utf8');
-    expect(generatedRecorder).toContain('TRACE_MAX_BYTES = 16 * 1024 * 1024');
-    expect(generatedRecorder).toContain('statSync(tracePath).size');
-    expect(generatedRecorder).toContain('Buffer.byteLength(payload)');
   });
 });

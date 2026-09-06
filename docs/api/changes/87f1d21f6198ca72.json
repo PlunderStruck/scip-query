@@ -1,0 +1,181 @@
+{
+  "acceptedAt": "2026-09-05T21:26:46.655Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "87f1d21f6198ca72e3f33c01e006ec3a44ba1ea158093d460ffb89213c9f709a",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export FunctionChange.",
+      "target": "./queries:FunctionChange"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceMaintenanceReport.",
+      "target": "./queries:SourceMaintenanceReport"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceReviewOptions.",
+      "target": "./queries:SourceReviewOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export TwinAbOptions.",
+      "target": "./queries:TwinAbOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export TwinAbOutcome.",
+      "target": "./queries:TwinAbOutcome"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export TwinAbRefusal.",
+      "target": "./queries:TwinAbRefusal"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export TwinAbSuccess.",
+      "target": "./queries:TwinAbSuccess"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export TwinAbSymbol.",
+      "target": "./queries:TwinAbSymbol"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "codeBatch changed from declare function codeBatch(db: ScipDatabase, selectors: readonly string[], opts?: { context?: number; members?: CodeFileMemberMode; }): CodeBatchResult; to declare function codeBatch(db: ScipDatabase, selectors: readonly string[], opts?: { context?: number; members?: CodeFileMemberMode; localCalls?: boolean; }): CodeBatchResult;.",
+      "target": "./queries:codeBatch"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export defaultTwinAbOutPath.",
+      "target": "./queries:defaultTwinAbOutPath"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export sourceMaintenanceReport.",
+      "target": "./queries:sourceMaintenanceReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export twinAb.",
+      "target": "./queries:twinAb"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "codeBatch changed from declare function codeBatch(db: ScipDatabase, selectors: readonly string[], opts?: { context?: number; members?: CodeFileMemberMode; }): CodeBatchResult; to declare function codeBatch(db: ScipDatabase, selectors: readonly string[], opts?: { context?: number; members?: CodeFileMemberMode; localCalls?: boolean; }): CodeBatchResult;.",
+      "target": "./queries/code:codeBatch"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export FunctionChange.",
+      "target": "./queries/index:FunctionChange"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceMaintenanceReport.",
+      "target": "./queries/index:SourceMaintenanceReport"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export SourceReviewOptions.",
+      "target": "./queries/index:SourceReviewOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export TwinAbOptions.",
+      "target": "./queries/index:TwinAbOptions"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export TwinAbOutcome.",
+      "target": "./queries/index:TwinAbOutcome"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export TwinAbRefusal.",
+      "target": "./queries/index:TwinAbRefusal"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export TwinAbSuccess.",
+      "target": "./queries/index:TwinAbSuccess"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export TwinAbSymbol.",
+      "target": "./queries/index:TwinAbSymbol"
+    },
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "codeBatch changed from declare function codeBatch(db: ScipDatabase, selectors: readonly string[], opts?: { context?: number; members?: CodeFileMemberMode; }): CodeBatchResult; to declare function codeBatch(db: ScipDatabase, selectors: readonly string[], opts?: { context?: number; members?: CodeFileMemberMode; localCalls?: boolean; }): CodeBatchResult;.",
+      "target": "./queries/index:codeBatch"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export defaultTwinAbOutPath.",
+      "target": "./queries/index:defaultTwinAbOutPath"
+    },
+    {
+      "classification": "additive",
+      "kind": "export-added",
+      "message": "Added export sourceMaintenanceReport.",
+      "target": "./queries/index:sourceMaintenanceReport"
+    },
+    {
+      "classification": "breaking",
+      "kind": "export-removed",
+      "message": "Removed export twinAb.",
+      "target": "./queries/index:twinAb"
+    },
+    {
+      "classification": "additive",
+      "kind": "entry-added",
+      "message": "Added public declaration path ./queries/review.",
+      "target": "./queries/review"
+    },
+    {
+      "classification": "breaking",
+      "kind": "entry-removed",
+      "message": "Removed public declaration path ./queries/twin-ab.",
+      "target": "./queries/twin-ab"
+    },
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "m changed from declare function codeBatch(db: ScipDatabase, selectors: readonly string[], opts?: { context?: number; members?: CodeFileMemberMode; }): CodeBatchResult; to declare function codeBatch(db: ScipDatabase, selectors: readonly string[], opts?: { context?: number; members?: CodeFileMemberMode; localCalls?: boolean; }): CodeBatchResult;.",
+      "target": "code-<hash>.d.ts:m"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.25.0",
+  "previousDigest": "5ad9572c68bf5ed662e157f7fdc5340a99728f8f008613df96894a1ef4379e6a",
+  "reason": "Replace twin-ab scaffold API with current-source maintenance review; make range call expansion explicit and preserve literal values in duplicate-body comparison. Migration and coverage limits are documented in docs/REVIEW.md.",
+  "schemaVersion": 1
+}

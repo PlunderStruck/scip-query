@@ -6,13 +6,9 @@
  */
 export const HEALTH_DETECTOR_PROFILES = {
   dead: { minLoc: 1, skipBarrels: false, deadCodeOnly: false },
-  isolated: { minLoc: 3 },
   similar: { minSimilarity: 0.6, limit: 50, minCallees: 4 },
   duplicateBodies: { maxLoc: 15, limit: 50 },
-  extract: { minLoc: 15, minCallees: 5, limit: 50 },
-  wrappers: { maxLoc: 15, limit: 50 },
   passthroughs: { maxLoc: 15, limit: 50 },
-  stale: { minLoc: 3, limit: 50 },
   drift: {},
   twinDrift: { minSimilarity: 0.3 },
 } as const;

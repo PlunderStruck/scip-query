@@ -8,15 +8,9 @@ import { consumerEvidenceProduct } from '../internal/consumer-evidence.js';
 import { definitionSourceSnippet, extractImplementationBody } from './duplicate-bodies.js';
 import { isExportedDefinition } from './passthrough-candidates.js';
 import { stripComments, stripCommentsAndStrings } from '../../source/primitives/source-stripper.js';
-import { getSourceText } from '../../source/primitives/source-text.js';
-import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 
-/**
- * not-implemented (D1): mechanizes the cleanup integrity question: "reachable
- * placeholder" drill. A stub with zero callers is `dead`'s job (delete it);
- * a stub a production entry point can actually reach — through a real
- * caller, a framework-dispatched entry surface, or a package-surface/
- * entryRoots export — is a live claim the code cannot back up.
+/** Placeholder syntax with observed consumer or configured/structural entry evidence.
+ * Findings require behavioral review; consumer absence is not proof of dead code.
  */
 
 export type NotImplementedStubKind = 'throw-stub' | 'todo-return-default' | 'empty-body';
@@ -84,21 +78,17 @@ export function notImplemented(
   }
   if (stubs.length === 0) return [];
 
-  const exempted = overriddenAbstractStubSymbols(db, stubs, candidates);
-  const nonExempt = stubs.filter((stub) => !exempted.has(stub.def.symbol));
-  if (nonExempt.length === 0) return [];
-
   const evidence = consumerEvidenceProduct(db, index).forDefinitions(
-    nonExempt.map((stub) => stub.def),
+    stubs.map((stub) => stub.def),
     { semantic },
   );
 
   const findings: NotImplementedFinding[] = [];
-  for (const stub of nonExempt) {
+  for (const stub of stubs) {
     const entry = evidence.get(stub.def.symbolId);
     const callerFanIn = entry?.realConsumers.length ?? 0;
     const reachability = reachabilityFor(db, stub.def, callerFanIn);
-    if (!reachability) continue; // unreachable — dead's job, not ours
+    if (!reachability) continue; // No observed consumer or entry evidence in this scan.
 
     findings.push({
       symbol: stub.def.symbol,
@@ -228,59 +218,4 @@ function isNotImplementedThrow(statement: string): boolean {
 
 function isGenuineEmptyFunctionBody(snippet: string): boolean {
   return EMPTY_FUNCTION_BODY_SUFFIX_PATTERN.test(snippet.trimEnd());
-}
-
-/**
- * FP archetype this exists to suppress: an abstract-method-shaped throw
- * stub in a base class that every concrete subclass overrides is the
- * intended contract, not a forgotten implementation — check the graph
- * (subclass-by-`extends`, same-leaf override) before judging it a finding.
- */
-function overriddenAbstractStubSymbols(
-  db: ScipDatabase,
-  stubs: readonly StubCandidate[],
-  productionFunctionLikeDefs: readonly IndexedDefinition[],
-): Set<string> {
-  const exempted = new Set<string>();
-  const owners = new Set(stubs.map((stub) => stub.def.parentTypeName).filter((name): name is string => name !== null));
-  if (owners.size === 0) return exempted;
-
-  const subclassesByOwner = findSubclassNames(db, owners);
-  const ownersByLeaf = new Map<string, Set<string>>();
-  for (const def of productionFunctionLikeDefs) {
-    if (!def.parentTypeName) continue;
-    const set = ownersByLeaf.get(def.leaf) ?? new Set<string>();
-    set.add(def.parentTypeName);
-    ownersByLeaf.set(def.leaf, set);
-  }
-
-  for (const stub of stubs) {
-    const owner = stub.def.parentTypeName;
-    if (!owner) continue;
-    const subclasses = subclassesByOwner.get(owner);
-    if (!subclasses || subclasses.size === 0) continue;
-    const definingOwners = ownersByLeaf.get(stub.def.leaf) ?? new Set<string>();
-    const allOverridden = [...subclasses].every((subclassName) => definingOwners.has(subclassName));
-    if (allOverridden) exempted.add(stub.def.symbol);
-  }
-  return exempted;
-}
-
-const EXTENDS_PATTERN = /\bclass\s+([A-Za-z_$][\w$]*)\s+extends\s+([A-Za-z_$][\w$]*)/g;
-
-function findSubclassNames(db: ScipDatabase, owners: ReadonlySet<string>): Map<string, Set<string>> {
-  const result = new Map<string, Set<string>>();
-  for (const path of indexedDocumentPaths(db, { includeIgnored: false })) {
-    const text = getSourceText(db, path);
-    if (!text) continue;
-    for (const match of text.matchAll(EXTENDS_PATTERN)) {
-      const subclassName = match[1];
-      const ownerName = match[2];
-      if (!subclassName || !ownerName || !owners.has(ownerName)) continue;
-      const set = result.get(ownerName) ?? new Set<string>();
-      set.add(subclassName);
-      result.set(ownerName, set);
-    }
-  }
-  return result;
 }

@@ -1,0 +1,116 @@
+{
+  "modelParse": "sany",
+  "variables": [
+    "x"
+  ],
+  "operators": [
+    "%",
+    "*",
+    "+",
+    "-",
+    "..",
+    "<",
+    ">",
+    "Bad",
+    "Init",
+    "Nat",
+    "Next",
+    "Safe",
+    "\\div",
+    "\\geq",
+    "\\leq",
+    "^"
+  ],
+  "actions": [
+    {
+      "name": "Nat",
+      "reads": [],
+      "writes": []
+    },
+    {
+      "name": "+",
+      "reads": [],
+      "writes": []
+    },
+    {
+      "name": "-",
+      "reads": [],
+      "writes": []
+    },
+    {
+      "name": "*",
+      "reads": [],
+      "writes": []
+    },
+    {
+      "name": "^",
+      "reads": [],
+      "writes": []
+    },
+    {
+      "name": "<",
+      "reads": [],
+      "writes": []
+    },
+    {
+      "name": ">",
+      "reads": [],
+      "writes": []
+    },
+    {
+      "name": "\\leq",
+      "reads": [],
+      "writes": []
+    },
+    {
+      "name": "\\geq",
+      "reads": [],
+      "writes": []
+    },
+    {
+      "name": "%",
+      "reads": [],
+      "writes": []
+    },
+    {
+      "name": "\\div",
+      "reads": [],
+      "writes": []
+    },
+    {
+      "name": "..",
+      "reads": [],
+      "writes": []
+    },
+    {
+      "name": "Init",
+      "reads": [
+        "x"
+      ],
+      "writes": []
+    },
+    {
+      "name": "Next",
+      "reads": [
+        "x"
+      ],
+      "writes": [
+        "x"
+      ]
+    },
+    {
+      "name": "Safe",
+      "reads": [
+        "x"
+      ],
+      "writes": []
+    },
+    {
+      "name": "Bad",
+      "reads": [
+        "x"
+      ],
+      "writes": []
+    }
+  ]
+}

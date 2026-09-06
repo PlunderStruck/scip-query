@@ -161,6 +161,15 @@ describe('co-change partner labels', () => {
     );
   });
 
+  it('applies a requested partner file before spending the pair scan budget', () => {
+    const { db } = createFixture();
+    const all = coChange(db, undefined, { minTogether: 4, minConfidence: 0.75, limit: 10 });
+    expect(all.findings.length).toBeGreaterThan(1);
+    const target = all.findings.at(-1)!;
+    const scoped = coChange(db, target.fileA, { minTogether: 4, limit: 10, scanLimit: 1 });
+    expect(scoped.findings).toContainEqual(expect.objectContaining({ fileA: target.fileA, fileB: target.fileB }));
+  });
+
   it('honors scanLimit by keeping only the highest-priority pairs (followup #6)', () => {
     const { db } = createFixture();
 
@@ -170,5 +179,16 @@ describe('co-change partner labels', () => {
     const bounded = coChange(db, undefined, { minTogether: 4, minConfidence: 0.75, limit: 10, scanLimit: 1 });
     expect(bounded.findings).toHaveLength(1);
     expect(bounded.findings[0]?.together).toBe(Math.max(...unbounded.findings.map((finding) => finding.together)));
+  });
+
+  it('returns no findings for a zero output limit while preserving history availability', () => {
+    const { db } = createFixture();
+    const observed = coChange(db, undefined, { minTogether: 4, limit: 10 });
+    expect(observed.findings.length).toBeGreaterThan(0);
+    expect(coChange(db, undefined, { minTogether: 4, limit: 0 })).toEqual({
+      available: true,
+      commitsAnalyzed: observed.commitsAnalyzed,
+      findings: [],
+    });
   });
 });

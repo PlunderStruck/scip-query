@@ -137,7 +137,7 @@ describe('context affected-consumer reuse', () => {
       });
       const ambiguous = repositoryContext(db, 'src/many.ts');
       expect(ambiguous).toMatchObject({
-        warnings: ['File target has 2 callable symbols; use one callable name for compiler-resolved flow.'],
+        warnings: ['File target has 2 callable symbols; use one callable name for compiler-resolved relationships.'],
       });
       expect(ambiguous).not.toHaveProperty('primaryCallable');
     } finally {

@@ -1,6 +1,6 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FileRevisionConflictError } from '../../src/runtime/revisioned-file.js';
 import {
@@ -58,6 +58,71 @@ afterEach(() => {
 });
 
 describe('suppression identity', () => {
+  it.each([
+    'complexity:src/calculate.ts:calculate',
+    '../../escaped-audit',
+    'C:\\outside\\record',
+    'NUL',
+    'ID-reserved',
+  ])('round trips %s without using the ID as a path', (id) => {
+    const root = createRoot();
+    const result = writeSuppressionFile(root, { id, reason: 'reviewed' });
+    expect(dirname(result.path)).toBe(suppressionDirPath(root));
+    expect(readRaw(result.path).suppressionIdentity).toBe(id);
+    expect(readSuppressionDir(root).suppressions).toMatchObject([{ id, reason: 'reviewed' }]);
+    expect(existsSync(join(root, 'escaped-audit.json'))).toBe(false);
+  });
+
+  it('reads and revision-checks old nested records in place', () => {
+    const root = createRoot();
+    const id = 'complexity:src/calculate.ts:calculate';
+    const path = suppressionPath(root, id);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify(record(id, 'old decision')));
+    expect(readSuppressionDir(root).suppressions).toMatchObject([{ id }]);
+    const current = writeSuppressionFile(root, { id, reason: 'old decision' });
+    expect(current.path).toBe(path);
+    expect(current.disposition).toBe('unchanged');
+    expect(() => writeSuppressionFile(root, { id, reason: 'new decision' })).toThrow(SuppressionWriteConflictError);
+    expect(
+      writeSuppressionFile(root, { id, reason: 'new decision' }, { expectedRevision: current.revision }).disposition,
+    ).toBe('replaced');
+    expect(readSuppressionDir(root).suppressions).toMatchObject([{ id, reason: 'new decision' }]);
+  });
+
+  it('discloses conflicting old and new records and applies neither', () => {
+    const root = createRoot();
+    const id = 'complexity:src/calculate.ts:calculate';
+    writeSuppressionFile(root, { id, reason: 'new decision' });
+    const oldPath = suppressionPath(root, id);
+    mkdirSync(dirname(oldPath), { recursive: true });
+    writeFileSync(oldPath, JSON.stringify(record(id, 'old decision')));
+    const result = readSuppressionDir(root);
+    expect(result.suppressions).toEqual([]);
+    expect(result.warnings.join(' ')).toContain('conflicting suppression identity');
+    expect(() => writeSuppressionFile(root, { id, reason: 'third decision' })).toThrow('Duplicate suppression records');
+  });
+
+  it('rejects symbolic storage directories and skips symbolic record files', () => {
+    const root = createRoot();
+    const outside = createRoot();
+    mkdirSync(join(root, '.scipquery'));
+    symlinkSync(outside, suppressionDirPath(root), 'dir');
+    expect(() => writeSuppressionFile(root, { id: 'SQABC', reason: 'x' })).toThrow('Symbolic links');
+    expect(existsSync(join(outside, 'SQABC.json'))).toBe(false);
+    rmSync(suppressionDirPath(root));
+    mkdirSync(suppressionDirPath(root));
+    const externalRecord = join(outside, 'record.json');
+    writeFileSync(externalRecord, JSON.stringify(record('SQABC', 'external')));
+    symlinkSync(externalRecord, suppressionPath(root, 'SQABC'));
+    expect(() => writeSuppressionFile(root, { id: 'SQABC', reason: 'x' })).toThrow('Symbolic links');
+    expect(readSuppressionDir(root)).toMatchObject({
+      suppressions: [],
+      warnings: [expect.stringContaining('symbolic')],
+    });
+    expect(readRaw(externalRecord).reason).toBe('external');
+  });
+
   it('uses the finding id when present', () => {
     const suppression = { id: 'SQABC123DEF456', reason: 'x' };
     expect(suppressionFileName(suppression)).toBe('SQABC123DEF456.json');
@@ -398,6 +463,26 @@ describe('writeSuppressionFile', () => {
 });
 
 describe('decodeSuppressionFile / readSuppressionDir', () => {
+  it.each([true, {}, [], { kind: 'unrecognized' }])(
+    'rejects malformed adjudication metadata in an unversioned record: %j',
+    (decision) => {
+      expect(decodeSuppressionFile({ id: 'SQAAA', reason: 'reviewed exception', decision })).toEqual({
+        state: 'malformed',
+        error: 'invalid automated adjudication decision',
+      });
+    },
+  );
+
+  it.each([{ id: 17 }, { check: 17 }, { id: '  ' }, { check: '  ' }, { id: {} }])(
+    'rejects legacy records without a nonempty string target: %j',
+    (target) => {
+      expect(decodeSuppressionFile({ ...target, reason: 'reviewed exception' })).toEqual({
+        state: 'malformed',
+        error: 'needs an id or a check',
+      });
+    },
+  );
+
   it('returns empty for a missing directory', () => {
     expect(readSuppressionDir(createRoot())).toMatchObject({
       suppressions: [],

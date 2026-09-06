@@ -1,0 +1,1 @@
+{"kind":"scip-query-json-export","schemaVersion":1,"producer":{"name":"scip-query","version":"0.25.0"},"command":"extract-candidates","path":"/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/full-tool-audit/2026-09-05/followup/final/extract-candidates.json","bytes":3088,"sha256":"9306995237028f950910e9344bbc035304227e7dd1dcd40718b78a44b84b9d80"}

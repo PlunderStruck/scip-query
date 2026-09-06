@@ -9,6 +9,7 @@ import {
   attributeResidue,
   diffImpact,
   diffImpactPartial,
+  diffImpactPlan,
   mergeDiffImpactPartials,
 } from '../../../src/queries/impact/diff-impact.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
@@ -212,6 +213,107 @@ describe('diff-impact accuracy', () => {
     }
   });
 
+  it('unions additional consumer tiers even when SCIP already has a consumer', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-impact-union-'));
+    const dbPath = join(tempDir, 'index.db');
+    createFixtureDb(dbPath);
+    const db = new ScipDatabase({ dbPath, projectRoot: tempDir });
+    try {
+      const result = diffImpactPartial(
+        db,
+        ['src/model.ts'],
+        ['src/model.ts'],
+        [{ file: 'src/model.ts', startLine: 4, endLine: 4 }],
+        {
+          evidenceRuntime: {
+            semanticConsumers: (_db, definitions) =>
+              new Map(definitions.map((def) => [def.symbolId, new Set(['src/semantic-consumer.ts'])])),
+            sourceFallbackConsumers: (_db, definitions) =>
+              new Map(definitions.map((def) => [def.symbolId, new Set(['src/source-consumer.ts'])])),
+          },
+        },
+      );
+      expect(result.changedSymbols[0]?.fanIn).toBe(3);
+      expect(result.consumerEntries.map((entry) => entry.file).sort()).toEqual([
+        'src/consumer.ts',
+        'src/semantic-consumer.ts',
+        'src/source-consumer.ts',
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('discloses changed paths omitted from an otherwise nonempty indexed result', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-impact-omissions-'));
+    const dbPath = join(tempDir, 'index.db');
+    createFixtureDb(dbPath);
+    const db = new ScipDatabase({ dbPath, projectRoot: tempDir });
+    try {
+      const result = diffImpact(db, {
+        plan: {
+          changedFiles: ['src/model.ts'],
+          changedFileLines: ['src/model.ts', 'src/new.ts'],
+          changedRanges: [{ file: 'src/model.ts', startLine: 4, endLine: 4 }],
+          renamedFiles: [],
+        },
+      });
+      expect(result.unindexedChangedFiles).toEqual(['src/new.ts']);
+      expect(result.summary.note).toContain('1 changed path(s) were omitted');
+    } finally {
+      db.close();
+    }
+  });
+
+  it('compares current worktree bytes with the base when a staged edit was reverted locally', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-impact-staged-'));
+    mkdirSync(join(tempDir, 'src'));
+    const file = join(tempDir, 'src/model.ts');
+    const initial = 'export const value = 1;\n';
+    writeFileSync(file, initial);
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: tempDir!, stdio: 'ignore' });
+    git('init', '-q');
+    git('add', '.');
+    git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'fixture');
+    writeFileSync(file, 'export const value = 2;\n');
+    git('add', 'src/model.ts');
+    writeFileSync(file, initial);
+    const dbPath = join(tempDir, 'index.db');
+    createFixtureDb(dbPath);
+    const db = new ScipDatabase({ dbPath, projectRoot: tempDir });
+    try {
+      expect(diffImpact(db).changedFiles).not.toContain('src/model.ts');
+    } finally {
+      db.close();
+    }
+  });
+
+  it('preserves quoted Unicode Git paths and attributes the actual changed line', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-impact-path-'));
+    mkdirSync(join(tempDir, 'src'));
+    const relative = 'src/Café".ts';
+    const file = join(tempDir, relative);
+    writeFileSync(file, 'export const first = 1;\nexport const second = 2;\n');
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: tempDir!, stdio: 'ignore' });
+    git('init', '-q');
+    git('add', '.');
+    git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'fixture');
+    writeFileSync(file, 'export const first = 1;\nexport const second = 3;\n');
+    const dbPath = join(tempDir, 'index.db');
+    createFixtureDb(dbPath);
+    const sql = new Database(dbPath);
+    sql.prepare('UPDATE documents SET relative_path = ? WHERE id = 1').run(relative);
+    sql.close();
+    const db = new ScipDatabase({ dbPath, projectRoot: tempDir });
+    try {
+      const plan = diffImpactPlan(db);
+      expect(plan.changedFiles).toContain(relative);
+      expect(plan.changedRanges).toContainEqual({ file: relative, startLine: 1, endLine: 1 });
+    } finally {
+      db.close();
+    }
+  });
+
   it('preserves per-symbol fan-in and consumers when multiple changed definitions are batched', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-query-diff-impact-'));
     mkdirSync(join(tempDir, 'src'), { recursive: true });
@@ -271,8 +373,8 @@ describe('diff-impact accuracy', () => {
         },
       ]);
       expect(result.evidenceTiers).toEqual([
-        { tier: 'semantic-consumers', state: 'complete', attemptedSymbols: 0 },
-        { tier: 'source-fallback-consumers', state: 'complete', attemptedSymbols: 0 },
+        { tier: 'semantic-consumers', state: 'complete', attemptedSymbols: 2 },
+        { tier: 'source-fallback-consumers', state: 'complete', attemptedSymbols: 2 },
       ]);
 
       const degraded = diffImpactPartial(
@@ -298,13 +400,13 @@ describe('diff-impact accuracy', () => {
         {
           tier: 'semantic-consumers',
           state: 'failed',
-          attemptedSymbols: 0,
+          attemptedSymbols: 2,
           reason: 'semantic provider crashed',
         },
         {
           tier: 'source-fallback-consumers',
           state: 'failed',
-          attemptedSymbols: 0,
+          attemptedSymbols: 2,
           reason: 'source fallback exhausted',
         },
       ]);
@@ -314,13 +416,13 @@ describe('diff-impact accuracy', () => {
         {
           tier: 'semantic-consumers',
           state: 'failed',
-          attemptedSymbols: 0,
+          attemptedSymbols: 4,
           reason: 'semantic provider crashed',
         },
         {
           tier: 'source-fallback-consumers',
           state: 'failed',
-          attemptedSymbols: 0,
+          attemptedSymbols: 4,
           reason: 'source fallback exhausted',
         },
       ]);

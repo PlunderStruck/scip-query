@@ -21,6 +21,8 @@ import { normalizeSafeProjectRelativePath } from '../../domain/path-normalizatio
 
 export interface DiffImpactResult {
   changedFiles: string[];
+  /** Changed paths omitted from symbol analysis because they are absent or excluded from this index. */
+  unindexedChangedFiles?: string[];
   changedSymbols: Array<{
     symbol: string;
     shortName: string;
@@ -174,9 +176,11 @@ export function diffImpact(db: ScipDatabase, opts: { base?: string; plan?: DiffI
     return unindexedChangedFilesResult(plan.changedFileLines);
   }
 
-  return mergeDiffImpactPartials(plan.changedFiles, [
-    diffImpactPartial(db, plan.changedFiles, plan.changedFiles, plan.changedRanges),
-  ]);
+  return mergeDiffImpactPartials(
+    plan.changedFiles,
+    [diffImpactPartial(db, plan.changedFiles, plan.changedFiles, plan.changedRanges)],
+    plan.changedFileLines.filter((file) => !plan.changedFiles.includes(file)),
+  );
 }
 
 export function diffImpactPlan(db: ScipDatabase, opts: { base?: string } = {}): DiffImpactPlan {
@@ -227,49 +231,25 @@ export function diffImpactPartial(
     (a, b) => a.relativePath.localeCompare(b.relativePath) || a.startLine - b.startLine,
   );
   const symbolIds = defs.map((def) => def.symbolId);
-  // Semantic caller evidence costs a whole-project findReferences per
-  // definition — spend it only where it can change an outcome: defs the SCIP
-  // index shows zero consumers for. Indexed fan-in already proves liveness
-  // for the rest.
-  const fanInBySymbolId = scipFanInBySymbolId(db, symbolIds);
-  const consumerFilesBySymbolId = scipConsumerFilesBySymbolId(db, symbolIds, allChangedFiles);
-  const stillZeroAfterScip = defs.filter((def) => (fanInBySymbolId.get(def.symbolId) ?? 0) === 0);
-  // A cold fragment cache with no watch service would make this batch host
-  // the whole compiler program for minutes; degrade with the remedy instead.
+  // Impact needs the union of observed consumers, even when one tier already
+  // proves liveness. A partial SCIP result cannot suppress another provider.
+  const consumerFilesBySymbolId = scipConsumerFilesBySymbolId(db, symbolIds);
   const readiness: SemanticConsumerReadiness =
-    stillZeroAfterScip.length > 0 ? (evidenceRuntime.semanticReadiness?.(db) ?? { ready: true }) : { ready: true };
+    defs.length > 0 ? (evidenceRuntime.semanticReadiness?.(db) ?? { ready: true }) : { ready: true };
   const semanticEvidence = readiness.ready
-    ? collectConsumerEvidence('semantic-consumers', stillZeroAfterScip.length, () =>
-        evidenceRuntime.semanticConsumers(db, stillZeroAfterScip),
-      )
+    ? collectConsumerEvidence('semantic-consumers', defs.length, () => evidenceRuntime.semanticConsumers(db, defs))
     : {
         values: new Map<number, Set<string>>(),
         status: {
           tier: 'semantic-consumers' as const,
           state: 'failed' as const,
-          attemptedSymbols: stillZeroAfterScip.length,
+          attemptedSymbols: defs.length,
           reason: readiness.reason,
         },
       };
   const semanticConsumers = semanticEvidence.values;
-  // Semantic (ts-morph) resolves most cross-file gaps the raw SCIP index
-  // misses, but shares the same tsconfig-alias/workspace-package resolution
-  // surface as everything else in this tool — when it also comes up empty,
-  // fall through to the same source-fallback layer `dead`/`isolated`/
-  // `stale-abstractions`/`production-callables` already lean on
-  // (sourceImportPathsByLocalName -> resolveImportPath), instead of letting
-  // `new-dead` report a symbol whose only real gap is index/resolution
-  // coverage, not liveness. Scoped to the same shrinking candidate set for
-  // the same reason semantic already is: this is a per-definition
-  // whole-project scan, worth paying only where the cheaper tiers found
-  // nothing.
-  const stillZeroAfterSemantic = stillZeroAfterScip.filter(
-    (def) => (semanticConsumers.get(def.symbolId)?.size ?? 0) === 0,
-  );
-  const sourceFallbackEvidence = collectConsumerEvidence(
-    'source-fallback-consumers',
-    stillZeroAfterSemantic.length,
-    () => evidenceRuntime.sourceFallbackConsumers(db, stillZeroAfterSemantic),
+  const sourceFallbackEvidence = collectConsumerEvidence('source-fallback-consumers', defs.length, () =>
+    evidenceRuntime.sourceFallbackConsumers(db, defs),
   );
   const sourceFallbackConsumers = sourceFallbackEvidence.values;
   for (const def of defs) {
@@ -281,7 +261,6 @@ export function diffImpactPartial(
       consumerMap,
       semanticConsumers.get(def.symbolId) ?? new Set<string>(),
       sourceFallbackConsumers.get(def.symbolId) ?? new Set<string>(),
-      fanInBySymbolId.get(def.symbolId) ?? 0,
       consumerFilesBySymbolId.get(def.symbolId) ?? new Set<string>(),
     );
   }
@@ -300,6 +279,7 @@ export function diffImpactPartial(
 export function mergeDiffImpactPartials(
   changedFiles: readonly string[],
   partials: readonly DiffImpactPartial[],
+  unindexedChangedFiles: readonly string[] = [],
 ): DiffImpactResult {
   const consumerMap: ConsumerMap = new Map();
   const changedSymbols = partials.flatMap((partial) => partial.changedSymbols);
@@ -320,6 +300,7 @@ export function mergeDiffImpactPartials(
   const affectedConsumers = affectedConsumerRows(consumerMap);
   return {
     changedFiles: [...changedFiles],
+    unindexedChangedFiles: [...unindexedChangedFiles],
     changedSymbols,
     affectedConsumers,
     attributionNotes,
@@ -328,6 +309,11 @@ export function mergeDiffImpactPartials(
       totalChangedFiles: changedFiles.length,
       totalChangedSymbols: changedSymbols.length,
       totalAffectedFiles: affectedConsumers.length,
+      ...(unindexedChangedFiles.length
+        ? {
+            note: `${unindexedChangedFiles.length} changed path(s) were omitted from symbol analysis because they are absent or excluded from this index. Reindex supported source or use review for current-source analysis.`,
+          }
+        : {}),
     },
   };
 }
@@ -351,6 +337,7 @@ function emptyDiffImpact(note: string, changedFiles: string[] = []): DiffImpactR
 function unindexedChangedFilesResult(changedFiles: string[]): DiffImpactResult {
   return {
     changedFiles,
+    unindexedChangedFiles: changedFiles,
     changedSymbols: [],
     affectedConsumers: [],
     attributionNotes: [],
@@ -365,41 +352,28 @@ function unindexedChangedFilesResult(changedFiles: string[]): DiffImpactResult {
 }
 
 function getGitDiffSnapshot(projectRoot: string, base: string): GitDiffSnapshot {
-  const diffNames = execFileSync('git', ['diff', '--name-status', '--find-renames', base, '--'], {
+  const diffNames = execFileSync('git', ['diff', '--relative', '-z', '--name-status', '--find-renames', base, '--'], {
     encoding: 'utf-8',
     cwd: projectRoot,
     timeout: 30_000,
     maxBuffer: 64 * 1024 * 1024,
   });
-  const stagedNames = execFileSync('git', ['diff', '--name-status', '--find-renames', '--cached', base, '--'], {
+  const untracked = execFileSync('git', ['ls-files', '-z', '--others', '--exclude-standard'], {
     encoding: 'utf-8',
     cwd: projectRoot,
     timeout: 30_000,
     maxBuffer: 64 * 1024 * 1024,
   });
-  const untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], {
+  const diff = execFileSync('git', ['diff', '--relative', '--unified=0', base, '--'], {
     encoding: 'utf-8',
     cwd: projectRoot,
     timeout: 30_000,
     maxBuffer: 64 * 1024 * 1024,
   });
-  const diff = execFileSync('git', ['diff', '--unified=0', base, '--'], {
-    encoding: 'utf-8',
-    cwd: projectRoot,
-    timeout: 30_000,
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  const staged = execFileSync('git', ['diff', '--unified=0', '--cached', base, '--'], {
-    encoding: 'utf-8',
-    cwd: projectRoot,
-    timeout: 30_000,
-    maxBuffer: 64 * 1024 * 1024,
-  });
-
-  const nameStatuses = parseGitNameStatuses([diffNames, stagedNames]);
+  const nameStatuses = parseGitNameStatuses(diffNames);
   return {
-    changedFileLines: [...new Set([...nameStatuses.changedFiles, ...lines(untracked)])],
-    changedRanges: dedupeRanges([...parseChangedLineRanges(diff), ...parseChangedLineRanges(staged)]),
+    changedFileLines: [...new Set([...nameStatuses.changedFiles, ...untracked.split('\0').filter(Boolean)])],
+    changedRanges: parseChangedLineRanges(diff),
     renamedFiles: nameStatuses.renamedFiles,
     deletedFiles: nameStatuses.deletedFiles,
   };
@@ -720,7 +694,7 @@ function detectRenamedFiles(
   return [...renamed.values()].sort((left, right) => left.to.localeCompare(right.to));
 }
 
-function parseGitNameStatuses(chunks: readonly string[]): {
+function parseGitNameStatuses(chunk: string): {
   changedFiles: string[];
   renamedFiles: RenamedFile[];
   deletedFiles: string[];
@@ -728,16 +702,21 @@ function parseGitNameStatuses(chunks: readonly string[]): {
   const changedFiles = new Set<string>();
   const renamedFiles = new Map<string, RenamedFile>();
   const deletedFiles = new Set<string>();
-  for (const line of chunks.flatMap((chunk) => lines(chunk))) {
-    const [status, firstPath, secondPath] = line.split('\t');
+  const fields = chunk.split('\0');
+  for (let i = 0; i < fields.length; ) {
+    const status = fields[i++];
+    const firstPath = fields[i++];
     if (!status || !firstPath) continue;
-    if (status.startsWith('R') && secondPath) {
+    if (status.startsWith('R') || status.startsWith('C')) {
+      const secondPath = fields[i++];
+      if (!secondPath) throw new Error('Incomplete Git rename/copy record.');
       changedFiles.add(secondPath);
-      renamedFiles.set(secondPath, {
-        from: firstPath,
-        to: secondPath,
-        similarity: Number(status.slice(1)) / 100,
-      });
+      if (status.startsWith('R'))
+        renamedFiles.set(secondPath, {
+          from: firstPath,
+          to: secondPath,
+          similarity: Number(status.slice(1)) / 100,
+        });
       continue;
     }
     changedFiles.add(firstPath);
@@ -764,13 +743,6 @@ function sourceMoveSimilarity(left: string, right: string): number {
 
 function sourceMoveTokens(text: string): string[] {
   return text.match(/[A-Za-z_$][\w$]*|[{}()[\].,]/g) ?? [];
-}
-
-function lines(value: string): string[] {
-  return value
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
 }
 
 function indexedChangedFiles(db: ScipDatabase, changedFileLines: readonly string[]): string[] {
@@ -809,7 +781,7 @@ function indexedDocumentResolver(db: ScipDatabase): (file: string) => string | n
     const normalized = file.replace(/\\/g, '/');
     const exactMatch = exact.get(normalized);
     if (exactMatch) return exactMatch;
-    return docs.find((path) => path.endsWith(normalized)) ?? null;
+    return null;
   };
 }
 
@@ -836,9 +808,37 @@ function parseChangedLineRanges(diff: string): ChangedLineRange[] {
 }
 
 function normalizeDiffPath(path: string): string | null {
+  path = decodeGitQuotedPath(path);
   if (path === '/dev/null') return null;
   if (path.startsWith('a/') || path.startsWith('b/')) return path.slice(2);
   return path;
+}
+
+function decodeGitQuotedPath(path: string): string {
+  if (!path.startsWith('"') || !path.endsWith('"')) return path;
+  const escapedBytes: Record<string, number> = { a: 7, b: 8, f: 12, n: 10, r: 13, t: 9, v: 11, '"': 34 };
+  escapedBytes[String.fromCharCode(92)] = 92;
+  const content = path.slice(1, -1);
+  const bytes: number[] = [];
+  for (let index = 0; index < content.length; ) {
+    if (content.charCodeAt(index) !== 92) {
+      const point = String.fromCodePoint(content.codePointAt(index)!);
+      bytes.push(...Buffer.from(point));
+      index += point.length;
+      continue;
+    }
+    index += 1;
+    const octal = /^[0-7]{1,3}/u.exec(content.slice(index))?.[0];
+    if (octal) {
+      bytes.push(Number.parseInt(octal, 8));
+      index += octal.length;
+      continue;
+    }
+    const byte = escapedBytes[content[index++]!];
+    if (byte === undefined) throw new Error('Unsupported escape in Git quoted path.');
+    bytes.push(byte);
+  }
+  return Buffer.from(bytes).toString('utf8');
 }
 
 function dedupeRanges(ranges: readonly ChangedLineRange[]): ChangedLineRange[] {
@@ -1026,10 +1026,11 @@ function addChangedDefinitionImpact(
   consumerMap: ConsumerMap,
   semanticConsumers: ReadonlySet<string>,
   sourceFallbackConsumers: ReadonlySet<string>,
-  indexedFanIn: number,
   indexedConsumers: ReadonlySet<string>,
 ): void {
-  const fanIn = Math.max(indexedFanIn, semanticConsumers.size, sourceFallbackConsumers.size);
+  const fanIn = new Set(
+    [...indexedConsumers, ...semanticConsumers, ...sourceFallbackConsumers].filter((file) => !db.isIgnored(file)),
+  ).size;
   if (!shouldReportChangedDefinition(definition, fanIn)) return;
 
   const shortName = shortenSymbol(definition.symbol);
@@ -1121,26 +1122,8 @@ function boundedEvidenceFailureReason(error: unknown): string {
   return bounded === '' ? 'evidence provider failed without a reason' : bounded;
 }
 
-function scipFanInBySymbolId(db: ScipDatabase, symbolIds: readonly number[]): Map<number, number> {
+function scipConsumerFilesBySymbolId(db: ScipDatabase, symbolIds: readonly number[]): Map<number, Set<string>> {
   if (symbolIds.length === 0) return new Map();
-  const rows = db.all<{ symbol_id: number; fan_in: number }>(
-    `SELECT m.symbol_id, COUNT(DISTINCT c.document_id) AS fan_in
-     FROM mentions m
-     JOIN chunks c ON m.chunk_id = c.id
-     WHERE m.symbol_id IN (${symbolIds.map(() => '?').join(',')})
-       AND m.role != 1
-     GROUP BY m.symbol_id`,
-    ...symbolIds,
-  );
-  return new Map(rows.map((row) => [row.symbol_id, row.fan_in]));
-}
-
-function scipConsumerFilesBySymbolId(
-  db: ScipDatabase,
-  symbolIds: readonly number[],
-  changedFiles: readonly string[],
-): Map<number, Set<string>> {
-  if (symbolIds.length === 0 || changedFiles.length === 0) return new Map();
   const rows = db.all<{ symbol_id: number; relative_path: string }>(
     `SELECT DISTINCT m.symbol_id, ref_d.relative_path
      FROM mentions m
@@ -1148,10 +1131,8 @@ function scipConsumerFilesBySymbolId(
      JOIN documents ref_d ON c.document_id = ref_d.id
      WHERE m.symbol_id IN (${symbolIds.map(() => '?').join(',')})
        AND m.role != 1
-       AND ref_d.relative_path NOT IN (${changedFiles.map(() => '?').join(',')})
      ${db.pathExclusionsFor('ref_d')}`,
     ...symbolIds,
-    ...changedFiles,
   );
   const consumersBySymbolId = new Map<number, Set<string>>();
   for (const row of rows) {

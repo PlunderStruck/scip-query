@@ -9,8 +9,8 @@ metadata:
       when: 'See which symbols consumers actually use from the scope.'
     - template: 'scip-query outline <file>'
       when: 'Inventory one file before assigning its units to roles.'
-    - template: 'scip-query trace <symbol>'
-      when: 'Prove a key symbol: definition plus every reference.'
+    - template: 'scip-query refs <symbol>'
+      when: 'Prove a key symbol: observed references within reported coverage.'
     - template: 'scip-query call-graph <symbol>'
       when: 'Prove a key symbol: callers and callees along its execution shape.'
     - template: 'scip-query affected <symbol>'
@@ -21,16 +21,8 @@ metadata:
       when: 'Signal: functions with overlapping callee sets across files.'
     - template: 'scip-query similar-files'
       when: 'Signal: files with overlapping dependency profiles.'
-    - template: 'scip-query similar-chains'
-      when: 'Signal: parallel end-to-end flows that diverge at a few points.'
-    - template: 'scip-query extract-candidates'
-      when: 'Signal: large functions with isolated callee clusters.'
-    - template: 'scip-query wrapper-candidates'
-      when: 'Signal: single-consumer indirection that a compression may absorb.'
     - template: 'scip-query passthrough-candidates'
       when: 'Signal: pure forwarding functions.'
-    - template: 'scip-query stale-abstractions'
-      when: 'Signal: types and classes with zero or one consumer.'
     - template: 'scip-query drift --architecture'
       when: 'Signal: files deviating from sibling conventions and declared boundary violations.'
     - template: 'scip-query diff-impact'
@@ -49,17 +41,13 @@ metadata:
 | `scip-query system <scope>` | Map a module or directory: files, exported symbols, dependencies in and out. |
 | `scip-query surface <scope>` | See which symbols consumers actually use from the scope. |
 | `scip-query outline <file>` | Inventory one file before assigning its units to roles. |
-| `scip-query trace <symbol>` | Prove a key symbol: definition plus every reference. |
+| `scip-query refs <symbol>` | Prove a key symbol: observed references within reported coverage. |
 | `scip-query call-graph <symbol>` | Prove a key symbol: callers and callees along its execution shape. |
 | `scip-query affected <symbol>` | Measure blast radius before choosing a compression model. |
 | `scip-query change-surface <file>` | Measure exports, consumers, and risk for a file a cluster will touch. |
 | `scip-query similar --cross-file-only` | Signal: functions with overlapping callee sets across files. |
 | `scip-query similar-files` | Signal: files with overlapping dependency profiles. |
-| `scip-query similar-chains` | Signal: parallel end-to-end flows that diverge at a few points. |
-| `scip-query extract-candidates` | Signal: large functions with isolated callee clusters. |
-| `scip-query wrapper-candidates` | Signal: single-consumer indirection that a compression may absorb. |
 | `scip-query passthrough-candidates` | Signal: pure forwarding functions. |
-| `scip-query stale-abstractions` | Signal: types and classes with zero or one consumer. |
 | `scip-query drift --architecture` | Signal: files deviating from sibling conventions and declared boundary violations. |
 | `scip-query diff-impact` | Audit after each implemented cluster: changed symbols and downstream consumers. |
 | `scip-query architecture` | Audit after each implemented cluster: declared boundaries still hold. |
@@ -117,7 +105,7 @@ Do not start by proposing a refactor. Start by discovering the current system. D
 scip-query system <scope>
 scip-query surface <scope>
 scip-query outline <file>
-scip-query trace <symbol>
+scip-query refs <symbol>
 scip-query call-graph <symbol>
 scip-query affected <symbol>
 scip-query change-surface <file>
@@ -128,11 +116,7 @@ Compression signals, used as starting points rather than boundaries:
 ```bash
 scip-query similar --cross-file-only
 scip-query similar-files
-scip-query similar-chains
-scip-query extract-candidates
-scip-query wrapper-candidates
 scip-query passthrough-candidates
-scip-query stale-abstractions
 scip-query drift --architecture
 ```
 
@@ -218,7 +202,6 @@ After each implemented cluster, run the repository's own tests plus:
 scip-query diff-impact
 scip-query architecture
 scip-query system <new-center-or-module>
-scip-query wrapper-candidates
 scip-query passthrough-candidates
 ```
 

@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto';
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
-import { getSourceLines, hasSuppressionCommentCategory } from '../../source/primitives/source-text.js';
-import { stripCommentsAndStrings } from '../../source/primitives/source-stripper.js';
+import { hasSuppressionCommentCategory } from '../../source/primitives/source-text.js';
+import { analyzeSourceFunctions, type SourceFunction } from '../../source/ast/function-metrics.js';
+import { readRepositoryTextFile } from '../../source/primitives/repository-text.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { getFileAddRecords } from '../../analysis/git-history.js';
 import { classifyFile, isFrameworkEntrypointPath } from '../../analysis/file-classifier.js';
@@ -41,6 +42,9 @@ export interface DuplicateBodyScan {
 }
 
 type DuplicateBodyEntryWithBody = DuplicateBodyEntry & { normalizedBody: string };
+
+// One parse per current file text and database lifetime; edits replace the entry.
+const sourceFunctionsByDb = new WeakMap<ScipDatabase, Map<string, { text: string; functions: SourceFunction[] }>>();
 
 /**
  * Default minimum body LOC (21.2 calibration retune). Below this, a
@@ -169,8 +173,11 @@ export function exactDuplicateBodyMatches(
 }
 
 export function normalizeBody(source: string): string {
+  const analysis = analyzeSourceFunctions('duplicate.ts', source);
+  if (analysis.errors.length === 0 && analysis.functions[0]) return analysis.functions[0].bodyHash;
   const body = extractImplementationBody(source);
-  return stripCommentsAndStrings(body).replace(/\s+/g, '');
+  // Unsupported syntax keeps exact body bytes: losing recall is preferable to erasing behavior.
+  return body.trim();
 }
 
 export function groupByHash(entries: ReadonlyArray<DuplicateBodyEntryWithBody>): DuplicateBodyGroup[] {
@@ -258,10 +265,41 @@ export function normalizedBodyForDefinition(db: ScipDatabase, definition: Indexe
  * for its own comparison logic (e.g. twin-drift's token-level diffing) —
  * reuse this instead of re-deriving "read file, slice lines" per detector.
  */
-export function definitionSourceSnippet(db: ScipDatabase, definition: IndexedDefinition): string | null {
-  const lines = getSourceLines(db, definition.relativePath);
-  if (lines.length === 0) return null;
-  return lines.slice(definition.startLine, definition.endLine + 1).join('\n');
+export function definitionSourceSnippet(
+  db: ScipDatabase,
+  definition: Pick<IndexedDefinition, 'symbol' | 'relativePath' | 'startLine' | 'endLine'>,
+): string | null {
+  const observed = readRepositoryTextFile(db, definition.relativePath);
+  if (!observed || observed.freshness.semantic.state === 'stale') return null;
+  if (/\.[cm]?[jt]sx?$/i.test(definition.relativePath)) {
+    let files = sourceFunctionsByDb.get(db);
+    if (!files) {
+      files = new Map();
+      sourceFunctionsByDb.set(db, files);
+    }
+    let cached = files.get(definition.relativePath);
+    if (!cached || cached.text !== observed.text) {
+      cached = {
+        text: observed.text,
+        functions: analyzeSourceFunctions(definition.relativePath, observed.text).functions,
+      };
+      files.set(definition.relativePath, cached);
+    }
+    const rawLeaf = leafName(definition.symbol);
+    const leaf = rawLeaf === '<constructor>' ? 'constructor' : rawLeaf;
+    const matches = cached.functions.filter(
+      (fn) =>
+        (fn.name === leaf || fn.name.endsWith(`.${leaf}`)) &&
+        fn.startLine - 1 >= definition.startLine &&
+        fn.endLine - 1 <= definition.endLine,
+    );
+    if (matches.length !== 1) return null;
+    return observed.text.slice(matches[0]!.startOffset, matches[0]!.endOffset);
+  }
+  return observed.text
+    .split('\n')
+    .slice(definition.startLine, definition.endLine + 1)
+    .join('\n');
 }
 
 /**

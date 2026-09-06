@@ -21,7 +21,6 @@ import { GRAPH_EVIDENCE_FAMILIES } from '../../domain/graph-exploration-contract
 import { GRAPH_EVIDENCE_STRENGTH_DEFINITIONS } from '../../domain/graph-relation-providers.js';
 import {
   booleanOptionValue,
-  budgetedDbCommand,
   budgetedListCommand,
   dbCommand,
   definedLimitOption,
@@ -39,21 +38,15 @@ import {
   sectionedQueryCommand,
   tableQueryCommand,
 } from '../command-kit/query-command-builders.js';
-import { displayLine, displayPathRange, displayRange, render } from '../render.js';
 import type { ReportSection } from '../render.js';
+import { displayLine, displayPathRange, displayRange, render } from '../render.js';
 import { renderSessionEvidence, renderSourceEvidence } from '../source-emission-session.js';
-import {
-  symbolResolutionJson,
-  symbolResolutionBefore,
-  symbolResolutionEmptyMessage,
-  withSymbolResolutionJson,
-} from './symbol-resolution.js';
+import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
 import { directNavigationQueryCommandDescriptors } from './direct-navigation.js';
 import {
   SOURCE_INSPECTION_MAX_SELECTORS,
   SOURCE_INSPECTION_SAFE_CHARACTERS,
 } from '../../domain/source-inspection-limits.js';
-import { assertNavigationDetailAllowed, stageNavigationMapCommands } from '../navigation-session.js';
 import { trySearchSourceWithQueryService } from '../query-service.js';
 import { resolveProjectRoot } from '../cli-context.js';
 import type { SourceSearchOptions } from '../../queries/navigation/source-search.js';
@@ -81,64 +74,6 @@ export function inspectViewOption(opts: Readonly<Record<string, unknown>>): quer
     throw new Error(`Unknown inspect view: ${view}. Use source or behavior.`);
   }
   return view;
-}
-
-function traceSections(result: queries.QualifiedTraceEvidenceResult): ReportSection[] {
-  const definitionRows: string[] = [];
-  for (const d of result.definitions) {
-    const sig = d.signature ? `  — ${d.signature}` : '';
-    if (d.source) {
-      definitionRows.push(
-        renderSourceEvidence({
-          relativePath: d.relativePath,
-          startLine: d.startLine,
-          source: d.source,
-          sessionPolicy: 'exact-unit',
-          headerSuffix: sig,
-          ownerSymbol: d.signature ?? undefined,
-        }),
-      );
-    } else {
-      definitionRows.push(`  ${displayPathRange(d.relativePath, d.startLine, d.endLine)}${sig}`);
-    }
-  }
-
-  const refRows: string[] = [];
-  let prevFile = '';
-  for (const ref of result.referencedBy) {
-    if (ref.relativePath !== prevFile) {
-      if (prevFile) refRows.push('');
-      refRows.push(`  ${ref.relativePath}`);
-      prevFile = ref.relativePath;
-    }
-    const sourceKind = referenceSourceKind(result.referenceEvidence, ref.relativePath, ref.line);
-    refRows.push(`    line ${displayLine(ref.line)}  in ${ref.enclosingShort}  [${referenceSourceLabel(sourceKind)}]`);
-    if (
-      ref.source !== undefined &&
-      ref.source !== null &&
-      ref.sourceStartLine !== undefined &&
-      ref.sourceStartLine !== null
-    ) {
-      refRows.push(
-        renderSourceEvidence({
-          relativePath: ref.relativePath,
-          startLine: ref.sourceStartLine,
-          source: ref.source,
-          sessionPolicy: 'preview',
-          focusLines: new Set([ref.line]),
-          ownerSymbol: ref.enclosingShort ?? undefined,
-          indent: '      ',
-          sourceIndent: '      ',
-        }),
-      );
-    }
-  }
-
-  return [
-    { title: 'DEFINITION', rows: definitionRows, preserveRowNewlines: true },
-    { title: 'REFERENCED BY', rows: refRows, preserveRowNewlines: true },
-    { title: 'CLAIM SUPPORT', rows: claimSupportRows(result.claimSupport), skipIfEmpty: true },
-  ];
 }
 
 function referenceSourceKind(
@@ -442,102 +377,6 @@ function sourceSearchLineMatchIndex(result: queries.SourceSearchResult, line: st
   } catch {
     return -1;
   }
-}
-
-function anchorDiscoverySections(result: queries.AnchorDiscoveryResult): ReportSection[] {
-  const groupRows = result.groups.flatMap((group, index) => {
-    const rootLabel =
-      group.kind === 'shared-callee-owners'
-        ? 'shared callee'
-        : group.kind === 'cross-boundary-flow' || group.kind === 'parallel-paths'
-          ? 'basis root'
-          : 'root';
-    const renderedRoots = group.roots.slice(0, 6);
-    const rootRows = renderedRoots.map((root) => {
-      const terms = root.matches.map((match) => `${match.term}[${match.sources.join('+')}]`).join(', ');
-      return `    ${rootLabel} ${root.label} — ${root.file}:${displayLine(root.line)} — ${terms}`;
-    });
-    const relationRows = group.relations.map(
-      (relation) =>
-        `    ${relation.fromLabel} → ${relation.toLabel} [${relation.kind}; ${relation.strength}; ${relation.evidence}; depth ${relation.depth}${relation.runtimeBoundaryKey ? `; ${relation.runtimeBoundaryKey}` : ''}]`,
-    );
-    return [
-      `  [${index + 1}] ${group.kind}; terms: ${group.matchedTerms.join(', ') || '(structural only)'}`,
-      ...(group.kind === 'shared-callee-owners'
-        ? [
-            `    map owners: ${group.keyAnchors.map((anchor) => anchor.label).join(', ')}`,
-            ...(group.omittedCandidateOwners.length > 0
-              ? [
-                  `    additional candidate owners: ${group.omittedCandidateOwners.map((owner) => owner.label).join(', ')}`,
-                  ...group.ownerRecoveryCommands.map(
-                    (command) => `    additional owner map if those candidates can change the answer: ${command}`,
-                  ),
-                ]
-              : []),
-          ]
-        : group.kind === 'cross-boundary-flow' || group.kind === 'parallel-paths'
-          ? [
-              `    map anchors: ${group.keyAnchors.map((anchor) => anchor.label).join(', ')}`,
-              ...(group.kind === 'parallel-paths'
-                ? [
-                    `    shared path vocabulary: ${group.parallelSharedPathTerms?.join(', ') || '(none)'}`,
-                    `    causal evidence on ${group.parallelConnectedSides ?? 0}/2 independently named path(s); matched orchestration roots on ${group.parallelOrchestrationSides ?? 0}/2; no cross-path edge is claimed.`,
-                  ]
-                : []),
-              ...group.upstreamEntries.map(
-                (entry) =>
-                  `    upstream entry: ${entry.name} — ${entry.file}:${displayLine(entry.line)}; if command preconditions can change the answer, include this location in the one batched gap inspect after the map.`,
-              ),
-            ]
-          : []),
-      ...rootRows,
-      ...(group.roots.length > renderedRoots.length
-        ? [`    ... ${group.roots.length - renderedRoots.length} additional basis owner(s) retained in the result.`]
-        : []),
-      ...relationRows,
-      ...(group.omittedRelations > 0
-        ? [`    ... ${group.omittedRelations} additional relationship(s) withheld from this compact view.`]
-        : []),
-      `    next abstraction (run to completion before any inspect): ${group.systemMapCommand}`,
-    ];
-  });
-  return [
-    {
-      title: 'REQUIRED NEXT STEP',
-      rows: [
-        '  Choose one evidence-grounded anchor set below and run its exact next-abstraction system-map command to transport completion.',
-        '  inspect, code, and evidence are intentionally unavailable until that map completes.',
-      ],
-    },
-    {
-      title: 'NORMALIZED REPOSITORY VOCABULARY',
-      rows: [
-        `  matched: ${result.matchedTerms.join(', ') || '(none)'}`,
-        `  unmatched: ${result.unmatchedTerms.join(', ') || '(none)'}`,
-      ],
-    },
-    {
-      title: `EVIDENCE-GROUNDED ANCHOR SETS (${result.groups.length} SHOWN)`,
-      rows: groupRows,
-    },
-    {
-      title: 'ANCHOR DISCOVERY COVERAGE',
-      rows: [
-        `  Repository scan: ${result.scannedFiles} current text file(s), ${result.scannedBytes.toLocaleString()} byte(s).`,
-        `  Lexical owners: ${result.candidateRootCount}; structurally analyzed: ${result.analyzedRootCount}; lower-ranked owners not graph-expanded: ${result.omittedRootCount}.`,
-        `  Displayed anchor sets: ${result.groups.length}; withheld sets or unanalyzed roots: ${result.omittedGroupCount}.`,
-        '  cross-boundary-flow joins otherwise separate call groups only when an indexed runtime producer→consumer link and bounded downstream calls connect them; parallel-paths batches disconnected regions only when the query names distinct path vocabulary shared by those regions and does not claim a causal edge; connected-flow follows calls forward from matched owners; shared-callee-owners finds callable owners that converge on common callees without claiming those callees are effects.',
-        '  Ranking uses repository vocabulary, compiler ownership, and bounded call connectivity; it does not establish task relevance.',
-        '  Selection gate: reject a set whose roots and matched terms omit an object, branch, or stage named by a material claim. Connectivity cannot make a partial set eligible. Among sets that cover every named part, use the first ranked eligible set; use parallel-paths when no connected-flow covers them together.',
-        '  Anchor roots are locator evidence, not behavior evidence. Select one set, run its next-abstraction command to transport completion, and only then decide whether source inspection is necessary. Never run a map and inspect concurrently.',
-        ...(result.recoveryCommand
-          ? [
-              `  Expand the ranked manifest only if the shown sets cannot establish the requested flow: ${result.recoveryCommand}`,
-            ]
-          : ['  Every candidate owner was structurally analyzed and every resulting anchor set was shown.']),
-      ],
-    },
-  ];
 }
 
 function sourceSearchTextCoverageComplete(result: queries.SourceSearchResult): boolean {
@@ -1052,7 +891,7 @@ function evidenceSections(result: queries.QualifiedEvidenceResult): ReportSectio
         source: row.source,
         sessionPolicy: 'preview',
         ownerSymbol: row.shortName,
-        headerSuffix: `  ${row.shortName}${row.omittedLines > 0 ? `  (${row.omittedLines} line(s) omitted)` : ''}`,
+        headerSuffix: `  ${row.shortName} [${row.evidenceStrength}]${row.omittedLines > 0 ? `  (${row.omittedLines} line(s) omitted)` : ''}`,
       }),
     );
   return [
@@ -1227,174 +1066,46 @@ function bindingClosureRows(closure: queries.BindingClosure | undefined): string
 
 const handleImports = budgetedListCommand('imports', {
   query: ({ db, args, budget }) => queries.imports(db, stringArg(args, 0), { semantic: budget.semantic }),
-  format: (r) => `  ${r.shortName}  ← ${r.fromFile}`,
-  emptyMessage: () => 'No imports found (indexer may not emit role=2 for this language).',
-});
-
-const handleDataflow = budgetedDbCommand('dataflow', ({ db, args, opts, budget }) => {
-  const query = stringArg(args, 0);
-  const result = queries.dataflow(db, query, { semantic: budget.semantic });
-  if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('dataflow', args, opts, withSymbolResolutionJson(db, query, result, 'dataflow'), {
-      analysisBudget: budget.analysisBudget,
-    });
-    return;
-  }
-  if (!result) return render.empty(symbolResolutionEmptyMessage(db, query, 'No dataflow found.'));
-  symbolResolutionBefore(db, query);
-  console.log(`${result.shortName}  (${result.relativePath})\n`);
-  if (result.definitionSites.length > 0) {
-    console.log('  ═══ DEFINED AT ═══');
-    for (const s of result.definitionSites) console.log(`    ${s.file}:${displayLine(s.line)}`);
-  }
-  if (result.usageSites.length > 0) {
-    console.log('\n  ═══ USED AT ═══');
-    for (const s of result.usageSites) console.log(`    ${s.file}:${displayLine(s.line)}  in ${s.enclosingShort}`);
-  }
-  if (result.producers.length > 0) {
-    console.log('\n  ═══ PRODUCERS (feeds into this) ═══');
-    for (const p of result.producers) console.log(`    ${p.file}  ${p.shortName}`);
-  }
-  if (result.consumers.length > 0) {
-    console.log('\n  ═══ CONSUMERS (this feeds into) ═══');
-    for (const c of result.consumers) console.log(`    ${c.file}  ${c.shortName}`);
-  }
-});
-
-const handleReferenceNeighborhood = budgetedDbCommand('reference-neighborhood', ({ db, args, opts, budget }) => {
-  const query = stringArg(args, 0);
-  const result = queries.referenceNeighborhood(db, query, { semantic: budget.semantic });
-  if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope(
-      'reference-neighborhood',
-      args,
-      opts,
-      withSymbolResolutionJson(db, query, result, 'reference-neighborhood'),
-      { analysisBudget: budget.analysisBudget },
-    );
-    return;
-  }
-  if (!result) return render.empty(symbolResolutionEmptyMessage(db, query, 'No reference neighborhood found.'));
-  symbolResolutionBefore(db, query);
-  console.log(`${result.shortName}  (${result.relativePath})\n`);
-  if (result.definitionSites.length > 0) {
-    console.log('  ═══ DEFINITION ═══');
-    for (const site of result.definitionSites) console.log(`    ${site.file}:${displayLine(site.line)}`);
-  }
-  if (result.referenceSites.length > 0) {
-    console.log('\n  ═══ REFERENCES ═══');
-    for (const site of result.referenceSites) {
-      console.log(`    ${site.file}:${displayLine(site.line)}  in ${site.enclosingShort}`);
-    }
-  }
-  if (result.incomingCalls.length > 0) {
-    console.log('\n  ═══ INCOMING CALLS ═══');
-    for (const caller of result.incomingCalls) console.log(`    ${caller.file}  ${caller.shortName}`);
-  }
-  if (result.outgoingCalls.length > 0) {
-    console.log('\n  ═══ OUTGOING CALLS ═══');
-    for (const callee of result.outgoingCalls) console.log(`    ${callee.file}  ${callee.shortName}`);
-  }
-});
-
-const handleValueFlow = dbCommand(({ db, args, opts }) => {
-  const query = stringArg(args, 0);
-  const result = queries.valueFlow(
-    db,
-    { symbols: [query] },
-    {
-      maxDepth: definedNumberOption(opts, 'depth', 2),
-      maxEdges: definedNumberOption(opts, 'maxEdges', 48),
-    },
-  );
-  if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('value-flow', args, opts, result);
-    return;
-  }
-  symbolResolutionBefore(db, query);
-  if (result.edges.length === 0) {
-    render.empty(
-      'No proved value transfers found. Missing output is not evidence that no value flow exists; inspect coverage.',
-    );
-  } else {
-    render.list(result.edges, (edge) => `  ${graphEvidenceEdgeRow(edge)}`);
-  }
-  console.log(`\nCoverage: ${result.coverage.status}; ${result.coverage.basis}.`);
-  for (const blindSpot of result.coverage.graph.blindSpots.slice(0, 3)) console.log(`  Blind spot: ${blindSpot}`);
-});
-
-const handleSlice = budgetedDbCommand('slice', ({ db, args, opts, budget }) => {
-  const query = stringArg(args, 0);
-  const direction = booleanOptionValue(opts, 'forward') ? 'forward' : 'backward';
-  const result = queries.slice(db, query, {
-    direction,
-    maxDepth: definedNumberOption(opts, 'depth', 3),
-    semantic: budget.semantic,
-  });
-  if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope('slice', args, opts, withSymbolResolutionJson(db, query, result, 'slice'), {
-      analysisBudget: budget.analysisBudget,
-    });
-    return;
-  }
-  if (!result) return render.empty(symbolResolutionEmptyMessage(db, query, 'No slice found.'));
-  symbolResolutionBefore(db, query);
-  console.log(`${result.direction} slice of ${result.shortName}\n`);
-  if (result.connectedSymbols.length === 0) {
-    console.log('  No connected symbols found.');
-    return;
-  }
-  render.list(result.connectedSymbols, (s) => `  ${s.file}  ${s.shortName}\n    ${s.relationship}`);
-  console.log(`\n${result.connectedSymbols.length} connected symbol(s).`);
-});
-
-const handleReferenceReachability = budgetedDbCommand('reference-reachability', ({ db, args, opts, budget }) => {
-  const query = stringArg(args, 0);
-  const direction = booleanOptionValue(opts, 'forward') ? 'forward' : 'backward';
-  const result = queries.referenceReachability(db, query, {
-    direction,
-    maxDepth: definedNumberOption(opts, 'depth', 3),
-    semantic: budget.semantic,
-  });
-  if (booleanOptionValue(opts, 'json')) {
-    printJsonEnvelope(
-      'reference-reachability',
-      args,
-      opts,
-      withSymbolResolutionJson(db, query, result, 'reference-reachability'),
-      { analysisBudget: budget.analysisBudget },
-    );
-    return;
-  }
-  if (!result) return render.empty(symbolResolutionEmptyMessage(db, query, 'No reference reachability found.'));
-  symbolResolutionBefore(db, query);
-  console.log(`${result.direction} reference/call reachability from ${result.shortName}\n`);
-  render.list(result.connectedSymbols, (symbol) => `  ${symbol.file}  ${symbol.shortName}\n    ${symbol.relationship}`);
-  console.log(`\n${result.connectedSymbols.length} connected symbol(s).`);
+  format: (r) => `  ${r.shortName}  ← ${r.fromFile} [${r.evidence}]`,
+  emptyMessage: () => 'No imports observed by the available index and source providers.',
 });
 
 const handleDependenceSlice = dbCommand(({ db, args, opts }) => {
   const criterion = stringArg(args, 0);
   const result = queries.dependenceSlice(db, criterion, {
     direction: booleanOptionValue(opts, 'forward') ? 'forward' : 'backward',
-    maxDepth: definedNumberOption(opts, 'depth', 3),
+    variable: stringOptionValue(opts, 'variable'),
+    column: numberOptionValue(opts, 'column'),
+    maxDepth: numberOptionValue(opts, 'depth'),
     maxEdges: definedNumberOption(opts, 'maxEdges', 200),
   });
+  if (result.resolution !== 'matched') process.exitCode = 1;
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope('dependence-slice', args, opts, result);
     return;
   }
-  console.log(`${result.direction} dependence slice of ${criterion}\n`);
-  if (result.edges.length === 0) {
-    render.empty('No proved dependence path found. Missing output is not evidence of absence; inspect coverage.');
+  console.log(`${result.direction} function-local slice at ${criterion}: ${result.resolution}`);
+  const pointRow = (point: queries.DependenceSliceResult['points'][number]) =>
+    `${point.line + 1}:${point.column + 1} ${point.kind} ${point.name}`;
+  if (result.resolution === 'ambiguous') {
+    console.log('Choose one occurrence with --variable and --column (one-based):');
+    render.list(result.candidates, (point) => `  ${pointRow(point)}`);
   } else {
+    render.list(result.points, (point) => `  ${pointRow(point)}`);
+    const points = new Map(result.points.map((point) => [point.id, point]));
     render.list(
       result.edges,
-      (edge) => `  depth ${edge.traversalDepth} ${edge.supporting ? '[support] ' : ''}${graphEvidenceEdgeRow(edge)}`,
+      (edge) =>
+        `  ${edge.kind}: ${pointRow(points.get(edge.fromPointId)!)} -> ${pointRow(points.get(edge.toPointId)!)}`,
     );
   }
-  console.log(`\nCoverage: ${result.coverage.status}; ${result.coverage.basis}; ${result.coverage.criterionKind}.`);
-  for (const blindSpot of result.coverage.graph.blindSpots.slice(0, 3)) console.log(`  Blind spot: ${blindSpot}`);
+  console.log(
+    `Coverage: ${result.coverage.status}; ${result.coverage.basis}; ${result.coverage.omittedEdges} edge(s) omitted; depth limited: ${result.coverage.depthLimited}.`,
+  );
+  console.log(
+    'This is local dependency evidence. Calls, heap effects, and closure invocation order require separate inspection.',
+  );
+  for (const gap of result.coverage.model.unsupported) console.log(`  Gap: ${gap}`);
 });
 
 const handleMethods = dbCommand(({ db, args, opts }) => {
@@ -1566,7 +1277,6 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       'scip-query inspect --at src/api.ts:42 --at src/web.tsx:90',
     ]),
     query: ({ db, opts, budget }) => {
-      assertNavigationDetailAllowed(db.config.projectRoot, 'inspect', opts['session'] !== false);
       const full = booleanOptionValue(opts, 'full');
       const result = queries.inspectSource(db, {
         searches: stringArrayOptionValue(opts, 'search'),
@@ -1715,96 +1425,6 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     }),
     sections: sourceSearchSections,
   }),
-  sectionedQueryCommand({
-    id: 'anchors',
-    command: 'anchors <question>',
-    hidden: true,
-    description:
-      'Deprecated compatibility view for query-vocabulary candidate groups; use exact locators plus evidence',
-    options: [
-      option('-s, --scope <path>', 'Limit candidate ownership and text evidence to indexed paths matching this text'),
-      option(
-        '-n, --limit <n>',
-        'Connected anchor sets to return; omitted candidates remain counted',
-        parsePositiveInteger,
-        4,
-      ),
-      option('--full', 'Analyze every candidate anchor group with semantic enrichment'),
-    ],
-    agent: agentContract(
-      'Which small graph-connected code regions contain repository vocabulary from this question?',
-      'ranked candidate owners, two-hop compiler call evidence, exact map commands, and an omission ledger',
-      ['pattern'],
-      'bounded',
-      undefined,
-      REPOSITORY_OBSERVATION_OPERATION,
-      locatorSemanticContract(
-        ['text', 'symbol', 'construct'],
-        [
-          'Connected candidate groups are compatibility navigation hints, not inferred task relevance.',
-          'Candidate grouping does not establish implementation behavior.',
-        ],
-        { ranking: 'identity-only', compatibility: 'deprecated' },
-      ),
-    ),
-    docs: doc('Compatibility'),
-    query: ({ db, args, opts }) => {
-      const result = queries.discoverAnchors(db, stringArg(args, 0), {
-        scope: stringOptionValue(opts, 'scope'),
-        limit: definedLimitOption(opts, 'limit', 4),
-        full: booleanOptionValue(opts, 'full'),
-        semantic: booleanOptionValue(opts, 'full'),
-      });
-      stageNavigationMapCommands(
-        db.config.projectRoot,
-        result.groups.map((group) => group.systemMapCommand),
-        opts['session'] !== false,
-      );
-      return result;
-    },
-    emptyMessage: (result) =>
-      result.candidateRootCount === 0
-        ? `No compiler-owned repository construct matched the normalized terms: ${result.normalizedTerms.join(', ')}.`
-        : undefined,
-    coverage: (result) =>
-      result.omittedRootCount === 0 && result.omittedGroupCount === 0
-        ? {
-            complete: true,
-            totalKnown: true,
-            returned: result.candidateRootCount,
-            total: result.candidateRootCount,
-            omitted: 0,
-          }
-        : {
-            complete: false,
-            totalKnown: true,
-            returned: result.analyzedRootCount,
-            total: result.candidateRootCount,
-            omitted: result.omittedRootCount,
-          },
-    agentResult: (result) => ({
-      normalizedTerms: result.normalizedTerms,
-      matchedTerms: result.matchedTerms,
-      unmatchedTerms: result.unmatchedTerms,
-      candidateRoots: result.candidateRootCount,
-      analyzedRoots: result.analyzedRootCount,
-      omittedRoots: result.omittedRootCount,
-      omittedAnchorSets: result.omittedGroupCount,
-      anchorSets: result.groups.map((group) => ({
-        roots: group.roots.map((root) => ({
-          symbol: root.symbol,
-          file: root.file,
-          line: displayLine(root.line),
-          matchedTerms: root.matchedTerms,
-        })),
-        keyAnchors: group.keyAnchors.map((anchor) => ({ file: anchor.file, line: displayLine(anchor.line) })),
-        relations: group.relations,
-        systemMapCommand: group.systemMapCommand,
-      })),
-      recoveryCommand: result.recoveryCommand,
-    }),
-    sections: anchorDiscoverySections,
-  }),
   {
     id: 'methods',
     command: 'methods <className>',
@@ -1823,59 +1443,6 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     renderShape: 'list',
     handler: handleMethods,
   },
-  budgetedSectionedQueryCommand({
-    id: 'trace',
-    command: 'trace <symbol>',
-    description: 'Trace a symbol: definition + all references',
-    options: [option('--full', 'Run unbounded semantic analysis on large indexes'), compactOption()],
-    budget: 'semantic',
-    agent: {
-      operation: REPOSITORY_OBSERVATION_OPERATION,
-      answers: ['Where is this symbol defined, and everywhere is it referenced?'],
-      returns: ['definition sites with source and signature', 'referencing files with line numbers'],
-      inputs: ['symbol'],
-      coverage: 'bounded',
-      semantic: analysisSemanticContract(
-        'Resolve one symbol definition and its indexed reference sites.',
-        'Definition source and signatures plus referencing files and line numbers.',
-        ['Flat reference sites do not establish runtime calls, data flow, or task relevance.'],
-      ),
-      contrasts: [
-        {
-          command: 'refs',
-          distinction: 'refs returns reference sites only; trace adds the definition and its source.',
-        },
-        {
-          command: 'call-graph',
-          distinction: 'trace lists reference sites flat; call-graph separates incoming callers from outgoing callees.',
-        },
-      ],
-    },
-    docs: doc('Navigation', ['scip-query trace parseSymbol']),
-    query: ({ db, args, budget }) =>
-      queries.qualifiedTraceEvidence(db, stringArg(args, 0), { semantic: budget.semantic }),
-    emptyMessage: (result, { db, args }) =>
-      result.definitions.length === 0 && result.referencedBy.length === 0
-        ? symbolResolutionEmptyMessage(db, stringArg(args, 0), 'No trace rows found.')
-        : undefined,
-    before: (_result, { db, args }) => symbolResolutionBefore(db, stringArg(args, 0)),
-    toJson: (result, { db, args }) => ({ ...symbolResolutionJson(db, stringArg(args, 0)), ...result }),
-    coverage: (result, { budget }) => {
-      const returned = result.definitions.length + result.referencedBy.length;
-      return budget.analysisBudget
-        ? { complete: false, totalKnown: false, returned }
-        : { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
-    },
-    agentResult: (result) => ({
-      definitionCount: result.definitions.length,
-      referenceCount: result.referencedBy.length,
-      definitionIdentities: result.definitions.map(
-        (definition) => `${definition.relativePath}:${definition.startLine}-${definition.endLine}`,
-      ),
-      referenceIdentities: result.referencedBy.map((reference) => `${reference.relativePath}:${reference.line}`),
-    }),
-    sections: traceSections,
-  }),
   budgetedSectionedQueryCommand({
     id: 'evidence',
     command: 'evidence',
@@ -1961,11 +1528,6 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
           command: 'call-graph',
           distinction:
             'call-graph specializes in static calls; evidence can combine execution with other selected families.',
-        },
-        {
-          command: 'value-flow',
-          distinction:
-            'value-flow specializes in proved transfers; evidence projects bounded dataflow alongside other families.',
         },
         {
           command: 'dependence-slice',
@@ -2076,75 +1638,6 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     }),
     sections: evidenceCommandSections,
   }),
-  budgetedSectionedQueryCommand({
-    id: 'evidence-source',
-    command: 'evidence-source <symbol>',
-    description: 'Deprecated compatibility path for positional source evidence; use inspect or code',
-    hidden: true,
-    options: [
-      option('--include <part>', 'Source parts to include', collectValues, []),
-      option('-C, --context <n>', 'Source lines before and after each reference', parseNonNegativeInteger, 2),
-      option('--related-source-lines <n>', 'Maximum source lines for each caller or callee', parsePositiveInteger, 80),
-      option('--full', 'Run unbounded semantic analysis on large indexes'),
-    ],
-    budget: 'semantic',
-    agent: {
-      operation: REPOSITORY_OBSERVATION_OPERATION,
-      answers: [
-        'Which legacy definition, reference, caller, callee, dependency, and consumer source surrounds this symbol?',
-      ],
-      returns: ['deprecated qualified source-evidence packet'],
-      inputs: ['symbol'],
-      coverage: 'bounded',
-      semantic: sourceReadSemanticContract(
-        ['construct', 'exact-source'],
-        ['This compatibility read does not establish graph reachability beyond its rendered evidence.'],
-        'deprecated',
-      ),
-    },
-    docs: doc('Compatibility'),
-    query: ({ db, args, opts, budget }): queries.QualifiedEvidenceResult => {
-      assertNavigationDetailAllowed(db.config.projectRoot, 'evidence', opts['session'] !== false);
-      return queries.qualifiedEvidence(db, stringArg(args, 0), {
-        parts: selectedEvidenceParts(stringArrayOptionValue(opts, 'include')),
-        referenceContext: definedNumberOption(opts, 'context', 2),
-        relatedSourceLines: definedNumberOption(opts, 'relatedSourceLines', 80),
-        semantic: budget.semantic,
-      });
-    },
-    emptyMessage: (result) => evidenceFailureMessage(result),
-    before: (result) => {
-      if (result.kind !== 'matched') process.exitCode = 1;
-    },
-    coverage: (result, { budget }) => {
-      if (result.kind !== 'matched') return { complete: true, totalKnown: true, returned: 0, total: 0, omitted: 0 };
-      const returned =
-        (result.definition ? 1 : 0) +
-        result.referenceWindows.reduce((total, window) => total + window.references.length, 0) +
-        result.callers.length +
-        result.callees.length +
-        result.dependencies.length +
-        result.consumers.length;
-      return budget.analysisBudget
-        ? { complete: false, totalKnown: false, returned }
-        : { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
-    },
-    agentResult: (result) =>
-      result.kind === 'matched'
-        ? {
-            symbol: result.symbol,
-            file: result.file,
-            parts: result.parts,
-            referenceSites: result.referenceWindows.reduce((total, window) => total + window.references.length, 0),
-            sourceWindows: result.referenceWindows.length,
-            callers: result.callers.length,
-            callees: result.callees.length,
-            dependencies: result.dependencies.length,
-            consumers: result.consumers.length,
-          }
-        : result,
-    sections: evidenceSections,
-  }),
   listQueryCommand({
     id: 'deps',
     command: 'deps <file>',
@@ -2233,7 +1726,9 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       { title: 'FILES', rows: result.files },
       {
         title: 'DOCUMENTED INDEXED SYMBOLS',
-        rows: result.symbols.map((s) => `  ${displayRange(s.startLine, s.endLine)}  ${s.shortName}`),
+        rows: result.symbols.map(
+          (s) => `  ${displayPathRange(s.relativePath, s.startLine, s.endLine)}  ${s.shortName}`,
+        ),
       },
       { title: 'DEPENDS ON (internal)', rows: result.dependsOn.map((d) => `  ${d}`) },
       { title: 'DEPENDED ON BY', rows: result.dependedOnBy.map((d) => `  ${d}`) },
@@ -2244,7 +1739,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'surface <module>',
     description: 'What symbols consumers actually use from this module',
     agent: analysisAgentContract(
-      'Which exported symbols do external consumers actually use?',
+      'Which indexed symbols have observed references from files outside this module?',
       'consumer paths and consumed symbol identities',
       ['module'],
       'complete',
@@ -2259,7 +1754,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     description: 'What symbols does this file import?',
     agent: analysisAgentContract(
       'Which symbols does this file import?',
-      'imported symbol identities and source files',
+      'observed imported bindings, source files, and provider evidence; source candidates may lack compiler identity',
       ['file'],
       'bounded',
     ),
@@ -2273,10 +1768,15 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     id: 'imported-by',
     command: 'imported-by <symbol>',
     description: 'Which files import this symbol?',
-    agent: analysisAgentContract('Which files import this symbol?', 'importing file paths', ['symbol'], 'complete'),
+    agent: analysisAgentContract(
+      'Which files have observed imports of this symbol?',
+      'importing file paths with indexed or source-candidate evidence; indirect re-export resolution may be unavailable',
+      ['symbol'],
+      'bounded',
+    ),
     docs: doc('Navigation'),
     query: ({ db, args }) => queries.importedBy(db, stringArg(args, 0)),
-    format: (r) => `  ${r.fromFile}`,
+    format: (r) => `  ${r.fromFile} [${r.evidence}]`,
   }),
   listQueryCommand({
     id: 'members',
@@ -2341,7 +1841,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   listQueryCommand({
     id: 'hierarchy',
     command: 'hierarchy <symbol>',
-    description: "Show a symbol's ancestry chain (method → class → module)",
+    description: 'Show indexed lexical owners of a symbol (method → class → module)',
     agent: analysisAgentContract(
       'What lexical ownership chain contains this symbol?',
       'ancestor symbol identities and depths',
@@ -2355,112 +1855,23 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     emptyMessage: ({ db, args }) => symbolResolutionEmptyMessage(db, stringArg(args, 0), 'Symbol not found.'),
     toJson: (rows, { db, args }) => withSymbolResolutionJson(db, stringArg(args, 0), rows, 'hierarchy'),
   }),
-  {
-    id: 'dataflow',
-    command: 'dataflow <symbol>',
-    hidden: true,
-    description: 'Deprecated compatibility alias for a reference/call neighborhood; use value-flow',
-    agent: analysisAgentContract(
-      'What definitions, references, incoming calls, and outgoing calls surround this symbol?',
-      'legacy reference sites and call-neighborhood rows; no value-flow claim',
-      ['symbol'],
-      'bounded',
-    ),
-    options: withJsonOption([option('--full', 'Run unbounded semantic analysis on large indexes')]),
-    budget: 'semantic',
-    renderShape: 'custom',
-    docs: doc('Navigation'),
-    handler: handleDataflow,
-  },
-  {
-    id: 'reference-neighborhood',
-    command: 'reference-neighborhood <symbol>',
-    description: 'Show definition/reference sites and incoming/outgoing static calls without value-flow claims',
-    agent: analysisAgentContract(
-      'What exact references and static calls surround this symbol?',
-      'definition sites, reference sites, incoming calls, and outgoing calls',
-      ['symbol'],
-      'bounded',
-    ),
-    options: withJsonOption([option('--full', 'Run unbounded semantic analysis on large indexes')]),
-    budget: 'semantic',
-    renderShape: 'custom',
-    docs: doc('Navigation'),
-    handler: handleReferenceNeighborhood,
-  },
-  {
-    id: 'value-flow',
-    command: 'value-flow <symbol>',
-    description: 'Show only proved argument/parameter and bounded static-value transfers around a symbol',
-    agent: analysisAgentContract(
-      'Which values are proved to flow into or through this symbol?',
-      'typed value-transfer edges with evidence strength and explicit unsupported relations',
-      ['symbol'],
-      'bounded',
-    ),
-    options: withJsonOption([
-      option('--depth <n>', 'Maximum graph depth', parseInteger, 2),
-      option('--max-edges <n>', 'Maximum typed value-transfer edges', parseInteger, 48),
-    ]),
-    renderShape: 'custom',
-    docs: doc('Navigation'),
-    handler: handleValueFlow,
-  },
-  {
-    id: 'slice',
-    command: 'slice <symbol>',
-    hidden: true,
-    description: 'Deprecated compatibility alias for reference/call reachability; use dependence-slice',
-    agent: analysisAgentContract(
-      'Which calls or reference owners are reachable from this symbol under the legacy traversal?',
-      'legacy connected symbols; no program-dependence claim',
-      ['symbol'],
-      'bounded',
-    ),
-    options: withJsonOption([
-      option('--forward', 'Forward slice (what does this affect). Default is backward.'),
-      option('--depth <n>', 'Max transitive depth for backward slice', parseInteger, 3),
-      option('--full', 'Run unbounded semantic analysis on large indexes'),
-    ]),
-    budget: 'semantic',
-    renderShape: 'custom',
-    docs: doc('Navigation'),
-    handler: handleSlice,
-  },
-  {
-    id: 'reference-reachability',
-    command: 'reference-reachability <symbol>',
-    description: 'Traverse legacy callee or reference-owner reachability without calling it a program slice',
-    agent: analysisAgentContract(
-      'Which call/reference nodes are reachable from this symbol?',
-      'connected symbols with relationship and traversal depth',
-      ['symbol'],
-      'bounded',
-    ),
-    options: withJsonOption([
-      option('--forward', 'Traverse reference owners. Default traverses callees.'),
-      option('--depth <n>', 'Maximum callee depth', parseInteger, 3),
-      option('--full', 'Run unbounded semantic analysis on large indexes'),
-    ]),
-    budget: 'semantic',
-    renderShape: 'custom',
-    docs: doc('Navigation'),
-    handler: handleReferenceReachability,
-  },
+
   {
     id: 'dependence-slice',
-    command: 'dependence-slice <symbol-or-location>',
-    description: 'Directional slice over proved data/control dependencies with explicit supporting call edges',
+    command: 'dependence-slice <file:line>',
+    description: 'Slice one variable occurrence through function-local value and control dependencies',
     agent: analysisAgentContract(
       'What proved program dependencies can affect this criterion, or be affected by it?',
-      'directional dependence edges, supporting connectors, and coverage limits',
+      'exact local source points, dependency edges, criterion ambiguity, and model limits',
       [['symbol', 'path']],
       'bounded',
     ),
     options: withJsonOption([
       option('--forward', 'Compute a forward slice. Default is backward.'),
-      option('--depth <n>', 'Maximum dependence traversal depth', parseInteger, 3),
-      option('--max-edges <n>', 'Maximum topology edges considered', parseInteger, 200),
+      option('--variable <name>', 'Exact variable name at the criterion line'),
+      option('--column <n>', 'One-based source column selecting one occurrence', parseInteger),
+      option('--depth <n>', 'Limit dependence hops; default follows the complete local graph', parseInteger),
+      option('--max-edges <n>', 'Maximum dependence edges rendered', parseInteger, 200),
     ]),
     renderShape: 'custom',
     docs: doc('Navigation'),

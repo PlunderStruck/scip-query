@@ -11,7 +11,7 @@ describe('context decision packet', () => {
 
     expect(titles).toEqual([
       'TARGET',
-      'CURRENT FLOW',
+      'CURRENT RELATIONSHIPS',
       'AFFECTED CONSUMERS',
       'SIMILARITY CANDIDATES',
       'CHANGE CONSTRAINTS',

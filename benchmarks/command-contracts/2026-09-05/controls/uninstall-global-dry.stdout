@@ -1,0 +1,77 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "uninstall",
+  "operationRole": "repository-preview",
+  "evidence": "graph-fact",
+  "args": [],
+  "options": {
+    "global": true,
+    "dryRun": true,
+    "json": true
+  },
+  "result": {
+    "dryRun": true,
+    "global": {
+      "removed": [
+        "Claude/concrete-plan",
+        "Claude/conductor",
+        "Claude/principal-maintainability-review",
+        "Claude/scip-calibrate",
+        "Claude/scip-claim-audit",
+        "Claude/scip-explore",
+        "Claude/scip-integrity-audit",
+        "Claude/scip-plan",
+        "Claude/scip-probe-reachability",
+        "Claude/scip-query",
+        "Claude/scip-root-cause",
+        "Claude/scip-setup",
+        "Claude/scip-system-compression",
+        "Claude/scip-twin-drift",
+        "Codex/concrete-plan",
+        "Codex/conductor",
+        "Codex/principal-maintainability-review",
+        "Codex/scip-calibrate",
+        "Codex/scip-claim-audit",
+        "Codex/scip-explore",
+        "Codex/scip-integrity-audit",
+        "Codex/scip-plan",
+        "Codex/scip-probe-reachability",
+        "Codex/scip-root-cause",
+        "Codex/scip-setup",
+        "Codex/scip-system-compression",
+        "Codex/scip-twin-drift",
+        "Agents/concrete-plan",
+        "Agents/conductor",
+        "Agents/principal-maintainability-review",
+        "Agents/scip-calibrate",
+        "Agents/scip-claim-audit",
+        "Agents/scip-explore",
+        "Agents/scip-integrity-audit",
+        "Agents/scip-plan",
+        "Agents/scip-probe-reachability",
+        "Agents/scip-query",
+        "Agents/scip-root-cause",
+        "Agents/scip-setup",
+        "Agents/scip-system-compression",
+        "Agents/scip-twin-drift"
+      ],
+      "left": [
+        "Codex/scip-query (symlink outside scip-query package)"
+      ],
+      "skipped": []
+    }
+  },
+  "coverage": {
+    "complete": true,
+    "totalKnown": true,
+    "returned": 1,
+    "total": 1,
+    "omitted": 0
+  }
+}

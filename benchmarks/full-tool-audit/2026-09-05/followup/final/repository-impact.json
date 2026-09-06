@@ -1,0 +1,4450 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "diff-impact",
+  "operationRole": "repository-observation",
+  "evidence": "graph-fact",
+  "args": [],
+  "options": {
+    "base": "HEAD",
+    "json": true
+  },
+  "result": {
+    "changedFiles": [
+      "src/domain/suppression-adjudication.ts",
+      "src/platform/typescript-projects.ts",
+      "src/platform/verified-binary-fetch.ts",
+      "src/queries/cleanup/decorative-checkers.ts",
+      "src/queries/cleanup/duplicate-bodies.ts",
+      "src/queries/cleanup/locality-candidates.ts",
+      "src/queries/cleanup/passthrough-candidates.ts",
+      "src/queries/cleanup/test-quality.ts",
+      "src/queries/graph/architecture.ts",
+      "src/queries/graph/deep-chains.ts",
+      "src/queries/graph/dependence-slice.ts",
+      "src/queries/graph/system-map.ts",
+      "src/queries/health/health-report.ts",
+      "src/queries/health/health.ts",
+      "src/queries/impact/context.ts",
+      "src/queries/index.ts",
+      "src/queries/internal/file-resolution.ts",
+      "src/queries/navigation/code.ts",
+      "src/queries/navigation/files.ts",
+      "src/queries/navigation/hierarchy.ts",
+      "src/queries/navigation/members.ts",
+      "src/queries/public-query-entries.ts",
+      "src/queries/quality/complexity.ts",
+      "src/queries/quality/slice-cohesion.ts",
+      "src/runtime/agent-setup.ts",
+      "src/runtime/cli-context.ts",
+      "src/runtime/cli-main.ts",
+      "src/runtime/cli-support.ts",
+      "src/runtime/cli.ts",
+      "src/runtime/command-kit/command-descriptor-types.ts",
+      "src/runtime/commands/command-descriptors.ts",
+      "src/runtime/commands/command-handlers.ts",
+      "src/runtime/commands/command-panels.ts",
+      "src/runtime/commands/invocation-command-descriptors.ts",
+      "src/runtime/commands/query-command-specs.ts",
+      "src/runtime/config.ts",
+      "src/runtime/generated-agent-command-catalog.ts",
+      "src/runtime/health-dossier.ts",
+      "src/runtime/health-report-cache.ts",
+      "src/runtime/output-pagination.ts",
+      "src/runtime/project-setup.ts",
+      "src/runtime/query-commands/cleanup/descriptors.ts",
+      "src/runtime/query-commands/cleanup/handlers.ts",
+      "src/runtime/query-commands/direct-navigation.ts",
+      "src/runtime/query-commands/graph.ts",
+      "src/runtime/query-commands/health.ts",
+      "src/runtime/query-commands/navigation.ts",
+      "src/runtime/query-commands/planning.ts",
+      "src/runtime/query-service-fastpath.ts",
+      "src/runtime/query-service-server.ts",
+      "src/runtime/query-service.ts",
+      "src/runtime/setup.ts",
+      "src/runtime/suppression-writer.ts",
+      "src/runtime/watch-service.ts",
+      "src/semantic/shared-primitives.ts",
+      "src/semantic/symbol-evidence.ts",
+      "src/semantic/typescript/local-flow.ts",
+      "src/semantic/typescript/ts-morph-provider.ts",
+      "src/source/facts/ast-facts.ts",
+      "src/source/facts/clojure-facts.ts",
+      "src/source/facts/source-callables.ts",
+      "src/source/facts/source-calls.ts",
+      "src/source/facts/source-fact-types.ts",
+      "src/source/facts/source-facts.ts",
+      "src/source/primitives/file-kind.ts",
+      "src/storage/scip-rows.ts",
+      "src/storage/suppression-store.ts",
+      "src/symbols/graph/call-graph-evidence.ts",
+      "tests/fixtures/public-api-consumer/index.ts",
+      "benchmarks/change/fixture/src/adapters/cancellation-admin.ts",
+      "benchmarks/change/fixture/src/adapters/cancellation-job.ts",
+      "benchmarks/change/fixture/src/adapters/cancellation-web.ts",
+      "benchmarks/change/fixture/src/adapters/checkout-quote.ts",
+      "benchmarks/change/fixture/src/adapters/receipt-jobs.ts",
+      "benchmarks/change/fixture/src/adapters/receipt-routes.ts",
+      "benchmarks/change/fixture/src/adapters/settings.ts",
+      "benchmarks/change/fixture/src/adapters/shipping.ts",
+      "benchmarks/change/fixture/src/adapters/support-quote.ts",
+      "benchmarks/change/fixture/src/adapters/web-config.ts",
+      "benchmarks/change/fixture/src/domain/shipping.ts",
+      "benchmarks/change/fixture/src/domain/types.ts",
+      "benchmarks/change/fixture/src/index.ts",
+      "benchmarks/change/fixture/src/notifications/legacy-receipt.ts",
+      "benchmarks/change/fixture/src/notifications/receipt.ts",
+      "benchmarks/change/fixture/src/pricing/charge-fee.ts",
+      "benchmarks/change/fixture/src/pricing/refund-fee.ts",
+      "benchmarks/change/fixture/src/reservations/cancel.ts",
+      "benchmarks/change/fixture/src/reservations/policy.ts",
+      "benchmarks/full-tool-audit/2026-09-05/assess-results.py",
+      "benchmarks/full-tool-audit/2026-09-05/create-fixture.py",
+      "benchmarks/full-tool-audit/2026-09-05/followup/assert-command-cases.py",
+      "benchmarks/full-tool-audit/2026-09-05/followup/cli-probes.py",
+      "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+      "benchmarks/full-tool-audit/2026-09-05/followup/create-fixture.py",
+      "benchmarks/full-tool-audit/2026-09-05/followup/extend-fixture.py",
+      "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+      "benchmarks/full-tool-audit/2026-09-05/lifecycle-probes.py",
+      "benchmarks/full-tool-audit/2026-09-05/run-cli-probes.py",
+      "src/domain/architecture-config.ts",
+      "src/queries/health/source-dependencies.ts",
+      "src/queries/health/source-finding-contract.ts",
+      "src/queries/health/source-findings.ts",
+      "src/queries/health/source-modules.ts",
+      "src/queries/health/source-review.ts",
+      "src/queries/health/source-suppressions.ts",
+      "src/queries/navigation/reference-neighborhood.ts",
+      "src/queries/navigation/reference-reachability.ts",
+      "src/runtime/query-commands/maintenance.ts",
+      "src/semantic/typescript/call-ownership.ts",
+      "src/source/ast/function-metrics.ts",
+      "src/source/ast/maintenance-bindings.ts",
+      "src/source/ast/maintenance-imports.ts",
+      "src/source/maintenance-coverage.ts",
+      "src/source/maintenance-snapshot.ts",
+      "src/source/primitives/maintenance-project.ts"
+    ],
+    "changedSymbols": [
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/adapters/`cancellation-admin.ts`/cancelFromAdmin().",
+        "shortName": "src:adapters:cancellation-admin:cancelFromAdmin()",
+        "file": "benchmarks/change/fixture/src/adapters/cancellation-admin.ts",
+        "startLine": 3,
+        "endLine": 5,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/adapters/`cancellation-job.ts`/cancelFromJob().",
+        "shortName": "src:adapters:cancellation-job:cancelFromJob()",
+        "file": "benchmarks/change/fixture/src/adapters/cancellation-job.ts",
+        "startLine": 2,
+        "endLine": 7,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/adapters/`cancellation-web.ts`/cancelFromWeb().",
+        "shortName": "src:adapters:cancellation-web:cancelFromWeb()",
+        "file": "benchmarks/change/fixture/src/adapters/cancellation-web.ts",
+        "startLine": 3,
+        "endLine": 5,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/adapters/`checkout-quote.ts`/checkoutQuote().",
+        "shortName": "src:adapters:checkout-quote:checkoutQuote()",
+        "file": "benchmarks/change/fixture/src/adapters/checkout-quote.ts",
+        "startLine": 0,
+        "endLine": 2,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/adapters/`receipt-jobs.ts`/receiptJobs.",
+        "shortName": "src:adapters:receipt-jobs:receiptJobs",
+        "file": "benchmarks/change/fixture/src/adapters/receipt-jobs.ts",
+        "startLine": 2,
+        "endLine": 2,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/adapters/`receipt-routes.ts`/receiptRoutes.",
+        "shortName": "src:adapters:receipt-routes:receiptRoutes",
+        "file": "benchmarks/change/fixture/src/adapters/receipt-routes.ts",
+        "startLine": 2,
+        "endLine": 2,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/adapters/`settings.ts`/settings.",
+        "shortName": "src:adapters:settings:settings",
+        "file": "benchmarks/change/fixture/src/adapters/settings.ts",
+        "startLine": 0,
+        "endLine": 0,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/adapters/`shipping.ts`/webShippingQuote().",
+        "shortName": "src:adapters:shipping:webShippingQuote()",
+        "file": "benchmarks/change/fixture/src/adapters/shipping.ts",
+        "startLine": 3,
+        "endLine": 5,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/adapters/`support-quote.ts`/supportQuote().",
+        "shortName": "src:adapters:support-quote:supportQuote()",
+        "file": "benchmarks/change/fixture/src/adapters/support-quote.ts",
+        "startLine": 0,
+        "endLine": 2,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/adapters/`web-config.ts`/webShippingRate.",
+        "shortName": "src:adapters:web-config:webShippingRate",
+        "file": "benchmarks/change/fixture/src/adapters/web-config.ts",
+        "startLine": 0,
+        "endLine": 0,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/domain/`shipping.ts`/shippingCost().",
+        "shortName": "src:domain:shipping:shippingCost()",
+        "file": "benchmarks/change/fixture/src/domain/shipping.ts",
+        "startLine": 0,
+        "endLine": 2,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/domain/`types.ts`/Reservation#",
+        "shortName": "src:domain:types:Reservation",
+        "file": "benchmarks/change/fixture/src/domain/types.ts",
+        "startLine": 0,
+        "endLine": 5,
+        "fanIn": 6
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/domain/`types.ts`/CancellationStore#",
+        "shortName": "src:domain:types:CancellationStore",
+        "file": "benchmarks/change/fixture/src/domain/types.ts",
+        "startLine": 6,
+        "endLine": 9,
+        "fanIn": 5
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/domain/`types.ts`/Order#",
+        "shortName": "src:domain:types:Order",
+        "file": "benchmarks/change/fixture/src/domain/types.ts",
+        "startLine": 10,
+        "endLine": 13,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/domain/`types.ts`/ReceiptStore#",
+        "shortName": "src:domain:types:ReceiptStore",
+        "file": "benchmarks/change/fixture/src/domain/types.ts",
+        "startLine": 14,
+        "endLine": 16,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/notifications/`legacy-receipt.ts`/sendLegacyReceipt().",
+        "shortName": "src:notifications:legacy-receipt:sendLegacyReceipt()",
+        "file": "benchmarks/change/fixture/src/notifications/legacy-receipt.ts",
+        "startLine": 2,
+        "endLine": 4,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/notifications/`receipt.ts`/sendReceipt().",
+        "shortName": "src:notifications:receipt:sendReceipt()",
+        "file": "benchmarks/change/fixture/src/notifications/receipt.ts",
+        "startLine": 2,
+        "endLine": 4,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/pricing/`charge-fee.ts`/chargeFee().",
+        "shortName": "src:pricing:charge-fee:chargeFee()",
+        "file": "benchmarks/change/fixture/src/pricing/charge-fee.ts",
+        "startLine": 0,
+        "endLine": 2,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/pricing/`refund-fee.ts`/refundFee().",
+        "shortName": "src:pricing:refund-fee:refundFee()",
+        "file": "benchmarks/change/fixture/src/pricing/refund-fee.ts",
+        "startLine": 0,
+        "endLine": 2,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/reservations/`cancel.ts`/cancelReservation().",
+        "shortName": "src:reservations:cancel:cancelReservation()",
+        "file": "benchmarks/change/fixture/src/reservations/cancel.ts",
+        "startLine": 3,
+        "endLine": 8,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm dispatch-desk 1.0.0 src/reservations/`policy.ts`/canCancel().",
+        "shortName": "src:reservations:policy:canCancel()",
+        "file": "benchmarks/change/fixture/src/reservations/policy.ts",
+        "startLine": 2,
+        "endLine": 4,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.assess-results`/read_artifact().",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.assess-results:read_artifact()",
+        "file": "benchmarks/full-tool-audit/2026-09-05/assess-results.py",
+        "startLine": 14,
+        "endLine": 19,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.assess-results`/result().",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.assess-results:result()",
+        "file": "benchmarks/full-tool-audit/2026-09-05/assess-results.py",
+        "startLine": 21,
+        "endLine": 23,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.assess-results`/check().",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.assess-results:check()",
+        "file": "benchmarks/full-tool-audit/2026-09-05/assess-results.py",
+        "startLine": 25,
+        "endLine": 26,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.create-fixture`/files.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.create-fixture:files",
+        "file": "benchmarks/full-tool-audit/2026-09-05/create-fixture.py",
+        "startLine": 0,
+        "endLine": 26,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.create-fixture`/root.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.create-fixture:root",
+        "file": "benchmarks/full-tool-audit/2026-09-05/create-fixture.py",
+        "startLine": 0,
+        "endLine": 26,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.assert-command-cases`/result().",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.assert-command-cases:result()",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/assert-command-cases.py",
+        "startLine": 12,
+        "endLine": 13,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.assert-command-cases`/check().",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.assert-command-cases:check()",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/assert-command-cases.py",
+        "startLine": 15,
+        "endLine": 17,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.cli-probes`/cases.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.cli-probes:cases",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/cli-probes.py",
+        "startLine": 0,
+        "endLine": 54,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.cli-probes`/cli.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.cli-probes:cli",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/cli-probes.py",
+        "startLine": 0,
+        "endLine": 54,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.cli-probes`/env.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.cli-probes:env",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/cli-probes.py",
+        "startLine": 0,
+        "endLine": 54,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.cli-probes`/out.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.cli-probes:out",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/cli-probes.py",
+        "startLine": 0,
+        "endLine": 54,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.cli-probes`/path.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.cli-probes:path",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/cli-probes.py",
+        "startLine": 0,
+        "endLine": 54,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.cli-probes`/payload.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.cli-probes:payload",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/cli-probes.py",
+        "startLine": 0,
+        "endLine": 54,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.cli-probes`/records.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.cli-probes:records",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/cli-probes.py",
+        "startLine": 0,
+        "endLine": 54,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.cli-probes`/result.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.cli-probes:result",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/cli-probes.py",
+        "startLine": 0,
+        "endLine": 54,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.cli-probes`/root.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.cli-probes:root",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/cli-probes.py",
+        "startLine": 0,
+        "endLine": 54,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.cli-probes`/run.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.cli-probes:run",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/cli-probes.py",
+        "startLine": 0,
+        "endLine": 54,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/args.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:args",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/cli.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:cli",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/command.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:command",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/env.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:env",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/human.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:human",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/isolated_contracts.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:isolated_contracts",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/ledger.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:ledger",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/out.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:out",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/output_args.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:output_args",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/packet.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:packet",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/payload.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:payload",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/record.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:record",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/records.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:records",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/root.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:root",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/run.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:run",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/selected.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:selected",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.command-cases`/special.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.command-cases:special",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/command-cases.py",
+        "startLine": 0,
+        "endLine": 55,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.create-fixture`/root.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.create-fixture:root",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/create-fixture.py",
+        "startLine": 0,
+        "endLine": 56,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.extend-fixture`/config.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.extend-fixture:config",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/extend-fixture.py",
+        "startLine": 0,
+        "endLine": 35,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.extend-fixture`/env.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.extend-fixture:env",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/extend-fixture.py",
+        "startLine": 0,
+        "endLine": 35,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.extend-fixture`/files.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.extend-fixture:files",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/extend-fixture.py",
+        "startLine": 0,
+        "endLine": 35,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.extend-fixture`/path.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.extend-fixture:path",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/extend-fixture.py",
+        "startLine": 0,
+        "endLine": 35,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.extend-fixture`/root.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.extend-fixture:root",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/extend-fixture.py",
+        "startLine": 0,
+        "endLine": 35,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.extend-fixture`/runner.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.extend-fixture:runner",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/extend-fixture.py",
+        "startLine": 0,
+        "endLine": 35,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger`/assertions.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger:assertions",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+        "startLine": 0,
+        "endLine": 148,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger`/base.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger:base",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+        "startLine": 0,
+        "endLine": 148,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger`/checked.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger:checked",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+        "startLine": 0,
+        "endLine": 148,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger`/claims.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger:claims",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+        "startLine": 0,
+        "endLine": 148,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger`/entries.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger:entries",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+        "startLine": 0,
+        "endLine": 148,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger`/ev.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger:ev",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+        "startLine": 0,
+        "endLine": 148,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger`/evidence.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger:evidence",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+        "startLine": 0,
+        "endLine": 148,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger`/files.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger:files",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+        "startLine": 0,
+        "endLine": 148,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger`/ledger.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger:ledger",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+        "startLine": 0,
+        "endLine": 148,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger`/md.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger:md",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+        "startLine": 0,
+        "endLine": 148,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger`/repo.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger:repo",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+        "startLine": 0,
+        "endLine": 148,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger`/rows.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger:rows",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+        "startLine": 0,
+        "endLine": 148,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger`/runs.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger:runs",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+        "startLine": 0,
+        "endLine": 148,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger`/suite.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger:suite",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+        "startLine": 0,
+        "endLine": 148,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger`/summary.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger:summary",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+        "startLine": 0,
+        "endLine": 148,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger`/tests.",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.finalize-ledger:tests",
+        "file": "benchmarks/full-tool-audit/2026-09-05/followup/finalize-ledger.py",
+        "startLine": 0,
+        "endLine": 148,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.lifecycle-probes`/run().",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.lifecycle-probes:run()",
+        "file": "benchmarks/full-tool-audit/2026-09-05/lifecycle-probes.py",
+        "startLine": 16,
+        "endLine": 25,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.lifecycle-probes`/machine().",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.lifecycle-probes:machine()",
+        "file": "benchmarks/full-tool-audit/2026-09-05/lifecycle-probes.py",
+        "startLine": 27,
+        "endLine": 28,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.run-cli-probes`/run().",
+        "shortName": "benchmarks.full-tool-audit.2026-09-05.run-cli-probes:run()",
+        "file": "benchmarks/full-tool-audit/2026-09-05/run-cli-probes.py",
+        "startLine": 23,
+        "endLine": 32,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/domain/`architecture-config.ts`/ArchitectureConfigDiagnostic#",
+        "shortName": "src:domain:architecture-config:ArchitectureConfigDiagnostic",
+        "file": "src/domain/architecture-config.ts",
+        "startLine": 3,
+        "endLine": 7,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/domain/`architecture-config.ts`/validateArchitectureConfig().",
+        "shortName": "src:domain:architecture-config:validateArchitectureConfig()",
+        "file": "src/domain/architecture-config.ts",
+        "startLine": 9,
+        "endLine": 165,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/domain/`architecture-config.ts`/isSupportedArchitecturePath().",
+        "shortName": "src:domain:architecture-config:isSupportedArchitecturePath()",
+        "file": "src/domain/architecture-config.ts",
+        "startLine": 167,
+        "endLine": 173,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/domain/`suppression-adjudication.ts`/SuppressionAdjudicationFinding#",
+        "shortName": "src:domain:suppression-adjudication:SuppressionAdjudicationFinding",
+        "file": "src/domain/suppression-adjudication.ts",
+        "startLine": 9,
+        "endLine": 17,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/domain/`suppression-adjudication.ts`/evaluateSuppressionAdjudication().",
+        "shortName": "src:domain:suppression-adjudication:evaluateSuppressionAdjudication()",
+        "file": "src/domain/suppression-adjudication.ts",
+        "startLine": 63,
+        "endLine": 109,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/platform/`typescript-projects.ts`/snapshotDirectoryEntries().",
+        "shortName": "src:platform:typescript-projects:snapshotDirectoryEntries()",
+        "file": "src/platform/typescript-projects.ts",
+        "startLine": 363,
+        "endLine": 398,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/platform/`typescript-projects.ts`/typeScriptSnapshotHost().",
+        "shortName": "src:platform:typescript-projects:typeScriptSnapshotHost()",
+        "file": "src/platform/typescript-projects.ts",
+        "startLine": 401,
+        "endLine": 436,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/cleanup/`duplicate-bodies.ts`/normalizeBody().",
+        "shortName": "src:queries:cleanup:duplicate-bodies:normalizeBody()",
+        "file": "src/queries/cleanup/duplicate-bodies.ts",
+        "startLine": 170,
+        "endLine": 176,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/cleanup/`locality-candidates.ts`/resolveIndexedFilePath().",
+        "shortName": "src:queries:cleanup:locality-candidates:resolveIndexedFilePath()",
+        "file": "src/queries/cleanup/locality-candidates.ts",
+        "startLine": 336,
+        "endLine": 347,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/cleanup/`test-quality.ts`/testQuality().",
+        "shortName": "src:queries:cleanup:test-quality:testQuality()",
+        "file": "src/queries/cleanup/test-quality.ts",
+        "startLine": 68,
+        "endLine": 139,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/cleanup/`test-quality.ts`/findTestBlocks().",
+        "shortName": "src:queries:cleanup:test-quality:findTestBlocks()",
+        "file": "src/queries/cleanup/test-quality.ts",
+        "startLine": 155,
+        "endLine": 167,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/cleanup/`test-quality.ts`/testBlock().",
+        "shortName": "src:queries:cleanup:test-quality:testBlock()",
+        "file": "src/queries/cleanup/test-quality.ts",
+        "startLine": 169,
+        "endLine": 187,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/cleanup/`test-quality.ts`/testCallback().",
+        "shortName": "src:queries:cleanup:test-quality:testCallback()",
+        "file": "src/queries/cleanup/test-quality.ts",
+        "startLine": 189,
+        "endLine": 191,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`architecture.ts`/ArchitectureCycle#",
+        "shortName": "src:queries:graph:architecture:ArchitectureCycle",
+        "file": "src/queries/graph/architecture.ts",
+        "startLine": 52,
+        "endLine": 60,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`architecture.ts`/ArchitectureReport#",
+        "shortName": "src:queries:graph:architecture:ArchitectureReport",
+        "file": "src/queries/graph/architecture.ts",
+        "startLine": 117,
+        "endLine": 139,
+        "fanIn": 6
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`architecture.ts`/analyzeArchitectureGraph().",
+        "shortName": "src:queries:graph:architecture:analyzeArchitectureGraph()",
+        "file": "src/queries/graph/architecture.ts",
+        "startLine": 157,
+        "endLine": 326,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`architecture.ts`/architectureFindingIdentities().",
+        "shortName": "src:queries:graph:architecture:architectureFindingIdentities()",
+        "file": "src/queries/graph/architecture.ts",
+        "startLine": 373,
+        "endLine": 438,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`architecture.ts`/productionArchitectureGraph().",
+        "shortName": "src:queries:graph:architecture:productionArchitectureGraph()",
+        "file": "src/queries/graph/architecture.ts",
+        "startLine": 671,
+        "endLine": 694,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`architecture.ts`/aggregateArchitectureEdges().",
+        "shortName": "src:queries:graph:architecture:aggregateArchitectureEdges()",
+        "file": "src/queries/graph/architecture.ts",
+        "startLine": 696,
+        "endLine": 721,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`dependence-slice.ts`/DependenceSliceEdge#",
+        "shortName": "src:queries:graph:dependence-slice:DependenceSliceEdge",
+        "file": "src/queries/graph/dependence-slice.ts",
+        "startLine": 9,
+        "endLine": 11,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`dependence-slice.ts`/DependenceSliceCoverage#",
+        "shortName": "src:queries:graph:dependence-slice:DependenceSliceCoverage",
+        "file": "src/queries/graph/dependence-slice.ts",
+        "startLine": 12,
+        "endLine": 20,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`dependence-slice.ts`/DependenceSliceResult#",
+        "shortName": "src:queries:graph:dependence-slice:DependenceSliceResult",
+        "file": "src/queries/graph/dependence-slice.ts",
+        "startLine": 21,
+        "endLine": 33,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`dependence-slice.ts`/dependenceSlice().",
+        "shortName": "src:queries:graph:dependence-slice:dependenceSlice()",
+        "file": "src/queries/graph/dependence-slice.ts",
+        "startLine": 40,
+        "endLine": 174,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`system-map.ts`/finalizeSystemMap().",
+        "shortName": "src:queries:graph:system-map:finalizeSystemMap()",
+        "file": "src/queries/graph/system-map.ts",
+        "startLine": 909,
+        "endLine": 1296,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`system-map.ts`/systemMapIncompleteReasons().",
+        "shortName": "src:queries:graph:system-map:systemMapIncompleteReasons()",
+        "file": "src/queries/graph/system-map.ts",
+        "startLine": 2999,
+        "endLine": 3006,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`system-map.ts`/buildSystemMapTopology().",
+        "shortName": "src:queries:graph:system-map:buildSystemMapTopology()",
+        "file": "src/queries/graph/system-map.ts",
+        "startLine": 3008,
+        "endLine": 3027,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`health-report.ts`/HealthAxes#",
+        "shortName": "src:queries:health:health-report:HealthAxes",
+        "file": "src/queries/health/health-report.ts",
+        "startLine": 31,
+        "endLine": 56,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`health-report.ts`/HealthReport#",
+        "shortName": "src:queries:health:health-report:HealthReport",
+        "file": "src/queries/health/health-report.ts",
+        "startLine": 87,
+        "endLine": 136,
+        "fanIn": 6
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`health-report.ts`/buildHealthReport().",
+        "shortName": "src:queries:health:health-report:buildHealthReport()",
+        "file": "src/queries/health/health-report.ts",
+        "startLine": 142,
+        "endLine": 191,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`health-report.ts`/buildHealthActions().",
+        "shortName": "src:queries:health:health-report:buildHealthActions()",
+        "file": "src/queries/health/health-report.ts",
+        "startLine": 348,
+        "endLine": 614,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-dependencies.ts`/sourceArchitectureContext().",
+        "shortName": "src:queries:health:source-dependencies:sourceArchitectureContext()",
+        "file": "src/queries/health/source-dependencies.ts",
+        "startLine": 11,
+        "endLine": 25,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-dependencies.ts`/sourceTestFile().",
+        "shortName": "src:queries:health:source-dependencies:sourceTestFile()",
+        "file": "src/queries/health/source-dependencies.ts",
+        "startLine": 27,
+        "endLine": 33,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-dependencies.ts`/importGraph().",
+        "shortName": "src:queries:health:source-dependencies:importGraph()",
+        "file": "src/queries/health/source-dependencies.ts",
+        "startLine": 35,
+        "endLine": 40,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-dependencies.ts`/productionImports().",
+        "shortName": "src:queries:health:source-dependencies:productionImports()",
+        "file": "src/queries/health/source-dependencies.ts",
+        "startLine": 42,
+        "endLine": 46,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-dependencies.ts`/eagerValueImports().",
+        "shortName": "src:queries:health:source-dependencies:eagerValueImports()",
+        "file": "src/queries/health/source-dependencies.ts",
+        "startLine": 48,
+        "endLine": 50,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-dependencies.ts`/dependencyCoverage().",
+        "shortName": "src:queries:health:source-dependencies:dependencyCoverage()",
+        "file": "src/queries/health/source-dependencies.ts",
+        "startLine": 52,
+        "endLine": 73,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-dependencies.ts`/dependencyCycleFindings().",
+        "shortName": "src:queries:health:source-dependencies:dependencyCycleFindings()",
+        "file": "src/queries/health/source-dependencies.ts",
+        "startLine": 75,
+        "endLine": 96,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-dependencies.ts`/sourceArchitecture().",
+        "shortName": "src:queries:health:source-dependencies:sourceArchitecture()",
+        "file": "src/queries/health/source-dependencies.ts",
+        "startLine": 98,
+        "endLine": 181,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-dependencies.ts`/unresolvedImportFindings().",
+        "shortName": "src:queries:health:source-dependencies:unresolvedImportFindings()",
+        "file": "src/queries/health/source-dependencies.ts",
+        "startLine": 183,
+        "endLine": 198,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-dependencies.ts`/relationshipChanges().",
+        "shortName": "src:queries:health:source-dependencies:relationshipChanges()",
+        "file": "src/queries/health/source-dependencies.ts",
+        "startLine": 200,
+        "endLine": 223,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-finding-contract.ts`/FindingSite#",
+        "shortName": "src:queries:health:source-finding-contract:FindingSite",
+        "file": "src/queries/health/source-finding-contract.ts",
+        "startLine": 3,
+        "endLine": 7,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-finding-contract.ts`/SourceFinding#",
+        "shortName": "src:queries:health:source-finding-contract:SourceFinding",
+        "file": "src/queries/health/source-finding-contract.ts",
+        "startLine": 8,
+        "endLine": 24,
+        "fanIn": 6
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-finding-contract.ts`/MeasuredFunction#",
+        "shortName": "src:queries:health:source-finding-contract:MeasuredFunction",
+        "file": "src/queries/health/source-finding-contract.ts",
+        "startLine": 26,
+        "endLine": 28,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-finding-contract.ts`/isDependencyComponent().",
+        "shortName": "src:queries:health:source-finding-contract:isDependencyComponent()",
+        "file": "src/queries/health/source-finding-contract.ts",
+        "startLine": 31,
+        "endLine": 33,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-finding-contract.ts`/compareFindings().",
+        "shortName": "src:queries:health:source-finding-contract:compareFindings()",
+        "file": "src/queries/health/source-finding-contract.ts",
+        "startLine": 34,
+        "endLine": 45,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-findings.ts`/SourceAnalysis#",
+        "shortName": "src:queries:health:source-findings:SourceAnalysis",
+        "file": "src/queries/health/source-findings.ts",
+        "startLine": 19,
+        "endLine": 26,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-findings.ts`/SOURCE_ANALYSIS_LIMITS.",
+        "shortName": "src:queries:health:source-findings:SOURCE_ANALYSIS_LIMITS",
+        "file": "src/queries/health/source-findings.ts",
+        "startLine": 28,
+        "endLine": 28,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-findings.ts`/analyzeSourceSnapshot().",
+        "shortName": "src:queries:health:source-findings:analyzeSourceSnapshot()",
+        "file": "src/queries/health/source-findings.ts",
+        "startLine": 35,
+        "endLine": 72,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-findings.ts`/complexityFindings().",
+        "shortName": "src:queries:health:source-findings:complexityFindings()",
+        "file": "src/queries/health/source-findings.ts",
+        "startLine": 74,
+        "endLine": 107,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-findings.ts`/duplicateFindings().",
+        "shortName": "src:queries:health:source-findings:duplicateFindings()",
+        "file": "src/queries/health/source-findings.ts",
+        "startLine": 109,
+        "endLine": 136,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-modules.ts`/SourceModuleSubject#",
+        "shortName": "src:queries:health:source-modules:SourceModuleSubject",
+        "file": "src/queries/health/source-modules.ts",
+        "startLine": 9,
+        "endLine": 19,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-modules.ts`/sourceModuleSubjects().",
+        "shortName": "src:queries:health:source-modules:sourceModuleSubjects()",
+        "file": "src/queries/health/source-modules.ts",
+        "startLine": 22,
+        "endLine": 91,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-modules.ts`/responsibilityFindings().",
+        "shortName": "src:queries:health:source-modules:responsibilityFindings()",
+        "file": "src/queries/health/source-modules.ts",
+        "startLine": 94,
+        "endLine": 140,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-modules.ts`/independentFunctionGroups().",
+        "shortName": "src:queries:health:source-modules:independentFunctionGroups()",
+        "file": "src/queries/health/source-modules.ts",
+        "startLine": 142,
+        "endLine": 161,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-review.ts`/SourceReviewOptions#",
+        "shortName": "src:queries:health:source-review:SourceReviewOptions",
+        "file": "src/queries/health/source-review.ts",
+        "startLine": 20,
+        "endLine": 25,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-review.ts`/FunctionChange#",
+        "shortName": "src:queries:health:source-review:FunctionChange",
+        "file": "src/queries/health/source-review.ts",
+        "startLine": 27,
+        "endLine": 32,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-review.ts`/SourceMaintenanceReport#",
+        "shortName": "src:queries:health:source-review:SourceMaintenanceReport",
+        "file": "src/queries/health/source-review.ts",
+        "startLine": 34,
+        "endLine": 62,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-review.ts`/sourceMaintenanceReport().",
+        "shortName": "src:queries:health:source-review:sourceMaintenanceReport()",
+        "file": "src/queries/health/source-review.ts",
+        "startLine": 64,
+        "endLine": 203,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-review.ts`/summarizeTestCoverage().",
+        "shortName": "src:queries:health:source-review:summarizeTestCoverage()",
+        "file": "src/queries/health/source-review.ts",
+        "startLine": 205,
+        "endLine": 218,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-review.ts`/changedFunctions().",
+        "shortName": "src:queries:health:source-review:changedFunctions()",
+        "file": "src/queries/health/source-review.ts",
+        "startLine": 220,
+        "endLine": 255,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-review.ts`/compareSourceFindings().",
+        "shortName": "src:queries:health:source-review:compareSourceFindings()",
+        "file": "src/queries/health/source-review.ts",
+        "startLine": 257,
+        "endLine": 298,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-review.ts`/worsenedComplexityFunctions().",
+        "shortName": "src:queries:health:source-review:worsenedComplexityFunctions()",
+        "file": "src/queries/health/source-review.ts",
+        "startLine": 301,
+        "endLine": 313,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-review.ts`/ambiguousFunctionNames().",
+        "shortName": "src:queries:health:source-review:ambiguousFunctionNames()",
+        "file": "src/queries/health/source-review.ts",
+        "startLine": 315,
+        "endLine": 327,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-review.ts`/removedDependencyFindings().",
+        "shortName": "src:queries:health:source-review:removedDependencyFindings()",
+        "file": "src/queries/health/source-review.ts",
+        "startLine": 329,
+        "endLine": 358,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-review.ts`/affectedImporters().",
+        "shortName": "src:queries:health:source-review:affectedImporters()",
+        "file": "src/queries/health/source-review.ts",
+        "startLine": 360,
+        "endLine": 378,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-suppressions.ts`/SourceSuppressionDecision#",
+        "shortName": "src:queries:health:source-suppressions:SourceSuppressionDecision",
+        "file": "src/queries/health/source-suppressions.ts",
+        "startLine": 14,
+        "endLine": 20,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-suppressions.ts`/sourceSuppressionDecisions().",
+        "shortName": "src:queries:health:source-suppressions:sourceSuppressionDecisions()",
+        "file": "src/queries/health/source-suppressions.ts",
+        "startLine": 23,
+        "endLine": 94,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-suppressions.ts`/mergeSourceSuppressionRecords().",
+        "shortName": "src:queries:health:source-suppressions:mergeSourceSuppressionRecords()",
+        "file": "src/queries/health/source-suppressions.ts",
+        "startLine": 96,
+        "endLine": 109,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/health/`source-suppressions.ts`/sourceSuppressionRecords().",
+        "shortName": "src:queries:health:source-suppressions:sourceSuppressionRecords()",
+        "file": "src/queries/health/source-suppressions.ts",
+        "startLine": 111,
+        "endLine": 139,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/impact/`context.ts`/RepositoryContextOptions#",
+        "shortName": "src:queries:impact:context:RepositoryContextOptions",
+        "file": "src/queries/impact/context.ts",
+        "startLine": 27,
+        "endLine": 34,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/impact/`context.ts`/RepositoryContextResult#",
+        "shortName": "src:queries:impact:context:RepositoryContextResult",
+        "file": "src/queries/impact/context.ts",
+        "startLine": 110,
+        "endLine": 143,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/impact/`context.ts`/repositoryContext().",
+        "shortName": "src:queries:impact:context:repositoryContext()",
+        "file": "src/queries/impact/context.ts",
+        "startLine": 157,
+        "endLine": 307,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/impact/`context.ts`/buildRepositoryContextSymbolComponents().",
+        "shortName": "src:queries:impact:context:buildRepositoryContextSymbolComponents()",
+        "file": "src/queries/impact/context.ts",
+        "startLine": 309,
+        "endLine": 436,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/internal/`file-resolution.ts`/resolveOnDiskFile().",
+        "shortName": "src:queries:internal:file-resolution:resolveOnDiskFile()",
+        "file": "src/queries/internal/file-resolution.ts",
+        "startLine": 63,
+        "endLine": 71,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/internal/`file-resolution.ts`/resolveDocumentCandidates().",
+        "shortName": "src:queries:internal:file-resolution:resolveDocumentCandidates()",
+        "file": "src/queries/internal/file-resolution.ts",
+        "startLine": 76,
+        "endLine": 121,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`code.ts`/code().",
+        "shortName": "src:queries:navigation:code:code()",
+        "file": "src/queries/navigation/code.ts",
+        "startLine": 122,
+        "endLine": 136,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`code.ts`/codeBatch().",
+        "shortName": "src:queries:navigation:code:codeBatch()",
+        "file": "src/queries/navigation/code.ts",
+        "startLine": 139,
+        "endLine": 170,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`code.ts`/codeBatchEntry().",
+        "shortName": "src:queries:navigation:code:codeBatchEntry()",
+        "file": "src/queries/navigation/code.ts",
+        "startLine": 172,
+        "endLine": 218,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`code.ts`/explicitFileSelector().",
+        "shortName": "src:queries:navigation:code:explicitFileSelector()",
+        "file": "src/queries/navigation/code.ts",
+        "startLine": 541,
+        "endLine": 551,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`files.ts`/files().",
+        "shortName": "src:queries:navigation:files:files()",
+        "file": "src/queries/navigation/files.ts",
+        "startLine": 14,
+        "endLine": 21,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`hierarchy.ts`/hierarchy().",
+        "shortName": "src:queries:navigation:hierarchy:hierarchy()",
+        "file": "src/queries/navigation/hierarchy.ts",
+        "startLine": 18,
+        "endLine": 78,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`members.ts`/members().",
+        "shortName": "src:queries:navigation:members:members()",
+        "file": "src/queries/navigation/members.ts",
+        "startLine": 23,
+        "endLine": 48,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`reference-neighborhood.ts`/ReferenceNeighborhoodResult#",
+        "shortName": "src:queries:navigation:reference-neighborhood:ReferenceNeighborhoodResult",
+        "file": "src/queries/navigation/reference-neighborhood.ts",
+        "startLine": 9,
+        "endLine": 17,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`reference-neighborhood.ts`/referenceNeighborhood().",
+        "shortName": "src:queries:navigation:reference-neighborhood:referenceNeighborhood()",
+        "file": "src/queries/navigation/reference-neighborhood.ts",
+        "startLine": 25,
+        "endLine": 71,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`reference-neighborhood.ts`/SymbolRow#",
+        "shortName": "src:queries:navigation:reference-neighborhood:SymbolRow",
+        "file": "src/queries/navigation/reference-neighborhood.ts",
+        "startLine": 73,
+        "endLine": 76,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`reference-neighborhood.ts`/collectReferenceEndpoints().",
+        "shortName": "src:queries:navigation:reference-neighborhood:collectReferenceEndpoints()",
+        "file": "src/queries/navigation/reference-neighborhood.ts",
+        "startLine": 78,
+        "endLine": 111,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`reference-reachability.ts`/ReferenceReachabilityResult#",
+        "shortName": "src:queries:navigation:reference-reachability:ReferenceReachabilityResult",
+        "file": "src/queries/navigation/reference-reachability.ts",
+        "startLine": 10,
+        "endLine": 16,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`reference-reachability.ts`/referenceReachability().",
+        "shortName": "src:queries:navigation:reference-reachability:referenceReachability()",
+        "file": "src/queries/navigation/reference-reachability.ts",
+        "startLine": 30,
+        "endLine": 45,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`reference-reachability.ts`/transitiveCallees().",
+        "shortName": "src:queries:navigation:reference-reachability:transitiveCallees()",
+        "file": "src/queries/navigation/reference-reachability.ts",
+        "startLine": 50,
+        "endLine": 101,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`reference-reachability.ts`/referencingOwners().",
+        "shortName": "src:queries:navigation:reference-reachability:referencingOwners()",
+        "file": "src/queries/navigation/reference-reachability.ts",
+        "startLine": 106,
+        "endLine": 150,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/`public-query-entries.ts`/PUBLIC_QUERY_ENTRIES.",
+        "shortName": "src:queries:public-query-entries:PUBLIC_QUERY_ENTRIES",
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 14,
+        "endLine": 14,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/`public-query-entries.ts`/PUBLIC_QUERY_SOURCE_PATHS.",
+        "shortName": "src:queries:public-query-entries:PUBLIC_QUERY_SOURCE_PATHS",
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 92,
+        "endLine": 92,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/quality/`complexity.ts`/ComplexityResult#",
+        "shortName": "src:queries:quality:complexity:ComplexityResult",
+        "file": "src/queries/quality/complexity.ts",
+        "startLine": 21,
+        "endLine": 39,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/quality/`complexity.ts`/BranchEstimate#",
+        "shortName": "src:queries:quality:complexity:BranchEstimate",
+        "file": "src/queries/quality/complexity.ts",
+        "startLine": 43,
+        "endLine": 47,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/quality/`complexity.ts`/complexity().",
+        "shortName": "src:queries:quality:complexity:complexity()",
+        "file": "src/queries/quality/complexity.ts",
+        "startLine": 59,
+        "endLine": 97,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/quality/`complexity.ts`/branchEstimateForDefinition().",
+        "shortName": "src:queries:quality:complexity:branchEstimateForDefinition()",
+        "file": "src/queries/quality/complexity.ts",
+        "startLine": 100,
+        "endLine": 121,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/quality/`complexity.ts`/branchEstimatesForDefinitions().",
+        "shortName": "src:queries:quality:complexity:branchEstimatesForDefinitions()",
+        "file": "src/queries/quality/complexity.ts",
+        "startLine": 123,
+        "endLine": 183,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/quality/`complexity.ts`/currentFunctionMetrics().",
+        "shortName": "src:queries:quality:complexity:currentFunctionMetrics()",
+        "file": "src/queries/quality/complexity.ts",
+        "startLine": 185,
+        "endLine": 193,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/quality/`complexity.ts`/functionBranchEstimate().",
+        "shortName": "src:queries:quality:complexity:functionBranchEstimate()",
+        "file": "src/queries/quality/complexity.ts",
+        "startLine": 195,
+        "endLine": 211,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/quality/`slice-cohesion.ts`/sliceCohesionForDefinition().",
+        "shortName": "src:queries:quality:slice-cohesion:sliceCohesionForDefinition()",
+        "file": "src/queries/quality/slice-cohesion.ts",
+        "startLine": 580,
+        "endLine": 733,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/quality/`slice-cohesion.ts`/tierFor().",
+        "shortName": "src:queries:quality:slice-cohesion:tierFor()",
+        "file": "src/queries/quality/slice-cohesion.ts",
+        "startLine": 2200,
+        "endLine": 2232,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/quality/`slice-cohesion.ts`/recommendation().",
+        "shortName": "src:queries:quality:slice-cohesion:recommendation()",
+        "file": "src/queries/quality/slice-cohesion.ts",
+        "startLine": 2313,
+        "endLine": 2375,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`agent-setup.ts`/writeInstructionsBlock().",
+        "shortName": "src:runtime:agent-setup:writeInstructionsBlock()",
+        "file": "src/runtime/agent-setup.ts",
+        "startLine": 72,
+        "endLine": 110,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`cli-context.ts`/SHARED_CACHE_PREPARATION_EXCLUDED_COMMANDS.",
+        "shortName": "src:runtime:cli-context:SHARED_CACHE_PREPARATION_EXCLUDED_COMMANDS",
+        "file": "src/runtime/cli-context.ts",
+        "startLine": 119,
+        "endLine": 119,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`cli-support.ts`/renderHealthReport().",
+        "shortName": "src:runtime:cli-support:renderHealthReport()",
+        "file": "src/runtime/cli-support.ts",
+        "startLine": 1308,
+        "endLine": 1399,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`cli.ts`/mayUseQueryServiceFastPath().",
+        "shortName": "src:runtime:cli:mayUseQueryServiceFastPath()",
+        "file": "src/runtime/cli.ts",
+        "startLine": 29,
+        "endLine": 62,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/commands/`command-descriptors.ts`/commandDescriptors.",
+        "shortName": "src:runtime:commands:command-descriptors:commandDescriptors",
+        "file": "src/runtime/commands/command-descriptors.ts",
+        "startLine": 22,
+        "endLine": 22,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/commands/`command-handlers.ts`/handleHealth().",
+        "shortName": "src:runtime:commands:command-handlers:handleHealth()",
+        "file": "src/runtime/commands/command-handlers.ts",
+        "startLine": 283,
+        "endLine": 330,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/commands/`command-handlers.ts`/handleInstallSkills().",
+        "shortName": "src:runtime:commands:command-handlers:handleInstallSkills()",
+        "file": "src/runtime/commands/command-handlers.ts",
+        "startLine": 363,
+        "endLine": 373,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/commands/`command-handlers.ts`/handleSuppress().",
+        "shortName": "src:runtime:commands:command-handlers:handleSuppress()",
+        "file": "src/runtime/commands/command-handlers.ts",
+        "startLine": 487,
+        "endLine": 534,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/commands/`command-panels.ts`/CommandPanelId#",
+        "shortName": "src:runtime:commands:command-panels:CommandPanelId",
+        "file": "src/runtime/commands/command-panels.ts",
+        "startLine": 4,
+        "endLine": 9,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/commands/`command-panels.ts`/commandPanelId().",
+        "shortName": "src:runtime:commands:command-panels:commandPanelId()",
+        "file": "src/runtime/commands/command-panels.ts",
+        "startLine": 24,
+        "endLine": 33,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/commands/`command-panels.ts`/commandPanels().",
+        "shortName": "src:runtime:commands:command-panels:commandPanels()",
+        "file": "src/runtime/commands/command-panels.ts",
+        "startLine": 35,
+        "endLine": 81,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/commands/`invocation-command-descriptors.ts`/DIRECT_NAVIGATION_COMMANDS.",
+        "shortName": "src:runtime:commands:invocation-command-descriptors:DIRECT_NAVIGATION_COMMANDS",
+        "file": "src/runtime/commands/invocation-command-descriptors.ts",
+        "startLine": 2,
+        "endLine": 2,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/commands/`query-command-specs.ts`/queryCommandOrder.",
+        "shortName": "src:runtime:commands:query-command-specs:queryCommandOrder",
+        "file": "src/runtime/commands/query-command-specs.ts",
+        "startLine": 9,
+        "endLine": 9,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/commands/`query-command-specs.ts`/queryCommandFamilies.",
+        "shortName": "src:runtime:commands:query-command-specs:queryCommandFamilies",
+        "file": "src/runtime/commands/query-command-specs.ts",
+        "startLine": 86,
+        "endLine": 86,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`generated-agent-command-catalog.ts`/GENERATED_EXPLORATION_CONTROLS.",
+        "shortName": "src:runtime:generated-agent-command-catalog:GENERATED_EXPLORATION_CONTROLS",
+        "file": "src/runtime/generated-agent-command-catalog.ts",
+        "startLine": 15,
+        "endLine": 15,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`health-dossier.ts`/HealthDossierReport#",
+        "shortName": "src:runtime:health-dossier:HealthDossierReport",
+        "file": "src/runtime/health-dossier.ts",
+        "startLine": 17,
+        "endLine": 50,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`health-dossier.ts`/renderHealthDossierMarkdown().",
+        "shortName": "src:runtime:health-dossier:renderHealthDossierMarkdown()",
+        "file": "src/runtime/health-dossier.ts",
+        "startLine": 143,
+        "endLine": 188,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`health-dossier.ts`/HealthAvailabilitySummary#",
+        "shortName": "src:runtime:health-dossier:HealthAvailabilitySummary",
+        "file": "src/runtime/health-dossier.ts",
+        "startLine": 223,
+        "endLine": 226,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`health-dossier.ts`/formatHealthAvailabilitySummary().",
+        "shortName": "src:runtime:health-dossier:formatHealthAvailabilitySummary()",
+        "file": "src/runtime/health-dossier.ts",
+        "startLine": 228,
+        "endLine": 231,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`health-report-cache.ts`/HEALTH_REPORT_CACHE_VERSION.",
+        "shortName": "src:runtime:health-report-cache:HEALTH_REPORT_CACHE_VERSION",
+        "file": "src/runtime/health-report-cache.ts",
+        "startLine": 21,
+        "endLine": 21,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`health-report-cache.ts`/isHealthReport().",
+        "shortName": "src:runtime:health-report-cache:isHealthReport()",
+        "file": "src/runtime/health-report-cache.ts",
+        "startLine": 167,
+        "endLine": 177,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`output-pagination.ts`/runWithCliOutputPaginationInSession().",
+        "shortName": "src:runtime:output-pagination:runWithCliOutputPaginationInSession()",
+        "file": "src/runtime/output-pagination.ts",
+        "startLine": 364,
+        "endLine": 544,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`output-pagination.ts`/runJsonToOutputFile().",
+        "shortName": "src:runtime:output-pagination:runJsonToOutputFile()",
+        "file": "src/runtime/output-pagination.ts",
+        "startLine": 580,
+        "endLine": 657,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`output-pagination.ts`/runJsonWithOversizeWarning().",
+        "shortName": "src:runtime:output-pagination:runJsonWithOversizeWarning()",
+        "file": "src/runtime/output-pagination.ts",
+        "startLine": 700,
+        "endLine": 742,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`output-pagination.ts`/runHumanToRegularFile().",
+        "shortName": "src:runtime:output-pagination:runHumanToRegularFile()",
+        "file": "src/runtime/output-pagination.ts",
+        "startLine": 745,
+        "endLine": 766,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`project-setup.ts`/ProjectSetupHealthSummary#",
+        "shortName": "src:runtime:project-setup:ProjectSetupHealthSummary",
+        "file": "src/runtime/project-setup.ts",
+        "startLine": 86,
+        "endLine": 91,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`project-setup.ts`/ProjectSetupSmokeTest#",
+        "shortName": "src:runtime:project-setup:ProjectSetupSmokeTest",
+        "file": "src/runtime/project-setup.ts",
+        "startLine": 104,
+        "endLine": 111,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`project-setup.ts`/renderProjectSetupReport().",
+        "shortName": "src:runtime:project-setup:renderProjectSetupReport()",
+        "file": "src/runtime/project-setup.ts",
+        "startLine": 834,
+        "endLine": 891,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`project-setup.ts`/buildSetupSmokeTests().",
+        "shortName": "src:runtime:project-setup:buildSetupSmokeTests()",
+        "file": "src/runtime/project-setup.ts",
+        "startLine": 902,
+        "endLine": 1016,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`project-setup.ts`/runSetupHealth().",
+        "shortName": "src:runtime:project-setup:runSetupHealth()",
+        "file": "src/runtime/project-setup.ts",
+        "startLine": 1163,
+        "endLine": 1194,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`project-setup.ts`/skippedSetupHealth().",
+        "shortName": "src:runtime:project-setup:skippedSetupHealth()",
+        "file": "src/runtime/project-setup.ts",
+        "startLine": 1196,
+        "endLine": 1201,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`project-setup.ts`/healthSummary().",
+        "shortName": "src:runtime:project-setup:healthSummary()",
+        "file": "src/runtime/project-setup.ts",
+        "startLine": 1203,
+        "endLine": 1209,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`project-setup.ts`/emptyHealthSummary().",
+        "shortName": "src:runtime:project-setup:emptyHealthSummary()",
+        "file": "src/runtime/project-setup.ts",
+        "startLine": 1227,
+        "endLine": 1234,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/cleanup/`descriptors.ts`/cleanupQueryCommandDescriptors.",
+        "shortName": "src:runtime:query-commands:cleanup:descriptors:cleanupQueryCommandDescriptors",
+        "file": "src/runtime/query-commands/cleanup/descriptors.ts",
+        "startLine": 74,
+        "endLine": 74,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`direct-navigation.ts`/handleCode.",
+        "shortName": "src:runtime:query-commands:direct-navigation:handleCode",
+        "file": "src/runtime/query-commands/direct-navigation.ts",
+        "startLine": 285,
+        "endLine": 285,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`direct-navigation.ts`/appendCodeCoverage().",
+        "shortName": "src:runtime:query-commands:direct-navigation:appendCodeCoverage()",
+        "file": "src/runtime/query-commands/direct-navigation.ts",
+        "startLine": 550,
+        "endLine": 589,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`direct-navigation.ts`/directNavigationQueryCommandDescriptors.",
+        "shortName": "src:runtime:query-commands:direct-navigation:directNavigationQueryCommandDescriptors",
+        "file": "src/runtime/query-commands/direct-navigation.ts",
+        "startLine": 600,
+        "endLine": 600,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`graph.ts`/handleArchitecture.",
+        "shortName": "src:runtime:query-commands:graph:handleArchitecture",
+        "file": "src/runtime/query-commands/graph.ts",
+        "startLine": 165,
+        "endLine": 165,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`graph.ts`/dependencyDepthHandler().",
+        "shortName": "src:runtime:query-commands:graph:dependencyDepthHandler()",
+        "file": "src/runtime/query-commands/graph.ts",
+        "startLine": 326,
+        "endLine": 350,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`graph.ts`/handleDependencyDepth.",
+        "shortName": "src:runtime:query-commands:graph:handleDependencyDepth",
+        "file": "src/runtime/query-commands/graph.ts",
+        "startLine": 351,
+        "endLine": 351,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`graph.ts`/graphQueryCommandDescriptors.",
+        "shortName": "src:runtime:query-commands:graph:graphQueryCommandDescriptors",
+        "file": "src/runtime/query-commands/graph.ts",
+        "startLine": 492,
+        "endLine": 492,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`health.ts`/handleComplexity.",
+        "shortName": "src:runtime:query-commands:health:handleComplexity",
+        "file": "src/runtime/query-commands/health.ts",
+        "startLine": 21,
+        "endLine": 21,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`maintenance.ts`/handleSourceHealth().",
+        "shortName": "src:runtime:query-commands:maintenance:handleSourceHealth()",
+        "file": "src/runtime/query-commands/maintenance.ts",
+        "startLine": 10,
+        "endLine": 12,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`maintenance.ts`/handleSourceReview().",
+        "shortName": "src:runtime:query-commands:maintenance:handleSourceReview()",
+        "file": "src/runtime/query-commands/maintenance.ts",
+        "startLine": 13,
+        "endLine": 15,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`maintenance.ts`/runSourceMaintenance().",
+        "shortName": "src:runtime:query-commands:maintenance:runSourceMaintenance()",
+        "file": "src/runtime/query-commands/maintenance.ts",
+        "startLine": 17,
+        "endLine": 39,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`maintenance.ts`/renderSourceMaintenance().",
+        "shortName": "src:runtime:query-commands:maintenance:renderSourceMaintenance()",
+        "file": "src/runtime/query-commands/maintenance.ts",
+        "startLine": 41,
+        "endLine": 100,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`maintenance.ts`/renderChangedFunctions().",
+        "shortName": "src:runtime:query-commands:maintenance:renderChangedFunctions()",
+        "file": "src/runtime/query-commands/maintenance.ts",
+        "startLine": 102,
+        "endLine": 120,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`maintenance.ts`/renderFindings().",
+        "shortName": "src:runtime:query-commands:maintenance:renderFindings()",
+        "file": "src/runtime/query-commands/maintenance.ts",
+        "startLine": 122,
+        "endLine": 136,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`maintenance.ts`/renderModuleSubjects().",
+        "shortName": "src:runtime:query-commands:maintenance:renderModuleSubjects()",
+        "file": "src/runtime/query-commands/maintenance.ts",
+        "startLine": 138,
+        "endLine": 165,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`maintenance.ts`/renderDependencyComponents().",
+        "shortName": "src:runtime:query-commands:maintenance:renderDependencyComponents()",
+        "file": "src/runtime/query-commands/maintenance.ts",
+        "startLine": 167,
+        "endLine": 183,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`maintenance.ts`/planningSubjectOrder().",
+        "shortName": "src:runtime:query-commands:maintenance:planningSubjectOrder()",
+        "file": "src/runtime/query-commands/maintenance.ts",
+        "startLine": 186,
+        "endLine": 198,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`navigation.ts`/handleDependenceSlice.",
+        "shortName": "src:runtime:query-commands:navigation:handleDependenceSlice",
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 1223,
+        "endLine": 1223,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`navigation.ts`/navigationQueryCommandDescriptors.",
+        "shortName": "src:runtime:query-commands:navigation:navigationQueryCommandDescriptors",
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 1311,
+        "endLine": 1311,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`planning.ts`/handleContext.",
+        "shortName": "src:runtime:query-commands:planning:handleContext",
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 30,
+        "endLine": 30,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`planning.ts`/planningQueryCommandDescriptors.",
+        "shortName": "src:runtime:query-commands:planning:planningQueryCommandDescriptors",
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 89,
+        "endLine": 89,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`planning.ts`/repositoryContextDecisionSections().",
+        "shortName": "src:runtime:query-commands:planning:repositoryContextDecisionSections()",
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 161,
+        "endLine": 181,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`planning.ts`/detailedRepositoryContextSections().",
+        "shortName": "src:runtime:query-commands:planning:detailedRepositoryContextSections()",
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 183,
+        "endLine": 199,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`planning.ts`/currentRelationshipRows().",
+        "shortName": "src:runtime:query-commands:planning:currentRelationshipRows()",
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 201,
+        "endLine": 212,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`planning.ts`/decisionCoverageRows().",
+        "shortName": "src:runtime:query-commands:planning:decisionCoverageRows()",
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 257,
+        "endLine": 289,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`planning.ts`/repositoryContextReturnedUnits().",
+        "shortName": "src:runtime:query-commands:planning:repositoryContextReturnedUnits()",
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 303,
+        "endLine": 328,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`planning.ts`/repositoryContextAgentResult().",
+        "shortName": "src:runtime:query-commands:planning:repositoryContextAgentResult()",
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 330,
+        "endLine": 371,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`planning.ts`/referenceNeighborhoodRows().",
+        "shortName": "src:runtime:query-commands:planning:referenceNeighborhoodRows()",
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 464,
+        "endLine": 476,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`planning.ts`/riskRows().",
+        "shortName": "src:runtime:query-commands:planning:riskRows()",
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 512,
+        "endLine": 551,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`query-service-fastpath.ts`/SemanticNeighborhoodFastPathInvocation#",
+        "shortName": "src:runtime:query-service-fastpath:SemanticNeighborhoodFastPathInvocation",
+        "file": "src/runtime/query-service-fastpath.ts",
+        "startLine": 123,
+        "endLine": 126,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`query-service-fastpath.ts`/tryRunQueryServiceFastPath().",
+        "shortName": "src:runtime:query-service-fastpath:tryRunQueryServiceFastPath()",
+        "file": "src/runtime/query-service-fastpath.ts",
+        "startLine": 177,
+        "endLine": 317,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`query-service-fastpath.ts`/parseFastPathInvocation().",
+        "shortName": "src:runtime:query-service-fastpath:parseFastPathInvocation()",
+        "file": "src/runtime/query-service-fastpath.ts",
+        "startLine": 319,
+        "endLine": 346,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`query-service-fastpath.ts`/parseSemanticNeighborhoodInvocation().",
+        "shortName": "src:runtime:query-service-fastpath:parseSemanticNeighborhoodInvocation()",
+        "file": "src/runtime/query-service-fastpath.ts",
+        "startLine": 400,
+        "endLine": 407,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`query-service-server.ts`/executeRequest().",
+        "shortName": "src:runtime:query-service-server:executeRequest()",
+        "file": "src/runtime/query-service-server.ts",
+        "startLine": 208,
+        "endLine": 412,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`query-service-server.ts`/parseEnvelope().",
+        "shortName": "src:runtime:query-service-server:parseEnvelope()",
+        "file": "src/runtime/query-service-server.ts",
+        "startLine": 414,
+        "endLine": 700,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`query-service-server.ts`/SerializedResultCacheKind#",
+        "shortName": "src:runtime:query-service-server:SerializedResultCacheKind",
+        "file": "src/runtime/query-service-server.ts",
+        "startLine": 715,
+        "endLine": 721,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`query-service.ts`/QueryServiceSemanticNeighborhoodRequest#",
+        "shortName": "src:runtime:query-service:QueryServiceSemanticNeighborhoodRequest",
+        "file": "src/runtime/query-service.ts",
+        "startLine": 177,
+        "endLine": 180,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`query-service.ts`/requestPoolSize().",
+        "shortName": "src:runtime:query-service:requestPoolSize()",
+        "file": "src/runtime/query-service.ts",
+        "startLine": 1432,
+        "endLine": 1456,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`setup.ts`/DEFAULT_SKILLS.",
+        "shortName": "src:runtime:setup:DEFAULT_SKILLS",
+        "file": "src/runtime/setup.ts",
+        "startLine": 21,
+        "endLine": 21,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`setup.ts`/installSkills().",
+        "shortName": "src:runtime:setup:installSkills()",
+        "file": "src/runtime/setup.ts",
+        "startLine": 62,
+        "endLine": 122,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`suppression-writer.ts`/writeSuppressionFile().",
+        "shortName": "src:runtime:suppression-writer:writeSuppressionFile()",
+        "file": "src/runtime/suppression-writer.ts",
+        "startLine": 118,
+        "endLine": 183,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`suppression-writer.ts`/parseExistingSuppression().",
+        "shortName": "src:runtime:suppression-writer:parseExistingSuppression()",
+        "file": "src/runtime/suppression-writer.ts",
+        "startLine": 185,
+        "endLine": 202,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`watch-service.ts`/AUTO_START_EXCLUDED_COMMANDS.",
+        "shortName": "src:runtime:watch-service:AUTO_START_EXCLUDED_COMMANDS",
+        "file": "src/runtime/watch-service.ts",
+        "startLine": 56,
+        "endLine": 56,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/`shared-primitives.ts`/semanticConsumerReadiness().",
+        "shortName": "src:semantic:shared-primitives:semanticConsumerReadiness()",
+        "file": "src/semantic/shared-primitives.ts",
+        "startLine": 157,
+        "endLine": 172,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/`symbol-evidence.ts`/TYPESCRIPT_CALLEE_SCHEMA.",
+        "shortName": "src:semantic:symbol-evidence:TYPESCRIPT_CALLEE_SCHEMA",
+        "file": "src/semantic/symbol-evidence.ts",
+        "startLine": 233,
+        "endLine": 233,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`call-ownership.ts`/compilerCallOwnerLookup().",
+        "shortName": "src:semantic:typescript:call-ownership:compilerCallOwnerLookup()",
+        "file": "src/semantic/typescript/call-ownership.ts",
+        "startLine": 4,
+        "endLine": 36,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`call-ownership.ts`/callableDeclaration().",
+        "shortName": "src:semantic:typescript:call-ownership:callableDeclaration()",
+        "file": "src/semantic/typescript/call-ownership.ts",
+        "startLine": 39,
+        "endLine": 53,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`call-ownership.ts`/isDeclarationWrapper().",
+        "shortName": "src:semantic:typescript:call-ownership:isDeclarationWrapper()",
+        "file": "src/semantic/typescript/call-ownership.ts",
+        "startLine": 55,
+        "endLine": 59,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`call-ownership.ts`/containsPosition().",
+        "shortName": "src:semantic:typescript:call-ownership:containsPosition()",
+        "file": "src/semantic/typescript/call-ownership.ts",
+        "startLine": 61,
+        "endLine": 65,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/analyzeTypeScriptLocalFlow().",
+        "shortName": "src:semantic:typescript:local-flow:analyzeTypeScriptLocalFlow()",
+        "file": "src/semantic/typescript/local-flow.ts",
+        "startLine": 137,
+        "endLine": 190,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/buildStatement().",
+        "shortName": "src:semantic:typescript:local-flow:buildStatement()",
+        "file": "src/semantic/typescript/local-flow.ts",
+        "startLine": 444,
+        "endLine": 561,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/buildExpressionFlow().",
+        "shortName": "src:semantic:typescript:local-flow:buildExpressionFlow()",
+        "file": "src/semantic/typescript/local-flow.ts",
+        "startLine": 564,
+        "endLine": 587,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/shortCircuitOperator().",
+        "shortName": "src:semantic:typescript:local-flow:shortCircuitOperator()",
+        "file": "src/semantic/typescript/local-flow.ts",
+        "startLine": 589,
+        "endLine": 595,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/collectNodeAccesses().",
+        "shortName": "src:semantic:typescript:local-flow:collectNodeAccesses()",
+        "file": "src/semantic/typescript/local-flow.ts",
+        "startLine": 740,
+        "endLine": 832,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/collectUses().",
+        "shortName": "src:semantic:typescript:local-flow:collectUses()",
+        "file": "src/semantic/typescript/local-flow.ts",
+        "startLine": 834,
+        "endLine": 868,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/isUpdateExpression().",
+        "shortName": "src:semantic:typescript:local-flow:isUpdateExpression()",
+        "file": "src/semantic/typescript/local-flow.ts",
+        "startLine": 870,
+        "endLine": 878,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/reportPossibleAlias().",
+        "shortName": "src:semantic:typescript:local-flow:reportPossibleAlias()",
+        "file": "src/semantic/typescript/local-flow.ts",
+        "startLine": 880,
+        "endLine": 892,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/aliasValues().",
+        "shortName": "src:semantic:typescript:local-flow:aliasValues()",
+        "file": "src/semantic/typescript/local-flow.ts",
+        "startLine": 895,
+        "endLine": 908,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/aliasPropertyValue().",
+        "shortName": "src:semantic:typescript:local-flow:aliasPropertyValue()",
+        "file": "src/semantic/typescript/local-flow.ts",
+        "startLine": 910,
+        "endLine": 918,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/aliasWrappedValue().",
+        "shortName": "src:semantic:typescript:local-flow:aliasWrappedValue()",
+        "file": "src/semantic/typescript/local-flow.ts",
+        "startLine": 920,
+        "endLine": 931,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/reportDelete().",
+        "shortName": "src:semantic:typescript:local-flow:reportDelete()",
+        "file": "src/semantic/typescript/local-flow.ts",
+        "startLine": 933,
+        "endLine": 938,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/mayCarryObject().",
+        "shortName": "src:semantic:typescript:local-flow:mayCarryObject()",
+        "file": "src/semantic/typescript/local-flow.ts",
+        "startLine": 940,
+        "endLine": 954,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/addControlDependenceEdges().",
+        "shortName": "src:semantic:typescript:local-flow:addControlDependenceEdges()",
+        "file": "src/semantic/typescript/local-flow.ts",
+        "startLine": 1424,
+        "endLine": 1465,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`ts-morph-provider.ts`/TsMorphSemanticProvider#",
+        "shortName": "src:semantic:typescript:ts-morph-provider:TsMorphSemanticProvider",
+        "file": "src/semantic/typescript/ts-morph-provider.ts",
+        "startLine": 171,
+        "endLine": 1399,
+        "fanIn": 0
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`ts-morph-provider.ts`/TsMorphSemanticProvider#calleeCoverageForDefinitions().",
+        "shortName": "src:semantic:typescript:ts-morph-provider:TsMorphSemanticProvider:calleeCoverageForDefinitions()",
+        "file": "src/semantic/typescript/ts-morph-provider.ts",
+        "startLine": 788,
+        "endLine": 841,
+        "fanIn": 4
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`ts-morph-provider.ts`/TsMorphSemanticProvider#calleeMapForFile().",
+        "shortName": "src:semantic:typescript:ts-morph-provider:TsMorphSemanticProvider:calleeMapForFile()",
+        "file": "src/semantic/typescript/ts-morph-provider.ts",
+        "startLine": 1223,
+        "endLine": 1308,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`ts-morph-provider.ts`/TsMorphSemanticProvider#semanticCalleeForCallNode().",
+        "shortName": "src:semantic:typescript:ts-morph-provider:TsMorphSemanticProvider:semanticCalleeForCallNode()",
+        "file": "src/semantic/typescript/ts-morph-provider.ts",
+        "startLine": 1311,
+        "endLine": 1362,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`function-metrics.ts`/ComplexityContribution#",
+        "shortName": "src:source:ast:function-metrics:ComplexityContribution",
+        "file": "src/source/ast/function-metrics.ts",
+        "startLine": 3,
+        "endLine": 9,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`function-metrics.ts`/SourceFunction#",
+        "shortName": "src:source:ast:function-metrics:SourceFunction",
+        "file": "src/source/ast/function-metrics.ts",
+        "startLine": 11,
+        "endLine": 25,
+        "fanIn": 5
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`function-metrics.ts`/FunctionAnalysis#",
+        "shortName": "src:source:ast:function-metrics:FunctionAnalysis",
+        "file": "src/source/ast/function-metrics.ts",
+        "startLine": 27,
+        "endLine": 32,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`function-metrics.ts`/FUNCTION_METRIC_RULES.",
+        "shortName": "src:source:ast:function-metrics:FUNCTION_METRIC_RULES",
+        "file": "src/source/ast/function-metrics.ts",
+        "startLine": 34,
+        "endLine": 34,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`function-metrics.ts`/sourceHash().",
+        "shortName": "src:source:ast:function-metrics:sourceHash()",
+        "file": "src/source/ast/function-metrics.ts",
+        "startLine": 36,
+        "endLine": 38,
+        "fanIn": 5
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`function-metrics.ts`/analyzeSourceFunctions().",
+        "shortName": "src:source:ast:function-metrics:analyzeSourceFunctions()",
+        "file": "src/source/ast/function-metrics.ts",
+        "startLine": 41,
+        "endLine": 71,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`function-metrics.ts`/ImplementedFunction#",
+        "shortName": "src:source:ast:function-metrics:ImplementedFunction",
+        "file": "src/source/ast/function-metrics.ts",
+        "startLine": 73,
+        "endLine": 73,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`function-metrics.ts`/isImplementedFunction().",
+        "shortName": "src:source:ast:function-metrics:isImplementedFunction()",
+        "file": "src/source/ast/function-metrics.ts",
+        "startLine": 75,
+        "endLine": 77,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`function-metrics.ts`/functionName().",
+        "shortName": "src:source:ast:function-metrics:functionName()",
+        "file": "src/source/ast/function-metrics.ts",
+        "startLine": 79,
+        "endLine": 93,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`function-metrics.ts`/measureFunction().",
+        "shortName": "src:source:ast:function-metrics:measureFunction()",
+        "file": "src/source/ast/function-metrics.ts",
+        "startLine": 95,
+        "endLine": 166,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`function-metrics.ts`/isLoop().",
+        "shortName": "src:source:ast:function-metrics:isLoop()",
+        "file": "src/source/ast/function-metrics.ts",
+        "startLine": 168,
+        "endLine": 176,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`function-metrics.ts`/isShortCircuit().",
+        "shortName": "src:source:ast:function-metrics:isShortCircuit()",
+        "file": "src/source/ast/function-metrics.ts",
+        "startLine": 178,
+        "endLine": 184,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`function-metrics.ts`/unwrapLogicalParent().",
+        "shortName": "src:source:ast:function-metrics:unwrapLogicalParent()",
+        "file": "src/source/ast/function-metrics.ts",
+        "startLine": 186,
+        "endLine": 190,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`function-metrics.ts`/implementationTokens().",
+        "shortName": "src:source:ast:function-metrics:implementationTokens()",
+        "file": "src/source/ast/function-metrics.ts",
+        "startLine": 193,
+        "endLine": 235,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`function-metrics.ts`/sourceBindingChecker().",
+        "shortName": "src:source:ast:function-metrics:sourceBindingChecker()",
+        "file": "src/source/ast/function-metrics.ts",
+        "startLine": 238,
+        "endLine": 259,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`maintenance-bindings.ts`/MaintenanceFunctionBindings#",
+        "shortName": "src:source:ast:maintenance-bindings:MaintenanceFunctionBindings",
+        "file": "src/source/ast/maintenance-bindings.ts",
+        "startLine": 4,
+        "endLine": 11,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`maintenance-bindings.ts`/MaintenanceBindingFacts#",
+        "shortName": "src:source:ast:maintenance-bindings:MaintenanceBindingFacts",
+        "file": "src/source/ast/maintenance-bindings.ts",
+        "startLine": 13,
+        "endLine": 16,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`maintenance-bindings.ts`/maintenanceBindings().",
+        "shortName": "src:source:ast:maintenance-bindings:maintenanceBindings()",
+        "file": "src/source/ast/maintenance-bindings.ts",
+        "startLine": 19,
+        "endLine": 81,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`maintenance-bindings.ts`/topLevelFunctions().",
+        "shortName": "src:source:ast:maintenance-bindings:topLevelFunctions()",
+        "file": "src/source/ast/maintenance-bindings.ts",
+        "startLine": 83,
+        "endLine": 94,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`maintenance-bindings.ts`/functionIdentifier().",
+        "shortName": "src:source:ast:maintenance-bindings:functionIdentifier()",
+        "file": "src/source/ast/maintenance-bindings.ts",
+        "startLine": 96,
+        "endLine": 98,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`maintenance-bindings.ts`/importBindings().",
+        "shortName": "src:source:ast:maintenance-bindings:importBindings()",
+        "file": "src/source/ast/maintenance-bindings.ts",
+        "startLine": 100,
+        "endLine": 112,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`maintenance-bindings.ts`/exportedBindings().",
+        "shortName": "src:source:ast:maintenance-bindings:exportedBindings()",
+        "file": "src/source/ast/maintenance-bindings.ts",
+        "startLine": 114,
+        "endLine": 123,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`maintenance-imports.ts`/ImportResolution#",
+        "shortName": "src:source:ast:maintenance-imports:ImportResolution",
+        "file": "src/source/ast/maintenance-imports.ts",
+        "startLine": 11,
+        "endLine": 11,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`maintenance-imports.ts`/SourceImport#",
+        "shortName": "src:source:ast:maintenance-imports:SourceImport",
+        "file": "src/source/ast/maintenance-imports.ts",
+        "startLine": 13,
+        "endLine": 25,
+        "fanIn": 5
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`maintenance-imports.ts`/maintenanceImports().",
+        "shortName": "src:source:ast:maintenance-imports:maintenanceImports()",
+        "file": "src/source/ast/maintenance-imports.ts",
+        "startLine": 28,
+        "endLine": 73,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`maintenance-imports.ts`/importKind().",
+        "shortName": "src:source:ast:maintenance-imports:importKind()",
+        "file": "src/source/ast/maintenance-imports.ts",
+        "startLine": 75,
+        "endLine": 86,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`maintenance-imports.ts`/exportKind().",
+        "shortName": "src:source:ast:maintenance-imports:exportKind()",
+        "file": "src/source/ast/maintenance-imports.ts",
+        "startLine": 88,
+        "endLine": 97,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`maintenance-imports.ts`/resolveSourceImport().",
+        "shortName": "src:source:ast:maintenance-imports:resolveSourceImport()",
+        "file": "src/source/ast/maintenance-imports.ts",
+        "startLine": 99,
+        "endLine": 141,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/facts/`ast-facts.ts`/CallSite#",
+        "shortName": "src:source:facts:ast-facts:CallSite",
+        "file": "src/source/facts/ast-facts.ts",
+        "startLine": 19,
+        "endLine": 32,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/facts/`source-callables.ts`/callableFactForNode().",
+        "shortName": "src:source:facts:source-callables:callableFactForNode()",
+        "file": "src/source/facts/source-callables.ts",
+        "startLine": 41,
+        "endLine": 76,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/facts/`source-callables.ts`/callSiteOwner().",
+        "shortName": "src:source:facts:source-callables:callSiteOwner()",
+        "file": "src/source/facts/source-callables.ts",
+        "startLine": 82,
+        "endLine": 98,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/facts/`source-calls.ts`/callSiteForNode().",
+        "shortName": "src:source:facts:source-calls:callSiteForNode()",
+        "file": "src/source/facts/source-calls.ts",
+        "startLine": 7,
+        "endLine": 22,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/facts/`source-fact-types.ts`/SourceCallableOwner#",
+        "shortName": "src:source:facts:source-fact-types:SourceCallableOwner",
+        "file": "src/source/facts/source-fact-types.ts",
+        "startLine": 12,
+        "endLine": 18,
+        "fanIn": 4
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/facts/`source-fact-types.ts`/SourceFacts#",
+        "shortName": "src:source:facts:source-fact-types:SourceFacts",
+        "file": "src/source/facts/source-fact-types.ts",
+        "startLine": 20,
+        "endLine": 61,
+        "fanIn": 5
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/facts/`source-facts.ts`/SOURCE_FACTS_PAYLOAD_VERSION.",
+        "shortName": "src:source:facts:source-facts:SOURCE_FACTS_PAYLOAD_VERSION",
+        "file": "src/source/facts/source-facts.ts",
+        "startLine": 39,
+        "endLine": 39,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-coverage.ts`/FunctionCoverage#",
+        "shortName": "src:source:maintenance-coverage:FunctionCoverage",
+        "file": "src/source/maintenance-coverage.ts",
+        "startLine": 3,
+        "endLine": 12,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-coverage.ts`/CoverageEntry#",
+        "shortName": "src:source:maintenance-coverage:CoverageEntry",
+        "file": "src/source/maintenance-coverage.ts",
+        "startLine": 14,
+        "endLine": 23,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-coverage.ts`/ReviewCoverage#",
+        "shortName": "src:source:maintenance-coverage:ReviewCoverage",
+        "file": "src/source/maintenance-coverage.ts",
+        "startLine": 25,
+        "endLine": 28,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-coverage.ts`/loadReviewCoverage().",
+        "shortName": "src:source:maintenance-coverage:loadReviewCoverage()",
+        "file": "src/source/maintenance-coverage.ts",
+        "startLine": 30,
+        "endLine": 52,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-coverage.ts`/functionCoverage().",
+        "shortName": "src:source:maintenance-coverage:functionCoverage()",
+        "file": "src/source/maintenance-coverage.ts",
+        "startLine": 54,
+        "endLine": 103,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-coverage.ts`/validMeasuredLocation().",
+        "shortName": "src:source:maintenance-coverage:validMeasuredLocation()",
+        "file": "src/source/maintenance-coverage.ts",
+        "startLine": 105,
+        "endLine": 117,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-snapshot.ts`/SourceSnapshot#",
+        "shortName": "src:source:maintenance-snapshot:SourceSnapshot",
+        "file": "src/source/maintenance-snapshot.ts",
+        "startLine": 6,
+        "endLine": 15,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-snapshot.ts`/SourceScanOptions#",
+        "shortName": "src:source:maintenance-snapshot:SourceScanOptions",
+        "file": "src/source/maintenance-snapshot.ts",
+        "startLine": 17,
+        "endLine": 23,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-snapshot.ts`/SOURCE_SCAN_DEFAULTS.",
+        "shortName": "src:source:maintenance-snapshot:SOURCE_SCAN_DEFAULTS",
+        "file": "src/source/maintenance-snapshot.ts",
+        "startLine": 25,
+        "endLine": 25,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-snapshot.ts`/MAX_SNAPSHOT_BYTES.",
+        "shortName": "src:source:maintenance-snapshot:MAX_SNAPSHOT_BYTES",
+        "file": "src/source/maintenance-snapshot.ts",
+        "startLine": 26,
+        "endLine": 26,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-snapshot.ts`/eligibleMaintenanceFile().",
+        "shortName": "src:source:maintenance-snapshot:eligibleMaintenanceFile()",
+        "file": "src/source/maintenance-snapshot.ts",
+        "startLine": 28,
+        "endLine": 30,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-snapshot.ts`/maintenanceExclusion().",
+        "shortName": "src:source:maintenance-snapshot:maintenanceExclusion()",
+        "file": "src/source/maintenance-snapshot.ts",
+        "startLine": 32,
+        "endLine": 46,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-snapshot.ts`/currentSourceSnapshot().",
+        "shortName": "src:source:maintenance-snapshot:currentSourceSnapshot()",
+        "file": "src/source/maintenance-snapshot.ts",
+        "startLine": 48,
+        "endLine": 56,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-snapshot.ts`/gitRevision().",
+        "shortName": "src:source:maintenance-snapshot:gitRevision()",
+        "file": "src/source/maintenance-snapshot.ts",
+        "startLine": 58,
+        "endLine": 62,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-snapshot.ts`/baseSourceSnapshot().",
+        "shortName": "src:source:maintenance-snapshot:baseSourceSnapshot()",
+        "file": "src/source/maintenance-snapshot.ts",
+        "startLine": 65,
+        "endLine": 121,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-snapshot.ts`/assertSourceSnapshotCurrent().",
+        "shortName": "src:source:maintenance-snapshot:assertSourceSnapshotCurrent()",
+        "file": "src/source/maintenance-snapshot.ts",
+        "startLine": 123,
+        "endLine": 155,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-snapshot.ts`/collectSnapshot().",
+        "shortName": "src:source:maintenance-snapshot:collectSnapshot()",
+        "file": "src/source/maintenance-snapshot.ts",
+        "startLine": 157,
+        "endLine": 216,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-snapshot.ts`/configurationInventory().",
+        "shortName": "src:source:maintenance-snapshot:configurationInventory()",
+        "file": "src/source/maintenance-snapshot.ts",
+        "startLine": 218,
+        "endLine": 220,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-snapshot.ts`/git().",
+        "shortName": "src:source:maintenance-snapshot:git()",
+        "file": "src/source/maintenance-snapshot.ts",
+        "startLine": 222,
+        "endLine": 230,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-snapshot.ts`/presentProjectFiles().",
+        "shortName": "src:source:maintenance-snapshot:presentProjectFiles()",
+        "file": "src/source/maintenance-snapshot.ts",
+        "startLine": 232,
+        "endLine": 240,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/`maintenance-snapshot.ts`/validateScanLimits().",
+        "shortName": "src:source:maintenance-snapshot:validateScanLimits()",
+        "file": "src/source/maintenance-snapshot.ts",
+        "startLine": 242,
+        "endLine": 248,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/primitives/`file-kind.ts`/isManagedOutputPath().",
+        "shortName": "src:source:primitives:file-kind:isManagedOutputPath()",
+        "file": "src/source/primitives/file-kind.ts",
+        "startLine": 10,
+        "endLine": 12,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/primitives/`file-kind.ts`/matchesTestPattern().",
+        "shortName": "src:source:primitives:file-kind:matchesTestPattern()",
+        "file": "src/source/primitives/file-kind.ts",
+        "startLine": 38,
+        "endLine": 56,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/primitives/`maintenance-project.ts`/MaintenanceProjectConfig#",
+        "shortName": "src:source:primitives:maintenance-project:MaintenanceProjectConfig",
+        "file": "src/source/primitives/maintenance-project.ts",
+        "startLine": 8,
+        "endLine": 13,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/primitives/`maintenance-project.ts`/MaintenanceProject#",
+        "shortName": "src:source:primitives:maintenance-project:MaintenanceProject",
+        "file": "src/source/primitives/maintenance-project.ts",
+        "startLine": 15,
+        "endLine": 26,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/primitives/`maintenance-project.ts`/DEFAULT_OPTIONS.",
+        "shortName": "src:source:primitives:maintenance-project:DEFAULT_OPTIONS",
+        "file": "src/source/primitives/maintenance-project.ts",
+        "startLine": 28,
+        "endLine": 28,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/primitives/`maintenance-project.ts`/maintenanceProject().",
+        "shortName": "src:source:primitives:maintenance-project:maintenanceProject()",
+        "file": "src/source/primitives/maintenance-project.ts",
+        "startLine": 31,
+        "endLine": 72,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/primitives/`maintenance-project.ts`/sourceDirectories().",
+        "shortName": "src:source:primitives:maintenance-project:sourceDirectories()",
+        "file": "src/source/primitives/maintenance-project.ts",
+        "startLine": 74,
+        "endLine": 84,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/primitives/`maintenance-project.ts`/readProjectConfigs().",
+        "shortName": "src:source:primitives:maintenance-project:readProjectConfigs()",
+        "file": "src/source/primitives/maintenance-project.ts",
+        "startLine": 86,
+        "endLine": 134,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/primitives/`maintenance-project.ts`/readRepositoryPackages().",
+        "shortName": "src:source:primitives:maintenance-project:readRepositoryPackages()",
+        "file": "src/source/primitives/maintenance-project.ts",
+        "startLine": 136,
+        "endLine": 164,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/primitives/`maintenance-project.ts`/packageHost().",
+        "shortName": "src:source:primitives:maintenance-project:packageHost()",
+        "file": "src/source/primitives/maintenance-project.ts",
+        "startLine": 166,
+        "endLine": 183,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/primitives/`maintenance-project.ts`/packageName().",
+        "shortName": "src:source:primitives:maintenance-project:packageName()",
+        "file": "src/source/primitives/maintenance-project.ts",
+        "startLine": 185,
+        "endLine": 187,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/primitives/`maintenance-project.ts`/maintenanceFileConfigs().",
+        "shortName": "src:source:primitives:maintenance-project:maintenanceFileConfigs()",
+        "file": "src/source/primitives/maintenance-project.ts",
+        "startLine": 190,
+        "endLine": 204,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/primitives/`maintenance-project.ts`/isInternalSpecifier().",
+        "shortName": "src:source:primitives:maintenance-project:isInternalSpecifier()",
+        "file": "src/source/primitives/maintenance-project.ts",
+        "startLine": 206,
+        "endLine": 215,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/source/primitives/`maintenance-project.ts`/snapshotArchitecture().",
+        "shortName": "src:source:primitives:maintenance-project:snapshotArchitecture()",
+        "file": "src/source/primitives/maintenance-project.ts",
+        "startLine": 217,
+        "endLine": 231,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`scip-rows.ts`/DefinitionOccurrenceRange#",
+        "shortName": "src:storage:scip-rows:DefinitionOccurrenceRange",
+        "file": "src/storage/scip-rows.ts",
+        "startLine": 13,
+        "endLine": 13,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`scip-rows.ts`/DEFINITION_OCCURRENCE_RANGES.",
+        "shortName": "src:storage:scip-rows:DEFINITION_OCCURRENCE_RANGES",
+        "file": "src/storage/scip-rows.ts",
+        "startLine": 14,
+        "endLine": 14,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`scip-rows.ts`/definitionOccurrenceRanges().",
+        "shortName": "src:storage:scip-rows:definitionOccurrenceRanges()",
+        "file": "src/storage/scip-rows.ts",
+        "startLine": 23,
+        "endLine": 36,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`scip-rows.ts`/chunkDefinitionRanges().",
+        "shortName": "src:storage:scip-rows:chunkDefinitionRanges()",
+        "file": "src/storage/scip-rows.ts",
+        "startLine": 38,
+        "endLine": 50,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`scip-rows.ts`/occurrenceDefinitionRange().",
+        "shortName": "src:storage:scip-rows:occurrenceDefinitionRange()",
+        "file": "src/storage/scip-rows.ts",
+        "startLine": 52,
+        "endLine": 64,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`scip-rows.ts`/definitionMentionRows().",
+        "shortName": "src:storage:scip-rows:definitionMentionRows()",
+        "file": "src/storage/scip-rows.ts",
+        "startLine": 111,
+        "endLine": 138,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`suppression-store.ts`/suppressionFileName().",
+        "shortName": "src:storage:suppression-store:suppressionFileName()",
+        "file": "src/storage/suppression-store.ts",
+        "startLine": 86,
+        "endLine": 93,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`suppression-store.ts`/suppressionIdentity().",
+        "shortName": "src:storage:suppression-store:suppressionIdentity()",
+        "file": "src/storage/suppression-store.ts",
+        "startLine": 95,
+        "endLine": 100,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`suppression-store.ts`/assertSuppressionPath().",
+        "shortName": "src:storage:suppression-store:assertSuppressionPath()",
+        "file": "src/storage/suppression-store.ts",
+        "startLine": 103,
+        "endLine": 115,
+        "fanIn": 2
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`suppression-store.ts`/suppressionWritePath().",
+        "shortName": "src:storage:suppression-store:suppressionWritePath()",
+        "file": "src/storage/suppression-store.ts",
+        "startLine": 118,
+        "endLine": 132,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`suppression-store.ts`/decodeSuppressionFile().",
+        "shortName": "src:storage:suppression-store:decodeSuppressionFile()",
+        "file": "src/storage/suppression-store.ts",
+        "startLine": 134,
+        "endLine": 214,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`suppression-store.ts`/readSuppressionDir().",
+        "shortName": "src:storage:suppression-store:readSuppressionDir()",
+        "file": "src/storage/suppression-store.ts",
+        "startLine": 216,
+        "endLine": 261,
+        "fanIn": 3
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`suppression-store.ts`/suppressionEntries().",
+        "shortName": "src:storage:suppression-store:suppressionEntries()",
+        "file": "src/storage/suppression-store.ts",
+        "startLine": 263,
+        "endLine": 282,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/symbols/graph/`call-graph-evidence.ts`/buildAstCalleeMap().",
+        "shortName": "src:symbols:graph:call-graph-evidence:buildAstCalleeMap()",
+        "file": "src/symbols/graph/call-graph-evidence.ts",
+        "startLine": 376,
+        "endLine": 416,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/symbols/graph/`call-graph-evidence.ts`/ownerKey().",
+        "shortName": "src:symbols:graph:call-graph-evidence:ownerKey()",
+        "file": "src/symbols/graph/call-graph-evidence.ts",
+        "startLine": 418,
+        "endLine": 420,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 src/symbols/graph/`call-graph-evidence.ts`/lexicalCallOwners().",
+        "shortName": "src:symbols:graph:call-graph-evidence:lexicalCallOwners()",
+        "file": "src/symbols/graph/call-graph-evidence.ts",
+        "startLine": 422,
+        "endLine": 450,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 tests/fixtures/public-api-consumer/`index.ts`/config.",
+        "shortName": "tests:fixtures:public-api-consumer:index:config",
+        "file": "tests/fixtures/public-api-consumer/index.ts",
+        "startLine": 30,
+        "endLine": 30,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 tests/fixtures/public-api-consumer/`index.ts`/contextOptions.",
+        "shortName": "tests:fixtures:public-api-consumer:index:contextOptions",
+        "file": "tests/fixtures/public-api-consumer/index.ts",
+        "startLine": 36,
+        "endLine": 36,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 tests/fixtures/public-api-consumer/`index.ts`/context.",
+        "shortName": "tests:fixtures:public-api-consumer:index:context",
+        "file": "tests/fixtures/public-api-consumer/index.ts",
+        "startLine": 37,
+        "endLine": 37,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 tests/fixtures/public-api-consumer/`index.ts`/contextHistory.",
+        "shortName": "tests:fixtures:public-api-consumer:index:contextHistory",
+        "file": "tests/fixtures/public-api-consumer/index.ts",
+        "startLine": 38,
+        "endLine": 38,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 tests/fixtures/public-api-consumer/`index.ts`/legacyReader.",
+        "shortName": "tests:fixtures:public-api-consumer:index:legacyReader",
+        "file": "tests/fixtures/public-api-consumer/index.ts",
+        "startLine": 91,
+        "endLine": 91,
+        "fanIn": 1
+      },
+      {
+        "symbol": "scip-typescript npm scip-query 0.25.0 tests/fixtures/public-api-consumer/`index.ts`/legacyGlobMatches.",
+        "shortName": "tests:fixtures:public-api-consumer:index:legacyGlobMatches",
+        "file": "tests/fixtures/public-api-consumer/index.ts",
+        "startLine": 93,
+        "endLine": 93,
+        "fanIn": 1
+      }
+    ],
+    "affectedConsumers": [
+      {
+        "file": "src/queries/graph/architecture-baseline.ts",
+        "consumedSymbols": 2
+      },
+      {
+        "file": "src/source/ast.ts",
+        "consumedSymbols": 2
+      },
+      {
+        "file": "src/source/vue/vue-script-facts.ts",
+        "consumedSymbols": 2
+      },
+      {
+        "file": "src/queries/cleanup/drift.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "src/queries/health/health-baseline.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "src/runtime/health-capability-disclosure.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "src/queries/navigation/evidence.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "tests/runtime/cli-contract.test.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "tsup.config.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "src/queries/quality/complexity-hotspots.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "src/runtime/query-commands/cleanup.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "src/runtime/query-commands/cleanup/index.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "src/runtime/index.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "src/queries/impact/diff-impact.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "src/semantic/local-flow.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "src/semantic/types.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "src/semantic/typescript/remote-provider.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "src/semantic/typescript/session-service.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "src/source/react-profile.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "src/language-parsers/source-evidence.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "src/queries/impact/newly-unreferenced-residue.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "benchmarks/maintenance-results/2026-09-05-first-use-sol-medium/implementation/src/source/maintenance-snapshot.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "benchmarks/maintenance-results/2026-09-05-sol-medium/untracked-source/src/source/maintenance-snapshot.ts",
+        "consumedSymbols": 1
+      },
+      {
+        "file": "src/symbols/symbol-lookup.ts",
+        "consumedSymbols": 1
+      }
+    ],
+    "attributionNotes": [
+      {
+        "file": "src/platform/verified-binary-fetch.ts",
+        "startLine": 18,
+        "endLine": 19,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/cleanup/decorative-checkers.ts",
+        "startLine": 69,
+        "endLine": 69,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/cleanup/duplicate-bodies.ts",
+        "startLine": 5,
+        "endLine": 5,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/cleanup/passthrough-candidates.ts",
+        "startLine": 201,
+        "endLine": 201,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/cleanup/test-quality.ts",
+        "startLine": 7,
+        "endLine": 7,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/graph/deep-chains.ts",
+        "startLine": 113,
+        "endLine": 113,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/graph/dependence-slice.ts",
+        "startLine": 1,
+        "endLine": 6,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/graph/dependence-slice.ts",
+        "startLine": 34,
+        "endLine": 34,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/graph/dependence-slice.ts",
+        "startLine": 36,
+        "endLine": 38,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/health/health-report.ts",
+        "startLine": 22,
+        "endLine": 22,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/health/health-report.ts",
+        "startLine": 30,
+        "endLine": 30,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/health/health-report.ts",
+        "startLine": 347,
+        "endLine": 347,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/health/health.ts",
+        "startLine": 26,
+        "endLine": 26,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/health/health.ts",
+        "startLine": 28,
+        "endLine": 28,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/health/health.ts",
+        "startLine": 30,
+        "endLine": 30,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/health/health.ts",
+        "startLine": 35,
+        "endLine": 35,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/health/health.ts",
+        "startLine": 443,
+        "endLine": 443,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/health/health.ts",
+        "startLine": 1239,
+        "endLine": 1239,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/impact/context.ts",
+        "startLine": 1,
+        "endLine": 1,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/impact/context.ts",
+        "startLine": 3,
+        "endLine": 3,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/impact/context.ts",
+        "startLine": 11,
+        "endLine": 11,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/impact/context.ts",
+        "startLine": 12,
+        "endLine": 12,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/impact/context.ts",
+        "startLine": 24,
+        "endLine": 25,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/internal/file-resolution.ts",
+        "startLine": 21,
+        "endLine": 22,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/internal/file-resolution.ts",
+        "startLine": 24,
+        "endLine": 28,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/navigation/files.ts",
+        "startLine": 3,
+        "endLine": 3,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/navigation/hierarchy.ts",
+        "startLine": 2,
+        "endLine": 3,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/navigation/hierarchy.ts",
+        "startLine": 15,
+        "endLine": 16,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/navigation/members.ts",
+        "startLine": 1,
+        "endLine": 2,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/navigation/members.ts",
+        "startLine": 19,
+        "endLine": 20,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 15,
+        "endLine": 15,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 17,
+        "endLine": 17,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 27,
+        "endLine": 27,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 29,
+        "endLine": 29,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 33,
+        "endLine": 33,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 34,
+        "endLine": 34,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 57,
+        "endLine": 57,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 71,
+        "endLine": 71,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 80,
+        "endLine": 80,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 93,
+        "endLine": 93,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 95,
+        "endLine": 95,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 105,
+        "endLine": 105,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 107,
+        "endLine": 107,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 111,
+        "endLine": 111,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 112,
+        "endLine": 112,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 135,
+        "endLine": 135,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 142,
+        "endLine": 143,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 149,
+        "endLine": 149,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/public-query-entries.ts",
+        "startLine": 158,
+        "endLine": 158,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/queries/quality/complexity.ts",
+        "startLine": 3,
+        "endLine": 8,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/cli-context.ts",
+        "startLine": 120,
+        "endLine": 121,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/cli-main.ts",
+        "startLine": 4,
+        "endLine": 4,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/cli-main.ts",
+        "startLine": 58,
+        "endLine": 58,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/cli-support.ts",
+        "startLine": 1409,
+        "endLine": 1409,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/command-kit/command-descriptor-types.ts",
+        "startLine": 63,
+        "endLine": 63,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/commands/command-descriptors.ts",
+        "startLine": 16,
+        "endLine": 16,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/commands/command-descriptors.ts",
+        "startLine": 20,
+        "endLine": 20,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/commands/command-descriptors.ts",
+        "startLine": 24,
+        "endLine": 71,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/commands/command-descriptors.ts",
+        "startLine": 221,
+        "endLine": 221,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/commands/command-descriptors.ts",
+        "startLine": 229,
+        "endLine": 229,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/commands/command-descriptors.ts",
+        "startLine": 232,
+        "endLine": 244,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/commands/command-descriptors.ts",
+        "startLine": 256,
+        "endLine": 259,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/commands/command-descriptors.ts",
+        "startLine": 278,
+        "endLine": 279,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/commands/command-descriptors.ts",
+        "startLine": 410,
+        "endLine": 413,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/commands/command-handlers.ts",
+        "startLine": 3,
+        "endLine": 3,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/commands/command-handlers.ts",
+        "startLine": 52,
+        "endLine": 52,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/commands/command-handlers.ts",
+        "startLine": 95,
+        "endLine": 98,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/commands/query-command-specs.ts",
+        "startLine": 7,
+        "endLine": 7,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/commands/query-command-specs.ts",
+        "startLine": 14,
+        "endLine": 14,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/commands/query-command-specs.ts",
+        "startLine": 18,
+        "endLine": 18,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/commands/query-command-specs.ts",
+        "startLine": 39,
+        "endLine": 39,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/commands/query-command-specs.ts",
+        "startLine": 42,
+        "endLine": 42,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/commands/query-command-specs.ts",
+        "startLine": 62,
+        "endLine": 62,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/commands/query-command-specs.ts",
+        "startLine": 70,
+        "endLine": 70,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/commands/query-command-specs.ts",
+        "startLine": 73,
+        "endLine": 73,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/commands/query-command-specs.ts",
+        "startLine": 76,
+        "endLine": 76,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/commands/query-command-specs.ts",
+        "startLine": 79,
+        "endLine": 79,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/commands/query-command-specs.ts",
+        "startLine": 92,
+        "endLine": 92,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/config.ts",
+        "startLine": 0,
+        "endLine": 0,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/config.ts",
+        "startLine": 575,
+        "endLine": 575,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/generated-agent-command-catalog.ts",
+        "startLine": 118,
+        "endLine": 118,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/output-pagination.ts",
+        "startLine": 38,
+        "endLine": 38,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/project-setup.ts",
+        "startLine": 22,
+        "endLine": 22,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/project-setup.ts",
+        "startLine": 25,
+        "endLine": 26,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/project-setup.ts",
+        "startLine": 28,
+        "endLine": 28,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/cleanup/descriptors.ts",
+        "startLine": 14,
+        "endLine": 14,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/cleanup/descriptors.ts",
+        "startLine": 16,
+        "endLine": 16,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/cleanup/descriptors.ts",
+        "startLine": 18,
+        "endLine": 21,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/cleanup/descriptors.ts",
+        "startLine": 23,
+        "endLine": 23,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/cleanup/descriptors.ts",
+        "startLine": 25,
+        "endLine": 25,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/cleanup/descriptors.ts",
+        "startLine": 27,
+        "endLine": 30,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/cleanup/descriptors.ts",
+        "startLine": 32,
+        "endLine": 33,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/cleanup/descriptors.ts",
+        "startLine": 35,
+        "endLine": 38,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/cleanup/descriptors.ts",
+        "startLine": 663,
+        "endLine": 663,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/cleanup/descriptors.ts",
+        "startLine": 816,
+        "endLine": 816,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/cleanup/handlers.ts",
+        "startLine": 0,
+        "endLine": 0,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/cleanup/handlers.ts",
+        "startLine": 2,
+        "endLine": 2,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/cleanup/handlers.ts",
+        "startLine": 686,
+        "endLine": 686,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/cleanup/handlers.ts",
+        "startLine": 847,
+        "endLine": 847,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/direct-navigation.ts",
+        "startLine": 44,
+        "endLine": 44,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/direct-navigation.ts",
+        "startLine": 289,
+        "endLine": 289,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/direct-navigation.ts",
+        "startLine": 701,
+        "endLine": 701,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/direct-navigation.ts",
+        "startLine": 705,
+        "endLine": 705,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/direct-navigation.ts",
+        "startLine": 736,
+        "endLine": 736,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/graph.ts",
+        "startLine": 0,
+        "endLine": 0,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/graph.ts",
+        "startLine": 1,
+        "endLine": 1,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/graph.ts",
+        "startLine": 14,
+        "endLine": 14,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/graph.ts",
+        "startLine": 30,
+        "endLine": 30,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/graph.ts",
+        "startLine": 180,
+        "endLine": 184,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/graph.ts",
+        "startLine": 191,
+        "endLine": 194,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/graph.ts",
+        "startLine": 224,
+        "endLine": 228,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/graph.ts",
+        "startLine": 312,
+        "endLine": 314,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/graph.ts",
+        "startLine": 491,
+        "endLine": 491,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/graph.ts",
+        "startLine": 660,
+        "endLine": 660,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/graph.ts",
+        "startLine": 770,
+        "endLine": 770,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/health.ts",
+        "startLine": 36,
+        "endLine": 36,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/health.ts",
+        "startLine": 38,
+        "endLine": 38,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 40,
+        "endLine": 40,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 42,
+        "endLine": 42,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 54,
+        "endLine": 54,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 444,
+        "endLine": 444,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 1135,
+        "endLine": 1135,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 1197,
+        "endLine": 1197,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 1227,
+        "endLine": 1229,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 1232,
+        "endLine": 1232,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 1237,
+        "endLine": 1242,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 1244,
+        "endLine": 1245,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 1248,
+        "endLine": 1249,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 1252,
+        "endLine": 1258,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 1429,
+        "endLine": 1429,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 1577,
+        "endLine": 1577,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 1848,
+        "endLine": 1848,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 2045,
+        "endLine": 2045,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 2058,
+        "endLine": 2058,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 2092,
+        "endLine": 2092,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 2115,
+        "endLine": 2116,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 2119,
+        "endLine": 2119,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/navigation.ts",
+        "startLine": 2125,
+        "endLine": 2128,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 36,
+        "endLine": 36,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 83,
+        "endLine": 83,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 96,
+        "endLine": 96,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 107,
+        "endLine": 107,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 122,
+        "endLine": 123,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 138,
+        "endLine": 138,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-commands/planning.ts",
+        "startLine": 151,
+        "endLine": 151,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/runtime/query-service-fastpath.ts",
+        "startLine": 6,
+        "endLine": 6,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-service-server.ts",
+        "startLine": 3,
+        "endLine": 3,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/query-service.ts",
+        "startLine": 5,
+        "endLine": 5,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/setup.ts",
+        "startLine": 209,
+        "endLine": 209,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/suppression-writer.ts",
+        "startLine": 1,
+        "endLine": 1,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/suppression-writer.ts",
+        "startLine": 17,
+        "endLine": 17,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/suppression-writer.ts",
+        "startLine": 22,
+        "endLine": 22,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/suppression-writer.ts",
+        "startLine": 262,
+        "endLine": 262,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/runtime/watch-service.ts",
+        "startLine": 57,
+        "endLine": 58,
+        "method": "ast-widened"
+      },
+      {
+        "file": "src/semantic/typescript/ts-morph-provider.ts",
+        "startLine": 10,
+        "endLine": 10,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/semantic/typescript/ts-morph-provider.ts",
+        "startLine": 1504,
+        "endLine": 1504,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/source/facts/ast-facts.ts",
+        "startLine": 6,
+        "endLine": 6,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/source/facts/clojure-facts.ts",
+        "startLine": 304,
+        "endLine": 304,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/source/facts/source-callables.ts",
+        "startLine": 3,
+        "endLine": 3,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/source/facts/source-calls.ts",
+        "startLine": 3,
+        "endLine": 3,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/storage/scip-rows.ts",
+        "startLine": 1,
+        "endLine": 1,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/storage/scip-rows.ts",
+        "startLine": 5,
+        "endLine": 5,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/storage/suppression-store.ts",
+        "startLine": 14,
+        "endLine": 14,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/storage/suppression-store.ts",
+        "startLine": 16,
+        "endLine": 16,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/symbols/graph/call-graph-evidence.ts",
+        "startLine": 2,
+        "endLine": 3,
+        "method": "unattributed"
+      },
+      {
+        "file": "src/symbols/graph/call-graph-evidence.ts",
+        "startLine": 369,
+        "endLine": 370,
+        "method": "unattributed"
+      },
+      {
+        "file": "tests/fixtures/public-api-consumer/index.ts",
+        "startLine": 1,
+        "endLine": 1,
+        "method": "unattributed"
+      },
+      {
+        "file": "tests/fixtures/public-api-consumer/index.ts",
+        "startLine": 6,
+        "endLine": 10,
+        "method": "unattributed"
+      },
+      {
+        "file": "tests/fixtures/public-api-consumer/index.ts",
+        "startLine": 101,
+        "endLine": 101,
+        "method": "unattributed"
+      },
+      {
+        "file": "tests/fixtures/public-api-consumer/index.ts",
+        "startLine": 105,
+        "endLine": 105,
+        "method": "unattributed"
+      },
+      {
+        "file": "tests/fixtures/public-api-consumer/index.ts",
+        "startLine": 116,
+        "endLine": 116,
+        "method": "unattributed"
+      }
+    ],
+    "evidenceTiers": [
+      {
+        "tier": "semantic-consumers",
+        "state": "complete",
+        "attemptedSymbols": 10
+      },
+      {
+        "tier": "source-fallback-consumers",
+        "state": "complete",
+        "attemptedSymbols": 9
+      }
+    ],
+    "summary": {
+      "totalChangedFiles": 115,
+      "totalChangedSymbols": 376,
+      "totalAffectedFiles": 24
+    }
+  },
+  "coverage": {
+    "complete": null,
+    "totalKnown": false,
+    "returned": 1
+  },
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "operationRole": "repository-observation",
+    "receipt": {
+      "schemaVersion": 2,
+      "observedAt": "2026-09-06T03:43:09.549Z",
+      "facts": {
+        "collaborationDomain": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:collaboration-domain",
+            "version": 1
+          },
+          "digest": "65fa7070a947c694f38de6708f2444d2bc2642785dcdb898d24a0401b41fb3c3"
+        },
+        "workspaceInstance": {
+          "schemaVersion": 1,
+          "canonicalizationVersion": 1,
+          "hashAlgorithm": "sha256",
+          "projection": {
+            "name": "scip-query:workspace-instance",
+            "version": 1
+          },
+          "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+        },
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "ee860077394fe264111ebceb24c2c1d3048b8e53777d2e2a7eb403df7b78a552"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "ee860077394fe264111ebceb24c2c1d3048b8e53777d2e2a7eb403df7b78a552"
+          }
+        },
+        {
+          "kind": "live-workspace",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:workspace-instance",
+              "version": 1
+            },
+            "digest": "f53b738aebdbca65df7f5d79a4bfc01cb854528c2a00705171682a625937c0c4"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        },
+        {
+          "source": "live-workspace",
+          "kind": "not-established"
+        }
+      ],
+      "diagnostics": {
+        "clean": false,
+        "headCommit": "80c94fb737719962989fb97f492dc5e5bcec5ea1",
+        "treeOid": "a4fae1b32a49d8b32e57d3e19fac1358eebca876"
+      }
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "graph-fact",
+      "coverage": {
+        "complete": null,
+        "totalKnown": false,
+        "returned": 1
+      },
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "mixed",
+        "coverage": {
+          "state": "unknown",
+          "returned": 1,
+          "totalKnown": false
+        },
+        "producerValidation": {
+          "status": "not-evaluated"
+        },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": [
+            "collaborationDomain",
+            "wholeContent",
+            "observationStability"
+          ],
+          "reasons": [
+            "wholeContent:unknown",
+            "observationStability:unknown",
+            "leftIndexAlignment:unknown",
+            "rightIndexAlignment:unknown"
+          ]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": [
+            "No repository action policy was supplied for this claim."
+          ]
+        },
+        "families": [
+          {
+            "id": "changed-files",
+            "selector": "changedFiles[]",
+            "origin": {
+              "kind": "fixed",
+              "origin": "repository-source"
+            }
+          },
+          {
+            "id": "changed-symbols",
+            "selector": "changedSymbols[]",
+            "origin": {
+              "kind": "fixed",
+              "origin": "compiler-graph"
+            }
+          },
+          {
+            "id": "downstream-consumers",
+            "selector": "affected[]",
+            "origin": {
+              "kind": "fixed",
+              "origin": "compiler-graph"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

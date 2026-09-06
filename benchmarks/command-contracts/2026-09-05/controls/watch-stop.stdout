@@ -1,0 +1,28 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "watch",
+  "operationRole": "composite",
+  "evidence": "graph-fact",
+  "args": [],
+  "options": {
+    "stop": true,
+    "json": true
+  },
+  "result": {
+    "disposition": "stopped",
+    "pid": 93593
+  },
+  "coverage": {
+    "complete": true,
+    "totalKnown": true,
+    "returned": 1,
+    "total": 1,
+    "omitted": 0
+  }
+}

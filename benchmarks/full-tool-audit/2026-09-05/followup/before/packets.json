@@ -1,0 +1,1641 @@
+[
+  {
+    "name": "complexity-returnedReference",
+    "args": [
+      "complexity",
+      "returnedReference"
+    ],
+    "exitCode": 0,
+    "result": {
+      "matched": true,
+      "resolved": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/returnedReference().",
+        "shortName": "src:calls:returnedReference()",
+        "relativePath": "src/calls.ts"
+      },
+      "otherMatches": [],
+      "totalMatches": 1,
+      "complexity": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/returnedReference().",
+        "shortName": "src:calls:returnedReference()",
+        "relativePath": "src/calls.ts",
+        "startLine": 1,
+        "endLine": 1,
+        "loc": 1,
+        "branches": 0,
+        "estimateBasis": "ast",
+        "metricRules": "typescript-function-local-v1",
+        "cyclomaticEstimate": 1,
+        "calleeCount": 0,
+        "candidateCalleeCount": 1,
+        "fanIn": 0,
+        "fanOut": 0
+      }
+    }
+  },
+  {
+    "name": "complexity-arrayReference",
+    "args": [
+      "complexity",
+      "arrayReference"
+    ],
+    "exitCode": 0,
+    "result": {
+      "matched": true,
+      "resolved": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/arrayReference().",
+        "shortName": "src:calls:arrayReference()",
+        "relativePath": "src/calls.ts"
+      },
+      "otherMatches": [],
+      "totalMatches": 1,
+      "complexity": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/arrayReference().",
+        "shortName": "src:calls:arrayReference()",
+        "relativePath": "src/calls.ts",
+        "startLine": 2,
+        "endLine": 2,
+        "loc": 1,
+        "branches": 0,
+        "estimateBasis": "ast",
+        "metricRules": "typescript-function-local-v1",
+        "cyclomaticEstimate": 1,
+        "calleeCount": 0,
+        "candidateCalleeCount": 1,
+        "fanIn": 0,
+        "fanOut": 0
+      }
+    }
+  },
+  {
+    "name": "complexity-actualCall",
+    "args": [
+      "complexity",
+      "actualCall"
+    ],
+    "exitCode": 0,
+    "result": {
+      "matched": true,
+      "resolved": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/actualCall().",
+        "shortName": "src:calls:actualCall()",
+        "relativePath": "src/calls.ts"
+      },
+      "otherMatches": [],
+      "totalMatches": 1,
+      "complexity": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/actualCall().",
+        "shortName": "src:calls:actualCall()",
+        "relativePath": "src/calls.ts",
+        "startLine": 3,
+        "endLine": 3,
+        "loc": 1,
+        "branches": 0,
+        "estimateBasis": "ast",
+        "metricRules": "typescript-function-local-v1",
+        "cyclomaticEstimate": 1,
+        "calleeCount": 1,
+        "candidateCalleeCount": 0,
+        "fanIn": 0,
+        "fanOut": 0
+      }
+    }
+  },
+  {
+    "name": "complexity-nestedOwner",
+    "args": [
+      "complexity",
+      "nestedOwner"
+    ],
+    "exitCode": 0,
+    "result": {
+      "matched": true,
+      "resolved": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/nestedOwner().",
+        "shortName": "src:calls:nestedOwner()",
+        "relativePath": "src/calls.ts"
+      },
+      "otherMatches": [],
+      "totalMatches": 1,
+      "complexity": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/nestedOwner().",
+        "shortName": "src:calls:nestedOwner()",
+        "relativePath": "src/calls.ts",
+        "startLine": 4,
+        "endLine": 7,
+        "loc": 4,
+        "branches": 0,
+        "estimateBasis": "ast",
+        "metricRules": "typescript-function-local-v1",
+        "cyclomaticEstimate": 1,
+        "calleeCount": 1,
+        "candidateCalleeCount": 0,
+        "fanIn": 0,
+        "fanOut": 0
+      }
+    }
+  },
+  {
+    "name": "complexity-nestedMetric",
+    "args": [
+      "complexity",
+      "nestedMetric"
+    ],
+    "exitCode": 0,
+    "result": {
+      "matched": true,
+      "resolved": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/nestedMetric().",
+        "shortName": "src:calls:nestedMetric()",
+        "relativePath": "src/calls.ts"
+      },
+      "otherMatches": [],
+      "totalMatches": 1,
+      "complexity": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/nestedMetric().",
+        "shortName": "src:calls:nestedMetric()",
+        "relativePath": "src/calls.ts",
+        "startLine": 9,
+        "endLine": 12,
+        "loc": 4,
+        "branches": 0,
+        "estimateBasis": "ast",
+        "metricRules": "typescript-function-local-v1",
+        "cyclomaticEstimate": 1,
+        "calleeCount": 0,
+        "candidateCalleeCount": 3,
+        "fanIn": 0,
+        "fanOut": 0
+      }
+    }
+  },
+  {
+    "name": "complexity-nullish",
+    "args": [
+      "complexity",
+      "nullish"
+    ],
+    "exitCode": 0,
+    "result": {
+      "matched": true,
+      "resolved": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/nullish().",
+        "shortName": "src:calls:nullish()",
+        "relativePath": "src/calls.ts"
+      },
+      "otherMatches": [],
+      "totalMatches": 1,
+      "complexity": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/nullish().",
+        "shortName": "src:calls:nullish()",
+        "relativePath": "src/calls.ts",
+        "startLine": 8,
+        "endLine": 8,
+        "loc": 1,
+        "branches": 1,
+        "estimateBasis": "ast",
+        "metricRules": "typescript-function-local-v1",
+        "cyclomaticEstimate": 2,
+        "calleeCount": 0,
+        "candidateCalleeCount": 2,
+        "fanIn": 0,
+        "fanOut": 0
+      }
+    }
+  },
+  {
+    "name": "complexity-sameLineBranches",
+    "args": [
+      "complexity",
+      "sameLineBranches"
+    ],
+    "exitCode": 0,
+    "result": {
+      "matched": true,
+      "resolved": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/sameLineBranches().",
+        "shortName": "src:calls:sameLineBranches()",
+        "relativePath": "src/calls.ts"
+      },
+      "otherMatches": [],
+      "totalMatches": 1,
+      "complexity": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/sameLineBranches().",
+        "shortName": "src:calls:sameLineBranches()",
+        "relativePath": "src/calls.ts",
+        "startLine": 13,
+        "endLine": 13,
+        "loc": 1,
+        "branches": 1,
+        "estimateBasis": "ast",
+        "metricRules": "typescript-function-local-v1",
+        "cyclomaticEstimate": 2,
+        "calleeCount": 0,
+        "candidateCalleeCount": 1,
+        "fanIn": 0,
+        "fanOut": 0
+      }
+    }
+  },
+  {
+    "name": "complexity-sharedName",
+    "args": [
+      "complexity",
+      "sharedName"
+    ],
+    "exitCode": 0,
+    "result": {
+      "matched": true,
+      "resolved": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`first.ts`/sharedName().",
+        "shortName": "src:first:sharedName()",
+        "relativePath": "src/first.ts"
+      },
+      "otherMatches": [
+        {
+          "shortName": "src:second:sharedName()",
+          "relativePath": "src/second.ts",
+          "startLine": 0
+        }
+      ],
+      "totalMatches": 2,
+      "complexity": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`first.ts`/sharedName().",
+        "shortName": "src:first:sharedName()",
+        "relativePath": "src/first.ts",
+        "startLine": 0,
+        "endLine": 0,
+        "loc": 1,
+        "branches": 0,
+        "estimateBasis": "ast",
+        "metricRules": "typescript-function-local-v1",
+        "cyclomaticEstimate": 1,
+        "calleeCount": 0,
+        "candidateCalleeCount": 1,
+        "fanIn": 0,
+        "fanOut": 0
+      }
+    }
+  },
+  {
+    "name": "calls-returnedReference",
+    "args": [
+      "call-graph",
+      "returnedReference"
+    ],
+    "exitCode": 0,
+    "result": {
+      "matched": true,
+      "resolved": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/returnedReference().",
+        "shortName": "src:calls:returnedReference()",
+        "relativePath": "src/calls.ts"
+      },
+      "otherMatches": [],
+      "totalMatches": 1,
+      "callGraph": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/returnedReference().",
+        "shortName": "src:calls:returnedReference()",
+        "callers": [],
+        "callees": [
+          {
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/helper().",
+            "shortName": "src:calls:helper()",
+            "file": "src/calls.ts"
+          }
+        ],
+        "callerEvidence": [],
+        "calleeEvidence": [
+          {
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/helper().",
+            "shortName": "src:calls:helper()",
+            "file": "src/calls.ts",
+            "relationship": "chunk-candidate",
+            "evidenceStrength": "candidate",
+            "evidenceSource": "scip-chunk"
+          }
+        ],
+        "coverage": {
+          "scope": "indexed-static-call-graph",
+          "blindSpots": [
+            "unresolved dynamic dispatch and reflection",
+            "external or unindexed callees without a resolved symbol identity",
+            "SCIP chunk co-occurrence is retained only as candidate call evidence"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "calls-actualCall",
+    "args": [
+      "call-graph",
+      "actualCall"
+    ],
+    "exitCode": 0,
+    "result": {
+      "matched": true,
+      "resolved": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/actualCall().",
+        "shortName": "src:calls:actualCall()",
+        "relativePath": "src/calls.ts"
+      },
+      "otherMatches": [],
+      "totalMatches": 1,
+      "callGraph": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/actualCall().",
+        "shortName": "src:calls:actualCall()",
+        "callers": [],
+        "callees": [
+          {
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/helper().",
+            "shortName": "src:calls:helper()",
+            "file": "src/calls.ts"
+          }
+        ],
+        "callerEvidence": [],
+        "calleeEvidence": [
+          {
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/helper().",
+            "shortName": "src:calls:helper()",
+            "file": "src/calls.ts",
+            "relationship": "resolved-call",
+            "evidenceStrength": "exact",
+            "evidenceSource": "scip-occurrence"
+          }
+        ],
+        "coverage": {
+          "scope": "indexed-static-call-graph",
+          "blindSpots": [
+            "unresolved dynamic dispatch and reflection",
+            "external or unindexed callees without a resolved symbol identity",
+            "SCIP chunk co-occurrence is retained only as candidate call evidence"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "calls-nestedOwner",
+    "args": [
+      "call-graph",
+      "nestedOwner"
+    ],
+    "exitCode": 0,
+    "result": {
+      "matched": true,
+      "resolved": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/nestedOwner().",
+        "shortName": "src:calls:nestedOwner()",
+        "relativePath": "src/calls.ts"
+      },
+      "otherMatches": [],
+      "totalMatches": 1,
+      "callGraph": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/nestedOwner().",
+        "shortName": "src:calls:nestedOwner()",
+        "callers": [],
+        "callees": [
+          {
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/helper().",
+            "shortName": "src:calls:helper()",
+            "file": "src/calls.ts"
+          }
+        ],
+        "callerEvidence": [],
+        "calleeEvidence": [
+          {
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/helper().",
+            "shortName": "src:calls:helper()",
+            "file": "src/calls.ts",
+            "relationship": "resolved-call",
+            "evidenceStrength": "exact",
+            "evidenceSource": "scip-occurrence"
+          }
+        ],
+        "coverage": {
+          "scope": "indexed-static-call-graph",
+          "blindSpots": [
+            "unresolved dynamic dispatch and reflection",
+            "external or unindexed callees without a resolved symbol identity",
+            "SCIP chunk co-occurrence is retained only as candidate call evidence"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "code-missing",
+    "args": [
+      "code",
+      "./src/never.ts"
+    ],
+    "exitCode": 0,
+    "result": {
+      "requested": 1,
+      "matched": 0,
+      "ambiguous": 0,
+      "missing": 1,
+      "entries": [
+        {
+          "selector": "./src/never.ts",
+          "status": "missing",
+          "kind": "source",
+          "totalCandidates": 0,
+          "results": [],
+          "definitions": [],
+          "candidates": [],
+          "omittedCandidates": 0,
+          "suggestions": [
+            "src:calls",
+            "src:first",
+            "src:second",
+            "src:flow",
+            "src:calls:helper()"
+          ],
+          "reason": "definition-not-found"
+        }
+      ],
+      "bindingClosure": {
+        "coverage": "indexed-project-literal-values",
+        "inline": []
+      }
+    }
+  },
+  {
+    "name": "code-ambiguous",
+    "args": [
+      "code",
+      "sharedName"
+    ],
+    "exitCode": 0,
+    "result": {
+      "requested": 1,
+      "matched": 0,
+      "ambiguous": 1,
+      "missing": 0,
+      "entries": [
+        {
+          "selector": "sharedName",
+          "status": "ambiguous",
+          "kind": "source",
+          "totalCandidates": 2,
+          "results": [
+            {
+              "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`first.ts`/sharedName().",
+              "shortName": "src:first:sharedName()",
+              "relativePath": "src/first.ts",
+              "startLine": 0,
+              "endLine": 0,
+              "language": "typescript",
+              "source": "export function sharedName(value: number) { return value; }",
+              "freshness": {
+                "exactText": {
+                  "state": "current",
+                  "basis": "working-tree-read",
+                  "sha256": "62fa1a236d363c2b3a20f79ae53265926a813f66edee548da4d907066d12ac8f"
+                },
+                "semantic": {
+                  "state": "aligned",
+                  "basis": "indexed-input-fingerprint"
+                }
+              },
+              "bindingClosure": {
+                "coverage": "indexed-project-literal-values",
+                "inline": []
+              }
+            },
+            {
+              "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`second.ts`/sharedName().",
+              "shortName": "src:second:sharedName()",
+              "relativePath": "src/second.ts",
+              "startLine": 0,
+              "endLine": 0,
+              "language": "typescript",
+              "source": "export function sharedName(value: number) { if (value) return 1; return 0; }",
+              "freshness": {
+                "exactText": {
+                  "state": "current",
+                  "basis": "working-tree-read",
+                  "sha256": "b058aae00f05ea429bdbb11ad5cfda13e50fad96ef467251d07068b74ad8ffb6"
+                },
+                "semantic": {
+                  "state": "aligned",
+                  "basis": "indexed-input-fingerprint"
+                }
+              },
+              "bindingClosure": {
+                "coverage": "indexed-project-literal-values",
+                "inline": []
+              }
+            }
+          ],
+          "definitions": [],
+          "candidates": [
+            {
+              "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`first.ts`/sharedName().",
+              "shortName": "src:first:sharedName()",
+              "relativePath": "src/first.ts",
+              "startLine": 0,
+              "endLine": 0
+            },
+            {
+              "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`second.ts`/sharedName().",
+              "shortName": "src:second:sharedName()",
+              "relativePath": "src/second.ts",
+              "startLine": 0,
+              "endLine": 0
+            }
+          ],
+          "omittedCandidates": 0,
+          "suggestions": []
+        }
+      ],
+      "bindingClosure": {
+        "coverage": "indexed-project-literal-values",
+        "inline": []
+      }
+    }
+  },
+  {
+    "name": "code-range",
+    "args": [
+      "code",
+      "src/calls.ts:2-2"
+    ],
+    "exitCode": 0,
+    "result": {
+      "matched": true,
+      "resolved": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/returnedReference().",
+        "shortName": "src:calls:returnedReference()",
+        "relativePath": "src/calls.ts"
+      },
+      "otherMatches": [],
+      "totalMatches": 1,
+      "code": {
+        "symbol": "src/calls.ts:2-2",
+        "shortName": "src/calls.ts:2-2",
+        "relativePath": "src/calls.ts",
+        "startLine": 1,
+        "endLine": 1,
+        "language": "typescript",
+        "source": "export function returnedReference() { return helper; }",
+        "freshness": {
+          "exactText": {
+            "state": "current",
+            "basis": "working-tree-read",
+            "sha256": "5d56ebfb0b1066a707a17aff7f077acf66ae5d10fa0153b873069c68ed936306"
+          },
+          "semantic": {
+            "state": "aligned",
+            "basis": "indexed-input-fingerprint"
+          }
+        },
+        "bindingClosure": {
+          "coverage": "indexed-project-literal-values",
+          "inline": []
+        }
+      }
+    }
+  },
+  {
+    "name": "slice-aggregate",
+    "args": [
+      "dependence-slice",
+      "src/flow.ts:4",
+      "--variable",
+      "state.value"
+    ],
+    "exitCode": 0,
+    "result": {
+      "kind": "dependence-slice",
+      "direction": "backward",
+      "criterion": "src/flow.ts:4",
+      "variable": "state.value",
+      "resolution": "matched",
+      "candidates": [
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:144:155:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A31%3Astate.value",
+          "kind": "use",
+          "name": "state.value",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:31:state.value",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:0:158",
+          "start": 144,
+          "end": 155,
+          "line": 3,
+          "column": 9
+        }
+      ],
+      "points": [
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:144:155:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A31%3Astate.value",
+          "kind": "use",
+          "name": "state.value",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:31:state.value",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:0:158",
+          "start": 144,
+          "end": 155,
+          "line": 3,
+          "column": 9
+        }
+      ],
+      "edges": [],
+      "coverage": {
+        "status": "complete",
+        "basis": "function-local-dependence",
+        "model": {
+          "status": "complete",
+          "basis": "typescript-compiler-cfg-reaching-definitions",
+          "unsupported": []
+        },
+        "omittedEdges": 0,
+        "omittedPoints": 0,
+        "depthLimited": false,
+        "candidateEdges": 0
+      }
+    }
+  },
+  {
+    "name": "slice-array",
+    "args": [
+      "dependence-slice",
+      "src/flow.ts:9",
+      "--variable",
+      "state.value"
+    ],
+    "exitCode": 0,
+    "result": {
+      "kind": "dependence-slice",
+      "direction": "backward",
+      "criterion": "src/flow.ts:9",
+      "variable": "state.value",
+      "resolution": "matched",
+      "candidates": [
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:291:302:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A186%3Astate.value",
+          "kind": "use",
+          "name": "state.value",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:186:state.value",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:159:305",
+          "start": 291,
+          "end": 302,
+          "line": 8,
+          "column": 9
+        }
+      ],
+      "points": [
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:291:302:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A186%3Astate.value",
+          "kind": "use",
+          "name": "state.value",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:186:state.value",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:159:305",
+          "start": 291,
+          "end": 302,
+          "line": 8,
+          "column": 9
+        }
+      ],
+      "edges": [],
+      "coverage": {
+        "status": "incomplete",
+        "basis": "function-local-dependence",
+        "model": {
+          "status": "partial",
+          "basis": "typescript-compiler-cfg-reaching-definitions",
+          "unsupported": [
+            "Dynamic assignment targets are not included in reaching definitions."
+          ]
+        },
+        "omittedEdges": 0,
+        "omittedPoints": 0,
+        "depthLimited": false,
+        "candidateEdges": 0
+      }
+    }
+  },
+  {
+    "name": "slice-delete",
+    "args": [
+      "dependence-slice",
+      "src/flow.ts:14",
+      "--variable",
+      "state.value"
+    ],
+    "exitCode": 0,
+    "result": {
+      "kind": "dependence-slice",
+      "direction": "backward",
+      "criterion": "src/flow.ts:14",
+      "variable": "state.value",
+      "resolution": "matched",
+      "candidates": [
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:435:446:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A337%3Astate.value",
+          "kind": "use",
+          "name": "state.value",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:337:state.value",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:306:449",
+          "start": 435,
+          "end": 446,
+          "line": 13,
+          "column": 9
+        }
+      ],
+      "points": [
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:364:369:parameter-definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A364%3Ainput",
+          "kind": "parameter-definition",
+          "name": "input",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:364:input",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:306:449",
+          "start": 364,
+          "end": 369,
+          "line": 10,
+          "column": 58
+        },
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:383:394:definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A337%3Astate.value",
+          "kind": "definition",
+          "name": "state.value",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:337:state.value",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:306:449",
+          "start": 383,
+          "end": 394,
+          "line": 11,
+          "column": 2
+        },
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:397:402:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A364%3Ainput",
+          "kind": "use",
+          "name": "input",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:364:input",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:306:449",
+          "start": 397,
+          "end": 402,
+          "line": 11,
+          "column": 16
+        },
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:435:446:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A337%3Astate.value",
+          "kind": "use",
+          "name": "state.value",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:337:state.value",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:306:449",
+          "start": 435,
+          "end": 446,
+          "line": 13,
+          "column": 9
+        }
+      ],
+      "edges": [
+        {
+          "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A383%3A394%3Adefinition%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A337%253Astate.value:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A435%3A446%3Ause%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A337%253Astate.value",
+          "kind": "reaching-definition",
+          "fromPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:383:394:definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A337%3Astate.value",
+          "toPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:435:446:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A337%3Astate.value",
+          "strength": "exact",
+          "reason": "A CFG path reaches this use without an intervening definition.",
+          "traversalDepth": 1
+        },
+        {
+          "id": "local-flow-edge:value-source:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A397%3A402%3Ause%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A364%253Ainput:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A383%3A394%3Adefinition%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A337%253Astate.value",
+          "kind": "value-source",
+          "fromPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:397:402:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A364%3Ainput",
+          "toPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:383:394:definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A337%3Astate.value",
+          "strength": "exact",
+          "reason": "This right-hand-side use supplies the new definition.",
+          "traversalDepth": 2
+        },
+        {
+          "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A364%3A369%3Aparameter-definition%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A364%253Ainput:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A397%3A402%3Ause%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A364%253Ainput",
+          "kind": "reaching-definition",
+          "fromPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:364:369:parameter-definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A364%3Ainput",
+          "toPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:397:402:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A364%3Ainput",
+          "strength": "exact",
+          "reason": "A CFG path reaches this use without an intervening definition.",
+          "traversalDepth": 3
+        }
+      ],
+      "coverage": {
+        "status": "complete",
+        "basis": "function-local-dependence",
+        "model": {
+          "status": "complete",
+          "basis": "typescript-compiler-cfg-reaching-definitions",
+          "unsupported": []
+        },
+        "omittedEdges": 0,
+        "omittedPoints": 0,
+        "depthLimited": false,
+        "candidateEdges": 0
+      }
+    }
+  },
+  {
+    "name": "slice-logical",
+    "args": [
+      "dependence-slice",
+      "src/flow.ts:19",
+      "--variable",
+      "value"
+    ],
+    "exitCode": 0,
+    "result": {
+      "kind": "dependence-slice",
+      "direction": "backward",
+      "criterion": "src/flow.ts:19",
+      "variable": "value",
+      "resolution": "matched",
+      "candidates": [
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:580:585:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3Avalue",
+          "kind": "use",
+          "name": "value",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:531:value",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:450:588",
+          "start": 580,
+          "end": 585,
+          "line": 18,
+          "column": 9
+        }
+      ],
+      "points": [
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:482:487:parameter-definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A482%3Astate",
+          "kind": "parameter-definition",
+          "name": "state",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:482:state",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:450:588",
+          "start": 482,
+          "end": 487,
+          "line": 15,
+          "column": 32
+        },
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:508:513:parameter-definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A508%3Ainput",
+          "kind": "parameter-definition",
+          "name": "input",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:508:input",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:450:588",
+          "start": 508,
+          "end": 513,
+          "line": 15,
+          "column": 58
+        },
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:531:536:definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3Avalue",
+          "kind": "definition",
+          "name": "value",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:531:value",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:450:588",
+          "start": 531,
+          "end": 536,
+          "line": 16,
+          "column": 6
+        },
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:539:544:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A482%3Astate",
+          "kind": "use",
+          "name": "state",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:482:state",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:450:588",
+          "start": 539,
+          "end": 544,
+          "line": 16,
+          "column": 14
+        },
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:539:550:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A482%3Astate.value",
+          "kind": "use",
+          "name": "state.value",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:482:state.value",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:450:588",
+          "start": 539,
+          "end": 550,
+          "line": 16,
+          "column": 14
+        },
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:554:559:definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3Avalue",
+          "kind": "definition",
+          "name": "value",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:531:value",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:450:588",
+          "start": 554,
+          "end": 559,
+          "line": 17,
+          "column": 2
+        },
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:554:559:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3Avalue",
+          "kind": "use",
+          "name": "value",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:531:value",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:450:588",
+          "start": 554,
+          "end": 559,
+          "line": 17,
+          "column": 2
+        },
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:564:569:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A508%3Ainput",
+          "kind": "use",
+          "name": "input",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:508:input",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:450:588",
+          "start": 564,
+          "end": 569,
+          "line": 17,
+          "column": 12
+        },
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:580:585:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3Avalue",
+          "kind": "use",
+          "name": "value",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:531:value",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:450:588",
+          "start": 580,
+          "end": 585,
+          "line": 18,
+          "column": 9
+        }
+      ],
+      "edges": [
+        {
+          "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A554%3A559%3Adefinition%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A531%253Avalue:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A580%3A585%3Ause%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A531%253Avalue",
+          "kind": "reaching-definition",
+          "fromPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:554:559:definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3Avalue",
+          "toPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:580:585:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3Avalue",
+          "strength": "exact",
+          "reason": "A CFG path reaches this use without an intervening definition.",
+          "traversalDepth": 1
+        },
+        {
+          "id": "local-flow-edge:value-source:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A554%3A559%3Ause%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A531%253Avalue:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A554%3A559%3Adefinition%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A531%253Avalue",
+          "kind": "value-source",
+          "fromPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:554:559:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3Avalue",
+          "toPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:554:559:definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3Avalue",
+          "strength": "exact",
+          "reason": "This right-hand-side use supplies the new definition.",
+          "traversalDepth": 2
+        },
+        {
+          "id": "local-flow-edge:value-source:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A564%3A569%3Ause%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A508%253Ainput:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A554%3A559%3Adefinition%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A531%253Avalue",
+          "kind": "value-source",
+          "fromPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:564:569:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A508%3Ainput",
+          "toPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:554:559:definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3Avalue",
+          "strength": "exact",
+          "reason": "This right-hand-side use supplies the new definition.",
+          "traversalDepth": 2
+        },
+        {
+          "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3A536%3Adefinition%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A531%253Avalue:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A554%3A559%3Ause%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A531%253Avalue",
+          "kind": "reaching-definition",
+          "fromPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:531:536:definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3Avalue",
+          "toPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:554:559:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3Avalue",
+          "strength": "exact",
+          "reason": "A CFG path reaches this use without an intervening definition.",
+          "traversalDepth": 3
+        },
+        {
+          "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A508%3A513%3Aparameter-definition%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A508%253Ainput:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A564%3A569%3Ause%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A508%253Ainput",
+          "kind": "reaching-definition",
+          "fromPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:508:513:parameter-definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A508%3Ainput",
+          "toPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:564:569:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A508%3Ainput",
+          "strength": "exact",
+          "reason": "A CFG path reaches this use without an intervening definition.",
+          "traversalDepth": 3
+        },
+        {
+          "id": "local-flow-edge:value-source:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A539%3A544%3Ause%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A482%253Astate:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3A536%3Adefinition%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A531%253Avalue",
+          "kind": "value-source",
+          "fromPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:539:544:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A482%3Astate",
+          "toPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:531:536:definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3Avalue",
+          "strength": "exact",
+          "reason": "This right-hand-side use supplies the new definition.",
+          "traversalDepth": 4
+        },
+        {
+          "id": "local-flow-edge:value-source:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A539%3A550%3Ause%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A482%253Astate.value:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3A536%3Adefinition%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A531%253Avalue",
+          "kind": "value-source",
+          "fromPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:539:550:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A482%3Astate.value",
+          "toPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:531:536:definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A531%3Avalue",
+          "strength": "exact",
+          "reason": "This right-hand-side use supplies the new definition.",
+          "traversalDepth": 4
+        },
+        {
+          "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A482%3A487%3Aparameter-definition%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A482%253Astate:flow-point%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A539%3A544%3Ause%3Asymbol%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fflow.ts%253A482%253Astate",
+          "kind": "reaching-definition",
+          "fromPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:482:487:parameter-definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A482%3Astate",
+          "toPointId": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:539:544:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A482%3Astate",
+          "strength": "exact",
+          "reason": "A CFG path reaches this use without an intervening definition.",
+          "traversalDepth": 5
+        }
+      ],
+      "coverage": {
+        "status": "complete",
+        "basis": "function-local-dependence",
+        "model": {
+          "status": "complete",
+          "basis": "typescript-compiler-cfg-reaching-definitions",
+          "unsupported": []
+        },
+        "omittedEdges": 0,
+        "omittedPoints": 0,
+        "depthLimited": false,
+        "candidateEdges": 0
+      }
+    }
+  },
+  {
+    "name": "slice-call",
+    "args": [
+      "dependence-slice",
+      "src/flow.ts:24",
+      "--variable",
+      "state.value"
+    ],
+    "exitCode": 0,
+    "result": {
+      "kind": "dependence-slice",
+      "direction": "backward",
+      "criterion": "src/flow.ts:24",
+      "variable": "state.value",
+      "resolution": "matched",
+      "candidates": [
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:783:794:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A707%3Astate.value",
+          "kind": "use",
+          "name": "state.value",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:707:state.value",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:678:797",
+          "start": 783,
+          "end": 794,
+          "line": 23,
+          "column": 9
+        }
+      ],
+      "points": [
+        {
+          "id": "flow-point:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:783:794:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fflow.ts%3A707%3Astate.value",
+          "kind": "use",
+          "name": "state.value",
+          "symbolKey": "symbol:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:707:state.value",
+          "callableId": "callable:%2Fprivate%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-followup-audit-0q1jojzy%2Fsrc%2Fflow.ts:678:797",
+          "start": 783,
+          "end": 794,
+          "line": 23,
+          "column": 9
+        }
+      ],
+      "edges": [],
+      "coverage": {
+        "status": "complete",
+        "basis": "function-local-dependence",
+        "model": {
+          "status": "complete",
+          "basis": "typescript-compiler-cfg-reaching-definitions",
+          "unsupported": []
+        },
+        "omittedEdges": 0,
+        "omittedPoints": 0,
+        "depthLimited": false,
+        "candidateEdges": 0
+      }
+    }
+  },
+  {
+    "name": "refs-helper",
+    "args": [
+      "refs",
+      "helper"
+    ],
+    "exitCode": 0,
+    "result": {
+      "matched": true,
+      "resolved": {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/helper().",
+        "shortName": "src:calls:helper()",
+        "relativePath": "src/calls.ts"
+      },
+      "otherMatches": [],
+      "totalMatches": 1,
+      "references": [
+        {
+          "relativePath": "src/calls.ts",
+          "line": 1
+        },
+        {
+          "relativePath": "src/calls.ts",
+          "line": 2
+        },
+        {
+          "relativePath": "src/calls.ts",
+          "line": 3
+        },
+        {
+          "relativePath": "src/calls.ts",
+          "line": 5
+        }
+      ],
+      "pagination": {
+        "cursorVersion": 2,
+        "producer": "complete-only",
+        "semanticEnrichment": true
+      }
+    }
+  },
+  {
+    "name": "files",
+    "args": [
+      "files",
+      "src/*.ts"
+    ],
+    "exitCode": 0,
+    "result": [
+      {
+        "relativePath": "src/calls.ts"
+      },
+      {
+        "relativePath": "src/first.ts"
+      },
+      {
+        "relativePath": "src/flow.ts"
+      },
+      {
+        "relativePath": "src/second.ts"
+      }
+    ]
+  },
+  {
+    "name": "outline",
+    "args": [
+      "outline",
+      "src/calls.ts"
+    ],
+    "exitCode": 0,
+    "result": [
+      {
+        "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/",
+        "shortName": "src:calls",
+        "startLine": 0,
+        "endLine": 13,
+        "signature": "module \"calls.ts\"",
+        "children": [
+          {
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/helper().",
+            "shortName": "src:calls:helper()",
+            "startLine": 0,
+            "endLine": 0,
+            "signature": "function helper(value: number): number",
+            "children": []
+          },
+          {
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/returnedReference().",
+            "shortName": "src:calls:returnedReference()",
+            "startLine": 1,
+            "endLine": 1,
+            "signature": "function returnedReference(): (value: number) => number",
+            "children": []
+          },
+          {
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/arrayReference().",
+            "shortName": "src:calls:arrayReference()",
+            "startLine": 2,
+            "endLine": 2,
+            "signature": "function arrayReference(): ((value: number) => number)[]",
+            "children": []
+          },
+          {
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/actualCall().",
+            "shortName": "src:calls:actualCall()",
+            "startLine": 3,
+            "endLine": 3,
+            "signature": "function actualCall(): number",
+            "children": []
+          },
+          {
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/nestedOwner().",
+            "shortName": "src:calls:nestedOwner()",
+            "startLine": 4,
+            "endLine": 7,
+            "signature": "function nestedOwner(): () => number",
+            "children": []
+          },
+          {
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/nullish().",
+            "shortName": "src:calls:nullish()",
+            "startLine": 8,
+            "endLine": 8,
+            "signature": "function nullish(value: number | null): number",
+            "children": []
+          },
+          {
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/nestedMetric().",
+            "shortName": "src:calls:nestedMetric()",
+            "startLine": 9,
+            "endLine": 12,
+            "signature": "function nestedMetric(value: number): (x: number) => 1 | 0",
+            "children": []
+          },
+          {
+            "symbol": "scip-typescript npm accuracy-followup 1.0.0 src/`calls.ts`/sameLineBranches().",
+            "shortName": "src:calls:sameLineBranches()",
+            "startLine": 13,
+            "endLine": 13,
+            "signature": "function sameLineBranches(x: boolean): 1 | 0",
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "health",
+    "args": [
+      "health"
+    ],
+    "exitCode": 0,
+    "result": {
+      "mode": "health",
+      "current": "e678de692c0338647272204608d87e715b04099a27061e0e9d01127fe2354b56",
+      "metricRules": "typescript-function-local-v1",
+      "changedFiles": [],
+      "configurationChanges": [],
+      "relationshipChangedFiles": [],
+      "architecture": {
+        "configured": false,
+        "boundaries": [],
+        "coverage": {
+          "totalFiles": 4,
+          "mappedFiles": 0,
+          "unmappedFiles": [],
+          "ambiguousFiles": []
+        },
+        "policyCoverage": {
+          "declaredRows": 0,
+          "totalBoundaries": 0,
+          "missingRows": [],
+          "requiresCompletePolicy": false,
+          "requiresCompleteCoverage": false,
+          "requiresMinimalPolicy": false
+        },
+        "dependencyRoles": {
+          "excludedTestEdges": 0,
+          "basis": "production-imports-including-types",
+          "cycleMeaning": "Boundary cycles concern declared groups. File cycle members, when present, concern static imports including types; neither establishes a runtime initialization failure."
+        },
+        "cycles": []
+      },
+      "functions": [],
+      "findings": [],
+      "suppressionDecisions": [],
+      "blockingFindingIds": [],
+      "modules": [],
+      "affectedFiles": [],
+      "coverage": {
+        "status": "accounted",
+        "analyzedFiles": 4,
+        "eligibleFiles": 4,
+        "excludedFiles": 10,
+        "exclusions": {
+          "unsupported-language": 10
+        },
+        "dependencies": {
+          "resolutions": {
+            "internal": 0,
+            "external": 0,
+            "builtin": 0,
+            "excluded": 0,
+            "missing": 0,
+            "ambiguous": 0,
+            "dynamic": 0
+          },
+          "typeOnly": 0,
+          "test": 0,
+          "deferredOrCommonJs": 0,
+          "unresolved": [],
+          "excluded": []
+        },
+        "analyzedFunctions": 18,
+        "unresolvedImports": 0,
+        "testCoverage": {
+          "requested": false,
+          "available": 0,
+          "unavailable": 18,
+          "reasons": [
+            "No source-matched coverage artifact supplied."
+          ]
+        },
+        "problems": [],
+        "limits": [
+          "TS/JS implemented functions; metric rules typescript-function-local-v1. Cognitive counts structural nesting and logical sequences; recursion and interprocedural behavior are not measured.",
+          "Duplication compares whole function body tokens (at least 60 tokens), retaining literals and property names. Renamed local bindings are candidates; similarity does not prove interchangeable behavior or justify deletion.",
+          "Dependencies use compiler resolution over captured source and project configuration, including aliases, repository package exports, literal dynamic imports and unshadowed CommonJS calls. External packages, excluded targets and unresolved imports are distinguished. Production file cycles use static value imports; type/test/deferred relationships remain separate. Runtime handoffs and custom loaders are not inferred.",
+          "Ownership and mixed responsibilities require evidence about callers, state and business rules; this scan does not infer a correct owner or an architectural grade.",
+          "Default exclusions: tests/fixtures/benchmarks, reference/vendor copies, generated files, declarations and build output. Use --include-tests, --include-references or --include-generated for the corresponding source roles.",
+          "Diff is the selected Git commit versus current files, including untracked files; staged-only review and inferred rename/split identity are not claimed.",
+          "Coverage without matching source hashes is unavailable, never zero. Base CRAP is unavailable unless independently measured against that base.",
+          "Affected files are transitive importers in the covered source graph. Use fresh diff-impact/evidence for symbol consumers and runtime effects."
+        ]
+      }
+    }
+  },
+  {
+    "name": "review-unchanged",
+    "args": [
+      "review",
+      "--base",
+      "HEAD",
+      "--check"
+    ],
+    "exitCode": 0,
+    "result": {
+      "mode": "review",
+      "base": "8c2b51401afa8b1949e55e2ef7d1d727064362d7",
+      "current": "e678de692c0338647272204608d87e715b04099a27061e0e9d01127fe2354b56",
+      "metricRules": "typescript-function-local-v1",
+      "changedFiles": [],
+      "configurationChanges": [],
+      "relationshipChangedFiles": [],
+      "architecture": {
+        "configured": false,
+        "boundaries": [],
+        "coverage": {
+          "totalFiles": 4,
+          "mappedFiles": 0,
+          "unmappedFiles": [],
+          "ambiguousFiles": []
+        },
+        "policyCoverage": {
+          "declaredRows": 0,
+          "totalBoundaries": 0,
+          "missingRows": [],
+          "requiresCompletePolicy": false,
+          "requiresCompleteCoverage": false,
+          "requiresMinimalPolicy": false
+        },
+        "dependencyRoles": {
+          "excludedTestEdges": 0,
+          "basis": "production-imports-including-types",
+          "cycleMeaning": "Boundary cycles concern declared groups. File cycle members, when present, concern static imports including types; neither establishes a runtime initialization failure."
+        },
+        "cycles": []
+      },
+      "functions": [],
+      "findings": [],
+      "suppressionDecisions": [],
+      "blockingFindingIds": [],
+      "modules": [],
+      "affectedFiles": [],
+      "coverage": {
+        "status": "accounted",
+        "analyzedFiles": 4,
+        "eligibleFiles": 4,
+        "excludedFiles": 10,
+        "exclusions": {
+          "unsupported-language": 10
+        },
+        "dependencies": {
+          "resolutions": {
+            "internal": 0,
+            "external": 0,
+            "builtin": 0,
+            "excluded": 0,
+            "missing": 0,
+            "ambiguous": 0,
+            "dynamic": 0
+          },
+          "typeOnly": 0,
+          "test": 0,
+          "deferredOrCommonJs": 0,
+          "unresolved": [],
+          "excluded": []
+        },
+        "analyzedFunctions": 18,
+        "unresolvedImports": 0,
+        "testCoverage": {
+          "requested": false,
+          "available": 0,
+          "unavailable": 0,
+          "reasons": []
+        },
+        "problems": [],
+        "limits": [
+          "TS/JS implemented functions; metric rules typescript-function-local-v1. Cognitive counts structural nesting and logical sequences; recursion and interprocedural behavior are not measured.",
+          "Duplication compares whole function body tokens (at least 60 tokens), retaining literals and property names. Renamed local bindings are candidates; similarity does not prove interchangeable behavior or justify deletion.",
+          "Dependencies use compiler resolution over captured source and project configuration, including aliases, repository package exports, literal dynamic imports and unshadowed CommonJS calls. External packages, excluded targets and unresolved imports are distinguished. Production file cycles use static value imports; type/test/deferred relationships remain separate. Runtime handoffs and custom loaders are not inferred.",
+          "Ownership and mixed responsibilities require evidence about callers, state and business rules; this scan does not infer a correct owner or an architectural grade.",
+          "Default exclusions: tests/fixtures/benchmarks, reference/vendor copies, generated files, declarations and build output. Use --include-tests, --include-references or --include-generated for the corresponding source roles.",
+          "Diff is the selected Git commit versus current files, including untracked files; staged-only review and inferred rename/split identity are not claimed.",
+          "Coverage without matching source hashes is unavailable, never zero. Base CRAP is unavailable unless independently measured against that base.",
+          "Affected files are transitive importers in the covered source graph. Use fresh diff-impact/evidence for symbol consumers and runtime effects."
+        ]
+      }
+    }
+  },
+  {
+    "name": "architecture",
+    "args": [
+      "architecture"
+    ],
+    "exitCode": 0,
+    "result": {
+      "configured": false,
+      "dependencyRoles": {
+        "excludedTestEdges": 0,
+        "basis": "production-imports-including-types",
+        "cycleMeaning": "Boundary cycles concern declared groups. File cycle members, when present, concern static imports including types; neither establishes a runtime initialization failure."
+      },
+      "boundaries": [],
+      "edges": [],
+      "forbiddenEdges": [],
+      "reciprocalPairs": [],
+      "cycles": [],
+      "coarseBoundaries": [],
+      "staleAllowances": [],
+      "boundaryLimits": [],
+      "fragileEdges": [],
+      "testBoundaryViolations": [],
+      "coverage": {
+        "totalFiles": 4,
+        "mappedFiles": 0,
+        "unmappedFiles": [],
+        "ambiguousFiles": []
+      },
+      "policyCoverage": {
+        "declaredRows": 0,
+        "totalBoundaries": 0,
+        "missingRows": [],
+        "requiresCompletePolicy": false,
+        "requiresCompleteCoverage": false,
+        "requiresMinimalPolicy": false
+      }
+    }
+  },
+  {
+    "name": "cycles",
+    "args": [
+      "cycles"
+    ],
+    "exitCode": 0,
+    "result": {
+      "cycles": [],
+      "truncated": false,
+      "edgeBasis": "symbol-references",
+      "maxDepth": 10
+    }
+  },
+  {
+    "name": "value-flow",
+    "args": [
+      "value-flow",
+      "helper"
+    ],
+    "exitCode": 0,
+    "result": {
+      "kind": "value-flow",
+      "targets": [
+        {
+          "kind": "symbol",
+          "query": "helper",
+          "status": "matched",
+          "nodeIds": [
+            "symbol:scip-typescript%20npm%20accuracy-followup%201.0.0%20src%2F%60calls.ts%60%2Fhelper()."
+          ],
+          "omittedCandidates": 0
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge:typescript-local-flow:src%2Fcalls.ts:local-flow-edge%3Areaching-definition%3Aflow-point%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fcalls.ts%253A23%253A28%253Aparameter-definition%253Asymbol%25253A%2525252Fprivate%2525252Fvar%2525252Ffolders%2525252F4c%2525252Fwsjvhgw90t7f31d7s68ddhtc0000gn%2525252FT%2525252Fscip-followup-audit-0q1jojzy%2525252Fsrc%2525252Fcalls.ts%25253A23%25253Avalue%3Aflow-point%253A%25252Fprivate%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-followup-audit-0q1jojzy%25252Fsrc%25252Fcalls.ts%253A47%253A52%253Ause%253Asymbol%25253A%2525252Fprivate%2525252Fvar%2525252Ffolders%2525252F4c%2525252Fwsjvhgw90t7f31d7s68ddhtc0000gn%2525252FT%2525252Fscip-followup-audit-0q1jojzy%2525252Fsrc%2525252Fcalls.ts%25253A23%25253Avalue:0:dataflow",
+          "family": "dataflow",
+          "semanticFamily": "data",
+          "subtype": "definition-to-use",
+          "from": {
+            "id": "local-flow-point:src%2Fcalls.ts:23:28:parameter-definition:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fcalls.ts%3A23%3Avalue",
+            "kind": "local-definition",
+            "label": "value",
+            "symbol": null,
+            "location": {
+              "file": "src/calls.ts",
+              "line": 0,
+              "endLine": 0
+            }
+          },
+          "to": {
+            "id": "local-flow-point:src%2Fcalls.ts:47:52:use:symbol%3A%252Fprivate%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-followup-audit-0q1jojzy%252Fsrc%252Fcalls.ts%3A23%3Avalue",
+            "kind": "local-use",
+            "label": "value",
+            "symbol": null,
+            "location": {
+              "file": "src/calls.ts",
+              "line": 0,
+              "endLine": 0
+            }
+          },
+          "sourceKind": "data-transfer",
+          "providerId": "typescript-local-dependence",
+          "supportCeiling": "partial",
+          "establishes": "The definition reaches the reported read on a feasible local control-flow path.",
+          "nonClaims": [
+            "Local reaching definitions do not establish heap aliasing, exceptional flow, or the runtime order of closure invocation."
+          ],
+          "recoverWith": [
+            "value-flow",
+            "dependence-slice",
+            "inspect",
+            "code"
+          ],
+          "evidenceStrength": "exact",
+          "evidenceMethods": [
+            "typescript-compiler-cfg-reaching-definitions"
+          ],
+          "evidenceConstituents": [
+            {
+              "method": "typescript-compiler-cfg-reaching-definitions",
+              "strength": "exact"
+            }
+          ],
+          "context": null,
+          "attributes": null
+        }
+      ],
+      "coverage": {
+        "status": "accounted",
+        "basis": "proved-bounded-static-value-flow",
+        "analysisBasis": "partial-system-definition-use",
+        "providers": [
+          "bounded-static-value-flow",
+          "typescript-local-dependence"
+        ],
+        "supportedRelations": [
+          "compiler-identified local definitions reaching local reads through a TypeScript control-flow graph",
+          "right-hand-side local reads supplying assignments and declarations",
+          "candidate closure captures and bounded same-owner field flow with explicit evidence strength",
+          "direct argument-to-parameter forwarding at compiler-resolved calls",
+          "bounded mechanically derived static arguments",
+          "callee return value to a consumed compiler-resolved call result"
+        ],
+        "unsupportedRelations": [
+          "general heap alias and cross-instance field points-to flow",
+          "exceptional control and value flow",
+          "closure invocation order",
+          "downstream local definition-use after a call result",
+          "dynamic calls not resolved by the semantic provider"
+        ],
+        "graph": {
+          "status": "accounted",
+          "topologyStatus": "accounted",
+          "scope": "explicit anchors; relations call, contract-symbol, import, reference, runtime-boundary; depth 2; evidence floor derived; source scopes production",
+          "maxDepth": 2,
+          "maxEdges": 48,
+          "matchedEdges": 1,
+          "eligibleEdges": 1,
+          "returnedEdges": 1,
+          "omittedEdges": 0,
+          "frontierGroups": 2,
+          "unsupportedFrontiers": 0,
+          "blindSpots": [
+            "Built-in runtime-boundary extractors traverse direct and replayably derived links; heuristic candidates, unsupported frameworks, reflection, generated names, and dependency wiring not recoverable from compiler occurrences or constructor assignments remain disclosed frontiers.",
+            "Literal matches outside the included source scopes (production) remain visible as match-only evidence and do not seed traversal.",
+            "Literal traversal is bounded to the smallest parser-delimited source construct; parser gaps may reduce an owner to one source line and leave its continuation untraversed.",
+            "Member calls use compiler occurrences, exact constructor-assigned fields, bounded unique service providers, direct factory-return members, and compiler-resolved object-literal callbacks when available. Ambiguous providers remain candidate frontiers; callback values routed through mutation, reflection, or unsupported dependency containers remain unrepresented.",
+            "Region labels are structural path groupings, not inferred runtime or architectural boundaries.",
+            "Reverse references do not recursively expand from discovered callers or callees.",
+            "Schema consumers stay within forward-flow regions; cross-workspace contracts may discover consumers in other workspaces. Add an explicit symbol anchor to widen either scope.",
+            "Traversal stops after depth 2; nonzero frontier counts identify evidence that was discovered but not traversed.",
+            "[general-interprocedural-value-flow] Whole-program definition-use flow through arbitrary calls and returns is unavailable. Missing dataflow edges cannot establish that a value never crosses an unmodeled call. Recover selected paths with: scip-query value-flow, scip-query dependence-slice, scip-query inspect, scip-query code.",
+            "[heap-aliasing] Heap points-to and cross-instance alias analysis are unavailable. Missing field or state edges cannot establish that two references never reach the same object. Recover selected paths with: scip-query value-flow, scip-query dependence-slice, scip-query inspect, scip-query code.",
+            "[exceptional-flow] Interprocedural exception propagation and finally completion flow are unavailable. Normal-path reachability and ordering do not establish behavior after a throw or rejection. Recover selected paths with: scip-query dependence-slice, scip-query inspect, scip-query code.",
+            "[unsupported-framework-adapters] Framework runtime crossings without a registered source adapter are unavailable. Missing boundary edges cannot establish that no producer, consumer, state effect, or ordering exists. Recover selected paths with: scip-query search, scip-query inspect, scip-query code."
+          ],
+          "explanation": "Every selected relationship in the bounded topology was emitted."
+        }
+      }
+    }
+  },
+  {
+    "name": "methods-missing",
+    "args": [
+      "methods",
+      "NonexistentClass"
+    ],
+    "exitCode": 1,
+    "result": {
+      "kind": "missing",
+      "query": "NonexistentClass",
+      "suggestions": [
+        "src:calls:nestedMetric()",
+        "src:calls:nestedOwner()",
+        "src:first",
+        "src:flow:aggregateAlias()",
+        "src:calls"
+      ]
+    }
+  }
+]

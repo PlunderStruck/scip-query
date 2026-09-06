@@ -1,0 +1,62 @@
+[
+  {
+    "name": "compiler-indexed call-free function has zero resolved callees",
+    "passed": true
+  },
+  {
+    "name": "compiler-indexed actual call retains its resolved callee",
+    "passed": true
+  },
+  {
+    "name": "an explicit missing file cannot return an unrelated symbol through the CLI",
+    "passed": true
+  },
+  {
+    "name": "declaration does not register a test callback",
+    "passed": true
+  },
+  {
+    "name": "mapping trace load failure survives verification",
+    "passed": true
+  },
+  {
+    "name": "explicit trace load failure survives verification",
+    "passed": true
+  },
+  {
+    "name": "duplicate trace load failure survives verification",
+    "passed": true
+  },
+  {
+    "name": "malformed trace load failure survives verification",
+    "passed": true
+  },
+  {
+    "name": "unreadable trace load failure survives verification",
+    "passed": true
+  },
+  {
+    "name": "ordinary help exposes source maintenance and planning",
+    "passed": true
+  },
+  {
+    "name": "stable checker installs through the production checksum verifier",
+    "passed": true
+  },
+  {
+    "name": "altered checker bytes are rejected",
+    "passed": true
+  },
+  {
+    "name": "real SANY parser exposes the intended variable and assignment",
+    "passed": true
+  },
+  {
+    "name": "real TLC passed for Safe",
+    "passed": true
+  },
+  {
+    "name": "real TLC failed for Bad",
+    "passed": true
+  }
+]

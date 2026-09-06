@@ -15,14 +15,14 @@ export interface CleanupPlanEntry {
   endLine: number;
   loc: number;
   /**
-   * 'graph-fact': zero references anywhere — deletable today.
-   * 'cascade':    becomes dead once earlier batches are deleted.
+   * 'graph-fact': no uses observed by the configured analysis; review before deleting.
+   * 'cascade': observed uses lie in earlier proposed removal batches.
    */
   evidence: 'graph-fact' | 'cascade';
 }
 
 export interface CleanupBatch {
-  /** 0 = deletable now; n = deletable after batch n-1 is applied. */
+  /** 0 = initial candidates; n = candidates after earlier proposed removals. */
   depth: number;
   entries: CleanupPlanEntry[];
   loc: number;
@@ -63,7 +63,7 @@ export function cleanupPlan(
   for (const entry of seed) removedRanges.add(entry);
 
   const batches: CleanupBatch[] = [];
-  const blocked: CleanupPlanResult['blocked'] = [];
+  const blocked = new Map<string, CleanupPlanResult['blocked'][number]>();
   if (seed.length > 0) {
     batches.push(buildBatch(db, 0, seed, removedRanges));
   }
@@ -73,10 +73,11 @@ export function cleanupPlan(
     .map((entry) => entry.definition)
     .filter((definition): definition is IndexedDefinition => definition !== null);
   const visited = new Set<string>(seed.map((entry) => entry.symbol));
+  const pending = new Set<string>();
 
   for (let depth = 1; depth <= maxDepth && frontier.length > 0; depth++) {
     const calleeMap = index.calleeMap(frontier, { semantic: false });
-    const candidateNames = new Set<string>();
+    const candidateNames = new Set(pending);
     for (const definition of frontier) {
       for (const callee of calleeMap.get(definition.symbolId) ?? []) {
         if (!visited.has(callee.symbol)) candidateNames.add(callee.symbol);
@@ -85,7 +86,6 @@ export function cleanupPlan(
 
     const next: PlanEntryInternal[] = [];
     for (const name of candidateNames) {
-      visited.add(name);
       const definition = resolveDefinition(db, name);
       if (!definition) continue;
       if (db.isIgnored(definition.relativePath)) continue;
@@ -96,12 +96,16 @@ export function cleanupPlan(
 
       const verdict = cascadeVerdict(db, definition, removedRanges);
       if (verdict.removable) {
+        visited.add(name);
+        pending.delete(name);
+        blocked.delete(name);
         next.push(toEntry(definition, 'cascade'));
       } else if (verdict.blockingFiles.length > 0) {
-        blocked.push({
+        pending.add(name);
+        blocked.set(name, {
           shortName: shortenSymbol(definition.symbol),
           file: definition.relativePath,
-          blockingFiles: verdict.blockingFiles.slice(0, 3),
+          blockingFiles: verdict.blockingFiles,
         });
       }
     }
@@ -116,7 +120,7 @@ export function cleanupPlan(
 
   const totalLoc = batches.reduce((sum, batch) => sum + batch.loc, 0);
   const totalSymbols = batches.reduce((sum, batch) => sum + batch.entries.length, 0);
-  return { batches, totalSymbols, totalLoc, blocked };
+  return { batches, totalSymbols, totalLoc, blocked: [...blocked.values()] };
 }
 
 interface PlanEntryInternal extends CleanupPlanEntry {

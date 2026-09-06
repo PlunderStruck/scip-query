@@ -4,16 +4,16 @@ import { ProjectIndex } from '../internal/project-index.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { indexedDocumentPaths } from '../../storage/scip-documents.js';
-import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
+import { resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { consumerEvidenceProduct, consumerFileMapFromEvidence } from '../internal/consumer-evidence.js';
 import { normalizeRelativePath as normalizePath } from '../../domain/path-normalization.js';
 
 export type LocalityActionTier = 'signal';
 
-export type LocalityConsumerCoverage = 'exact' | 'file-level' | 'none';
+export type LocalityConsumerCoverage = 'symbol-observations' | 'file-level' | 'none';
 
-export type LocalityDestinationConfidence = 'exact' | 'withheld';
+export type LocalityDestinationConfidence = 'candidate' | 'withheld';
 
 export type LocalityRecommendedTier =
   | 'same-file'
@@ -22,7 +22,7 @@ export type LocalityRecommendedTier =
   | 'app-level-shared'
   | 'package-level-shared'
   | 'repository-level-review'
-  | 'no-exact-consumers';
+  | 'no-observed-consumers';
 
 export interface LocalityDirectoryAncestor {
   path: string;
@@ -47,7 +47,7 @@ export interface LocalityCandidate {
   directoryAncestry: LocalityDirectoryAncestor[];
   consumerFiles: string[];
   consumerCoverage: LocalityConsumerCoverage;
-  nearestCommonOwner: string | null;
+  nearestCommonDirectory: string | null;
   boundaryMarkers: string[];
   recommendedTier: LocalityRecommendedTier;
   suggestedHome: string | null;
@@ -168,7 +168,7 @@ export function localityCandidates(db: ScipDatabase, options: LocalityCandidates
   const limit = positiveInteger(options.limit, DEFAULT_LIMIT);
   const minConsumers = positiveInteger(options.minConsumers, DEFAULT_MIN_CONSUMERS);
   const index = new ProjectIndex(db);
-  const graph = index.fileDependencyGraph(options.scope);
+  const graph = index.fileDependencyGraph();
   const indexedDirectories = directorySetForIndexedFiles(indexedDocumentPaths(db, { includeIgnored: false }));
   const architecturalBoundarySegments = architecturalBoundarySegmentsFor(
     db.config.locality?.architecturalBoundarySegments,
@@ -196,7 +196,9 @@ function resolveTargetSourceUnits(db: ScipDatabase, index: ProjectIndex, target:
     return [fileSourceUnit(filePath)];
   }
 
-  const match = findFirstSymbolMatch(db, target);
+  const resolution = resolveSymbol(db, target);
+  if (resolution.candidates.length > 0) throw new Error(`Ambiguous symbol: ${target}. Use an exact symbol.`);
+  const match = resolution.match;
   if (!match) {
     return [];
   }
@@ -249,25 +251,25 @@ function buildLocalityCandidate(
     : fileConsumerFiles(graph, source.unit.file);
   const consumerCoverage = source.definition
     ? consumerFiles.length > 0
-      ? 'exact'
+      ? 'symbol-observations'
       : 'none'
     : consumerFiles.length > 0
       ? 'file-level'
       : 'none';
   const candidatePath = source.unit.file;
   const currentDirectory = normalizeDirectory(posix.dirname(candidatePath));
-  const nearestCommonOwner = nearestCommonDirectory(consumerFiles);
+  const nearestCommonDirectory = commonDirectoryForFiles(consumerFiles);
   const directoryAncestry = directoryAncestryFor(currentDirectory);
   const boundaryMarkers = unique([
     ...boundaryMarkersForPath(currentDirectory),
-    ...(nearestCommonOwner ? boundaryMarkersForPath(nearestCommonOwner) : []),
+    ...(nearestCommonDirectory ? boundaryMarkersForPath(nearestCommonDirectory) : []),
   ]);
-  const tier = recommendedTier(source.unit, currentDirectory, nearestCommonOwner, consumerFiles);
+  const tier = recommendedTier(source.unit, currentDirectory, nearestCommonDirectory, consumerFiles);
   const destination = destinationAssessmentFor(
     tier,
     source.unit,
     currentDirectory,
-    nearestCommonOwner,
+    nearestCommonDirectory,
     consumerFiles,
     indexedDirectories,
     architecturalBoundarySegments,
@@ -275,7 +277,7 @@ function buildLocalityCandidate(
   const counterevidence = counterevidenceFor(
     source.unit,
     consumerCoverage,
-    nearestCommonOwner,
+    nearestCommonDirectory,
     consumerFiles,
     currentDirectory,
     destination.whyNoSuggestedHome,
@@ -283,7 +285,7 @@ function buildLocalityCandidate(
   const reasons = reasonsFor(
     source.unit,
     currentDirectory,
-    nearestCommonOwner,
+    nearestCommonDirectory,
     consumerFiles,
     destination.suggestedHome,
     destination.whyNoSuggestedHome,
@@ -297,7 +299,7 @@ function buildLocalityCandidate(
     directoryAncestry,
     consumerFiles,
     consumerCoverage,
-    nearestCommonOwner,
+    nearestCommonDirectory,
     boundaryMarkers,
     recommendedTier: tier,
     suggestedHome: destination.suggestedHome,
@@ -343,11 +345,8 @@ function resolveIndexedFilePath(db: ScipDatabase, target: string): string | null
   if (exact) {
     return exact;
   }
-  const suffix = docs.find((path) => path.endsWith(`/${normalizedTarget}`));
-  if (suffix) {
-    return suffix;
-  }
-  return docs.find((path) => path.includes(normalizedTarget)) ?? null;
+  const suffixes = docs.filter((path) => path.endsWith(`/${normalizedTarget}`));
+  return suffixes.length === 1 ? suffixes[0]! : null;
 }
 
 function definitionSourceUnit(definition: IndexedDefinition): SourceUnitWithDefinition {
@@ -419,7 +418,7 @@ function markerEntriesForPath(path: string): Array<{ marker: string; prefix: str
   return markers;
 }
 
-function nearestCommonDirectory(files: string[]): string | null {
+function commonDirectoryForFiles(files: string[]): string | null {
   if (files.length === 0) {
     return null;
   }
@@ -445,26 +444,26 @@ function nearestCommonDirectory(files: string[]): string | null {
 function recommendedTier(
   sourceUnit: LocalitySourceUnit,
   currentDirectory: string,
-  nearestCommonOwner: string | null,
+  nearestCommonDirectory: string | null,
   consumerFiles: string[],
 ): LocalityRecommendedTier {
-  if (!nearestCommonOwner) {
-    return 'no-exact-consumers';
+  if (!nearestCommonDirectory) {
+    return 'no-observed-consumers';
   }
   if (sourceUnit.kind === 'symbol' && consumerFiles.length === 1) {
     return consumerFiles[0] === sourceUnit.file ? 'same-file' : 'sibling-folder';
   }
-  if (nearestCommonOwner === '.' || nearestCommonOwner === 'src') {
+  if (nearestCommonDirectory === '.' || nearestCommonDirectory === 'src') {
     return 'repository-level-review';
   }
-  if (hasMarker(nearestCommonOwner, 'package')) {
+  if (hasMarker(nearestCommonDirectory, 'package')) {
     return 'package-level-shared';
   }
-  if (hasMarker(nearestCommonOwner, 'app')) {
+  if (hasMarker(nearestCommonDirectory, 'app')) {
     return 'app-level-shared';
   }
   if (
-    hasAnyMarker(nearestCommonOwner, ['feature', 'domain', 'module']) ||
+    hasAnyMarker(nearestCommonDirectory, ['feature', 'domain', 'module']) ||
     hasAnyMarker(currentDirectory, ['feature', 'domain', 'module'])
   ) {
     return 'feature-local-shared';
@@ -476,12 +475,12 @@ function destinationAssessmentFor(
   tier: LocalityRecommendedTier,
   sourceUnit: LocalitySourceUnit,
   currentDirectory: string,
-  nearestCommonOwner: string | null,
+  nearestCommonDirectory: string | null,
   consumerFiles: string[],
   indexedDirectories: Set<string>,
   architecturalBoundarySegments: ReadonlySet<string>,
 ): DestinationAssessment {
-  const unsupportedReason = unsupportedDestinationReason(tier, nearestCommonOwner);
+  const unsupportedReason = unsupportedDestinationReason(tier, nearestCommonDirectory);
   if (unsupportedReason) return withheldDestination(unsupportedReason);
 
   const sourceRoot = sourceRootFor(sourceUnit.file);
@@ -494,9 +493,9 @@ function destinationAssessmentFor(
   );
   if (directDestination) return directDestination;
 
-  const owner = nearestCommonOwner!;
+  const owner = nearestCommonDirectory!;
   if (normalizeDirectory(currentDirectory) === normalizeDirectory(owner)) {
-    return withheldDestination(`${currentDirectory} is already the nearest common owner for its consumers.`);
+    return withheldDestination(`${currentDirectory} is already the nearest common directory for its consumers.`);
   }
 
   const sharedOwnerDestination = sharedOwnerDestinationFor(
@@ -516,12 +515,15 @@ function destinationAssessmentFor(
   );
 }
 
-function unsupportedDestinationReason(tier: LocalityRecommendedTier, nearestCommonOwner: string | null): string | null {
-  if (!nearestCommonOwner) {
-    return 'No consumer owner could be inferred from the current index.';
+function unsupportedDestinationReason(
+  tier: LocalityRecommendedTier,
+  nearestCommonDirectory: string | null,
+): string | null {
+  if (!nearestCommonDirectory) {
+    return 'No shared consumer directory was observed in the current evidence.';
   }
-  if (tier === 'no-exact-consumers' || tier === 'repository-level-review') {
-    return 'The inferred owner is too broad or unsupported for an exact destination.';
+  if (tier === 'no-observed-consumers' || tier === 'repository-level-review') {
+    return 'The inferred owner is too broad or unsupported for an suggested destination.';
   }
   return null;
 }
@@ -535,7 +537,7 @@ function directDestinationFor(
 ): DestinationAssessment | null {
   if (tier === 'same-file') {
     const home = consumerFiles[0] ?? null;
-    return home ? exactDestination(home) : withheldDestination('No same-file consumer path was available.');
+    return home ? candidateDestination(home) : withheldDestination('No same-file consumer path was available.');
   }
   if (tier === 'sibling-folder' && consumerFiles.length === 1) {
     const destination = normalizeDirectory(posix.dirname(consumerFiles[0]));
@@ -546,7 +548,7 @@ function directDestinationFor(
       architecturalBoundarySegments,
     );
     if (boundaryReason) return withheldDestination(boundaryReason);
-    return exactDestination(destination);
+    return candidateDestination(destination);
   }
   return null;
 }
@@ -558,7 +560,7 @@ function sharedOwnerDestinationFor(
   architecturalBoundarySegments: ReadonlySet<string>,
 ): DestinationAssessment | null {
   if (!endsWithSharedHomeSegment(owner)) return null;
-  return exactDestinationWithinBoundary(
+  return candidateDestinationWithinBoundary(
     owner,
     currentDirectory,
     sourceRoot,
@@ -575,10 +577,10 @@ function proposedSharedHomeDestinationFor(
   architecturalBoundarySegments: ReadonlySet<string>,
 ): DestinationAssessment {
   if (owner === '.') {
-    return withheldDestination('The nearest common owner is the repository root.');
+    return withheldDestination('The nearest common directory is the repository root.');
   }
   const proposedHome = `${owner}/shared`;
-  const destination = exactDestinationWithinBoundary(
+  const destination = candidateDestinationWithinBoundary(
     proposedHome,
     currentDirectory,
     sourceRoot,
@@ -593,7 +595,7 @@ function proposedSharedHomeDestinationFor(
   return destination;
 }
 
-function exactDestinationWithinBoundary(
+function candidateDestinationWithinBoundary(
   destination: string,
   currentDirectory: string,
   sourceRoot: string,
@@ -610,11 +612,11 @@ function exactDestinationWithinBoundary(
     architecturalBoundarySegments,
   );
   if (boundaryReason) return withheldDestination(boundaryReason);
-  return exactDestination(destination);
+  return candidateDestination(destination);
 }
 
-function exactDestination(suggestedHome: string): DestinationAssessment {
-  return { suggestedHome, confidence: 'exact', whyNoSuggestedHome: null };
+function candidateDestination(suggestedHome: string): DestinationAssessment {
+  return { suggestedHome, confidence: 'candidate', whyNoSuggestedHome: null };
 }
 
 function withheldDestination(whyNoSuggestedHome: string): DestinationAssessment {
@@ -624,20 +626,22 @@ function withheldDestination(whyNoSuggestedHome: string): DestinationAssessment 
 function counterevidenceFor(
   sourceUnit: LocalitySourceUnit,
   consumerCoverage: LocalityConsumerCoverage,
-  nearestCommonOwner: string | null,
+  nearestCommonDirectory: string | null,
   consumerFiles: string[],
   currentDirectory: string,
   whyNoSuggestedHome: string | null,
 ): string[] {
-  const evidence: string[] = ['Report-only signal; review ownership before moving files.'];
+  const evidence: string[] = [
+    'Path and observed-consumer heuristic; confirm conceptual ownership, complete consumers and behavior before moving files.',
+  ];
   if (consumerCoverage === 'none') {
     evidence.push('No consumers were found in the current index.');
   }
   if (consumerCoverage === 'file-level') {
     evidence.push('File-level import evidence can hide which exported unit is actually used.');
   }
-  if (nearestCommonOwner === '.' || nearestCommonOwner === 'src') {
-    evidence.push('Nearest common owner is broad, so this is not enough evidence for automatic placement.');
+  if (nearestCommonDirectory === '.' || nearestCommonDirectory === 'src') {
+    evidence.push('Nearest common directory is broad, so this is not enough evidence for automatic placement.');
   }
   if (consumerFiles.length === 1) {
     evidence.push(
@@ -647,11 +651,11 @@ function counterevidenceFor(
   if (sourceUnit.kind === 'file') {
     evidence.push('File targets describe module locality, not symbol-level usage.');
   }
-  if (nearestCommonOwner && currentDirectory.startsWith(`${nearestCommonOwner}/`)) {
-    evidence.push('Candidate already lives under the nearest common owner.');
+  if (nearestCommonDirectory && currentDirectory.startsWith(`${nearestCommonDirectory}/`)) {
+    evidence.push('Candidate already lives under the nearest common directory.');
   }
   if (whyNoSuggestedHome) {
-    evidence.push(`No exact suggested home: ${whyNoSuggestedHome}`);
+    evidence.push(`No suggested home: ${whyNoSuggestedHome}`);
   }
   return evidence;
 }
@@ -659,22 +663,24 @@ function counterevidenceFor(
 function reasonsFor(
   sourceUnit: LocalitySourceUnit,
   currentDirectory: string,
-  nearestCommonOwner: string | null,
+  nearestCommonDirectory: string | null,
   consumerFiles: string[],
   suggestedHome: string | null,
   whyNoSuggestedHome: string | null,
 ): string[] {
   const reasons: string[] = [];
   reasons.push(`${sourceUnit.shortName} currently lives in ${currentDirectory}.`);
-  if (nearestCommonOwner) {
-    reasons.push(`${consumerFiles.length} consumer file(s) share ${nearestCommonOwner} as their nearest common owner.`);
+  if (nearestCommonDirectory) {
+    reasons.push(
+      `${consumerFiles.length} consumer file(s) share ${nearestCommonDirectory} as their nearest common directory.`,
+    );
   } else {
-    reasons.push('No consumer owner could be inferred from the current index.');
+    reasons.push('No shared consumer directory was observed in the current evidence.');
   }
   if (suggestedHome) {
     reasons.push(`Suggested home is ${suggestedHome}.`);
   } else if (whyNoSuggestedHome) {
-    reasons.push(`No exact suggested home: ${whyNoSuggestedHome}`);
+    reasons.push(`No suggested home: ${whyNoSuggestedHome}`);
   }
   return reasons;
 }
@@ -684,7 +690,7 @@ function localityRecommendationFor(
   suggestedHome: string | null,
   consumerCoverage: LocalityConsumerCoverage,
 ): string {
-  if (tier === 'no-exact-consumers') {
+  if (tier === 'no-observed-consumers') {
     return 'Review references before moving; no consumers were found.';
   }
   if (tier === 'repository-level-review') {
@@ -693,7 +699,7 @@ function localityRecommendationFor(
   if (!suggestedHome) {
     return 'Review ownership manually before changing structure.';
   }
-  const coverage = consumerCoverage === 'exact' ? 'symbol usage' : 'module import';
+  const coverage = consumerCoverage === 'symbol-observations' ? 'symbol usage' : 'module import';
   return `Review whether ${coverage} supports moving or extracting toward ${suggestedHome}.`;
 }
 
@@ -703,7 +709,7 @@ function compareLocalityCandidates(a: LocalityCandidate, b: LocalityCandidate): 
 
 function scoreLocalityCandidate(candidate: LocalityCandidate): number {
   let score = candidate.consumerFiles.length * 10;
-  if (candidate.consumerCoverage === 'exact') {
+  if (candidate.consumerCoverage === 'symbol-observations') {
     score += 5;
   }
   if (candidate.suggestedHome) {
@@ -712,7 +718,7 @@ function scoreLocalityCandidate(candidate: LocalityCandidate): number {
   if (candidate.recommendedTier === 'repository-level-review') {
     score *= 0.1;
   }
-  if (candidate.recommendedTier === 'no-exact-consumers') {
+  if (candidate.recommendedTier === 'no-observed-consumers') {
     score *= 0.05;
   }
   return score;
@@ -781,7 +787,7 @@ function boundaryDestinationReason(
   if (!isArchitecturalBoundaryDirectory(currentDirectory, sourceRoot, architecturalBoundarySegments)) {
     return null;
   }
-  return `${currentDirectory} is a named architectural boundary; an exact move to ${destination} needs human design.`;
+  return `${currentDirectory} matches a protected directory-name marker; a move to ${destination} needs human design.`;
 }
 
 function architecturalBoundarySegmentsFor(...segmentLists: Array<readonly string[] | undefined>): ReadonlySet<string> {

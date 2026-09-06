@@ -151,8 +151,9 @@ export function verifyCleanupPlan(
       baselineErrorsByChecker.set(checker.label, runChecker(checker, snapshot.root, timeoutMs).rawErrors);
     }
 
+    const applyBatch = cleanupBatchApplier(snapshot.root);
     for (const batch of plan.batches) {
-      applyBatchDeletions(snapshot.root, batch);
+      applyBatch(batch);
       let failure: BatchVerification | null = null;
       for (const checker of checkers) {
         const result = runChecker(checker, snapshot.root, timeoutMs);
@@ -567,22 +568,32 @@ function headSnapshotFailureReason(error: unknown): string {
   return 'isolated HEAD snapshot failed; confirm that Git can read the repository and committed HEAD';
 }
 
-function applyBatchDeletions(worktree: string, batch: CleanupBatch): void {
+// Every entry uses coordinates from the original source generation. Reapply the
+// cumulative selection to those bytes so earlier batches cannot shift later ones.
+function cleanupBatchApplier(worktree: string): (batch: CleanupBatch) => void {
+  const originalByFile = new Map<string, string>();
   const rangesByFile = new Map<string, Array<{ start: number; end: number }>>();
-  for (const entry of batch.entries) {
-    const bucket = rangesByFile.get(entry.file) ?? [];
-    bucket.push({ start: entry.startLine, end: entry.endLine });
-    rangesByFile.set(entry.file, bucket);
-  }
-  for (const [file, ranges] of rangesByFile) {
-    const path = join(worktree, file);
-    if (!existsSync(path)) continue;
-    const source = readTextFileWithinLimit(path, {
-      maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
-      inputKind: 'cleanup verification source file',
-    });
-    writeFileSync(path, deleteLineRanges(source, ranges, { rust: file.endsWith('.rs') }));
-  }
+  return (batch) => {
+    const touched = new Set<string>();
+    for (const entry of batch.entries) {
+      const bucket = rangesByFile.get(entry.file) ?? [];
+      bucket.push({ start: entry.startLine, end: entry.endLine });
+      rangesByFile.set(entry.file, bucket);
+      touched.add(entry.file);
+    }
+    for (const file of touched) {
+      const path = join(worktree, file);
+      let source = originalByFile.get(file);
+      if (source === undefined) {
+        source = readTextFileWithinLimit(path, {
+          maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+          inputKind: 'cleanup verification source file',
+        });
+        originalByFile.set(file, source);
+      }
+      writeFileSync(path, deleteLineRanges(source, rangesByFile.get(file)!, { rust: file.endsWith('.rs') }));
+    }
+  };
 }
 
 export function describeCleanupBatches(
@@ -617,7 +628,8 @@ export function applyCleanupBatches(
 ): CleanupApplicationReport {
   const report = describeCleanupBatches(batches, opts);
   if (!report.dryRun) {
-    for (const batch of batches) applyBatchDeletions(projectRoot, batch);
+    const applyBatch = cleanupBatchApplier(projectRoot);
+    for (const batch of batches) applyBatch(batch);
   }
   return report;
 }

@@ -1,14 +1,16 @@
 import type { AstLanguage } from '../ast/ast-language.js';
 import type { SyntaxNode } from '../ast/ast-types.js';
 import type { CallSiteKind } from './source-fact-types.js';
+import { callSiteOwner } from './source-callables.js';
 
 // scip-query: ignore-wrapper — source-facts owns the single tree walk; this
 // helper owns the callsite-shape policy used during that walk.
 export function callSiteForNode(node: SyntaxNode, language: AstLanguage) {
   const target = callTargetForNode(node, language);
   if (!target) return null;
-  const leaf = extractCallLeaf(target);
-  if (!leaf) return null;
+  const leafNode = callLeafNode(target);
+  if (!leafNode) return null;
+  const leaf = leafNode.text.replace(/^#/u, '');
   const memberAccess = isMemberAccessTarget(target);
   return {
     kind: callSiteKindForNode(node),
@@ -17,6 +19,13 @@ export function callSiteForNode(node: SyntaxNode, language: AstLanguage) {
     calleeText: target.text,
     memberAccess,
     line: node.startPosition.row,
+    targetRange: {
+      startLine: leafNode.startPosition.row,
+      startColumn: leafNode.startPosition.column,
+      endLine: leafNode.endPosition.row,
+      endColumn: leafNode.endPosition.column,
+    },
+    owner: callSiteOwner(node, language),
   };
 }
 
@@ -117,36 +126,28 @@ function isMemberAccessTarget(node: SyntaxNode): boolean {
 }
 
 export function extractCallLeaf(node: SyntaxNode): string | null {
-  switch (node.type) {
-    case 'identifier':
-    case 'type_identifier':
-    case 'field_identifier':
-    case 'property_identifier':
-    case 'private_property_identifier':
-    case 'shorthand_property_identifier':
-      return node.text.replace(/^#/u, '');
-    case 'field_expression':
-    case 'member_expression':
-    case 'nested_identifier':
-    case 'attribute': {
-      const last = node.namedChild(node.namedChildCount - 1);
-      return last ? extractCallLeaf(last) : null;
-    }
-    case 'jsx_identifier':
-      return node.text;
-    case 'generic_function': {
-      const target = node.childForFieldName('function') ?? node.namedChild(0);
-      return target ? extractCallLeaf(target) : null;
-    }
-    case 'scoped_identifier': {
-      const name = node.childForFieldName('name') ?? node.namedChild(node.namedChildCount - 1);
-      return name ? extractCallLeaf(name) : null;
-    }
-    case 'super':
-    case 'self':
-    case 'this':
-      return null;
-    default:
-      return null;
+  return callLeafNode(node)?.text.replace(/^#/u, '') ?? null;
+}
+
+const CALL_IDENTIFIER_KINDS = new Set([
+  'identifier',
+  'type_identifier',
+  'field_identifier',
+  'property_identifier',
+  'private_property_identifier',
+  'shorthand_property_identifier',
+  'jsx_identifier',
+]);
+
+function callLeafNode(node: SyntaxNode): SyntaxNode | null {
+  if (CALL_IDENTIFIER_KINDS.has(node.type)) return node;
+  let target: SyntaxNode | null = null;
+  if (isMemberAccessTarget(node)) {
+    target = node.namedChild(node.namedChildCount - 1);
+  } else if (node.type === 'generic_function') {
+    target = node.childForFieldName('function') ?? node.namedChild(0);
+  } else if (node.type === 'scoped_identifier') {
+    target = node.childForFieldName('name') ?? node.namedChild(node.namedChildCount - 1);
   }
+  return target ? callLeafNode(target) : null;
 }

@@ -19,16 +19,12 @@ metadata:
       when: 'Probe for functions with overlapping callee sets across files.'
     - template: 'scip-query similar-files'
       when: 'Probe for files with overlapping dependency profiles.'
-    - template: 'scip-query stale-abstractions --include-low-confidence'
-      when: 'Probe for types, interfaces, and classes with zero or one consumer.'
-    - template: 'scip-query wrapper-candidates'
-      when: 'Probe for single-consumer indirection.'
     - template: 'scip-query passthrough-candidates'
       when: 'Probe for functions that only forward to one callee.'
     - template: 'scip-query drift --architecture'
       when: 'Probe for files that deviate from sibling conventions and for declared boundary violations.'
     - template: 'scip-query health --full'
-      when: 'Run every configured detector once as a sampling frame, never as a target.'
+      when: 'Measure current TS/JS complexity, token duplication and resolved dependencies; inspect the reported coverage.'
     - template: 'scip-query diff-impact'
       when: 'After an implemented slice, map changed symbols and downstream consumers.'
     - template: 'scip-query architecture'
@@ -50,11 +46,9 @@ metadata:
 | `scip-query code <selector>` | Read exact source when the body itself decides whether variation is essential. |
 | `scip-query similar --cross-file-only` | Probe for functions with overlapping callee sets across files. |
 | `scip-query similar-files` | Probe for files with overlapping dependency profiles. |
-| `scip-query stale-abstractions --include-low-confidence` | Probe for types, interfaces, and classes with zero or one consumer. |
-| `scip-query wrapper-candidates` | Probe for single-consumer indirection. |
 | `scip-query passthrough-candidates` | Probe for functions that only forward to one callee. |
 | `scip-query drift --architecture` | Probe for files that deviate from sibling conventions and for declared boundary violations. |
-| `scip-query health --full` | Run every configured detector once as a sampling frame, never as a target. |
+| `scip-query health --full` | Measure current TS/JS complexity, token duplication and resolved dependencies; inspect the reported coverage. |
 | `scip-query diff-impact` | After an implemented slice, map changed symbols and downstream consumers. |
 | `scip-query architecture` | After an implemented slice, confirm declared boundaries still hold. |
 
@@ -132,10 +126,7 @@ Use smell probes as signals, not verdicts:
 ```bash
 scip-query similar --cross-file-only
 scip-query similar-files
-scip-query extract-candidates
-scip-query wrapper-candidates
 scip-query passthrough-candidates
-scip-query stale-abstractions --include-low-confidence
 scip-query drift --architecture
 scip-query health --full
 ```
@@ -248,8 +239,6 @@ After changes, run the narrow tests for the touched subsystem and the repository
 ```bash
 scip-query diff-impact
 scip-query architecture
-scip-query stale-abstractions --include-low-confidence
-scip-query wrapper-candidates
 scip-query passthrough-candidates
 ```
 

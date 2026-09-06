@@ -77,7 +77,7 @@ interface VueReferenceComputationContext {
 }
 
 interface AugmentVueFingerprint {
-  version: 3;
+  version: 4;
   tsconfig: string;
   files: ReturnType<typeof fingerprintProjectFiles>;
   db: {
@@ -311,7 +311,7 @@ function computeAugmentVueFingerprint(
     .get() as AugmentVueFingerprint['db'];
 
   return {
-    version: 3,
+    version: 4,
     tsconfig,
     files: fingerprintProjectFiles(projectRoot),
     db: dbStats,

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { similar } from '../../../src/queries/cleanup/similar.js';
+import { similar, similarityFingerprintProduct } from '../../../src/queries/cleanup/similar.js';
 import {
   fileContentHash,
   readCachedFileEvidence,
@@ -85,6 +85,59 @@ describe('source fingerprint cache', () => {
       ).toBe(false);
     } finally {
       db2.close();
+    }
+  });
+
+  it('uses complete callable source without including same-line siblings', () => {
+    rmSync(dbPath);
+    const source = [
+      'export function alphaWorker() {',
+      ...Array.from({ length: 16 }, (_, n) => `  const padding${n} = ${n};`),
+      "  return 'unmistakableTailMarker';",
+      '}',
+    ];
+    writeFixtureFiles(projectRoot, {
+      [A_FILE]: source,
+      [B_FILE]: [
+        "export function betaWorker() { return 'invoice'; } export function unrelated() { return 'unrelatedContamination'; }",
+      ],
+    });
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', A_FILE)
+      .document(2, 'typescript', B_FILE)
+      .symbol(1, symbol(A_FILE, 'alphaWorker'), 'alphaWorker', 12)
+      .symbol(2, symbol(B_FILE, 'betaWorker'), 'betaWorker', 12)
+      .definition(1, 1, 1, 0, 0, source.length - 1, 1)
+      .definition(2, 2, 2, 0, 0, 0, 49)
+      .write();
+    const db = openDb();
+    try {
+      const corpus = similarityFingerprintProduct(db).sourceCorpus();
+      expect(corpus.find((entry) => entry.symbol === symbol(A_FILE, 'alphaWorker'))?.tokens).toContain('unmistakable');
+      expect(corpus.find((entry) => entry.symbol === symbol(B_FILE, 'betaWorker'))?.tokens).not.toContain(
+        'contamination',
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('rejects an ambiguous target before comparing source or calls', () => {
+    rmSync(dbPath);
+    writeFixtureFiles(projectRoot, { [B_FILE]: ['export function alphaWorker() { return 2; }'] });
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', A_FILE)
+      .document(2, 'typescript', B_FILE)
+      .symbol(1, symbol(A_FILE, 'alphaWorker'), 'alphaWorker', 12)
+      .symbol(2, symbol(B_FILE, 'alphaWorker'), 'alphaWorker', 12)
+      .definition(1, 1, 1, 0, 0, 4, 1)
+      .definition(2, 2, 2, 0, 0, 0, 49)
+      .write();
+    const db = openDb();
+    try {
+      expect(() => similar(db, 'alphaWorker')).toThrow(/ambiguous/i);
+    } finally {
+      db.close();
     }
   });
 

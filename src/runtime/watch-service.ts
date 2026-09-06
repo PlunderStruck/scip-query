@@ -55,6 +55,8 @@ const WATCH_SERVICE_STOP_TIMEOUT_MS = 6_000;
 const WATCH_SERVICE_FORCE_STOP_TIMEOUT_MS = 1_000;
 const WATCH_SERVICE_POLL_INTERVAL_MS = 10;
 const AUTO_START_EXCLUDED_COMMANDS = new Set([
+  'health',
+  'review',
   'capabilities',
   'check-deps',
   'config-validate',

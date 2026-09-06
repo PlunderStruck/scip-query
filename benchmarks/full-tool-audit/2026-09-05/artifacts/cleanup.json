@@ -1,0 +1,17 @@
+[
+  {
+    "root": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-full-audit-fixture-bdl5rqbu",
+    "watchStopExit": 0,
+    "stderr": "",
+    "directoryRemoved": true
+  },
+  {
+    "root": "/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-audit-suppression-1s94n9a8",
+    "watchStopExit": 0,
+    "stderr": "",
+    "directoryRemoved": true
+  },
+  {
+    "packedConsumerRemoved": true
+  }
+]

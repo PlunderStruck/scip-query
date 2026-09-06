@@ -37,7 +37,6 @@ import { quoteShellArgument } from '../platform/shell-arguments.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
 import { isNonNegativeInteger, isRecordObject, isSha256Hex } from '../domain/record-validation.js';
 import { finalizeSourceEmission, runWithSourceEmissionInvocation } from './source-emission-session.js';
-import { assertNavigationMapCanStart, recordNavigationOutputDelivery } from './navigation-session.js';
 export {
   CLIENT_SAFE_OUTPUT_BYTES,
   DEFAULT_OUTPUT_PAGE_SIZE,
@@ -392,17 +391,11 @@ async function runWithCliOutputPaginationInSession(
     if (options.agentOutput || options.pageSize !== undefined || options.cursor !== undefined) {
       throw new Error('--json-output cannot be combined with --agent-output or output pagination.');
     }
-    if (options.command === 'system-map') {
-      assertNavigationMapCanStart(options.cwd, options.sourceSession !== false);
-    }
     await runJsonToOutputFile(options, action, runtime, maxOutputCharacters);
     return;
   }
 
   if (options.json && !options.agentOutput && options.pageSize === undefined && options.cursor === undefined) {
-    if (options.command === 'system-map') {
-      assertNavigationMapCanStart(options.cwd, options.sourceSession !== false);
-    }
     await runJsonWithOversizeWarning(options, action, runtime);
     return;
   }
@@ -417,9 +410,6 @@ async function runWithCliOutputPaginationInSession(
     options.pageSize === undefined &&
     runtime.stdoutIsRegularFile?.() === true
   ) {
-    if (options.command === 'system-map') {
-      assertNavigationMapCanStart(options.cwd, options.sourceSession !== false);
-    }
     await runHumanToRegularFile(options, action, maxOutputCharacters);
     return;
   }
@@ -428,9 +418,6 @@ async function runWithCliOutputPaginationInSession(
   const invocationPrefix = normalizeInvocationPrefix(options.invocationPrefix);
   const invocationHash = hashInvocation(options.command, options.cwd, invocationPrefix, filteredArgv);
   const decodedCursor = options.cursor === undefined ? undefined : decodeOutputCursor(options.cursor, invocationHash);
-  if (options.command === 'system-map' && !decodedCursor) {
-    assertNavigationMapCanStart(options.cwd, options.sourceSession !== false);
-  }
   let snapshotId = decodedCursor?.snapshotId;
   let completed: {
     content: string;
@@ -508,14 +495,6 @@ async function runWithCliOutputPaginationInSession(
         nextPageIndex: completed.pageIndex + 1,
         snapshotId: requireSnapshotId(snapshotId),
       });
-
-  recordNavigationOutputDelivery(
-    options.command,
-    options.cwd,
-    complete,
-    options.sourceSession !== false,
-    continuation?.command,
-  );
 
   if (completed.offset === 0 && complete && options.cursor === undefined) {
     runtime.writeStdout(completed.content);
@@ -675,7 +654,6 @@ async function runJsonToOutputFile(
     sha256: hash.digest('hex'),
   };
   runtime.writeStdout(`${JSON.stringify(receipt)}\n`);
-  recordNavigationOutputDelivery(options.command, options.cwd, true, options.sourceSession !== false);
   finalizeSourceEmission(true);
 }
 
@@ -759,7 +737,6 @@ async function runJsonWithOversizeWarning(
     }
     if (remainder.bytes.length > 0) originalWrite.call(process.stdout, remainder.bytes);
     if (warningWritten) runtime.writeStderr(warning);
-    recordNavigationOutputDelivery(options.command, options.cwd, true, options.sourceSession !== false);
   } finally {
     process.stdout.write = originalWrite;
   }
@@ -786,7 +763,6 @@ async function runHumanToRegularFile(
   } finally {
     process.stdout.write = originalWrite;
   }
-  recordNavigationOutputDelivery(options.command, options.cwd, true, options.sourceSession !== false);
   finalizeSourceEmission(true);
 }
 
@@ -1515,7 +1491,7 @@ function pageContentByteLimit(
     const digits = '9'.repeat(String(MAX_TRACKED_OUTPUT_CHARACTERS).length);
     const wrapper =
       `[scip-query output page: characters ${digits}-${digits} of ${digits}]\n` +
-      `\n[Incomplete: ${digits} characters remain. Continue exactly:\n${continuation.command}]\n`;
+      `\n[Incomplete: ${digits} characters remain.]\nContinue exactly:\n${continuation.command}\n`;
     return pageContentBudgetAfterWrapper(HUMAN_OUTPUT_PAGE_CONTENT_BYTES, Buffer.byteLength(wrapper), 1);
   }
   const envelope: CliOutputPageEnvelopeV1 = {
@@ -1766,7 +1742,7 @@ function renderHumanOutputPage(envelope: CliOutputPageEnvelopeV1): string {
   const pageEnd = Math.max(envelope.page.offset, envelope.page.offset + envelope.page.returnedCharacters - 1);
   const header = `[scip-query output page: characters ${envelope.page.offset}-${pageEnd} of ${envelope.page.totalCharacters}]\n`;
   const footer = continuation
-    ? `\n[Incomplete: ${envelope.page.remainingCharacters} characters remain. Continue exactly:\n${continuation.command}]\n`
+    ? `\n[Incomplete: ${envelope.page.remainingCharacters} characters remain.]\nContinue exactly:\n${continuation.command}\n`
     : '\n[scip-query transport complete; evaluate command coverage separately]\n';
   return `${header}${envelope.content}${footer}`;
 }

@@ -1,0 +1,807 @@
+{
+  "slice-straight": {
+    "source": [
+      "export function calculate(input: number, fallback: number) {",
+      "  let value = fallback;",
+      "  value = input + 1;",
+      "  return value;",
+      "}"
+    ],
+    "coverage": {
+      "status": "complete",
+      "basis": "function-local-dependence",
+      "model": {
+        "status": "complete",
+        "basis": "typescript-compiler-cfg-reaching-definitions",
+        "unsupported": []
+      },
+      "omittedEdges": 0,
+      "omittedPoints": 0,
+      "depthLimited": false,
+      "candidateEdges": 0
+    },
+    "resolution": "matched",
+    "points": [
+      {
+        "name": "input",
+        "line": 0,
+        "kind": "parameter-definition"
+      },
+      {
+        "name": "value",
+        "line": 2,
+        "kind": "definition"
+      },
+      {
+        "name": "input",
+        "line": 2,
+        "kind": "use"
+      },
+      {
+        "name": "value",
+        "line": 3,
+        "kind": "use"
+      }
+    ],
+    "edges": [
+      {
+        "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-S7tWAN%252Fsrc%252Fcalculate.ts%3A87%3A92%3Adefinition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-S7tWAN%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-S7tWAN%252Fsrc%252Fcalculate.ts%3A115%3A120%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-S7tWAN%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue",
+        "kind": "reaching-definition",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-S7tWAN%2Fsrc%2Fcalculate.ts:87:92:definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-S7tWAN%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-S7tWAN%2Fsrc%2Fcalculate.ts:115:120:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-S7tWAN%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "strength": "exact",
+        "reason": "A CFG path reaches this use without an intervening definition.",
+        "traversalDepth": 1
+      },
+      {
+        "id": "local-flow-edge:value-source:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-S7tWAN%252Fsrc%252Fcalculate.ts%3A95%3A100%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-S7tWAN%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-S7tWAN%252Fsrc%252Fcalculate.ts%3A87%3A92%3Adefinition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-S7tWAN%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue",
+        "kind": "value-source",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-S7tWAN%2Fsrc%2Fcalculate.ts:95:100:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-S7tWAN%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-S7tWAN%2Fsrc%2Fcalculate.ts:87:92:definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-S7tWAN%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "strength": "exact",
+        "reason": "This right-hand-side use supplies the new definition.",
+        "traversalDepth": 2
+      },
+      {
+        "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-S7tWAN%252Fsrc%252Fcalculate.ts%3A26%3A31%3Aparameter-definition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-S7tWAN%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-S7tWAN%252Fsrc%252Fcalculate.ts%3A95%3A100%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-S7tWAN%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput",
+        "kind": "reaching-definition",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-S7tWAN%2Fsrc%2Fcalculate.ts:26:31:parameter-definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-S7tWAN%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-S7tWAN%2Fsrc%2Fcalculate.ts:95:100:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-S7tWAN%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "strength": "exact",
+        "reason": "A CFG path reaches this use without an intervening definition.",
+        "traversalDepth": 3
+      }
+    ]
+  },
+  "slice-bounded": {
+    "status": "bounded",
+    "basis": "function-local-dependence",
+    "model": {
+      "status": "complete",
+      "basis": "typescript-compiler-cfg-reaching-definitions",
+      "unsupported": []
+    },
+    "omittedEdges": 3,
+    "omittedPoints": 3,
+    "depthLimited": false,
+    "candidateEdges": 0
+  },
+  "slice-invalid-column": "RangeError: Slice column must be a positive safe integer.",
+  "runtime-straight": 1,
+  "slice-shortCircuit": {
+    "source": [
+      "export function calculate(input: number, fallback: number) {",
+      "  let value = fallback;",
+      "  input && (value = input);",
+      "  return value;",
+      "}"
+    ],
+    "coverage": {
+      "status": "complete",
+      "basis": "function-local-dependence",
+      "model": {
+        "status": "complete",
+        "basis": "typescript-compiler-cfg-reaching-definitions",
+        "unsupported": []
+      },
+      "omittedEdges": 0,
+      "omittedPoints": 0,
+      "depthLimited": false,
+      "candidateEdges": 0
+    },
+    "resolution": "matched",
+    "points": [
+      {
+        "name": "input",
+        "line": 0,
+        "kind": "parameter-definition"
+      },
+      {
+        "name": "fallback",
+        "line": 0,
+        "kind": "parameter-definition"
+      },
+      {
+        "name": "value",
+        "line": 1,
+        "kind": "definition"
+      },
+      {
+        "name": "fallback",
+        "line": 1,
+        "kind": "use"
+      },
+      {
+        "name": "predicate",
+        "line": 2,
+        "kind": "predicate"
+      },
+      {
+        "name": "input",
+        "line": 2,
+        "kind": "use"
+      },
+      {
+        "name": "value",
+        "line": 2,
+        "kind": "definition"
+      },
+      {
+        "name": "input",
+        "line": 2,
+        "kind": "use"
+      },
+      {
+        "name": "value",
+        "line": 3,
+        "kind": "use"
+      }
+    ],
+    "edges": [
+      {
+        "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A67%3A72%3Adefinition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A122%3A127%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue",
+        "kind": "reaching-definition",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:67:72:definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:122:127:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "strength": "exact",
+        "reason": "A CFG path reaches this use without an intervening definition.",
+        "traversalDepth": 1
+      },
+      {
+        "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A97%3A102%3Adefinition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A122%3A127%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue",
+        "kind": "reaching-definition",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:97:102:definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:122:127:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "strength": "exact",
+        "reason": "A CFG path reaches this use without an intervening definition.",
+        "traversalDepth": 1
+      },
+      {
+        "id": "local-flow-edge:value-source:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A75%3A83%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A41%253Afallback:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A67%3A72%3Adefinition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue",
+        "kind": "value-source",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:75:83:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A41%3Afallback",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:67:72:definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "strength": "exact",
+        "reason": "This right-hand-side use supplies the new definition.",
+        "traversalDepth": 2
+      },
+      {
+        "id": "local-flow-edge:control-dependence:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A87%3A92%3Apredicate%3Apredicate:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A97%3A102%3Adefinition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue",
+        "kind": "control-dependence",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:87:92:predicate:predicate",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:97:102:definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "strength": "exact",
+        "reason": "The target postdominates a branch successor but does not postdominate the predicate.",
+        "traversalDepth": 2
+      },
+      {
+        "id": "local-flow-edge:value-source:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A105%3A110%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A97%3A102%3Adefinition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue",
+        "kind": "value-source",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:105:110:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:97:102:definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "strength": "exact",
+        "reason": "This right-hand-side use supplies the new definition.",
+        "traversalDepth": 2
+      },
+      {
+        "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A41%3A49%3Aparameter-definition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A41%253Afallback:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A75%3A83%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A41%253Afallback",
+        "kind": "reaching-definition",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:41:49:parameter-definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A41%3Afallback",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:75:83:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A41%3Afallback",
+        "strength": "exact",
+        "reason": "A CFG path reaches this use without an intervening definition.",
+        "traversalDepth": 3
+      },
+      {
+        "id": "local-flow-edge:value-source:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A87%3A92%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A87%3A92%3Apredicate%3Apredicate",
+        "kind": "value-source",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:87:92:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:87:92:predicate:predicate",
+        "strength": "exact",
+        "reason": "The predicate evaluates this variable occurrence to choose its control-flow successor.",
+        "traversalDepth": 3
+      },
+      {
+        "id": "local-flow-edge:control-dependence:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A87%3A92%3Apredicate%3Apredicate:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A105%3A110%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput",
+        "kind": "control-dependence",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:87:92:predicate:predicate",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:105:110:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "strength": "exact",
+        "reason": "The target postdominates a branch successor but does not postdominate the predicate.",
+        "traversalDepth": 3
+      },
+      {
+        "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A26%3A31%3Aparameter-definition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A105%3A110%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput",
+        "kind": "reaching-definition",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:26:31:parameter-definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:105:110:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "strength": "exact",
+        "reason": "A CFG path reaches this use without an intervening definition.",
+        "traversalDepth": 3
+      },
+      {
+        "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A26%3A31%3Aparameter-definition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A87%3A92%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-aZ0ilT%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput",
+        "kind": "reaching-definition",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:26:31:parameter-definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-aZ0ilT%2Fsrc%2Fcalculate.ts:87:92:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-aZ0ilT%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "strength": "exact",
+        "reason": "A CFG path reaches this use without an intervening definition.",
+        "traversalDepth": 4
+      }
+    ]
+  },
+  "runtime-shortCircuit": 7,
+  "slice-ternaryWrite": {
+    "source": [
+      "export function calculate(input: number, fallback: number) {",
+      "  let value = fallback;",
+      "  input ? (value = input) : 0;",
+      "  return value;",
+      "}"
+    ],
+    "coverage": {
+      "status": "complete",
+      "basis": "function-local-dependence",
+      "model": {
+        "status": "complete",
+        "basis": "typescript-compiler-cfg-reaching-definitions",
+        "unsupported": []
+      },
+      "omittedEdges": 0,
+      "omittedPoints": 0,
+      "depthLimited": false,
+      "candidateEdges": 0
+    },
+    "resolution": "matched",
+    "points": [
+      {
+        "name": "input",
+        "line": 0,
+        "kind": "parameter-definition"
+      },
+      {
+        "name": "fallback",
+        "line": 0,
+        "kind": "parameter-definition"
+      },
+      {
+        "name": "value",
+        "line": 1,
+        "kind": "definition"
+      },
+      {
+        "name": "fallback",
+        "line": 1,
+        "kind": "use"
+      },
+      {
+        "name": "predicate",
+        "line": 2,
+        "kind": "predicate"
+      },
+      {
+        "name": "input",
+        "line": 2,
+        "kind": "use"
+      },
+      {
+        "name": "value",
+        "line": 2,
+        "kind": "definition"
+      },
+      {
+        "name": "input",
+        "line": 2,
+        "kind": "use"
+      },
+      {
+        "name": "value",
+        "line": 3,
+        "kind": "use"
+      }
+    ],
+    "edges": [
+      {
+        "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A67%3A72%3Adefinition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A125%3A130%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue",
+        "kind": "reaching-definition",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:67:72:definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:125:130:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "strength": "exact",
+        "reason": "A CFG path reaches this use without an intervening definition.",
+        "traversalDepth": 1
+      },
+      {
+        "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A96%3A101%3Adefinition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A125%3A130%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue",
+        "kind": "reaching-definition",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:96:101:definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:125:130:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "strength": "exact",
+        "reason": "A CFG path reaches this use without an intervening definition.",
+        "traversalDepth": 1
+      },
+      {
+        "id": "local-flow-edge:value-source:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A75%3A83%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A41%253Afallback:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A67%3A72%3Adefinition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue",
+        "kind": "value-source",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:75:83:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A41%3Afallback",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:67:72:definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "strength": "exact",
+        "reason": "This right-hand-side use supplies the new definition.",
+        "traversalDepth": 2
+      },
+      {
+        "id": "local-flow-edge:control-dependence:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A87%3A92%3Apredicate%3Apredicate:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A96%3A101%3Adefinition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue",
+        "kind": "control-dependence",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:87:92:predicate:predicate",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:96:101:definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "strength": "exact",
+        "reason": "The target postdominates a branch successor but does not postdominate the predicate.",
+        "traversalDepth": 2
+      },
+      {
+        "id": "local-flow-edge:value-source:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A104%3A109%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A96%3A101%3Adefinition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A67%253Avalue",
+        "kind": "value-source",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:104:109:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:96:101:definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A67%3Avalue",
+        "strength": "exact",
+        "reason": "This right-hand-side use supplies the new definition.",
+        "traversalDepth": 2
+      },
+      {
+        "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A41%3A49%3Aparameter-definition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A41%253Afallback:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A75%3A83%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A41%253Afallback",
+        "kind": "reaching-definition",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:41:49:parameter-definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A41%3Afallback",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:75:83:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A41%3Afallback",
+        "strength": "exact",
+        "reason": "A CFG path reaches this use without an intervening definition.",
+        "traversalDepth": 3
+      },
+      {
+        "id": "local-flow-edge:value-source:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A87%3A92%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A87%3A92%3Apredicate%3Apredicate",
+        "kind": "value-source",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:87:92:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:87:92:predicate:predicate",
+        "strength": "exact",
+        "reason": "The predicate evaluates this variable occurrence to choose its control-flow successor.",
+        "traversalDepth": 3
+      },
+      {
+        "id": "local-flow-edge:control-dependence:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A87%3A92%3Apredicate%3Apredicate:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A104%3A109%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput",
+        "kind": "control-dependence",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:87:92:predicate:predicate",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:104:109:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "strength": "exact",
+        "reason": "The target postdominates a branch successor but does not postdominate the predicate.",
+        "traversalDepth": 3
+      },
+      {
+        "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A26%3A31%3Aparameter-definition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A104%3A109%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput",
+        "kind": "reaching-definition",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:26:31:parameter-definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:104:109:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "strength": "exact",
+        "reason": "A CFG path reaches this use without an intervening definition.",
+        "traversalDepth": 3
+      },
+      {
+        "id": "local-flow-edge:reaching-definition:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A26%3A31%3Aparameter-definition%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput:flow-point%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A87%3A92%3Ause%3Asymbol%253A%25252Fvar%25252Ffolders%25252F4c%25252Fwsjvhgw90t7f31d7s68ddhtc0000gn%25252FT%25252Fscip-audit-library-q3Bim4%25252Fsrc%25252Fcalculate.ts%253A26%253Ainput",
+        "kind": "reaching-definition",
+        "fromPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:26:31:parameter-definition:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "toPointId": "flow-point:%2Fvar%2Ffolders%2F4c%2Fwsjvhgw90t7f31d7s68ddhtc0000gn%2FT%2Fscip-audit-library-q3Bim4%2Fsrc%2Fcalculate.ts:87:92:use:symbol%3A%252Fvar%252Ffolders%252F4c%252Fwsjvhgw90t7f31d7s68ddhtc0000gn%252FT%252Fscip-audit-library-q3Bim4%252Fsrc%252Fcalculate.ts%3A26%3Ainput",
+        "strength": "exact",
+        "reason": "A CFG path reaches this use without an intervening definition.",
+        "traversalDepth": 4
+      }
+    ]
+  },
+  "runtime-ternaryWrite": 7,
+  "slice-alias": {
+    "source": [
+      "export function calculate(input: number, state: {value: number}) {",
+      "  const alias = state;",
+      "  alias.value = input;",
+      "  return state.value;",
+      "}"
+    ],
+    "coverage": {
+      "status": "incomplete",
+      "basis": "function-local-dependence",
+      "model": {
+        "status": "partial",
+        "basis": "typescript-compiler-cfg-reaching-definitions",
+        "unsupported": [
+          "Object alias at /var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-audit-library-eA9teb/src/calculate.ts:2 is not included in local points-to flow."
+        ]
+      },
+      "omittedEdges": 0,
+      "omittedPoints": 0,
+      "depthLimited": false,
+      "candidateEdges": 0
+    },
+    "resolution": "matched",
+    "points": [
+      {
+        "name": "state.value",
+        "line": 3,
+        "kind": "use"
+      }
+    ],
+    "edges": []
+  },
+  "runtime-alias": 7,
+  "slice-nestedIncrement": {
+    "source": [
+      "export function calculate(input: number) {",
+      "  let value = input;",
+      "  const previous = value++;",
+      "  return value;",
+      "}"
+    ],
+    "coverage": {
+      "status": "incomplete",
+      "basis": "function-local-dependence",
+      "model": {
+        "status": "partial",
+        "basis": "typescript-compiler-cfg-reaching-definitions",
+        "unsupported": [
+          "Nested increment/decrement at /var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-audit-library-DZQAUM/src/calculate.ts:3 is not included in ordered local definition-use flow."
+        ]
+      },
+      "omittedEdges": 0,
+      "omittedPoints": 0,
+      "depthLimited": false,
+      "candidateEdges": 0
+    },
+    "resolution": "matched",
+    "points": [
+      {
+        "name": "value",
+        "line": 3,
+        "kind": "use"
+      }
+    ],
+    "edges": []
+  },
+  "runtime-nestedIncrement": 1,
+  "deleted-file-locator": [],
+  "partially-matching-missing-file-code": {
+    "requested": 1,
+    "matched": 0,
+    "ambiguous": 0,
+    "missing": 1,
+    "entries": [
+      {
+        "selector": "src/runtime/command-kit/help.ts",
+        "status": "missing",
+        "kind": "source",
+        "totalCandidates": 0,
+        "results": [],
+        "definitions": [],
+        "candidates": [],
+        "omittedCandidates": 0,
+        "suggestions": [
+          "src:runtime:command-kit:command-descriptor-types:ts:helpAfter()"
+        ],
+        "reason": "definition-not-found"
+      }
+    ],
+    "bindingClosure": {
+      "coverage": "indexed-project-literal-values",
+      "inline": []
+    }
+  },
+  "missing-file-code": {
+    "requested": 1,
+    "matched": 0,
+    "ambiguous": 0,
+    "missing": 1,
+    "entries": [
+      {
+        "selector": "src/not-present/calculate.ts",
+        "status": "missing",
+        "kind": "source",
+        "totalCandidates": 0,
+        "results": [],
+        "definitions": [],
+        "candidates": [],
+        "omittedCandidates": 0,
+        "suggestions": [
+          "src:calculate:ts:calculate()"
+        ],
+        "reason": "definition-not-found"
+      }
+    ],
+    "bindingClosure": {
+      "coverage": "indexed-project-literal-values",
+      "inline": []
+    }
+  },
+  "complexity-nested": {
+    "source": "export function calculate(x: number) {\n function inner() { if (x) return 1; return 0; }\n return inner;\n}",
+    "sourceMetrics": [
+      {
+        "name": "calculate",
+        "cyclomatic": 1,
+        "cognitive": 0
+      },
+      {
+        "name": "calculate.inner",
+        "cyclomatic": 2,
+        "cognitive": 1
+      }
+    ],
+    "indexedMetric": {
+      "symbol": "scip-typescript npm fixture 1.0.0 src/calculate.ts/calculate().",
+      "shortName": "src:calculate:ts:calculate()",
+      "relativePath": "src/calculate.ts",
+      "startLine": 0,
+      "endLine": 3,
+      "loc": 4,
+      "branches": 0,
+      "estimateBasis": "ast",
+      "metricRules": "typescript-function-local-v1",
+      "cyclomaticEstimate": 1,
+      "calleeCount": 0,
+      "candidateCalleeCount": 0,
+      "fanIn": 0,
+      "fanOut": 0
+    }
+  },
+  "complexity-nullish": {
+    "source": "export function calculate(x?: number) { return x ?? 0; }",
+    "sourceMetrics": [
+      {
+        "name": "calculate",
+        "cyclomatic": 2,
+        "cognitive": 0
+      }
+    ],
+    "indexedMetric": {
+      "symbol": "scip-typescript npm fixture 1.0.0 src/calculate.ts/calculate().",
+      "shortName": "src:calculate:ts:calculate()",
+      "relativePath": "src/calculate.ts",
+      "startLine": 0,
+      "endLine": 0,
+      "loc": 1,
+      "branches": 1,
+      "estimateBasis": "ast",
+      "metricRules": "typescript-function-local-v1",
+      "cyclomaticEstimate": 2,
+      "calleeCount": 0,
+      "candidateCalleeCount": 0,
+      "fanIn": 0,
+      "fanOut": 0
+    }
+  },
+  "complexity-branch": {
+    "source": "export function calculate(x: number) {\n if (x > 0) return 1;\n else if (x < 0) return -1;\n return 0;\n}",
+    "sourceMetrics": [
+      {
+        "name": "calculate",
+        "cyclomatic": 3,
+        "cognitive": 2
+      }
+    ],
+    "indexedMetric": {
+      "symbol": "scip-typescript npm fixture 1.0.0 src/calculate.ts/calculate().",
+      "shortName": "src:calculate:ts:calculate()",
+      "relativePath": "src/calculate.ts",
+      "startLine": 0,
+      "endLine": 4,
+      "loc": 5,
+      "branches": 2,
+      "estimateBasis": "ast",
+      "metricRules": "typescript-function-local-v1",
+      "cyclomaticEstimate": 3,
+      "calleeCount": 0,
+      "candidateCalleeCount": 0,
+      "fanIn": 0,
+      "fanOut": 0
+    }
+  },
+  "coverage-full": {
+    "status": "available",
+    "basis": "istanbul-statement-start-lines",
+    "coveredLines": 2,
+    "measuredLines": 2,
+    "fraction": 1,
+    "crap": 2
+  },
+  "coverage-half": {
+    "status": "available",
+    "basis": "istanbul-statement-start-lines",
+    "coveredLines": 1,
+    "measuredLines": 2,
+    "fraction": 0.5,
+    "crap": 2.5
+  },
+  "coverage-none": {
+    "status": "available",
+    "basis": "istanbul-statement-start-lines",
+    "coveredLines": 0,
+    "measuredLines": 2,
+    "fraction": 0,
+    "crap": 6
+  },
+  "coverage-malformed": {
+    "status": "unavailable",
+    "reason": "Malformed statement coverage locations or counts."
+  },
+  "coverage-stale": {
+    "status": "unavailable",
+    "reason": "Coverage missing or source hash does not match current bytes."
+  },
+  "slice-malformed-source": {
+    "kind": "dependence-slice",
+    "direction": "backward",
+    "criterion": "src/calculate.ts:3",
+    "variable": "value",
+    "resolution": "unsupported",
+    "candidates": [],
+    "points": [],
+    "edges": [],
+    "coverage": {
+      "status": "incomplete",
+      "basis": "function-local-dependence",
+      "model": {
+        "status": "unsupported",
+        "basis": "typescript-compiler-cfg-reaching-definitions",
+        "unsupported": [
+          "TypeScript syntax error at /var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-audit-library-d8wERp/src/calculate.ts:2: Expression expected."
+        ]
+      },
+      "omittedEdges": 0,
+      "omittedPoints": 0,
+      "depthLimited": false,
+      "candidateEdges": 0
+    }
+  },
+  "suppression-roundtrip": {
+    "stored": {
+      "path": "/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-audit-library-l1kTeD/.scipquery/suppressions/ID-8213bc488b59853e644d2bbb4e540ad03e8e839fd30b51c750fde0fd874d05b4.json",
+      "disposition": "created",
+      "revision": "6b24921b389231cfe07975254cdd9a0d94d3da8f5833e502192356b5a22b1ef7"
+    },
+    "loaded": {
+      "suppressions": [
+        {
+          "id": "complexity:src/calculate.ts:calculate",
+          "reason": "Disposable audit fixture, deliberately checking suppression persistence.",
+          "createdAt": "2026-09-06T02:30:58.578Z",
+          "decision": {
+            "kind": "automated-adjudication",
+            "reasonCode": "test-fixture",
+            "decidedBy": "agent",
+            "policyVersion": 1,
+            "evidence": [
+              {
+                "kind": "source",
+                "referent": "src/calculate.ts",
+                "claim": "Disposable audit fixture, deliberately checking suppression persistence.",
+                "contentHash": "38a65a7b99d1950b3da65715005d90d0b4c819588313707509d5f678f0ef893a"
+              }
+            ],
+            "invalidateOn": {
+              "targetContentChange": true,
+              "detectorMajorChange": true
+            }
+          }
+        }
+      ],
+      "compatibility": {
+        "complete": true,
+        "total": 1,
+        "accepted": 1,
+        "legacy": 0,
+        "current": 1,
+        "unsupportedOlder": 0,
+        "unsupportedFuture": 0,
+        "malformed": 0,
+        "omitted": 0,
+        "issues": []
+      },
+      "warnings": []
+    }
+  },
+  "suppression-path-confinement": {
+    "escaped": {
+      "path": "/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-audit-library-l1kTeD/.scipquery/suppressions/ID-e5bb1e42912e3d575fbf37af05ac3d98bcd3817945d71fe1531ff81273b28ed5.json",
+      "disposition": "created",
+      "revision": "f2746e2c6273c339fcb97d5e92f29e86f3842f009798fd1945db92382ecd393b"
+    },
+    "relativePath": "ID-e5bb1e42912e3d575fbf37af05ac3d98bcd3817945d71fe1531ff81273b28ed5.json"
+  },
+  "checks": [
+    {
+      "name": "bounded slice discloses omissions",
+      "passed": true
+    },
+    {
+      "name": "straight: executed behavior oracle",
+      "passed": true
+    },
+    {
+      "name": "shortCircuit: complete slice retains conditional fallback",
+      "passed": true
+    },
+    {
+      "name": "shortCircuit: executed behavior oracle",
+      "passed": true
+    },
+    {
+      "name": "ternaryWrite: complete slice retains conditional fallback",
+      "passed": true
+    },
+    {
+      "name": "ternaryWrite: executed behavior oracle",
+      "passed": true
+    },
+    {
+      "name": "alias: complete slice retains input written through alias",
+      "passed": true
+    },
+    {
+      "name": "alias: executed behavior oracle",
+      "passed": true
+    },
+    {
+      "name": "nested increment: complete slice retains mutation",
+      "passed": true
+    },
+    {
+      "name": "nestedIncrement: executed behavior oracle",
+      "passed": true
+    },
+    {
+      "name": "files excludes tracked deletion",
+      "passed": true
+    },
+    {
+      "name": "missing file cannot become an unrelated symbol",
+      "passed": true
+    },
+    {
+      "name": "nested: source and indexed cyclomatic measurements agree",
+      "passed": true
+    },
+    {
+      "name": "nullish: source and indexed cyclomatic measurements agree",
+      "passed": true
+    },
+    {
+      "name": "branch: source and indexed cyclomatic measurements agree",
+      "passed": true
+    },
+    {
+      "name": "malformed source cannot produce complete dependence coverage",
+      "passed": true
+    },
+    {
+      "name": "source finding suppression survives write/read round trip",
+      "passed": true
+    },
+    {
+      "name": "suppression ID cannot escape its storage directory",
+      "passed": true
+    }
+  ]
+}

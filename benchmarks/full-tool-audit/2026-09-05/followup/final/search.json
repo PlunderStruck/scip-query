@@ -1,0 +1,262 @@
+{
+  "kind": "scip-query-result",
+  "schemaVersion": 1,
+  "producer": {
+    "name": "scip-query",
+    "version": "0.25.0"
+  },
+  "resultSchemaVersion": 1,
+  "command": "search",
+  "operationRole": "repository-observation",
+  "evidence": "graph-fact",
+  "args": [
+    "sum(1, 2)"
+  ],
+  "options": {
+    "context": 2,
+    "limit": 6,
+    "json": true,
+    "session": true,
+    "jsonOutput": "/Users/aydansalois/Documents/GitHub/scip-query/benchmarks/full-tool-audit/2026-09-05/followup/final/search.json"
+  },
+  "result": {
+    "pattern": "sum(1, 2)",
+    "mode": "literal",
+    "identities": [
+      {
+        "relativePath": "src/service/runner.ts",
+        "focusLine": 4,
+        "ownerSymbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+        "ownerShort": "src:service:runner:runJob()",
+        "ownerStartLine": 4,
+        "ownerEndLine": 4,
+        "fileKind": "source",
+        "freshness": {
+          "exactText": {
+            "state": "current",
+            "basis": "working-tree-read",
+            "sha256": "47ff65875a88ee0640a1149ae2edb3d8e56a31de61cdebedfdb5d10b8f1f43f8"
+          },
+          "semantic": {
+            "state": "aligned",
+            "basis": "indexed-input-fingerprint"
+          }
+        }
+      }
+    ],
+    "identityCoverage": {
+      "mode": "complete",
+      "returned": 1,
+      "total": 1,
+      "omitted": 0
+    },
+    "matches": [
+      {
+        "relativePath": "src/service/runner.ts",
+        "startLine": 2,
+        "endLine": 6,
+        "focusLine": 4,
+        "source": "export function runJob() {\n  const store = new Store();\n  const total = sum(1, 2);\n  store.write(total);\n  return total > 0 ? total : 0;",
+        "ownerSymbol": "scip-typescript npm accuracy-followup 1.0.0 src/service/`runner.ts`/runJob().",
+        "ownerShort": "src:service:runner:runJob()",
+        "ownerStartLine": 4,
+        "ownerEndLine": 4,
+        "fileKind": "source",
+        "freshness": {
+          "exactText": {
+            "state": "current",
+            "basis": "working-tree-read",
+            "sha256": "47ff65875a88ee0640a1149ae2edb3d8e56a31de61cdebedfdb5d10b8f1f43f8"
+          },
+          "semantic": {
+            "state": "aligned",
+            "basis": "indexed-input-fingerprint"
+          }
+        }
+      }
+    ],
+    "matchingLines": 1,
+    "matchingFiles": 1,
+    "omittedMatches": 0,
+    "fileCoverage": [
+      {
+        "relativePath": "src/service/runner.ts",
+        "matchingLines": 1,
+        "returnedMatches": 1,
+        "freshness": {
+          "exactText": {
+            "state": "current",
+            "basis": "working-tree-read",
+            "sha256": "47ff65875a88ee0640a1149ae2edb3d8e56a31de61cdebedfdb5d10b8f1f43f8"
+          },
+          "semantic": {
+            "state": "aligned",
+            "basis": "indexed-input-fingerprint"
+          }
+        }
+      }
+    ],
+    "scopeHints": [
+      {
+        "scope": "src/service",
+        "matchingLines": 1,
+        "matchingFiles": 1
+      }
+    ],
+    "omittedScopeHints": 0,
+    "scannedFiles": 24,
+    "textCoverage": {
+      "basis": "current-project-text-files",
+      "candidateFiles": 24,
+      "scannedTextFiles": 24,
+      "scannedBytes": 24422,
+      "skippedBinaryPaths": [],
+      "skippedUnreadablePaths": [],
+      "skippedOversizedPaths": [],
+      "semanticFiles": {
+        "aligned": 13,
+        "stale": 0,
+        "unavailable": 11
+      }
+    }
+  },
+  "coverage": {
+    "complete": true,
+    "totalKnown": true,
+    "returned": 1,
+    "total": 1,
+    "omitted": 0
+  },
+  "agentResult": {
+    "identityCoverage": {
+      "mode": "complete",
+      "returned": 1,
+      "total": 1,
+      "omitted": 0
+    },
+    "mode": "literal",
+    "scannedFiles": 24,
+    "returnedMatches": 1,
+    "totalMatches": 1,
+    "omittedMatches": 0,
+    "materializedSourceWindows": 1,
+    "unmaterializedSourceWindows": 0,
+    "matchIdentities": [
+      "src/service/runner.ts:5"
+    ],
+    "scopeHints": [
+      {
+        "scope": "src/service",
+        "matchingLines": 1,
+        "matchingFiles": 1
+      }
+    ],
+    "omittedScopeHints": 0,
+    "textCoverage": {
+      "basis": "current-project-text-files",
+      "candidateFiles": 24,
+      "scannedTextFiles": 24,
+      "scannedBytes": 24422,
+      "skippedBinaryPaths": [],
+      "skippedUnreadablePaths": [],
+      "skippedOversizedPaths": [],
+      "semanticFiles": {
+        "aligned": 13,
+        "stale": 0,
+        "unavailable": 11
+      }
+    }
+  },
+  "evidenceContext": {
+    "schemaVersion": 1,
+    "operationRole": "repository-observation",
+    "receipt": {
+      "schemaVersion": 2,
+      "observedAt": "2026-09-06T03:42:48.272Z",
+      "facts": {
+        "index": {
+          "generation": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          },
+          "source": "immutable"
+        }
+      },
+      "observedSources": [
+        {
+          "kind": "index-generation",
+          "identity": {
+            "schemaVersion": 1,
+            "canonicalizationVersion": 1,
+            "hashAlgorithm": "sha256",
+            "projection": {
+              "name": "scip-query:index-generation",
+              "version": 1
+            },
+            "digest": "5f5af108211ca4cbc96039e19fd54c8883c58afac704157b2a864eac2df1349e"
+          }
+        }
+      ],
+      "stabilityProofs": [
+        {
+          "source": "index-generation",
+          "kind": "immutable"
+        }
+      ]
+    },
+    "analysisManifest": {
+      "schemaVersion": 1,
+      "evidence": "graph-fact",
+      "coverage": {
+        "complete": true,
+        "totalKnown": true,
+        "returned": 1,
+        "total": 1,
+        "omitted": 0
+      },
+      "claimQualification": {
+        "schemaVersion": 1,
+        "origin": "compiler-graph",
+        "coverage": {
+          "state": "complete",
+          "returned": 1,
+          "totalKnown": true,
+          "total": 1,
+          "omitted": 0
+        },
+        "producerValidation": {
+          "status": "not-evaluated"
+        },
+        "stateAuthority": {
+          "policyVersion": 1,
+          "authority": "advisory",
+          "requiredRelationships": [
+            "collaborationDomain",
+            "wholeContent",
+            "observationStability"
+          ],
+          "reasons": [
+            "collaborationDomain:unknown",
+            "wholeContent:unknown",
+            "leftIndexAlignment:unknown",
+            "rightIndexAlignment:unknown"
+          ]
+        },
+        "repositoryPolicy": {
+          "policyId": "scip-query:unresolved-repository-policy",
+          "policyVersion": 1,
+          "permission": "not-established",
+          "reasons": [
+            "No repository action policy was supplied for this claim."
+          ]
+        }
+      }
+    }
+  }
+}

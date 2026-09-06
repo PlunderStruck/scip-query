@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { outline } from '../../../src/queries/navigation/outline.js';
 import { codeBatch } from '../../../src/queries/navigation/code.js';
 import { files } from '../../../src/queries/navigation/files.js';
 import { searchSourceBatch } from '../../../src/queries/navigation/source-search-batch.js';
@@ -33,7 +34,11 @@ describe('lossless repository text sensor', () => {
     writeFileSync(join(projectRoot, 'assets/invalid-utf8.bin'), Buffer.from([0xff, 0xfe]));
 
     const dbPath = join(fixtureRoot, 'index.db');
-    evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/aligned.ts').write();
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/aligned.ts')
+      .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`aligned.ts`/indexedMarker.', 'indexedMarker', 61)
+      .definition(1, 1, 1, 0, 0, 0, 38)
+      .write();
     const alignedBytes = Buffer.from(sources['src/aligned.ts']);
     writeFileSync(
       join(fixtureRoot, 'meta.json'),
@@ -66,6 +71,15 @@ describe('lossless repository text sensor', () => {
   afterEach(() => {
     db.close();
     rmSync(fixtureRoot, { recursive: true, force: true });
+  });
+
+  it('keeps exact range reads local unless call expansion is explicitly requested', () => {
+    const selector = 'src/aligned.ts:1-1';
+    const exact = codeBatch(db, [selector]);
+    expect(exact.entries[0]?.results).toHaveLength(1);
+    expect(exact.entries[0]?.rangeCoverage).toBeUndefined();
+    const expanded = codeBatch(db, [selector], { localCalls: true });
+    expect(expanded.entries[0]?.rangeCoverage?.basis).toBe('requested-range-and-same-file-call-closure');
   });
 
   it('matches a native filesystem oracle across indexed, unindexed, and extensionless text', () => {
@@ -194,6 +208,13 @@ describe('lossless repository text sensor', () => {
       freshness: { semantic: { state: 'stale', basis: 'indexed-input-fingerprint' } },
     });
     expect(range?.bindingClosure).toBeUndefined();
+    expect(codeBatch(db, ['indexedMarker']).entries[0]).toMatchObject({
+      status: 'missing',
+      reason: 'definition-index-stale',
+      results: [],
+    });
+    expect(() => outline(db, 'src/aligned.ts')).toThrow(/stale.*reindex/i);
+    expect(codeBatch(db, ['src/aligned.ts']).entries[0]?.results[0]?.source).toBe(changed);
   });
 
   function writeSource(relativePath: string, source: string): void {

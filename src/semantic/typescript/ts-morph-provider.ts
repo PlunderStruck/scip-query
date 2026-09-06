@@ -8,6 +8,7 @@ import { resolveImportPath } from '../../source/primitives/import-path-resolver.
 import { getAllDefinitions, getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { cached } from './cache.js';
 import { definitionNodesForSourceFile } from './definition-node-matcher.js';
+import { compilerCallOwnerLookup } from './call-ownership.js';
 import {
   findIndexedDefinitionExact,
   findIndexedDefinitionNear,
@@ -801,13 +802,14 @@ class TsMorphSemanticProvider implements SemanticProvider {
       const checker = this.compilerCheckerForSourceFile(sourceFile);
       const compilerSourceFile = sourceFile.compilerNode;
       const symbolCache = new Map<TypeScriptSymbol, ResolvedCalleeTarget | null>();
+      const callerForNode = compilerCallOwnerLookup(this.tsMorph.ts, compilerSourceFile, fileDefinitions);
       const visit = (node: ts.Node): void => {
         if (
           this.tsMorph.ts.isCallExpression(node) ||
           this.tsMorph.ts.isNewExpression(node) ||
           isJsxComponentElement(this.tsMorph.ts, node)
         ) {
-          const caller = findContainingDefinition(fileDefinitions, lineOfCompilerNode(compilerSourceFile, node));
+          const caller = callerForNode(node);
           const coverage = caller ? result.get(caller.symbolId) : undefined;
           if (coverage) {
             coverage.callSites += 1;
@@ -880,10 +882,10 @@ class TsMorphSemanticProvider implements SemanticProvider {
         const type = decl
           ? param.getTypeAtLocation(decl).getText(decl)
           : (param.getValueDeclaration()?.getType().getText() ?? 'unknown');
-        return normalizeType(type);
+        return type.trim();
       });
       const returnType = signature.getReturnType().getText(node);
-      return `(${params.join(',')})=>${normalizeType(returnType)}`;
+      return `(${params.join(',')})=>${returnType.trim()}`;
     });
   }
 
@@ -1254,6 +1256,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
         const checkerStart = profiling ? performance.now() : 0;
         const checker = this.compilerCheckerForSourceFile(sourceFile);
         const compilerSourceFile = sourceFile.compilerNode;
+        const callerForNode = compilerCallOwnerLookup(this.tsMorph.ts, compilerSourceFile, definitions);
         if (profiling) checkerLookupMs = Math.round(performance.now() - checkerStart);
         const symbolCache = new Map<TypeScriptSymbol, ResolvedCalleeTarget | null>();
         const visit = (node: ts.Node): void => {
@@ -1266,7 +1269,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
             const callee = this.semanticCalleeForCallNode(
               checker,
               compilerSourceFile,
-              definitions,
+              callerForNode,
               node,
               symbolCache,
               requestedSymbolIds,
@@ -1309,14 +1312,14 @@ class TsMorphSemanticProvider implements SemanticProvider {
   private semanticCalleeForCallNode(
     checker: TypeScriptTypeChecker,
     sourceFile: ts.SourceFile,
-    definitions: ReadonlyArray<IndexedDefinition>,
+    callerForNode: (node: ts.Node) => IndexedDefinition | undefined,
     node: ts.CallExpression | ts.NewExpression | ts.JsxOpeningElement | ts.JsxSelfClosingElement,
     symbolCache: Map<TypeScriptSymbol, ResolvedCalleeTarget | null>,
     requestedSymbolIds?: ReadonlySet<number>,
     stats?: CalleeMapProfileStats,
   ): { callerId: number; target: SemanticCallee } | null {
     const callerStart = stats ? performance.now() : 0;
-    const caller = findContainingDefinition(definitions, lineOfCompilerNode(sourceFile, node));
+    const caller = callerForNode(node);
     if (stats) stats.callerLookupMs += performance.now() - callerStart;
     if (!caller) return null;
     if (requestedSymbolIds && !requestedSymbolIds.has(caller.symbolId)) {
@@ -1500,20 +1503,6 @@ function importLocalNames(sourceFile: SourceFile): Set<string> {
   return names;
 }
 
-function findContainingDefinition(
-  definitions: ReadonlyArray<IndexedDefinition>,
-  line: number,
-): IndexedDefinition | null {
-  let best: IndexedDefinition | null = null;
-  for (const definition of definitions) {
-    if (line < definition.startLine || line > definition.endLine) continue;
-    if (!best || definition.startLine >= best.startLine) {
-      best = definition;
-    }
-  }
-  return best;
-}
-
 function lineOfCompilerNode(sourceFile: ts.SourceFile, node: ts.Node): number {
   return sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line;
 }
@@ -1685,11 +1674,4 @@ function dedupeCallees(callees: SemanticCallee[]): SemanticCallee[] {
     out.push(callee);
   }
   return out;
-}
-
-function normalizeType(type: string): string {
-  return type
-    .replace(/\s+/g, ' ')
-    .replace(/\bimport\("[^"]+"\)\./g, '')
-    .trim();
 }

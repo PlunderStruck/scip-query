@@ -1,7 +1,13 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { isMissingProjectFileError, readProjectFileText } from '../../source/primitives/project-file-boundary.js';
-import { findFirstSymbolMatch } from '../../symbols/symbol-lookup.js';
-import { shortenSymbol } from '../../symbols/symbol-parser.js';
+import { resolveSymbol } from '../../symbols/symbol-lookup.js';
+import { indexedReferenceFileCount } from '../internal/indexed-reference-count.js';
+import { leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
+import {
+  analyzeSourceFunctions,
+  FUNCTION_METRIC_RULES,
+  type SourceFunction,
+} from '../../source/ast/function-metrics.js';
 import { ProjectIndex } from '../internal/project-index.js';
 import { stripCommentsAndStrings } from '../../source/primitives/source-stripper.js';
 import {
@@ -24,10 +30,12 @@ export interface ComplexityResult {
   /** Branch count from AST when available, otherwise source-level regex fallback. */
   branches: number;
   estimateBasis: BranchEstimateBasis;
+  metricRules?: string;
   /** Cyclomatic complexity estimate: branches + 1 */
   cyclomaticEstimate: number;
-  /** Number of distinct callees within the definition */
+  /** Distinct compiler-resolved callees; candidate targets are reported separately. */
   calleeCount: number;
+  candidateCalleeCount: number;
   fanIn: number;
   fanOut: number;
 }
@@ -37,14 +45,15 @@ export type BranchEstimateBasis = 'ast' | 'regex-fallback';
 export interface BranchEstimate {
   branches: number;
   estimateBasis: BranchEstimateBasis;
+  metricRules?: string;
 }
 
 /**
  * Per-symbol complexity analysis combining source-level branch counting
  * with index-level metrics (fan-in, fan-out, callee count).
  *
- * Branch counting uses language-aware regex. The language is read from
- * the SCIP documents table, so it works for any indexed language.
+ * TS/JS uses function-local compiler syntax metrics. Other languages use
+ * a labeled AST or regex estimate; source must be available.
  */
 // scip-query: ignore-extract — this is the per-symbol complexity scoring pass:
 // branches, fan-out, fan-in, LOC, language, and preview source are the public
@@ -54,7 +63,11 @@ export function complexity(
   symbolPattern: string,
   opts: { semantic?: boolean } = {},
 ): ComplexityResult | null {
-  const match = findFirstSymbolMatch(db, symbolPattern);
+  const resolution = resolveSymbol(db, symbolPattern);
+  if (resolution.candidates.length > 0) {
+    throw new Error(`Ambiguous symbol: ${symbolPattern}. Use an exact SCIP symbol or file:line.`);
+  }
+  const match = resolution.match;
   if (!match) return null;
   const index = new ProjectIndex(db);
 
@@ -62,8 +75,14 @@ export function complexity(
   const loc = match.endLine - match.startLine + 1;
 
   const calleeMap = index.calleeMap([match], { additive: true, semantic: opts.semantic });
-  const callees = calleeMap.get(match.symbolId) ?? [];
+  const allCallees = calleeMap.get(match.symbolId) ?? [];
+  const callees = allCallees.filter(
+    (callee) => callee.source === 'scip-occurrence' || callee.source === 'semantic-callee',
+  );
   const uniqueCallees = new Set(callees.map((c) => c.symbol));
+  const candidateCallees = new Set(
+    allCallees.filter((callee) => !uniqueCallees.has(callee.symbol)).map((callee) => callee.symbol),
+  );
 
   return {
     symbol: match.symbol,
@@ -74,15 +93,20 @@ export function complexity(
     loc,
     branches: branchEstimate.branches,
     estimateBasis: branchEstimate.estimateBasis,
+    metricRules: branchEstimate.metricRules ?? `${branchEstimate.estimateBasis}-estimate-v1`,
     cyclomaticEstimate: branchEstimate.branches + 1,
     calleeCount: uniqueCallees.size,
-    fanIn: fanInForSymbol(db, match.symbolId),
+    candidateCalleeCount: candidateCallees.size,
+    fanIn: indexedReferenceFileCount(db, match.symbolId),
     fanOut: fanOutForCallees(callees, match.relativePath),
   };
 }
 
 // scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 export function branchEstimateForDefinition(db: ScipDatabase, definition: SymbolMatch): BranchEstimate {
+  readSymbolSource(db, definition.relativePath, definition.startLine, definition.endLine);
+  const sourceMetric = functionBranchEstimate(definition, currentFunctionMetrics(db, definition.relativePath));
+  if (sourceMetric) return sourceMetric;
   const ast = getAst(db, definition.relativePath);
   if (ast) {
     const node = smallestNodeCoveringLines(ast.rootNode, definition.startLine, definition.endLine);
@@ -111,52 +135,104 @@ export function branchEstimatesForDefinitions(
   const definitionsByFile = new Map<string, SymbolMatch[]>();
 
   for (const definition of definitions) {
+    readSymbolSource(db, definition.relativePath, definition.startLine, definition.endLine);
     const bucket = definitionsByFile.get(definition.relativePath) ?? [];
     bucket.push(definition);
     definitionsByFile.set(definition.relativePath, bucket);
   }
 
   for (const [relativePath, definitionsInFile] of definitionsByFile) {
-    // The persisted source facts already carry a branch count per callable;
-    // a definition whose range matches one exactly needs no parse.
-    const factBranches = new Map<string, number>();
-    for (const callable of getSourceFacts(db, relativePath)?.callables ?? []) {
-      if (callable.branches !== undefined)
-        factBranches.set(`${callable.startLine}:${callable.endLine}`, callable.branches);
-    }
-    const fileDefinitions: SymbolMatch[] = [];
-    for (const definition of definitionsInFile) {
-      const branches = factBranches.get(`${definition.startLine}:${definition.endLine}`);
-      if (branches === undefined) fileDefinitions.push(definition);
-      else result.set(definition.symbolId, { branches, estimateBasis: 'ast' });
-    }
-    if (fileDefinitions.length === 0) continue;
-
-    const ast = getAst(db, relativePath);
-    const astDefinitions =
-      ast === null
-        ? []
-        : fileDefinitions.filter(
-            (definition) =>
-              ast.rootNode.startPosition.row <= definition.startLine &&
-              ast.rootNode.endPosition.row >= definition.endLine,
-          );
-    const astDefinitionIds = new Set(astDefinitions.map((definition) => definition.symbolId));
-
-    if (ast && astDefinitions.length > 0) {
-      for (const definition of astDefinitions) {
-        result.set(definition.symbolId, { branches: 0, estimateBasis: 'ast' });
-      }
-      addAstBranchEstimates(ast.rootNode, astDefinitions, result);
-    }
-
-    for (const definition of fileDefinitions) {
-      if (astDefinitionIds.has(definition.symbolId)) continue;
-      result.set(definition.symbolId, regexBranchEstimate(db, definition));
-    }
+    addFileBranchEstimates(db, relativePath, definitionsInFile, result);
   }
 
   return result;
+}
+
+/** Prefer current function metrics, then persisted exact ranges, then AST/regex fallbacks. */
+function addFileBranchEstimates(
+  db: ScipDatabase,
+  relativePath: string,
+  definitionsInFile: readonly SymbolMatch[],
+  result: Map<number, BranchEstimate>,
+): void {
+  const functions = currentFunctionMetrics(db, relativePath);
+  // The persisted source facts already carry a branch count per callable;
+  // a definition whose range matches one exactly needs no parse.
+  const factBranches = new Map<string, number>();
+  for (const callable of getSourceFacts(db, relativePath)?.callables ?? []) {
+    if (callable.branches !== undefined)
+      factBranches.set(`${callable.startLine}:${callable.endLine}`, callable.branches);
+  }
+  const fileDefinitions: SymbolMatch[] = [];
+  for (const definition of definitionsInFile) {
+    const sourceMetric = functionBranchEstimate(definition, functions);
+    if (sourceMetric) {
+      result.set(definition.symbolId, sourceMetric);
+      continue;
+    }
+    const branches = factBranches.get(`${definition.startLine}:${definition.endLine}`);
+    if (branches === undefined) fileDefinitions.push(definition);
+    else result.set(definition.symbolId, { branches, estimateBasis: 'ast' });
+  }
+  if (fileDefinitions.length > 0) addFallbackBranchEstimates(db, relativePath, fileDefinitions, result);
+}
+
+function addFallbackBranchEstimates(
+  db: ScipDatabase,
+  relativePath: string,
+  fileDefinitions: readonly SymbolMatch[],
+  result: Map<number, BranchEstimate>,
+): void {
+  const ast = getAst(db, relativePath);
+  const astDefinitions =
+    ast === null
+      ? []
+      : fileDefinitions.filter(
+          (definition) =>
+            ast.rootNode.startPosition.row <= definition.startLine &&
+            ast.rootNode.endPosition.row >= definition.endLine,
+        );
+  const astDefinitionIds = new Set(astDefinitions.map((definition) => definition.symbolId));
+
+  if (ast && astDefinitions.length > 0) {
+    for (const definition of astDefinitions) {
+      result.set(definition.symbolId, { branches: 0, estimateBasis: 'ast' });
+    }
+    addAstBranchEstimates(ast.rootNode, astDefinitions, result);
+  }
+
+  for (const definition of fileDefinitions) {
+    if (astDefinitionIds.has(definition.symbolId)) continue;
+    result.set(definition.symbolId, regexBranchEstimate(db, definition));
+  }
+}
+
+function currentFunctionMetrics(db: ScipDatabase, file: string): SourceFunction[] {
+  if (!/\.[cm]?[jt]sx?$/i.test(file)) return [];
+  try {
+    return analyzeSourceFunctions(file, readProjectFileText(db.config.projectRoot, file)).functions;
+  } catch (error) {
+    if (!isMissingProjectFileError(error)) throw error;
+    return [];
+  }
+}
+
+function functionBranchEstimate(
+  definition: SymbolMatch,
+  functions: readonly SourceFunction[],
+): BranchEstimate | undefined {
+  const name = leafName(definition.symbol);
+  const matches = functions.filter(
+    (fn) =>
+      fn.startLine - 1 >= definition.startLine &&
+      fn.endLine - 1 <= definition.endLine &&
+      fn.name
+        .split('.')
+        .at(-1)
+        ?.replace(/^(get|set) /, '') === name,
+  );
+  if (matches.length !== 1) return undefined;
+  return { branches: matches[0]!.cyclomatic - 1, estimateBasis: 'ast', metricRules: FUNCTION_METRIC_RULES };
 }
 
 function regexBranchEstimate(db: ScipDatabase, definition: SymbolMatch): BranchEstimate {
@@ -178,36 +254,16 @@ function languageForFile(db: ScipDatabase, relativePath: string): string {
 }
 
 function readSymbolSource(db: ScipDatabase, relativePath: string, startLine: number, endLine: number): string {
-  try {
-    const lines = readProjectFileText(db.config.projectRoot, relativePath, {
-      inputKind: 'indexed source file',
-    }).split('\n');
-    return lines.slice(startLine, endLine + 1).join('\n');
-  } catch (error) {
-    if (!isMissingProjectFileError(error)) throw error;
-    return '';
+  const lines = readProjectFileText(db.config.projectRoot, relativePath, {
+    inputKind: 'indexed source file',
+  }).split('\n');
+  const source = lines.slice(startLine, endLine + 1).join('\n');
+  if (startLine < 0 || endLine < startLine || endLine >= lines.length || !source.trim()) {
+    throw new Error(
+      `Current source does not cover the indexed definition in ${relativePath}. Reindex before measuring complexity.`,
+    );
   }
-}
-
-function fanInForSymbol(db: ScipDatabase, symbolId: number): number {
-  return (
-    db.get<{ c: number }>(
-      `SELECT COUNT(DISTINCT c.document_id) AS c
-    FROM mentions m
-    JOIN chunks c ON m.chunk_id = c.id
-    JOIN (
-      SELECT m2.symbol_id, c2.document_id
-      FROM mentions m2
-      JOIN chunks c2 ON m2.chunk_id = c2.id
-      WHERE m2.role = 1
-      GROUP BY m2.symbol_id
-    ) sym_def ON sym_def.symbol_id = m.symbol_id
-    WHERE m.symbol_id = ?
-      AND m.role != 1
-      AND sym_def.document_id != c.document_id`,
-      symbolId,
-    )?.c ?? 0
-  );
+  return source;
 }
 
 function fanOutForCallees(callees: ReadonlyArray<{ symbol: string; file: string }>, relativePath: string): number {

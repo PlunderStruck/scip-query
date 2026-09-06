@@ -9,8 +9,6 @@ import { dead } from '../../../src/queries/cleanup/dead.js';
 import { health } from '../../../src/queries/health/health.js';
 import { checkHealthBaseline, writeHealthBaseline } from '../../../src/queries/health/health-baseline.js';
 import { normalizeBaselineFindingIdentity } from '../../../src/queries/internal/baseline-file.js';
-import { isolated } from '../../../src/queries/cleanup/isolated.js';
-import { selfAudit } from '../../../src/queries/quality/self-audit.js';
 import { redundantReexports } from '../../../src/queries/cleanup/redundant-reexports.js';
 import type { ScipQueryConfig } from '../../../src/domain/types.js';
 
@@ -188,41 +186,17 @@ describe('debloat liveness regressions', () => {
     expect(shortNames.some((name) => name.includes('src:index'))).toBe(false);
   });
 
-  it('skips redundant re-exports from live barrels but still reports inactive ones', () => {
-    const results = redundantReexports(db);
-    const barrelFiles = results.map((result) => result.barrelFile);
-    const shortNames = results.map((result) => result.shortName);
-
-    expect(barrelFiles).toContain('src/unused/index.ts');
-    expect(shortNames.some((name) => name.includes('unusedHelper'))).toBe(true);
-    expect(barrelFiles).not.toContain('src/queries/index.ts');
+  it('does not invent re-export declarations from reference mentions without source', () => {
+    expect(redundantReexports(db)).toEqual([]);
   });
 
   it('uses the standalone conservative dead-code profile in health scoring', () => {
     const report = health(db);
 
     expect(report.findings.deadSymbols).toBe(0);
-    expect(report.findings.isolatedSymbols).toBe(0);
     expect(report.warnings).toBeUndefined();
     expect(report.actions.some((action) => action.category === 'Dead code')).toBe(false);
     expect(report.actions.some((action) => action.category === 'Isolated symbols')).toBe(false);
-  });
-
-  it('keeps runtime entry surfaces out of isolated results too', () => {
-    const results = isolated(db, { minLoc: 1 });
-    const shortNames = results.map((result) => result.shortName);
-
-    expect(shortNames.some((name) => name.includes('src:cli'))).toBe(false);
-    expect(shortNames.some((name) => name.includes('src:index'))).toBe(false);
-    expect(shortNames.some((name) => name.includes('reindex-worker'))).toBe(false);
-    expect(shortNames.some((name) => name.includes('postinstall'))).toBe(false);
-  });
-
-  it('reports self-audit as unavailable without a semantic provider', () => {
-    const result = selfAudit(db, { samples: 5 });
-
-    expect(result.available).toBe(false);
-    expect(result.scores).toEqual([]);
   });
 
   it('ratchets fixed findings through write-baseline / check-baseline round trips', () => {

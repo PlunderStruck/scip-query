@@ -253,7 +253,7 @@ async function loadProjectSetup(
       written: ['/repo/docs/scip-query/health-dossier.md', '/repo/docs/scip-query/health-dossier.json'],
       unchanged: [],
     })),
-    formatHealthScoreSummary: (health: {
+    formatHealthAvailabilitySummary: (health: {
       score: number | null;
       riskScore: number | null;
       hygieneScore: number | null;
@@ -451,7 +451,7 @@ describe('runProjectSetup', () => {
     ]);
   });
 
-  it('reports health score and issue list before any cleanup work could begin', async () => {
+  it('reports health availability and issue list before any cleanup work could begin', async () => {
     const {
       module,
       runIsolatedHealthReport,
@@ -463,7 +463,8 @@ describe('runProjectSetup', () => {
 
     const report = await module.runProjectSetup({ runHealth: true });
 
-    expect(report.health.score).toBe(91);
+    expect(report.health.available).toBe(true);
+    expect(report.health).not.toHaveProperty('score');
     expect(report.health.issuesNeedAttention).toEqual([
       {
         category: 'Duplication',
@@ -501,9 +502,13 @@ describe('runProjectSetup', () => {
         expect.objectContaining({ command: 'scip-query status', status: 'pass' }),
         expect.objectContaining({ command: 'scip-query config-validate', status: 'pass' }),
         expect.objectContaining({ command: 'scip-query capabilities', status: 'pass' }),
-        expect.objectContaining({ command: 'scip-query capability-matrix --json', status: 'pass' }),
-        expect.objectContaining({ command: 'scip-query health', status: 'pass' }),
-        expect.objectContaining({ command: 'scip-query diff-impact --json', status: 'pass' }),
+        expect.objectContaining({ command: 'scip-query capabilities --matrix', status: 'pass', basis: 'readiness' }),
+        expect.objectContaining({
+          command: 'scip-query health --indexed --full',
+          status: 'pass',
+          basis: 'operation-result',
+        }),
+        expect.objectContaining({ command: 'scip-query diff-impact --json', status: 'pass', basis: 'readiness' }),
         expect.objectContaining({
           id: 'watch-refresh',
           command: 'scip-query status --json',
@@ -541,7 +546,7 @@ describe('runProjectSetup', () => {
 
     expect(runIsolatedHealthReport).not.toHaveBeenCalled();
     expect(report.healthDossier).toBeNull();
-    expect(report.health.unavailableReason).toContain('scip-query health --full');
+    expect(report.health.unavailableReason).toContain('scip-query health --indexed --full');
     expect(report.steps).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'health', status: 'skipped', optional: true }),
@@ -575,8 +580,16 @@ describe('runProjectSetup', () => {
         expect.objectContaining({ command: 'scip-query status', status: 'fail' }),
         expect.objectContaining({ command: 'scip-query config-validate', status: 'pass' }),
         expect.objectContaining({ command: 'scip-query capabilities', status: 'unavailable' }),
-        expect.objectContaining({ command: 'scip-query capability-matrix --json', status: 'unavailable' }),
-        expect.objectContaining({ command: 'scip-query health', status: 'unavailable' }),
+        expect.objectContaining({
+          command: 'scip-query capabilities --matrix',
+          status: 'unavailable',
+          basis: 'readiness',
+        }),
+        expect.objectContaining({
+          command: 'scip-query health --indexed --full',
+          status: 'unavailable',
+          basis: 'operation-result',
+        }),
         expect.objectContaining({ command: 'scip-query diff-impact --json', status: 'fail' }),
         expect.objectContaining({ command: 'scip-query setup-agent', status: 'pass' }),
       ]),
@@ -965,7 +978,7 @@ describe('runProjectSetup', () => {
         written: ['/repo/docs/scip-query/health-dossier.md'],
         unchanged: ['/repo/docs/scip-query/health-dossier.json'],
       })),
-      formatHealthScoreSummary: (health: {
+      formatHealthAvailabilitySummary: (health: {
         score: number | null;
         riskScore: number | null;
         hygieneScore: number | null;

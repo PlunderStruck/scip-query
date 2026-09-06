@@ -1,0 +1,9 @@
+scip CLI: installed
+
+Detected languages: typescript
+
+Indexer readiness:
+  OK typescript: scip-typescript (/opt/homebrew/bin/scip-typescript)
+
+Semantic provider readiness:
+  OK typescript: ts-morph (/private/var/folders/4c/wsjvhgw90t7f31d7s68ddhtc0000gn/T/scip-followup-audit-0q1jojzy/tsconfig.json)

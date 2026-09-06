@@ -1,0 +1,59 @@
+diff --git a/src/reservations/policy.ts b/src/reservations/policy.ts
+index 8691b51..1d9baf1 100644
+--- a/src/reservations/policy.ts
++++ b/src/reservations/policy.ts
+@@ -1,6 +1,6 @@
+ import type { Reservation } from '../domain/types.js';
+ 
+-const MINIMUM_CANCELLATION_NOTICE_MS = 24 * 60 * 60 * 1000;
++const MINIMUM_CANCELLATION_NOTICE_MS = 48 * 60 * 60 * 1000;
+ 
+ export function canCancel(reservation: Reservation, now: number): boolean {
+   return (
+diff --git a/test/cancellation.test.mjs b/test/cancellation.test.mjs
+index 3cd9284..99949f7 100644
+--- a/test/cancellation.test.mjs
++++ b/test/cancellation.test.mjs
+@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
+ import test from 'node:test';
+ import * as desk from '../build/index.js';
+ 
+-const DAY_MS = 24 * 60 * 60 * 1000;
++const CANCELLATION_WINDOW_MS = 48 * 60 * 60 * 1000;
+ const NOW = 1_700_000_000_000;
+ 
+ const channels = [
+@@ -30,7 +30,7 @@ function reservation(overrides = {}) {
+   return {
+     id: 'reservation-123',
+     status: 'confirmed',
+-    startsAt: NOW + DAY_MS,
++    startsAt: NOW + CANCELLATION_WINDOW_MS,
+     locked: false,
+     ...overrides,
+   };
+@@ -44,7 +44,7 @@ function populatedStore() {
+ }
+ 
+ for (const channel of channels) {
+-  test(`${channel.name} permits an unlocked confirmed reservation exactly 24 hours ahead`, () => {
++  test(`${channel.name} permits an unlocked confirmed reservation exactly 48 hours ahead`, () => {
+     const store = populatedStore();
+ 
+     assert.deepEqual(channel.cancel(reservation(), NOW, store), channel.accepted);
+@@ -61,7 +61,7 @@ for (const channel of channels) {
+     ['pending', { status: 'pending' }],
+     ['already cancelled', { status: 'cancelled' }],
+     ['locked', { locked: true }],
+-    ['less than 24 hours ahead', { startsAt: NOW + DAY_MS - 1 }],
++    ['less than 48 hours ahead', { startsAt: NOW + CANCELLATION_WINDOW_MS - 1 }],
+   ]) {
+     test(`${channel.name} rejects a reservation that is ${reason} without changing the store`, () => {
+       const store = populatedStore();
+@@ -83,5 +83,5 @@ test('public reservation eligibility and cancellation operations use the same bo
+     cancelled: ['reservation-123'],
+     audit: [{ kind: 'reservation.cancelled', reservationId: 'reservation-123' }],
+   });
+-  assert.equal(desk.canCancel(reservation({ startsAt: NOW + DAY_MS - 1 }), NOW), false);
++  assert.equal(desk.canCancel(reservation({ startsAt: NOW + CANCELLATION_WINDOW_MS - 1 }), NOW), false);
+ });

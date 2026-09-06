@@ -1,0 +1,22 @@
+{
+  "model": "gpt-5.6-sol",
+  "reasoning": "medium",
+  "purpose": "bounded development audit, not a controlled efficacy trial",
+  "files": {
+    "implementation/src/source/maintenance-project.ts": "f951dcdc5efe1cebd78d85269a17bd1e7e2c5fa93d159bbf9c8cf38b3517ee0a",
+    "implementation/src/source/maintenance-snapshot.ts": "73efc63f025402e9b61dfc2664be23a2278bf770f665e3576e24da3d92340004",
+    "implementation/src/source/ast/maintenance-imports.ts": "f39efa84bd51659211f7dc6f9c74b876deca50c4790fa0e2eeb95ccccd8bc51e",
+    "implementation/src/source/ast/maintenance-bindings.ts": "60e4970f79dae848e1da4d64bd4bcc2cbac23a5950870b775865aea4cc8ed9e0",
+    "implementation/src/queries/health/source-findings.ts": "60aff1a038598eed69a8436e832725361b246fbd955c509df764b3bf626c2107",
+    "implementation/src/queries/health/source-review.ts": "5df4b54bd80b730ee186fccd36710b8b09a16b63c2330e572e607a5d2de25900",
+    "implementation/src/queries/health/source-dependencies.ts": "cd032848734c9a882bdd12a8953bac53b5f50710f66e6f9dd73547b3662368f6",
+    "implementation/src/queries/health/source-modules.ts": "7af2fc86fd1a0a11655f8b24dba0e28f3ca1cf29a6c6a4dabe33d0abbe2516e6",
+    "launchpoint/src/lib/client-access/index.ts": "c57f9bd39c9486fb3707824a391bd5720369c1aded4f2e9f3e4d9176f1528906",
+    "launchpoint/src/lib/client-access/operations/campaign-workspace-location.ts": "3b6359f2eaa5f07a180719e320a503b29ee3d8423221d20fc076747f6f182c7b",
+    "launchpoint/src/lib/clients/index.ts": "ea18dd7994f10a0cee4916a4db9d5973e8916042190d9e5189a41f737d161950",
+    "launchpoint/src/lib/clients/queries.ts": "4ca6bc58c6db08d9bc26dff86992293586615b67141fa11dd92283fe6a24c6f7",
+    "launchpoint/src/app/api/buy/analytics/stats/entities/route.ts": "50b9768a6023b0c4d657d90e20dbe9a69ef2ffe84d9d6079bc91c6d4810b838c",
+    "launchpoint/src/app/api/buy/campaigns/[id]/account-post-counts/route.ts": "f962abf543ac88956f10a5aa065abaaf0313aca65fccf22cf681403d2d503798",
+    "launchpoint/src/app/api/buy/creators/account-health/route.ts": "ed842cfa0e2c781548499d0f8d2d533be09141fb4c65d88a0ef9ea206d4be120"
+  }
+}

@@ -13,7 +13,7 @@ import { evidenceFixtureDb, writeFixtureFiles } from '../../fixtures/evidence-fi
  * between a divergent-twin second function (escapeRegex/escapeRegExp — the
  * same near-name fixture `tests/queries/cleanup/twin-drift.test.ts` proves
  * classifies as 'divergent') and an unrelated second function of the same
- * shape (formatDate) so the two fixtures carry identical dead/isolated
+ * shape (formatDate) so the two fixtures carry identical dead
  * symbol pressure and differ only in the twin-drift signal.
  */
 function buildFixtureDb(root: string, opts: { twin: boolean }): ScipDatabase {
@@ -91,7 +91,7 @@ describe('health twin-drift dimension', () => {
     }
   });
 
-  it('scores a repo with a divergent twin pair below an otherwise-identical repo without one', () => {
+  it('distinguishes divergent twins from an otherwise-identical repository without them', () => {
     const withTempDir = mkdtempSync(join(tmpdir(), 'scip-query-health-twin-drift-with-'));
     const withoutTempDir = mkdtempSync(join(tmpdir(), 'scip-query-health-twin-drift-without-'));
     const withDb = buildFixtureDb(withTempDir, { twin: true });
@@ -100,15 +100,12 @@ describe('health twin-drift dimension', () => {
       const withReport = health(withDb, { full: true });
       const withoutReport = health(withoutDb, { full: true });
 
-      // Same dead/isolated symbol pressure in both fixtures (two unused
+      // Same dead symbol pressure in both fixtures (two unused
       // exported functions each) — the score gap is attributable to
       // twin-drift, not a confound from a different symbol count.
       expect(withReport.findings.deadSymbols).toBe(withoutReport.findings.deadSymbols);
-      expect(withReport.findings.isolatedSymbols).toBe(withoutReport.findings.isolatedSymbols);
 
       expect(withReport.findings.twinDriftGroups).toBeGreaterThan(withoutReport.findings.twinDriftGroups);
-      expect(withReport.hygieneScore).toBeLessThanOrEqual(withoutReport.hygieneScore);
-      expect(withReport.score).toBeLessThanOrEqual(withoutReport.score);
     } finally {
       withDb.close();
       withoutDb.close();

@@ -61,8 +61,7 @@ export type CoveragePolicy =
 /**
  * Positional input kinds, in declaration order. A list rather than one target
  * union because the command set does not fit a single value: `similar <a> <b>`
- * is two symbols, `coupling <f1> <f2>` two files, `tla <operation> [spec]` an
- * action plus a path, and `hotspots` takes nothing.
+ * is two symbols, `coupling <f1> <f2>` two files, and `hotspots` takes nothing.
  */
 export type CommandInputKind = 'symbol' | 'file' | 'module' | 'pattern' | 'path' | 'action' | 'finding' | 'record';
 

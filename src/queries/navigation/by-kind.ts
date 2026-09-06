@@ -1,5 +1,4 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { indexedDocumentPaths } from '../../storage/scip-documents.js';
 import { getAllDefinitions } from '../../symbols/definition-catalog.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { leafSuffix, parseSymbol, shortenSymbol } from '../../symbols/symbol-parser.js';
@@ -16,23 +15,20 @@ export interface ByKindResult {
   endLine: number;
 }
 
-const KIND_COUNT_PATH_BATCH_SIZE = 500;
-
 /**
  * Find symbols by SCIP kind (class, interface, enum, function, etc.)
  */
 function resolveKindQuery(kindQuery: string): number | null {
-  const asNum = parseInt(kindQuery, 10);
-  if (!isNaN(asNum)) return asNum;
-
-  const lower = kindQuery.toLowerCase();
-  const exact = SCIP_KIND_BY_NAME.get(lower);
-  if (exact !== undefined) return exact;
-
-  for (const [kind, name] of SCIP_KIND_NAMES) {
-    if (name.toLowerCase().includes(lower)) return kind;
+  const query = kindQuery.trim().toLowerCase();
+  if (!query) return null;
+  if (/^\d+$/.test(query)) {
+    const kind = Number(query);
+    return SCIP_KIND_NAMES.has(kind) ? kind : null;
   }
-  return null;
+  const exact = SCIP_KIND_BY_NAME.get(query);
+  if (exact !== undefined) return exact;
+  const matches = [...SCIP_KIND_NAMES].filter(([, name]) => name.toLowerCase().includes(query));
+  return matches.length === 1 ? matches[0]![0] : null;
 }
 
 // scip-query: ignore-extract — the cluster the extract heuristic finds
@@ -47,7 +43,9 @@ export function byKind(
 
   const kindNum = resolveKindQuery(kindQuery);
   if (kindNum === null) {
-    return [];
+    throw new Error(
+      `Unknown or ambiguous symbol kind: ${JSON.stringify(kindQuery)}. Use an exact SCIP kind name or number.`,
+    );
   }
 
   const rows = loadKindRows(db, scope)
@@ -75,9 +73,9 @@ export function kindCounts(
   db: ScipDatabase,
   opts: { scope?: string } = {},
 ): Array<{ kind: number; kindName: string; count: number }> {
-  const counts = loadStoredKindCounts(db, opts.scope);
+  const counts = new Map<number, number>();
 
-  for (const row of loadInferredKindRows(db, opts.scope)) {
+  for (const row of loadKindRows(db, opts.scope)) {
     const kind = resolveKindNumber(row);
     if (kind === null || kind === 0) continue;
     counts.set(kind, (counts.get(kind) ?? 0) + 1);
@@ -92,11 +90,6 @@ export function kindCounts(
     }));
 }
 
-interface KindCountRow {
-  kind: number;
-  count: number;
-}
-
 interface KindRow {
   symbol: string;
   kind: number | null;
@@ -109,64 +102,6 @@ interface KindRow {
 
 function loadKindRows(db: ScipDatabase, scope?: string): KindRow[] {
   return getAllDefinitions(db, { scope }).map(mapDefinitionToKindRow);
-}
-
-function loadStoredKindCounts(db: ScipDatabase, scope?: string): Map<number, number> {
-  const counts = new Map<number, number>();
-  for (const paths of chunkedPaths(indexedDocumentPaths(db, { scope, includeIgnored: false }))) {
-    const placeholders = paths.map(() => '?').join(', ');
-    const rows = db.all<KindCountRow>(
-      `SELECT gs.kind AS kind, COUNT(*) AS count
-       FROM defn_enclosing_ranges der
-       JOIN global_symbols gs ON der.symbol_id = gs.id
-       JOIN documents d ON der.document_id = d.id
-       WHERE gs.kind IS NOT NULL
-         AND gs.kind != 0
-         AND gs.symbol NOT LIKE '%#'
-         AND d.relative_path IN (${placeholders})
-       GROUP BY gs.kind`,
-      ...paths,
-    );
-    for (const row of rows) {
-      counts.set(row.kind, (counts.get(row.kind) ?? 0) + row.count);
-    }
-  }
-  return counts;
-}
-
-function loadInferredKindRows(db: ScipDatabase, scope?: string): KindRow[] {
-  const rows: KindRow[] = [];
-  for (const paths of chunkedPaths(indexedDocumentPaths(db, { scope, includeIgnored: false }))) {
-    const placeholders = paths.map(() => '?').join(', ');
-    rows.push(
-      ...db.all<KindRow>(
-        `SELECT gs.symbol,
-                gs.kind,
-                gs.documentation,
-                gs.enclosing_symbol,
-                d.relative_path,
-                der.start_line,
-                der.end_line
-         FROM defn_enclosing_ranges der
-         JOIN global_symbols gs ON der.symbol_id = gs.id
-         JOIN documents d ON der.document_id = d.id
-         WHERE (gs.kind IS NULL OR gs.kind = 0 OR gs.symbol LIKE '%#')
-           ${db.symbolNoiseFor('gs')}
-           AND d.relative_path IN (${placeholders})
-         ORDER BY d.relative_path, der.start_line, der.end_line, gs.symbol`,
-        ...paths,
-      ),
-    );
-  }
-  return rows;
-}
-
-function chunkedPaths(paths: readonly string[]): string[][] {
-  const chunks: string[][] = [];
-  for (let offset = 0; offset < paths.length; offset += KIND_COUNT_PATH_BATCH_SIZE) {
-    chunks.push(paths.slice(offset, offset + KIND_COUNT_PATH_BATCH_SIZE));
-  }
-  return chunks;
 }
 
 function mapDefinitionToKindRow(definition: IndexedDefinition): KindRow {
