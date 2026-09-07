@@ -249,23 +249,31 @@ export function managedGenerationMatchesFingerprint(
         maxBytes: SMALL_ARTIFACT_MAX_BYTES,
       }),
     ) as WorktreeCacheLease;
-    if (
-      lease.version !== 1 ||
-      lease.repositoryId !== pointer.repositoryId ||
-      lease.worktreeId !== pointer.worktreeId ||
-      resolve(lease.projectRoot) !== resolve(context.projectRoot) ||
-      lease.treeOid !== context.treeOid ||
-      resolve(lease.localCacheDir) !== resolve(localCacheDir) ||
-      lease.ownershipChecksum !== worktreeLeaseOwnershipChecksum(lease) ||
-      lease.baseGenerationId !== snapshot.generationId ||
-      lease.activeGenerationId !== snapshot.generationId
-    ) {
-      return false;
-    }
+    if (!managedLeaseMatchesSnapshot(lease, pointer, context, localCacheDir, snapshot)) return false;
     return readSharedGeneration(snapshot, false) !== null;
   } catch {
     return false;
   }
+}
+
+function managedLeaseMatchesSnapshot(
+  lease: WorktreeCacheLease,
+  pointer: NonNullable<ReturnType<typeof readWorktreeCachePointer>>,
+  context: GitWorktreeContext,
+  localCacheDir: string,
+  snapshot: SharedGenerationSnapshot,
+): boolean {
+  return !(
+    lease.version !== 1 ||
+    lease.repositoryId !== pointer.repositoryId ||
+    lease.worktreeId !== pointer.worktreeId ||
+    resolve(lease.projectRoot) !== resolve(context.projectRoot) ||
+    lease.treeOid !== context.treeOid ||
+    resolve(lease.localCacheDir) !== resolve(localCacheDir) ||
+    lease.ownershipChecksum !== worktreeLeaseOwnershipChecksum(lease) ||
+    lease.baseGenerationId !== snapshot.generationId ||
+    lease.activeGenerationId !== snapshot.generationId
+  );
 }
 
 export function sharedCacheBypassReason(
@@ -480,39 +488,8 @@ function publishSharedGenerationOwned(input: SharedGenerationPublicationInput): 
   const directoryStatuses: Exclude<DirectorySyncStatus, 'not-requested'>[] = [ensureDirectoryDurable(generationsDir)];
   const stagingDir = mkdtempSync(join(generationsDir, `.tmp-${process.pid}-`));
   try {
-    const records: SharedGenerationArtifact[] = [];
-    for (const relativePath of artifacts.files) {
-      const source = indexArtifactPath(input.sourceCacheDir, relativePath);
-      const target = indexArtifactPath(stagingDir, relativePath);
-      directoryStatuses.push(cloneArtifactFile(source, target, 0o444));
-      input.onPublicationStage?.('after-artifact-flushed', relativePath);
-      const size = statSync(target).size;
-      records.push({
-        path: relativePath,
-        size,
-        sha256: sha256FileWithinLimit(target, {
-          inputKind: 'staged shared-generation artifact',
-          maxBytes: SCIP_ARTIFACT_MAX_BYTES,
-        }),
-      });
-    }
-    const scipProjectRoot = readScipIndexProjectRoot(
-      readFileWithinLimit(join(stagingDir, 'index.scip'), {
-        inputKind: 'staged shared SCIP index',
-        maxBytes: SCIP_ARTIFACT_MAX_BYTES,
-      }),
-    );
-    if (!scipProjectRoot) throw new Error('shared SCIP generation has no project root metadata');
-    const expectedSourceRoot = canonicalProjectRootUrl(input.sourceProjectRoot);
-    if (scipProjectRoot !== expectedSourceRoot) {
-      throw new Error('shared SCIP generation root does not match its source worktree');
-    }
-    if (
-      sourceGenerationSignature(input.sourceCacheDir) !== sourceSignature ||
-      (input.sourceStillValid && !input.sourceStillValid())
-    ) {
-      throw new Error('source index changed while staging a shared generation');
-    }
+    const records = stageSharedPublicationArtifacts(input, artifacts.files, stagingDir, directoryStatuses);
+    const scipProjectRoot = validateStagedSharedPublication(input, stagingDir, sourceSignature);
     const manifest: SharedGenerationManifest = {
       version: SHARED_GENERATION_FORMAT_VERSION,
       artifactCatalogVersion: INDEX_ARTIFACT_CATALOG_VERSION,
@@ -534,19 +511,8 @@ function publishSharedGenerationOwned(input: SharedGenerationPublicationInput): 
     input.onPublicationStage?.('after-manifest-flushed');
     directoryStatuses.push(syncDirectoryDurable(stagingDir));
     input.onPublicationStage?.('after-staging-directory-synced');
-    const targetDir = sharedGenerationDirectory(input.snapshot);
-    try {
-      if (existsSync(targetDir) && !readSharedGeneration(input.snapshot)) {
-        const corruptDir = `${targetDir}.corrupt-${process.pid}-${Date.now()}`;
-        renameSync(targetDir, corruptDir);
-        rmSync(corruptDir, { recursive: true, force: true });
-      }
-      renameSync(stagingDir, targetDir);
-    } catch (error) {
-      const raced = readSharedGeneration(input.snapshot);
-      if (raced) return existingSharedGenerationResult(input.snapshot, raced);
-      throw error;
-    }
+    const raced = promoteStagedSharedPublication(input.snapshot, stagingDir);
+    if (raced) return raced;
     input.onPublicationStage?.('after-generation-renamed');
     directoryStatuses.push(syncDirectoryDurable(generationsDir));
     input.onPublicationStage?.('after-generations-directory-synced');
@@ -560,6 +526,76 @@ function publishSharedGenerationOwned(input: SharedGenerationPublicationInput): 
   } finally {
     rmSync(stagingDir, { recursive: true, force: true });
   }
+}
+
+function promoteStagedSharedPublication(
+  snapshot: SharedGenerationSnapshot,
+  stagingDir: string,
+): SharedGenerationPublicationResult | undefined {
+  const targetDir = sharedGenerationDirectory(snapshot);
+  try {
+    if (existsSync(targetDir) && !readSharedGeneration(snapshot)) {
+      const corruptDir = `${targetDir}.corrupt-${process.pid}-${Date.now()}`;
+      renameSync(targetDir, corruptDir);
+      rmSync(corruptDir, { recursive: true, force: true });
+    }
+    renameSync(stagingDir, targetDir);
+  } catch (error) {
+    const raced = readSharedGeneration(snapshot);
+    if (raced) return existingSharedGenerationResult(snapshot, raced);
+    throw error;
+  }
+  return undefined;
+}
+
+function validateStagedSharedPublication(
+  input: SharedGenerationPublicationInput,
+  stagingDir: string,
+  sourceSignature: string,
+): string {
+  const scipProjectRoot = readScipIndexProjectRoot(
+    readFileWithinLimit(join(stagingDir, 'index.scip'), {
+      inputKind: 'staged shared SCIP index',
+      maxBytes: SCIP_ARTIFACT_MAX_BYTES,
+    }),
+  );
+  if (!scipProjectRoot) throw new Error('shared SCIP generation has no project root metadata');
+  const expectedSourceRoot = canonicalProjectRootUrl(input.sourceProjectRoot);
+  if (scipProjectRoot !== expectedSourceRoot) {
+    throw new Error('shared SCIP generation root does not match its source worktree');
+  }
+  if (
+    sourceGenerationSignature(input.sourceCacheDir) !== sourceSignature ||
+    (input.sourceStillValid && !input.sourceStillValid())
+  ) {
+    throw new Error('source index changed while staging a shared generation');
+  }
+  return scipProjectRoot;
+}
+
+function stageSharedPublicationArtifacts(
+  input: SharedGenerationPublicationInput,
+  files: readonly string[],
+  stagingDir: string,
+  directoryStatuses: Exclude<DirectorySyncStatus, 'not-requested'>[],
+): SharedGenerationArtifact[] {
+  const records: SharedGenerationArtifact[] = [];
+  for (const relativePath of files) {
+    const source = indexArtifactPath(input.sourceCacheDir, relativePath);
+    const target = indexArtifactPath(stagingDir, relativePath);
+    directoryStatuses.push(cloneArtifactFile(source, target, 0o444));
+    input.onPublicationStage?.('after-artifact-flushed', relativePath);
+    const size = statSync(target).size;
+    records.push({
+      path: relativePath,
+      size,
+      sha256: sha256FileWithinLimit(target, {
+        inputKind: 'staged shared-generation artifact',
+        maxBytes: SCIP_ARTIFACT_MAX_BYTES,
+      }),
+    });
+  }
+  return records;
 }
 
 function existingSharedGenerationResult(
@@ -684,37 +720,8 @@ export function prepareSharedGenerationForProject(
   try {
     const context = resolvedContext ?? resolveGitWorktreeContext(projectRoot);
     if (!context) return { kind: 'missed', reason: 'Git worktree identity is unavailable' };
-    if (!context.clean) {
-      if (existsSync(paths.dbPath)) {
-        writeManagedWorktreeLease(context, paths.cacheDir, 'missed', undefined, 'worktree has uncommitted changes');
-        return { kind: 'missed', reason: 'worktree has uncommitted changes' };
-      }
-      const languages = config.languages ?? detectLanguages(projectRoot);
-      const currentFingerprint = buildProjectInputFingerprint(projectRoot, languages, configFingerprintOptions(config));
-      const baseline = findSharedBaselineGeneration(
-        context,
-        languages,
-        configFingerprintOptions(config),
-        currentFingerprint,
-      );
-      if (!baseline) {
-        writeManagedWorktreeLease(context, paths.cacheDir, 'missed', undefined, 'worktree has uncommitted changes');
-        return { kind: 'missed', reason: 'worktree has uncommitted changes' };
-      }
-      hydrateSharedGeneration({
-        snapshot: baseline.snapshot,
-        manifest: baseline.manifest,
-        targetCacheDir: paths.cacheDir,
-        targetProjectRoot: projectRoot,
-        persistLease: false,
-        lockWaitMs: 0,
-      });
-      writeWorktreeOverlayLease(baseline.snapshot, paths.cacheDir);
-      return { kind: 'overlay' };
-    }
-    const languages = config.languages ?? detectLanguages(projectRoot);
-    const fingerprint = buildProjectInputFingerprint(projectRoot, languages, configFingerprintOptions(config));
-    const snapshot = buildSharedGenerationSnapshot(context, fingerprint);
+    if (!context.clean) return prepareDirtySharedGeneration(context, projectRoot, config, paths);
+    const { languages, fingerprint, snapshot } = sharedProjectSnapshot(context, projectRoot, config);
     if (!snapshot) return { kind: 'missed', reason: 'clean committed snapshot is unavailable' };
     let manifest = readSharedGeneration(snapshot);
     if (manifest) {
@@ -723,36 +730,7 @@ export function prepareSharedGenerationForProject(
     }
 
     const peer = importPeerGeneration(snapshot, projectRoot);
-    if (!peer) {
-      if (!existsSync(paths.dbPath)) {
-        const baseline = findSharedBaselineGeneration(
-          context,
-          languages,
-          configFingerprintOptions(config),
-          fingerprint,
-        );
-        if (baseline) {
-          hydrateSharedGeneration({
-            snapshot: baseline.snapshot,
-            manifest: baseline.manifest,
-            targetCacheDir: paths.cacheDir,
-            targetProjectRoot: projectRoot,
-            persistLease: false,
-            lockWaitMs: 0,
-          });
-          writeWorktreeOverlayLease(baseline.snapshot, paths.cacheDir);
-          return { kind: 'overlay' };
-        }
-      }
-      writeManagedWorktreeLease(
-        context,
-        paths.cacheDir,
-        'missed',
-        undefined,
-        'no exact shared or peer generation exists',
-      );
-      return { kind: 'missed', reason: 'no exact shared or peer generation exists' };
-    }
+    if (!peer) return prepareMissingSharedGeneration(context, projectRoot, config, paths, languages, fingerprint);
     manifest = peer.manifest;
     hydrateSharedGeneration({
       snapshot,
@@ -765,6 +743,74 @@ export function prepareSharedGenerationForProject(
   } catch (error) {
     return { kind: 'failed', reason: error instanceof Error ? error.message : String(error) };
   }
+}
+
+function sharedProjectSnapshot(context: GitWorktreeContext, projectRoot: string, config: ProjectConfig) {
+  const languages = config.languages ?? detectLanguages(projectRoot);
+  const fingerprint = buildProjectInputFingerprint(projectRoot, languages, configFingerprintOptions(config));
+  const snapshot = buildSharedGenerationSnapshot(context, fingerprint);
+  return { languages, fingerprint, snapshot };
+}
+
+function prepareMissingSharedGeneration(
+  context: GitWorktreeContext,
+  projectRoot: string,
+  config: ProjectConfig,
+  paths: IndexStoragePaths,
+  languages: ProjectInputFingerprint['languages'],
+  fingerprint: ProjectInputFingerprint,
+): SharedCacheAction {
+  if (!existsSync(paths.dbPath)) {
+    const baseline = findSharedBaselineGeneration(context, languages, configFingerprintOptions(config), fingerprint);
+    if (baseline) {
+      hydrateSharedGeneration({
+        snapshot: baseline.snapshot,
+        manifest: baseline.manifest,
+        targetCacheDir: paths.cacheDir,
+        targetProjectRoot: projectRoot,
+        persistLease: false,
+        lockWaitMs: 0,
+      });
+      writeWorktreeOverlayLease(baseline.snapshot, paths.cacheDir);
+      return { kind: 'overlay' };
+    }
+  }
+  writeManagedWorktreeLease(context, paths.cacheDir, 'missed', undefined, 'no exact shared or peer generation exists');
+  return { kind: 'missed', reason: 'no exact shared or peer generation exists' };
+}
+
+function prepareDirtySharedGeneration(
+  context: GitWorktreeContext,
+  projectRoot: string,
+  config: ProjectConfig,
+  paths: IndexStoragePaths,
+): SharedCacheAction {
+  if (existsSync(paths.dbPath)) {
+    writeManagedWorktreeLease(context, paths.cacheDir, 'missed', undefined, 'worktree has uncommitted changes');
+    return { kind: 'missed', reason: 'worktree has uncommitted changes' };
+  }
+  const languages = config.languages ?? detectLanguages(projectRoot);
+  const currentFingerprint = buildProjectInputFingerprint(projectRoot, languages, configFingerprintOptions(config));
+  const baseline = findSharedBaselineGeneration(
+    context,
+    languages,
+    configFingerprintOptions(config),
+    currentFingerprint,
+  );
+  if (!baseline) {
+    writeManagedWorktreeLease(context, paths.cacheDir, 'missed', undefined, 'worktree has uncommitted changes');
+    return { kind: 'missed', reason: 'worktree has uncommitted changes' };
+  }
+  hydrateSharedGeneration({
+    snapshot: baseline.snapshot,
+    manifest: baseline.manifest,
+    targetCacheDir: paths.cacheDir,
+    targetProjectRoot: projectRoot,
+    persistLease: false,
+    lockWaitMs: 0,
+  });
+  writeWorktreeOverlayLease(baseline.snapshot, paths.cacheDir);
+  return { kind: 'overlay' };
 }
 
 // scip-query: ignore-similar — reviewed M1 lifecycle variation; preparation reads/imports while publication creates and leases.
@@ -804,47 +850,65 @@ export function publishFreshLocalGenerationForProject(
       return { kind: 'missed', reason: 'worktree is not a clean committed snapshot' };
     }
     const existing = readSharedGeneration(snapshot);
-    if (existing) {
-      if (validateSourceGeneration(paths.cacheDir, projectRoot, fingerprint)) {
-        writeWorktreeLease(snapshot, paths.cacheDir, 'local-fresh');
-        return { kind: 'local-fresh' };
-      }
-      hydrateSharedGeneration({
-        snapshot,
-        manifest: existing,
-        targetCacheDir: paths.cacheDir,
-        targetProjectRoot: projectRoot,
-      });
-      return { kind: 'attached', generationId: snapshot.generationId };
-    }
-    const metadata = readPublishableReindexMetadata(paths.cacheDir);
-    if (
-      !metadata ||
-      !sameProjectInputSnapshotContent(projectInputSnapshotOrNull(metadata.fingerprint), fingerprint) ||
-      JSON.stringify([...(metadata.indexedLanguages ?? [])].sort()) !== JSON.stringify([...languages].sort())
-    ) {
-      return { kind: 'missed', reason: 'local metadata does not match the clean worktree snapshot' };
-    }
-    if (!validateSourceGeneration(paths.cacheDir, projectRoot, fingerprint)) {
-      return { kind: 'missed', reason: 'local index artifacts are incomplete or incompatible' };
-    }
-    publishSharedGeneration({
-      snapshot,
-      sourceCacheDir: paths.cacheDir,
-      sourceProjectRoot: projectRoot,
-      sourceStillValid: () => {
-        const current = resolveGitWorktreeContext(projectRoot);
-        return (
-          (current ? buildSharedGenerationSnapshot(current, fingerprint) : undefined)?.generationId ===
-          snapshot.generationId
-        );
-      },
-    });
-    writeWorktreeLease(snapshot, paths.cacheDir, 'built');
-    return { kind: 'built', generationId: snapshot.generationId };
+    if (existing) return attachOrLeaseFreshLocalGeneration(existing, snapshot, paths, projectRoot, fingerprint);
+    return publishMatchingLocalGeneration(snapshot, paths, projectRoot, fingerprint, languages);
   } catch (error) {
     return { kind: 'failed', reason: error instanceof Error ? error.message : String(error) };
   }
+}
+
+function publishMatchingLocalGeneration(
+  snapshot: SharedGenerationSnapshot,
+  paths: IndexStoragePaths,
+  projectRoot: string,
+  fingerprint: ProjectInputFingerprint,
+  languages: ProjectInputFingerprint['languages'],
+): SharedCacheAction {
+  const metadata = readPublishableReindexMetadata(paths.cacheDir);
+  if (
+    !metadata ||
+    !sameProjectInputSnapshotContent(projectInputSnapshotOrNull(metadata.fingerprint), fingerprint) ||
+    JSON.stringify([...(metadata.indexedLanguages ?? [])].sort()) !== JSON.stringify([...languages].sort())
+  ) {
+    return { kind: 'missed', reason: 'local metadata does not match the clean worktree snapshot' };
+  }
+  if (!validateSourceGeneration(paths.cacheDir, projectRoot, fingerprint)) {
+    return { kind: 'missed', reason: 'local index artifacts are incomplete or incompatible' };
+  }
+  publishSharedGeneration({
+    snapshot,
+    sourceCacheDir: paths.cacheDir,
+    sourceProjectRoot: projectRoot,
+    sourceStillValid: () => {
+      const current = resolveGitWorktreeContext(projectRoot);
+      return (
+        (current ? buildSharedGenerationSnapshot(current, fingerprint) : undefined)?.generationId ===
+        snapshot.generationId
+      );
+    },
+  });
+  writeWorktreeLease(snapshot, paths.cacheDir, 'built');
+  return { kind: 'built', generationId: snapshot.generationId };
+}
+
+function attachOrLeaseFreshLocalGeneration(
+  existing: SharedGenerationManifest,
+  snapshot: SharedGenerationSnapshot,
+  paths: IndexStoragePaths,
+  projectRoot: string,
+  fingerprint: ProjectInputFingerprint,
+): SharedCacheAction {
+  if (validateSourceGeneration(paths.cacheDir, projectRoot, fingerprint)) {
+    writeWorktreeLease(snapshot, paths.cacheDir, 'local-fresh');
+    return { kind: 'local-fresh' };
+  }
+  hydrateSharedGeneration({
+    snapshot,
+    manifest: existing,
+    targetCacheDir: paths.cacheDir,
+    targetProjectRoot: projectRoot,
+  });
+  return { kind: 'attached', generationId: snapshot.generationId };
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.

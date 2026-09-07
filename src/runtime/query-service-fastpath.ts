@@ -600,42 +600,56 @@ function parseNoOperandInvocation(
 }
 
 function parseEntryPointsInvocation(argv: readonly string[]): EntryPointsFastPathInvocation | null {
-  let search: string | undefined;
-  let scope: string | undefined;
-  let json = false;
-  let resultOnly = false;
-  let compact = false;
+  const state: EntryPointsInvocationState = { json: false, resultOnly: false, compact: false };
 
   for (let index = 1; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--') {
       const remaining = argv.slice(index + 1);
-      if (remaining.length !== 1 || search !== undefined) return null;
-      search = remaining[0];
+      if (remaining.length !== 1 || state.search !== undefined) return null;
+      state.search = remaining[0];
       break;
     }
-    if (arg === '--json') {
-      json = true;
-      continue;
-    }
-    if (arg === '--result-only') {
-      resultOnly = true;
-      continue;
-    }
-    if (arg === '--compact') {
-      compact = true;
-      continue;
-    }
+    if (applyEntryPointsFlag(state, arg)) continue;
     const scopeOption = optionValue(argv, index, arg, '--scope', '-s');
     if (scopeOption) {
-      scope = scopeOption.value;
+      state.scope = scopeOption.value;
       index = scopeOption.nextIndex;
       continue;
     }
-    if (arg.startsWith('-') || search !== undefined) return null;
-    search = arg;
+    if (arg.startsWith('-') || state.search !== undefined) return null;
+    state.search = arg;
   }
 
+  return entryPointsInvocationResult(state);
+}
+
+interface EntryPointsInvocationState {
+  search?: string;
+  scope?: string;
+  json: boolean;
+  resultOnly: boolean;
+  compact: boolean;
+}
+
+function applyEntryPointsFlag(state: EntryPointsInvocationState, arg: string): boolean {
+  switch (arg) {
+    case '--json':
+      state.json = true;
+      return true;
+    case '--result-only':
+      state.resultOnly = true;
+      return true;
+    case '--compact':
+      state.compact = true;
+      return true;
+    default:
+      return false;
+  }
+}
+
+function entryPointsInvocationResult(state: EntryPointsInvocationState): EntryPointsFastPathInvocation | null {
+  const { search, scope, json, resultOnly, compact } = state;
   if (!json || !resultOnly || !compact) return null;
   return {
     kind: 'entrypoints',

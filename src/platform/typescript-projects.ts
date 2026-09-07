@@ -130,31 +130,41 @@ export function typeScriptProjectSelectionIsTreeOwned(
   const root = path.resolve(projectRoot);
   const tracked = new Set(trackedPaths);
   for (const configured of configuredProjects) {
-    const absolute = path.resolve(root, configured);
-    if (!isInsideProject(root, absolute)) continue;
-    try {
-      const stats = lstatSync(absolute);
-      if (stats.isSymbolicLink()) return false;
-      if (stats.isFile() && !tracked.has(relativeProjectPath(root, absolute))) return false;
-    } catch {
-      // Missing configured entries normalize away during ordinary discovery.
-    }
+    if (!configuredProjectEntryIsTreeOwned(root, configured, tracked)) return false;
   }
 
   const projects = projectMode === 'workspace' ? discoverTypeScriptProjectRoots(root, configuredProjects) : ['.'];
   for (const project of projects) {
-    const projectDirectory = project === '.' ? root : path.join(root, project);
-    const tsconfigPath = path.join(projectDirectory, 'tsconfig.json');
-    if (!projectFileExists(root, tsconfigPath)) continue;
-    const relativePath = relativeProjectPath(root, tsconfigPath);
-    if (!tracked.has(relativePath)) return false;
-    try {
-      if (lstatSync(tsconfigPath).isSymbolicLink()) return false;
-      const source = readProjectConfigText(root, tsconfigPath);
-      if (source.includes('extends') || source.includes('\\')) return false;
-    } catch {
-      return false;
-    }
+    if (!projectConfigIsTreeOwned(root, project, tracked)) return false;
+  }
+  return true;
+}
+
+function configuredProjectEntryIsTreeOwned(root: string, configured: string, tracked: ReadonlySet<string>): boolean {
+  const absolute = path.resolve(root, configured);
+  if (!isInsideProject(root, absolute)) return true;
+  try {
+    const stats = lstatSync(absolute);
+    if (stats.isSymbolicLink()) return false;
+    if (stats.isFile() && !tracked.has(relativeProjectPath(root, absolute))) return false;
+  } catch {
+    // Missing configured entries normalize away during ordinary discovery.
+  }
+  return true;
+}
+
+function projectConfigIsTreeOwned(root: string, project: string, tracked: ReadonlySet<string>): boolean {
+  const projectDirectory = project === '.' ? root : path.join(root, project);
+  const tsconfigPath = path.join(projectDirectory, 'tsconfig.json');
+  if (!projectFileExists(root, tsconfigPath)) return true;
+  const relativePath = relativeProjectPath(root, tsconfigPath);
+  if (!tracked.has(relativePath)) return false;
+  try {
+    if (lstatSync(tsconfigPath).isSymbolicLink()) return false;
+    const source = readProjectConfigText(root, tsconfigPath);
+    if (source.includes('extends') || source.includes('\\')) return false;
+  } catch {
+    return false;
   }
   return true;
 }

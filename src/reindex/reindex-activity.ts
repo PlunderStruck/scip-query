@@ -638,13 +638,22 @@ function parseLanguageActivity(value: unknown): {
 function isValidLanguageActivity(value: unknown): value is ReindexRunLanguageActivity {
   if (!value || typeof value !== 'object') return false;
   const detail = value as Partial<ReindexRunLanguageActivity>;
+  return validLanguageActivityStrategy(detail) && validLanguageActivityProduction(detail);
+}
+
+function validLanguageActivityStrategy(detail: Partial<ReindexRunLanguageActivity>): boolean {
   return (
     (detail.result === 'rebuilt' || detail.result === 'reused') &&
     (detail.strategy === undefined ||
       detail.strategy === 'reused' ||
       detail.strategy === 'incremental' ||
       detail.strategy === 'full') &&
-    (detail.fallbackReason === undefined || typeof detail.fallbackReason === 'string') &&
+    (detail.fallbackReason === undefined || typeof detail.fallbackReason === 'string')
+  );
+}
+
+function validLanguageActivityProduction(detail: Partial<ReindexRunLanguageActivity>): boolean {
+  return (
     isNonNegativeInteger(detail.outputBytes) &&
     isNonNegativeInteger(detail.producedOutputBytes) &&
     isNonNegativeFiniteNumber(detail.durationMs) &&

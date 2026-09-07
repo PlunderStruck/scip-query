@@ -489,3 +489,68 @@ Target measurements (cyclomatic/cognitive):
 - `propagateCompilerResolvedHttpSummaries.<callback:recordSpan:1>` → 2/1 (`src/analysis/runtime-boundaries/http-summaries.ts`).
 
 Next: prepared fifth wave of 45 ranked targets. Artifacts: `/tmp/complexity-wave4-{review,health,impact,metrics}.json`; verification logs use `/tmp/complexity-wave4-*.log`.
+
+
+### Fifth parallel complexity wave completed
+
+Completed 45 ranked targets across exclusive file assignments: root nine, each of three Astra-medium workers twelve. All selected targets and introduced helpers are at or below cyclomatic 10 / cognitive 15. No thresholds, source scope, suppressions or dependency policy changed.
+
+Fifth parallel complexity wave: 3227 full-suite tests / 360 files passed; build, source types and contract fixtures, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), public consumer compilation and skill links passed. Accounted source review resolves 45 findings with no introduced/worsened findings. Fresh source health: 563/563 eligible files, 13,146 functions, 385 complexity findings, no other finding rules. Fresh indexed diff impact: 122 changed symbols across 34 changed files; 30 affected files. No source-matched test coverage artifact; no CRAP claim.
+
+All 563 source files remain mapped and all 47 dependency rows declared. Fresh health reports no duplication, dependency cycles or configured architecture violations. The 385 remaining complexity findings are the next work queue; the historical maintenance inventory remains a different population.
+
+Focused validation passed 219 tests in worker 1 plus 144 affected tests rerun after final splits; 187 in worker 2 plus 28 rerun; 156 in worker 3 including the final 48 search/source-evidence tests; and 220 distinct tests in root. These counts overlap. New isolated script fixtures exercise calibration argument consumption, early exits, numeric-error precedence, summary parsing and report output without launching benchmark entrypoints. Every lane received a second read-only diff review. A temporary return-newline mistake in worker 3 was corrected before final checks. Seven search CLI failures during shared editing did not recur in a focused rerun or the frozen full suite; their initial cause was not established. Worker logs for those two runs were retained as tool output, not filesystem artifacts.
+
+The anonymous source-inspection search row callback was replaced by the named sourceInspectionSearchRow at7/4; the target mapping is established by the exact diff, not automated name identity. The untouched publishFreshReindexArtifacts callback remains12/16 and is reported uncomparable. Indexed impact omits eleven paths absent/excluded from its symbol index; current-source health accounts for eligible scripts.
+
+The VM remains on its previously verified installation from `931fe6c1`; these behavior-preserving refactors do not require another reinstall under the user's instruction.
+
+Target measurements (cyclomatic/cognitive):
+
+- `isValidLanguageActivity` → 4/3 (`src/reindex/reindex-activity.ts`).
+- `isClaimCoverage` → 4/3 (`src/domain/claim-qualification.ts`).
+- `decodeProjectConfig` → 5/7 (`src/domain/project-config.ts`).
+- `isSuppressionCounterevidence` → 5/3 (`src/domain/suppression-adjudication.ts`).
+- `validateDeclaredCouplings` → 5/3 (`src/runtime/config.ts`).
+- `parseEntryPointsInvocation` → 9/14 (`src/runtime/query-service-fastpath.ts`).
+- `isSourceSearchResult` → 8/4 (`src/runtime/query-service.ts`).
+- `parseGitWorktreeList` → 8/14 (`src/platform/git-worktree.ts`).
+- `parseArgs` → 7/9 (`scripts/semantic-command-calibration.mjs`).
+- `buildTryStatement` → 10/6 (`src/semantic/typescript/local-flow.ts`).
+- `collectNodeAccesses.visit` → 10/10 (`src/semantic/typescript/local-flow.ts`).
+- `buildClojureSourceFacts` → 6/9 (`src/source/facts/clojure-facts.ts`).
+- `callTargetForNode` → 8/6 (`src/source/facts/source-calls.ts`).
+- `reactCandidateForNode` → 6/6 (`src/source/react-profile.ts`).
+- `importedMemberCallTargets` → 9/11 (`src/symbols/graph/member-call-targets.ts`).
+- `resolveMember` → 7/12 (`src/symbols/graph/static-value-flow.ts`).
+- `sourceMayContainCandidateName` → 5/4 (`src/source/primitives/source-identifier-prefilter.ts`).
+- `addRustAttrCallers` → 7/11 (`src/symbols/references/reference-callers.ts`).
+- `classifyCycle` → 6/6 (`src/queries/graph/cycles.ts`).
+- `nativeConsumerClassifyEntry` → 4/4 (`src/queries/internal/consumer-evidence.ts`).
+- `shortestDirectedAnchorPath` → 2/1 (`src/queries/internal/exploration-topology.ts`).
+- `publishSharedGenerationOwned` → 8/6 (`src/reindex/shared-generation-store.ts`).
+- `materializeGeneration` → 9/8 (`src/reindex/sqlite-generation-store.ts`).
+- `getPublishedIndexFreshness` → 7/7 (`src/runtime/index-freshness.ts`).
+- `getProjectCapabilities` → 9/9 (`src/runtime/project-readiness.ts`).
+- `ensureWatchService` → 7/5 (`src/runtime/watch-service.ts`).
+- `classifyLanguageShardReuse` → 4/3 (`src/reindex/index.ts`).
+- `runPreparedIndexer` → 10/11 (`src/reindex/indexer-runner.ts`).
+- `managedGenerationMatchesFingerprint` → 8/6 (`src/reindex/shared-generation-store.ts`).
+- `prepareSharedGenerationForProject` → 10/9 (`src/reindex/shared-generation-store.ts`).
+- `publishFreshLocalGenerationForProject` → 10/8 (`src/reindex/shared-generation-store.ts`).
+- `languageCapability` → 10/11 (`src/runtime/project-readiness.ts`).
+- `sanitizeScipBuffer` → 6/7 (`src/reindex/sanitize.ts`).
+- `compareReferencedDeclarations` → 6/9 (`scripts/api-surface-contract.mjs`).
+- `typeScriptProjectSelectionIsTreeOwned` → 6/7 (`src/platform/typescript-projects.ts`).
+- `handleLocalityCandidates.<callback:budgetedDbCommand:1>` → 5/4 (`src/runtime/query-commands/cleanup/handlers.ts`).
+- `renderRelationshipPacket` → 4/3 (`scripts/accuracy-calibration.mjs`).
+- `runResampleMode` → 6/5 (`scripts/accuracy-calibration.mjs`).
+- `runSummarizeMode` → 8/4 (`scripts/accuracy-calibration.mjs`).
+- `projectCommandResult` → 9/7 (`skills/scip-explore/scripts/capture-evidence.mjs`).
+- `capabilityDescriptorHandler` → 6/11 (`src/analysis/runtime-boundaries/extractors.ts`).
+- `terminateOwnedProcessTree` → 10/9 (`src/platform/process-tree.ts`).
+- `patternDeviationDrift` → 3/3 (`src/queries/cleanup/drift.ts`).
+- `qualifiedEvidence` → 8/6 (`src/queries/navigation/evidence.ts`).
+- `sourceInspectionSections.searchRows.<callback:result.searches.map:0>` → 7/4 (`src/runtime/query-commands/navigation.ts`).
+
+Next: the user requested larger parallel batches, so the sixth wave has90 ranked targets with exclusive file ownership (root15; each worker25). Artifacts: `/tmp/complexity-wave5-{review,health,impact,metrics}.json`; verification logs use `/tmp/complexity-wave5-*.log`.

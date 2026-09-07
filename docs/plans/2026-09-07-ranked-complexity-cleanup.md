@@ -865,3 +865,186 @@ Target measurements (cyclomatic/cognitive):
 - `propagateCompilerResolvedHttpSummaries.<callback:recordSpan:1>` → 2/1 (`src/analysis/runtime-boundaries/http-summaries.ts`).
 
 Next: prepared fifth wave of 45 ranked targets. Artifacts: `/tmp/complexity-wave4-{review,health,impact,metrics}.json`; verification logs use `/tmp/complexity-wave4-*.log`.
+
+
+### Fifth parallel wave root implementation checkpoint
+
+Root's nine assigned functions have been refactored. Validators retain their original field acceptance and short-circuit order; config decoding retains malformed/unsupported/version/schema-hint precedence and unknown fields. Coupling diagnostics retain name/files/reason ordering. Entrypoint argument parsing retains required output flags, delimiter handling and fallback behavior. Git worktree parsing retains NUL record boundaries, first-space field splitting and final unterminated record handling. Calibration argument parsing retains value consumption, limits and early help/list exits.
+
+Initial focused run passed 210 tests in seven files; the requested domain claim test filename did not exist, so the actual runtime claim-qualification suite was located and is included in final focused checks. Six new isolated calibration parser cases pass without executing any benchmark entrypoint. Owned-file ESLint passes. Initial source metrics showed parseGitWorktreeList still at 10/18; extracting field decoding reduces nested parsing choices, with exact metrics recheck pending. Other eight targets and introduced helpers were already ≤10/15. Early source typecheck encountered another lane's temporary return-newline mistake, since corrected there; final frozen typecheck remains required.
+
+Root frozen: all nine targets and helpers now ≤10/15; Git record parser is 8/14. Final focused rerun passed 30 tests across worktree, actual claim-qualification and calibration parser suites (20 overlap the earlier 210). Root total is 220 distinct focused tests. Scoped metrics captured after-functions but reported incomplete whole-source coverage because peers were editing; combined frozen-source review remains authoritative. No root processes running.
+
+
+### Sixth parallel wave assignments: expanded to 90 targets
+
+The user requested more horizontal scale. This session allows four concurrent agents total, so the next wave uses root plus three Astra-medium workers with larger exclusive file sets: root 15 targets and each worker 25. Ninety highest-ranked current findings occupy 68 distinct source/script files; no file is assigned twice. Fresh fifth-wave health confirms the ranking and source locations. Workers may prepare read-only during fifth-wave validation; no sixth-wave edits start until fifth-wave commit.
+
+Every selected target and new helper must reach cyclomatic ≤10 / cognitive ≤15 while preserving decisions, evidence, ordering, cleanup and parsing behavior. Use one initial source review per lane and selective correction rechecks to avoid repeatedly scanning the full project for each file. Combined frozen-source review, full tests, public API/consumer/skill checks, fresh source health and indexed impact remain required. No source-policy, suppression or threshold changes; no external agent benchmarks.
+
+root:
+
+- `src/runtime/result-pagination.ts` — `isResultKeysetCursorPayload` (16, cognitive 4.).
+- `src/runtime/source-emission-session.ts` — `sourceChunks` (16, cognitive 14.).
+- `src/semantic/rust/durable-session-protocol.ts` — `isRustReferenceWorkerRequest` (16, cognitive 3.).
+- `scripts/incremental-freshness-contract.mjs` — `parseArgs` (15, cognitive 16.).
+- `src/runtime/cli-support.ts` — `parseHealthSemanticPrewarmMarker` (15, cognitive 14.).
+- `src/runtime/output-pagination.ts` — `isLegacyOutputCursorPayload` (15, cognitive 3.).
+- `src/runtime/output-pagination.ts` — `isOutputSnapshotPage` (15, cognitive 3.).
+- `src/runtime/query-service-fastpath.ts` — `parseOutlineInvocation` (15, cognitive 20.).
+- `src/runtime/query-service.ts` — `isOutlineResult` (15, cognitive 9.).
+- `src/runtime/query-service.ts` — `isSymbolResolutionResult` (15, cognitive 5.).
+- `src/runtime/query-service.ts` — `parseQueryServiceResponse` (15, cognitive 10.).
+- `src/runtime/watch-service-prune.ts` — `assertWatcherArtifactsBelongToRoot` (15, cognitive 12.).
+- `src/storage/bounded-mailbox.ts` — `completeBoundedMailboxClaim` (15, cognitive 13.).
+- `src/reindex/worker.ts` — `parseTypeScriptWorkerConfig` (14, cognitive 11.).
+- `src/runtime/cleanup-verify.ts` — `parseRuffJsonDiagnostics` (14, cognitive 21.).
+
+worker-1:
+
+- `src/semantic/rust/import-usage.ts` — `flattenRustUseTreePositions` (16, cognitive 7.).
+- `src/source/facts/behavior-skeleton.ts` — `buildBehaviorOutline.emitNode` (16, cognitive 15.).
+- `src/source/facts/behavior-skeleton.ts` — `addSwitchControlFacts` (15, cognitive 13.).
+- `src/source/facts/behavior-skeleton.ts` — `behaviorSkeleton` (15, cognitive 10.).
+- `src/source/facts/source-callables.ts` — `namedCallableNode` (16, cognitive 14.).
+- `src/source/facts/source-callables.ts` — `directForwardedCall` (15, cognitive 11.).
+- `src/symbols/graph/file-dep-graph.ts` — `fileDependencyPaths` (11, cognitive 24.).
+- `src/symbols/graph/file-dep-graph.ts` — `isFileDependencyGraphPayload` (15, cognitive 7.).
+- `src/symbols/references/reference-callers.ts` — `addAstCallsiteCallers` (13, cognitive 24.).
+- `src/source/react-profile.ts` — `recordJsxElement` (14, cognitive 23.).
+- `src/symbols/references/source-reference-scan.ts` — `scanSourceReferences` (15, cognitive 23.).
+- `src/queries/internal/exploration-topology.ts` — `addAdjacentJunctions` (15, cognitive 17.).
+- `src/queries/internal/next-anchor-candidates.ts` — `enrichResultCallbackControlSemantics` (15, cognitive 21.).
+- `src/queries/quality/slice-cohesion.ts` — `sliceCohesionForDefinition` (15, cognitive 11.).
+- `src/queries/quality/slice-cohesion.ts` — `projectFlowDependencies` (13, cognitive 21.).
+- `src/semantic/typescript/local-flow.ts` — `addCrossCallableCandidates` (15, cognitive 21.).
+- `src/semantic/typescript/local-flow.ts` — `isUseNode` (15, cognitive 13.).
+- `src/semantic/typescript/local-flow.ts` — `addReachingDefinitionEdges` (11, cognitive 22.).
+- `src/semantic/typescript/local-flow.ts` — `computePostdominators` (11, cognitive 22.).
+- `src/source/facts/state-temporal-analysis.ts` — `mutationFact` (15, cognitive 11.).
+- `src/source/vue/vue-profile.ts` — `buildBehaviorTokens` (15, cognitive 14.).
+- `src/symbols/graph/member-call-targets.ts` — `resolveCallableTargetDefinitions` (15, cognitive 13.).
+- `src/symbols/graph/member-call-targets.ts` — `serviceDeclarationFilesForImplementation` (13, cognitive 22.).
+- `src/queries/impact/context.ts` — `discoverAffectedConsumerReuse` (10, cognitive 23.).
+- `src/queries/internal/causal-corridor.ts` — `isSelectedCorridorEvidence.<callback:(edge.semantics ?? []).some:0>` (14, cognitive 16.).
+
+worker-2:
+
+- `src/runtime/setup.ts` — `uninstallSkills` (11, cognitive 23.).
+- `src/reindex/shared-generation-store.ts` — `validateSourceGeneration` (15, cognitive 14.).
+- `src/reindex/typescript-index-requester.ts` — `decodeDocumentResponse.fragments.<callback:response.fragments.map:0>` (15, cognitive 4.).
+- `src/reindex/typescript-index-service.ts` — `TypeScriptIndexServiceHost.constructor` (15, cognitive 7.).
+- `src/runtime/project-setup.ts` — `remediateIndexers` (15, cognitive 14.).
+- `src/runtime/watch.ts` — `Watcher.handleFileChange` (15, cognitive 11.).
+- `src/semantic/typescript/session-service.ts` — `TypeScriptSemanticServiceHost.status` (15, cognitive 12.).
+- `src/reindex/affected-shadow.ts` — `collectAffectedSetShadowRecord` (14, cognitive 12.).
+- `src/reindex/index.ts` — `collectIndexerOutputs` (10, cognitive 21.).
+- `src/reindex/index.ts` — `publishFreshReindexArtifacts` (14, cognitive 13.).
+- `src/reindex/shared-generation-store.ts` — `readSharedGeneration` (14, cognitive 10.).
+- `src/reindex/sqlite-generation-store.ts` — `ensureImmutableSqliteGeneration` (14, cognitive 11.).
+- `src/reindex/typescript-compiler-shards.ts` — `partitionTypeScriptCompilerInputsIntoShards` (14, cognitive 16.).
+- `src/reindex/vue/augment-vue-workers.ts` — `awaitVueReferenceWorkers` (14, cognitive 12.).
+- `src/reindex/vue/augment-vue-workers.ts` — `readWorkerResult` (14, cognitive 11.).
+- `src/semantic/rust/durable-session-server.ts` — `processDurableRustSessionRequests` (15, cognitive 19.).
+- `src/semantic/rust/provider.ts` — `createRustSemanticProvider` (15, cognitive 2.).
+- `src/semantic/rust/scip-occurrence-callees.ts` — `loadScipOccurrenceCalleeIndex` (15, cognitive 19.).
+- `src/semantic/rust/scip-occurrence-references.ts` — `loadScipOccurrenceReferenceIndex` (15, cognitive 17.).
+- `src/semantic/shared-primitives.ts` — `materializeSemanticReferenceBatch` (16, cognitive 20.).
+- `src/semantic/shared-primitives.ts` — `buildSemanticCalleeMap.<callback:profileSpan:1>` (12, cognitive 22.).
+- `src/semantic/typescript/ts-morph-provider.ts` — `TsMorphSemanticProvider.definitionFromCompilerSymbol` (16, cognitive 22.).
+- `src/semantic/typescript/ts-morph-provider.ts` — `TsMorphSemanticProvider.importUsageForSourceFile` (14, cognitive 24.).
+- `src/semantic/typescript/ts-morph-provider.ts` — `TsMorphSemanticProvider.referencesForDefinitions` (15, cognitive 19.).
+- `src/platform/fingerprint-stat-cache.ts` — `isFingerprintStatRecord` (14, cognitive 5.).
+
+worker-3:
+
+- `scripts/change-benchmark-core.mjs` — `checkStructure.visit` (15, cognitive 21.).
+- `src/analysis/runtime-boundaries/extractors.ts` — `nodeChildProcessBindings` (15, cognitive 16.).
+- `src/analysis/runtime-boundaries/graph.ts` — `buildRelationGroups` (12, cognitive 22.).
+- `src/analysis/runtime-boundaries/wrapper-propagation.ts` — `propagateCompilerResolvedWrappers` (10, cognitive 22.).
+- `src/language-parsers/languages/php.ts` — `parsePhpImportsAst` (10, cognitive 22.).
+- `src/queries/cleanup/dead.ts` — `deadSummary` (12, cognitive 22.).
+- `scripts/accuracy-calibration-core.mjs` — `parseDeadCalibrationOptions` (14, cognitive 20.).
+- `scripts/accuracy-calibration.mjs` — `renderDeadPacket` (14, cognitive 3.).
+- `scripts/api-surface-contract.mjs` — `normalizeNamedBindings` (14, cognitive 16.).
+- `scripts/profile-scoreboard.mjs` — `profileScoreboard` (14, cognitive 18.).
+- `scripts/scip-windows-provenance.mjs` — `inspectPortableExecutable` (14, cognitive 10.).
+- `scripts/scip-windows-release.ts` — `runWindowsSidecarRelease` (14, cognitive 11.).
+- `skills/scip-explore/scripts/capture-evidence.mjs` — `priorSourceCoverage` (14, cognitive 20.).
+- `src/analysis/framework-patterns.ts` — `collectRustAstExclusions` (14, cognitive 13.).
+- `src/analysis/framework-patterns.ts` — `normalizeExclusionEntry` (14, cognitive 13.).
+- `src/analysis/runtime-boundaries/extractors.ts` — `capabilityRegistryExtractor.extract.<callback:visitDescendantsOfType:2>` (14, cognitive 15.).
+- `src/analysis/runtime-boundaries/extractors.ts` — `effectHttpApiExtractor.extract.<callback:visitDescendantsOfType:2>` (14, cognitive 12.).
+- `src/queries/cleanup/duplicate-bodies.ts` — `extractImplementationBody` (14, cognitive 17.).
+- `src/queries/graph/architecture.ts` — `analyzeArchitectureGraph` (14, cognitive 15.).
+- `src/queries/graph/deep-chains.ts` — `dependencyDepth` (14, cognitive 21.).
+- `src/queries/graph/graph-evidence.ts` — `graphEvidence` (14, cognitive 11.).
+- `src/queries/graph/system-map.ts` — `causalCorridorFocusLocations` (14, cognitive 15.).
+- `src/queries/navigation/source-inspection.ts` — `inspectSource` (14, cognitive 11.).
+- `src/runtime/commands/command-handlers.ts` — `renderSqliteGeneration` (14, cognitive 15.).
+- `src/runtime/commands/command-handlers.ts` — `renderWatchReindexActivity` (14, cognitive 6.).
+
+
+### Fifth parallel complexity wave completed
+
+Completed 45 ranked targets across exclusive file assignments: root nine, each of three Astra-medium workers twelve. All selected targets and introduced helpers are at or below cyclomatic 10 / cognitive 15. No thresholds, source scope, suppressions or dependency policy changed.
+
+Fifth parallel complexity wave: 3227 full-suite tests / 360 files passed; build, source types and contract fixtures, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), public consumer compilation and skill links passed. Accounted source review resolves 45 findings with no introduced/worsened findings. Fresh source health: 563/563 eligible files, 13,146 functions, 385 complexity findings, no other finding rules. Fresh indexed diff impact: 122 changed symbols across 34 changed files; 30 affected files. No source-matched test coverage artifact; no CRAP claim.
+
+All 563 source files remain mapped and all 47 dependency rows declared. Fresh health reports no duplication, dependency cycles or configured architecture violations. The 385 remaining complexity findings are the next work queue; the historical maintenance inventory remains a different population.
+
+Focused validation passed 219 tests in worker 1 plus 144 affected tests rerun after final splits; 187 in worker 2 plus 28 rerun; 156 in worker 3 including the final 48 search/source-evidence tests; and 220 distinct tests in root. These counts overlap. New isolated script fixtures exercise calibration argument consumption, early exits, numeric-error precedence, summary parsing and report output without launching benchmark entrypoints. Every lane received a second read-only diff review. A temporary return-newline mistake in worker 3 was corrected before final checks. Seven search CLI failures during shared editing did not recur in a focused rerun or the frozen full suite; their initial cause was not established. Worker logs for those two runs were retained as tool output, not filesystem artifacts.
+
+The anonymous source-inspection search row callback was replaced by the named sourceInspectionSearchRow at7/4; the target mapping is established by the exact diff, not automated name identity. The untouched publishFreshReindexArtifacts callback remains12/16 and is reported uncomparable. Indexed impact omits eleven paths absent/excluded from its symbol index; current-source health accounts for eligible scripts.
+
+The VM remains on its previously verified installation from `931fe6c1`; these behavior-preserving refactors do not require another reinstall under the user's instruction.
+
+Target measurements (cyclomatic/cognitive):
+
+- `isValidLanguageActivity` → 4/3 (`src/reindex/reindex-activity.ts`).
+- `isClaimCoverage` → 4/3 (`src/domain/claim-qualification.ts`).
+- `decodeProjectConfig` → 5/7 (`src/domain/project-config.ts`).
+- `isSuppressionCounterevidence` → 5/3 (`src/domain/suppression-adjudication.ts`).
+- `validateDeclaredCouplings` → 5/3 (`src/runtime/config.ts`).
+- `parseEntryPointsInvocation` → 9/14 (`src/runtime/query-service-fastpath.ts`).
+- `isSourceSearchResult` → 8/4 (`src/runtime/query-service.ts`).
+- `parseGitWorktreeList` → 8/14 (`src/platform/git-worktree.ts`).
+- `parseArgs` → 7/9 (`scripts/semantic-command-calibration.mjs`).
+- `buildTryStatement` → 10/6 (`src/semantic/typescript/local-flow.ts`).
+- `collectNodeAccesses.visit` → 10/10 (`src/semantic/typescript/local-flow.ts`).
+- `buildClojureSourceFacts` → 6/9 (`src/source/facts/clojure-facts.ts`).
+- `callTargetForNode` → 8/6 (`src/source/facts/source-calls.ts`).
+- `reactCandidateForNode` → 6/6 (`src/source/react-profile.ts`).
+- `importedMemberCallTargets` → 9/11 (`src/symbols/graph/member-call-targets.ts`).
+- `resolveMember` → 7/12 (`src/symbols/graph/static-value-flow.ts`).
+- `sourceMayContainCandidateName` → 5/4 (`src/source/primitives/source-identifier-prefilter.ts`).
+- `addRustAttrCallers` → 7/11 (`src/symbols/references/reference-callers.ts`).
+- `classifyCycle` → 6/6 (`src/queries/graph/cycles.ts`).
+- `nativeConsumerClassifyEntry` → 4/4 (`src/queries/internal/consumer-evidence.ts`).
+- `shortestDirectedAnchorPath` → 2/1 (`src/queries/internal/exploration-topology.ts`).
+- `publishSharedGenerationOwned` → 8/6 (`src/reindex/shared-generation-store.ts`).
+- `materializeGeneration` → 9/8 (`src/reindex/sqlite-generation-store.ts`).
+- `getPublishedIndexFreshness` → 7/7 (`src/runtime/index-freshness.ts`).
+- `getProjectCapabilities` → 9/9 (`src/runtime/project-readiness.ts`).
+- `ensureWatchService` → 7/5 (`src/runtime/watch-service.ts`).
+- `classifyLanguageShardReuse` → 4/3 (`src/reindex/index.ts`).
+- `runPreparedIndexer` → 10/11 (`src/reindex/indexer-runner.ts`).
+- `managedGenerationMatchesFingerprint` → 8/6 (`src/reindex/shared-generation-store.ts`).
+- `prepareSharedGenerationForProject` → 10/9 (`src/reindex/shared-generation-store.ts`).
+- `publishFreshLocalGenerationForProject` → 10/8 (`src/reindex/shared-generation-store.ts`).
+- `languageCapability` → 10/11 (`src/runtime/project-readiness.ts`).
+- `sanitizeScipBuffer` → 6/7 (`src/reindex/sanitize.ts`).
+- `compareReferencedDeclarations` → 6/9 (`scripts/api-surface-contract.mjs`).
+- `typeScriptProjectSelectionIsTreeOwned` → 6/7 (`src/platform/typescript-projects.ts`).
+- `handleLocalityCandidates.<callback:budgetedDbCommand:1>` → 5/4 (`src/runtime/query-commands/cleanup/handlers.ts`).
+- `renderRelationshipPacket` → 4/3 (`scripts/accuracy-calibration.mjs`).
+- `runResampleMode` → 6/5 (`scripts/accuracy-calibration.mjs`).
+- `runSummarizeMode` → 8/4 (`scripts/accuracy-calibration.mjs`).
+- `projectCommandResult` → 9/7 (`skills/scip-explore/scripts/capture-evidence.mjs`).
+- `capabilityDescriptorHandler` → 6/11 (`src/analysis/runtime-boundaries/extractors.ts`).
+- `terminateOwnedProcessTree` → 10/9 (`src/platform/process-tree.ts`).
+- `patternDeviationDrift` → 3/3 (`src/queries/cleanup/drift.ts`).
+- `qualifiedEvidence` → 8/6 (`src/queries/navigation/evidence.ts`).
+- `sourceInspectionSections.searchRows.<callback:result.searches.map:0>` → 7/4 (`src/runtime/query-commands/navigation.ts`).
+
+Next: the user requested larger parallel batches, so the sixth wave has90 ranked targets with exclusive file ownership (root15; each worker25). Artifacts: `/tmp/complexity-wave5-{review,health,impact,metrics}.json`; verification logs use `/tmp/complexity-wave5-*.log`.

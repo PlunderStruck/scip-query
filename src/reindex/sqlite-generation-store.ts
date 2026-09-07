@@ -744,16 +744,7 @@ function materializeGeneration(input: {
   const generationDirectory = join(input.generationRoot, identity);
   const existingManifestPath = join(generationDirectory, SQLITE_GENERATION_MANIFEST);
   if (existsSync(existingManifestPath)) {
-    const existing = readSqliteGenerationManifestFromRoot(input.generationRoot, identity);
-    if (
-      existing &&
-      storedArtifactMatches(generationDirectory, existing.database, database) &&
-      optionalStoredArtifactMatches(generationDirectory, existing.index, index) &&
-      storedMetadataMatches(generationDirectory, existing.metadata, input.metadataPath)
-    ) {
-      return { identity, directorySync: syncDirectoryDurable(input.generationRoot) };
-    }
-    throw new Error(`SQLite generation ${identity} already exists with different or corrupt artifacts.`);
+    return reuseMatchingGeneration(input, identity, generationDirectory, database, index);
   }
 
   const directoryStatuses: Exclude<DirectorySyncStatus, 'not-requested'>[] = [
@@ -764,13 +755,7 @@ function materializeGeneration(input: {
   rmSync(temporaryDirectory, { recursive: true, force: true });
   mkdirSync(temporaryDirectory, { recursive: true });
   try {
-    directoryStatuses.push(cloneArtifact(input.databasePath, join(temporaryDirectory, database.file)));
-    if (index && input.indexPath) {
-      directoryStatuses.push(cloneArtifact(input.indexPath, join(temporaryDirectory, index.file)));
-    }
-    if (metadata && input.metadataPath) {
-      directoryStatuses.push(cloneArtifact(input.metadataPath, join(temporaryDirectory, metadata.file)));
-    }
+    cloneGenerationArtifacts(input, temporaryDirectory, database, index, metadata, directoryStatuses);
     const manifestWrite = writeJsonDurable(
       join(temporaryDirectory, SQLITE_GENERATION_MANIFEST),
       {
@@ -790,6 +775,42 @@ function materializeGeneration(input: {
     rmSync(temporaryDirectory, { recursive: true, force: true });
   }
   return { identity, directorySync: mergeDirectorySyncStatus(...directoryStatuses) };
+}
+
+function cloneGenerationArtifacts(
+  input: Parameters<typeof materializeGeneration>[0],
+  temporaryDirectory: string,
+  database: SqliteGenerationArtifact,
+  index: SqliteGenerationArtifact | undefined,
+  metadata: SqliteGenerationArtifact | undefined,
+  directoryStatuses: Exclude<DirectorySyncStatus, 'not-requested'>[],
+): void {
+  directoryStatuses.push(cloneArtifact(input.databasePath, join(temporaryDirectory, database.file)));
+  if (index && input.indexPath) {
+    directoryStatuses.push(cloneArtifact(input.indexPath, join(temporaryDirectory, index.file)));
+  }
+  if (metadata && input.metadataPath) {
+    directoryStatuses.push(cloneArtifact(input.metadataPath, join(temporaryDirectory, metadata.file)));
+  }
+}
+
+function reuseMatchingGeneration(
+  input: Parameters<typeof materializeGeneration>[0],
+  identity: string,
+  generationDirectory: string,
+  database: SqliteGenerationArtifact,
+  index: SqliteGenerationArtifact | undefined,
+): ReturnType<typeof materializeGeneration> {
+  const existing = readSqliteGenerationManifestFromRoot(input.generationRoot, identity);
+  if (
+    existing &&
+    storedArtifactMatches(generationDirectory, existing.database, database) &&
+    optionalStoredArtifactMatches(generationDirectory, existing.index, index) &&
+    storedMetadataMatches(generationDirectory, existing.metadata, input.metadataPath)
+  ) {
+    return { identity, directorySync: syncDirectoryDurable(input.generationRoot) };
+  }
+  throw new Error(`SQLite generation ${identity} already exists with different or corrupt artifacts.`);
 }
 
 function generationIdentityFromArtifacts(

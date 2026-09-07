@@ -171,6 +171,10 @@ function requiresDirectCounterevidence(finding: SuppressionAdjudicationFinding):
 function isSuppressionCounterevidence(value: unknown): value is SuppressionCounterevidence {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const evidence = value as Partial<SuppressionCounterevidence>;
+  return validCounterevidenceClaim(evidence) && validCounterevidenceVersion(evidence);
+}
+
+function validCounterevidenceClaim(evidence: Partial<SuppressionCounterevidence>): boolean {
   return (
     (evidence.kind === 'source' ||
       evidence.kind === 'config' ||
@@ -179,7 +183,12 @@ function isSuppressionCounterevidence(value: unknown): value is SuppressionCount
     typeof evidence.referent === 'string' &&
     evidence.referent.trim() !== '' &&
     typeof evidence.claim === 'string' &&
-    evidence.claim.trim() !== '' &&
+    evidence.claim.trim() !== ''
+  );
+}
+
+function validCounterevidenceVersion(evidence: Partial<SuppressionCounterevidence>): boolean {
+  return (
     (evidence.contentHash === undefined || /^[a-f0-9]{64}$/u.test(evidence.contentHash)) &&
     (evidence.generation === undefined || (typeof evidence.generation === 'string' && evidence.generation.length > 0))
   );

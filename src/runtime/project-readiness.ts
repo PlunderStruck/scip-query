@@ -193,12 +193,7 @@ export function getProjectCapabilities(
   } = {},
 ): ProjectCapabilityReport {
   const runnableIndexers = readiness.indexers.filter((indexer) => indexer.runnable).length;
-  const graphStatus =
-    readiness.languages.length === 0 || (runnableIndexers === 0 && !opts.hasIndexedGraph)
-      ? 'unavailable'
-      : runnableIndexers === readiness.indexers.length && readiness.indexers.length > 0
-        ? 'available'
-        : 'partial';
+  const graphStatus = projectIndexingStatus(readiness, opts, runnableIndexers);
   const graphDataAvailable = graphStatus !== 'unavailable';
   const matrix = readiness.languages.map((language) =>
     languageCapability(readiness, language, {
@@ -207,12 +202,7 @@ export function getProjectCapabilities(
     }),
   );
   const verificationStatuses = matrix.map((row) => row.cleanupVerification.status);
-  const verificationStatus: CapabilityStatus =
-    verificationStatuses.length === 0 || verificationStatuses.every((status) => status === 'unavailable')
-      ? 'unavailable'
-      : verificationStatuses.every((status) => status === 'available')
-        ? 'available'
-        : 'partial';
+  const verificationStatus = aggregateVerificationStatus(verificationStatuses);
   return {
     languages: readiness.languages,
     matrix,
@@ -263,6 +253,25 @@ export function getProjectCapabilities(
       },
     ],
   };
+}
+
+function projectIndexingStatus(
+  readiness: ProjectReadiness,
+  opts: { hasIndexedGraph?: boolean },
+  runnableIndexers: number,
+): CapabilityStatus {
+  return readiness.languages.length === 0 || (runnableIndexers === 0 && !opts.hasIndexedGraph)
+    ? 'unavailable'
+    : runnableIndexers === readiness.indexers.length && readiness.indexers.length > 0
+      ? 'available'
+      : 'partial';
+}
+function aggregateVerificationStatus(statuses: readonly CapabilityStatus[]): CapabilityStatus {
+  return statuses.length === 0 || statuses.every((status) => status === 'unavailable')
+    ? 'unavailable'
+    : statuses.every((status) => status === 'available')
+      ? 'available'
+      : 'partial';
 }
 
 function projectRelationCapabilities(
@@ -450,12 +459,7 @@ function languageCapability(
       label: 'SCIP indexing',
       status: indexingStatus,
       evidence: 'graph-fact',
-      reason:
-        indexingStatus === 'available'
-          ? `${indexer?.binaryLabel ?? language} is runnable${indexer?.resolvedBinary ? ` at ${indexer.resolvedBinary}` : ''}.`
-          : indexingStatus === 'partial'
-            ? `An indexed ${language} graph is present, but ${indexer?.binaryLabel ?? language} is not currently runnable for refresh.`
-            : (indexer?.note ?? `${language} indexing is not runnable in this project.`),
+      reason: languageIndexingReason(indexingStatus, indexer, language),
     },
     sourceFacts: {
       id: 'source-facts',
@@ -487,6 +491,18 @@ function languageCapability(
           : `No detected checker covers ${LANGUAGE_EXTENSIONS[language].join(', ')} files.`,
     },
   };
+}
+
+function languageIndexingReason(
+  indexingStatus: CapabilityStatus,
+  indexer: ProjectReadiness['indexers'][number] | undefined,
+  language: SupportedLanguage,
+): string {
+  return indexingStatus === 'available'
+    ? `${indexer?.binaryLabel ?? language} is runnable${indexer?.resolvedBinary ? ` at ${indexer.resolvedBinary}` : ''}.`
+    : indexingStatus === 'partial'
+      ? `An indexed ${language} graph is present, but ${indexer?.binaryLabel ?? language} is not currently runnable for refresh.`
+      : (indexer?.note ?? `${language} indexing is not runnable in this project.`);
 }
 
 function languageHasIndexedGraph(

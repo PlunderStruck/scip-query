@@ -395,9 +395,7 @@ export function parseGitWorktreeList(output: string): GitWorktreeRecord[] {
       current = undefined;
       continue;
     }
-    const separator = field.indexOf(' ');
-    const key = separator < 0 ? field : field.slice(0, separator);
-    const value = separator < 0 ? '' : field.slice(separator + 1);
+    const { key, value } = parseGitWorktreeField(field);
     if (key === 'worktree') {
       if (current) records.push(current);
       current = {
@@ -410,15 +408,27 @@ export function parseGitWorktreeList(output: string): GitWorktreeRecord[] {
       continue;
     }
     if (!current) continue;
-    if (key === 'HEAD') current.head = value;
-    else if (key === 'branch') current.branch = value;
-    else if (key === 'detached') current.detached = true;
-    else if (key === 'bare') current.bare = true;
-    else if (key === 'prunable') current.prunable = true;
-    else if (key === 'locked') current.locked = true;
+    applyGitWorktreeAttribute(current, key, value);
   }
   if (current) records.push(current);
   return records;
+}
+
+function parseGitWorktreeField(field: string): { key: string; value: string } {
+  const separator = field.indexOf(' ');
+  return {
+    key: separator < 0 ? field : field.slice(0, separator),
+    value: separator < 0 ? '' : field.slice(separator + 1),
+  };
+}
+
+function applyGitWorktreeAttribute(current: GitWorktreeRecord, key: string, value: string): void {
+  if (key === 'HEAD') current.head = value;
+  else if (key === 'branch') current.branch = value;
+  else if (key === 'detached') current.detached = true;
+  else if (key === 'bare') current.bare = true;
+  else if (key === 'prunable') current.prunable = true;
+  else if (key === 'locked') current.locked = true;
 }
 
 export function gitOutput(

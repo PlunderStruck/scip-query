@@ -62,8 +62,7 @@ export function buildClojureSourceFacts(source: string): SourceFacts {
   const clojureMembers: SourceFacts['clojureMembers'] = [];
   const identifierLineMap = new Map<string, number[]>();
   const stack: FormFrame[] = [];
-  let line = 0;
-  let index = 0;
+  const cursor = { line: 0, index: 0 };
 
   const recordIdentifier = (name: string, row: number): void => {
     const existing = identifierLineMap.get(name);
@@ -74,57 +73,19 @@ export function buildClojureSourceFacts(source: string): SourceFacts {
     if (existing[existing.length - 1] !== row) existing.push(row);
   };
 
-  while (index < source.length) {
-    const char = source[index]!;
-    if (char === '\n') {
-      line += 1;
-      index += 1;
-      continue;
-    }
-    if (/\s|,/.test(char)) {
-      index += 1;
-      continue;
-    }
-    if (char === ';') {
-      index = skipLineComment(source, index);
-      continue;
-    }
-    if (char === '"') {
-      const skipped = skipString(source, index, line);
-      line = skipped.line;
-      index = skipped.index;
-      continue;
-    }
-    if (char === '(' || char === '[' || char === '{') {
-      stack.push({ kind: char, startLine: line, endLine: line, headTokens: [], tokens: [], children: [] });
-      index += 1;
-      continue;
-    }
-    if (char === ')' || char === ']' || char === '}') {
-      const frame = stack.pop();
-      if (frame) {
-        frame.endLine = line;
-        recordCompletedFrame(frame, { callables, callSites, clojureMembers, recordIdentifier });
-        stack[stack.length - 1]?.children.push(frame);
-      }
-      index += 1;
-      continue;
-    }
+  const out = { callables, callSites, clojureMembers, recordIdentifier };
+  while (cursor.index < source.length) {
+    const char = source[cursor.index]!;
+    if (skipClojureTrivia(source, char, cursor)) continue;
+    if (consumeClojureFormDelimiter(char, cursor, stack, out)) continue;
     if (isReaderMacroPrefix(char)) {
-      index += 1;
+      cursor.index += 1;
       continue;
     }
-
-    const tokenStartLine = line;
-    const tokenStart = index;
-    while (index < source.length && !isTokenDelimiter(source[index]!)) {
-      index += 1;
-    }
-    const text = source.slice(tokenStart, index);
-    if (!text) continue;
-    const token = { text, line: tokenStartLine, column: tokenStart - source.lastIndexOf('\n', tokenStart - 1) - 1 };
+    const token = readClojureToken(source, cursor);
+    if (!token) continue;
     recordFrameToken(stack[stack.length - 1], token);
-    recordIdentifier(clojureLeaf(text), tokenStartLine);
+    recordIdentifier(clojureLeaf(token.text), token.line);
   }
 
   return {
@@ -139,6 +100,60 @@ export function buildClojureSourceFacts(source: string): SourceFacts {
     rustAttrReferencedNames: new Set(),
     crossLanguageDispatchNames: new Set(),
   };
+}
+
+interface ClojureScanCursor {
+  line: number;
+  index: number;
+}
+
+function skipClojureTrivia(source: string, char: string, cursor: ClojureScanCursor): boolean {
+  if (char === '\n') {
+    cursor.line += 1;
+    cursor.index += 1;
+  } else if (/\s|,/.test(char)) {
+    cursor.index += 1;
+  } else if (char === ';') {
+    cursor.index = skipLineComment(source, cursor.index);
+  } else if (char === '"') {
+    const skipped = skipString(source, cursor.index, cursor.line);
+    cursor.line = skipped.line;
+    cursor.index = skipped.index;
+  } else {
+    return false;
+  }
+  return true;
+}
+
+function consumeClojureFormDelimiter(
+  char: string,
+  cursor: ClojureScanCursor,
+  stack: FormFrame[],
+  out: Parameters<typeof recordCompletedFrame>[1],
+): boolean {
+  if (char === '(' || char === '[' || char === '{') {
+    stack.push({ kind: char, startLine: cursor.line, endLine: cursor.line, headTokens: [], tokens: [], children: [] });
+  } else if (char === ')' || char === ']' || char === '}') {
+    const frame = stack.pop();
+    if (frame) {
+      frame.endLine = cursor.line;
+      recordCompletedFrame(frame, out);
+      stack[stack.length - 1]?.children.push(frame);
+    }
+  } else {
+    return false;
+  }
+  cursor.index += 1;
+  return true;
+}
+
+function readClojureToken(source: string, cursor: ClojureScanCursor): ClojureToken | null {
+  const tokenStartLine = cursor.line;
+  const tokenStart = cursor.index;
+  while (cursor.index < source.length && !isTokenDelimiter(source[cursor.index]!)) cursor.index += 1;
+  const text = source.slice(tokenStart, cursor.index);
+  if (!text) return null;
+  return { text, line: tokenStartLine, column: tokenStart - source.lastIndexOf('\n', tokenStart - 1) - 1 };
 }
 
 function recordCompletedFrame(

@@ -138,14 +138,22 @@ function addRustAttrCallers(
     if (attrRefs.length === 0) continue;
     for (const { name } of attrRefs) {
       if (targetLeaves && !targetLeaves.has(name)) continue;
-      const candidates = leafIndex.get(name);
-      if (!candidates) continue;
-      for (const c of candidates) {
-        if (!targetSymbolIds.has(c.symbolId)) continue;
-        if (c.file === doc) continue; // self-ref, not a caller
-        addCallerFile(map, c.symbolId, doc);
-      }
+      addRustAttrCandidateCallers(map, doc, leafIndex.get(name), targetSymbolIds);
     }
+  }
+}
+
+function addRustAttrCandidateCallers(
+  map: Map<number, Set<string>>,
+  doc: string,
+  candidates: readonly GlobalLeafCandidate[] | undefined,
+  targetSymbolIds: ReadonlySet<number>,
+): void {
+  if (!candidates) return;
+  for (const candidate of candidates) {
+    if (!targetSymbolIds.has(candidate.symbolId)) continue;
+    if (candidate.file === doc) continue; // self-ref, not a caller
+    addCallerFile(map, candidate.symbolId, doc);
   }
 }
 

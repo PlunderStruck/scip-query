@@ -1048,6 +1048,14 @@ function shortestDirectedAnchorPath(
     const shared = starts.find((id) => targets.has(id))!;
     return { nodeIds: [shared], edgeIds: [] };
   }
+  const adjacency = directedAnchorPathAdjacency(topology, includeCandidateEvidence);
+  return traverseDirectedAnchorPath(starts, targets, adjacency);
+}
+
+function directedAnchorPathAdjacency(
+  topology: ExplorationTopology,
+  includeCandidateEvidence: boolean,
+): Map<string, Array<{ nodeId: string; edgeId: string }>> {
   const structuralNodeIds = new Set(
     topology.nodes.filter((node) => node.kind === 'structural-region').map((node) => node.id),
   );
@@ -1063,6 +1071,14 @@ function shortestDirectedAnchorPath(
   for (const neighbors of adjacency.values()) {
     neighbors.sort((left, right) => left.nodeId.localeCompare(right.nodeId) || left.edgeId.localeCompare(right.edgeId));
   }
+  return adjacency;
+}
+
+function traverseDirectedAnchorPath(
+  starts: string[],
+  targets: ReadonlySet<string>,
+  adjacency: ReadonlyMap<string, Array<{ nodeId: string; edgeId: string }>>,
+): TraversedPath | null {
   const queue = starts.map((nodeId) => ({ nodeId, nodeIds: [nodeId], edgeIds: [] as string[] }));
   const visited = new Set(starts);
   for (let cursor = 0; cursor < queue.length; cursor += 1) {

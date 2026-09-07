@@ -124,13 +124,7 @@ export function importedMemberCallTargets(
   );
   if (!callsites) return { targets: [], unresolvedCallsites: 0 };
 
-  const sourceImports = getSourceImports(db, sourceFile).filter(
-    (entry): entry is ParsedSourceImport & { sourcePath: string } => Boolean(entry.sourcePath),
-  );
-  const sourceAliases = simpleIdentifierAliases(getSourceText(db, sourceFile) ?? '');
-  const sourceRoot = getAst(db, sourceFile)?.rootNode ?? null;
-  const serviceReceivers = sourceRoot ? indexServiceReceivers(sourceRoot) : emptyServiceReceiverIndex();
-  const callablesByFile = new Map<string, Array<{ name: string; startLine: number; endLine: number }>>();
+  const resolutionContext = createImportedMemberResolutionContext(db, sourceFile);
   const leafIndex = getGlobalLeafIndex(db);
   const targets: ImportedMemberCallTarget[] = [];
   let unresolvedCallsites = 0;
@@ -145,50 +139,87 @@ export function importedMemberCallTargets(
       continue;
     }
 
-    const receiver = site.calleeQualifier;
-    const constructedTarget = constructedMemberCallTarget(db, sourceFile, site, sourceImports);
-    if (constructedTarget) {
-      targets.push(constructedTarget);
-      continue;
+    const siteTargets = resolveImportedMemberCallSite(resolutionContext, site);
+    if (siteTargets.length === 0) unresolvedCallsites += 1;
+    for (const target of siteTargets) targets.push(target);
+  }
+
+  return { targets, unresolvedCallsites };
+}
+
+interface ImportedMemberResolutionContext {
+  db: ScipDatabase;
+  sourceFile: string;
+  sourceImports: Array<ParsedSourceImport & { sourcePath: string }>;
+  sourceAliases: ReturnType<typeof simpleIdentifierAliases>;
+  serviceReceivers: ServiceReceiverIndex;
+  callablesByFile: Map<string, NonNullable<ReturnType<typeof getCallableSites>>>;
+}
+
+function createImportedMemberResolutionContext(db: ScipDatabase, sourceFile: string): ImportedMemberResolutionContext {
+  const sourceImports = getSourceImports(db, sourceFile).filter(
+    (entry): entry is ParsedSourceImport & { sourcePath: string } => Boolean(entry.sourcePath),
+  );
+  const sourceAliases = simpleIdentifierAliases(getSourceText(db, sourceFile) ?? '');
+  const sourceRoot = getAst(db, sourceFile)?.rootNode ?? null;
+  const serviceReceivers = sourceRoot ? indexServiceReceivers(sourceRoot) : emptyServiceReceiverIndex();
+  const callablesByFile = new Map<string, NonNullable<ReturnType<typeof getCallableSites>>>();
+  return {
+    db,
+    sourceFile,
+    sourceImports,
+    sourceAliases,
+    serviceReceivers,
+    callablesByFile,
+  };
+}
+
+function resolveImportedMemberCallSite(
+  context: ImportedMemberResolutionContext,
+  site: NonNullable<ReturnType<typeof getCallSites>>[number],
+): ImportedMemberCallTarget[] {
+  const { db, sourceFile, sourceImports, serviceReceivers } = context;
+  const constructedTarget = constructedMemberCallTarget(db, sourceFile, site, sourceImports);
+  if (constructedTarget) return [constructedTarget];
+  const assembledTargets = importedServiceObjectMemberTargets(
+    db,
+    sourceFile,
+    site,
+    sourceImports,
+    serviceAliasesForCallsite(serviceReceivers, site.calleeQualifier, site.line),
+  );
+  if (assembledTargets.length > 0) return assembledTargets;
+  const injectedTargets = factoryCallbackMemberTargets(db, sourceFile, site);
+  if (injectedTargets.length > 0) return injectedTargets;
+  return directImportedReceiverTargets(context, site);
+}
+
+function directImportedReceiverTargets(
+  context: ImportedMemberResolutionContext,
+  site: NonNullable<ReturnType<typeof getCallSites>>[number],
+): ImportedMemberCallTarget[] {
+  const { db, sourceFile, sourceImports, sourceAliases, callablesByFile } = context;
+  const receiver = site.calleeQualifier;
+  const importedReceiver = receiver ? (sourceAliases.get(receiver) ?? receiver) : null;
+  const receiverFiles = importedReceiver
+    ? uniqueResolvedPaths(
+        sourceImports
+          .filter((entry) => (entry.localName ?? entry.importedName) === importedReceiver)
+          .map((entry) => entry.sourcePath),
+      )
+    : [];
+  const matchingCallables = receiverFiles.flatMap((file) => {
+    let callables = callablesByFile.get(file);
+    if (!callables) {
+      callables = getCallableSites(db, file) ?? [];
+      callablesByFile.set(file, callables);
     }
-    const assembledTargets = importedServiceObjectMemberTargets(
-      db,
-      sourceFile,
-      site,
-      sourceImports,
-      serviceAliasesForCallsite(serviceReceivers, site.calleeQualifier, site.line),
-    );
-    if (assembledTargets.length > 0) {
-      targets.push(...assembledTargets);
-      continue;
-    }
-    const injectedTargets = factoryCallbackMemberTargets(db, sourceFile, site);
-    if (injectedTargets.length > 0) {
-      targets.push(...injectedTargets);
-      continue;
-    }
-    const importedReceiver = receiver ? (sourceAliases.get(receiver) ?? receiver) : null;
-    const receiverFiles = importedReceiver
-      ? uniqueResolvedPaths(
-          sourceImports
-            .filter((entry) => (entry.localName ?? entry.importedName) === importedReceiver)
-            .map((entry) => entry.sourcePath),
-        )
-      : [];
-    const matchingCallables = receiverFiles.flatMap((file) => {
-      let callables = callablesByFile.get(file);
-      if (!callables) {
-        callables = getCallableSites(db, file) ?? [];
-        callablesByFile.set(file, callables);
-      }
-      return callables.filter((callable) => callable.name === site.calleeLeaf).map((callable) => ({ file, callable }));
-    });
-    if (matchingCallables.length !== 1) {
-      unresolvedCallsites += 1;
-      continue;
-    }
-    const match = matchingCallables[0]!;
-    targets.push({
+    return callables.filter((callable) => callable.name === site.calleeLeaf).map((callable) => ({ file, callable }));
+  });
+  if (matchingCallables.length !== 1) return [];
+  const match = matchingCallables[0]!;
+  return [
+    {
       calleeLeaf: site.calleeLeaf,
       line: site.line,
       sourceFile,
@@ -197,10 +228,8 @@ export function importedMemberCallTargets(
       targetEndLine: match.callable.endLine,
       resolution: 'direct-import-receiver',
       strength: 'candidate',
-    });
-  }
-
-  return { targets, unresolvedCallsites };
+    },
+  ];
 }
 
 function importedServiceObjectMemberTargets(

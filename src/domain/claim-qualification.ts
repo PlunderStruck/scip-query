@@ -262,9 +262,17 @@ export function isClaimQualificationV1(value: unknown): value is ClaimQualificat
 
 function isClaimCoverage(value: unknown): value is ClaimCoverage {
   if (!isRecordObject(value) || !isOneOf(value['state'], CLAIM_COVERAGE_STATES)) return false;
+  return validClaimCoverageCounts(value) && claimCoverageCountsMatchState(value);
+}
+
+function validClaimCoverageCounts(value: Record<string, unknown>): boolean {
   if (!isNonNegativeInteger(value['returned']) || typeof value['totalKnown'] !== 'boolean') return false;
   if (value['total'] !== undefined && !isNonNegativeInteger(value['total'])) return false;
   if (value['omitted'] !== undefined && !isNonNegativeInteger(value['omitted'])) return false;
+  return true;
+}
+
+function claimCoverageCountsMatchState(value: Record<string, unknown>): boolean {
   if (value['state'] === 'complete') {
     return value['totalKnown'] === true && value['total'] === value['returned'] && value['omitted'] === 0;
   }

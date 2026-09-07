@@ -663,20 +663,7 @@ function buildTryStatement(
     ? buildStatements(state, cfg, [...statement.finallyBlock.statements], next, context)
     : null;
   const after = finallyEntry ?? next;
-  let catchEntry: string | null = null;
-  let catchNodes: string[] = [];
-  if (statement.catchClause) {
-    const before = new Set(cfg.keys());
-    const catchContext: BuildContext = { ...context, throwTarget: finallyEntry ?? context.throwTarget };
-    const catchBody = buildStatements(state, cfg, [...statement.catchClause.block.statements], after, catchContext);
-    catchEntry = catchBody;
-    if (statement.catchClause.variableDeclaration) {
-      const binding = cfgNode(state, cfg, 'statement', statement.catchClause.variableDeclaration);
-      connect(cfg, binding.id, catchBody);
-      catchEntry = binding.id;
-    }
-    catchNodes = [...cfg.keys()].filter((id) => !before.has(id));
-  }
+  const { catchEntry, catchNodes } = buildCatchClause(state, cfg, statement.catchClause, after, finallyEntry, context);
   const raiseTarget = catchEntry ?? finallyEntry ?? context.throwTarget;
   const before = new Set(cfg.keys());
   const tryEntry = buildStatements(state, cfg, [...statement.tryBlock.statements], after, {
@@ -688,10 +675,10 @@ function buildTryStatement(
   connect(cfg, entry.id, tryEntry);
   if (raiseTarget) {
     connect(cfg, entry.id, raiseTarget);
-    for (const id of tryNodes) if (mayRaiseInto(state, cfg.get(id)!)) connect(cfg, id, raiseTarget);
+    connectRaisingNodes(state, cfg, tryNodes, raiseTarget);
   }
   if (finallyEntry && catchEntry) {
-    for (const id of catchNodes) if (mayRaiseInto(state, cfg.get(id)!)) connect(cfg, id, finallyEntry);
+    connectRaisingNodes(state, cfg, catchNodes, finallyEntry);
   }
   if (statement.finallyBlock && hasAbruptCompletion(ts, statement.tryBlock, statement.catchClause?.block)) {
     state.unsupported.add(
@@ -699,6 +686,42 @@ function buildTryStatement(
     );
   }
   return entry.id;
+}
+
+function buildCatchClause(
+  state: AnalysisState,
+  cfg: Map<string, CfgNode>,
+  catchClause: TypeScript.CatchClause | undefined,
+  after: string,
+  finallyEntry: string | null,
+  context: BuildContext,
+): { catchEntry: string | null; catchNodes: string[] } {
+  let catchEntry: string | null = null;
+  let catchNodes: string[] = [];
+  if (catchClause) {
+    const before = new Set(cfg.keys());
+    const catchContext: BuildContext = { ...context, throwTarget: finallyEntry ?? context.throwTarget };
+    const catchBody = buildStatements(state, cfg, [...catchClause.block.statements], after, catchContext);
+    catchEntry = catchBody;
+    if (catchClause.variableDeclaration) {
+      const binding = cfgNode(state, cfg, 'statement', catchClause.variableDeclaration);
+      connect(cfg, binding.id, catchBody);
+      catchEntry = binding.id;
+    }
+    catchNodes = [...cfg.keys()].filter((id) => !before.has(id));
+  }
+  return { catchEntry, catchNodes };
+}
+
+function connectRaisingNodes(
+  state: AnalysisState,
+  cfg: Map<string, CfgNode>,
+  nodes: readonly string[],
+  target: string,
+): void {
+  for (const id of nodes) {
+    if (mayRaiseInto(state, cfg.get(id)!)) connect(cfg, id, target);
+  }
 }
 
 /** Nodes whose completion could still be followed by a raise before the handler; terminal jumps have already left. */
@@ -793,23 +816,7 @@ function collectNodeAccesses(
   const ts = state.ts;
   const visit = (node: TypeScript.Node): void => {
     if (node !== root && ts.isFunctionLike(node)) return;
-    if (ts.isVariableDeclaration(node)) return collectDeclarationAccesses(state, analysis, cfg, node);
-    if (
-      ts.isConditionalExpression(node) ||
-      (ts.isBinaryExpression(node) && shortCircuitOperator(ts, node.operatorToken.kind))
-    ) {
-      // Expressions not split into CFG nodes (e.g. within a predicate or initializer)
-      // must not model their conditional assignments as unconditional definitions.
-      cfg.uses.push(...collectUses(state, analysis.id, node, cfg));
-      return;
-    }
-    if (ts.isBinaryExpression(node) && assignmentOperator(ts, node.operatorToken.kind))
-      return collectAssignmentAccesses(state, analysis, cfg, node);
-    if (isUpdateExpression(ts, node)) return collectUpdateAccesses(state, analysis, cfg, node);
-    if (ts.isDeleteExpression(node)) {
-      reportDelete(state, cfg);
-      return;
-    }
+    if (collectHandledNodeAccesses(state, analysis, cfg, node)) return;
     if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node)) return;
     if (isUseNode(state, node)) {
       const use = useForNode(state, analysis.id, node);
@@ -821,6 +828,38 @@ function collectNodeAccesses(
   };
   visit(root);
   cfg.uses = uniqueUses(cfg.uses);
+}
+
+function collectHandledNodeAccesses(
+  state: AnalysisState,
+  analysis: CallableAnalysis,
+  cfg: CfgNode,
+  node: TypeScript.Node,
+): boolean {
+  const ts = state.ts;
+  if (ts.isVariableDeclaration(node)) {
+    collectDeclarationAccesses(state, analysis, cfg, node);
+  } else if (isConditionalAccessExpression(ts, node)) {
+    // These expressions were not split into CFG nodes. Their assignments
+    // must remain conditional rather than becoming unconditional definitions.
+    cfg.uses.push(...collectUses(state, analysis.id, node, cfg));
+  } else if (ts.isBinaryExpression(node) && assignmentOperator(ts, node.operatorToken.kind)) {
+    collectAssignmentAccesses(state, analysis, cfg, node);
+  } else if (isUpdateExpression(ts, node)) {
+    collectUpdateAccesses(state, analysis, cfg, node);
+  } else if (ts.isDeleteExpression(node)) {
+    reportDelete(state, cfg);
+  } else {
+    return false;
+  }
+  return true;
+}
+
+function isConditionalAccessExpression(ts: TypeScriptModule, node: TypeScript.Node): boolean {
+  return (
+    ts.isConditionalExpression(node) ||
+    (ts.isBinaryExpression(node) && shortCircuitOperator(ts, node.operatorToken.kind))
+  );
 }
 
 function collectDeclarationAccesses(

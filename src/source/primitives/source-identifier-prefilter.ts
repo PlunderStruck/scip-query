@@ -30,17 +30,24 @@ export function sourceMayContainCandidateName(
   if (!matcher.hasUsableCandidate) return true;
 
   if (matcher.candidateNames.size <= DIRECT_INCLUDES_CANDIDATE_LIMIT) {
-    for (const candidate of matcher.candidateNames) {
-      if (!candidate) continue;
-      if (SIMPLE_IDENTIFIER_RE.test(candidate)) {
-        if (exactIdentifierRegex(candidate).test(source)) return true;
-        continue;
-      }
-      if (source.includes(candidate)) return true;
-    }
-    return false;
+    return sourceContainsDirectCandidate(source, matcher.candidateNames);
   }
+  return sourceContainsScannedCandidate(source, matcher);
+}
 
+function sourceContainsDirectCandidate(source: string, candidateNames: ReadonlySet<string>): boolean {
+  for (const candidate of candidateNames) {
+    if (!candidate) continue;
+    if (SIMPLE_IDENTIFIER_RE.test(candidate)) {
+      if (exactIdentifierRegex(candidate).test(source)) return true;
+      continue;
+    }
+    if (source.includes(candidate)) return true;
+  }
+  return false;
+}
+
+function sourceContainsScannedCandidate(source: string, matcher: CandidateNameMatcher): boolean {
   SOURCE_IDENTIFIER_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = SOURCE_IDENTIFIER_RE.exec(source)) !== null) {

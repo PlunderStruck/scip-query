@@ -1343,6 +1343,12 @@ function isSourceSearchResult(value: unknown): value is SourceSearchResult {
     typeof record['pattern'] === 'string' &&
     (record['mode'] === 'literal' || record['mode'] === 'regexp') &&
     Array.isArray(record['matches']) &&
+    validSourceSearchCounts(record)
+  );
+}
+
+function validSourceSearchCounts(record: Record<string, unknown>): boolean {
+  return (
     typeof record['matchingLines'] === 'number' &&
     Number.isSafeInteger(record['matchingLines']) &&
     record['matchingLines'] >= 0 &&

@@ -260,6 +260,65 @@ export function inspectWatchService(opts: WatchServiceControllerOptions): WatchS
   );
 }
 
+function spawnReadyWatchService(
+  opts: WatchServiceControllerOptions,
+  identity: ReturnType<typeof resolveWatchServiceIdentity>,
+  runtime: WatchServiceRuntime,
+  activityPath: string,
+): WatchServiceEnsureResult {
+  const serverPath = opts.serverPath ?? fileURLToPath(new URL('./watch-server.js', import.meta.url));
+  runtime.spawnServer(serverPath, identity.projectRoot, opts.cliVersion, opts.watchOverrides ?? {});
+  const state = waitForWatchServiceState(
+    opts,
+    identity,
+    runtime,
+    opts.startupTimeoutMs ?? WATCH_SERVICE_STARTUP_TIMEOUT_MS,
+  );
+  if (!state) {
+    throw new Error(
+      `scip-query watch service did not become ready within ${opts.startupTimeoutMs ?? WATCH_SERVICE_STARTUP_TIMEOUT_MS}ms.`,
+    );
+  }
+  recordWatchServiceActivityBestEffort(activityPath, runtime);
+  return { disposition: 'started', state };
+}
+
+function prepareWatchServiceStart(
+  action: ReturnType<typeof planWatchServiceAction>,
+  inspection: ReturnType<typeof inspectWatchServiceWithIdentity>,
+  opts: WatchServiceControllerOptions,
+  identity: ReturnType<typeof resolveWatchServiceIdentity>,
+  runtime: WatchServiceRuntime,
+): WatchServiceEnsureResult | undefined {
+  if (action.kind === 'replace') {
+    stopLiveWatchProcess(action.state, opts, runtime);
+    cleanupWatchServiceFiles(inspection.paths, action.state, runtime);
+  } else if (action.kind === 'start') {
+    if (inspection.lockIsLive) {
+      const concurrent = waitForWatchServiceState(
+        opts,
+        identity,
+        runtime,
+        Math.min(opts.startupTimeoutMs ?? 1_000, 1_000),
+      );
+      if (concurrent) {
+        recordWatchServiceActivityBestEffort(inspection.paths.activityPath, runtime);
+        return { disposition: 'reused', state: concurrent };
+      }
+      throw new Error(
+        `scip-query watch is already running for ${resolve(opts.projectRoot)} (pid ${inspection.lock?.pid}; lock: ${inspection.paths.lockPath}) without compatible daemon state. Stop the foreground watcher before starting the service.`,
+      );
+    }
+    if (inspection.classification.kind === 'stale') {
+      cleanupWatchServiceFiles(inspection.paths, inspection.classification.state, runtime);
+    }
+  } else {
+    throw new Error(`Unexpected ensure action: ${action.kind}`);
+  }
+
+  return undefined;
+}
+
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function inspectWatchServiceWithIdentity(
   opts: WatchServiceControllerOptions,
@@ -295,31 +354,8 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
         'Refusing automatic replacement because civil-clock age alone cannot authorize a process signal.',
     );
   }
-  if (action.kind === 'replace') {
-    stopLiveWatchProcess(action.state, opts, runtime);
-    cleanupWatchServiceFiles(inspection.paths, action.state, runtime);
-  } else if (action.kind === 'start') {
-    if (inspection.lockIsLive) {
-      const concurrent = waitForWatchServiceState(
-        opts,
-        identity,
-        runtime,
-        Math.min(opts.startupTimeoutMs ?? 1_000, 1_000),
-      );
-      if (concurrent) {
-        recordWatchServiceActivityBestEffort(inspection.paths.activityPath, runtime);
-        return { disposition: 'reused', state: concurrent };
-      }
-      throw new Error(
-        `scip-query watch is already running for ${resolve(opts.projectRoot)} (pid ${inspection.lock?.pid}; lock: ${inspection.paths.lockPath}) without compatible daemon state. Stop the foreground watcher before starting the service.`,
-      );
-    }
-    if (inspection.classification.kind === 'stale') {
-      cleanupWatchServiceFiles(inspection.paths, inspection.classification.state, runtime);
-    }
-  } else {
-    throw new Error(`Unexpected ensure action: ${action.kind}`);
-  }
+  const concurrent = prepareWatchServiceStart(action, inspection, opts, identity, runtime);
+  if (concurrent) return concurrent;
 
   inspection = inspectWatchServiceWithIdentity(opts, identity);
   action = planWatchServiceAction('ensure', inspection.classification);
@@ -334,21 +370,7 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
     );
   }
 
-  const serverPath = opts.serverPath ?? fileURLToPath(new URL('./watch-server.js', import.meta.url));
-  runtime.spawnServer(serverPath, identity.projectRoot, opts.cliVersion, opts.watchOverrides ?? {});
-  const state = waitForWatchServiceState(
-    opts,
-    identity,
-    runtime,
-    opts.startupTimeoutMs ?? WATCH_SERVICE_STARTUP_TIMEOUT_MS,
-  );
-  if (!state) {
-    throw new Error(
-      `scip-query watch service did not become ready within ${opts.startupTimeoutMs ?? WATCH_SERVICE_STARTUP_TIMEOUT_MS}ms.`,
-    );
-  }
-  recordWatchServiceActivityBestEffort(inspection.paths.activityPath, runtime);
-  return { disposition: 'started', state };
+  return spawnReadyWatchService(opts, identity, runtime, inspection.paths.activityPath);
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.

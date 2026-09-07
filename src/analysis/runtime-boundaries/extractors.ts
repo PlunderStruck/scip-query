@@ -1026,27 +1026,32 @@ function capabilityDescriptorHandler(identityPair: SyntaxNode): SyntaxNode | nul
   while (current && current.type !== 'variable_declarator') {
     if (['object', 'object_literal', 'dictionary'].includes(current.type)) {
       for (const child of current.namedChildren) {
-        if (child.type === 'pair') {
-          const key = child.childForFieldName('key') ?? child.namedChild(0);
-          const value = child.childForFieldName('value') ?? child.namedChild(1);
-          const field = key?.text.replace(/^['"`]|['"`]$/gu, '');
-          if (field && ['execute', 'handler', 'invoke', 'run'].includes(field) && value && registryValueLike(value)) {
-            return current;
-          }
-        }
-        const name = child.childForFieldName('name') ?? child.namedChild(0);
-        if (
-          name &&
-          ['execute', 'handler', 'invoke', 'run'].includes(name.text.replace(/^['"`]|['"`]$/gu, '')) &&
-          /(?:function|method)/u.test(child.type)
-        ) {
-          return current;
-        }
+        if (isCapabilityHandlerMember(child)) return current;
       }
     }
     current = current.parent;
   }
   return null;
+}
+
+function isCapabilityHandlerMember(child: SyntaxNode): boolean {
+  if (child.type === 'pair' && isCapabilityHandlerPair(child)) return true;
+  const name = child.childForFieldName('name') ?? child.namedChild(0);
+  if (
+    name &&
+    ['execute', 'handler', 'invoke', 'run'].includes(name.text.replace(/^['"`]|['"`]$/gu, '')) &&
+    /(?:function|method)/u.test(child.type)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function isCapabilityHandlerPair(child: SyntaxNode): boolean {
+  const key = child.childForFieldName('key') ?? child.namedChild(0);
+  const value = child.childForFieldName('value') ?? child.namedChild(1);
+  const field = key?.text.replace(/^['"`]|['"`]$/gu, '');
+  return !!field && ['execute', 'handler', 'invoke', 'run'].includes(field) && !!value && registryValueLike(value);
 }
 
 type PersistenceAdapter = 'database' | 'orm' | 'repository';

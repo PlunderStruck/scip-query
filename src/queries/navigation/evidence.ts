@@ -108,17 +108,8 @@ export function qualifiedEvidence(
 
   const match = resolution.match;
   const parts = normalizeEvidenceParts(opts.parts);
-  const traced =
-    parts.includes('definition') || parts.includes('references')
-      ? qualifiedTraceEvidence(db, match.symbol, {
-          semantic: opts.semantic,
-          referenceContext: opts.referenceContext,
-        })
-      : { definitions: [], referencedBy: [], referenceEvidence: [], claimSupport: null };
-  const graph =
-    parts.includes('callers') || parts.includes('callees')
-      ? callGraph(db, match.symbol, { semantic: opts.semantic })
-      : null;
+  const traced = selectedTraceEvidence(db, match.symbol, parts, opts);
+  const graph = selectedCallGraph(db, match.symbol, parts, opts);
   const relatedSourceLines = opts.relatedSourceLines ?? 80;
 
   return {
@@ -130,13 +121,45 @@ export function qualifiedEvidence(
     parts,
     definition: parts.includes('definition') ? code(db, match.symbol) : null,
     referenceWindows: parts.includes('references') ? mergeReferenceWindows(db, traced.referencedBy) : [],
-    callers: parts.includes('callers') ? relatedSymbols(db, graph?.callerEvidence ?? [], relatedSourceLines) : [],
-    callees: parts.includes('callees') ? relatedSymbols(db, graph?.calleeEvidence ?? [], relatedSourceLines) : [],
+    callers: selectedRelatedSources(db, graph, 'callers', parts, relatedSourceLines),
+    callees: selectedRelatedSources(db, graph, 'callees', parts, relatedSourceLines),
     dependencies: parts.includes('dependencies') ? deps(db, match.relativePath) : [],
     consumers: parts.includes('consumers') ? rdeps(db, match.relativePath) : [],
     referenceEvidence: traced.referenceEvidence,
     claimSupport: traced.claimSupport,
   };
+}
+
+function selectedTraceEvidence(
+  db: ScipDatabase,
+  symbol: string,
+  parts: readonly EvidencePart[],
+  opts: EvidenceOptions,
+) {
+  return parts.includes('definition') || parts.includes('references')
+    ? qualifiedTraceEvidence(db, symbol, {
+        semantic: opts.semantic,
+        referenceContext: opts.referenceContext,
+      })
+    : { definitions: [], referencedBy: [], referenceEvidence: [], claimSupport: null };
+}
+
+function selectedCallGraph(db: ScipDatabase, symbol: string, parts: readonly EvidencePart[], opts: EvidenceOptions) {
+  return parts.includes('callers') || parts.includes('callees')
+    ? callGraph(db, symbol, { semantic: opts.semantic })
+    : null;
+}
+
+function selectedRelatedSources(
+  db: ScipDatabase,
+  graph: ReturnType<typeof selectedCallGraph>,
+  part: 'callers' | 'callees',
+  parts: readonly EvidencePart[],
+  maxLines: number,
+): EvidenceRelatedSymbol[] {
+  if (!parts.includes(part)) return [];
+  const rows = part === 'callers' ? (graph?.callerEvidence ?? []) : (graph?.calleeEvidence ?? []);
+  return relatedSymbols(db, rows, maxLines);
 }
 
 function mergeReferenceWindows(

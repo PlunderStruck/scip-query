@@ -235,24 +235,48 @@ function resolveMember(
     proofSymbol = targets[0]!.symbol;
   }
 
+  return evaluateResolvedMember(context, { targetFile, targetName, proofSymbol }, base, properties, site, depth, seen);
+}
+
+function evaluateResolvedMember(
+  context: BoundaryValueContext,
+  target: { targetFile: string; targetName: string; proofSymbol: string | undefined },
+  base: string,
+  properties: readonly string[],
+  site: SyntaxNode,
+  depth: number,
+  seen: Set<string>,
+): EvaluatedStaticValue | null {
+  const { targetFile, targetName, proofSymbol } = target;
   const targetRoot = targetFile === context.file ? context.root : getAst(context.db, targetFile)?.rootNode;
   if (!targetRoot) return symbolicValue(site, proofSymbol ?? base, 'member-definition-unparsed');
-  let current = findVariableInitializer(targetRoot, targetName);
+  const current = findVariableInitializer(targetRoot, targetName);
   if (!current) return symbolicValue(site, proofSymbol ?? base, 'member-base-non-value');
-  for (const property of properties) {
-    const object = unwrapExpression(current);
-    current = objectMemberValue(object, property);
-    if (!current)
-      return symbolicValue(
-        site,
-        proofSymbol ?? `${base}.${properties.join('.')}`,
-        `member-property-missing:${property}`,
-      );
+  const member = resolveObjectPropertyPath(current, properties);
+  if ('missingProperty' in member) {
+    return symbolicValue(
+      site,
+      proofSymbol ?? `${base}.${properties.join('.')}`,
+      `member-property-missing:${member.missingProperty}`,
+    );
   }
-  const value = evaluateNode({ db: context.db, file: targetFile, root: targetRoot }, current, depth + 1, seen);
+  const value = evaluateNode({ db: context.db, file: targetFile, root: targetRoot }, member.node, depth + 1, seen);
   return value
     ? derivedFrom(site, 'member-constant', value, proofSymbol)
     : symbolicValue(site, proofSymbol ?? base, 'member-value-unresolved');
+}
+
+function resolveObjectPropertyPath(
+  current: SyntaxNode,
+  properties: readonly string[],
+): { node: SyntaxNode } | { missingProperty: string } {
+  for (const property of properties) {
+    const object = unwrapExpression(current);
+    const value = objectMemberValue(object, property);
+    if (!value) return { missingProperty: property };
+    current = value;
+  }
+  return { node: current };
 }
 
 function stringTerm(

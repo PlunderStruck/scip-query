@@ -1606,69 +1606,93 @@ function classifyLanguageShardReuse(opts: {
   for (const language of opts.languages) {
     const scipPath = languageShardPath(opts.paths.outputDb, language);
     const fingerprint = current[language]!;
-    if (!meta) {
-      result.set(language, { reused: false, reason: 'no reindex metadata found', fingerprint, scipPath });
-      continue;
-    }
-    if (meta.version !== CURRENT_REINDEX_METADATA_VERSION) {
-      result.set(language, {
-        reused: false,
-        reason: `metadata version ${String(meta.version ?? 'unknown')} predates per-language shard caching`,
-        fingerprint,
-        scipPath,
-      });
-      continue;
-    }
-    if (!reindexMetadataCapabilities(meta).languageShardReuse || !meta.languageFingerprints) {
-      result.set(language, {
-        reused: false,
-        reason: 'no per-language fingerprints recorded in metadata',
-        fingerprint,
-        scipPath,
-      });
-      continue;
-    }
-    const cached = meta.languageFingerprints[language];
-    if (!cached) {
-      result.set(language, {
-        reused: false,
-        reason: 'no cached fingerprint for this language',
-        fingerprint,
-        scipPath,
-      });
-      continue;
-    }
-    if (!existsSync(scipPath)) {
-      result.set(language, { reused: false, reason: 'cached shard file missing on disk', fingerprint, scipPath });
-      continue;
-    }
-    const comparableCached =
-      language === 'typescript' ? migrateLegacyTypeScriptLanguageFingerprint(opts.projectRoot, cached) : cached;
-    if (stableJson(comparableCached) !== stableJson(fingerprint)) {
-      result.set(language, {
-        reused: false,
-        reason: 'language inputs changed since last index',
-        fingerprint,
-        scipPath,
-      });
-      continue;
-    }
-    if (
-      acceptedCoverage?.state === 'unavailable' ||
-      (acceptedCoverage?.state === 'incomplete' && acceptedCoverage.affectedLanguages.includes(language))
-    ) {
-      result.set(language, {
-        reused: false,
-        reason: describeIndexCoverageFailure('accepted SQLite index', acceptedCoverage),
-        cacheIntegrityFailed: true,
-        fingerprint,
-        scipPath,
-      });
-      continue;
-    }
-    result.set(language, { reused: true, fingerprint, scipPath });
+    result.set(
+      language,
+      classifyCachedLanguageShard(opts.projectRoot, language, fingerprint, scipPath, meta, acceptedCoverage),
+    );
   }
   return result;
+}
+
+function classifyCachedLanguageShard(
+  projectRoot: string,
+  language: SupportedLanguage,
+  fingerprint: ReindexFingerprint,
+  scipPath: string,
+  meta: ReturnType<typeof readReindexMetaOrNull>,
+  acceptedCoverage: ReturnType<typeof inspectIndexDocumentCoverage> | null,
+): LanguageShardClassification {
+  if (!meta) {
+    return { reused: false, reason: 'no reindex metadata found', fingerprint, scipPath };
+  }
+  if (meta.version !== CURRENT_REINDEX_METADATA_VERSION) {
+    return {
+      reused: false,
+      reason: `metadata version ${String(meta.version ?? 'unknown')} predates per-language shard caching`,
+      fingerprint,
+      scipPath,
+    };
+  }
+  if (!reindexMetadataCapabilities(meta).languageShardReuse || !meta.languageFingerprints) {
+    return {
+      reused: false,
+      reason: 'no per-language fingerprints recorded in metadata',
+      fingerprint,
+      scipPath,
+    };
+  }
+  return classifyPresentLanguageShard(
+    projectRoot,
+    language,
+    fingerprint,
+    scipPath,
+    meta.languageFingerprints[language],
+    acceptedCoverage,
+  );
+}
+
+function classifyPresentLanguageShard(
+  projectRoot: string,
+  language: SupportedLanguage,
+  fingerprint: ReindexFingerprint,
+  scipPath: string,
+  cached: unknown,
+  acceptedCoverage: ReturnType<typeof inspectIndexDocumentCoverage> | null,
+): LanguageShardClassification {
+  if (!cached) {
+    return {
+      reused: false,
+      reason: 'no cached fingerprint for this language',
+      fingerprint,
+      scipPath,
+    };
+  }
+  if (!existsSync(scipPath)) {
+    return { reused: false, reason: 'cached shard file missing on disk', fingerprint, scipPath };
+  }
+  const comparableCached =
+    language === 'typescript' ? migrateLegacyTypeScriptLanguageFingerprint(projectRoot, cached) : cached;
+  if (stableJson(comparableCached) !== stableJson(fingerprint)) {
+    return {
+      reused: false,
+      reason: 'language inputs changed since last index',
+      fingerprint,
+      scipPath,
+    };
+  }
+  if (
+    acceptedCoverage?.state === 'unavailable' ||
+    (acceptedCoverage?.state === 'incomplete' && acceptedCoverage.affectedLanguages.includes(language))
+  ) {
+    return {
+      reused: false,
+      reason: describeIndexCoverageFailure('accepted SQLite index', acceptedCoverage),
+      cacheIntegrityFailed: true,
+      fingerprint,
+      scipPath,
+    };
+  }
+  return { reused: true, fingerprint, scipPath };
 }
 
 /** Diagnostics context for reused/rerun TypeScript workspace project shards (2.4); undefined on every other path (single mode, non-workspace, or a whole-language hit/miss with no project classification). */

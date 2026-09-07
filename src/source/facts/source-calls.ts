@@ -44,13 +44,7 @@ function memberAccessQualifier(node: SyntaxNode): string | undefined {
 
 function callTargetForNode(node: SyntaxNode, language: AstLanguage): SyntaxNode | null {
   if (language === 'rust') {
-    if (node.type === 'call_expression') {
-      return node.childForFieldName('function') ?? node.namedChild(0);
-    }
-    if (node.type === 'macro_invocation') {
-      return node.childForFieldName('macro') ?? node.namedChild(0);
-    }
-    return null;
+    return rustCallTarget(node);
   }
 
   if (language === 'python') {
@@ -59,17 +53,31 @@ function callTargetForNode(node: SyntaxNode, language: AstLanguage): SyntaxNode 
   }
 
   if (language === 'typescript' || language === 'tsx' || language === 'javascript') {
-    if (node.type === 'call_expression') {
-      return unwrapCallTarget(node.childForFieldName('function') ?? node.namedChild(0));
-    }
-    if (node.type === 'new_expression') {
-      return unwrapCallTarget(node.childForFieldName('constructor') ?? node.namedChild(0));
-    }
-    if (JSX_ELEMENT_NODE_TYPES.has(node.type)) {
-      return jsxComponentTarget(node);
-    }
+    return javascriptCallTarget(node);
   }
+  return null;
+}
 
+function rustCallTarget(node: SyntaxNode): SyntaxNode | null {
+  if (node.type === 'call_expression') {
+    return node.childForFieldName('function') ?? node.namedChild(0);
+  }
+  if (node.type === 'macro_invocation') {
+    return node.childForFieldName('macro') ?? node.namedChild(0);
+  }
+  return null;
+}
+
+function javascriptCallTarget(node: SyntaxNode): SyntaxNode | null {
+  if (node.type === 'call_expression') {
+    return unwrapCallTarget(node.childForFieldName('function') ?? node.namedChild(0));
+  }
+  if (node.type === 'new_expression') {
+    return unwrapCallTarget(node.childForFieldName('constructor') ?? node.namedChild(0));
+  }
+  if (JSX_ELEMENT_NODE_TYPES.has(node.type)) {
+    return jsxComponentTarget(node);
+  }
   return null;
 }
 

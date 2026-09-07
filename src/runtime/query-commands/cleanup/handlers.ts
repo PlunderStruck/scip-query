@@ -198,26 +198,34 @@ export const handleLocalityCandidates = budgetedDbCommand('locality-candidates',
   if (results.length === 0) return render.empty('No locality candidates found.');
   renderHeuristicNotice('locality candidates');
   for (const r of results) {
-    const location =
-      r.sourceUnit.kind === 'symbol' && r.sourceUnit.startLine !== undefined && r.sourceUnit.endLine !== undefined
-        ? displayPathRange(r.sourceUnit.file, r.sourceUnit.startLine, r.sourceUnit.endLine)
-        : r.sourceUnit.file;
-    console.log(`\n${location}  ${r.sourceUnit.shortName}`);
-    console.log(`  Current directory: ${r.currentDirectory}; tier: ${r.recommendedTier}; action: ${r.actionTier}`);
-    console.log(`  Consumer coverage: ${r.consumerCoverage}; consumers: ${r.consumerFiles.length}`);
-    if (r.nearestCommonDirectory) console.log(`  Nearest common directory: ${r.nearestCommonDirectory}`);
-    if (r.suggestedHome) console.log(`  Suggested home: ${r.suggestedHome}`);
-    if (r.whyNoSuggestedHome) console.log(`  Suggested home withheld: ${r.whyNoSuggestedHome}`);
-    if (r.boundaryMarkers.length > 0) console.log(`  Boundary markers: ${r.boundaryMarkers.join('; ')}`);
-    console.log(`  Recommendation: ${r.recommendation}`);
-    if (r.consumerFiles.length > 0) {
-      for (const consumer of r.consumerFiles.slice(0, 8)) console.log(`  - consumer: ${consumer}`);
-      if (r.consumerFiles.length > 8) console.log(`  - ... ${r.consumerFiles.length - 8} more consumer(s)`);
-    }
-    for (const counter of r.counterevidence) console.log(`  - counterevidence: ${counter}`);
+    renderLocalityCandidate(r);
   }
   console.log(`\n${results.length} locality candidate(s) found.`);
 });
+
+function renderLocalityCandidate(r: ReturnType<typeof queries.localityCandidates>[number]): void {
+  const location =
+    r.sourceUnit.kind === 'symbol' && r.sourceUnit.startLine !== undefined && r.sourceUnit.endLine !== undefined
+      ? displayPathRange(r.sourceUnit.file, r.sourceUnit.startLine, r.sourceUnit.endLine)
+      : r.sourceUnit.file;
+  console.log(`\n${location}  ${r.sourceUnit.shortName}`);
+  console.log(`  Current directory: ${r.currentDirectory}; tier: ${r.recommendedTier}; action: ${r.actionTier}`);
+  console.log(`  Consumer coverage: ${r.consumerCoverage}; consumers: ${r.consumerFiles.length}`);
+  if (r.nearestCommonDirectory) console.log(`  Nearest common directory: ${r.nearestCommonDirectory}`);
+  if (r.suggestedHome) console.log(`  Suggested home: ${r.suggestedHome}`);
+  if (r.whyNoSuggestedHome) console.log(`  Suggested home withheld: ${r.whyNoSuggestedHome}`);
+  if (r.boundaryMarkers.length > 0) console.log(`  Boundary markers: ${r.boundaryMarkers.join('; ')}`);
+  console.log(`  Recommendation: ${r.recommendation}`);
+  renderLocalityConsumers(r.consumerFiles);
+  for (const counter of r.counterevidence) console.log(`  - counterevidence: ${counter}`);
+}
+
+function renderLocalityConsumers(consumers: readonly string[]): void {
+  if (consumers.length > 0) {
+    for (const consumer of consumers.slice(0, 8)) console.log(`  - consumer: ${consumer}`);
+    if (consumers.length > 8) console.log(`  - ... ${consumers.length - 8} more consumer(s)`);
+  }
+}
 
 export const handlePassthroughCandidates = budgetedListCommand('passthrough-candidates', {
   query: ({ db, opts, budget }) =>

@@ -111,12 +111,7 @@ export async function terminateOwnedProcessTree(
   runtime: ProcessTreeRuntime = DEFAULT_PROCESS_TREE_RUNTIME,
 ): Promise<ProcessTreeTerminationResult> {
   if (!tree.rootIdentity) {
-    const reaped = await waitForTreeExit(tree, options.gracefulMs + options.forceMs, runtime);
-    return {
-      reaped,
-      reason: reaped ? 'terminated' : 'identity-unavailable',
-      detail: reaped ? undefined : `Could not establish the birth identity of process ${tree.rootPid}.`,
-    };
+    return waitForUnidentifiedTree(tree, options, runtime);
   }
 
   const rootState = refreshKnownMembers(tree, runtime);
@@ -131,22 +126,7 @@ export async function terminateOwnedProcessTree(
     return { reaped: true, reason: 'terminated' };
   }
 
-  if (runtime.platform === 'win32') {
-    try {
-      // Windows does not expose POSIX process-group signals. taskkill /T /F is
-      // the finite tree primitive, so use it only after revalidating the root.
-      runtime.terminateWindowsTree(tree.rootPid);
-    } catch (error) {
-      const reaped = await waitForTreeExit(tree, options.forceMs, runtime);
-      return {
-        reaped,
-        reason: reaped ? 'terminated' : 'signal-failed',
-        detail: reaped ? undefined : errorMessage(error),
-      };
-    }
-    const reaped = await waitForTreeExit(tree, options.forceMs, runtime);
-    return { reaped, reason: reaped ? 'terminated' : 'deadline' };
-  }
+  if (runtime.platform === 'win32') return terminateWindowsProcessTree(tree, options, runtime);
 
   const gracefulSignal = signalKnownTree(tree, 'SIGTERM', runtime);
   const gracefullyReaped = await waitForTreeExit(tree, options.gracefulMs, runtime);
@@ -166,6 +146,40 @@ export async function terminateOwnedProcessTree(
     reason: 'deadline',
     detail: `Process tree ${tree.rootPid} did not exit before its termination deadline.`,
   };
+}
+
+async function waitForUnidentifiedTree(
+  tree: OwnedProcessTree,
+  options: TerminateOwnedProcessTreeOptions,
+  runtime: ProcessTreeRuntime,
+): Promise<ProcessTreeTerminationResult> {
+  const reaped = await waitForTreeExit(tree, options.gracefulMs + options.forceMs, runtime);
+  return {
+    reaped,
+    reason: reaped ? 'terminated' : 'identity-unavailable',
+    detail: reaped ? undefined : `Could not establish the birth identity of process ${tree.rootPid}.`,
+  };
+}
+
+async function terminateWindowsProcessTree(
+  tree: OwnedProcessTree,
+  options: TerminateOwnedProcessTreeOptions,
+  runtime: ProcessTreeRuntime,
+): Promise<ProcessTreeTerminationResult> {
+  try {
+    // Windows does not expose POSIX process-group signals. taskkill /T /F is
+    // the finite tree primitive, so use it only after revalidating the root.
+    runtime.terminateWindowsTree(tree.rootPid);
+  } catch (error) {
+    const reaped = await waitForTreeExit(tree, options.forceMs, runtime);
+    return {
+      reaped,
+      reason: reaped ? 'terminated' : 'signal-failed',
+      detail: reaped ? undefined : errorMessage(error),
+    };
+  }
+  const reaped = await waitForTreeExit(tree, options.forceMs, runtime);
+  return { reaped, reason: reaped ? 'terminated' : 'deadline' };
 }
 
 type RootState = 'owned' | 'exited' | 'mismatch';

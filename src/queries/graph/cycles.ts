@@ -209,13 +209,21 @@ function classifyCycle(path: string[]): 'real' | 'module-hierarchy' {
   // bookkeeping. Entries do bootstrap imports the rest of the crate then
   // mirrors. Apply to cycles of any length.
   for (const file of path) {
-    const kind = classifyFile(file);
-    if (kind === 'test' || kind === 'barrel' || kind === 'entry') return 'module-hierarchy';
+    if (isCycleBookkeepingFile(file)) return 'module-hierarchy';
   }
   // path includes the closing repeat (a → b → a), so 2 distinct files = path of length 3.
   if (path.length !== 3) return 'real';
   const [a, b] = path;
   if (!a || !b) return 'real';
+  return classifyTwoFileCycle(a, b);
+}
+
+function isCycleBookkeepingFile(file: string): boolean {
+  const kind = classifyFile(file);
+  return kind === 'test' || kind === 'barrel' || kind === 'entry';
+}
+
+function classifyTwoFileCycle(a: string, b: string): 'real' | 'module-hierarchy' {
   if (isBarrelFile(a) || isBarrelFile(b)) return 'module-hierarchy';
   // Rust submodule pattern: `foo.rs` declares `mod bar;` whose body lives in
   // `foo/bar.rs`. Parent and child reference each other's items — this is

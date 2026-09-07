@@ -324,52 +324,13 @@ async function runPreparedIndexer(
     moveDefaultOutputIfNeeded(run.config, projectRoot, run.scipPath);
   } catch (err) {
     if (signal?.aborted) throw abortSignalReason(signal, 'Reindex cancelled by its owner.');
-    const msg = err instanceof Error ? err.message : String(err);
-    const boundedMessage =
-      msg.length <= INDEXER_FAILURE_DETAIL_LIMIT
-        ? msg
-        : `${msg.slice(0, INDEXER_FAILURE_DETAIL_LIMIT)}\n[indexer failure detail truncated]`;
-    const reason = `${run.resolvedBinary} indexer failed: ${boundedMessage}`;
-    const skippedReason = run.label === run.language ? reason : `${run.label}: ${reason}`;
-    onStatus(`Skipping ${run.label}: ${reason}`);
-    return {
-      result: {
-        id: run.id,
-        language: run.language,
-        label: run.label,
-        scipPath: run.scipPath,
-        outputScipPath: run.outputScipPath,
-        durationMs: monotonicNowMs() - startedAt,
-        command,
-        ...(run.outputComposition ? { outputComposition: run.outputComposition } : {}),
-        skipped: { language: run.language, reason: skippedReason },
-      },
-      retryable: isTransientIndexerFailure(err),
-    };
+    return failedIndexerAttempt(run, err, onStatus, startedAt, command);
   } finally {
     restoreDefaultOutputBackup(defaultOutputBackup);
     for (const config of temporaryConfigs.reverse()) releaseTemporaryRootConfig(config);
   }
 
-  if (!existsSync(run.scipPath)) {
-    const reason = `${run.resolvedBinary} indexer completed but did not produce ${run.scipPath}`;
-    const skippedReason = run.label === run.language ? reason : `${run.label}: ${reason}`;
-    onStatus(`Skipping ${run.label}: ${reason}`);
-    return {
-      result: {
-        id: run.id,
-        language: run.language,
-        label: run.label,
-        scipPath: run.scipPath,
-        outputScipPath: run.outputScipPath,
-        durationMs: monotonicNowMs() - startedAt,
-        command,
-        ...(run.outputComposition ? { outputComposition: run.outputComposition } : {}),
-        skipped: { language: run.language, reason: skippedReason },
-      },
-      retryable: false,
-    };
-  }
+  if (!existsSync(run.scipPath)) return missingIndexerOutputAttempt(run, onStatus, startedAt, command);
   let outputBytes: number | undefined;
   try {
     outputBytes = statSync(run.scipPath).size;
@@ -389,6 +350,62 @@ async function runPreparedIndexer(
       outputBytes,
     },
     retryable: false,
+  };
+}
+
+function missingIndexerOutputAttempt(
+  run: PreparedIndexerRun,
+  onStatus: (message: string) => void,
+  startedAt: number,
+  command: string,
+): IndexerAttempt {
+  const reason = `${run.resolvedBinary} indexer completed but did not produce ${run.scipPath}`;
+  const skippedReason = run.label === run.language ? reason : `${run.label}: ${reason}`;
+  onStatus(`Skipping ${run.label}: ${reason}`);
+  return {
+    result: {
+      id: run.id,
+      language: run.language,
+      label: run.label,
+      scipPath: run.scipPath,
+      outputScipPath: run.outputScipPath,
+      durationMs: monotonicNowMs() - startedAt,
+      command,
+      ...(run.outputComposition ? { outputComposition: run.outputComposition } : {}),
+      skipped: { language: run.language, reason: skippedReason },
+    },
+    retryable: false,
+  };
+}
+
+function failedIndexerAttempt(
+  run: PreparedIndexerRun,
+  err: unknown,
+  onStatus: (message: string) => void,
+  startedAt: number,
+  command: string,
+): IndexerAttempt {
+  const msg = err instanceof Error ? err.message : String(err);
+  const boundedMessage =
+    msg.length <= INDEXER_FAILURE_DETAIL_LIMIT
+      ? msg
+      : `${msg.slice(0, INDEXER_FAILURE_DETAIL_LIMIT)}\n[indexer failure detail truncated]`;
+  const reason = `${run.resolvedBinary} indexer failed: ${boundedMessage}`;
+  const skippedReason = run.label === run.language ? reason : `${run.label}: ${reason}`;
+  onStatus(`Skipping ${run.label}: ${reason}`);
+  return {
+    result: {
+      id: run.id,
+      language: run.language,
+      label: run.label,
+      scipPath: run.scipPath,
+      outputScipPath: run.outputScipPath,
+      durationMs: monotonicNowMs() - startedAt,
+      command,
+      ...(run.outputComposition ? { outputComposition: run.outputComposition } : {}),
+      skipped: { language: run.language, reason: skippedReason },
+    },
+    retryable: isTransientIndexerFailure(err),
   };
 }
 

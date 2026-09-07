@@ -40,6 +40,10 @@ export function decodeProjectConfig(input: unknown): DecodedProjectConfig {
   }
   if (!isRecordObject(value)) return { kind: 'malformed', reason: 'project config must be a JSON object' };
 
+  return decodeProjectConfigVersion(value);
+}
+
+function decodeProjectConfigVersion(value: Record<string, unknown>): DecodedProjectConfig {
   const rawVersion = value['schemaVersion'];
   if (rawVersion !== undefined && !Number.isInteger(rawVersion)) {
     return { kind: 'malformed', reason: 'schemaVersion must be an integer' };
@@ -55,6 +59,10 @@ export function decodeProjectConfig(input: unknown): DecodedProjectConfig {
       direction: schemaVersion < LEGACY_PROJECT_CONFIG_SCHEMA_VERSION ? 'older' : 'future',
     };
   }
+  return decodeSupportedProjectConfig(value, schemaVersion);
+}
+
+function decodeSupportedProjectConfig(value: Record<string, unknown>, schemaVersion: number): DecodedProjectConfig {
   const schemaHint = value['$schema'];
   if (schemaHint !== undefined && (typeof schemaHint !== 'string' || schemaHint.trim() === '')) {
     return { kind: 'malformed', reason: '$schema must be a non-empty string when present' };

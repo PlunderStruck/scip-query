@@ -646,36 +646,15 @@ function nativeConsumerClassifyResult(
 }
 
 function nativeConsumerClassifyEntry(value: unknown): NativeConsumerClassifyEntry | null {
-  if (!value || typeof value !== 'object') return null;
-  const candidate = value as Partial<NativeConsumerClassifyEntry>;
-  if (
-    typeof candidate.symbol_id !== 'number' ||
-    !Array.isArray(candidate.real_consumers) ||
-    typeof candidate.barrel_consumers !== 'number' ||
-    typeof candidate.import_only_consumers !== 'number' ||
-    !Array.isArray(candidate.files)
-  ) {
-    return null;
-  }
-  if (!candidate.real_consumers.every((file): file is string => typeof file === 'string')) return null;
+  if (!isNativeConsumerClassifyHeader(value)) return null;
+  const candidate = value;
   const files: NativeConsumerClassifyEntry['files'] = [];
   for (const file of candidate.files) {
-    if (!file || typeof file !== 'object') return null;
-    const item = file as Partial<NativeConsumerClassifyEntry['files'][number]>;
-    if (
-      typeof item.file !== 'string' ||
-      !Array.isArray(item.sources) ||
-      !item.sources.every(isDefinitionConsumerSource) ||
-      !isDefinitionConsumerClassification(item.classification)
-    ) {
-      return null;
-    }
-    files.push({
-      file: item.file,
-      sources: item.sources,
-      classification: item.classification,
-    });
+    const item = nativeConsumerClassifyFile(file);
+    if (!item) return null;
+    files.push(item);
   }
+
   return {
     symbol_id: candidate.symbol_id,
     real_consumers: candidate.real_consumers,
@@ -683,6 +662,36 @@ function nativeConsumerClassifyEntry(value: unknown): NativeConsumerClassifyEntr
     import_only_consumers: candidate.import_only_consumers,
     files,
   };
+}
+
+type NativeConsumerClassifyHeader = Omit<NativeConsumerClassifyEntry, 'files'> & { files: unknown[] };
+
+function isNativeConsumerClassifyHeader(value: unknown): value is NativeConsumerClassifyHeader {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as { [Key in keyof NativeConsumerClassifyEntry]?: unknown };
+  if (
+    typeof candidate.symbol_id !== 'number' ||
+    !Array.isArray(candidate.real_consumers) ||
+    typeof candidate.barrel_consumers !== 'number' ||
+    typeof candidate.import_only_consumers !== 'number' ||
+    !Array.isArray(candidate.files)
+  ) {
+    return false;
+  }
+  return candidate.real_consumers.every((file): file is string => typeof file === 'string');
+}
+
+function nativeConsumerClassifyFile(value: unknown): NativeConsumerClassifyEntry['files'][number] | null {
+  if (!value || typeof value !== 'object') return null;
+  const item = value as { [Key in keyof NativeConsumerClassifyEntry['files'][number]]?: unknown };
+  if (
+    typeof item.file !== 'string' ||
+    !Array.isArray(item.sources) ||
+    !item.sources.every(isDefinitionConsumerSource) ||
+    !isDefinitionConsumerClassification(item.classification)
+  )
+    return null;
+  return { file: item.file, sources: item.sources, classification: item.classification };
 }
 
 function isDefinitionConsumerSource(value: unknown): value is DefinitionConsumerSource {

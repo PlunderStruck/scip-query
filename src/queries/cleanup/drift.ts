@@ -225,33 +225,43 @@ function patternDeviationDrift(depGraph: Map<string, Set<string>>, minDeviation:
 
     const depFreq = dependencyFrequency(depGraph, realSiblings);
 
-    for (const file of realSiblings) {
-      for (const dep of depGraph.get(file) ?? []) {
-        if (shouldSkipDriftFile(dep)) continue;
-        if ((depFreq.get(dep) ?? 0) !== 1) continue;
-        // Skip same-directory deps (sibling imports are normal).
-        if (path.dirname(dep) === dir) continue;
-        // Skip deps that share the file's own *parent* directory — pulling
-        // from a sibling subdir is the common Rust submodule pattern, not
-        // drift.
-        if (path.dirname(dep) === path.dirname(dir)) continue;
-        results.push({
-          file,
-          kind: 'pattern-deviation',
-          description: `Only file in ${dir}/ that depends on ${dep}`,
-          dep,
-          actionTier: 'signal',
-          evidenceReasons: [
-            `${realSiblings.length} sibling file(s) in ${dir}/ were compared`,
-            `${file} is the only non-skipped sibling depending on ${dep}`,
-          ],
-          recommendation:
-            'Review sibling ownership before changing this import; unique dependency shape can be intentional specialization.',
-        });
-      }
-    }
+    appendDirectoryPatternDeviations(depGraph, dir, realSiblings, depFreq, results);
   }
   return results;
+}
+
+function appendDirectoryPatternDeviations(
+  depGraph: ReadonlyMap<string, Set<string>>,
+  dir: string,
+  realSiblings: string[],
+  depFreq: ReadonlyMap<string, number>,
+  results: DriftResult[],
+): void {
+  for (const file of realSiblings) {
+    for (const dep of depGraph.get(file) ?? []) {
+      if (shouldSkipDriftFile(dep)) continue;
+      if ((depFreq.get(dep) ?? 0) !== 1) continue;
+      // Skip same-directory deps (sibling imports are normal).
+      if (path.dirname(dep) === dir) continue;
+      // Skip deps that share the file's own *parent* directory — pulling
+      // from a sibling subdir is the common Rust submodule pattern, not
+      // drift.
+      if (path.dirname(dep) === path.dirname(dir)) continue;
+      results.push({
+        file,
+        kind: 'pattern-deviation',
+        description: `Only file in ${dir}/ that depends on ${dep}`,
+        dep,
+        actionTier: 'signal',
+        evidenceReasons: [
+          `${realSiblings.length} sibling file(s) in ${dir}/ were compared`,
+          `${file} is the only non-skipped sibling depending on ${dep}`,
+        ],
+        recommendation:
+          'Review sibling ownership before changing this import; unique dependency shape can be intentional specialization.',
+      });
+    }
+  }
 }
 
 function summarizeDrift(results: DriftResult[]): DriftSummary {

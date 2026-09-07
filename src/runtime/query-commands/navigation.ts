@@ -576,35 +576,43 @@ function enforceInspectBehaviorFocusContract(
   );
 }
 
+function sourceInspectionSearchRow(search: queries.SourceInspectionResult['searches'][number]): string {
+  const rows = [sourceInspectionSearchSummary(search)];
+  if (search.omittedMatches > 0 || (search.omittedUnits ?? 0) > 0) {
+    rows.push(
+      `    Withheld: ${search.omittedMatches} matching line(s), ${search.omittedFiles ?? 0} file(s) with no materialized match, and ${search.omittedUnits ?? 0} materialized unit(s) outside the packet ceiling.`,
+    );
+    appendSearchScopeHints(search, rows);
+    if (search.exactFollowup) {
+      rows.push(
+        `    Expand this selector completely only if omitted matches can change the decision: ${search.exactFollowup}`,
+      );
+    }
+  }
+  return rows.join('\n');
+}
+
+function sourceInspectionSearchSummary(search: queries.SourceInspectionResult['searches'][number]): string {
+  return `  ${search.pattern}: ${search.returnedMatches}/${search.matchingLines} matching line(s) materialized across ${search.returnedFiles ?? 0}/${search.matchingFiles ?? 0} file(s); ${search.selectedUnits ?? 0}/${search.candidateUnits ?? 0} deduplicated unit(s) selected`;
+}
+
+function appendSearchScopeHints(search: queries.SourceInspectionResult['searches'][number], rows: string[]): void {
+  if ((search.scopeHints?.length ?? 0) > 0) {
+    rows.push('    Highest-coverage scopes available for focused expansion:');
+    rows.push(
+      ...(search.scopeHints ?? []).map(
+        (scope) =>
+          `      ${scope.scope}: ${scope.returnedMatches}/${scope.matchingLines} matching line(s) materialized; ${scope.exactFollowup}`,
+      ),
+    );
+    if ((search.omittedScopeHints ?? 0) > 0)
+      rows.push(`      ... ${search.omittedScopeHints} additional matching scope(s).`);
+  }
+}
+
 function sourceInspectionSections(result: queries.SourceInspectionResult): ReportSection[] {
   const units = result.units ?? [];
-  const searchRows = result.searches.map((search) => {
-    const rows = [
-      `  ${search.pattern}: ${search.returnedMatches}/${search.matchingLines} matching line(s) materialized across ${search.returnedFiles ?? 0}/${search.matchingFiles ?? 0} file(s); ${search.selectedUnits ?? 0}/${search.candidateUnits ?? 0} deduplicated unit(s) selected`,
-    ];
-    if (search.omittedMatches > 0 || (search.omittedUnits ?? 0) > 0) {
-      rows.push(
-        `    Withheld: ${search.omittedMatches} matching line(s), ${search.omittedFiles ?? 0} file(s) with no materialized match, and ${search.omittedUnits ?? 0} materialized unit(s) outside the packet ceiling.`,
-      );
-      if ((search.scopeHints?.length ?? 0) > 0) {
-        rows.push('    Highest-coverage scopes available for focused expansion:');
-        rows.push(
-          ...(search.scopeHints ?? []).map(
-            (scope) =>
-              `      ${scope.scope}: ${scope.returnedMatches}/${scope.matchingLines} matching line(s) materialized; ${scope.exactFollowup}`,
-          ),
-        );
-        if ((search.omittedScopeHints ?? 0) > 0)
-          rows.push(`      ... ${search.omittedScopeHints} additional matching scope(s).`);
-      }
-      if (search.exactFollowup) {
-        rows.push(
-          `    Expand this selector completely only if omitted matches can change the decision: ${search.exactFollowup}`,
-        );
-      }
-    }
-    return rows.join('\n');
-  });
+  const searchRows = result.searches.map(sourceInspectionSearchRow);
   const locationRows = result.locations.map(
     (location) => `  ${location.matched ? 'matched' : 'missing'}  ${location.target}`,
   );

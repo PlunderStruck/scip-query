@@ -519,38 +519,55 @@ function validateDeclaredCouplings(
     return;
   }
   for (const [index, coupling] of (config.declaredCouplings ?? []).entries()) {
-    const path = `declaredCouplings[${index}]`;
-    if (!coupling.name || coupling.name.trim() === '') {
-      diagnostics.push({ level: 'error', path: `${path}.name`, message: 'Declared coupling name is required.' });
-    }
-    if (!Array.isArray(coupling.files) || coupling.files.length < 2) {
+    validateDeclaredCoupling(coupling, `declaredCouplings[${index}]`, diagnostics, opts);
+  }
+}
+
+function validateDeclaredCoupling(
+  coupling: NonNullable<ProjectConfig['declaredCouplings']>[number],
+  path: string,
+  diagnostics: ConfigDiagnostic[],
+  opts: { projectRoot?: string },
+): void {
+  if (!coupling.name || coupling.name.trim() === '') {
+    diagnostics.push({ level: 'error', path: `${path}.name`, message: 'Declared coupling name is required.' });
+  }
+  if (!Array.isArray(coupling.files) || coupling.files.length < 2) {
+    diagnostics.push({
+      level: 'error',
+      path: `${path}.files`,
+      message: 'Declared coupling needs at least two files.',
+    });
+  } else {
+    validateDeclaredCouplingFiles(coupling.files, path, diagnostics, opts);
+  }
+  if (coupling.reason !== undefined && coupling.reason.trim() === '') {
+    diagnostics.push({
+      level: 'error',
+      path: `${path}.reason`,
+      message: 'Declared coupling reason cannot be blank.',
+    });
+  }
+}
+
+function validateDeclaredCouplingFiles(
+  files: readonly string[],
+  path: string,
+  diagnostics: ConfigDiagnostic[],
+  opts: { projectRoot?: string },
+): void {
+  for (const [fileIndex, file] of files.entries()) {
+    if (!file || file.trim() === '') {
       diagnostics.push({
         level: 'error',
-        path: `${path}.files`,
-        message: 'Declared coupling needs at least two files.',
+        path: `${path}.files[${fileIndex}]`,
+        message: 'Declared coupling file path is required.',
       });
-    } else {
-      for (const [fileIndex, file] of coupling.files.entries()) {
-        if (!file || file.trim() === '') {
-          diagnostics.push({
-            level: 'error',
-            path: `${path}.files[${fileIndex}]`,
-            message: 'Declared coupling file path is required.',
-          });
-        } else if (opts.projectRoot && !existsSync(join(opts.projectRoot, file))) {
-          diagnostics.push({
-            level: 'warning',
-            path: `${path}.files[${fileIndex}]`,
-            message: `Declared coupling file does not exist: ${file}`,
-          });
-        }
-      }
-    }
-    if (coupling.reason !== undefined && coupling.reason.trim() === '') {
+    } else if (opts.projectRoot && !existsSync(join(opts.projectRoot, file))) {
       diagnostics.push({
-        level: 'error',
-        path: `${path}.reason`,
-        message: 'Declared coupling reason cannot be blank.',
+        level: 'warning',
+        path: `${path}.files[${fileIndex}]`,
+        message: `Declared coupling file does not exist: ${file}`,
       });
     }
   }

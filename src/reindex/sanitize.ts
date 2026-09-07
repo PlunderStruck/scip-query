@@ -51,21 +51,7 @@ function sanitizeScipBuffer(buffer: Uint8Array, path: string): SanitizeScipResul
   const text = new TextDecoder();
   const definedSymbols = new Set<string>();
 
-  for (const field of eachWireField(buffer)) {
-    if (field.wireType !== 2) continue;
-    if (field.fieldNumber === INDEX_DOCUMENTS_FIELD) {
-      for (const inner of eachWireField(buffer, field.valueStart, field.valueEnd)) {
-        if (inner.wireType !== 2) continue;
-        if (inner.fieldNumber === DOCUMENT_RELATIVE_PATH_FIELD) {
-          normalizeSafeProjectRelativePath(text.decode(buffer.subarray(inner.valueStart, inner.valueEnd)));
-        } else if (inner.fieldNumber === DOCUMENT_SYMBOLS_FIELD) {
-          collectSymbolInformationSymbol(buffer, inner, text, definedSymbols);
-        }
-      }
-    } else if (field.fieldNumber === INDEX_EXTERNAL_SYMBOLS_FIELD) {
-      collectSymbolInformationSymbol(buffer, field, text, definedSymbols);
-    }
-  }
+  collectIndexDefinedSymbols(buffer, text, definedSymbols);
 
   let removedDefinitionOccurrences = 0;
   const dirtyDocuments: WireField[] = [];
@@ -84,6 +70,33 @@ function sanitizeScipBuffer(buffer: Uint8Array, path: string): SanitizeScipResul
 
   rewriteSanitizedScip(buffer, path, dirtyDocuments, definedSymbols);
   return { removedDefinitionOccurrences, touchedDocuments: dirtyDocuments.length };
+}
+
+function collectIndexDefinedSymbols(buffer: Uint8Array, text: TextDecoder, definedSymbols: Set<string>): void {
+  for (const field of eachWireField(buffer)) {
+    if (field.wireType !== 2) continue;
+    if (field.fieldNumber === INDEX_DOCUMENTS_FIELD) {
+      collectDocumentDefinedSymbols(buffer, field, text, definedSymbols);
+    } else if (field.fieldNumber === INDEX_EXTERNAL_SYMBOLS_FIELD) {
+      collectSymbolInformationSymbol(buffer, field, text, definedSymbols);
+    }
+  }
+}
+
+function collectDocumentDefinedSymbols(
+  buffer: Uint8Array,
+  field: WireField,
+  text: TextDecoder,
+  definedSymbols: Set<string>,
+): void {
+  for (const inner of eachWireField(buffer, field.valueStart, field.valueEnd)) {
+    if (inner.wireType !== 2) continue;
+    if (inner.fieldNumber === DOCUMENT_RELATIVE_PATH_FIELD) {
+      normalizeSafeProjectRelativePath(text.decode(buffer.subarray(inner.valueStart, inner.valueEnd)));
+    } else if (inner.fieldNumber === DOCUMENT_SYMBOLS_FIELD) {
+      collectSymbolInformationSymbol(buffer, inner, text, definedSymbols);
+    }
+  }
 }
 
 function collectSymbolInformationSymbol(

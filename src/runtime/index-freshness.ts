@@ -279,30 +279,7 @@ export function getPublishedIndexFreshness(paths: { dbPath: string; metaPath: st
         remedy: 'Run: scip-query reindex',
       };
     }
-    const metadata = decoded.metadata;
-    const metadataLanguages = [...(metadata.indexedLanguages ?? [])].sort();
-    const fingerprint = projectInputSnapshotOrNull(metadata.fingerprint);
-    const fingerprintLanguages = [...(fingerprint?.languages ?? [])].sort();
-    const publishable =
-      decoded.capabilities.publishableGeneration &&
-      fingerprint !== null &&
-      JSON.stringify(metadataLanguages) === JSON.stringify(fingerprintLanguages);
-    const generation = inspectSqliteGeneration(paths.dbPath, paths.metaPath);
-    const generationDrift = generation.state === 'invalid' || generation.state === 'drifted';
-    const accepted = publishable && !generationDrift;
-    return {
-      state: accepted ? 'fresh' : 'stale',
-      checkedAt,
-      metaPath: paths.metaPath,
-      updatedAt: metadata.updatedAt,
-      lastRefresh: metadata.lastRefresh,
-      reason: generationDrift
-        ? `SQLite generation requires repair: ${generation.reason}`
-        : publishable
-          ? 'Watcher accepted the newly published index generation with no later changes pending.'
-          : 'Published index metadata is not a complete queryable generation.',
-      remedy: accepted ? undefined : 'Run: scip-query reindex',
-    };
+    return acceptedPublicationFreshness(paths, checkedAt, decoded);
   } catch (error) {
     return {
       state: 'unknown',
@@ -312,6 +289,45 @@ export function getPublishedIndexFreshness(paths: { dbPath: string; metaPath: st
       remedy: 'Run: scip-query reindex',
     };
   }
+}
+
+function acceptedPublicationFreshness(
+  paths: { dbPath: string; metaPath: string },
+  checkedAt: string,
+  decoded: Extract<ReturnType<typeof decodeReindexMetadata>, { metadata: unknown }>,
+): IndexFreshness {
+  const metadata = decoded.metadata;
+  const publishable = acceptedMetadataPublishable(decoded);
+  const generation = inspectSqliteGeneration(paths.dbPath, paths.metaPath);
+  const generationDrift = generation.state === 'invalid' || generation.state === 'drifted';
+  const accepted = publishable && !generationDrift;
+  return {
+    state: accepted ? 'fresh' : 'stale',
+    checkedAt,
+    metaPath: paths.metaPath,
+    updatedAt: metadata.updatedAt,
+    lastRefresh: metadata.lastRefresh,
+    reason: generationDrift
+      ? `SQLite generation requires repair: ${generation.reason}`
+      : publishable
+        ? 'Watcher accepted the newly published index generation with no later changes pending.'
+        : 'Published index metadata is not a complete queryable generation.',
+    remedy: accepted ? undefined : 'Run: scip-query reindex',
+  };
+}
+
+function acceptedMetadataPublishable(
+  decoded: Extract<ReturnType<typeof decodeReindexMetadata>, { metadata: unknown }>,
+): boolean {
+  const metadata = decoded.metadata;
+  const metadataLanguages = [...(metadata.indexedLanguages ?? [])].sort();
+  const fingerprint = projectInputSnapshotOrNull(metadata.fingerprint);
+  const fingerprintLanguages = [...(fingerprint?.languages ?? [])].sort();
+  return (
+    decoded.capabilities.publishableGeneration &&
+    fingerprint !== null &&
+    JSON.stringify(metadataLanguages) === JSON.stringify(fingerprintLanguages)
+  );
 }
 
 export function runtimeFingerprint(

@@ -406,58 +406,56 @@ function compareReferencedDeclarations(previousDeclarations, currentDeclarations
     }
     if (before.declaration === after.declaration) continue;
 
-    const oldExports = new Map(
-      extractPublicExports(before.declaration, before.module).map((item) => [item.name, item]),
-    );
-    const newExports = new Map(extractPublicExports(after.declaration, after.module).map((item) => [item.name, item]));
-    const names = new Set([...oldExports.keys(), ...newExports.keys()]);
-    let explained = false;
-    for (const name of [...names].sort()) {
-      const oldExport = oldExports.get(name);
-      const newExport = newExports.get(name);
-      if (!oldExport && newExport) {
-        explained = true;
-        changes.push(
-          change('additive', 'referenced-export-added', `${module}:${name}`, `Added referenced declaration ${name}.`),
-        );
-      } else if (oldExport && !newExport) {
-        explained = true;
-        changes.push(
-          change(
-            'breaking',
-            'referenced-export-removed',
-            `${module}:${name}`,
-            `Removed referenced declaration ${name}.`,
-          ),
-        );
-      } else if (oldExport && newExport && stableJson(oldExport) !== stableJson(newExport)) {
-        explained = true;
-        const classification =
-          oldExport.kind === newExport.kind
-            ? classifySignatureChange(oldExport.signature, newExport.signature)
-            : 'breaking';
-        changes.push(
-          change(
-            classification,
-            'referenced-signature-changed',
-            `${module}:${name}`,
-            `${name} changed from ${oneLine(oldExport.signature)} to ${oneLine(newExport.signature)}.`,
-          ),
-        );
-      }
-    }
-    if (!explained) {
-      changes.push(
-        change(
-          'uncertain',
-          'referenced-declaration-changed',
-          module,
-          `Non-exported declarations changed in referenced module ${module}.`,
-        ),
-      );
-    }
+    compareReferencedModuleExports(module, before, after, changes);
   }
   return changes;
+}
+
+function compareReferencedModuleExports(module, before, after, changes) {
+  const oldExports = new Map(extractPublicExports(before.declaration, before.module).map((item) => [item.name, item]));
+  const newExports = new Map(extractPublicExports(after.declaration, after.module).map((item) => [item.name, item]));
+  const names = new Set([...oldExports.keys(), ...newExports.keys()]);
+  let explained = false;
+  for (const name of [...names].sort()) {
+    const oldExport = oldExports.get(name);
+    const newExport = newExports.get(name);
+    const exportChange = referencedExportChange(module, name, oldExport, newExport);
+    if (exportChange) {
+      explained = true;
+      changes.push(exportChange);
+    }
+  }
+  if (!explained) {
+    changes.push(
+      change(
+        'uncertain',
+        'referenced-declaration-changed',
+        module,
+        `Non-exported declarations changed in referenced module ${module}.`,
+      ),
+    );
+  }
+}
+
+function referencedExportChange(module, name, oldExport, newExport) {
+  if (!oldExport && newExport)
+    return change('additive', 'referenced-export-added', `${module}:${name}`, `Added referenced declaration ${name}.`);
+  if (oldExport && !newExport)
+    return change(
+      'breaking',
+      'referenced-export-removed',
+      `${module}:${name}`,
+      `Removed referenced declaration ${name}.`,
+    );
+  if (!oldExport || !newExport || stableJson(oldExport) === stableJson(newExport)) return null;
+  const classification =
+    oldExport.kind === newExport.kind ? classifySignatureChange(oldExport.signature, newExport.signature) : 'breaking';
+  return change(
+    classification,
+    'referenced-signature-changed',
+    `${module}:${name}`,
+    `${name} changed from ${oneLine(oldExport.signature)} to ${oneLine(newExport.signature)}.`,
+  );
 }
 
 function normalizeNamedBindings(statement) {

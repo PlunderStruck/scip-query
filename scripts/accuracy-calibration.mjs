@@ -246,70 +246,22 @@ function runResampleMode(rawArgs) {
     throw new Error(`unsupported calibration packet schema: ${packet.schemaVersion}`);
   }
 
-  const rows = [];
-  for (const repository of packet.repositories) {
-    const detectors = packet.detectors ?? [packet.detector];
-    for (const detector of detectors) {
-      const candidates = packet.rows.filter(
-        (row) => row.repository === repository.repository && row.detector === detector,
-      );
-      const count = Math.min(sampleSize, candidates.length);
-      rows.push(
-        ...(usesStratifiedRelationshipSample(packet)
-          ? deterministicStratifiedSample(
-              candidates,
-              count,
-              `${packet.seed}:${repository.repository}:${detector}`,
-              (row) => row.findingKind,
-            )
-          : deterministicSample(candidates, count, `${packet.seed}:${repository.repository}:${detector}`)),
-      );
-    }
-  }
+  const rows = resamplePacketRows(packet, sampleSize);
   const resampled = {
     ...packet,
     generatedAt: new Date().toISOString(),
     ...(packet.detectors
       ? { sampleSizePerRepositoryAndDetector: sampleSize }
       : { sampleSizePerRepository: sampleSize }),
-    repositories: packet.repositories.map((repository) => ({
-      ...repository,
-      ...(packet.detectors
-        ? {
-            sampledCounts: Object.fromEntries(
-              packet.detectors.map((detector) => [
-                detector,
-                Math.min(
-                  sampleSize,
-                  packet.rows.filter((row) => row.repository === repository.repository && row.detector === detector)
-                    .length,
-                ),
-              ]),
-            ),
-          }
-        : {
-            sampled: Math.min(sampleSize, packet.rows.filter((row) => row.repository === repository.repository).length),
-          }),
-    })),
+    repositories: packet.repositories.map((repository) => resampledRepository(packet, repository, sampleSize)),
     rows,
-    summary: isRelationshipPacket(packet)
-      ? similarityPacketSummary(rows, packet.detectors ?? [], {})
-      : packet.detector === 'typescript-factual'
-        ? summarizeCalibrationByDetector(rows, { detectors: packet.detectors ?? [] })
-        : summarizeCalibration(rows),
+    summary: resampledPacketSummary(packet, rows),
   };
   const baseName = `${runId}-${packet.language}-${packet.detector}-resampled`;
   const jsonPath = join(outDir, `${baseName}.json`);
   const markdownPath = join(outDir, `${baseName}.md`);
   writeFileSync(jsonPath, `${JSON.stringify(resampled, null, 2)}\n`);
-  writeFileSync(
-    markdownPath,
-    isRelationshipPacket(packet)
-      ? renderRelationshipPacketForType(resampled)
-      : packet.detector === 'typescript-factual'
-        ? renderFactualPacket(resampled)
-        : renderDeadPacket(resampled),
-  );
+  writeFileSync(markdownPath, renderCalibrationPacket(resampled));
   console.log(jsonPath);
   console.log(markdownPath);
 }
@@ -332,31 +284,88 @@ function runSummarizeMode(rawArgs) {
     reviewedAt: new Date().toISOString(),
     verdictSource: resolve(verdictArg),
     rows,
-    summary: isRelationshipPacket(packet)
-      ? similarityPacketSummary(rows, packet.detectors ?? [], verdicts)
-      : packet.detector === 'typescript-factual'
-        ? summarizeCalibrationByDetector(rows, {
-            detectors: packet.detectors ?? [],
-            knownPositiveRecallCases: typeof knownPositiveRecallCases === 'object' ? knownPositiveRecallCases : {},
-          })
-        : summarizeCalibration(rows, {
-            knownPositiveRecallCases: typeof knownPositiveRecallCases === 'number' ? knownPositiveRecallCases : 0,
-          }),
+    summary: reviewedPacketSummary(packet, rows, verdicts, knownPositiveRecallCases),
   };
   const baseName = `${runId}-${packet.language}-${packet.detector}-reviewed`;
   const jsonPath = join(outDir, `${baseName}.json`);
   const markdownPath = join(outDir, `${baseName}.md`);
   writeFileSync(jsonPath, `${JSON.stringify(reviewed, null, 2)}\n`);
-  writeFileSync(
-    markdownPath,
-    isRelationshipPacket(packet)
-      ? renderRelationshipPacketForType(reviewed)
-      : packet.detector === 'typescript-factual'
-        ? renderFactualPacket(reviewed)
-        : renderDeadPacket(reviewed),
-  );
+  writeFileSync(markdownPath, renderCalibrationPacket(reviewed));
   console.log(jsonPath);
   console.log(markdownPath);
+}
+
+function resamplePacketRows(packet, sampleSize) {
+  const rows = [];
+  for (const repository of packet.repositories) {
+    const detectors = packet.detectors ?? [packet.detector];
+    for (const detector of detectors) {
+      const candidates = packet.rows.filter(
+        (row) => row.repository === repository.repository && row.detector === detector,
+      );
+      const count = Math.min(sampleSize, candidates.length);
+      rows.push(
+        ...(usesStratifiedRelationshipSample(packet)
+          ? deterministicStratifiedSample(
+              candidates,
+              count,
+              `${packet.seed}:${repository.repository}:${detector}`,
+              (row) => row.findingKind,
+            )
+          : deterministicSample(candidates, count, `${packet.seed}:${repository.repository}:${detector}`)),
+      );
+    }
+  }
+  return rows;
+}
+
+function resampledRepository(packet, repository, sampleSize) {
+  return {
+    ...repository,
+    ...(packet.detectors
+      ? {
+          sampledCounts: Object.fromEntries(
+            packet.detectors.map((detector) => [
+              detector,
+              Math.min(
+                sampleSize,
+                packet.rows.filter((row) => row.repository === repository.repository && row.detector === detector)
+                  .length,
+              ),
+            ]),
+          ),
+        }
+      : {
+          sampled: Math.min(sampleSize, packet.rows.filter((row) => row.repository === repository.repository).length),
+        }),
+  };
+}
+
+function resampledPacketSummary(packet, rows) {
+  return isRelationshipPacket(packet)
+    ? similarityPacketSummary(rows, packet.detectors ?? [], {})
+    : packet.detector === 'typescript-factual'
+      ? summarizeCalibrationByDetector(rows, { detectors: packet.detectors ?? [] })
+      : summarizeCalibration(rows);
+}
+
+function reviewedPacketSummary(packet, rows, verdicts, knownPositiveRecallCases) {
+  return isRelationshipPacket(packet)
+    ? similarityPacketSummary(rows, packet.detectors ?? [], verdicts)
+    : packet.detector === 'typescript-factual'
+      ? summarizeCalibrationByDetector(rows, {
+          detectors: packet.detectors ?? [],
+          knownPositiveRecallCases: typeof knownPositiveRecallCases === 'object' ? knownPositiveRecallCases : {},
+        })
+      : summarizeCalibration(rows, {
+          knownPositiveRecallCases: typeof knownPositiveRecallCases === 'number' ? knownPositiveRecallCases : 0,
+        });
+}
+
+function renderCalibrationPacket(packet) {
+  if (isRelationshipPacket(packet)) return renderRelationshipPacketForType(packet);
+  if (packet.detector === 'typescript-factual') return renderFactualPacket(packet);
+  return renderDeadPacket(packet);
 }
 
 function runHealthFactualMode(rawArgs) {
@@ -1563,43 +1572,51 @@ function renderRelationshipPacket(packet, title) {
   for (const detector of packet.detectors) lines.push(`- **${detector}:** ${packet.truthRules[detector]}`);
   lines.push('', '## Repository Inventory', '');
   for (const repository of packet.repositories) {
-    lines.push(
-      `### ${repository.repository}`,
-      '',
-      `- Commit: \`${repository.commit ?? '-'}\``,
-      `- Candidate counts: \`${JSON.stringify(repository.candidateCounts ?? {})}\``,
-      `- Sampled counts: \`${JSON.stringify(repository.sampledCounts ?? {})}\``,
-      `- Detector metadata: \`${JSON.stringify(repository.detectorMetadata ?? {})}\``,
-      `- Error: ${repository.error ?? '-'}`,
-      '',
-    );
+    appendRelationshipRepository(lines, repository);
   }
   lines.push('## Current Summary', '', '```json', JSON.stringify(packet.summary, null, 2), '```', '');
   for (const [index, row] of packet.rows.entries()) {
-    lines.push(
-      `## ${index + 1}. ${row.detector}: ${row.repository}: ${row.shortName}`,
-      '',
-      `- Calibration ID: \`${row.calibrationId}\``,
-      `- Commit: \`${row.commit}\``,
-      `- Primary location: \`${row.relativePath}:${row.startLine + 1}-${row.endLine + 1}\``,
-      `- Endpoints: \`${JSON.stringify(row.endpoints)}\``,
-      `- Evidence: ${row.evidence}`,
-      `- Kind: ${row.findingKind}`,
-      `- Relationship verdict: **${row.verdict?.toUpperCase() ?? 'PENDING'}**`,
-      `- Relationship noise archetype: ${row.noiseArchetype ?? '-'}`,
-      `- Relationship evidence note: ${row.evidenceNote ?? '-'}`,
-      `- Recommendation utility: **${row.utilityVerdict?.toUpperCase() ?? 'PENDING'}**`,
-      `- Utility archetype: ${row.utilityArchetype ?? '-'}`,
-      `- Utility evidence note: ${row.utilityNote ?? '-'}`,
-      `- Details: \`${JSON.stringify(row.details)}\``,
-      '',
-      '````text',
-      row.sourceExcerpt ?? '(source unavailable)',
-      '````',
-      '',
-    );
+    appendRelationshipRow(lines, row, index);
   }
   return `${lines.join('\n')}\n`;
+}
+
+function appendRelationshipRepository(lines, repository) {
+  lines.push(
+    `### ${repository.repository}`,
+    '',
+    `- Commit: \`${repository.commit ?? '-'}\``,
+    `- Candidate counts: \`${JSON.stringify(repository.candidateCounts ?? {})}\``,
+    `- Sampled counts: \`${JSON.stringify(repository.sampledCounts ?? {})}\``,
+    `- Detector metadata: \`${JSON.stringify(repository.detectorMetadata ?? {})}\``,
+    `- Error: ${repository.error ?? '-'}`,
+    '',
+  );
+}
+
+function appendRelationshipRow(lines, row, index) {
+  lines.push(
+    `## ${index + 1}. ${row.detector}: ${row.repository}: ${row.shortName}`,
+    '',
+    `- Calibration ID: \`${row.calibrationId}\``,
+    `- Commit: \`${row.commit}\``,
+    `- Primary location: \`${row.relativePath}:${row.startLine + 1}-${row.endLine + 1}\``,
+    `- Endpoints: \`${JSON.stringify(row.endpoints)}\``,
+    `- Evidence: ${row.evidence}`,
+    `- Kind: ${row.findingKind}`,
+    `- Relationship verdict: **${row.verdict?.toUpperCase() ?? 'PENDING'}**`,
+    `- Relationship noise archetype: ${row.noiseArchetype ?? '-'}`,
+    `- Relationship evidence note: ${row.evidenceNote ?? '-'}`,
+    `- Recommendation utility: **${row.utilityVerdict?.toUpperCase() ?? 'PENDING'}**`,
+    `- Utility archetype: ${row.utilityArchetype ?? '-'}`,
+    `- Utility evidence note: ${row.utilityNote ?? '-'}`,
+    `- Details: \`${JSON.stringify(row.details)}\``,
+    '',
+    '````text',
+    row.sourceExcerpt ?? '(source unavailable)',
+    '````',
+    '',
+  );
 }
 
 function runNavigationMode(rawRoots) {

@@ -184,17 +184,8 @@ function projectCommandResult(envelope) {
   const identityCoverage = result?.identityCoverage;
   const identities = result?.identities;
   const scopeHints = result?.scopeHints;
-  const commandProjectionComplete =
-    Array.isArray(identities) &&
-    identityCoverage?.mode === 'complete' &&
-    identityCoverage.omitted === 0 &&
-    identityCoverage.returned === identities.length &&
-    identityCoverage.total === identities.length;
-  const exhaustivePacketComplete =
-    Array.isArray(identities) &&
-    Number.isSafeInteger(identityCoverage?.total) &&
-    identities.length === identityCoverage.total &&
-    result.matchingLines === identityCoverage.total;
+  const commandProjectionComplete = completeCommandSearchIdentities(identities, identityCoverage);
+  const exhaustivePacketComplete = completeExhaustiveSearchIdentities(result, identities, identityCoverage);
   const identitiesComplete = commandProjectionComplete || exhaustivePacketComplete;
   const scopeHintsComplete = Array.isArray(scopeHints) && result.omittedScopeHints === 0;
   if (!identitiesComplete || !scopeHintsComplete) {
@@ -238,6 +229,25 @@ function projectCommandResult(envelope) {
       },
     },
   };
+}
+
+function completeCommandSearchIdentities(identities, coverage) {
+  return (
+    Array.isArray(identities) &&
+    coverage?.mode === 'complete' &&
+    coverage.omitted === 0 &&
+    coverage.returned === identities.length &&
+    coverage.total === identities.length
+  );
+}
+
+function completeExhaustiveSearchIdentities(result, identities, coverage) {
+  return (
+    Array.isArray(identities) &&
+    Number.isSafeInteger(coverage?.total) &&
+    identities.length === coverage.total &&
+    result.matchingLines === coverage.total
+  );
 }
 
 function groupSearchIdentities(identities) {

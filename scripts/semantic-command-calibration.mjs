@@ -200,13 +200,11 @@ function parseArgs(argv) {
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === '--repo') out.repos = mustValue(argv, ++i, arg).split(',');
-    else if (arg === '--command') out.commandIds = mustValue(argv, ++i, arg).split(',');
-    else if (arg === '--iterations') out.iterations = Number(mustValue(argv, ++i, arg));
-    else if (arg === '--timeout-ms') out.timeoutMs = Number(mustValue(argv, ++i, arg));
-    else if (arg === '--out') out.out = resolve(mustValue(argv, ++i, arg));
-    else if (arg === '--profile-dir') out.profileDir = resolve(mustValue(argv, ++i, arg));
-    else if (arg === '--append') out.append = true;
+    if (applyCalibrationValueOption(out, argv, i)) {
+      i += 1;
+      continue;
+    }
+    if (arg === '--append') out.append = true;
     else if (arg === '--list') {
       printMatrix();
       process.exit(0);
@@ -217,9 +215,40 @@ function parseArgs(argv) {
       throw new Error(`Unknown argument: ${arg}`);
     }
   }
+  validateCalibrationLimits(out);
+  return out;
+}
+
+function applyCalibrationValueOption(out, argv, index) {
+  const arg = argv[index];
+  switch (arg) {
+    case '--repo':
+      out.repos = mustValue(argv, index + 1, arg).split(',');
+      break;
+    case '--command':
+      out.commandIds = mustValue(argv, index + 1, arg).split(',');
+      break;
+    case '--iterations':
+      out.iterations = Number(mustValue(argv, index + 1, arg));
+      break;
+    case '--timeout-ms':
+      out.timeoutMs = Number(mustValue(argv, index + 1, arg));
+      break;
+    case '--out':
+      out.out = resolve(mustValue(argv, index + 1, arg));
+      break;
+    case '--profile-dir':
+      out.profileDir = resolve(mustValue(argv, index + 1, arg));
+      break;
+    default:
+      return false;
+  }
+  return true;
+}
+
+function validateCalibrationLimits(out) {
   if (!Number.isFinite(out.iterations) || out.iterations < 1) throw new Error('--iterations must be >= 1');
   if (!Number.isFinite(out.timeoutMs) || out.timeoutMs < 1000) throw new Error('--timeout-ms must be >= 1000');
-  return out;
 }
 
 function mustValue(argv, index, flag) {

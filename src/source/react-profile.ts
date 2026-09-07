@@ -366,12 +366,7 @@ function collectReactCandidates(root: SyntaxNode, language: AstLanguage): ReactC
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 function reactCandidateForNode(node: SyntaxNode): ReactCandidate | null {
   if (node.type === 'class_declaration') {
-    const name = callableName(node);
-    if (!name || !/^[A-Z]/.test(name)) return null;
-    const renderMethod = reactRenderMethod(node);
-    if (!renderMethod) return null;
-    if (!extendsReactComponent(node) && !containsJsx(renderMethod)) return null;
-    return { name, kind: 'component', node, bodyNode: renderMethod };
+    return reactClassCandidate(node);
   }
 
   if (node.type === 'function_declaration') {
@@ -381,6 +376,19 @@ function reactCandidateForNode(node: SyntaxNode): ReactCandidate | null {
   }
 
   if (node.type !== 'variable_declarator') return null;
+  return reactVariableCandidate(node);
+}
+
+function reactClassCandidate(node: SyntaxNode): ReactCandidate | null {
+  const name = callableName(node);
+  if (!name || !/^[A-Z]/.test(name)) return null;
+  const renderMethod = reactRenderMethod(node);
+  if (!renderMethod) return null;
+  if (!extendsReactComponent(node) && !containsJsx(renderMethod)) return null;
+  return { name, kind: 'component', node, bodyNode: renderMethod };
+}
+
+function reactVariableCandidate(node: SyntaxNode): ReactCandidate | null {
   const nameNode = node.childForFieldName('name') ?? node.namedChild(0);
   const valueNode = node.childForFieldName('value') ?? node.namedChild(1);
   const name = simpleIdentifier(nameNode);
