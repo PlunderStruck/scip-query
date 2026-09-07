@@ -1,10 +1,10 @@
+import { isRefreshTriggerKind } from '../domain/maintenance-types.js';
 import { existsSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import type {
   LastRefreshMetadata,
   RefreshTrigger,
-  RefreshTriggerKind,
   ReindexActivitySummary,
   ReindexLanguageActivitySummary,
   SupportedLanguage,
@@ -471,20 +471,6 @@ function isExpensiveRebuild(record: ReindexRunActivity): boolean {
 function budgetRetryAt(oldestContributingRecord: string | undefined, windowMs: number, nowMs: number): number {
   const oldestAtMs = oldestContributingRecord ? Date.parse(oldestContributingRecord) : Number.NaN;
   return Number.isFinite(oldestAtMs) && oldestAtMs + windowMs > nowMs ? oldestAtMs + windowMs : nowMs + windowMs;
-}
-
-function isRefreshTriggerKind(value: unknown): value is RefreshTriggerKind {
-  return (
-    value === 'manual-cli' ||
-    value === 'setup' ||
-    value === 'watch-source' ||
-    value === 'watch-startup' ||
-    value === 'watch-demand' ||
-    value === 'watch-git-head' ||
-    value === 'watch-git-index' ||
-    value === 'watch-git-state' ||
-    value === 'unknown'
-  );
 }
 
 function fileSize(path: string): number {

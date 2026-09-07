@@ -112,6 +112,72 @@ describe('watch service persisted state', () => {
     ).toBeNull();
   });
 
+  it.each([
+    { protocolVersion: -1 },
+    { protocolVersion: 1.5 },
+    { protocolVersion: Number.NaN },
+    { pid: Number.MAX_SAFE_INTEGER + 1 },
+    { indexGeneration: ['a'.repeat(64)] },
+    { watcher: { state: 'waiting', changedFiles: -1, reindexAt: 10 } },
+    { watcher: { state: 'waiting', changedFiles: 1.5, reindexAt: 10 } },
+    { typescriptSemantic: { ...liveState().typescriptSemantic!, requests: -1 } },
+    { typescriptSemantic: { ...liveState().typescriptSemantic!, sessionsReused: 0.5 } },
+    { typescriptIndex: { ...liveState().typescriptIndex!, protocolVersion: -1 } },
+    { reindexActivity: { ...liveState().reindexActivity!, automatic: { runs: -1 } } },
+    { reindexActivity: { ...liveState().reindexActivity!, byTrigger: { invented: 1 } } },
+  ])('rejects malformed state fields: %j', (patch) => {
+    expect(parseWatchServiceState({ ...liveState(), ...patch })).toBeNull();
+  });
+
+  it.each([
+    { trigger: { kind: 'invented' } },
+    { trigger: { kind: 'setup', detail: [] } },
+    { result: 'invented' },
+    { durationMs: -1 },
+    { indexedLanguages: 'typescript' },
+    { indexedLanguages: ['invented'] },
+    { skipped: [{ language: 'typescript', reason: 42 }] },
+    { error: [] },
+  ])('rejects malformed last-refresh metadata: %j', (patch) => {
+    expect(
+      parseWatchServiceState({
+        ...liveState(),
+        lastRefresh: {
+          trigger: { kind: 'setup' },
+          result: 'reused',
+          durationMs: 10,
+          startedAt: liveState().startedAt,
+          completedAt: liveState().heartbeatAt,
+          ...patch,
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it('retains supported legacy records and complete current metadata without mutating the input', () => {
+    const state = Object.freeze({
+      ...liveState(),
+      protocolVersion: WATCH_SERVICE_PROTOCOL_VERSION - 1,
+      processIdentity: Object.freeze({ version: 1, pid: 123, platform: 'linux', startToken: '12345' }),
+      lastRefresh: {
+        trigger: { kind: 'watch-demand', detail: 'queued refresh' },
+        result: 'rebuilt',
+        durationMs: 1.5,
+        startedAt: liveState().startedAt,
+        completedAt: liveState().heartbeatAt,
+        indexedLanguages: ['typescript'],
+        skipped: [{ language: 'python', reason: 'not available' }],
+      },
+      reindexActivity: {
+        ...liveState().reindexActivity!,
+        automatic: { runs: 1, rebuilt: 1, fullRebuilds: 1, estimatedWriteBytes: 1_024 },
+      },
+    });
+    expect(parseWatchServiceState(state)).toEqual(state);
+    expect(parseWatchServiceState(liveState())).toEqual(liveState());
+    expect(parseWatchServiceState({ ...state, processIdentity: { ...state.processIdentity, pid: 456 } })).toBeNull();
+  });
+
   it('reads valid state and treats missing or malformed files as unavailable', () => {
     const directory = mkdtempSync(join(tmpdir(), 'scip-query-watch-state-'));
     const statePath = join(directory, WATCH_STATE_FILE);

@@ -187,9 +187,9 @@
           "name": "validReindexActivitySummary"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Replaced repeated boolean field checks with explicit record field schemas sharing timestamp, safe-counter, generation and refresh-trigger validators. Closed missing nested metadata validation and preserved supported legacy optional fields.",
+      "verification": "22 distinguishing regressions failed before fixes; 123 focused tests and all 3,042 full-suite tests pass. Final source review: accounted, no blocking findings."
     },
     {
       "id": "complexity:src/runtime/commands/command-handlers.ts:renderWatchServiceReport",
@@ -446,9 +446,9 @@
           "name": "validTypeScriptIndexStatus"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Replaced repeated boolean field checks with explicit record field schemas sharing timestamp, safe-counter, generation and refresh-trigger validators. Closed missing nested metadata validation and preserved supported legacy optional fields.",
+      "verification": "22 distinguishing regressions failed before fixes; 123 focused tests and all 3,042 full-suite tests pass. Final source review: accounted, no blocking findings."
     },
     {
       "id": "complexity:src/reindex/reindex-activity.ts:readReindexActivitySummary",
@@ -521,9 +521,9 @@
           "name": "parseWatchServiceState"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Replaced repeated boolean field checks with explicit record field schemas sharing timestamp, safe-counter, generation and refresh-trigger validators. Closed missing nested metadata validation and preserved supported legacy optional fields.",
+      "verification": "22 distinguishing regressions failed before fixes; 123 focused tests and all 3,042 full-suite tests pass. Final source review: accounted, no blocking findings."
     },
     {
       "id": "complexity:src/queries/internal/connected-behavior.ts:connectedBehaviorPacket",
@@ -2141,9 +2141,9 @@
           "name": "validTypeScriptSemanticStatus"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Replaced repeated boolean field checks with explicit record field schemas sharing timestamp, safe-counter, generation and refresh-trigger validators. Closed missing nested metadata validation and preserved supported legacy optional fields.",
+      "verification": "22 distinguishing regressions failed before fixes; 123 focused tests and all 3,042 full-suite tests pass. Final source review: accounted, no blocking findings."
     },
     {
       "id": "complexity:src/queries/internal/production-callables.ts:productionCallableDefinitions",
@@ -3581,9 +3581,9 @@
           "name": "validWatcherStatus"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Replaced repeated boolean field checks with explicit record field schemas sharing timestamp, safe-counter, generation and refresh-trigger validators. Closed missing nested metadata validation and preserved supported legacy optional fields.",
+      "verification": "22 distinguishing regressions failed before fixes; 123 focused tests and all 3,042 full-suite tests pass. Final source review: accounted, no blocking findings."
     },
     {
       "id": "complexity:src/queries/graph/system-map.ts:finalizeSystemMap.boundaryFrontiers.<callback:(runtimeBoundaries?.frontiers ?? [])\n    .flatMap:0>",
@@ -5396,9 +5396,9 @@
           "name": "validLanguageActivitySummary"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Replaced repeated boolean field checks with explicit record field schemas sharing timestamp, safe-counter, generation and refresh-trigger validators. Closed missing nested metadata validation and preserved supported legacy optional fields.",
+      "verification": "22 distinguishing regressions failed before fixes; 123 focused tests and all 3,042 full-suite tests pass. Final source review: accounted, no blocking findings."
     },
     {
       "id": "complexity:src/queries/cleanup/duplicate-bodies.ts:extractImplementationBody",
@@ -6236,9 +6236,9 @@
           "name": "validBoundedMailboxStatus"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Replaced repeated boolean field checks with explicit record field schemas sharing timestamp, safe-counter, generation and refresh-trigger validators. Closed missing nested metadata validation and preserved supported legacy optional fields.",
+      "verification": "22 distinguishing regressions failed before fixes; 123 focused tests and all 3,042 full-suite tests pass. Final source review: accounted, no blocking findings."
     },
     {
       "id": "complexity:src/queries/cleanup/boundary-evidence.ts:hasCleanupIgnoreComment",

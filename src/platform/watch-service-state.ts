@@ -1,10 +1,14 @@
 import { join } from 'node:path';
 
 import type { LastRefreshMetadata, ReindexActivitySummary, WatcherStatus } from '../domain/types.js';
+import { isRefreshTriggerKind } from '../domain/maintenance-types.js';
 import { SUPPORTED_LANGUAGES } from '../domain/config-types.js';
 import {
   isNonNegativeFiniteNumber,
   isNonNegativeInteger,
+  isPositiveInteger,
+  isRecordObject,
+  isSha256Hex,
   isValidRecordTimestamp,
 } from '../domain/record-validation.js';
 import { parseProcessIdentity, type ProcessIdentity } from './process-identity.js';
@@ -125,252 +129,261 @@ export function readWatchServiceState(statePath: string): WatchServiceState | nu
 }
 
 export function parseWatchServiceState(value: unknown): WatchServiceState | null {
-  if (!value || typeof value !== 'object') return null;
-  const state = value as Partial<WatchServiceState>;
   if (
-    state.version !== 1 ||
-    typeof state.protocolVersion !== 'number' ||
-    typeof state.pid !== 'number' ||
-    !Number.isInteger(state.pid) ||
-    state.pid <= 0 ||
-    typeof state.projectRoot !== 'string' ||
-    (state.worktreeId !== undefined && (typeof state.worktreeId !== 'string' || state.worktreeId.length === 0)) ||
-    typeof state.cliVersion !== 'string' ||
-    !isValidWatchServiceTimestamp(state.startedAt) ||
-    !isValidWatchServiceTimestamp(state.heartbeatAt) ||
-    !isValidWatchServiceTimestamp(state.lastActivityAt) ||
-    !validWatcherStatus(state.watcher)
-  ) {
+    !validFields(value, {
+      version: (entry) => entry === 1,
+      protocolVersion: isPositiveInteger,
+      pid: isPositiveInteger,
+      projectRoot: isString,
+      worktreeId: optional((entry) => isString(entry) && entry.length > 0),
+      cliVersion: isString,
+      startedAt: isValidWatchServiceTimestamp,
+      heartbeatAt: isValidWatchServiceTimestamp,
+      lastActivityAt: isValidWatchServiceTimestamp,
+      idleDeadlineAt: optional(isValidWatchServiceTimestamp),
+      watcher: validWatcherStatus,
+      indexGeneration: optional(isSha256Hex),
+      lastError: optional(validLastError),
+      lastRefresh: optional(validLastRefresh),
+      reindexActivity: optional(validReindexActivitySummary),
+      refreshRequests: optional(validWatchRefreshRequestStatus),
+      typescriptSemantic: optional(validTypeScriptSemanticStatus),
+      typescriptIndex: optional(validTypeScriptIndexStatus),
+    })
+  )
     return null;
-  }
-  if (state.idleDeadlineAt !== undefined && !isValidWatchServiceTimestamp(state.idleDeadlineAt)) {
-    return null;
-  }
-  if (state.processIdentity !== undefined) {
-    const processIdentity = parseProcessIdentity(state.processIdentity);
-    if (!processIdentity || processIdentity.pid !== state.pid) return null;
-    state.processIdentity = processIdentity;
-  }
-  if (state.indexGeneration !== undefined && !/^[a-f0-9]{64}$/.test(state.indexGeneration)) {
-    return null;
-  }
-  if (state.lastError !== undefined && !validLastError(state.lastError)) return null;
-  if (state.lastRefresh !== undefined && !validLastRefresh(state.lastRefresh)) return null;
-  if (state.reindexActivity !== undefined && !validReindexActivitySummary(state.reindexActivity)) return null;
-  if (state.refreshRequests !== undefined && !validWatchRefreshRequestStatus(state.refreshRequests)) return null;
-  if (state.typescriptSemantic !== undefined && !validTypeScriptSemanticStatus(state.typescriptSemantic)) {
-    return null;
-  }
-  if (state.typescriptIndex !== undefined && !validTypeScriptIndexStatus(state.typescriptIndex)) {
-    return null;
-  }
-  return state as WatchServiceState;
+  if (value.processIdentity === undefined) return value as unknown as WatchServiceState;
+  const processIdentity = parseProcessIdentity(value.processIdentity);
+  if (!processIdentity || processIdentity.pid !== value.pid) return null;
+  return { ...value, processIdentity } as unknown as WatchServiceState;
 }
 
-// scip-query: ignore-wrapper — reviewed W1 reused predicate; eleven validation sites share this timestamp rule.
+// scip-query: ignore-wrapper — reviewed W1 reused predicate; validation sites share this timestamp rule.
 export function isValidWatchServiceTimestamp(value: unknown): value is string {
   return isValidRecordTimestamp(value);
 }
 
+type FieldValidator = (value: unknown) => boolean;
+
+/** Validate known fields while retaining forward-compatible extra metadata. */
+function validFields(
+  value: unknown,
+  fields: Readonly<Record<string, FieldValidator>>,
+): value is Record<string, unknown> {
+  return isRecordObject(value) && Object.entries(fields).every(([key, validate]) => validate(value[key]));
+}
+
+function optional(validate: FieldValidator): FieldValidator {
+  return (value) => value === undefined || validate(value);
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function validWatcherStatus(value: unknown): value is WatcherStatus {
-  if (!value || typeof value !== 'object' || !('state' in value)) return false;
-  const status = value as Partial<WatcherStatus>;
-  switch (status.state) {
+  if (!isRecordObject(value)) return false;
+  switch (value.state) {
     case 'idle':
       return true;
     case 'waiting':
-      return finiteNumber(status.changedFiles) && finiteNumber(status.reindexAt);
+      return validFields(value, { changedFiles: isNonNegativeInteger, reindexAt: isNonNegativeFiniteNumber });
     case 'indexing':
-      return finiteNumber(status.startedAt);
+      return validFields(value, { startedAt: isNonNegativeFiniteNumber });
     case 'cooldown':
-      return finiteNumber(status.until) && typeof status.dirty === 'boolean';
+      return validFields(value, { until: isNonNegativeFiniteNumber, dirty: isBoolean });
     case 'budget-paused':
-      return (
-        finiteNumber(status.until) &&
-        typeof status.dirty === 'boolean' &&
-        typeof status.reason === 'string' &&
-        isNonNegativeInteger(status.rebuilt) &&
-        isNonNegativeInteger(status.estimatedWriteBytes)
-      );
+      return validFields(value, {
+        until: isNonNegativeFiniteNumber,
+        dirty: isBoolean,
+        reason: isString,
+        rebuilt: isNonNegativeInteger,
+        estimatedWriteBytes: isNonNegativeInteger,
+      });
     case 'draining':
-      return finiteNumber(status.startedAt) && typeof status.reason === 'string';
+      return validFields(value, { startedAt: isNonNegativeFiniteNumber, reason: isString });
     default:
       return false;
   }
 }
 
-function validLastError(value: unknown): value is NonNullable<WatchServiceState['lastError']> {
-  if (!value || typeof value !== 'object') return false;
-  const error = value as Partial<NonNullable<WatchServiceState['lastError']>>;
-  return isValidWatchServiceTimestamp(error.at) && typeof error.message === 'string';
+function validLastError(value: unknown): boolean {
+  return validFields(value, { at: isValidWatchServiceTimestamp, message: isString });
 }
 
 function validLastRefresh(value: unknown): value is LastRefreshMetadata {
-  if (!value || typeof value !== 'object') return false;
-  const refresh = value as Partial<LastRefreshMetadata>;
-  return (
-    typeof refresh.trigger?.kind === 'string' &&
-    typeof refresh.result === 'string' &&
-    isValidWatchServiceTimestamp(refresh.startedAt) &&
-    isValidWatchServiceTimestamp(refresh.completedAt) &&
-    finiteNumber(refresh.durationMs)
-  );
+  return validFields(value, {
+    trigger: (entry) => validFields(entry, { kind: isRefreshTriggerKind, detail: optional(isString) }),
+    result: (entry) => entry === 'rebuilt' || entry === 'reused' || entry === 'failed',
+    startedAt: isValidWatchServiceTimestamp,
+    completedAt: isValidWatchServiceTimestamp,
+    durationMs: isNonNegativeFiniteNumber,
+    indexedLanguages: optional((entry) => Array.isArray(entry) && entry.every(isSupportedLanguage)),
+    skipped: optional(
+      (entry) =>
+        Array.isArray(entry) &&
+        entry.every((item) => validFields(item, { language: isSupportedLanguage, reason: isString })),
+    ),
+    error: optional(isString),
+  });
+}
+
+function isSupportedLanguage(value: unknown): boolean {
+  return isString(value) && (SUPPORTED_LANGUAGES as readonly string[]).includes(value);
+}
+
+function validConfidence(value: unknown): boolean {
+  return value === 'complete' || value === 'partial' || value === 'unavailable';
 }
 
 function validReindexActivitySummary(value: unknown): value is ReindexActivitySummary {
-  if (!value || typeof value !== 'object') return false;
-  const summary = value as Partial<ReindexActivitySummary>;
-  if (
-    (summary.confidence !== undefined &&
-      summary.confidence !== 'complete' &&
-      summary.confidence !== 'partial' &&
-      summary.confidence !== 'unavailable') ||
-    (summary.recordsRead !== undefined && !isNonNegativeInteger(summary.recordsRead)) ||
-    (summary.invalidRecords !== undefined && !isNonNegativeInteger(summary.invalidRecords)) ||
-    (summary.skippedRecords !== undefined && !isNonNegativeInteger(summary.skippedRecords)) ||
-    (summary.readErrors !== undefined && !isNonNegativeInteger(summary.readErrors)) ||
-    (summary.ignoredPartialTailBytes !== undefined && !isNonNegativeInteger(summary.ignoredPartialTailBytes)) ||
-    !isValidWatchServiceTimestamp(summary.windowStartedAt) ||
-    !isValidWatchServiceTimestamp(summary.windowEndedAt) ||
-    !isNonNegativeInteger(summary.runs) ||
-    !isNonNegativeInteger(summary.rebuilt) ||
-    (summary.fullRebuilds !== undefined && !isNonNegativeInteger(summary.fullRebuilds)) ||
-    !isNonNegativeInteger(summary.reused) ||
-    !isNonNegativeInteger(summary.failed) ||
-    !isNonNegativeInteger(summary.suppressed) ||
-    !finiteNumber(summary.estimatedLogicalOutputBytes) ||
-    (summary.estimatedWriteBytes !== undefined && !isNonNegativeInteger(summary.estimatedWriteBytes)) ||
-    (summary.reflinkedBytes !== undefined && !isNonNegativeInteger(summary.reflinkedBytes)) ||
-    (summary.fallbackCopiedBytes !== undefined && !isNonNegativeInteger(summary.fallbackCopiedBytes)) ||
-    (summary.oldestRebuildAt !== undefined && !isValidWatchServiceTimestamp(summary.oldestRebuildAt)) ||
-    (summary.oldestWriteAt !== undefined && !isValidWatchServiceTimestamp(summary.oldestWriteAt)) ||
-    (summary.languageAttribution !== undefined &&
-      summary.languageAttribution !== 'complete' &&
-      summary.languageAttribution !== 'partial' &&
-      summary.languageAttribution !== 'unavailable') ||
-    (summary.attributedRuns !== undefined && !isNonNegativeInteger(summary.attributedRuns)) ||
-    (summary.unattributedRuns !== undefined && !isNonNegativeInteger(summary.unattributedRuns)) ||
-    (summary.invalidLanguageDetails !== undefined && !isNonNegativeInteger(summary.invalidLanguageDetails)) ||
-    summary.estimatedLogicalOutputBytes! < 0 ||
-    !summary.byTrigger ||
-    typeof summary.byTrigger !== 'object' ||
-    Array.isArray(summary.byTrigger) ||
-    (summary.byLanguage !== undefined && !validLanguageActivitySummary(summary.byLanguage))
-  ) {
-    return false;
-  }
-  return Object.values(summary.byTrigger).every((count) => count === undefined || isNonNegativeInteger(count));
+  return validFields(value, {
+    confidence: optional(validConfidence),
+    recordsRead: optional(isNonNegativeInteger),
+    invalidRecords: optional(isNonNegativeInteger),
+    skippedRecords: optional(isNonNegativeInteger),
+    readErrors: optional(isNonNegativeInteger),
+    ignoredPartialTailBytes: optional(isNonNegativeInteger),
+    windowStartedAt: isValidWatchServiceTimestamp,
+    windowEndedAt: isValidWatchServiceTimestamp,
+    runs: isNonNegativeInteger,
+    rebuilt: isNonNegativeInteger,
+    fullRebuilds: optional(isNonNegativeInteger),
+    reused: isNonNegativeInteger,
+    failed: isNonNegativeInteger,
+    suppressed: isNonNegativeInteger,
+    estimatedLogicalOutputBytes: isNonNegativeFiniteNumber,
+    estimatedWriteBytes: optional(isNonNegativeInteger),
+    reflinkedBytes: optional(isNonNegativeInteger),
+    fallbackCopiedBytes: optional(isNonNegativeInteger),
+    oldestRebuildAt: optional(isValidWatchServiceTimestamp),
+    oldestWriteAt: optional(isValidWatchServiceTimestamp),
+    languageAttribution: optional(validConfidence),
+    attributedRuns: optional(isNonNegativeInteger),
+    unattributedRuns: optional(isNonNegativeInteger),
+    invalidLanguageDetails: optional(isNonNegativeInteger),
+    byTrigger: (entry) =>
+      isRecordObject(entry) &&
+      Object.entries(entry).every(
+        ([kind, count]) => isRefreshTriggerKind(kind) && (count === undefined || isNonNegativeInteger(count)),
+      ),
+    byLanguage: optional(validLanguageActivitySummary),
+    automatic: optional(validAutomaticActivitySummary),
+  });
+}
+
+function validAutomaticActivitySummary(value: unknown): boolean {
+  return validFields(value, {
+    runs: isNonNegativeInteger,
+    rebuilt: isNonNegativeInteger,
+    fullRebuilds: isNonNegativeInteger,
+    estimatedWriteBytes: isNonNegativeInteger,
+    oldestRebuildAt: optional(isValidWatchServiceTimestamp),
+    oldestWriteAt: optional(isValidWatchServiceTimestamp),
+  });
 }
 
 function validLanguageActivitySummary(value: unknown): boolean {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  for (const [language, candidate] of Object.entries(value)) {
-    if (!(SUPPORTED_LANGUAGES as readonly string[]).includes(language)) return false;
-    if (!candidate || typeof candidate !== 'object') return false;
-    const summary = candidate as {
-      runs?: unknown;
-      rebuilt?: unknown;
-      reused?: unknown;
-      producedOutputBytes?: unknown;
-      durationMs?: unknown;
-    };
-    if (
-      !isNonNegativeInteger(summary.runs) ||
-      !isNonNegativeInteger(summary.rebuilt) ||
-      !isNonNegativeInteger(summary.reused) ||
-      !isNonNegativeInteger(summary.producedOutputBytes) ||
-      !isNonNegativeFiniteNumber(summary.durationMs) ||
-      summary.rebuilt + summary.reused !== summary.runs
-    ) {
-      return false;
-    }
-  }
-  return true;
+  return (
+    isRecordObject(value) &&
+    Object.entries(value).every(
+      ([language, candidate]) => isSupportedLanguage(language) && validLanguageActivity(candidate),
+    )
+  );
+}
+
+function validLanguageActivity(value: unknown): boolean {
+  if (
+    !validFields(value, {
+      runs: isNonNegativeInteger,
+      rebuilt: isNonNegativeInteger,
+      reused: isNonNegativeInteger,
+      producedOutputBytes: isNonNegativeInteger,
+      durationMs: isNonNegativeFiniteNumber,
+    })
+  )
+    return false;
+  return (value.rebuilt as number) + (value.reused as number) === value.runs;
 }
 
 function validWatchRefreshRequestStatus(value: unknown): value is WatchRefreshRequestStatusSnapshot {
-  if (!value || typeof value !== 'object') return false;
-  const status = value as Partial<WatchRefreshRequestStatusSnapshot>;
-  return (
-    isNonNegativeInteger(status.pending) &&
-    isNonNegativeInteger(status.claimed) &&
-    isNonNegativeInteger(status.completed) &&
-    isNonNegativeInteger(status.expired) &&
-    isNonNegativeInteger(status.invalid) &&
-    (status.oldestPendingAt === undefined || isValidWatchServiceTimestamp(status.oldestPendingAt))
-  );
+  return validFields(value, {
+    pending: isNonNegativeInteger,
+    claimed: isNonNegativeInteger,
+    completed: isNonNegativeInteger,
+    expired: isNonNegativeInteger,
+    invalid: isNonNegativeInteger,
+    oldestPendingAt: optional(isValidWatchServiceTimestamp),
+  });
+}
+
+function validServiceState(value: unknown): boolean {
+  return value === 'idle' || value === 'ready' || value === 'unavailable' || value === 'error';
 }
 
 function validTypeScriptSemanticStatus(value: unknown): value is TypeScriptSemanticServiceStatusSnapshot {
-  if (!value || typeof value !== 'object') return false;
-  const status = value as Partial<TypeScriptSemanticServiceStatusSnapshot>;
-  return (
-    typeof status.protocolVersion === 'number' &&
-    (status.state === 'idle' ||
-      status.state === 'ready' ||
-      status.state === 'unavailable' ||
-      status.state === 'error') &&
-    finiteNumber(status.requests) &&
-    finiteNumber(status.sessionsCreated) &&
-    finiteNumber(status.sessionsReused) &&
-    finiteNumber(status.sessionsRefreshed) &&
-    finiteNumber(status.sessionsReplaced) &&
-    finiteNumber(status.projectsCreated) &&
-    (status.lastRequestAt === undefined || isValidWatchServiceTimestamp(status.lastRequestAt)) &&
-    (status.lastError === undefined || typeof status.lastError === 'string') &&
-    (status.busyUntil === undefined || isValidWatchServiceTimestamp(status.busyUntil)) &&
-    (status.mailbox === undefined || validBoundedMailboxStatus(status.mailbox))
-  );
+  return validFields(value, {
+    protocolVersion: isPositiveInteger,
+    state: validServiceState,
+    requests: isNonNegativeInteger,
+    sessionsCreated: isNonNegativeInteger,
+    sessionsReused: isNonNegativeInteger,
+    sessionsRefreshed: isNonNegativeInteger,
+    sessionsReplaced: isNonNegativeInteger,
+    projectsCreated: isNonNegativeInteger,
+    lastRequestAt: optional(isValidWatchServiceTimestamp),
+    lastError: optional(isString),
+    busyUntil: optional(isValidWatchServiceTimestamp),
+    mailbox: optional(validBoundedMailboxStatus),
+  });
+}
+
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === 'boolean';
 }
 
 function validTypeScriptIndexStatus(value: unknown): value is TypeScriptIndexServiceStatusSnapshot {
-  if (!value || typeof value !== 'object') return false;
-  const status = value as Partial<TypeScriptIndexServiceStatusSnapshot>;
-  return (
-    typeof status.protocolVersion === 'number' &&
-    (status.state === 'idle' ||
-      status.state === 'ready' ||
-      status.state === 'unavailable' ||
-      status.state === 'error') &&
-    isNonNegativeInteger(status.requests) &&
-    isNonNegativeInteger(status.sessionsCreated) &&
-    isNonNegativeInteger(status.sessionsReplaced) &&
-    (status.sessionsEvicted === undefined || isNonNegativeInteger(status.sessionsEvicted)) &&
-    (status.activeSessions === undefined || isNonNegativeInteger(status.activeSessions)) &&
-    (status.maxActiveSessions === undefined || isNonNegativeInteger(status.maxActiveSessions)) &&
-    (status.heapUsedBytes === undefined || isNonNegativeInteger(status.heapUsedBytes)) &&
-    (status.heapLimitBytes === undefined || isNonNegativeInteger(status.heapLimitBytes)) &&
-    (status.softMemoryLimitBytes === undefined || isNonNegativeInteger(status.softMemoryLimitBytes)) &&
-    (status.retireRequested === undefined || typeof status.retireRequested === 'boolean') &&
-    isNonNegativeInteger(status.initializations) &&
-    isNonNegativeInteger(status.programUpdates) &&
-    isNonNegativeInteger(status.documentsEmitted) &&
-    isNonNegativeInteger(status.documentsRemoved) &&
-    (status.lastRequestAt === undefined || isValidWatchServiceTimestamp(status.lastRequestAt)) &&
-    (status.lastDurationMs === undefined || (finiteNumber(status.lastDurationMs) && status.lastDurationMs >= 0)) &&
-    (status.lastError === undefined || typeof status.lastError === 'string') &&
-    (status.busyUntil === undefined || isValidWatchServiceTimestamp(status.busyUntil)) &&
-    (status.mailbox === undefined || validBoundedMailboxStatus(status.mailbox))
-  );
+  return validFields(value, {
+    protocolVersion: isPositiveInteger,
+    state: validServiceState,
+    requests: isNonNegativeInteger,
+    sessionsCreated: isNonNegativeInteger,
+    sessionsReplaced: isNonNegativeInteger,
+    sessionsEvicted: optional(isNonNegativeInteger),
+    activeSessions: optional(isNonNegativeInteger),
+    maxActiveSessions: optional(isNonNegativeInteger),
+    heapUsedBytes: optional(isNonNegativeInteger),
+    heapLimitBytes: optional(isNonNegativeInteger),
+    softMemoryLimitBytes: optional(isNonNegativeInteger),
+    retireRequested: optional(isBoolean),
+    initializations: isNonNegativeInteger,
+    programUpdates: isNonNegativeInteger,
+    documentsEmitted: isNonNegativeInteger,
+    documentsRemoved: isNonNegativeInteger,
+    lastRequestAt: optional(isValidWatchServiceTimestamp),
+    lastDurationMs: optional(isNonNegativeFiniteNumber),
+    lastError: optional(isString),
+    busyUntil: optional(isValidWatchServiceTimestamp),
+    mailbox: optional(validBoundedMailboxStatus),
+  });
 }
 
 function validBoundedMailboxStatus(value: unknown): value is BoundedMailboxStatusSnapshot {
-  if (!value || typeof value !== 'object') return false;
-  const status = value as Partial<BoundedMailboxStatusSnapshot>;
+  if (
+    !validFields(value, {
+      pending: isNonNegativeInteger,
+      inflight: isNonNegativeInteger,
+      responses: isNonNegativeInteger,
+      deadLetters: isNonNegativeInteger,
+      invalid: isNonNegativeInteger,
+      totalItems: isNonNegativeInteger,
+      totalBytes: isNonNegativeFiniteNumber,
+      oldestPendingAt: optional(isValidWatchServiceTimestamp),
+    })
+  )
+    return false;
   return (
-    isNonNegativeInteger(status.pending) &&
-    isNonNegativeInteger(status.inflight) &&
-    isNonNegativeInteger(status.responses) &&
-    isNonNegativeInteger(status.deadLetters) &&
-    isNonNegativeInteger(status.invalid) &&
-    isNonNegativeInteger(status.totalItems) &&
-    finiteNumber(status.totalBytes) &&
-    status.totalBytes! >= 0 &&
-    status.totalItems === status.pending! + status.inflight! + status.responses! + status.deadLetters! &&
-    (status.oldestPendingAt === undefined || isValidWatchServiceTimestamp(status.oldestPendingAt))
+    value.totalItems ===
+    (value.pending as number) + (value.inflight as number) + (value.responses as number) + (value.deadLetters as number)
   );
-}
-
-function finiteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
 }

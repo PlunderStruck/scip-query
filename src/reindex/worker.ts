@@ -1,3 +1,4 @@
+import { isRefreshTriggerKind } from '../domain/maintenance-types.js';
 /**
  * Child process worker for background reindexing.
  * Invoked by the watcher via fork(). Reads config from env vars.
@@ -79,17 +80,7 @@ function parseParentIdentity(value: string | undefined) {
 }
 
 function parseRefreshTriggerKind(value: string | undefined): RefreshTriggerKind {
-  switch (value) {
-    case 'manual-cli':
-    case 'setup':
-    case 'watch-source':
-    case 'watch-git-head':
-    case 'watch-git-index':
-    case 'watch-git-state':
-      return value;
-    default:
-      return 'unknown';
-  }
+  return isRefreshTriggerKind(value) ? value : 'unknown';
 }
 
 function parseTypeScriptWorkerConfig(value: string | undefined): {

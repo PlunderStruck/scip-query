@@ -28,6 +28,23 @@ export type RefreshTriggerKind =
   | 'watch-git-state'
   | 'unknown';
 
+const REFRESH_TRIGGER_KINDS: Record<RefreshTriggerKind, true> = {
+  'manual-cli': true,
+  setup: true,
+  'watch-source': true,
+  'watch-startup': true,
+  'watch-demand': true,
+  'watch-git-head': true,
+  'watch-git-index': true,
+  'watch-git-state': true,
+  unknown: true,
+};
+
+/** The refresh vocabulary shared by workers, activity records, and persisted status. */
+export function isRefreshTriggerKind(value: unknown): value is RefreshTriggerKind {
+  return typeof value === 'string' && Object.hasOwn(REFRESH_TRIGGER_KINDS, value);
+}
+
 export interface RefreshTrigger {
   kind: RefreshTriggerKind;
   detail?: string;
