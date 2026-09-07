@@ -190,7 +190,8 @@ export class TypeScriptIndexRequester {
   private requestLocally(request: TypeScriptIndexDocumentRequest): RequestedTypeScriptDocuments {
     if (this.requireService) {
       throw new Error(
-        'TypeScript incremental index service unavailable; refusing to load the whole compiler graph inside the reindex process',
+        'TypeScript incremental index service unavailable; refusing to load the whole compiler graph inside the reindex process. ' +
+          'Check scip-query watch --status; run scip-query watch --daemon to start the service explicitly, then retry scip-query reindex',
       );
     }
     if (this.emitLocally) {

@@ -162,7 +162,7 @@ describe('TypeScript index service mailbox', () => {
     expect(localCalls).toBe(1);
   });
 
-  test('does not load the compiler into a caller that requires the isolated service', () => {
+  test('gives explicit service recovery without loading the compiler into the requesting process', () => {
     const fixture = serviceFixture();
     let localCalls = 0;
     const requester = new TypeScriptIndexRequester(
@@ -178,6 +178,9 @@ describe('TypeScript index service mailbox', () => {
 
     expect(() => requester.request(indexRequest('producer'))).toThrow(
       'refusing to load the whole compiler graph inside the reindex process',
+    );
+    expect(() => requester.request(indexRequest('producer'))).toThrow(
+      'Check scip-query watch --status; run scip-query watch --daemon to start the service explicitly, then retry scip-query reindex',
     );
     expect(localCalls).toBe(0);
   });
