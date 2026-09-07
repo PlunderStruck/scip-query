@@ -1040,7 +1040,7 @@ function connectorSliceRepresentation(
     coverage: {
       sourceStatements,
       representedStatements: lines.length,
-      copiedStatements: lines.length,
+      copiedStatements: lines.filter((line) => line.copied).length,
       omittedStatements: Math.max(0, sourceStatements - lines.length),
     },
     rawCharacters,
@@ -1095,13 +1095,7 @@ function focusedConnectorSlice(
   addGovernedFocusBindings(context, normalizedFocusLines, selectedLines);
   const materialSignals = new Set<BehaviorSignal>(['binding', 'branch', 'loop', 'call', 'return', 'throw', 'mutation']);
   addControlBodyStatements(outline, governingControls, selectedLines, materialSignals);
-  expandLexicalBindingClosure(lexicalBindings, selectedLines, behaviorSignals, startLine, endLine, materialSignals);
-  const selectedControls = (outline?.lines ?? []).filter(
-    (control) =>
-      selectedLines.has(control.line) &&
-      control.signals.some((signal) => ['branch', 'loop', 'catch', 'finally'].includes(signal)),
-  );
-  addControlBodyStatements(outline, selectedControls, selectedLines, materialSignals);
+  expandConnectorClosure(lexicalBindings, selectedLines, context, materialSignals);
   return renderConnectorSlice(context, selectedLines, governingControls, receipt);
 }
 
@@ -1158,14 +1152,13 @@ function bindingUsesAfterLine(db: ScipDatabase, file: string, line: number, endL
   ].sort((a, b) => a - b);
 }
 
-function expandLexicalBindingClosure(
+function expandConnectorClosure(
   bindings: readonly LexicalBindingReference[],
   selectedLines: Set<number>,
-  signals: Map<number, BehaviorSignal[]>,
-  startLine: number,
-  endLine: number,
+  context: ConnectorSliceSource,
   materialSignals: Set<BehaviorSignal>,
 ): void {
+  const { behaviorSignals: signals, startLine, endLine, outline } = context;
   const eligible = bindings.filter(
     (binding) =>
       binding.startLine >= startLine &&
@@ -1174,7 +1167,7 @@ function expandLexicalBindingClosure(
   );
   let changed = true;
   while (changed) {
-    changed = false;
+    const previousSize = selectedLines.size;
     for (const binding of eligible) {
       const touchesSelection =
         binding.referenceLines.some((line) => selectedLines.has(line)) ||
@@ -1193,9 +1186,17 @@ function expandLexicalBindingClosure(
       for (const line of [...declarations, ...references]) {
         if (selectedLines.has(line)) continue;
         selectedLines.add(line);
-        changed = true;
       }
     }
+    // A selected binding can introduce a control header whose body introduces
+    // more bindings. Close both relationships together before rendering.
+    const selectedControls = (outline?.lines ?? []).filter(
+      (control) =>
+        selectedLines.has(control.line) &&
+        control.signals.some((signal) => ['branch', 'loop', 'catch', 'finally'].includes(signal)),
+    );
+    addControlBodyStatements(outline, selectedControls, selectedLines, materialSignals);
+    changed = selectedLines.size !== previousSize;
   }
 }
 

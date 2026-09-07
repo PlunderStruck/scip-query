@@ -581,9 +581,12 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
 
   const changeScopes: ProjectSetupChangeScopes = {
     repository: [
-      ...(languageConfig?.changed ? [languageConfig.configPath] : []),
-      ...(automaticRefreshConfig?.changed ? [automaticRefreshConfig.configPath] : []),
-      ...(agentResult?.written ?? []),
+      ...new Set([
+        ...[collaborationConfig, languageConfig, automaticRefreshConfig].flatMap((change) =>
+          change?.changed ? [change.configPath] : [],
+        ),
+        ...(agentResult?.written ?? []),
+      ]),
     ],
     checkout: [],
     user: [

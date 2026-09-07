@@ -658,12 +658,23 @@ describe('runProjectSetup', () => {
     });
   });
 
+  it('reports a collaboration-only config write in repository change scope', async () => {
+    const { module, ensureProjectCollaborationDomain, configureProjectAutomaticRefresh } = await loadProjectSetup({
+      config: { watch: { enabled: false, autoRefresh: true } },
+    });
+    const report = await module.runProjectSetup({ noAgentGuidance: true });
+    expect(ensureProjectCollaborationDomain).toHaveBeenCalledOnce();
+    expect(configureProjectAutomaticRefresh).not.toHaveBeenCalled();
+    expect(report.changeScopes.repository).toEqual(['/repo/.scipquery.json']);
+  });
+
   it('adopts a missing collaboration domain before later setup writes', async () => {
     const { module, ensureProjectCollaborationDomain, configureProjectAutomaticRefresh } = await loadProjectSetup();
 
     const report = await module.runProjectSetup();
 
     expect(ensureProjectCollaborationDomain).toHaveBeenCalledWith('/repo', {});
+    expect(report.changeScopes.repository.filter((path) => path === '/repo/.scipquery.json')).toHaveLength(1);
     expect(configureProjectAutomaticRefresh).toHaveBeenCalledWith(
       '/repo',
       expect.objectContaining({

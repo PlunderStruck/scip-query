@@ -1989,6 +1989,62 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
+  it('closes binding dependencies introduced by a later selected control body', async () => {
+    root = mkdtempSync(join(tmpdir(), 'scip-system-map-lexical-slice-'));
+    const projectRoot = join(root, 'project');
+    const dbPath = join(root, 'index.db');
+    const source = [
+      'export function run() {',
+      '  const payload = loadPayload();',
+      '  const trigger = readTrigger();',
+      '  inspectTrigger(trigger);',
+      '  if (trigger) {',
+      '    consume(payload);',
+      '  }',
+      ...Array.from({ length: 220 }, (_, i) => `  unrelated${i}();`),
+      '}',
+    ];
+    writeFixtureFiles(projectRoot, { 'src/flow.ts': source });
+    evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/flow.ts').write();
+    const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(root, 'index.scip') });
+    try {
+      const topology = createExplorationTopology({
+        anchors: [
+          {
+            id: 'anchor:run',
+            kind: 'symbol',
+            query: 'run',
+            status: 'matched',
+            nodeIds: ['run'],
+            candidateNodeIds: [],
+            omittedCandidates: 0,
+          },
+        ],
+        nodes: [
+          {
+            id: 'run',
+            kind: 'symbol',
+            label: 'run',
+            disposition: 'emitted',
+            location: { file: 'src/flow.ts', line: 0, endLine: source.length - 1 },
+            anchorIds: ['anchor:run'],
+            attributes: { leaf: 'run' },
+          },
+        ],
+        edges: [],
+        paths: [],
+        scope: 'lexical slice fixture',
+      });
+      const packet = connectedBehaviorPacket(db, topology, { focusLocations: [{ file: 'src/flow.ts', line: 3 }] });
+      const behavior = packet.steps.find((step) => step.label === 'run')?.behavior;
+      expect(behavior?.kind).toBe('connector-slice');
+      const lines = behavior?.lines.map((line) => line.line) ?? [];
+      expect(lines).toEqual(expect.arrayContaining([1, 2, 3, 4, 5]));
+    } finally {
+      db.close();
+    }
+  });
+
   it('compresses a multiline governing predicate as one complete connector line', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-multiline-connector-predicate-'));
     const projectRoot = join(root, 'project');
@@ -2086,6 +2142,10 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       expect(runLoop?.behavior?.kind).toBe('connector-slice');
       expect(predicate?.text).toContain('completed && !summary && isOverflow(tokens)');
       expect(predicate?.text).not.toBe('if (');
+      expect(predicate?.copied).toBe(false);
+      expect(runLoop?.behavior?.coverage.copiedStatements).toBe(
+        runLoop?.behavior?.lines.filter((line) => line.copied).length,
+      );
     } finally {
       db.close();
     }
