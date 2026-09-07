@@ -589,3 +589,143 @@ Target measurements (cyclomatic/cognitive):
 - `flattenRustUseTree` → 10/9 (`src/language-parsers/languages/rust.ts`).
 
 Next: prepared third wave of 45 ranked targets. Artifacts: `/tmp/complexity-wave2-{review,health,impact,metrics}.json`; verification logs use `/tmp/complexity-wave2-*.log`.
+
+
+### Third wave root implementation checkpoint
+
+Root's nine selected targets are implemented across seven exclusive files. Fragment, server-state and reader-lease validators separate header, identity and record checks while retaining parse-before-validation order and existing failure results. Config diagnostics preserve field traversal order and suppression decision/evidence paths. Slice analysis preserves effect-callback reachability, closure state-write merging, union-find grouping, cluster input sources and remainder selection. Health action groups preserve stable priority ordering. API comparison and recursive declaration resolution preserve classification precedence, visited-set isolation and both caches.
+
+Focused root checks: 208 distinct tests across eight files passed (157 initial + 22 API/health + 29 SQLite generation; slice reruns overlap). Root ESLint and formatting pass. Source typecheck before the final API/health edits passed; final combined typecheck remains required. Existing API tests and lint caught a temporary automatic-semicolon-insertion error while extracting a return expression; it was corrected and all 14 API contract tests rerun successfully. No root source/test processes remain after these focused checks. Root reviewed worker 1's lane and confirmed a missed candidate-state reference and new spread argument limits were corrected by the owner; final worker reruns and combined validation remain pending.
+
+
+Third-wave integration: all lanes frozen and no focused test processes remain. Worker 1: 244 distinct tests across ten files; worker 2: 216 across eleven, including nine TypeScript provider tests for cold/warm fragment cache reuse and leaf-edit invalidation; worker 3: 113 across thirteen, including three new script regressions. Root: 208 across eight. Counts overlap between lanes. All lanes received a second diff review; no unresolved review issues remain. The semantic cache result property typo found in cross-review was corrected before final typecheck.
+
+Combined typecheck, contract fixture compilation and changed-file ESLint pass. Accounted full source review resolves 45 findings with no introduced/worsened findings. No new helper exceeds 10/15. The enclosing semantic reference materializer remains 16/20 and stays on the queue; only its selected cache-scan callback was simplified. Build, full suite, reindex, fresh health and diff impact are in progress.
+
+
+### Fourth parallel complexity wave prepared
+
+Prepared from the frozen third-wave source scan: 477 remaining complexity findings, 563/563 eligible files. All 45 assignments are the highest remaining reported scores, with whole-file ownership. Root takes nine targets and each worker twelve. Begin source edits only after the third wave passes the full suite and is committed. No thresholds, source scope, suppressions or architectural policy changes; preserve behavior and avoid external release or agent benchmark actions.
+
+root: `/tmp/complexity-wave4-root-targets.json`
+
+- `sanitizeTerminalText` — 18, cognitive 19. (`src/platform/terminal-output.ts`).
+- `deferredHealthPhaseResult` — 18, cognitive 1. (`src/runtime/cli-support.ts`).
+- `validateProjectHeaderConfig` — 18, cognitive 19. (`src/runtime/config.ts`).
+- `isOutputSnapshotReservation` — 18, cognitive 6. (`src/runtime/output-pagination.ts`).
+- `pruneAbandonedOutputSnapshots` — 18, cognitive 21. (`src/runtime/output-pagination.ts`).
+- `isEntryPointResult.<callback:value.every:0>` — 18, cognitive 5. (`src/runtime/query-service.ts`).
+- `validPersistedEvidenceItem` — 18, cognitive 5. (`src/runtime/source-emission-session.ts`).
+- `validPublication` — 18, cognitive 10. (`src/storage/sqlite-generation.ts`).
+- `isSuppressionDecision` — 17, cognitive 5. (`src/domain/suppression-adjudication.ts`).
+
+worker-1: `/tmp/complexity-wave4-worker-1-targets.json`
+
+- `coChange` — 18, cognitive 22. (`src/queries/cleanup/co-change.ts`).
+- `docsCitingFiles.<callback:profileSpan:1>` — 15, cognitive 27. (`src/queries/cleanup/doc-drift.ts`).
+- `computeFileLeafUsageFromAst` — 14, cognitive 27. (`src/queries/internal/consumer-evidence.ts`).
+- `countBranchesFromRegex` — 15, cognitive 27. (`src/queries/quality/complexity.ts`).
+- `containerAccesses` — 12, cognitive 27. (`src/queries/quality/slice-cohesion.ts`).
+- `handleDocDrift.<callback:dbCommand:0>` — 15, cognitive 27. (`src/runtime/query-commands/cleanup/handlers.ts`).
+- `sourceInspectionSections` — 18, cognitive 14. (`src/runtime/query-commands/navigation.ts`).
+- `collectBehaviorCandidates` — 18, cognitive 15. (`src/source/facts/behavior-skeleton.ts`).
+- `indexServiceReceivers.<callback:walk:1>` — 18, cognitive 13. (`src/symbols/graph/member-call-targets.ts`).
+- `pickAstCallCandidate` — 17, cognitive 27. (`src/symbols/leaf-symbol-index.ts`).
+- `testQuality` — 13, cognitive 26. (`src/queries/cleanup/test-quality.ts`).
+- `modelBody` — 17, cognitive 22. (`src/queries/quality/slice-cohesion.ts`).
+
+worker-2: `/tmp/complexity-wave4-worker-2-targets.json`
+
+- `prepareSharedGenerationCache` — 18, cognitive 22. (`src/reindex/index.ts`).
+- `deriveProjectDependencies` — 15, cognitive 27. (`src/reindex/project-shards.ts`).
+- `stripJsonComments` — 16, cognitive 27. (`src/reindex/project-shards.ts`).
+- `runtimeBoundaryAugmentationStage.run` — 18, cognitive 18. (`src/reindex/runtime-boundaries.ts`).
+- `findSharedBaselineGeneration` — 18, cognitive 21. (`src/reindex/shared-generation-store.ts`).
+- `hydrateSharedGeneration` — 18, cognitive 20. (`src/reindex/shared-generation-store.ts`).
+- `inspectLocalSqliteGenerationRetention` — 18, cognitive 14. (`src/reindex/sqlite-generation-store.ts`).
+- `commitTypeScriptOverlay` — 18, cognitive 11. (`src/reindex/typescript-overlay-store.ts`).
+- `buildSweepInventory` — 18, cognitive 27. (`src/runtime/repository-cache-lifecycle.ts`).
+- `Watcher.constructor` — 18, cognitive 1. (`src/runtime/watch.ts`).
+- `resolveReindexWorkerLaunch` — 18, cognitive 5. (`src/runtime/watch.ts`).
+- `buildFreshReindexShardDiagnostics` — 17, cognitive 24. (`src/reindex/index.ts`).
+
+worker-3: `/tmp/complexity-wave4-worker-3-targets.json`
+
+- `runNpmRelease` — 18, cognitive 21. (`scripts/npm-release.ts`).
+- `deriveConsumerDiscriminators` — 13, cognitive 27. (`src/analysis/runtime-boundaries/carrier-discriminators.ts`).
+- `deriveParameterRoles.<callback:walk:1>` — 18, cognitive 17. (`src/analysis/runtime-boundaries/http-summaries.ts`).
+- `propagateCompilerResolvedHttpSummaries.<callback:recordSpan:1>` — 12, cognitive 27. (`src/analysis/runtime-boundaries/http-summaries.ts`).
+- `formatUninstallReport` — 18, cognitive 27. (`src/runtime/uninstall.ts`).
+- `isResponseForKind` — 18, cognitive 15. (`src/semantic/rust/durable-session-protocol.ts`).
+- `collectExtensions` — 13, cognitive 26. (`src/reindex/detect.ts`).
+- `parseCargoJsonDiagnostics` — 17, cognitive 26. (`src/runtime/cleanup-verify.ts`).
+- `legacyDispositionForReason` — 17, cognitive 2. (`src/analysis/framework-patterns.ts`).
+- `loadFileAddRecords` — 17, cognitive 25. (`src/analysis/git-history.ts`).
+- `incompleteMigration` — 17, cognitive 20. (`src/queries/impact/incomplete-migration.ts`).
+- `sameFileCallClosureForRange` — 17, cognitive 21. (`src/queries/navigation/code.ts`).
+
+
+
+### Third parallel complexity wave completed
+
+Completed 45 ranked targets across exclusive file assignments: root nine, each of three Astra-medium workers twelve. All selected targets and introduced helpers are at or below cyclomatic 10 / cognitive 15. No thresholds, source scope, suppressions or dependency policy changed.
+
+Third parallel complexity wave: 3199 full-suite tests / 358 files passed; build, source types and contract fixtures, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), public consumer compilation and skill links passed. Accounted source review resolves 45 findings with no introduced/worsened findings. Fresh source health: 563/563 eligible files, 12,938 functions, 477 complexity findings, no other finding rules. Fresh indexed diff impact: 154 changed symbols across 30 changed files; 20 affected files. No source-matched test coverage artifact; no CRAP claim.
+
+All 563 source files remain mapped and all 47 dependency rows declared. Fresh health reports no duplication, dependency cycles or configured architecture violations. The 477 remaining complexity findings are the next work queue; the historical maintenance inventory remains a different population.
+
+Validation included 244 focused tests in worker 1, 216 in worker 2 (including cold/warm semantic fragment caching and leaf-edit invalidation), 113 in worker 3 (including three new script regressions), and 208 in root; these counts overlap. Every lane received a second read-only diff review. Tests/lint/review caught and corrected a temporary API return newline error, a missed candidate-state reference and a semantic cache counter property typo. Newly introduced spread argument limits were removed from graph/residue collection. No agent benchmarks or release actions ran.
+
+The semantic cache-scan callback has the same anonymous name as two sibling callbacks; its 2/1 measurement is tied to the exact diff location (baseline 466/current 551) and span label, not a name-only pairing. The enclosing materializeSemanticReferenceBatch remains at its existing 16/20 and is still on the cleanup queue. The source review reports no uncomparable findings; some anonymous function records remain uncomparable. Indexed impact omits thirteen paths absent/excluded from its symbol index; the current-source scan accounts for eligible scripts.
+
+The VM remains on its previously verified installation from `931fe6c1`. The skill capture helper was refactored with preserved behavior and permissions, so the user's instructions do not require another reinstall.
+
+Target measurements (cyclomatic/cognitive):
+
+- `reportUnknownConfigKeys` → 2/1 (`src/runtime/config.ts`).
+- `buildHealthActions` → 1/0 (`src/queries/health/health-report.ts`).
+- `compareApiSurfaces` → 6/1 (`scripts/api-surface-contract.mjs`).
+- `createDeclarationResolver.resolveExport` → 7/6 (`scripts/api-surface-contract.mjs`).
+- `clusterOutputs` → 4/4 (`src/queries/quality/slice-cohesion.ts`).
+- `parseManifest` → 3/3 (`src/reindex/typescript-fragment-store.ts`).
+- `readQueryServiceServerState` → 10/7 (`src/runtime/query-service.ts`).
+- `parseSqliteGenerationReaderLease` → 8/6 (`src/storage/sqlite-generation.ts`).
+- `renderTimeStateWrites.visit` → 7/6 (`src/queries/quality/slice-cohesion.ts`).
+- `expandRuntimeBoundaryFrontier` → 4/3 (`src/queries/graph/system-map.ts`).
+- `systemMapTopologyRelationEndpoint` → 9/8 (`src/queries/graph/system-map.ts`).
+- `compareNeutralNextAnchors` → 2/1 (`src/queries/internal/next-anchor-candidates.ts`).
+- `buildInspection` → 1/0 (`src/queries/navigation/source-inspection.ts`).
+- `detectCoarseBoundaries` → 5/7 (`src/queries/graph/architecture.ts`).
+- `parseSkillCommands` → 7/6 (`scripts/render-command-reference.ts`).
+- `sourceBindingOwnerAtLine` → 7/6 (`src/queries/graph/system-map.ts`).
+- `collectRemovedReferences` → 4/3 (`src/queries/impact/newly-unreferenced-residue.ts`).
+- `newlyUnreferencedResidue` → 8/5 (`src/queries/impact/newly-unreferenced-residue.ts`).
+- `createExplorationTopology` → 9/4 (`src/queries/internal/exploration-topology.ts`).
+- `inferKindNumber` → 10/7 (`src/queries/navigation/by-kind.ts`).
+- `codeBatchText` → 1/0 (`src/runtime/query-commands/direct-navigation.ts`).
+- `parseFastPathInvocation` → 2/0 (`src/runtime/query-service-fastpath.ts`).
+- `queryNavigationFastPath` → 4/3 (`src/runtime/query-service-fastpath.ts`).
+- `decodeDurableRustMailboxRequest` → 4/3 (`src/semantic/rust/durable-session-protocol.ts`).
+- `isIndexedDefinition` → 4/1 (`src/semantic/rust/durable-session-protocol.ts`).
+- `readDurableRustSessionServerState` → 8/7 (`src/semantic/rust/durable-session.ts`).
+- `runRustAnalyzerReferenceBatch` → 6/3 (`src/semantic/rust/lsp-batch-worker.ts`).
+- `RustAnalyzerLspClient.handleData` → 7/8 (`src/semantic/rust/lsp-client.ts`).
+- `decodeSemanticAvailability` → 9/8 (`src/semantic/types.ts`).
+- `ensureEvidenceCommandFreshness` → 9/10 (`src/runtime/evidence-command-freshness.ts`).
+- `parseCodeInvocation` → 6/8 (`src/runtime/query-service-fastpath.ts`).
+- `claimBoundedMailboxRequestsUnlocked` → 7/10 (`src/storage/bounded-mailbox.ts`).
+- `loadGrammar` → 5/4 (`src/source/ast/ast-runtime.ts`).
+- `isStructuralEntryPath` → 10/9 (`src/source/primitives/file-kind.ts`).
+- `scoreLabels` → 3/2 (`scripts/score-detector-labels.ts`).
+- `parseScalaImportsAst` → 7/14 (`src/language-parsers/languages/jvm.ts`).
+- `runLeafCorpus` → 9/10 (`scripts/affected-set-shadow-contract.mjs`).
+- `parseCodexJsonl` → 5/3 (`scripts/codex-exploration-trial-core.mjs`).
+- `summarizeParsedJson` → 6/3 (`scripts/semantic-command-calibration.mjs`).
+- `main` → 5/4 (`skills/scip-explore/scripts/capture-evidence.mjs`).
+- `summarizeLanguageActivity` → 2/1 (`src/reindex/reindex-activity.ts`).
+- `collectLocalSqliteGenerations` → 6/6 (`src/reindex/sqlite-generation-store.ts`).
+- `readLease` → 5/3 (`src/runtime/repository-cache-lifecycle.ts`).
+- `collectSuppressionExclusions.walk` → 4/3 (`src/analysis/framework-patterns.ts`).
+- `materializeSemanticReferenceBatch.<callback:profileSpan:1>` → 2/1 (`src/semantic/shared-primitives.ts`).
+
+Next: prepared fourth wave of 45 ranked targets. Artifacts: `/tmp/complexity-wave3-{review,health,impact,metrics}.json`; verification logs use `/tmp/complexity-wave3-*.log`.

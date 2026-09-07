@@ -1107,13 +1107,22 @@ function nextAnchorPacketFromCandidates(
 }
 
 function compareNeutralNextAnchors(left: NextAnchorCandidate, right: NextAnchorCandidate): number {
-  const leftTarget = left.anchor.alternatives[0];
-  const rightTarget = right.anchor.alternatives[0];
+  return compareNextAnchorRelation(left, right) || compareNextAnchorLocation(left, right);
+}
+
+function compareNextAnchorRelation(left: NextAnchorCandidate, right: NextAnchorCandidate): number {
   return (
     nextAnchorStatusRank(left.anchor.status) - nextAnchorStatusRank(right.anchor.status) ||
     (left.anchor.direction ?? '').localeCompare(right.anchor.direction ?? '') ||
     (left.anchor.relationKind ?? '').localeCompare(right.anchor.relationKind ?? '') ||
-    (left.anchor.causalRole ?? '').localeCompare(right.anchor.causalRole ?? '') ||
+    (left.anchor.causalRole ?? '').localeCompare(right.anchor.causalRole ?? '')
+  );
+}
+
+function compareNextAnchorLocation(left: NextAnchorCandidate, right: NextAnchorCandidate): number {
+  const leftTarget = left.anchor.alternatives[0];
+  const rightTarget = right.anchor.alternatives[0];
+  return (
     left.anchor.fromStepId.localeCompare(right.anchor.fromStepId) ||
     left.anchor.callsite.file.localeCompare(right.anchor.callsite.file) ||
     left.anchor.callsite.line - right.anchor.callsite.line ||

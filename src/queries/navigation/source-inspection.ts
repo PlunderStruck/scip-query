@@ -590,8 +590,23 @@ function unboundedEvidenceBudgets(): Record<SourceInspectionEvidenceChannel, num
 }
 
 function buildInspection(db: ScipDatabase, request: InspectionRequest): BuiltInspection {
-  const candidates: CandidateUnit[] = [];
-  let sequence = 0;
+  const state: InspectionCandidateState = { candidates: [], sequence: 0 };
+  const searches = buildInspectionSearches(db, request, state);
+  const locations = buildInspectionLocations(db, request, state);
+  const evidence = buildInspectionEvidence(db, request, state);
+  return { searches, evidence, locations, candidates: state.candidates };
+}
+
+interface InspectionCandidateState {
+  candidates: CandidateUnit[];
+  sequence: number;
+}
+
+function buildInspectionSearches(
+  db: ScipDatabase,
+  request: InspectionRequest,
+  state: InspectionCandidateState,
+): BuiltInspection['searches'] {
   const pendingSearches = searchSourceBatch(db, request.searches, {
     scope: request.scope,
     context: 0,
@@ -616,14 +631,14 @@ function buildInspection(db: ScipDatabase, request: InspectionRequest): BuiltIns
       if (!unit) continue;
       addSourceCandidate(
         db,
-        candidates,
+        state.candidates,
         unit,
         'search',
         `search:${pending.pattern}`,
         match.ownerSymbol,
         match.ownerShort,
         1,
-        sequence++,
+        state.sequence++,
       );
     }
   }
@@ -649,99 +664,125 @@ function buildInspection(db: ScipDatabase, request: InspectionRequest): BuiltIns
     };
   });
 
+  return searchResults;
+}
+
+function buildInspectionLocations(
+  db: ScipDatabase,
+  request: InspectionRequest,
+  state: InspectionCandidateState,
+): BuiltInspection['locations'] {
   const locationResults = request.locations.map((target) => {
     const parsed = parseLocation(target);
     const relativePath = parsed ? resolveIndexedLocationPath(db, parsed.path) : null;
     const unit = relativePath
       ? enclosingSourceUnitSnippet(db, relativePath, parsed!.line - 1, UNBOUNDED_LIMIT, request.context)
       : null;
-    if (unit) addSourceCandidate(db, candidates, unit, 'location', `at:${target}`, null, null, 0, sequence++);
+    if (unit)
+      addSourceCandidate(db, state.candidates, unit, 'location', `at:${target}`, null, null, 0, state.sequence++);
     return { target, matched: unit !== null };
   });
 
+  return locationResults;
+}
+
+function addInspectionDefinitionAndReferences(
+  db: ScipDatabase,
+  request: InspectionRequest,
+  state: InspectionCandidateState,
+  item: Extract<EvidenceResult, { kind: 'matched' }>,
+): void {
+  if (item.definition) {
+    const unit = enclosingSourceUnitSnippet(
+      db,
+      item.definition.relativePath,
+      item.definition.startLine,
+      UNBOUNDED_LIMIT,
+      request.context,
+    );
+    if (unit) {
+      addSourceCandidate(
+        db,
+        state.candidates,
+        unit,
+        'definition',
+        `definition:${item.shortName}`,
+        item.symbol,
+        item.shortName,
+        0,
+        state.sequence++,
+      );
+    }
+  }
+  for (const window of item.referenceWindows) {
+    const owner = window.references[0];
+    addSourceCandidate(
+      db,
+      state.candidates,
+      {
+        ...window,
+        focusLine: owner?.line ?? window.startLine,
+        unitType: null,
+        unitStartLine: window.startLine,
+        unitEndLine: window.endLine,
+        omittedLines: 0,
+      },
+      'reference',
+      `reference:${item.shortName}`,
+      owner?.enclosingSymbol ?? null,
+      owner?.enclosingShort ?? null,
+      classifyFile(window.relativePath) === 'test' ? 5 : 4,
+      state.sequence++,
+      window.references.map((reference) => reference.line),
+      item.symbol,
+    );
+  }
+}
+
+function buildInspectionEvidence(
+  db: ScipDatabase,
+  request: InspectionRequest,
+  state: InspectionCandidateState,
+): BuiltInspection['evidence'] {
   const evidenceResults = request.symbols.map((symbol) => evidence(db, symbol, request.evidence));
   for (const item of evidenceResults) {
     if (item.kind !== 'matched') continue;
-    if (item.definition) {
-      const unit = enclosingSourceUnitSnippet(
-        db,
-        item.definition.relativePath,
-        item.definition.startLine,
-        UNBOUNDED_LIMIT,
-        request.context,
-      );
-      if (unit) {
-        addSourceCandidate(
-          db,
-          candidates,
-          unit,
-          'definition',
-          `definition:${item.shortName}`,
-          item.symbol,
-          item.shortName,
-          0,
-          sequence++,
-        );
-      }
-    }
-    for (const window of item.referenceWindows) {
-      const owner = window.references[0];
-      addSourceCandidate(
-        db,
-        candidates,
-        {
-          ...window,
-          focusLine: owner?.line ?? window.startLine,
-          unitType: null,
-          unitStartLine: window.startLine,
-          unitEndLine: window.endLine,
-          omittedLines: 0,
-        },
-        'reference',
-        `reference:${item.shortName}`,
-        owner?.enclosingSymbol ?? null,
-        owner?.enclosingShort ?? null,
-        classifyFile(window.relativePath) === 'test' ? 5 : 4,
-        sequence++,
-        window.references.map((reference) => reference.line),
-        item.symbol,
-      );
-    }
+    addInspectionDefinitionAndReferences(db, request, state, item);
     for (const related of item.callers) {
-      addRelatedSymbolCandidate(db, candidates, related, 'caller', item, 2, sequence++);
+      addRelatedSymbolCandidate(db, state.candidates, related, 'caller', item, 2, state.sequence++);
     }
     for (const related of item.callees) {
-      addRelatedSymbolCandidate(db, candidates, related, 'callee', item, 3, sequence++);
+      addRelatedSymbolCandidate(db, state.candidates, related, 'callee', item, 3, state.sequence++);
     }
     for (const dependency of item.dependencies) {
       addEdgeCandidate(
         db,
-        candidates,
+        state.candidates,
         'dependency',
         item.file,
         dependency.relativePath,
         item.symbol,
         request.context,
         6,
-        sequence++,
+        state.sequence++,
       );
     }
     for (const consumer of item.consumers) {
       addEdgeCandidate(
         db,
-        candidates,
+        state.candidates,
         'consumer',
         consumer.relativePath,
         item.file,
         item.symbol,
         request.context,
         7,
-        sequence++,
+        state.sequence++,
       );
     }
   }
 
-  return { searches: searchResults, evidence: evidenceResults, locations: locationResults, candidates };
+  return evidenceResults;
 }
 
 function compareCandidates(left: CandidateUnit, right: CandidateUnit): number {

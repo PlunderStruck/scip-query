@@ -2034,58 +2034,78 @@ function expandSystemMapFileFrontier(context: SystemMapTraversalContext, depth: 
 }
 
 function expandRuntimeBoundaryFrontier(context: SystemMapTraversalContext, depth: number): void {
-  const {
-    relationPolicy,
-    runtimeBoundaries,
-    evidenceFloor,
-    representedBoundaryLinkIds,
-    boundaryObservations,
-    sourceAllowed,
-    boundaryObservationDepths,
-    symbols,
-    sourceConstructs,
-    addBoundaryObservation,
-    pendingRelations,
-  } = context;
+  const { relationPolicy, runtimeBoundaries } = context;
   for (const link of relationPolicy.has('runtime-boundary') ? (runtimeBoundaries?.links ?? []) : []) {
-    if (
-      link.strength === 'candidate' ||
-      (evidenceFloor === 'exact' && link.strength !== 'exact') ||
-      representedBoundaryLinkIds.has(link.id)
-    )
-      continue;
-    const from = boundaryObservations.get(link.from);
-    const to = boundaryObservations.get(link.to);
-    if (!from || !to) continue;
-    if (!sourceAllowed(from.source.file) || !sourceAllowed(to.source.file)) continue;
-    const fromDepth = reachedObservationDepth(from, depth, boundaryObservationDepths, symbols, sourceConstructs);
-    const toDepth = reachedObservationDepth(to, depth, boundaryObservationDepths, symbols, sourceConstructs);
-    if (fromDepth === null && toDepth === null) continue;
-
-    const nextDepth = depth + 1;
-    const fromSymbol = addBoundaryObservation(from, fromDepth ?? nextDepth, `runtime-boundary:${link.joinRule}`);
-    const toSymbol = addBoundaryObservation(to, toDepth ?? nextDepth, `runtime-boundary:${link.joinRule}`);
-    const fromSourceConstruct = fromSymbol ? null : smallestSourceConstructAtObservation(sourceConstructs, from);
-    const toSourceConstruct = toSymbol ? null : smallestSourceConstructAtObservation(sourceConstructs, to);
-    boundaryObservationDepths.set(from.id, fromDepth ?? nextDepth);
-    boundaryObservationDepths.set(to.id, toDepth ?? nextDepth);
-    addRelation(pendingRelations, {
-      kind: 'runtime-boundary',
-      evidence: `runtime-boundary:${link.joinRule}`,
-      fromFile: from.source.file,
-      fromSymbol,
-      toFile: to.source.file,
-      toSymbol,
-      fromBoundaryParticipant: boundaryParticipant(from),
-      toBoundaryParticipant: boundaryParticipant(to),
-      fromSourceConstruct: fromSourceConstruct ? sourceConstructIdentity(fromSourceConstruct) : undefined,
-      toSourceConstruct: toSourceConstruct ? sourceConstructIdentity(toSourceConstruct) : undefined,
-      runtimeBoundaryKey: link.matchedKeyParts.map((part) => `${part.name}=${part.value}`).join(' '),
-      line: from.source.startLine,
-      strength: link.strength,
-    });
-    representedBoundaryLinkIds.add(link.id);
+    expandRuntimeBoundaryLink(context, link, depth);
   }
+}
+
+type TraversalBoundaryLink = NonNullable<SystemMapTraversalContext['runtimeBoundaries']>['links'][number];
+
+function expandRuntimeBoundaryLink(
+  context: SystemMapTraversalContext,
+  link: TraversalBoundaryLink,
+  depth: number,
+): void {
+  const { boundaryObservations, sourceAllowed, boundaryObservationDepths, symbols, sourceConstructs } = context;
+  if (!traversableRuntimeBoundaryLink(context, link)) return;
+  const from = boundaryObservations.get(link.from);
+  const to = boundaryObservations.get(link.to);
+  if (!from || !to) return;
+  if (!sourceAllowed(from.source.file) || !sourceAllowed(to.source.file)) return;
+  const fromDepth = reachedObservationDepth(from, depth, boundaryObservationDepths, symbols, sourceConstructs);
+  const toDepth = reachedObservationDepth(to, depth, boundaryObservationDepths, symbols, sourceConstructs);
+  if (fromDepth === null && toDepth === null) return;
+
+  materializeRuntimeBoundaryLink(context, link, from, to, fromDepth, toDepth, depth + 1);
+}
+
+function traversableRuntimeBoundaryLink(context: SystemMapTraversalContext, link: TraversalBoundaryLink): boolean {
+  return (
+    link.strength !== 'candidate' &&
+    !(context.evidenceFloor === 'exact' && link.strength !== 'exact') &&
+    !context.representedBoundaryLinkIds.has(link.id)
+  );
+}
+
+function materializeRuntimeBoundaryLink(
+  context: SystemMapTraversalContext,
+  link: TraversalBoundaryLink,
+  from: BoundaryObservation,
+  to: BoundaryObservation,
+  fromDepth: number | null,
+  toDepth: number | null,
+  nextDepth: number,
+): void {
+  const {
+    addBoundaryObservation,
+    sourceConstructs,
+    boundaryObservationDepths,
+    pendingRelations,
+    representedBoundaryLinkIds,
+  } = context;
+  const fromSymbol = addBoundaryObservation(from, fromDepth ?? nextDepth, `runtime-boundary:${link.joinRule}`);
+  const toSymbol = addBoundaryObservation(to, toDepth ?? nextDepth, `runtime-boundary:${link.joinRule}`);
+  const fromSourceConstruct = fromSymbol ? null : smallestSourceConstructAtObservation(sourceConstructs, from);
+  const toSourceConstruct = toSymbol ? null : smallestSourceConstructAtObservation(sourceConstructs, to);
+  boundaryObservationDepths.set(from.id, fromDepth ?? nextDepth);
+  boundaryObservationDepths.set(to.id, toDepth ?? nextDepth);
+  addRelation(pendingRelations, {
+    kind: 'runtime-boundary',
+    evidence: `runtime-boundary:${link.joinRule}`,
+    fromFile: from.source.file,
+    fromSymbol,
+    toFile: to.source.file,
+    toSymbol,
+    fromBoundaryParticipant: boundaryParticipant(from),
+    toBoundaryParticipant: boundaryParticipant(to),
+    fromSourceConstruct: fromSourceConstruct ? sourceConstructIdentity(fromSourceConstruct) : undefined,
+    toSourceConstruct: toSourceConstruct ? sourceConstructIdentity(toSourceConstruct) : undefined,
+    runtimeBoundaryKey: link.matchedKeyParts.map((part) => `${part.name}=${part.value}`).join(' '),
+    line: from.source.startLine,
+    strength: link.strength,
+  });
+  representedBoundaryLinkIds.add(link.id);
 }
 
 function executeSystemMap(db: ScipDatabase, opts: SystemMapOptions, mode: 'full'): SystemMapResult;
@@ -2823,15 +2843,41 @@ function systemMapTopologyRelationEndpoint(
   line: number | null,
   preferParticipant = false,
 ): string {
-  const symbolNodeId = symbol ? symbolTopologyNodeId(symbol) : null;
-  if (symbolNodeId && knownNodeIds.has(symbolNodeId) && !isModuleLikeSymbol(symbol!)) return symbolNodeId;
-  const participantNodeId = participant ? runtimeBoundaryParticipantTopologyNodeId(participant.observationId) : null;
-  if (preferParticipant && participantNodeId && knownNodeIds.has(participantNodeId)) return participantNodeId;
-  const explicitSourceNodeId = explicitSourceConstruct
-    ? sourceConstructTopologyNodeId(canonicalSourceConstruct(db, explicitSourceConstruct))
-    : null;
-  if (explicitSourceNodeId && knownNodeIds.has(explicitSourceNodeId)) return explicitSourceNodeId;
-  if (participantNodeId && knownNodeIds.has(participantNodeId)) return participantNodeId;
+  const symbolNodeId = knownTopologyNodeId(knownNodeIds, symbol ? symbolTopologyNodeId(symbol) : null);
+  if (symbolNodeId && !isModuleLikeSymbol(symbol!)) return symbolNodeId;
+  const participantNodeId = knownTopologyNodeId(
+    knownNodeIds,
+    participant ? runtimeBoundaryParticipantTopologyNodeId(participant.observationId) : null,
+  );
+  if (preferParticipant && participantNodeId) return participantNodeId;
+  const explicitSourceNodeId = explicitTopologySourceNodeId(db, knownNodeIds, explicitSourceConstruct);
+  if (explicitSourceNodeId) return explicitSourceNodeId;
+  if (participantNodeId) return participantNodeId;
+  return systemMapLocationEndpoint(sourceConstructsByFile, file, line, symbolNodeId, regionId);
+}
+
+function explicitTopologySourceNodeId(
+  db: ScipDatabase,
+  knownNodeIds: ReadonlySet<string>,
+  construct: SystemMapSourceConstruct | undefined,
+): string | null {
+  return knownTopologyNodeId(
+    knownNodeIds,
+    construct ? sourceConstructTopologyNodeId(canonicalSourceConstruct(db, construct)) : null,
+  );
+}
+
+function knownTopologyNodeId(knownNodeIds: ReadonlySet<string>, id: string | null): string | null {
+  return id && knownNodeIds.has(id) ? id : null;
+}
+
+function systemMapLocationEndpoint(
+  sourceConstructsByFile: ReadonlyMap<string, SourceConstructHit[]>,
+  file: string,
+  line: number | null,
+  symbolNodeId: string | null,
+  regionId: string,
+): string {
   const sourceConstruct =
     line === null
       ? null
@@ -2842,8 +2888,7 @@ function systemMapTopologyRelationEndpoint(
               left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
           )[0] ?? null);
   if (sourceConstruct) return sourceConstructTopologyNodeId(sourceConstruct);
-  if (symbolNodeId && knownNodeIds.has(symbolNodeId)) return symbolNodeId;
-  return regionId;
+  return symbolNodeId ?? regionId;
 }
 
 function systemMapTopologyRelationEdges(
@@ -3706,6 +3751,37 @@ function sourceOwnerConstructAtLine(
   };
 }
 
+function sourceSyntaxBindingOwner(current: SyntaxNode, line: number): ReturnType<typeof sourceBindingOwnerAtLine> {
+  if (current.type === 'variable_declarator') {
+    const name = current.childForFieldName('name') ?? current.namedChild(0);
+    const value = current.childForFieldName('value') ?? current.namedChild(1);
+    if (name?.type === 'identifier' && value && syntaxCallableContainsLine(value, line)) {
+      return {
+        name: name.text,
+        startLine: current.startPosition.row,
+        endLine: current.endPosition.row,
+      };
+    }
+  }
+  return sourcePairBindingOwner(current, line);
+}
+
+function sourcePairBindingOwner(current: SyntaxNode, line: number): ReturnType<typeof sourceBindingOwnerAtLine> {
+  if (current.type === 'pair') {
+    const key = current.childForFieldName('key') ?? current.namedChild(0);
+    const value = current.childForFieldName('value') ?? current.namedChild(1);
+    const name = key?.text.replace(/^(?:['"])(.*)(?:['"])$/u, '$1');
+    if (name && value && /^[A-Za-z_$][\w$]*$/u.test(name) && syntaxCallableContainsLine(value, line)) {
+      return {
+        name,
+        startLine: current.startPosition.row,
+        endLine: current.endPosition.row,
+      };
+    }
+  }
+  return null;
+}
+
 function sourceBindingOwnerAtLine(
   db: ScipDatabase,
   relativePath: string,
@@ -3715,29 +3791,8 @@ function sourceBindingOwnerAtLine(
   if (!root || root.startPosition.row > line || root.endPosition.row < line) return null;
   let current: SyntaxNode | null = deepestSyntaxNodeAtLine(root, line);
   while (current) {
-    if (current.type === 'variable_declarator') {
-      const name = current.childForFieldName('name') ?? current.namedChild(0);
-      const value = current.childForFieldName('value') ?? current.namedChild(1);
-      if (name?.type === 'identifier' && value && syntaxCallableContainsLine(value, line)) {
-        return {
-          name: name.text,
-          startLine: current.startPosition.row,
-          endLine: current.endPosition.row,
-        };
-      }
-    }
-    if (current.type === 'pair') {
-      const key = current.childForFieldName('key') ?? current.namedChild(0);
-      const value = current.childForFieldName('value') ?? current.namedChild(1);
-      const name = key?.text.replace(/^(?:['"])(.*)(?:['"])$/u, '$1');
-      if (name && value && /^[A-Za-z_$][\w$]*$/u.test(name) && syntaxCallableContainsLine(value, line)) {
-        return {
-          name,
-          startLine: current.startPosition.row,
-          endLine: current.endPosition.row,
-        };
-      }
-    }
+    const binding = sourceSyntaxBindingOwner(current, line);
+    if (binding) return binding;
     current = current.parent;
   }
   const readable = readableSourceUnitRange(db, relativePath, line);

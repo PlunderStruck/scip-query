@@ -265,40 +265,21 @@ async function runLeafCorpus() {
   if (initialGitStatus !== '') throw new Error(`corpus must start clean:\n${initialGitStatus}`);
   const original = readFileSync(editPath);
   const mutated = appendText(original, `\n// affected-set shadow corpus ${runId}\n`);
-  let mutatedOnDisk = false;
+  const mutation = { onDisk: false };
   let runError;
   try {
     assertCommand(runCli(projectRoot, ['watch', '--stop', '--json']), 'stop corpus service');
     assertCommand(runCli(projectRoot, ['reindex', '--json']), 'prepare leaf corpus');
 
     writeFileSync(editPath, mutated);
-    mutatedOnDisk = true;
+    mutation.onDisk = true;
     const warmup = reindexWithShadow(projectRoot, 'leaf-warmup');
     verifyShadow(warmup.shadow, { expectedMode: 'closure', expectedActual: [args.editFile], maxRatio: 0.2 });
 
-    const measurements = [];
-    for (let iteration = 1; iteration <= args.iterations; iteration += 1) {
-      const direction = mutatedOnDisk ? 'restore' : 'apply';
-      writeFileSync(editPath, mutatedOnDisk ? original : mutated);
-      mutatedOnDisk = !mutatedOnDisk;
-      const run = reindexWithShadow(projectRoot, `leaf-${direction}`);
-      verifyShadow(run.shadow, { expectedMode: 'closure', expectedActual: [args.editFile], maxRatio: 0.2 });
-      const record = baseRecord({
-        mode: 'leaf',
-        corpus: args.label,
-        projectRoot,
-        commit: gitCommit(projectRoot),
-        scenario: 'leaf-edit',
-        iteration,
-        direction,
-        ...measurementFields(run),
-      });
-      measurements.push(record);
-      records.push(record);
-    }
-    if (mutatedOnDisk) {
+    const measurements = measureLeafCorpus(projectRoot, editPath, original, mutated, mutation);
+    if (mutation.onDisk) {
       writeFileSync(editPath, original);
-      mutatedOnDisk = false;
+      mutation.onDisk = false;
       assertCommand(runCli(projectRoot, ['reindex', '--json']), 'restore leaf corpus');
     }
     const summary = leafSummary(measurements);
@@ -319,24 +300,58 @@ async function runLeafCorpus() {
   }
   let cleanupError;
   try {
-    if (mutatedOnDisk || !readFileSync(editPath).equals(original)) writeFileSync(editPath, original);
-    runCli(projectRoot, ['watch', '--stop', '--json']);
-    const repair = runCli(projectRoot, ['reindex', '--json']);
-    if (repair.exitCode !== 0) cleanupError = new Error(`leaf corpus repair failed: ${repair.stderr}`);
-    const finalGitStatus = gitStatus(projectRoot);
-    if (finalGitStatus !== initialGitStatus) {
-      cleanupError = new Error(`corpus Git state changed:\nbefore=${initialGitStatus}\nafter=${finalGitStatus}`);
-    }
+    cleanupError = repairLeafCorpus(projectRoot, editPath, original, mutation.onDisk, initialGitStatus);
   } catch (error) {
     cleanupError = error instanceof Error ? error : new Error(String(error));
   } finally {
     activeProjectRoot = undefined;
   }
+  throwLeafCorpusErrors(runError, cleanupError);
+}
+
+function throwLeafCorpusErrors(runError, cleanupError) {
   if (runError) {
     if (cleanupError) runError.message += `; cleanup also failed: ${cleanupError.message}`;
     throw runError;
   }
   if (cleanupError) throw cleanupError;
+}
+
+function measureLeafCorpus(projectRoot, editPath, original, mutated, mutation) {
+  const measurements = [];
+  for (let iteration = 1; iteration <= args.iterations; iteration += 1) {
+    const direction = mutation.onDisk ? 'restore' : 'apply';
+    writeFileSync(editPath, mutation.onDisk ? original : mutated);
+    mutation.onDisk = !mutation.onDisk;
+    const run = reindexWithShadow(projectRoot, `leaf-${direction}`);
+    verifyShadow(run.shadow, { expectedMode: 'closure', expectedActual: [args.editFile], maxRatio: 0.2 });
+    const record = baseRecord({
+      mode: 'leaf',
+      corpus: args.label,
+      projectRoot,
+      commit: gitCommit(projectRoot),
+      scenario: 'leaf-edit',
+      iteration,
+      direction,
+      ...measurementFields(run),
+    });
+    measurements.push(record);
+    records.push(record);
+  }
+  return measurements;
+}
+
+function repairLeafCorpus(projectRoot, editPath, original, mutatedOnDisk, initialGitStatus) {
+  let cleanupError;
+  if (mutatedOnDisk || !readFileSync(editPath).equals(original)) writeFileSync(editPath, original);
+  runCli(projectRoot, ['watch', '--stop', '--json']);
+  const repair = runCli(projectRoot, ['reindex', '--json']);
+  if (repair.exitCode !== 0) cleanupError = new Error(`leaf corpus repair failed: ${repair.stderr}`);
+  const finalGitStatus = gitStatus(projectRoot);
+  if (finalGitStatus !== initialGitStatus) {
+    cleanupError = new Error(`corpus Git state changed:\nbefore=${initialGitStatus}\nafter=${finalGitStatus}`);
+  }
+  return cleanupError;
 }
 
 function runNoopCorpus() {

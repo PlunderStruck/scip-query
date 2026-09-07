@@ -353,6 +353,18 @@ function codeBatchText(result: CodeBatchResult, sessionAware = false): string {
     '',
     `═══ OBSERVED FACTS (${result.requested} requested: ${result.matched} matched, ${result.ambiguous} ambiguous, ${result.missing} missing) ═══`,
   ];
+  appendCodeBatchSources(lines, result, sessionAware);
+  appendCodeBatchSections(lines, result);
+  appendCodeBindingClosure(lines, result.bindingClosure);
+  appendCodeFreshness(
+    lines,
+    result.entries.flatMap((entry) => entry.results),
+  );
+  appendCodeCoverage(lines, result);
+  return `${lines.join('\n')}\n`;
+}
+
+function appendCodeBatchSources(lines: string[], result: CodeBatchResult, sessionAware: boolean): void {
   const rendered = new Set<string>();
   for (const entry of result.entries) {
     for (const source of entry.results) {
@@ -369,7 +381,9 @@ function codeBatchText(result: CodeBatchResult, sessionAware = false): string {
       appendCodeResult(lines, source, sessionAware);
     }
   }
+}
 
+function appendCodeBatchSections(lines: string[], result: CodeBatchResult): void {
   const fileSources = result.entries.filter((entry) => entry.kind === 'file-source');
   if (fileSources.length > 0) {
     lines.push('', '═══ FILE SOURCE COVERAGE ═══');
@@ -392,19 +406,16 @@ function codeBatchText(result: CodeBatchResult, sessionAware = false): string {
   if (missing.length > 0) {
     lines.push('', '═══ MISSING SELECTORS ═══');
     for (const entry of missing) {
-      const suggestions = entry.suggestions.length > 0 ? ` Suggestions: ${entry.suggestions.join(', ')}` : '';
-      lines.push(
-        `  ${entry.selector}: ${entry.reason === 'definition-source-unreadable' ? 'definition source unreadable.' : 'no definition matched.'}${suggestions}`,
-      );
+      appendCodeMissingSelector(lines, entry);
     }
   }
-  appendCodeBindingClosure(lines, result.bindingClosure);
-  appendCodeFreshness(
-    lines,
-    result.entries.flatMap((entry) => entry.results),
+}
+
+function appendCodeMissingSelector(lines: string[], entry: CodeBatchEntry): void {
+  const suggestions = entry.suggestions.length > 0 ? ` Suggestions: ${entry.suggestions.join(', ')}` : '';
+  lines.push(
+    `  ${entry.selector}: ${entry.reason === 'definition-source-unreadable' ? 'definition source unreadable.' : 'no definition matched.'}${suggestions}`,
   );
-  appendCodeCoverage(lines, result);
-  return `${lines.join('\n')}\n`;
 }
 
 function appendCodeRangeCoverage(lines: string[], entry: CodeBatchEntry): void {

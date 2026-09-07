@@ -73,10 +73,7 @@ interface SignatureTaskResult {
   signature: string | null;
 }
 
-// scip-query: ignore-extract — reviewed E1 workflow owner; batch setup, request execution, retry, and result assembly stay together.
-export async function runRustAnalyzerReferenceBatch(
-  request: RustReferenceWorkerRequest,
-): Promise<RustReferenceWorkerResponse> {
+function selectRustReferenceBatch(request: RustReferenceWorkerRequest) {
   const includeReferences = request.includeReferences !== false;
   const includeCallees = request.includeCallees === true;
   const includeSignatures = request.includeSignatures === true;
@@ -85,6 +82,139 @@ export async function runRustAnalyzerReferenceBatch(
   const referenceDefinitions = rustRequestReferenceDefinitions(request);
   const calleeDefinitions = rustRequestCalleeDefinitions(request);
   const signatureDefinitions = rustRequestSignatureDefinitions(request);
+  return {
+    includeReferences,
+    includeCallees,
+    includeSignatures,
+    requestOptions,
+    sessionDefinitions,
+    referenceDefinitions,
+    calleeDefinitions,
+    signatureDefinitions,
+  };
+}
+
+type RustReferenceBatchSelection = ReturnType<typeof selectRustReferenceBatch>;
+
+function unavailableRustReferenceBatch(
+  capabilities: Awaited<ReturnType<RustAnalyzerLspClient['initialize']>>['capabilities'],
+  selection: RustReferenceBatchSelection,
+): RustReferenceWorkerResponse | null {
+  const {
+    includeReferences,
+    includeCallees,
+    includeSignatures,
+    referenceDefinitions,
+    calleeDefinitions,
+    signatureDefinitions,
+  } = selection;
+  if (includeReferences && !capabilities.referencesProvider) {
+    return {
+      available: false,
+      reason: 'rust-analyzer initialized without textDocument/references support.',
+      references: referenceDefinitions.map((definition) => [definition.symbolId, []]),
+      ...(includeCallees ? { callees: calleeDefinitions.map((definition) => [definition.symbolId, []]) } : {}),
+    };
+  }
+  if (includeCallees && !capabilities.callHierarchyProvider) {
+    return {
+      available: false,
+      reason: 'rust-analyzer initialized without call hierarchy support.',
+      references: referenceDefinitions.map((definition) => [definition.symbolId, []]),
+      callees: calleeDefinitions.map((definition) => [definition.symbolId, []]),
+      ...(includeSignatures
+        ? { signatures: signatureDefinitions.map((definition) => [definition.symbolId, null]) }
+        : {}),
+    };
+  }
+  if (includeSignatures && !capabilities.hoverProvider) {
+    return {
+      available: false,
+      reason: 'rust-analyzer initialized without hover support.',
+      references: referenceDefinitions.map((definition) => [definition.symbolId, []]),
+      ...(includeCallees ? { callees: calleeDefinitions.map((definition) => [definition.symbolId, []]) } : {}),
+      signatures: signatureDefinitions.map((definition) => [definition.symbolId, null]),
+    };
+  }
+
+  return null;
+}
+
+async function executeRustReferenceQueries(
+  client: RustAnalyzerLspClient,
+  request: RustReferenceWorkerRequest,
+  selection: RustReferenceBatchSelection,
+): Promise<ReferenceTaskResult[]> {
+  const { includeReferences, referenceDefinitions } = selection;
+  if (!includeReferences)
+    return referenceDefinitions.map((definition) => ({
+      symbolId: definition.symbolId,
+      references: [],
+      complete: true,
+    }));
+  return runWithConcurrency(
+    referenceDefinitions,
+    request.concurrency ?? 8,
+    async (definition): Promise<ReferenceTaskResult> => {
+      const lookup = await referencesWithCompletion(
+        client,
+        definitionToReferenceParams(request.projectRoot, definition, false),
+        {
+          requestTimeoutMs: request.requestTimeoutMs,
+          retryTimeoutMs: request.referenceRetryTimeoutMs,
+        },
+      );
+      return {
+        symbolId: definition.symbolId,
+        references: dedupeSemanticReferences(locationsToSemanticReferences(request.projectRoot, lookup.locations)),
+        complete: lookup.complete,
+      };
+    },
+  );
+}
+
+async function executeRustCalleeQueries(
+  client: RustAnalyzerLspClient,
+  request: RustReferenceWorkerRequest,
+  selection: RustReferenceBatchSelection,
+): Promise<CalleeTaskResult[]> {
+  const { includeCallees, calleeDefinitions } = selection;
+  if (!includeCallees) return [];
+  const { requestOptions } = selection;
+  return runWithConcurrency(
+    calleeDefinitions,
+    request.concurrency ?? 8,
+    async (definition): Promise<CalleeTaskResult> => ({
+      symbolId: definition.symbolId,
+      callees: await calleesForDefinition(client, request.projectRoot, definition, requestOptions),
+    }),
+  );
+}
+
+async function executeRustSignatureQueries(
+  client: RustAnalyzerLspClient,
+  request: RustReferenceWorkerRequest,
+  selection: RustReferenceBatchSelection,
+): Promise<SignatureTaskResult[]> {
+  const { includeSignatures, signatureDefinitions } = selection;
+  if (!includeSignatures) return [];
+  const { requestOptions } = selection;
+  return runWithConcurrency(
+    signatureDefinitions,
+    request.concurrency ?? 8,
+    async (definition): Promise<SignatureTaskResult> => ({
+      symbolId: definition.symbolId,
+      signature: await signatureForDefinition(client, request.projectRoot, definition, requestOptions),
+    }),
+  );
+}
+
+// scip-query: ignore-extract — reviewed E1 workflow owner; batch setup, request execution, retry, and result assembly stay together.
+export async function runRustAnalyzerReferenceBatch(
+  request: RustReferenceWorkerRequest,
+): Promise<RustReferenceWorkerResponse> {
+  const selection = selectRustReferenceBatch(request);
+  const { includeCallees, includeSignatures, sessionDefinitions } = selection;
   const linkedProjects = cargoManifestsForDefinitions(request.projectRoot, sessionDefinitions);
   const sessionRoot = rustAnalyzerSessionRoot(request.projectRoot, linkedProjects);
   const initializationOptions = rustAnalyzerInitializationOptions(linkedProjects);
@@ -111,82 +241,16 @@ export async function runRustAnalyzerReferenceBatch(
       },
       initializationOptions,
     });
-    if (includeReferences && !initialized.capabilities.referencesProvider) {
-      return {
-        available: false,
-        reason: 'rust-analyzer initialized without textDocument/references support.',
-        references: referenceDefinitions.map((definition) => [definition.symbolId, []]),
-        ...(includeCallees ? { callees: calleeDefinitions.map((definition) => [definition.symbolId, []]) } : {}),
-      };
-    }
-    if (includeCallees && !initialized.capabilities.callHierarchyProvider) {
-      return {
-        available: false,
-        reason: 'rust-analyzer initialized without call hierarchy support.',
-        references: referenceDefinitions.map((definition) => [definition.symbolId, []]),
-        callees: calleeDefinitions.map((definition) => [definition.symbolId, []]),
-        ...(includeSignatures
-          ? { signatures: signatureDefinitions.map((definition) => [definition.symbolId, null]) }
-          : {}),
-      };
-    }
-    if (includeSignatures && !initialized.capabilities.hoverProvider) {
-      return {
-        available: false,
-        reason: 'rust-analyzer initialized without hover support.',
-        references: referenceDefinitions.map((definition) => [definition.symbolId, []]),
-        ...(includeCallees ? { callees: calleeDefinitions.map((definition) => [definition.symbolId, []]) } : {}),
-        signatures: signatureDefinitions.map((definition) => [definition.symbolId, null]),
-      };
-    }
+    const unavailable = unavailableRustReferenceBatch(initialized.capabilities, selection);
+    if (unavailable) return unavailable;
 
     const openedUris = openDefinitionDocuments(client, request.projectRoot, sessionDefinitions);
     await waitForOpenedDocuments(client, openedUris, request.diagnosticsTimeoutMs ?? 10_000);
     await sleep(request.settleDelayMs ?? 5_000);
 
-    const references = includeReferences
-      ? await runWithConcurrency(
-          referenceDefinitions,
-          request.concurrency ?? 8,
-          async (definition): Promise<ReferenceTaskResult> => {
-            const lookup = await referencesWithCompletion(
-              client,
-              definitionToReferenceParams(request.projectRoot, definition, false),
-              {
-                requestTimeoutMs: request.requestTimeoutMs,
-                retryTimeoutMs: request.referenceRetryTimeoutMs,
-              },
-            );
-            return {
-              symbolId: definition.symbolId,
-              references: dedupeSemanticReferences(
-                locationsToSemanticReferences(request.projectRoot, lookup.locations),
-              ),
-              complete: lookup.complete,
-            };
-          },
-        )
-      : referenceDefinitions.map((definition) => ({ symbolId: definition.symbolId, references: [], complete: true }));
-    const callees = includeCallees
-      ? await runWithConcurrency(
-          calleeDefinitions,
-          request.concurrency ?? 8,
-          async (definition): Promise<CalleeTaskResult> => ({
-            symbolId: definition.symbolId,
-            callees: await calleesForDefinition(client, request.projectRoot, definition, requestOptions),
-          }),
-        )
-      : [];
-    const signatures = includeSignatures
-      ? await runWithConcurrency(
-          signatureDefinitions,
-          request.concurrency ?? 8,
-          async (definition): Promise<SignatureTaskResult> => ({
-            symbolId: definition.symbolId,
-            signature: await signatureForDefinition(client, request.projectRoot, definition, requestOptions),
-          }),
-        )
-      : [];
+    const references = await executeRustReferenceQueries(client, request, selection);
+    const callees = await executeRustCalleeQueries(client, request, selection);
+    const signatures = await executeRustSignatureQueries(client, request, selection);
 
     return {
       available: true,

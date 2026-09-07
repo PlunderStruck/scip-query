@@ -417,6 +417,83 @@ function buildSemanticCallerMap(
   return result;
 }
 
+interface SemanticReferenceCacheScan {
+  skippedUnsupportedLanguage: number;
+  inMemoryHits: number;
+  cacheHits: number;
+  parseFailures: number;
+  cacheReadFiles: number;
+  fullyInMemoryFiles: number;
+  incompleteInMemoryHits: number;
+  materializedReferences: Map<number, SemanticReference[]>;
+  incompleteReferences: ReadonlySet<number>;
+  misses: Array<{ definition: IndexedDefinition; cacheFingerprint: string }>;
+  unkeyed: IndexedDefinition[];
+}
+
+function pendingSemanticReferenceDefinitions(
+  definitions: readonly IndexedDefinition[],
+  scan: SemanticReferenceCacheScan,
+): IndexedDefinition[] {
+  const pending: IndexedDefinition[] = [];
+  for (const definition of definitions) {
+    if (scan.materializedReferences.has(definition.symbolId)) scan.inMemoryHits += 1;
+    else if (scan.incompleteReferences.has(definition.symbolId)) scan.incompleteInMemoryHits += 1;
+    else pending.push(definition);
+  }
+  return pending;
+}
+
+function scanSemanticReferenceFile(
+  db: ScipDatabase,
+  projectFingerprint: string | null,
+  relativePath: string,
+  definitions: readonly IndexedDefinition[],
+  scan: SemanticReferenceCacheScan,
+): void {
+  const pending = pendingSemanticReferenceDefinitions(definitions, scan);
+  if (pending.length === 0) {
+    scan.fullyInMemoryFiles += 1;
+    return;
+  }
+  const cacheFingerprint = semanticReferenceCacheFingerprint(db, projectFingerprint, relativePath);
+  if (!cacheFingerprint) {
+    for (const definition of pending) {
+      if (!semanticProviderLanguageForPath(definition.relativePath)) scan.skippedUnsupportedLanguage += 1;
+      scan.unkeyed.push(definition);
+    }
+    return;
+  }
+  scan.cacheReadFiles += 1;
+  const cachedBySymbol = readCachedSemanticReferencesForFile(db, relativePath, cacheFingerprint);
+  for (const definition of pending) {
+    materializeCachedSemanticReference(
+      definition,
+      cachedBySymbol.get(definition.symbol) ?? null,
+      cacheFingerprint,
+      scan,
+    );
+  }
+}
+
+function materializeCachedSemanticReference(
+  definition: IndexedDefinition,
+  cached: string | null,
+  cacheFingerprint: string,
+  scan: SemanticReferenceCacheScan,
+): void {
+  if (cached !== null) {
+    const references = parseCachedReferences(cached);
+    if (references) {
+      scan.cacheHits += 1;
+      scan.materializedReferences.set(definition.symbolId, references);
+      return;
+    }
+    scan.parseFailures += 1;
+  }
+  scan.misses.push({ definition, cacheFingerprint });
+}
+
 // scip-query: ignore-extract — reviewed E1 workflow owner; provider resolution, batching, cache writes, and evidence merge stay together.
 function materializeSemanticReferenceBatch(
   db: ScipDatabase,
@@ -429,14 +506,22 @@ function materializeSemanticReferenceBatch(
   const cacheWrites: SemanticReferenceCacheEntry[] = [];
   const misses: Array<{ definition: IndexedDefinition; cacheFingerprint: string }> = [];
   const unkeyed: IndexedDefinition[] = [];
-  let skippedUnsupportedLanguage = 0;
-  let inMemoryHits = 0;
-  let cacheHits = 0;
-  let parseFailures = 0;
+  const cacheScan: SemanticReferenceCacheScan = {
+    skippedUnsupportedLanguage: 0,
+    inMemoryHits: 0,
+    cacheHits: 0,
+    parseFailures: 0,
+    cacheReadFiles: 0,
+    fullyInMemoryFiles: 0,
+    incompleteInMemoryHits: 0,
+    materializedReferences,
+    incompleteReferences,
+    misses,
+    unkeyed,
+  };
+
   let computedRows = 0;
-  let cacheReadFiles = 0;
-  let fullyInMemoryFiles = 0;
-  let incompleteInMemoryHits = 0;
+
   let fragmentDefinitions = 0;
   let fragmentCacheHits = 0;
   let fragmentCacheMisses = 0;
@@ -465,58 +550,20 @@ function materializeSemanticReferenceBatch(
     'semantic.references.cache-scan',
     () => {
       for (const [relativePath, fileDefinitions] of semanticDefinitionsByFile(definitions)) {
-        const pendingDefinitions: IndexedDefinition[] = [];
-        for (const definition of fileDefinitions) {
-          if (materializedReferences.has(definition.symbolId)) {
-            inMemoryHits += 1;
-          } else if (incompleteReferences.has(definition.symbolId)) {
-            incompleteInMemoryHits += 1;
-          } else {
-            pendingDefinitions.push(definition);
-          }
-        }
-        if (pendingDefinitions.length === 0) {
-          fullyInMemoryFiles += 1;
-          continue;
-        }
-
-        const cacheFingerprint = semanticReferenceCacheFingerprint(db, projectFingerprint, relativePath);
-        if (!cacheFingerprint) {
-          for (const definition of pendingDefinitions) {
-            if (!semanticProviderLanguageForPath(definition.relativePath)) skippedUnsupportedLanguage += 1;
-            unkeyed.push(definition);
-          }
-          continue;
-        }
-
-        cacheReadFiles += 1;
-        const cachedBySymbol = readCachedSemanticReferencesForFile(db, relativePath, cacheFingerprint);
-        for (const definition of pendingDefinitions) {
-          const cached = cachedBySymbol.get(definition.symbol) ?? null;
-          if (cached !== null) {
-            const references = parseCachedReferences(cached);
-            if (references) {
-              cacheHits += 1;
-              materializedReferences.set(definition.symbolId, references);
-              continue;
-            }
-            parseFailures += 1;
-          }
-          misses.push({ definition, cacheFingerprint });
-        }
+        scanSemanticReferenceFile(db, projectFingerprint, relativePath, fileDefinitions, cacheScan);
       }
     },
     () => ({
       definitions: definitions.length,
-      skippedUnsupportedLanguage,
-      cacheHits,
-      parseFailures,
+      skippedUnsupportedLanguage: cacheScan.skippedUnsupportedLanguage,
+      cacheHits: cacheScan.cacheHits,
+      parseFailures: cacheScan.parseFailures,
       misses: misses.length,
       unkeyed: unkeyed.length,
-      inMemoryHits,
-      incompleteInMemoryHits,
-      fullyInMemoryFiles,
-      cacheReadFiles,
+      inMemoryHits: cacheScan.inMemoryHits,
+      incompleteInMemoryHits: cacheScan.incompleteInMemoryHits,
+      fullyInMemoryFiles: cacheScan.fullyInMemoryFiles,
+      cacheReadFiles: cacheScan.cacheReadFiles,
     }),
   );
 
@@ -571,13 +618,13 @@ function materializeSemanticReferenceBatch(
   }
   return {
     definitions: definitions.length,
-    inMemoryHits,
-    incompleteInMemoryHits,
-    cacheHits,
+    inMemoryHits: cacheScan.inMemoryHits,
+    incompleteInMemoryHits: cacheScan.incompleteInMemoryHits,
+    cacheHits: cacheScan.cacheHits,
     misses: misses.length,
     unkeyed: unkeyed.length,
-    skippedUnsupportedLanguage,
-    parseFailures,
+    skippedUnsupportedLanguage: cacheScan.skippedUnsupportedLanguage,
+    parseFailures: cacheScan.parseFailures,
     computed: computedRows,
     incomplete: incompleteReferences.size,
     cacheWrites: cacheWrites.length,

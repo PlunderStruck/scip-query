@@ -151,12 +151,7 @@ function inferKindNumber(symbol: string, documentation: string | null, enclosing
   const suffix = leafSuffix(symbol);
   const signature = (documentation ?? '').toLowerCase();
   if (suffix === 'type') {
-    if (signature.includes('type ')) return SymbolInformation_Kind.TypeAlias;
-    if (signature.includes('interface ')) return SymbolInformation_Kind.Interface;
-    if (signature.includes('struct ')) return SymbolInformation_Kind.Struct;
-    if (signature.includes('trait ')) return SymbolInformation_Kind.Trait;
-    if (signature.includes('class ')) return SymbolInformation_Kind.Class;
-    return SymbolInformation_Kind.Class; // Class fallback when the index does not expose richer type metadata
+    return normalizeIndexedKind(SymbolInformation_Kind.Class, symbol, documentation);
   }
   if (suffix === 'method') {
     return parent?.suffix === 'type' ? SymbolInformation_Kind.Method : SymbolInformation_Kind.Function;
@@ -164,11 +159,15 @@ function inferKindNumber(symbol: string, documentation: string | null, enclosing
   if (suffix === 'namespace') return SymbolInformation_Kind.Module;
   if (suffix !== 'term') return null;
 
+  return inferTermKind(signature, enclosingSymbol, parent?.suffix ?? null);
+}
+
+function inferTermKind(signature: string, enclosingSymbol: string | null, parentSuffix: string | null): number {
   if (signature.includes('async def ') || signature.includes('def ')) {
     return SymbolInformation_Kind.Function;
   }
 
-  const enclosingSuffix = enclosingSymbol ? leafSuffix(enclosingSymbol) : (parent?.suffix ?? null);
+  const enclosingSuffix = enclosingSymbol ? leafSuffix(enclosingSymbol) : parentSuffix;
   if (enclosingSuffix === 'type') {
     return SymbolInformation_Kind.Field;
   }

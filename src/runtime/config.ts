@@ -982,17 +982,34 @@ function reportUnknownConfigKeys(config: ProjectConfig, diagnostics: ConfigDiagn
   reportUnknownObjectKeys(diagnostics, typedConfig.architecture, 'architecture', ARCHITECTURE_CONFIG_KEYS);
   reportUnknownObjectKeys(diagnostics, typedConfig.docs, 'docs', DOCS_CONFIG_KEYS);
 
-  if (Array.isArray(typedConfig.architecture?.boundaries)) {
-    for (const [index, boundary] of typedConfig.architecture.boundaries.entries()) {
-      reportUnknownObjectKeys(
-        diagnostics,
-        boundary,
-        `architecture.boundaries[${index}]`,
-        ARCHITECTURE_BOUNDARY_CONFIG_KEYS,
-      );
-    }
-  }
+  reportUnknownConfigArrayKeys(
+    diagnostics,
+    typedConfig.architecture?.boundaries,
+    'architecture.boundaries',
+    ARCHITECTURE_BOUNDARY_CONFIG_KEYS,
+  );
+  reportUnknownIndexerKeys(typedConfig, diagnostics);
+  reportUnknownConfigArrayKeys(
+    diagnostics,
+    typedConfig.declaredCouplings,
+    'declaredCouplings',
+    DECLARED_COUPLING_CONFIG_KEYS,
+  );
+  reportUnknownSuppressionKeys(typedConfig, diagnostics);
+  reportUnknownCoverageContractKeys(typedConfig, diagnostics);
+}
 
+function reportUnknownConfigArrayKeys(
+  diagnostics: ConfigDiagnostic[],
+  value: unknown,
+  path: string,
+  keys: ReadonlySet<string>,
+): void {
+  if (!Array.isArray(value)) return;
+  for (const [index, entry] of value.entries()) reportUnknownObjectKeys(diagnostics, entry, `${path}[${index}]`, keys);
+}
+
+function reportUnknownIndexerKeys(typedConfig: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
   if (isRecordObject(typedConfig.indexer)) {
     reportUnknownObjectKeys(diagnostics, typedConfig.indexer, 'indexer', INDEXER_CONFIG_KEYS);
     for (const [language, override] of Object.entries(typedConfig.indexer)) {
@@ -1001,43 +1018,35 @@ function reportUnknownConfigKeys(config: ProjectConfig, diagnostics: ConfigDiagn
       }
     }
   }
+}
 
-  if (Array.isArray(typedConfig.declaredCouplings)) {
-    for (const [index, coupling] of typedConfig.declaredCouplings.entries()) {
-      reportUnknownObjectKeys(diagnostics, coupling, `declaredCouplings[${index}]`, DECLARED_COUPLING_CONFIG_KEYS);
-    }
-  }
-
+function reportUnknownSuppressionKeys(typedConfig: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
   if (Array.isArray(typedConfig.suppressions)) {
     for (const [index, suppression] of typedConfig.suppressions.entries()) {
       reportUnknownObjectKeys(diagnostics, suppression, `suppressions[${index}]`, SUPPRESSION_CONFIG_KEYS);
-      if (isRecordObject(suppression.decision)) {
-        reportUnknownObjectKeys(
-          diagnostics,
-          suppression.decision,
-          `suppressions[${index}].decision`,
-          SUPPRESSION_DECISION_KEYS,
-        );
-        if (Array.isArray(suppression.decision['evidence'])) {
-          for (const [evidenceIndex, evidence] of suppression.decision['evidence'].entries()) {
-            reportUnknownObjectKeys(
-              diagnostics,
-              evidence,
-              `suppressions[${index}].decision.evidence[${evidenceIndex}]`,
-              SUPPRESSION_EVIDENCE_KEYS,
-            );
-          }
-        }
-        reportUnknownObjectKeys(
-          diagnostics,
-          suppression.decision['invalidateOn'],
-          `suppressions[${index}].decision.invalidateOn`,
-          SUPPRESSION_INVALIDATION_KEYS,
-        );
-      }
+      reportUnknownSuppressionDecision(suppression.decision, `suppressions[${index}].decision`, diagnostics);
     }
   }
+}
 
+function reportUnknownSuppressionDecision(decision: unknown, path: string, diagnostics: ConfigDiagnostic[]): void {
+  if (isRecordObject(decision)) {
+    reportUnknownObjectKeys(diagnostics, decision, path, SUPPRESSION_DECISION_KEYS);
+    if (Array.isArray(decision['evidence'])) {
+      for (const [evidenceIndex, evidence] of decision['evidence'].entries()) {
+        reportUnknownObjectKeys(diagnostics, evidence, `${path}.evidence[${evidenceIndex}]`, SUPPRESSION_EVIDENCE_KEYS);
+      }
+    }
+    reportUnknownObjectKeys(
+      diagnostics,
+      decision['invalidateOn'],
+      `${path}.invalidateOn`,
+      SUPPRESSION_INVALIDATION_KEYS,
+    );
+  }
+}
+
+function reportUnknownCoverageContractKeys(typedConfig: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
   if (Array.isArray(typedConfig.coverageContracts)) {
     for (const [index, contract] of typedConfig.coverageContracts.entries()) {
       const path = `coverageContracts[${index}]`;

@@ -242,41 +242,49 @@ function collectSuppressionExclusions(
 ): ExclusionEntry[] {
   const out: ExclusionEntry[] = [];
   const walk = (node: SyntaxNode): void => {
-    if (matchableNodeTypes.has(node.type) && node.parent) {
-      const parent = node.parent;
-      const children = parent.children;
-      let idx = -1;
-      for (let i = 0; i < children.length; i += 1) {
-        if (children[i]!.startIndex === node.startIndex && children[i]!.type === node.type) {
-          idx = i;
-          break;
-        }
-      }
-      if (idx > 0) {
-        for (let i = idx - 1; i >= 0; i -= 1) {
-          const sib = children[i]!;
-          if (commentTypes.has(sib.type)) {
-            if (isSuppressionComment(sib.text)) {
-              out.push({
-                startLine: node.startPosition.row,
-                endLine: node.endPosition.row,
-                reason: 'scip-query suppression comment',
-                disposition: 'exclude',
-              });
-              break;
-            }
-            continue;
-          }
-          // Skip attribute_items between comment and node — common in Rust.
-          if (sib.type === 'attribute_item' || sib.type === 'inner_attribute_item') continue;
-          break;
-        }
-      }
+    if (matchableNodeTypes.has(node.type) && hasPrecedingSuppressionComment(node, commentTypes)) {
+      out.push({
+        startLine: node.startPosition.row,
+        endLine: node.endPosition.row,
+        reason: 'scip-query suppression comment',
+        disposition: 'exclude',
+      });
     }
     for (const child of node.namedChildren) walk(child);
   };
   walk(tree.rootNode);
   return out;
+}
+
+function hasPrecedingSuppressionComment(node: SyntaxNode, commentTypes: ReadonlySet<string>): boolean {
+  if (!node.parent) return false;
+  const children = node.parent.children;
+  let index = -1;
+  for (let i = 0; i < children.length; i += 1) {
+    if (children[i]!.startIndex === node.startIndex && children[i]!.type === node.type) {
+      index = i;
+      break;
+    }
+  }
+  return precedingSiblingsSuppress(children, index, commentTypes);
+}
+
+function precedingSiblingsSuppress(
+  children: readonly SyntaxNode[],
+  index: number,
+  commentTypes: ReadonlySet<string>,
+): boolean {
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const sibling = children[i]!;
+    if (commentTypes.has(sibling.type)) {
+      if (isSuppressionComment(sibling.text)) return true;
+      continue;
+    }
+    // Rust attributes do not break adjacency to the preceding comment.
+    if (sibling.type === 'attribute_item' || sibling.type === 'inner_attribute_item') continue;
+    break;
+  }
+  return false;
 }
 
 // scip-query: ignore-extract — this is the Rust exclusion policy aggregator:

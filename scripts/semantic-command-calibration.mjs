@@ -278,21 +278,32 @@ function summarizeParsedJson(parsed) {
   } else if (result && typeof result === 'object') {
     summary.resultKind = 'object';
     summary.resultKeys = Object.keys(result).slice(0, 20);
-    if (typeof result.score === 'number') summary.healthScore = result.score;
-    if (typeof result.riskScore === 'number') summary.riskScore = result.riskScore;
-    if (typeof result.hygieneScore === 'number') summary.hygieneScore = result.hygieneScore;
-    if (Array.isArray(result.findings)) summary.findings = result.findings.length;
-    if (Array.isArray(result.symbols)) summary.symbols = result.symbols.length;
-    if (Array.isArray(result.files)) summary.files = result.files.length;
-    if (Array.isArray(result.imports)) summary.imports = result.imports.length;
-    const graph = result.callGraph ?? result;
-    if (Array.isArray(graph.callers)) summary.callers = graph.callers.length;
-    if (Array.isArray(graph.callees)) summary.callees = graph.callees.length;
-    if (typeof result.matched === 'boolean') summary.matched = result.matched;
-    if (typeof result.totalMatches === 'number') summary.totalMatches = result.totalMatches;
-    if (typeof result.exitCode === 'number') summary.innerExitCode = result.exitCode;
+    summarizeObjectMetrics(result, summary);
   }
   return summary;
+}
+
+function summarizeObjectMetrics(result, summary) {
+  for (const [source, destination] of [
+    ['score', 'healthScore'],
+    ['riskScore', 'riskScore'],
+    ['hygieneScore', 'hygieneScore'],
+  ]) {
+    if (typeof result[source] === 'number') summary[destination] = result[source];
+  }
+  for (const field of ['findings', 'symbols', 'files', 'imports']) {
+    if (Array.isArray(result[field])) summary[field] = result[field].length;
+  }
+  const graph = result.callGraph ?? result;
+  if (Array.isArray(graph.callers)) summary.callers = graph.callers.length;
+  if (Array.isArray(graph.callees)) summary.callees = graph.callees.length;
+  summarizeObjectStatus(result, summary);
+}
+
+function summarizeObjectStatus(result, summary) {
+  if (typeof result.matched === 'boolean') summary.matched = result.matched;
+  if (typeof result.totalMatches === 'number') summary.totalMatches = result.totalMatches;
+  if (typeof result.exitCode === 'number') summary.innerExitCode = result.exitCode;
 }
 
 function summarizeProfile(profilePath) {

@@ -569,54 +569,76 @@ export function detectCoarseBoundaries(
     const subUnitOf = granularityFor(boundary) === 'file' ? (file: string) => file : directoryOf;
     const considered = [...members].filter((file) => !isModuleHierarchyFile(file));
     if (considered.length < 2) continue;
-    const inBoundary = new Set(considered);
-
-    const edges = new Map<string, { from: string; to: string; fileEdges: ArchitectureFileEdge[] }>();
-    const subGraph = new Map<string, Set<string>>();
-    for (const file of considered) subGraph.set(subUnitOf(file), new Set());
-
-    for (const fromFile of considered) {
-      for (const toFile of fileGraph.get(fromFile) ?? []) {
-        if (!inBoundary.has(toFile)) continue;
-        const from = subUnitOf(fromFile);
-        const to = subUnitOf(toFile);
-        if (from === to) continue;
-        const key = boundaryEdgeKey(from, to);
-        let edge = edges.get(key);
-        if (!edge) {
-          edge = { from, to, fileEdges: [] };
-          edges.set(key, edge);
-        }
-        edge.fileEdges.push({ fromFile, toFile });
-        subGraph.get(from)!.add(to);
-      }
-    }
-
-    const { components } = stronglyConnectedComponents(subGraph);
-    for (const component of components) {
-      if (component.length < 2) continue;
-      const members = new Set(component);
-      const internalEdges = [...edges.values()]
-        .filter((edge) => members.has(edge.from) && members.has(edge.to))
-        .map((edge) => ({
-          from: edge.from,
-          to: edge.to,
-          fileEdgeCount: edge.fileEdges.length,
-          examples: edge.fileEdges.slice(0, 5),
-        }))
-        .sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
-      const minimum = Math.min(...internalEdges.map((edge) => edge.fileEdgeCount));
-      findings.push({
-        boundary,
-        violatesPolicy,
-        subUnits: [...component].sort(),
-        internalEdges,
-        narrowestEdges: internalEdges.filter((edge) => edge.fileEdgeCount === minimum),
-      });
-    }
+    const { edges, subGraph } = coarseBoundarySubgraph(fileGraph, considered, subUnitOf);
+    for (const finding of coarseBoundaryFindings(boundary, violatesPolicy, edges, subGraph)) findings.push(finding);
   }
 
   return findings.sort((a, b) => b.subUnits.length - a.subUnits.length || a.boundary.localeCompare(b.boundary));
+}
+
+type CoarseBoundarySubEdge = { from: string; to: string; fileEdges: ArchitectureFileEdge[] };
+
+function coarseBoundarySubgraph(
+  fileGraph: ReadonlyMap<string, ReadonlySet<string>>,
+  considered: readonly string[],
+  subUnitOf: (file: string) => string,
+): { edges: Map<string, CoarseBoundarySubEdge>; subGraph: Map<string, Set<string>> } {
+  const inBoundary = new Set(considered);
+
+  const edges = new Map<string, CoarseBoundarySubEdge>();
+  const subGraph = new Map<string, Set<string>>();
+  for (const file of considered) subGraph.set(subUnitOf(file), new Set());
+
+  for (const fromFile of considered) {
+    for (const toFile of fileGraph.get(fromFile) ?? []) {
+      if (!inBoundary.has(toFile)) continue;
+      const from = subUnitOf(fromFile);
+      const to = subUnitOf(toFile);
+      if (from === to) continue;
+      const key = boundaryEdgeKey(from, to);
+      let edge = edges.get(key);
+      if (!edge) {
+        edge = { from, to, fileEdges: [] };
+        edges.set(key, edge);
+      }
+      edge.fileEdges.push({ fromFile, toFile });
+      subGraph.get(from)!.add(to);
+    }
+  }
+
+  return { edges, subGraph };
+}
+
+function coarseBoundaryFindings(
+  boundary: string,
+  violatesPolicy: boolean,
+  edges: ReadonlyMap<string, CoarseBoundarySubEdge>,
+  subGraph: ReadonlyMap<string, ReadonlySet<string>>,
+): ArchitectureCoarseBoundary[] {
+  const findings: ArchitectureCoarseBoundary[] = [];
+  const { components } = stronglyConnectedComponents(subGraph);
+  for (const component of components) {
+    if (component.length < 2) continue;
+    const members = new Set(component);
+    const internalEdges = [...edges.values()]
+      .filter((edge) => members.has(edge.from) && members.has(edge.to))
+      .map((edge) => ({
+        from: edge.from,
+        to: edge.to,
+        fileEdgeCount: edge.fileEdges.length,
+        examples: edge.fileEdges.slice(0, 5),
+      }))
+      .sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
+    const minimum = Math.min(...internalEdges.map((edge) => edge.fileEdgeCount));
+    findings.push({
+      boundary,
+      violatesPolicy,
+      subUnits: [...component].sort(),
+      internalEdges,
+      narrowestEdges: internalEdges.filter((edge) => edge.fileEdgeCount === minimum),
+    });
+  }
+  return findings;
 }
 
 /**

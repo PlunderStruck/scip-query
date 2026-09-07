@@ -19,21 +19,28 @@ export type SemanticAvailability = SemanticAvailabilityState & {
   projectScope?: 'project' | 'file-closure';
 };
 
+function validSemanticAvailabilityPaths(value: Record<string, unknown>): boolean {
+  return (
+    (value['tsconfigPath'] === undefined || typeof value['tsconfigPath'] === 'string') &&
+    (value['tsconfigPaths'] === undefined ||
+      (Array.isArray(value['tsconfigPaths']) && value['tsconfigPaths'].every((path) => typeof path === 'string')))
+  );
+}
+
+function validSemanticAvailabilityOptions(value: Record<string, unknown>): boolean {
+  return (
+    typeof value['available'] === 'boolean' &&
+    (value['dependencyAvailable'] === undefined || typeof value['dependencyAvailable'] === 'boolean') &&
+    validSemanticAvailabilityPaths(value) &&
+    (value['resolvedBinary'] === undefined || typeof value['resolvedBinary'] === 'string') &&
+    (value['note'] === undefined || typeof value['note'] === 'string')
+  );
+}
+
 export function decodeSemanticAvailability(input: unknown): SemanticAvailability | null {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
   const value = input as Record<string, unknown>;
-  if (
-    typeof value['available'] !== 'boolean' ||
-    (value['dependencyAvailable'] !== undefined && typeof value['dependencyAvailable'] !== 'boolean') ||
-    (value['tsconfigPath'] !== undefined && typeof value['tsconfigPath'] !== 'string') ||
-    (value['tsconfigPaths'] !== undefined &&
-      (!Array.isArray(value['tsconfigPaths']) ||
-        !value['tsconfigPaths'].every((path): path is string => typeof path === 'string'))) ||
-    (value['resolvedBinary'] !== undefined && typeof value['resolvedBinary'] !== 'string') ||
-    (value['note'] !== undefined && typeof value['note'] !== 'string')
-  ) {
-    return null;
-  }
+  if (!validSemanticAvailabilityOptions(value)) return null;
   if (value['available'] === true) {
     if (value['reason'] !== undefined) return null;
   } else if (typeof value['reason'] !== 'string' || value['reason'].length === 0) {

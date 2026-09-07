@@ -325,6 +325,24 @@ function scoreCountNote(
 function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
   const actions: HealthAction[] = [];
 
+  appendStructuralHealthActions(analyses, actions);
+  appendDuplicationHealthActions(analyses, actions);
+  appendFrameworkHealthActions(analyses, actions);
+  appendMaintenanceHealthActions(analyses, actions);
+  appendHistoryHealthActions(analyses, actions);
+
+  // Sort: high impact + low effort first
+  const impactWeight = { high: 3, medium: 2, low: 1 };
+  const effortWeight = { low: 3, medium: 2, high: 1 };
+  actions.sort((a, b) => {
+    const scoreA = impactWeight[a.impact] * effortWeight[a.effort];
+    const scoreB = impactWeight[b.impact] * effortWeight[b.effort];
+    return scoreB - scoreA;
+  });
+  return actions;
+}
+
+function appendStructuralHealthActions(analyses: HealthAnalyses, actions: HealthAction[]): void {
   if (analyses.dead.count > 0) {
     actions.push({
       category: 'Dead code',
@@ -349,7 +367,9 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
       locRecoverable: 0,
     });
   }
+}
 
+function appendDuplicationHealthActions(analyses: HealthAnalyses, actions: HealthAction[]): void {
   if (analyses.similarCount > 0) {
     actions.push({
       category: 'Similar functions',
@@ -387,7 +407,9 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
       locRecoverable: 0,
     });
   }
+}
 
+function appendFrameworkHealthActions(analyses: HealthAnalyses, actions: HealthAction[]): void {
   if (analyses.reactComponentDuplicates.count > 0) {
     actions.push({
       category: 'Duplicated React components',
@@ -459,7 +481,9 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
       locRecoverable: 0,
     });
   }
+}
 
+function appendMaintenanceHealthActions(analyses: HealthAnalyses, actions: HealthAction[]): void {
   if (analyses.passthroughs.count > 0) {
     actions.push({
       category: 'Passthrough functions',
@@ -501,7 +525,9 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
       locRecoverable: 0,
     });
   }
+}
 
+function appendHistoryHealthActions(analyses: HealthAnalyses, actions: HealthAction[]): void {
   if (analyses.gitEvidence && analyses.gitEvidence.hiddenCoupling.pairCount > 0) {
     const top = analyses.gitEvidence.hiddenCoupling.top[0];
     actions.push({
@@ -524,14 +550,4 @@ function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {
       locRecoverable: 0,
     });
   }
-
-  // Sort: high impact + low effort first
-  const impactWeight = { high: 3, medium: 2, low: 1 };
-  const effortWeight = { low: 3, medium: 2, high: 1 };
-  actions.sort((a, b) => {
-    const scoreA = impactWeight[a.impact] * effortWeight[a.effort];
-    const scoreB = impactWeight[b.impact] * effortWeight[b.effort];
-    return scoreB - scoreA;
-  });
-  return actions;
 }

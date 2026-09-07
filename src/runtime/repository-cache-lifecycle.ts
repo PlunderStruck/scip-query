@@ -563,24 +563,38 @@ function hasLiveLocalCacheProcess(lease: WorktreeCacheLease, ignoreLifecycleLock
   return watcherPid !== undefined && isProcessAlive(watcherPid);
 }
 
+function validLeaseIdentity(parsed: Partial<WorktreeCacheLease>): boolean {
+  return (
+    parsed.version === 1 &&
+    typeof parsed.repositoryId === 'string' &&
+    typeof parsed.worktreeId === 'string' &&
+    typeof parsed.projectRoot === 'string' &&
+    typeof parsed.localCacheDir === 'string' &&
+    typeof parsed.ownershipChecksum === 'string' &&
+    /^[a-f0-9]{64}$/.test(parsed.ownershipChecksum)
+  );
+}
+
+function validLeaseOptionalFields(parsed: Partial<WorktreeCacheLease>): boolean {
+  return (
+    (parsed.treeOid === undefined || typeof parsed.treeOid === 'string') &&
+    (parsed.baseGenerationId === undefined || typeof parsed.baseGenerationId === 'string') &&
+    (parsed.activeGenerationId === undefined || typeof parsed.activeGenerationId === 'string')
+  );
+}
+
+function validLeaseActivity(parsed: Partial<WorktreeCacheLease>): boolean {
+  return (
+    typeof parsed.lastAction === 'string' &&
+    (parsed.lastReason === undefined || typeof parsed.lastReason === 'string') &&
+    typeof parsed.lastSeenAt === 'string'
+  );
+}
+
 function readLease(path: string): WorktreeCacheLease | null {
   try {
     const parsed = JSON.parse(readSmallArtifactText(path, 'worktree cache lease')) as Partial<WorktreeCacheLease>;
-    if (
-      parsed.version !== 1 ||
-      typeof parsed.repositoryId !== 'string' ||
-      typeof parsed.worktreeId !== 'string' ||
-      typeof parsed.projectRoot !== 'string' ||
-      (parsed.treeOid !== undefined && typeof parsed.treeOid !== 'string') ||
-      typeof parsed.localCacheDir !== 'string' ||
-      (parsed.baseGenerationId !== undefined && typeof parsed.baseGenerationId !== 'string') ||
-      (parsed.activeGenerationId !== undefined && typeof parsed.activeGenerationId !== 'string') ||
-      typeof parsed.ownershipChecksum !== 'string' ||
-      !/^[a-f0-9]{64}$/.test(parsed.ownershipChecksum) ||
-      typeof parsed.lastAction !== 'string' ||
-      (parsed.lastReason !== undefined && typeof parsed.lastReason !== 'string') ||
-      typeof parsed.lastSeenAt !== 'string'
-    ) {
+    if (!validLeaseIdentity(parsed) || !validLeaseOptionalFields(parsed) || !validLeaseActivity(parsed)) {
       return null;
     }
     return parsed as WorktreeCacheLease;

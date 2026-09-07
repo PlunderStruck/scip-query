@@ -478,6 +478,18 @@ function manifestContentIdentity(manifest: TypeScriptFragmentGenerationManifest)
 
 function parseManifest(raw: string): TypeScriptFragmentGenerationManifest {
   const parsed = JSON.parse(raw) as Partial<TypeScriptFragmentGenerationManifest>;
+  validateFragmentManifestHeader(parsed);
+  const seen = new Set<string>();
+  for (const document of parsed.documents!) {
+    validateFragmentRecord(document);
+    validateRelativePath(document.relativePath);
+    if (seen.has(document.relativePath)) throw new Error('duplicate TypeScript fragment record');
+    seen.add(document.relativePath);
+  }
+  return parsed as TypeScriptFragmentGenerationManifest;
+}
+
+function validateFragmentManifestHeader(parsed: Partial<TypeScriptFragmentGenerationManifest>): void {
   if (
     parsed.version !== TYPESCRIPT_FRAGMENT_STORE_VERSION ||
     typeof parsed.producerIdentity !== 'string' ||
@@ -489,26 +501,22 @@ function parseManifest(raw: string): TypeScriptFragmentGenerationManifest {
   ) {
     throw new Error('invalid TypeScript fragment generation manifest');
   }
-  const seen = new Set<string>();
-  for (const document of parsed.documents) {
-    if (
-      !document ||
-      typeof document.relativePath !== 'string' ||
-      typeof document.blobHash !== 'string' ||
-      !/^[a-f0-9]{64}$/.test(document.blobHash) ||
-      typeof document.byteLength !== 'number' ||
-      !Number.isInteger(document.byteLength) ||
-      document.byteLength < 0 ||
-      typeof document.documentIdentity !== 'string' ||
-      !document.documentIdentity
-    ) {
-      throw new Error('invalid TypeScript fragment record');
-    }
-    validateRelativePath(document.relativePath);
-    if (seen.has(document.relativePath)) throw new Error('duplicate TypeScript fragment record');
-    seen.add(document.relativePath);
+}
+
+function validateFragmentRecord(document: TypeScriptFragmentGenerationManifest['documents'][number]): void {
+  if (
+    !document ||
+    typeof document.relativePath !== 'string' ||
+    typeof document.blobHash !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(document.blobHash) ||
+    typeof document.byteLength !== 'number' ||
+    !Number.isInteger(document.byteLength) ||
+    document.byteLength < 0 ||
+    typeof document.documentIdentity !== 'string' ||
+    !document.documentIdentity
+  ) {
+    throw new Error('invalid TypeScript fragment record');
   }
-  return parsed as TypeScriptFragmentGenerationManifest;
 }
 
 function generationManifestPath(paths: TypeScriptFragmentStorePaths, generationIdentity: string): string {

@@ -775,19 +775,11 @@ export function readQueryServiceServerState(sessionDir: string): QueryServiceSer
     const processIdentity =
       record['processIdentity'] === undefined ? undefined : parseProcessIdentity(record['processIdentity']);
     if (
-      record['protocolVersion'] !== QUERY_SERVICE_PROTOCOL_VERSION ||
-      typeof record['sessionIdentity'] !== 'string' ||
-      record['sessionIdentity'] !== queryServiceSessionIdentity(sessionDir) ||
-      typeof record['pid'] !== 'number' ||
-      !Number.isSafeInteger(record['pid']) ||
-      record['pid'] <= 0 ||
-      (record['processIdentity'] !== undefined && (!processIdentity || processIdentity.pid !== record['pid'])) ||
-      typeof record['generation'] !== 'string' ||
-      typeof record['heartbeatAtMs'] !== 'number' ||
-      !Number.isFinite(record['heartbeatAtMs'])
-    ) {
+      !isQueryServiceStateSession(record, sessionDir) ||
+      !isQueryServiceStateProcess(record, processIdentity) ||
+      !isQueryServiceStateHeartbeat(record)
+    )
       return null;
-    }
     return {
       protocolVersion: QUERY_SERVICE_PROTOCOL_VERSION,
       sessionIdentity: record['sessionIdentity'],
@@ -799,6 +791,39 @@ export function readQueryServiceServerState(sessionDir: string): QueryServiceSer
   } catch {
     return null;
   }
+}
+
+function isQueryServiceStateSession(
+  record: Record<string, unknown>,
+  sessionDir: string,
+): record is Record<string, unknown> & Pick<QueryServiceServerState, 'protocolVersion' | 'sessionIdentity'> {
+  return (
+    record['protocolVersion'] === QUERY_SERVICE_PROTOCOL_VERSION &&
+    typeof record['sessionIdentity'] === 'string' &&
+    record['sessionIdentity'] === queryServiceSessionIdentity(sessionDir)
+  );
+}
+
+function isQueryServiceStateProcess(
+  record: Record<string, unknown>,
+  processIdentity: ReturnType<typeof parseProcessIdentity> | undefined,
+): record is Record<string, unknown> & Pick<QueryServiceServerState, 'pid'> {
+  return (
+    typeof record['pid'] === 'number' &&
+    Number.isSafeInteger(record['pid']) &&
+    record['pid'] > 0 &&
+    (record['processIdentity'] === undefined || Boolean(processIdentity && processIdentity.pid === record['pid']))
+  );
+}
+
+function isQueryServiceStateHeartbeat(
+  record: Record<string, unknown>,
+): record is Record<string, unknown> & Pick<QueryServiceServerState, 'generation' | 'heartbeatAtMs'> {
+  return (
+    typeof record['generation'] === 'string' &&
+    typeof record['heartbeatAtMs'] === 'number' &&
+    Number.isFinite(record['heartbeatAtMs'])
+  );
 }
 
 export function isQueryServiceServerStateUsable(state: QueryServiceServerState, nowMs = Date.now()): boolean {

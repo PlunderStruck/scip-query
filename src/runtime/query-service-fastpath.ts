@@ -218,9 +218,31 @@ async function runDependenceSliceFastPath(
   return true;
 }
 
-function queryNavigationFastPath(
+type NavigationFastPathInvocation = Exclude<
+  FastPathInvocation,
+  MethodsFastPathInvocation | DependenceSliceFastPathInvocation
+>;
+
+function navigationKindIn<Kind extends NavigationFastPathInvocation['kind']>(
+  invocation: NavigationFastPathInvocation,
+  kinds: readonly Kind[],
+): invocation is Extract<NavigationFastPathInvocation, { kind: Kind }> {
+  return kinds.includes(invocation.kind as Kind);
+}
+
+function queryNavigationFastPath(projectRoot: string, invocation: NavigationFastPathInvocation): FastPathOutput | null {
+  if (navigationKindIn(invocation, ['code', 'call-graph', 'system']))
+    return querySerializedNavigation(projectRoot, invocation);
+  if (navigationKindIn(invocation, ['files', 'members', 'file-dependencies', 'imported-by', 'refs', 'surface']))
+    return queryPagedNavigation(projectRoot, invocation);
+  if (navigationKindIn(invocation, ['hierarchy', 'by-kind', 'kind-counts', 'imports', 'unused-imports']))
+    return queryBoundedNavigation(projectRoot, invocation);
+  return queryDirectNavigation(projectRoot, invocation);
+}
+
+function querySerializedNavigation(
   projectRoot: string,
-  invocation: Exclude<FastPathInvocation, MethodsFastPathInvocation | DependenceSliceFastPathInvocation>,
+  invocation: Extract<NavigationFastPathInvocation, { kind: 'code' | 'call-graph' | 'system' }>,
 ): FastPathOutput | null {
   switch (invocation.kind) {
     case 'code':
@@ -228,6 +250,29 @@ function queryNavigationFastPath(
         tryCodeWithQueryService(projectRoot, invocation.selectors, invocation.options, { allowDefault: true }),
         'direct',
       );
+    case 'call-graph':
+      return serializedFastPathOutput(
+        trySemanticNeighborhoodWithQueryService(projectRoot, invocation.kind, invocation.symbolPattern, {
+          allowDefault: true,
+        }),
+        'paged',
+      );
+    case 'system':
+      return serializedFastPathOutput(
+        trySystemWithQueryService(projectRoot, invocation.modulePattern, { allowDefault: true }),
+        'paged',
+      );
+  }
+}
+
+function queryPagedNavigation(
+  projectRoot: string,
+  invocation: Extract<
+    NavigationFastPathInvocation,
+    { kind: 'files' | 'members' | 'file-dependencies' | 'imported-by' | 'refs' | 'surface' }
+  >,
+): FastPathOutput | null {
+  switch (invocation.kind) {
     case 'files':
       return jsonFastPathOutput(
         tryFilesWithQueryService(projectRoot, invocation.pattern, { allowDefault: true }),
@@ -251,6 +296,27 @@ function queryNavigationFastPath(
         tryImportedByWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true }),
         'paged',
       );
+    case 'refs':
+      return jsonFastPathOutput(
+        tryRefsWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true }),
+        'paged',
+      );
+    case 'surface':
+      return jsonFastPathOutput(
+        trySurfaceWithQueryService(projectRoot, invocation.modulePattern, { allowDefault: true }),
+        'paged',
+      );
+  }
+}
+
+function queryBoundedNavigation(
+  projectRoot: string,
+  invocation: Extract<
+    NavigationFastPathInvocation,
+    { kind: 'hierarchy' | 'by-kind' | 'kind-counts' | 'imports' | 'unused-imports' }
+  >,
+): FastPathOutput | null {
+  switch (invocation.kind) {
     case 'hierarchy':
       return jsonFastPathOutput(
         tryHierarchyWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true }),
@@ -263,18 +329,6 @@ function queryNavigationFastPath(
       );
     case 'kind-counts':
       return jsonFastPathOutput(tryKindCountsWithQueryService(projectRoot, { allowDefault: true }), 'bounded');
-    case 'refs':
-      return jsonFastPathOutput(
-        tryRefsWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true }),
-        'paged',
-      );
-    case 'call-graph':
-      return serializedFastPathOutput(
-        trySemanticNeighborhoodWithQueryService(projectRoot, invocation.kind, invocation.symbolPattern, {
-          allowDefault: true,
-        }),
-        'paged',
-      );
     case 'imports':
       return jsonFastPathOutput(
         tryImportsWithQueryService(projectRoot, invocation.filePattern, { allowDefault: true }),
@@ -285,16 +339,14 @@ function queryNavigationFastPath(
         tryUnusedImportsWithQueryService(projectRoot, invocation.filePattern, { allowDefault: true }),
         'bounded',
       );
-    case 'system':
-      return serializedFastPathOutput(
-        trySystemWithQueryService(projectRoot, invocation.modulePattern, { allowDefault: true }),
-        'paged',
-      );
-    case 'surface':
-      return jsonFastPathOutput(
-        trySurfaceWithQueryService(projectRoot, invocation.modulePattern, { allowDefault: true }),
-        'paged',
-      );
+  }
+}
+
+function queryDirectNavigation(
+  projectRoot: string,
+  invocation: Extract<NavigationFastPathInvocation, { kind: 'stats' | 'entrypoints' | 'source-search' | 'outline' }>,
+): FastPathOutput | null {
+  switch (invocation.kind) {
     case 'stats':
       return jsonFastPathOutput(tryStatsWithQueryService(projectRoot, { allowDefault: true }), 'direct');
     case 'entrypoints':
@@ -315,32 +367,32 @@ function queryNavigationFastPath(
   }
 }
 
-export function parseFastPathInvocation(argv: readonly string[]): FastPathInvocation | null {
-  if (argv[0] === 'search') return parseSourceSearchInvocation(argv);
-  if (argv[0] === 'outline') return parseOutlineInvocation(argv);
-  if (argv[0] === 'code') return parseCodeInvocation(argv);
-  if (argv[0] === 'entrypoints') return parseEntryPointsInvocation(argv);
-  if (argv[0] === 'files') return parseFilesInvocation(argv);
-  if (argv[0] === 'stats') return parseNoOperandInvocation(argv, 'stats');
-  if (argv[0] === 'kind-counts') return parseNoOperandInvocation(argv, 'kind-counts');
-  if (argv[0] === 'members') return parseSymbolQueryInvocation(argv, 'members');
-  if (argv[0] === 'methods') return parseSymbolQueryInvocation(argv, 'methods');
-  if (argv[0] === 'deps') return parseFileDependenciesInvocation(argv, 'outgoing');
-  if (argv[0] === 'rdeps') return parseFileDependenciesInvocation(argv, 'incoming');
-  if (argv[0] === 'imported-by') return parseImportedByInvocation(argv);
-  if (argv[0] === 'hierarchy') return parseHierarchyInvocation(argv);
-  if (argv[0] === 'by-kind') return parseByKindInvocation(argv);
-  if (argv[0] === 'refs') return parseRefsInvocation(argv);
+const FAST_PATH_PARSERS = new Map<string, (argv: readonly string[]) => FastPathInvocation | null>([
+  ['search', parseSourceSearchInvocation],
+  ['outline', parseOutlineInvocation],
+  ['code', parseCodeInvocation],
+  ['entrypoints', parseEntryPointsInvocation],
+  ['files', parseFilesInvocation],
+  ['stats', (argv) => parseNoOperandInvocation(argv, 'stats')],
+  ['kind-counts', (argv) => parseNoOperandInvocation(argv, 'kind-counts')],
+  ['members', (argv) => parseSymbolQueryInvocation(argv, 'members')],
+  ['methods', (argv) => parseSymbolQueryInvocation(argv, 'methods')],
+  ['deps', (argv) => parseFileDependenciesInvocation(argv, 'outgoing')],
+  ['rdeps', (argv) => parseFileDependenciesInvocation(argv, 'incoming')],
+  ['imported-by', parseImportedByInvocation],
+  ['hierarchy', parseHierarchyInvocation],
+  ['by-kind', parseByKindInvocation],
+  ['refs', parseRefsInvocation],
+  ['dependence-slice', parseDependenceSliceInvocation],
+  ['call-graph', parseSemanticNeighborhoodInvocation],
+  ['imports', parseImportsInvocation],
+  ['unused-imports', parseUnusedImportsInvocation],
+  ['system', parseSystemInvocation],
+  ['surface', parseSurfaceInvocation],
+]);
 
-  if (argv[0] === 'dependence-slice') return parseDependenceSliceInvocation(argv);
-  if (argv[0] === 'call-graph') {
-    return parseSemanticNeighborhoodInvocation(argv);
-  }
-  if (argv[0] === 'imports') return parseImportsInvocation(argv);
-  if (argv[0] === 'unused-imports') return parseUnusedImportsInvocation(argv);
-  if (argv[0] === 'system') return parseSystemInvocation(argv);
-  if (argv[0] === 'surface') return parseSurfaceInvocation(argv);
-  return null;
+export function parseFastPathInvocation(argv: readonly string[]): FastPathInvocation | null {
+  return FAST_PATH_PARSERS.get(argv[0])?.(argv) ?? null;
 }
 
 function parseSymbolQueryInvocation(
@@ -594,66 +646,91 @@ function parseEntryPointsInvocation(argv: readonly string[]): EntryPointsFastPat
   };
 }
 
+interface CodeInvocationState {
+  selectors: string[];
+  context: number;
+  members: CodeFileMemberMode;
+  session: boolean;
+  json: boolean;
+  resultOnly: boolean;
+  compact: boolean;
+}
+
+function applyCodeInvocationFlag(state: CodeInvocationState, arg: string): boolean {
+  switch (arg) {
+    case '--json':
+      state.json = true;
+      return true;
+    case '--result-only':
+      state.resultOnly = true;
+      return true;
+    case '--compact':
+      state.compact = true;
+      return true;
+    case '--no-session':
+      state.session = false;
+      return true;
+    default:
+      return false;
+  }
+}
+
+function applyCodeInvocationOption(state: CodeInvocationState, argv: readonly string[], index: number): number | null {
+  const arg = argv[index];
+  const contextOption = optionValue(argv, index, arg, '--context', '-C');
+  if (contextOption) {
+    const parsed = parseInteger(contextOption.value, 0);
+    if (parsed === null) return null;
+    state.context = parsed;
+    return contextOption.nextIndex;
+  }
+  const membersOption = optionValue(argv, index, arg, '--members');
+  if (membersOption) {
+    if (membersOption.value !== 'exported' && membersOption.value !== 'all') return null;
+    state.members = membersOption.value;
+    return membersOption.nextIndex;
+  }
+  if (arg.startsWith('-')) return null;
+  state.selectors.push(arg);
+  return index;
+}
+
+function validCodeInvocationState(state: CodeInvocationState): boolean {
+  return (
+    state.json &&
+    state.resultOnly &&
+    state.compact &&
+    state.selectors.length >= 1 &&
+    state.selectors.length <= SOURCE_INSPECTION_MAX_SELECTORS &&
+    !state.selectors.some((selector) => selector.length === 0)
+  );
+}
+
 function parseCodeInvocation(argv: readonly string[]): CodeFastPathInvocation | null {
-  const selectors: string[] = [];
-  let context = 0;
-  let members: CodeFileMemberMode = 'exported';
-  let session = true;
-  let json = false;
-  let resultOnly = false;
-  let compact = false;
+  const state: CodeInvocationState = {
+    selectors: [],
+    context: 0,
+    members: 'exported',
+    session: true,
+    json: false,
+    resultOnly: false,
+    compact: false,
+  };
 
   for (let index = 1; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--') {
-      selectors.push(...argv.slice(index + 1));
+      state.selectors.push(...argv.slice(index + 1));
       break;
     }
-    if (arg === '--json') {
-      json = true;
-      continue;
-    }
-    if (arg === '--result-only') {
-      resultOnly = true;
-      continue;
-    }
-    if (arg === '--compact') {
-      compact = true;
-      continue;
-    }
-    if (arg === '--no-session') {
-      session = false;
-      continue;
-    }
-    const contextOption = optionValue(argv, index, arg, '--context', '-C');
-    if (contextOption) {
-      const parsed = parseInteger(contextOption.value, 0);
-      if (parsed === null) return null;
-      context = parsed;
-      index = contextOption.nextIndex;
-      continue;
-    }
-    const membersOption = optionValue(argv, index, arg, '--members');
-    if (membersOption) {
-      if (membersOption.value !== 'exported' && membersOption.value !== 'all') return null;
-      members = membersOption.value;
-      index = membersOption.nextIndex;
-      continue;
-    }
-    if (arg.startsWith('-')) return null;
-    selectors.push(arg);
+    if (applyCodeInvocationFlag(state, arg)) continue;
+    const nextIndex = applyCodeInvocationOption(state, argv, index);
+    if (nextIndex === null) return null;
+    index = nextIndex;
   }
 
-  if (
-    !json ||
-    !resultOnly ||
-    !compact ||
-    selectors.length < 1 ||
-    selectors.length > SOURCE_INSPECTION_MAX_SELECTORS ||
-    selectors.some((selector) => selector.length === 0)
-  ) {
-    return null;
-  }
+  const { selectors, context, members, session } = state;
+  if (!validCodeInvocationState(state)) return null;
   return { kind: 'code', selectors, options: { context, members }, session };
 }
 

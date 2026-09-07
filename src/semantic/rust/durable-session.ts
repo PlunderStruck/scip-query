@@ -500,6 +500,50 @@ function ensureDurableRustSessionServer(
   throw new Error('Durable Rust semantic session helper did not become ready within 5s.');
 }
 
+type RustSessionStateNumbers = Pick<DurableRustSessionServerState, 'protocolVersion' | 'pid' | 'heartbeatAtMs'>;
+
+function validRustSessionStateNumbers(
+  parsed: Partial<DurableRustSessionServerState>,
+  sessionDir: string,
+): parsed is Partial<DurableRustSessionServerState> & RustSessionStateNumbers {
+  return (
+    typeof parsed.protocolVersion === 'number' &&
+    validRustSessionNamespace(parsed, sessionDir) &&
+    typeof parsed.pid === 'number' &&
+    typeof parsed.heartbeatAtMs === 'number'
+  );
+}
+
+function validRustSessionNamespace(parsed: Partial<DurableRustSessionServerState>, sessionDir: string): boolean {
+  return (
+    parsed.sessionIdentity === undefined ||
+    (typeof parsed.sessionIdentity === 'string' &&
+      parsed.sessionIdentity === durableRustMailboxSessionIdentity(sessionDir))
+  );
+}
+
+function validRustSessionStateOptions(parsed: Partial<DurableRustSessionServerState>): boolean {
+  return (
+    (parsed.busyUntilMs === undefined || typeof parsed.busyUntilMs === 'number') &&
+    (parsed.mailbox === undefined || isBoundedMailboxStatus(parsed.mailbox))
+  );
+}
+
+function materializeRustSessionServerState(
+  parsed: Partial<DurableRustSessionServerState> & RustSessionStateNumbers,
+  processIdentity: ReturnType<typeof parseProcessIdentity>,
+): DurableRustSessionServerState {
+  return {
+    protocolVersion: parsed.protocolVersion,
+    ...(parsed.sessionIdentity === undefined ? {} : { sessionIdentity: parsed.sessionIdentity }),
+    pid: parsed.pid,
+    ...(processIdentity ? { processIdentity } : {}),
+    heartbeatAtMs: parsed.heartbeatAtMs,
+    ...(parsed.busyUntilMs === undefined ? {} : { busyUntilMs: parsed.busyUntilMs }),
+    ...(parsed.mailbox === undefined ? {} : { mailbox: parsed.mailbox }),
+  };
+}
+
 export function readDurableRustSessionServerState(sessionDir: string): DurableRustSessionServerState | null {
   try {
     const parsed = JSON.parse(
@@ -508,29 +552,10 @@ export function readDurableRustSessionServerState(sessionDir: string): DurableRu
         inputKind: 'durable Rust session state',
       }),
     ) as Partial<DurableRustSessionServerState>;
-    if (
-      typeof parsed.protocolVersion !== 'number' ||
-      (parsed.sessionIdentity !== undefined &&
-        (typeof parsed.sessionIdentity !== 'string' ||
-          parsed.sessionIdentity !== durableRustMailboxSessionIdentity(sessionDir))) ||
-      typeof parsed.pid !== 'number' ||
-      typeof parsed.heartbeatAtMs !== 'number' ||
-      (parsed.busyUntilMs !== undefined && typeof parsed.busyUntilMs !== 'number') ||
-      (parsed.mailbox !== undefined && !isBoundedMailboxStatus(parsed.mailbox))
-    ) {
-      return null;
-    }
+    if (!validRustSessionStateNumbers(parsed, sessionDir) || !validRustSessionStateOptions(parsed)) return null;
     const processIdentity = parsed.processIdentity === undefined ? null : parseProcessIdentity(parsed.processIdentity);
     if (parsed.processIdentity !== undefined && (!processIdentity || processIdentity.pid !== parsed.pid)) return null;
-    return {
-      protocolVersion: parsed.protocolVersion,
-      ...(parsed.sessionIdentity === undefined ? {} : { sessionIdentity: parsed.sessionIdentity }),
-      pid: parsed.pid,
-      ...(processIdentity ? { processIdentity } : {}),
-      heartbeatAtMs: parsed.heartbeatAtMs,
-      ...(parsed.busyUntilMs === undefined ? {} : { busyUntilMs: parsed.busyUntilMs }),
-      ...(parsed.mailbox === undefined ? {} : { mailbox: parsed.mailbox }),
-    };
+    return materializeRustSessionServerState(parsed, processIdentity);
   } catch {
     return null;
   }

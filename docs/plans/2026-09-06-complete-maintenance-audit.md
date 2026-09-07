@@ -359,3 +359,68 @@ Target measurements (cyclomatic/cognitive):
 - `flattenRustUseTree` → 10/9 (`src/language-parsers/languages/rust.ts`).
 
 Next: prepared third wave of 45 ranked targets. Artifacts: `/tmp/complexity-wave2-{review,health,impact,metrics}.json`; verification logs use `/tmp/complexity-wave2-*.log`.
+
+
+### Third parallel complexity wave completed
+
+Completed 45 ranked targets across exclusive file assignments: root nine, each of three Astra-medium workers twelve. All selected targets and introduced helpers are at or below cyclomatic 10 / cognitive 15. No thresholds, source scope, suppressions or dependency policy changed.
+
+Third parallel complexity wave: 3199 full-suite tests / 358 files passed; build, source types and contract fixtures, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), public consumer compilation and skill links passed. Accounted source review resolves 45 findings with no introduced/worsened findings. Fresh source health: 563/563 eligible files, 12,938 functions, 477 complexity findings, no other finding rules. Fresh indexed diff impact: 154 changed symbols across 30 changed files; 20 affected files. No source-matched test coverage artifact; no CRAP claim.
+
+All 563 source files remain mapped and all 47 dependency rows declared. Fresh health reports no duplication, dependency cycles or configured architecture violations. The 477 remaining complexity findings are the next work queue; the historical maintenance inventory remains a different population.
+
+Validation included 244 focused tests in worker 1, 216 in worker 2 (including cold/warm semantic fragment caching and leaf-edit invalidation), 113 in worker 3 (including three new script regressions), and 208 in root; these counts overlap. Every lane received a second read-only diff review. Tests/lint/review caught and corrected a temporary API return newline error, a missed candidate-state reference and a semantic cache counter property typo. Newly introduced spread argument limits were removed from graph/residue collection. No agent benchmarks or release actions ran.
+
+The semantic cache-scan callback has the same anonymous name as two sibling callbacks; its 2/1 measurement is tied to the exact diff location (baseline 466/current 551) and span label, not a name-only pairing. The enclosing materializeSemanticReferenceBatch remains at its existing 16/20 and is still on the cleanup queue. The source review reports no uncomparable findings; some anonymous function records remain uncomparable. Indexed impact omits thirteen paths absent/excluded from its symbol index; the current-source scan accounts for eligible scripts.
+
+The VM remains on its previously verified installation from `931fe6c1`. The skill capture helper was refactored with preserved behavior and permissions, so the user's instructions do not require another reinstall.
+
+Target measurements (cyclomatic/cognitive):
+
+- `reportUnknownConfigKeys` → 2/1 (`src/runtime/config.ts`).
+- `buildHealthActions` → 1/0 (`src/queries/health/health-report.ts`).
+- `compareApiSurfaces` → 6/1 (`scripts/api-surface-contract.mjs`).
+- `createDeclarationResolver.resolveExport` → 7/6 (`scripts/api-surface-contract.mjs`).
+- `clusterOutputs` → 4/4 (`src/queries/quality/slice-cohesion.ts`).
+- `parseManifest` → 3/3 (`src/reindex/typescript-fragment-store.ts`).
+- `readQueryServiceServerState` → 10/7 (`src/runtime/query-service.ts`).
+- `parseSqliteGenerationReaderLease` → 8/6 (`src/storage/sqlite-generation.ts`).
+- `renderTimeStateWrites.visit` → 7/6 (`src/queries/quality/slice-cohesion.ts`).
+- `expandRuntimeBoundaryFrontier` → 4/3 (`src/queries/graph/system-map.ts`).
+- `systemMapTopologyRelationEndpoint` → 9/8 (`src/queries/graph/system-map.ts`).
+- `compareNeutralNextAnchors` → 2/1 (`src/queries/internal/next-anchor-candidates.ts`).
+- `buildInspection` → 1/0 (`src/queries/navigation/source-inspection.ts`).
+- `detectCoarseBoundaries` → 5/7 (`src/queries/graph/architecture.ts`).
+- `parseSkillCommands` → 7/6 (`scripts/render-command-reference.ts`).
+- `sourceBindingOwnerAtLine` → 7/6 (`src/queries/graph/system-map.ts`).
+- `collectRemovedReferences` → 4/3 (`src/queries/impact/newly-unreferenced-residue.ts`).
+- `newlyUnreferencedResidue` → 8/5 (`src/queries/impact/newly-unreferenced-residue.ts`).
+- `createExplorationTopology` → 9/4 (`src/queries/internal/exploration-topology.ts`).
+- `inferKindNumber` → 10/7 (`src/queries/navigation/by-kind.ts`).
+- `codeBatchText` → 1/0 (`src/runtime/query-commands/direct-navigation.ts`).
+- `parseFastPathInvocation` → 2/0 (`src/runtime/query-service-fastpath.ts`).
+- `queryNavigationFastPath` → 4/3 (`src/runtime/query-service-fastpath.ts`).
+- `decodeDurableRustMailboxRequest` → 4/3 (`src/semantic/rust/durable-session-protocol.ts`).
+- `isIndexedDefinition` → 4/1 (`src/semantic/rust/durable-session-protocol.ts`).
+- `readDurableRustSessionServerState` → 8/7 (`src/semantic/rust/durable-session.ts`).
+- `runRustAnalyzerReferenceBatch` → 6/3 (`src/semantic/rust/lsp-batch-worker.ts`).
+- `RustAnalyzerLspClient.handleData` → 7/8 (`src/semantic/rust/lsp-client.ts`).
+- `decodeSemanticAvailability` → 9/8 (`src/semantic/types.ts`).
+- `ensureEvidenceCommandFreshness` → 9/10 (`src/runtime/evidence-command-freshness.ts`).
+- `parseCodeInvocation` → 6/8 (`src/runtime/query-service-fastpath.ts`).
+- `claimBoundedMailboxRequestsUnlocked` → 7/10 (`src/storage/bounded-mailbox.ts`).
+- `loadGrammar` → 5/4 (`src/source/ast/ast-runtime.ts`).
+- `isStructuralEntryPath` → 10/9 (`src/source/primitives/file-kind.ts`).
+- `scoreLabels` → 3/2 (`scripts/score-detector-labels.ts`).
+- `parseScalaImportsAst` → 7/14 (`src/language-parsers/languages/jvm.ts`).
+- `runLeafCorpus` → 9/10 (`scripts/affected-set-shadow-contract.mjs`).
+- `parseCodexJsonl` → 5/3 (`scripts/codex-exploration-trial-core.mjs`).
+- `summarizeParsedJson` → 6/3 (`scripts/semantic-command-calibration.mjs`).
+- `main` → 5/4 (`skills/scip-explore/scripts/capture-evidence.mjs`).
+- `summarizeLanguageActivity` → 2/1 (`src/reindex/reindex-activity.ts`).
+- `collectLocalSqliteGenerations` → 6/6 (`src/reindex/sqlite-generation-store.ts`).
+- `readLease` → 5/3 (`src/runtime/repository-cache-lifecycle.ts`).
+- `collectSuppressionExclusions.walk` → 4/3 (`src/analysis/framework-patterns.ts`).
+- `materializeSemanticReferenceBatch.<callback:profileSpan:1>` → 2/1 (`src/semantic/shared-primitives.ts`).
+
+Next: prepared fourth wave of 45 ranked targets. Artifacts: `/tmp/complexity-wave3-{review,health,impact,metrics}.json`; verification logs use `/tmp/complexity-wave3-*.log`.

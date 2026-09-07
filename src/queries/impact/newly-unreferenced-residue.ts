@@ -110,45 +110,7 @@ export function newlyUnreferencedResidue(
     excludeRustTraitImplMembers: true,
     includeSuppressed: true,
   });
-  const definitionsByLeaf = definitionsGroupedByLeaf(definitions);
-  const unresolved = coverageState.unresolvedReferences;
-  const resolved = new Map<number, { definition: IndexedDefinition; evidence: ResidueChangeEvidence[] }>();
-
-  for (const removed of removedReferences) {
-    const candidates = definitionsByLeaf.get(removed.leaf) ?? [];
-    if (candidates.length !== 1) {
-      unresolved.push({
-        changedFile: removed.evidence.changedFile,
-        leaf: removed.leaf,
-        reason: candidates.length === 0 ? 'no-current-callable' : 'ambiguous-current-callable',
-      });
-      continue;
-    }
-    const definition = candidates[0]!;
-    const baseDefinitionPath = renamedFrom.get(definition.relativePath) ?? definition.relativePath;
-    if (
-      !pathsResolveSame(removed.basePath, baseDefinitionPath) &&
-      !removed.importedFrom.some((sourcePath) => pathsResolveSame(sourcePath, baseDefinitionPath))
-    ) {
-      unresolved.push({
-        changedFile: removed.evidence.changedFile,
-        leaf: removed.leaf,
-        reason: 'base-reference-not-attributed',
-      });
-      continue;
-    }
-    const baseDefinition = baseContentAt(baseDefinitionPath);
-    if (baseDefinition.state === 'unavailable') {
-      coverageState.omitted.push({ file: baseDefinitionPath, reason: baseDefinition.reason });
-      continue;
-    }
-    if (baseDefinition.state === 'absent' || !containsIdentifier(baseDefinition.content, removed.leaf)) {
-      continue;
-    }
-    const entry = resolved.get(definition.symbolId) ?? { definition, evidence: [] };
-    entry.evidence.push(removed.evidence);
-    resolved.set(definition.symbolId, entry);
-  }
+  const resolved = resolveRemovedReferences(removedReferences, definitions, renamedFrom, baseContentAt, coverageState);
 
   const resolvedDefinitions = [...resolved.values()].map((entry) => entry.definition);
   const callerMap = index.callerFileMap(resolvedDefinitions, {
@@ -193,6 +155,68 @@ export function newlyUnreferencedResidue(
   };
 }
 
+function resolveRemovedReferences(
+  removedReferences: readonly RemovedReference[],
+  definitions: readonly IndexedDefinition[],
+  renamedFrom: ReadonlyMap<string, string>,
+  baseContentAt: BaseContentResultReader,
+  coverageState: ReturnType<typeof coverageBuilder>,
+): Map<number, { definition: IndexedDefinition; evidence: ResidueChangeEvidence[] }> {
+  const definitionsByLeaf = definitionsGroupedByLeaf(definitions);
+  const unresolved = coverageState.unresolvedReferences;
+  const resolved = new Map<number, { definition: IndexedDefinition; evidence: ResidueChangeEvidence[] }>();
+
+  for (const removed of removedReferences) {
+    const attributed = attributedRemovedReference(removed, definitionsByLeaf, renamedFrom, unresolved);
+    if (!attributed) continue;
+    const { definition, baseDefinitionPath } = attributed;
+    const baseDefinition = baseContentAt(baseDefinitionPath);
+    if (baseDefinition.state === 'unavailable') {
+      coverageState.omitted.push({ file: baseDefinitionPath, reason: baseDefinition.reason });
+      continue;
+    }
+    if (baseDefinition.state === 'absent' || !containsIdentifier(baseDefinition.content, removed.leaf)) {
+      continue;
+    }
+    const entry = resolved.get(definition.symbolId) ?? { definition, evidence: [] };
+    entry.evidence.push(removed.evidence);
+    resolved.set(definition.symbolId, entry);
+  }
+
+  return resolved;
+}
+
+function attributedRemovedReference(
+  removed: RemovedReference,
+  definitionsByLeaf: ReturnType<typeof definitionsGroupedByLeaf>,
+  renamedFrom: ReadonlyMap<string, string>,
+  unresolved: ReturnType<typeof coverageBuilder>['unresolvedReferences'],
+): { definition: IndexedDefinition; baseDefinitionPath: string } | null {
+  const candidates = definitionsByLeaf.get(removed.leaf) ?? [];
+  if (candidates.length !== 1) {
+    unresolved.push({
+      changedFile: removed.evidence.changedFile,
+      leaf: removed.leaf,
+      reason: candidates.length === 0 ? 'no-current-callable' : 'ambiguous-current-callable',
+    });
+    return null;
+  }
+  const definition = candidates[0]!;
+  const baseDefinitionPath = renamedFrom.get(definition.relativePath) ?? definition.relativePath;
+  if (
+    !pathsResolveSame(removed.basePath, baseDefinitionPath) &&
+    !removed.importedFrom.some((sourcePath) => pathsResolveSame(sourcePath, baseDefinitionPath))
+  ) {
+    unresolved.push({
+      changedFile: removed.evidence.changedFile,
+      leaf: removed.leaf,
+      reason: 'base-reference-not-attributed',
+    });
+    return null;
+  }
+  return { definition, baseDefinitionPath };
+}
+
 function collectRemovedReferences(
   db: ScipDatabase,
   changedFiles: readonly string[],
@@ -202,74 +226,110 @@ function collectRemovedReferences(
 ): RemovedReference[] {
   const removed: RemovedReference[] = [];
   for (const currentPath of changedFiles) {
-    const basePath = renamedFrom.get(currentPath) ?? currentPath;
-    if (!detectAstLanguage(basePath) && !isVueSfcPath(basePath)) {
-      coverage.notApplicableFiles.push(currentPath);
-      continue;
-    }
-    const baseContent = baseContentAt(basePath);
-    if (baseContent.state === 'unavailable') {
-      coverage.omitted.push({ file: basePath, reason: baseContent.reason });
-      continue;
-    }
-    if (baseContent.state === 'absent') {
-      coverage.analyzedFiles.push(currentPath);
-      continue;
-    }
-    const baseFacts = sourceFactsFromText(db, basePath, baseContent.content);
-    if (!baseFacts.facts) {
-      coverage.omitted.push({
-        file: basePath,
-        reason: baseFacts.unavailable?.reason ?? 'source facts unavailable',
-      });
-      continue;
-    }
-    const currentAbsolute = resolve(db.config.projectRoot, currentPath);
-    const currentSource = existsSync(currentAbsolute) ? readProjectFileText(db.config.projectRoot, currentPath) : null;
-    const currentFacts =
-      currentSource === null
-        ? { facts: emptyFacts(baseFacts.facts) }
-        : sourceFactsFromText(db, currentPath, currentSource);
-    if (!currentFacts.facts) {
-      coverage.omitted.push({
-        file: currentPath,
-        reason: currentFacts.unavailable?.reason ?? 'source facts unavailable',
-      });
-      continue;
-    }
+    const fileReferences = removedReferencesForFile(
+      db,
+      currentPath,
+      renamedFrom.get(currentPath) ?? currentPath,
+      baseContentAt,
+      coverage,
+    );
+    for (const reference of fileReferences) removed.push(reference);
+  }
+  return removed;
+}
+
+function removedReferencesForFile(
+  db: ScipDatabase,
+  currentPath: string,
+  basePath: string,
+  baseContentAt: BaseContentResultReader,
+  coverage: ReturnType<typeof coverageBuilder>,
+): RemovedReference[] {
+  if (!detectAstLanguage(basePath) && !isVueSfcPath(basePath)) {
+    coverage.notApplicableFiles.push(currentPath);
+    return [];
+  }
+  const baseContent = baseContentAt(basePath);
+  if (baseContent.state === 'unavailable') {
+    coverage.omitted.push({ file: basePath, reason: baseContent.reason });
+    return [];
+  }
+  if (baseContent.state === 'absent') {
     coverage.analyzedFiles.push(currentPath);
-    const baseCounts = referenceCounts(baseFacts.facts);
-    const currentCounts = referenceCounts(currentFacts.facts);
-    const baseImportPaths = importPathsByLocalName(db, basePath, baseContent.content);
-    for (const [leaf, before] of baseCounts) {
-      const after = currentCounts.get(leaf) ?? { identifiers: 0, calls: 0 };
-      const removedCalls = Math.max(0, before.calls - after.calls);
-      const removedIdentifiers = Math.max(0, before.identifiers - after.identifiers);
-      if (removedCalls > 0) {
-        removed.push({
-          leaf,
-          basePath,
-          importedFrom: [...(baseImportPaths.get(leaf) ?? [])].sort(),
-          evidence: {
-            kind: 'removed-call',
-            changedFile: currentPath,
-            baseOccurrences: before.calls,
-            currentOccurrences: after.calls,
-          },
-        });
-      } else if (removedIdentifiers > 0) {
-        removed.push({
-          leaf,
-          basePath,
-          importedFrom: [...(baseImportPaths.get(leaf) ?? [])].sort(),
-          evidence: {
-            kind: 'removed-reference',
-            changedFile: currentPath,
-            baseOccurrences: before.identifiers,
-            currentOccurrences: after.identifiers,
-          },
-        });
-      }
+    return [];
+  }
+  const baseFacts = sourceFactsFromText(db, basePath, baseContent.content);
+  if (!baseFacts.facts) {
+    coverage.omitted.push({
+      file: basePath,
+      reason: baseFacts.unavailable?.reason ?? 'source facts unavailable',
+    });
+    return [];
+  }
+  const currentFacts = currentReferenceFacts(db, currentPath, baseFacts.facts);
+  if (!currentFacts.facts) {
+    coverage.omitted.push({
+      file: currentPath,
+      reason: currentFacts.unavailable?.reason ?? 'source facts unavailable',
+    });
+    return [];
+  }
+  coverage.analyzedFiles.push(currentPath);
+  return removedReferenceCounts(db, currentPath, basePath, baseContent.content, baseFacts.facts, currentFacts.facts);
+}
+
+function currentReferenceFacts(
+  db: ScipDatabase,
+  currentPath: string,
+  baseFacts: SourceFacts,
+): ReturnType<typeof sourceFactsFromText> {
+  const currentAbsolute = resolve(db.config.projectRoot, currentPath);
+  const currentSource = existsSync(currentAbsolute) ? readProjectFileText(db.config.projectRoot, currentPath) : null;
+  return currentSource === null
+    ? { facts: emptyFacts(baseFacts) }
+    : sourceFactsFromText(db, currentPath, currentSource);
+}
+
+function removedReferenceCounts(
+  db: ScipDatabase,
+  currentPath: string,
+  basePath: string,
+  baseContent: string,
+  baseFacts: SourceFacts,
+  currentFacts: SourceFacts,
+): RemovedReference[] {
+  const removed: RemovedReference[] = [];
+  const baseCounts = referenceCounts(baseFacts);
+  const currentCounts = referenceCounts(currentFacts);
+  const baseImportPaths = importPathsByLocalName(db, basePath, baseContent);
+  for (const [leaf, before] of baseCounts) {
+    const after = currentCounts.get(leaf) ?? { identifiers: 0, calls: 0 };
+    const removedCalls = Math.max(0, before.calls - after.calls);
+    const removedIdentifiers = Math.max(0, before.identifiers - after.identifiers);
+    if (removedCalls > 0) {
+      removed.push({
+        leaf,
+        basePath,
+        importedFrom: [...(baseImportPaths.get(leaf) ?? [])].sort(),
+        evidence: {
+          kind: 'removed-call',
+          changedFile: currentPath,
+          baseOccurrences: before.calls,
+          currentOccurrences: after.calls,
+        },
+      });
+    } else if (removedIdentifiers > 0) {
+      removed.push({
+        leaf,
+        basePath,
+        importedFrom: [...(baseImportPaths.get(leaf) ?? [])].sort(),
+        evidence: {
+          kind: 'removed-reference',
+          changedFile: currentPath,
+          baseOccurrences: before.identifiers,
+          currentOccurrences: after.identifiers,
+        },
+      });
     }
   }
   return removed;

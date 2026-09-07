@@ -128,48 +128,67 @@ export function decodeDurableRustMailboxRequest(
     nowMs: number;
   },
 ): DurableRustMailboxRequestDecodeResult {
-  if (!isRecordObject(value) || typeof value.id !== 'string' || !value.id) {
+  if (!isIdentifiedRustMailboxInput(value)) {
     return malformedRequest('Durable Rust semantic helper received an invalid mailbox request.');
   }
   if (value.id !== context.claimRequestId) {
     return malformedRequest('Durable Rust semantic request identity does not match its mailbox path.');
   }
 
-  if (value.protocolVersion === undefined) {
-    if (
-      value.mailboxVersion !== undefined ||
-      value.operationKey !== undefined ||
-      value.clientId !== undefined ||
-      value.enqueuedAtMs !== undefined ||
-      value.deadlineAtMs !== undefined ||
-      value.sessionIdentity !== undefined
-    ) {
-      return malformedRequest(
-        'Durable Rust semantic helper received a partially versioned request without a protocol version.',
-      );
-    }
-    const request = decodeDurableRustSessionRequest(value.request);
-    if (!request) {
-      return malformedRequest('Durable Rust semantic helper received an invalid legacy request kind or payload.');
-    }
-    const deadlineAtMs = context.nowMs + Math.max(1, request.timeoutMs);
-    return {
-      ok: true,
-      compatibility: 'legacy-v2',
-      value: {
-        mailboxVersion: BOUNDED_MAILBOX_VERSION,
-        protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
-        id: value.id,
-        operationKey: boundedMailboxOperationKey('rust-semantic-v2', { id: value.id, request }),
-        clientId: 'legacy-v2',
-        enqueuedAtMs: context.nowMs,
-        deadlineAtMs,
-        sessionIdentity: context.sessionIdentity,
-        request,
-      },
-    };
-  }
+  if (value.protocolVersion === undefined) return decodeLegacyRustMailboxRequest(value, context);
 
+  return decodeVersionedRustMailboxRequest(value, context);
+}
+
+type RustMailboxDecodeContext = Parameters<typeof decodeDurableRustMailboxRequest>[1];
+type IdentifiedRustMailboxInput = Record<string, unknown> & { id: string };
+
+function isIdentifiedRustMailboxInput(value: unknown): value is IdentifiedRustMailboxInput {
+  return isRecordObject(value) && typeof value.id === 'string' && !!value.id;
+}
+
+function decodeLegacyRustMailboxRequest(
+  value: IdentifiedRustMailboxInput,
+  context: RustMailboxDecodeContext,
+): DurableRustMailboxRequestDecodeResult {
+  if (
+    value.mailboxVersion !== undefined ||
+    value.operationKey !== undefined ||
+    value.clientId !== undefined ||
+    value.enqueuedAtMs !== undefined ||
+    value.deadlineAtMs !== undefined ||
+    value.sessionIdentity !== undefined
+  ) {
+    return malformedRequest(
+      'Durable Rust semantic helper received a partially versioned request without a protocol version.',
+    );
+  }
+  const request = decodeDurableRustSessionRequest(value.request);
+  if (!request) {
+    return malformedRequest('Durable Rust semantic helper received an invalid legacy request kind or payload.');
+  }
+  const deadlineAtMs = context.nowMs + Math.max(1, request.timeoutMs);
+  return {
+    ok: true,
+    compatibility: 'legacy-v2',
+    value: {
+      mailboxVersion: BOUNDED_MAILBOX_VERSION,
+      protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+      id: value.id,
+      operationKey: boundedMailboxOperationKey('rust-semantic-v2', { id: value.id, request }),
+      clientId: 'legacy-v2',
+      enqueuedAtMs: context.nowMs,
+      deadlineAtMs,
+      sessionIdentity: context.sessionIdentity,
+      request,
+    },
+  };
+}
+
+function decodeVersionedRustMailboxRequest(
+  value: IdentifiedRustMailboxInput,
+  context: RustMailboxDecodeContext,
+): DurableRustMailboxRequestDecodeResult {
   const correlation = decodeCurrentCorrelation(value, context);
   if (!correlation.ok) return correlation;
   if (value.protocolVersion !== DURABLE_RUST_SESSION_PROTOCOL_VERSION) {
@@ -479,24 +498,42 @@ function optionalDefinitionArray(value: unknown): boolean {
   return value === undefined || isIndexedDefinitionArray(value);
 }
 
-function isIndexedDefinition(value: unknown): value is IndexedDefinition {
+function validIndexedDefinitionLocation(value: Record<string, unknown>): boolean {
   return (
-    isRecordObject(value) &&
     isNonNegativeInteger(value.symbolId) &&
     isNonNegativeInteger(value.documentId) &&
     isNonNegativeInteger(value.startLine) &&
     optionalNonNegativeInteger(value.startChar) &&
     isNonNegativeInteger(value.endLine) &&
-    optionalNonNegativeInteger(value.endChar) &&
+    optionalNonNegativeInteger(value.endChar)
+  );
+}
+
+function validIndexedDefinitionIdentity(value: Record<string, unknown>): boolean {
+  return (
     typeof value.symbol === 'string' &&
     typeof value.relativePath === 'string' &&
     typeof value.leaf === 'string' &&
-    (value.parentTypeName === null || typeof value.parentTypeName === 'string') &&
+    (value.parentTypeName === null || typeof value.parentTypeName === 'string')
+  );
+}
+
+function validIndexedDefinitionMetadata(value: Record<string, unknown>): boolean {
+  return (
     typeof value.isFunctionLike === 'boolean' &&
     typeof value.isTypeLike === 'boolean' &&
     (value.kind === null || Number.isSafeInteger(value.kind)) &&
     (value.documentation === null || typeof value.documentation === 'string') &&
     (value.enclosingSymbol === null || typeof value.enclosingSymbol === 'string')
+  );
+}
+
+function isIndexedDefinition(value: unknown): value is IndexedDefinition {
+  return (
+    isRecordObject(value) &&
+    validIndexedDefinitionLocation(value) &&
+    validIndexedDefinitionIdentity(value) &&
+    validIndexedDefinitionMetadata(value)
   );
 }
 

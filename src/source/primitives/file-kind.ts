@@ -63,25 +63,25 @@ function isWorkerPath(normalized: string): boolean {
   return /(?:^|\/)[^/]*worker\.(?:ts|tsx|js|mjs|cjs|rs|py|go)$/.test(normalized);
 }
 
+const ENTRY_BASENAMES = new Set([
+  'cli.ts',
+  'cli.js',
+  'postinstall.ts',
+  'postinstall.js',
+  'main.ts',
+  'main.js',
+  'main.rs',
+  'main.go',
+  'main.py',
+  'build.rs',
+  'lib.rs',
+]);
+
 function isStructuralEntryPath(normalized: string): boolean {
   const segments = normalized.split('/');
   const basename = segments[segments.length - 1] ?? normalized;
 
-  if (
-    basename === 'cli.ts' ||
-    basename === 'cli.js' ||
-    basename === 'postinstall.ts' ||
-    basename === 'postinstall.js' ||
-    basename === 'main.ts' ||
-    basename === 'main.js' ||
-    basename === 'main.rs' ||
-    basename === 'main.go' ||
-    basename === 'main.py' ||
-    basename === 'build.rs' ||
-    basename === 'lib.rs'
-  ) {
-    return true;
-  }
+  if (ENTRY_BASENAMES.has(basename)) return true;
 
   if (/\bsrc\/bin\/[^/]+\.rs$/.test(normalized)) return true;
   if (/(?:^|\/)examples\/[^/]+\.rs$/.test(normalized)) return true;

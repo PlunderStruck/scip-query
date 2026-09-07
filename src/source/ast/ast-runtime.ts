@@ -59,61 +59,49 @@ export function probeAstLanguageRuntime(lang: AstLanguage): LanguageRuntimeProbe
 const grammarCache = new Map<AstLanguage, unknown>();
 const failedLanguages = new Set<AstLanguage>();
 
+const NATIVE_GRAMMAR_PACKAGES = new Map<AstLanguage, string>([
+  ['rust', 'tree-sitter-rust'],
+  ['javascript', 'tree-sitter-javascript'],
+  ['python', 'tree-sitter-python'],
+  ['java', 'tree-sitter-java'],
+  ['kotlin', 'tree-sitter-kotlin'],
+  ['scala', 'tree-sitter-scala'],
+  ['ruby', 'tree-sitter-ruby'],
+  ['c', 'tree-sitter-c'],
+  ['cpp', 'tree-sitter-cpp'],
+  ['csharp', 'tree-sitter-c-sharp'],
+]);
+
+function loadNativeGrammar(lang: AstLanguage): unknown {
+  const packageName = NATIVE_GRAMMAR_PACKAGES.get(lang);
+  if (packageName) return require(packageName);
+  switch (lang) {
+    case 'typescript':
+      return (require('tree-sitter-typescript') as { typescript: unknown }).typescript;
+    case 'tsx':
+      return (require('tree-sitter-typescript') as { tsx: unknown }).tsx;
+    case 'php':
+      return (require('tree-sitter-php') as { php: unknown }).php;
+    case 'vb': {
+      const module = require('tree-sitter-vb-dotnet') as { language?: unknown };
+      return module.language ?? module;
+    }
+    default:
+      return undefined;
+  }
+}
+
 function loadGrammar(lang: AstLanguage): unknown | null {
   if (failedLanguages.has(lang)) return null;
   const cached = grammarCache.get(lang);
   if (cached) return cached;
   let grammar: unknown;
   try {
-    switch (lang) {
-      case 'rust':
-        grammar = require('tree-sitter-rust');
-        break;
-      case 'typescript':
-        grammar = (require('tree-sitter-typescript') as { typescript: unknown }).typescript;
-        break;
-      case 'tsx':
-        grammar = (require('tree-sitter-typescript') as { tsx: unknown }).tsx;
-        break;
-      case 'javascript':
-        grammar = require('tree-sitter-javascript');
-        break;
-      case 'python':
-        grammar = require('tree-sitter-python');
-        break;
-      case 'java':
-        grammar = require('tree-sitter-java');
-        break;
-      case 'kotlin':
-        grammar = require('tree-sitter-kotlin');
-        break;
-      case 'scala':
-        grammar = require('tree-sitter-scala');
-        break;
-      case 'ruby':
-        grammar = require('tree-sitter-ruby');
-        break;
-      case 'c':
-        grammar = require('tree-sitter-c');
-        break;
-      case 'cpp':
-        grammar = require('tree-sitter-cpp');
-        break;
-      case 'csharp':
-        grammar = require('tree-sitter-c-sharp');
-        break;
-      case 'php':
-        grammar = (require('tree-sitter-php') as { php: unknown }).php;
-        break;
-      case 'vb': {
-        const module = require('tree-sitter-vb-dotnet') as { language?: unknown };
-        grammar = module.language ?? module;
-        break;
-      }
-      case 'clojure':
-        failedLanguages.add(lang);
-        return null;
+    if (lang === 'clojure') {
+      failedLanguages.add(lang);
+      return null;
     }
+    grammar = loadNativeGrammar(lang);
   } catch {
     failedLanguages.add(lang);
     return null;

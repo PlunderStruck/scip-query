@@ -196,61 +196,7 @@ export function compareApiSurfaces(previous, current) {
   for (const exportPath of [...entryPaths].sort()) {
     const before = previousEntries[exportPath];
     const after = currentEntries[exportPath];
-    if (!before && after) {
-      changes.push(change('additive', 'entry-added', exportPath, `Added public declaration path ${exportPath}.`));
-      continue;
-    }
-    if (before && !after) {
-      changes.push(change('breaking', 'entry-removed', exportPath, `Removed public declaration path ${exportPath}.`));
-      continue;
-    }
-    if (before.types !== after.types) {
-      changes.push(
-        change(
-          'breaking',
-          'declaration-target-changed',
-          exportPath,
-          `Declaration target changed from ${before.types} to ${after.types}.`,
-        ),
-      );
-    }
-
-    const previousExports = new Map(before.exports.map((item) => [item.name, item]));
-    const currentExports = new Map(after.exports.map((item) => [item.name, item]));
-    const names = new Set([...previousExports.keys(), ...currentExports.keys()]);
-    let changedNamedDeclaration = false;
-    for (const name of [...names].sort()) {
-      const oldExport = previousExports.get(name);
-      const newExport = currentExports.get(name);
-      if (!oldExport && newExport) {
-        changedNamedDeclaration = true;
-        changes.push(change('additive', 'export-added', `${exportPath}:${name}`, `Added export ${name}.`));
-      } else if (oldExport && !newExport) {
-        changedNamedDeclaration = true;
-        changes.push(change('breaking', 'export-removed', `${exportPath}:${name}`, `Removed export ${name}.`));
-      } else if (oldExport && newExport && stableJson(oldExport) !== stableJson(newExport)) {
-        changedNamedDeclaration = true;
-        const classification = classifySignatureChange(oldExport.signature, newExport.signature);
-        changes.push(
-          change(
-            classification,
-            'signature-changed',
-            `${exportPath}:${name}`,
-            `${name} changed from ${oneLine(oldExport.signature)} to ${oneLine(newExport.signature)}.`,
-          ),
-        );
-      }
-    }
-    if (!changedNamedDeclaration && before.declaration !== after.declaration) {
-      changes.push(
-        change(
-          'uncertain',
-          'entry-declaration-changed',
-          exportPath,
-          `Referenced declarations changed for ${exportPath}; review their variance and runtime meaning.`,
-        ),
-      );
-    }
+    compareApiEntry(before, after, exportPath, changes);
   }
 
   changes.push(
@@ -261,6 +207,73 @@ export function compareApiSurfaces(previous, current) {
     classification: highestAutomaticClassification(changes),
     changes,
   };
+}
+
+function compareApiEntry(before, after, exportPath, changes) {
+  if (!before && after) {
+    changes.push(change('additive', 'entry-added', exportPath, `Added public declaration path ${exportPath}.`));
+    return;
+  }
+  if (before && !after) {
+    changes.push(change('breaking', 'entry-removed', exportPath, `Removed public declaration path ${exportPath}.`));
+    return;
+  }
+  if (before.types !== after.types) {
+    changes.push(
+      change(
+        'breaking',
+        'declaration-target-changed',
+        exportPath,
+        `Declaration target changed from ${before.types} to ${after.types}.`,
+      ),
+    );
+  }
+
+  const changedNamedDeclaration = compareNamedApiExports(before.exports, after.exports, exportPath, changes);
+  if (!changedNamedDeclaration && before.declaration !== after.declaration) {
+    changes.push(
+      change(
+        'uncertain',
+        'entry-declaration-changed',
+        exportPath,
+        `Referenced declarations changed for ${exportPath}; review their variance and runtime meaning.`,
+      ),
+    );
+  }
+}
+
+function compareNamedApiExports(before, after, exportPath, changes) {
+  const previousExports = new Map(before.map((item) => [item.name, item]));
+  const currentExports = new Map(after.map((item) => [item.name, item]));
+  const names = new Set([...previousExports.keys(), ...currentExports.keys()]);
+  let changedNamedDeclaration = false;
+  for (const name of [...names].sort()) {
+    const oldExport = previousExports.get(name);
+    const newExport = currentExports.get(name);
+    const difference = compareNamedApiExport(oldExport, newExport, exportPath, name);
+    if (difference) {
+      changedNamedDeclaration = true;
+      changes.push(difference);
+    }
+  }
+  return changedNamedDeclaration;
+}
+
+function compareNamedApiExport(oldExport, newExport, exportPath, name) {
+  if (!oldExport && newExport) {
+    return change('additive', 'export-added', `${exportPath}:${name}`, `Added export ${name}.`);
+  } else if (oldExport && !newExport) {
+    return change('breaking', 'export-removed', `${exportPath}:${name}`, `Removed export ${name}.`);
+  } else if (oldExport && newExport && stableJson(oldExport) !== stableJson(newExport)) {
+    const classification = classifySignatureChange(oldExport.signature, newExport.signature);
+    return change(
+      classification,
+      'signature-changed',
+      `${exportPath}:${name}`,
+      `${name} changed from ${oneLine(oldExport.signature)} to ${oneLine(newExport.signature)}.`,
+    );
+  }
+  return null;
 }
 
 export function checkApiContract({
@@ -568,17 +581,7 @@ function createDeclarationResolver() {
     visited.add(cacheKey);
     if (!existsSync(declarationPath)) return null;
 
-    let sourceFile = sourceCache.get(declarationPath);
-    if (!sourceFile) {
-      sourceFile = ts.createSourceFile(
-        declarationPath,
-        readFileSync(declarationPath, 'utf8'),
-        ts.ScriptTarget.Latest,
-        true,
-        ts.ScriptKind.TS,
-      );
-      sourceCache.set(declarationPath, sourceFile);
-    }
+    const sourceFile = cachedDeclarationSource(declarationPath, sourceCache);
 
     const declarations = declarationStatementsByName(sourceFile);
     const imports = importBindingDetailsByName(sourceFile);
@@ -592,31 +595,10 @@ function createDeclarationResolver() {
     }
 
     if (!resolved) {
-      for (const statement of sourceFile.statements) {
-        if (
-          !ts.isExportDeclaration(statement) ||
-          !statement.exportClause ||
-          !ts.isNamedExports(statement.exportClause)
-        ) {
-          continue;
-        }
-        const element = statement.exportClause.elements.find((item) => item.name.text === exportName);
-        if (!element) continue;
-        const localName = element.propertyName?.text ?? element.name.text;
-        if (statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)) {
-          resolved = resolveExport(declarationPath, statement.moduleSpecifier.text, localName, new Set(visited));
-        } else {
-          resolved =
-            declarationResult(declarations.get(localName), sourceFile) ??
-            resolveImportedBinding(declarationPath, imports.get(localName), (nestedFile, nestedModule, nestedName) =>
-              resolveExport(nestedFile, nestedModule, nestedName, new Set(visited)),
-            );
-        }
-        if (resolved) {
-          if (statement.isTypeOnly || element.isTypeOnly) resolved = { ...resolved, kind: 'type' };
-          break;
-        }
-      }
+      resolved = resolveNamedDeclarationExport(
+        { declarationPath, sourceFile, declarations, imports, exportName },
+        (nestedFile, nestedModule, nestedName) => resolveExport(nestedFile, nestedModule, nestedName, new Set(visited)),
+      );
     }
 
     resultCache.set(cacheKey, resolved);
@@ -624,6 +606,52 @@ function createDeclarationResolver() {
   }
 
   return resolveExport;
+}
+
+function cachedDeclarationSource(declarationPath, sourceCache) {
+  let sourceFile = sourceCache.get(declarationPath);
+  if (!sourceFile) {
+    sourceFile = ts.createSourceFile(
+      declarationPath,
+      readFileSync(declarationPath, 'utf8'),
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    sourceCache.set(declarationPath, sourceFile);
+  }
+
+  return sourceFile;
+}
+
+function resolveNamedDeclarationExport(context, resolveNested) {
+  const { sourceFile, exportName } = context;
+  for (const statement of sourceFile.statements) {
+    if (!ts.isExportDeclaration(statement) || !statement.exportClause || !ts.isNamedExports(statement.exportClause)) {
+      continue;
+    }
+    const element = statement.exportClause.elements.find((item) => item.name.text === exportName);
+    if (!element) continue;
+    const localName = element.propertyName?.text ?? element.name.text;
+    let resolved = resolveNamedDeclarationElement(statement, localName, context, resolveNested);
+    if (resolved) {
+      if (statement.isTypeOnly || element.isTypeOnly) resolved = { ...resolved, kind: 'type' };
+      return resolved;
+    }
+  }
+  return null;
+}
+
+function resolveNamedDeclarationElement(statement, localName, context, resolveNested) {
+  const { declarationPath, declarations, imports, sourceFile } = context;
+  if (statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)) {
+    return resolveNested(declarationPath, statement.moduleSpecifier.text, localName);
+  } else {
+    return (
+      declarationResult(declarations.get(localName), sourceFile) ??
+      resolveImportedBinding(declarationPath, imports.get(localName), resolveNested)
+    );
+  }
 }
 
 function resolveImportedBinding(fromFile, detail, resolveExport) {

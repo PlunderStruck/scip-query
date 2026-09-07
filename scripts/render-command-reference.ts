@@ -91,8 +91,52 @@ function writeSkillCommandBlocks(skillsRoot: string): void {
 }
 
 export function parseSkillCommands(raw: string, sourceLabel: string): SkillCommandEntry[] {
+  const section = skillCommandSection(raw);
+  if (!section) return [];
+  const { lines, commandIndent } = section;
+  const entryIndent = ' '.repeat(commandIndent + 2);
+  const propertyIndent = ' '.repeat(commandIndent + 4);
+  const entries: SkillCommandEntry[] = [];
+  let current: Partial<SkillCommandEntry> | null = null;
+  for (const line of lines) {
+    const lineIndent = line.match(/^\s*/)?.[0].length ?? 0;
+    if (line.trim().length > 0 && lineIndent <= commandIndent) break;
+    current = parseSkillCommandLine(line, entryIndent, propertyIndent, current, entries, sourceLabel);
+  }
+  if (current?.template) entries.push(finishSkillCommandEntry(current, sourceLabel));
+  return entries;
+}
+
+function parseSkillCommandLine(
+  line: string,
+  entryIndent: string,
+  propertyIndent: string,
+  current: Partial<SkillCommandEntry> | null,
+  entries: SkillCommandEntry[],
+  sourceLabel: string,
+): Partial<SkillCommandEntry> | null {
+  // Quote style is not ours to control here: `npm run format` (prettier's
+  // YAML formatter) rewrites frontmatter string quoting per-line — single
+  // quotes by default, double only when the value itself contains an
+  // apostrophe (e.g. "the model's Next relation"). Both quote styles must
+  // parse, or a plain `prettier --write` silently empties a skill's
+  // commands list (this once broke a routed TLA+ skill preview row).
+  const templateMatch = line.match(new RegExp(`^${entryIndent}- template:\\s*(?:"(.*)"|'(.*)')\\s*$`));
+  const whenMatch = line.match(new RegExp(`^${propertyIndent}when:\\s*(?:"(.*)"|'(.*)')\\s*$`));
+  if (templateMatch) {
+    if (current?.template) entries.push(finishSkillCommandEntry(current, sourceLabel));
+    return { template: templateMatch[1] ?? templateMatch[2] };
+  } else if (whenMatch && current) {
+    current.when = whenMatch[1] ?? whenMatch[2];
+  } else if (line.trim().length > 0) {
+    throw new Error(`${sourceLabel}: malformed commands frontmatter line: ${line.trim()}`);
+  }
+  return current;
+}
+
+function skillCommandSection(raw: string): { lines: string[]; commandIndent: number } | null {
   const frontmatterMatch = raw.match(/^---\n([\s\S]*?)\n---/);
-  if (!frontmatterMatch) return [];
+  if (!frontmatterMatch) return null;
   const frontmatter = frontmatterMatch[1] ?? '';
   const lines = frontmatter.split('\n');
   const topLevelStart = lines.findIndex((line) => /^commands:\s*$/.test(line));
@@ -100,37 +144,11 @@ export function parseSkillCommands(raw: string, sourceLabel: string): SkillComma
   const metadataCommandsStart =
     metadataStart === -1
       ? -1
-      : lines.findIndex((line, index) => index > metadataStart && /^  commands:\s*$/.test(line));
+      : lines.findIndex((line, index) => index > metadataStart && /^ {2}commands:\s*$/.test(line));
   const startIndex = topLevelStart !== -1 ? topLevelStart : metadataCommandsStart;
-  if (startIndex === -1) return [];
+  if (startIndex === -1) return null;
   const commandIndent = lines[startIndex]?.match(/^\s*/)?.[0].length ?? 0;
-  const entryIndent = ' '.repeat(commandIndent + 2);
-  const propertyIndent = ' '.repeat(commandIndent + 4);
-
-  const entries: SkillCommandEntry[] = [];
-  let current: Partial<SkillCommandEntry> | null = null;
-  for (const line of lines.slice(startIndex + 1)) {
-    const lineIndent = line.match(/^\s*/)?.[0].length ?? 0;
-    if (line.trim().length > 0 && lineIndent <= commandIndent) break;
-    // Quote style is not ours to control here: `npm run format` (prettier's
-    // YAML formatter) rewrites frontmatter string quoting per-line — single
-    // quotes by default, double only when the value itself contains an
-    // apostrophe (e.g. "the model's Next relation"). Both quote styles must
-    // parse, or a plain `prettier --write` silently empties a skill's
-    // commands list (this once broke a routed TLA+ skill preview row).
-    const templateMatch = line.match(new RegExp(`^${entryIndent}- template:\\s*(?:"(.*)"|'(.*)')\\s*$`));
-    const whenMatch = line.match(new RegExp(`^${propertyIndent}when:\\s*(?:"(.*)"|'(.*)')\\s*$`));
-    if (templateMatch) {
-      if (current?.template) entries.push(finishSkillCommandEntry(current, sourceLabel));
-      current = { template: templateMatch[1] ?? templateMatch[2] };
-    } else if (whenMatch && current) {
-      current.when = whenMatch[1] ?? whenMatch[2];
-    } else if (line.trim().length > 0) {
-      throw new Error(`${sourceLabel}: malformed commands frontmatter line: ${line.trim()}`);
-    }
-  }
-  if (current?.template) entries.push(finishSkillCommandEntry(current, sourceLabel));
-  return entries;
+  return { lines: lines.slice(startIndex + 1), commandIndent };
 }
 
 function finishSkillCommandEntry(entry: Partial<SkillCommandEntry>, sourceLabel: string): SkillCommandEntry {

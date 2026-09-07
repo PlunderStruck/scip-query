@@ -30,15 +30,27 @@ function main() {
   const receiptPath = join(evidenceRoot, `${id}.receipt.json`);
   if (existsSync(rawPath) || existsSync(receiptPath)) fail(`Evidence id already exists: ${id}`);
 
+  validateCaptureOutputArguments(queryArgs);
+
+  const priorReceipts = readPriorReceipts(evidenceRoot);
+  const reusableReceipts = receiptsForLatestObservation(priorReceipts);
+  const request = requestIdentity(queryArgs);
+  if (emitReusableCapture(id, request, reusableReceipts)) return;
+
+  const exportReceipt = executeCaptureQuery(queryArgs, rawPath);
+  const envelope = JSON.parse(readFileSync(rawPath, 'utf8'));
+  persistCaptureProjection({ id, request, rawPath, receiptPath, exportReceipt, envelope, priorReceipts });
+}
+
+function validateCaptureOutputArguments(queryArgs) {
   for (const argument of queryArgs) {
     if (FORBIDDEN_OUTPUT_ARGUMENTS.some((flag) => argument === flag || argument.startsWith(`${flag}=`))) {
       fail(`The capture wrapper owns ${argument.split('=', 1)[0]}; remove it from the scip-query arguments.`);
     }
   }
+}
 
-  const priorReceipts = readPriorReceipts(evidenceRoot);
-  const reusableReceipts = receiptsForLatestObservation(priorReceipts);
-  const request = requestIdentity(queryArgs);
+function emitReusableCapture(id, request, reusableReceipts) {
   const reuse = findReusableObservation(request, reusableReceipts);
   if (reuse) {
     process.stdout.write(
@@ -53,7 +65,7 @@ function main() {
         recovery: 'Reuse the named receipt ids in the ledger; do not rerun this observation.',
       })}\n`,
     );
-    return;
+    return true;
   }
 
   const overlap = findOverlappingCodeRanges(request, reusableReceipts);
@@ -72,9 +84,13 @@ function main() {
       })}\n`,
     );
     process.exitCode = 2;
-    return;
+    return true;
   }
 
+  return false;
+}
+
+function executeCaptureQuery(queryArgs, rawPath) {
   const execution = spawnSync('scip-query', [...queryArgs, '--json', '--json-output', rawPath], {
     cwd: process.cwd(),
     env: process.env,
@@ -90,7 +106,10 @@ function main() {
   if (!isAbsolute(exportReceipt.path) || resolve(exportReceipt.path) !== rawPath) {
     fail('scip-query wrote the evidence packet to an unexpected path.');
   }
-  const envelope = JSON.parse(readFileSync(rawPath, 'utf8'));
+  return exportReceipt;
+}
+
+function persistCaptureProjection({ id, request, rawPath, receiptPath, exportReceipt, envelope, priorReceipts }) {
   const projection = projectCommandResult(envelope);
   if (projection.status !== 'complete') {
     const refusal = {

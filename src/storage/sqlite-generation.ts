@@ -234,21 +234,7 @@ function parseSqliteGenerationReaderLease(value: unknown): SqliteGenerationReade
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const lease = value as Partial<SqliteGenerationReaderLease>;
   const processIdentity = lease.processIdentity === undefined ? null : parseProcessIdentity(lease.processIdentity);
-  if (
-    lease.version !== 1 ||
-    typeof lease.token !== 'string' ||
-    lease.token.trim() === '' ||
-    typeof lease.generationIdentity !== 'string' ||
-    !/^[a-f0-9]{64}$/.test(lease.generationIdentity) ||
-    typeof lease.pid !== 'number' ||
-    !Number.isSafeInteger(lease.pid) ||
-    lease.pid <= 0 ||
-    typeof lease.acquiredAt !== 'string' ||
-    !Number.isFinite(Date.parse(lease.acquiredAt)) ||
-    (lease.processIdentity !== undefined && (!processIdentity || processIdentity.pid !== lease.pid))
-  ) {
-    return null;
-  }
+  if (!isReaderLeaseGeneration(lease) || !isReaderLeaseAcquisition(lease, processIdentity)) return null;
   return {
     version: 1,
     token: lease.token,
@@ -257,6 +243,33 @@ function parseSqliteGenerationReaderLease(value: unknown): SqliteGenerationReade
     ...(processIdentity ? { processIdentity } : {}),
     acquiredAt: lease.acquiredAt,
   };
+}
+
+function isReaderLeaseGeneration(
+  lease: Partial<SqliteGenerationReaderLease>,
+): lease is Partial<SqliteGenerationReaderLease> &
+  Pick<SqliteGenerationReaderLease, 'version' | 'token' | 'generationIdentity'> {
+  return (
+    lease.version === 1 &&
+    typeof lease.token === 'string' &&
+    lease.token.trim() !== '' &&
+    typeof lease.generationIdentity === 'string' &&
+    /^[a-f0-9]{64}$/.test(lease.generationIdentity)
+  );
+}
+
+function isReaderLeaseAcquisition(
+  lease: Partial<SqliteGenerationReaderLease>,
+  processIdentity: ReturnType<typeof parseProcessIdentity>,
+): lease is Partial<SqliteGenerationReaderLease> & Pick<SqliteGenerationReaderLease, 'pid' | 'acquiredAt'> {
+  return (
+    typeof lease.pid === 'number' &&
+    Number.isSafeInteger(lease.pid) &&
+    lease.pid > 0 &&
+    typeof lease.acquiredAt === 'string' &&
+    Number.isFinite(Date.parse(lease.acquiredAt)) &&
+    (lease.processIdentity === undefined || Boolean(processIdentity && processIdentity.pid === lease.pid))
+  );
 }
 
 function readerLeaseIsLive(

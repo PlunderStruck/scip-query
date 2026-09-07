@@ -402,6 +402,81 @@ export function pollBoundedMailboxRequests(
   return claimBoundedMailboxRequests(paths, options);
 }
 
+interface MailboxClaimPublication {
+  paths: BoundedMailboxPaths;
+  ownerId: string;
+  ownerDirectory: string;
+  nowMs: number;
+  limits: BoundedMailboxLimits;
+  ownerDirectorySync: DirectorySyncStatus;
+  durability: AtomicFileDurability;
+  onClaimStage: ((stage: BoundedMailboxClaimStage) => void) | undefined;
+}
+
+function publishMailboxCandidate(
+  candidate: PendingCandidate,
+  publication: MailboxClaimPublication,
+): BoundedMailboxClaim | null {
+  const {
+    paths,
+    ownerId: _ownerId,
+    ownerDirectory,
+    nowMs,
+    limits,
+    ownerDirectorySync,
+    durability,
+    onClaimStage,
+  } = publication;
+  const responsePath = join(paths.responseDir, `${candidate.header.id}.json`);
+  if (existsSync(responsePath)) {
+    rmSync(candidate.path, { force: true });
+    return null;
+  }
+  const claimExpiresAtMs = Math.max(nowMs + limits.claimLeaseMs, (candidate.header.deadlineAtMs ?? nowMs) + 5_000);
+  const claimFile = `${encodeSegment(candidate.originalFile)}.${claimExpiresAtMs}.claim`;
+  const claimPath = join(ownerDirectory, claimFile);
+  try {
+    renameSync(candidate.path, claimPath);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT' || code === 'EEXIST') return null;
+    throw error;
+  }
+  onClaimStage?.('after-claim-renamed');
+  const sourceDirectorySync =
+    durability === 'durable' ? syncDirectoryDurable(dirname(candidate.path)) : 'not-requested';
+  onClaimStage?.('after-source-directory-synced');
+  const destinationDirectorySync = durability === 'durable' ? syncDirectoryDurable(ownerDirectory) : 'not-requested';
+  onClaimStage?.('after-destination-directory-synced');
+  const directorySync = mergeDirectorySyncStatus(ownerDirectorySync, sourceDirectorySync, destinationDirectorySync);
+  return materializePublishedMailboxClaim(candidate, publication, claimPath, claimExpiresAtMs, directorySync);
+}
+
+function materializePublishedMailboxClaim(
+  candidate: PendingCandidate,
+  publication: MailboxClaimPublication,
+  claimPath: string,
+  claimExpiresAtMs: number,
+  directorySync: DirectorySyncStatus,
+): BoundedMailboxClaim {
+  const { ownerId, nowMs } = publication;
+  return {
+    requestId: candidate.header.id,
+    ownerId,
+    path: claimPath,
+    originalFile: candidate.originalFile,
+    claimedAtMs: nowMs,
+    claimExpiresAtMs,
+    byteLength: candidate.byteLength,
+    ...(candidate.header.operationKey ? { operationKey: candidate.header.operationKey } : {}),
+    ...(candidate.header.clientId ? { clientId: candidate.header.clientId } : {}),
+    ...(candidate.header.enqueuedAtMs === undefined ? {} : { enqueuedAtMs: candidate.header.enqueuedAtMs }),
+    ...(candidate.header.deadlineAtMs === undefined ? {} : { deadlineAtMs: candidate.header.deadlineAtMs }),
+    legacy: candidate.legacy,
+    directorySync,
+  };
+}
+
 function claimBoundedMailboxRequestsUnlocked(
   paths: BoundedMailboxPaths,
   ownerId: string,
@@ -435,46 +510,21 @@ function claimBoundedMailboxRequestsUnlocked(
     ensureMailboxOwnerRecord(ownerDirectory, ownerId, owner, durability);
     onClaimStage?.('after-owner-record-published');
   }
+  const publication: MailboxClaimPublication = {
+    paths,
+    ownerId,
+    ownerDirectory,
+    nowMs,
+    limits,
+    ownerDirectorySync,
+    durability,
+    onClaimStage,
+  };
   const claims: BoundedMailboxClaim[] = [];
   for (const candidate of candidates) {
     if (claims.length >= limits.maxBatch) break;
-    const responsePath = join(paths.responseDir, `${candidate.header.id}.json`);
-    if (existsSync(responsePath)) {
-      rmSync(candidate.path, { force: true });
-      continue;
-    }
-    const claimExpiresAtMs = Math.max(nowMs + limits.claimLeaseMs, (candidate.header.deadlineAtMs ?? nowMs) + 5_000);
-    const claimFile = `${encodeSegment(candidate.originalFile)}.${claimExpiresAtMs}.claim`;
-    const claimPath = join(ownerDirectory, claimFile);
-    try {
-      renameSync(candidate.path, claimPath);
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === 'ENOENT' || code === 'EEXIST') continue;
-      throw error;
-    }
-    onClaimStage?.('after-claim-renamed');
-    const sourceDirectorySync =
-      durability === 'durable' ? syncDirectoryDurable(dirname(candidate.path)) : 'not-requested';
-    onClaimStage?.('after-source-directory-synced');
-    const destinationDirectorySync = durability === 'durable' ? syncDirectoryDurable(ownerDirectory) : 'not-requested';
-    onClaimStage?.('after-destination-directory-synced');
-    const directorySync = mergeDirectorySyncStatus(ownerDirectorySync, sourceDirectorySync, destinationDirectorySync);
-    claims.push({
-      requestId: candidate.header.id,
-      ownerId,
-      path: claimPath,
-      originalFile: candidate.originalFile,
-      claimedAtMs: nowMs,
-      claimExpiresAtMs,
-      byteLength: candidate.byteLength,
-      ...(candidate.header.operationKey ? { operationKey: candidate.header.operationKey } : {}),
-      ...(candidate.header.clientId ? { clientId: candidate.header.clientId } : {}),
-      ...(candidate.header.enqueuedAtMs === undefined ? {} : { enqueuedAtMs: candidate.header.enqueuedAtMs }),
-      ...(candidate.header.deadlineAtMs === undefined ? {} : { deadlineAtMs: candidate.header.deadlineAtMs }),
-      legacy: candidate.legacy,
-      directorySync,
-    });
+    const claim = publishMailboxCandidate(candidate, publication);
+    if (claim) claims.push(claim);
   }
   return claims;
 }

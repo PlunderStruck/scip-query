@@ -127,39 +127,11 @@ export function scoreLabels(labelSet: DetectorLabelSet, dump: unknown): LabelSco
   // finding) and `direct | signal` (direct is the finding, signal the demoted
   // review lead). When a dump carries any `direct` row, its `signal` rows are
   // the demoted ones.
-  const directVocabulary = rows.some((row) => row['actionTier'] === 'direct');
-  const counted = labelSet.countedTiers ? new Set(labelSet.countedTiers) : null;
-  const tiers = new Map<string, 'signal' | 'support'>();
-  for (const row of rows) {
-    const id = rowIdentity(labelSet.identity, row);
-    if (!id) continue;
-    const actionTier = row['actionTier'];
-    const demoted = counted
-      ? typeof actionTier === 'string' && !counted.has(actionTier)
-      : actionTier === 'support' || (directVocabulary && actionTier === 'signal');
-    const tier = demoted ? 'support' : 'signal';
-    if (tiers.get(id) !== 'signal') tiers.set(id, tier);
-  }
-  const present: Record<LabelVerdict, number> = { true: 0, false: 0, uncertain: 0 };
-  const demoted: Record<LabelVerdict, number> = { true: 0, false: 0, uncertain: 0 };
-  const absent: Record<LabelVerdict, number> = { true: 0, false: 0, uncertain: 0 };
-  const missingTrue: DetectorLabel[] = [];
-  const retainedFalse: DetectorLabel[] = [];
-  const labeledIds = new Set<string>();
-  for (const label of labelSet.labels) {
-    labeledIds.add(label.id);
-    const tier = tiers.get(label.id);
-    if (tier === 'signal') {
-      present[label.verdict] += 1;
-      if (label.verdict === 'false') retainedFalse.push(label);
-    } else if (tier === 'support') {
-      demoted[label.verdict] += 1;
-      if (label.verdict === 'true') missingTrue.push(label);
-    } else {
-      absent[label.verdict] += 1;
-      if (label.verdict === 'true') missingTrue.push(label);
-    }
-  }
+  const tiers = scoredRowTiers(labelSet, rows);
+  const { present, demoted, absent, missingTrue, retainedFalse, labeledIds } = countLabelVerdicts(
+    labelSet.labels,
+    tiers,
+  );
   const labeledTrue = present.true + demoted.true + absent.true;
   const decided = present.true + present.false;
   return {
@@ -175,6 +147,48 @@ export function scoreLabels(labelSet: DetectorLabelSet, dump: unknown): LabelSco
     retainedFalse,
     unlabeledRows: [...tiers.keys()].filter((id) => !labeledIds.has(id)).length,
   };
+}
+
+function scoredRowTiers(
+  labelSet: DetectorLabelSet,
+  rows: Record<string, unknown>[],
+): Map<string, 'signal' | 'support'> {
+  const directVocabulary = rows.some((row) => row['actionTier'] === 'direct');
+  const counted = labelSet.countedTiers ? new Set(labelSet.countedTiers) : null;
+  const tiers = new Map<string, 'signal' | 'support'>();
+  for (const row of rows) {
+    const id = rowIdentity(labelSet.identity, row);
+    if (!id) continue;
+    const actionTier = row['actionTier'];
+    const demoted = counted
+      ? typeof actionTier === 'string' && !counted.has(actionTier)
+      : actionTier === 'support' || (directVocabulary && actionTier === 'signal');
+    const tier = demoted ? 'support' : 'signal';
+    if (tiers.get(id) !== 'signal') tiers.set(id, tier);
+  }
+  return tiers;
+}
+
+function countLabelVerdicts(labels: DetectorLabel[], tiers: ReadonlyMap<string, 'signal' | 'support'>) {
+  const present: Record<LabelVerdict, number> = { true: 0, false: 0, uncertain: 0 };
+  const demoted: Record<LabelVerdict, number> = { true: 0, false: 0, uncertain: 0 };
+  const absent: Record<LabelVerdict, number> = { true: 0, false: 0, uncertain: 0 };
+  const missingTrue: DetectorLabel[] = [];
+  const retainedFalse: DetectorLabel[] = [];
+  const labeledIds = new Set<string>();
+  for (const label of labels) {
+    labeledIds.add(label.id);
+    const tier = tiers.get(label.id);
+    if (tier === 'signal') {
+      present[label.verdict] += 1;
+      if (label.verdict === 'false') retainedFalse.push(label);
+      continue;
+    }
+    if (tier === 'support') demoted[label.verdict] += 1;
+    else absent[label.verdict] += 1;
+    if (label.verdict === 'true') missingTrue.push(label);
+  }
+  return { present, demoted, absent, missingTrue, retainedFalse, labeledIds };
 }
 
 function round3(value: number): number {

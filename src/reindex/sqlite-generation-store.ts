@@ -310,59 +310,7 @@ export function collectLocalSqliteGenerations(
     };
   }
   try {
-    const state = readSqliteGenerationState(outputDb);
-    const generations = localGenerationEntries(outputDb);
-    const leaseSnapshot = inspectSqliteGenerationReaderLeases(
-      outputDb,
-      generations.map((generation) => generation.identity),
-      {
-        isProcessAlive: options.isProcessAlive ?? isProcessAlive,
-        readProcessIdentity: options.readProcessIdentity ?? readProcessIdentity,
-      },
-    );
-    const protectedIdentities = new Set(leaseSnapshot.protectedGenerations);
-    if (state?.currentGeneration) protectedIdentities.add(state.currentGeneration);
-    if (state?.previousGeneration?.generationIdentity) {
-      protectedIdentities.add(state.previousGeneration.generationIdentity);
-    }
-    let generationCount = generations.length;
-    let logicalBytes = generations.reduce((total, generation) => total + generation.logicalBytes, 0);
-    let removedGenerations = 0;
-    let removedLogicalBytes = 0;
-    for (const generation of generations) {
-      if (generationCount <= limits.maxGenerations && logicalBytes <= limits.maxLogicalBytes) break;
-      if (protectedIdentities.has(generation.identity)) continue;
-      options.onBeforeRemove?.(generation.identity);
-      rmSync(generation.path, { recursive: true, force: true });
-      generationCount -= 1;
-      logicalBytes -= generation.logicalBytes;
-      removedGenerations += 1;
-      removedLogicalBytes += generation.logicalBytes;
-    }
-    const stillOverLimit = generationCount > limits.maxGenerations || logicalBytes > limits.maxLogicalBytes;
-    const result: LocalSqliteGenerationRetentionResult = {
-      state: stillOverLimit ? 'protected' : removedGenerations > 0 ? 'collected' : 'within-bounds',
-      generationCount,
-      logicalBytes,
-      protectedGenerations: protectedIdentities.size,
-      activeReaderLeases: leaseSnapshot.activeLeases,
-      staleReaderLeasesRemoved: leaseSnapshot.staleLeasesRemoved,
-      malformedReaderLeases: leaseSnapshot.malformedLeases,
-      removedGenerations,
-      removedLogicalBytes,
-      limits,
-      at,
-      ...(stillOverLimit
-        ? {
-            reason:
-              leaseSnapshot.malformedLeases > 0
-                ? 'malformed reader ownership evidence fails closed'
-                : 'retention bounds cannot be met without deleting a protected generation',
-          }
-        : {}),
-    };
-    writeLocalGenerationRetentionResult(outputDb, result);
-    return result;
+    return collectLocalGenerationsUnderLock(outputDb, options, limits, at);
   } catch (error) {
     const result: LocalSqliteGenerationRetentionResult = {
       state: 'error',
@@ -387,6 +335,81 @@ export function collectLocalSqliteGenerations(
   } finally {
     lock.release();
   }
+}
+
+function collectLocalGenerationsUnderLock(
+  outputDb: string,
+  options: NonNullable<Parameters<typeof collectLocalSqliteGenerations>[1]>,
+  limits: LocalSqliteGenerationRetentionLimits,
+  at: string,
+): LocalSqliteGenerationRetentionResult {
+  const state = readSqliteGenerationState(outputDb);
+  const generations = localGenerationEntries(outputDb);
+  const leaseSnapshot = inspectSqliteGenerationReaderLeases(
+    outputDb,
+    generations.map((generation) => generation.identity),
+    {
+      isProcessAlive: options.isProcessAlive ?? isProcessAlive,
+      readProcessIdentity: options.readProcessIdentity ?? readProcessIdentity,
+    },
+  );
+  const protectedIdentities = new Set(leaseSnapshot.protectedGenerations);
+  if (state?.currentGeneration) protectedIdentities.add(state.currentGeneration);
+  if (state?.previousGeneration?.generationIdentity) {
+    protectedIdentities.add(state.previousGeneration.generationIdentity);
+  }
+  const { generationCount, logicalBytes, removedGenerations, removedLogicalBytes } = removeUnprotectedLocalGenerations(
+    generations,
+    protectedIdentities,
+    limits,
+    options,
+  );
+  const stillOverLimit = generationCount > limits.maxGenerations || logicalBytes > limits.maxLogicalBytes;
+  const result: LocalSqliteGenerationRetentionResult = {
+    state: stillOverLimit ? 'protected' : removedGenerations > 0 ? 'collected' : 'within-bounds',
+    generationCount,
+    logicalBytes,
+    protectedGenerations: protectedIdentities.size,
+    activeReaderLeases: leaseSnapshot.activeLeases,
+    staleReaderLeasesRemoved: leaseSnapshot.staleLeasesRemoved,
+    malformedReaderLeases: leaseSnapshot.malformedLeases,
+    removedGenerations,
+    removedLogicalBytes,
+    limits,
+    at,
+    ...(stillOverLimit ? { reason: localGenerationProtectionReason(leaseSnapshot.malformedLeases) } : {}),
+  };
+  writeLocalGenerationRetentionResult(outputDb, result);
+  return result;
+}
+
+function localGenerationProtectionReason(malformedLeases: number): string {
+  return malformedLeases > 0
+    ? 'malformed reader ownership evidence fails closed'
+    : 'retention bounds cannot be met without deleting a protected generation';
+}
+
+function removeUnprotectedLocalGenerations(
+  generations: ReturnType<typeof localGenerationEntries>,
+  protectedIdentities: ReadonlySet<string>,
+  limits: LocalSqliteGenerationRetentionLimits,
+  options: NonNullable<Parameters<typeof collectLocalSqliteGenerations>[1]>,
+) {
+  let generationCount = generations.length;
+  let logicalBytes = generations.reduce((total, generation) => total + generation.logicalBytes, 0);
+  let removedGenerations = 0;
+  let removedLogicalBytes = 0;
+  for (const generation of generations) {
+    if (generationCount <= limits.maxGenerations && logicalBytes <= limits.maxLogicalBytes) break;
+    if (protectedIdentities.has(generation.identity)) continue;
+    options.onBeforeRemove?.(generation.identity);
+    rmSync(generation.path, { recursive: true, force: true });
+    generationCount -= 1;
+    logicalBytes -= generation.logicalBytes;
+    removedGenerations += 1;
+    removedLogicalBytes += generation.logicalBytes;
+  }
+  return { generationCount, logicalBytes, removedGenerations, removedLogicalBytes };
 }
 
 export function inspectLocalSqliteGenerationRetention(outputDb: string): LocalSqliteGenerationStatus {

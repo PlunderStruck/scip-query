@@ -1708,20 +1708,10 @@ function renderTimeStateWrites(body: BodyModel, node: TypeScript.Node): string[]
     if (ts.isFunctionLike(inner) && inner !== node && !insideEffect) return;
     if (ts.isCallExpression(inner)) {
       const callee = unwrapExpression(ts, inner.expression);
-      if (ts.isIdentifier(callee)) {
-        const state = body.stateSetters.get(callee.text);
-        if (state) states.add(state);
-        const summary = body.closures.get(callee.text);
-        if (summary) for (const written of summary.stateWrites) states.add(written);
-      }
+      recordCalledStateWrites(body, callee, states);
       const leaf = calleeLeafName(ts, callee);
       if (leaf && EFFECT_HOOK_NAME.test(leaf)) {
-        for (const argument of inner.arguments) {
-          const value = unwrapExpression(ts, argument);
-          const callback = ts.isArrowFunction(value) || ts.isFunctionExpression(value);
-          if (callback && value.body) visit(value.body, true);
-          else visit(argument, insideEffect);
-        }
+        visitEffectArguments(ts, inner, insideEffect, visit);
         return;
       }
     }
@@ -1729,6 +1719,30 @@ function renderTimeStateWrites(body: BodyModel, node: TypeScript.Node): string[]
   };
   visit(node, false);
   return [...states];
+}
+
+function recordCalledStateWrites(body: BodyModel, callee: TypeScript.Expression, states: Set<string>): void {
+  const { ts } = body;
+  if (ts.isIdentifier(callee)) {
+    const state = body.stateSetters.get(callee.text);
+    if (state) states.add(state);
+    const summary = body.closures.get(callee.text);
+    if (summary) for (const written of summary.stateWrites) states.add(written);
+  }
+}
+
+function visitEffectArguments(
+  ts: TypeScriptModule,
+  call: TypeScript.CallExpression,
+  insideEffect: boolean,
+  visit: (inner: TypeScript.Node, insideEffect: boolean) => void,
+): void {
+  for (const argument of call.arguments) {
+    const value = unwrapExpression(ts, argument);
+    const callback = ts.isArrowFunction(value) || ts.isFunctionExpression(value);
+    if (callback && value.body) visit(value.body, true);
+    else visit(argument, insideEffect);
+  }
 }
 
 /** A write through a member or element, or a mutating method call, as opposed to rebinding a bare identifier. */
@@ -2193,6 +2207,23 @@ function clusterOutputs(
   thresholds: Thresholds,
 ): SliceCohesionCluster[] {
   const reduced = outputs.map((output) => sliceOf(output).filter((unit) => !preamble.has(unit)));
+  const groups = groupSharedOutputSlices(outputs, reduced);
+  const clusters: SliceCohesionCluster[] = [];
+  for (const members of groups.values()) {
+    const units = [...new Set(members.flatMap((index) => reduced[index]!))].sort(ascending);
+    if (units.length === 0) continue;
+    clusters.push(describeOutputCluster(outputs, members, units, preamble, body, flow, thresholds));
+  }
+  clusters.sort((left, right) => right.units.length - left.units.length || compareFirstLine(left, right));
+  const remainder = clusters.find((cluster) => cluster.role === 'extraction');
+  if (remainder) remainder.role = 'remainder';
+  return clusters;
+}
+
+function groupSharedOutputSlices(
+  outputs: readonly SliceCohesionOutput[],
+  reduced: readonly number[][],
+): Map<number, number[]> {
   const parent = outputs.map((_output, index) => index);
   const find = (index: number): number => {
     while (parent[index] !== index) {
@@ -2216,45 +2247,67 @@ function clusterOutputs(
     members.push(index);
     groups.set(root, members);
   });
-  const clusters: SliceCohesionCluster[] = [];
-  for (const members of groups.values()) {
-    const units = [...new Set(members.flatMap((index) => reduced[index]!))].sort(ascending);
-    if (units.length === 0) continue;
-    const inputs = new Set<string>();
-    const hooks: string[] = [];
-    for (const unit of units) {
-      for (const name of flow.paramReads[unit]!) inputs.add(name);
-      for (const name of flow.outerReads[unit]!) inputs.add(name);
-      for (const dependency of flow.dataDeps[unit]!) {
-        if (preamble.has(dependency)) for (const name of flow.definedNames[dependency]!) inputs.add(name);
-      }
-      for (const hook of body.hookCalls.get(unit) ?? []) hooks.push(`${hook}@${body.units[unit]!.startLine + 1}`);
-    }
-    const clusterOutputRows = members.map((index) => outputs[index]!);
-    const guardOnly = clusterOutputRows.every((output) => output.kind === 'throw');
-    const lineRangeList = lineRanges(units.map((unit) => body.units[unit]!));
-    const lines = lineRangeList.reduce((sum, range) => sum + range.endLine - range.startLine + 1, 0);
-    const qualifying = units.length >= thresholds.minClusterUnits && !guardOnly && lines >= MIN_CLUSTER_LINES;
-    clusters.push({
-      outputs: clusterOutputRows.map((output) => output.id),
-      units,
-      lineRanges: lineRangeList,
-      inputs: [...inputs].sort(),
-      kind: clusterKind(
-        clusterOutputRows,
-        hooks,
-        units.some((unit) => body.awaitUnits.has(unit)),
-      ),
-      role: qualifying ? 'extraction' : 'below-threshold',
-      narrow: inputs.size <= MAX_SIGNAL_CLUSTER_INPUTS,
-      hooks,
-      guardOnly,
-    });
+  return groups;
+}
+
+function outputClusterInputs(
+  units: readonly number[],
+  preamble: ReadonlySet<number>,
+  body: BodyModel,
+  flow: FlowModel,
+): { inputs: Set<string>; hooks: string[] } {
+  const inputs = new Set<string>();
+  const hooks: string[] = [];
+  for (const unit of units) {
+    for (const name of flow.paramReads[unit]!) inputs.add(name);
+    for (const name of flow.outerReads[unit]!) inputs.add(name);
+    addClusterPreambleInputs(flow, unit, preamble, inputs);
+    for (const hook of body.hookCalls.get(unit) ?? []) hooks.push(`${hook}@${body.units[unit]!.startLine + 1}`);
   }
-  clusters.sort((left, right) => right.units.length - left.units.length || compareFirstLine(left, right));
-  const remainder = clusters.find((cluster) => cluster.role === 'extraction');
-  if (remainder) remainder.role = 'remainder';
-  return clusters;
+  return { inputs, hooks };
+}
+
+function addClusterPreambleInputs(
+  flow: FlowModel,
+  unit: number,
+  preamble: ReadonlySet<number>,
+  inputs: Set<string>,
+): void {
+  for (const dependency of flow.dataDeps[unit]!) {
+    if (preamble.has(dependency)) for (const name of flow.definedNames[dependency]!) inputs.add(name);
+  }
+}
+
+function describeOutputCluster(
+  outputs: readonly SliceCohesionOutput[],
+  members: readonly number[],
+  units: number[],
+  preamble: ReadonlySet<number>,
+  body: BodyModel,
+  flow: FlowModel,
+  thresholds: Thresholds,
+): SliceCohesionCluster {
+  const { inputs, hooks } = outputClusterInputs(units, preamble, body, flow);
+  const clusterOutputRows = members.map((index) => outputs[index]!);
+  const guardOnly = clusterOutputRows.every((output) => output.kind === 'throw');
+  const lineRangeList = lineRanges(units.map((unit) => body.units[unit]!));
+  const lines = lineRangeList.reduce((sum, range) => sum + range.endLine - range.startLine + 1, 0);
+  const qualifying = units.length >= thresholds.minClusterUnits && !guardOnly && lines >= MIN_CLUSTER_LINES;
+  return {
+    outputs: clusterOutputRows.map((output) => output.id),
+    units,
+    lineRanges: lineRangeList,
+    inputs: [...inputs].sort(),
+    kind: clusterKind(
+      clusterOutputRows,
+      hooks,
+      units.some((unit) => body.awaitUnits.has(unit)),
+    ),
+    role: qualifying ? 'extraction' : 'below-threshold',
+    narrow: inputs.size <= MAX_SIGNAL_CLUSTER_INPUTS,
+    hooks,
+    guardOnly,
+  };
 }
 
 function clusterKind(

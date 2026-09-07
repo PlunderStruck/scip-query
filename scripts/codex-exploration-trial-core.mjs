@@ -122,6 +122,25 @@ export function disciplinedControlPrompt(question) {
 }
 
 export function parseCodexJsonl(jsonl, metadata = {}) {
+  const events = parseCodexEvents(jsonl);
+
+  const state = { calls: [], answer: '', usage: undefined, threadId: undefined };
+  for (const event of events) recordCodexEvent(event, state);
+  const { calls, answer, usage, threadId } = state;
+
+  if (answer.trim() === '') throw new Error('Codex JSONL contained no completed agent answer');
+  if (!usage) throw new Error('Codex JSONL contained no turn.completed usage');
+  return {
+    ...metadata,
+    answer,
+    calls,
+    usage,
+    codexThreadId: threadId ?? null,
+    rawEventCount: events.length,
+  };
+}
+
+function parseCodexEvents(jsonl) {
   const events = [];
   for (const [index, line] of jsonl.split(/\r?\n/u).entries()) {
     if (line.trim() === '') continue;
@@ -135,41 +154,32 @@ export function parseCodexJsonl(jsonl, metadata = {}) {
     }
   }
 
-  const calls = [];
-  let answer = '';
-  let usage;
-  let threadId;
-  for (const event of events) {
-    if (event.type === 'thread.started' && typeof event.thread_id === 'string') threadId = event.thread_id;
-    if (event.type === 'turn.completed') usage = parseUsage(event.usage);
-    if (event.type !== 'item.completed' || !event.item || typeof event.item !== 'object') continue;
-    if (event.item.type === 'agent_message' && typeof event.item.text === 'string') answer = event.item.text;
-    if (!['command_execution', 'shell_command'].includes(event.item.type)) continue;
-    const command = commandText(event.item.command);
-    const output = outputText(event.item);
-    calls.push({
-      ...classifyExplorationCommand(command),
-      command,
-      output: '',
-      outputCharacters: output.length,
-      outputSha256: createHash('sha256').update(output).digest('hex'),
-      preconditionRefusal: /NAVIGATION MAP REQUIRED|NAVIGATION MAP ALREADY RUNNING|MAP TRANSPORT INCOMPLETE/u.test(
-        output,
-      ),
-      exitCode: Number.isSafeInteger(event.item.exit_code) ? event.item.exit_code : null,
-    });
-  }
+  return events;
+}
 
-  if (answer.trim() === '') throw new Error('Codex JSONL contained no completed agent answer');
-  if (!usage) throw new Error('Codex JSONL contained no turn.completed usage');
-  return {
-    ...metadata,
-    answer,
-    calls,
-    usage,
-    codexThreadId: threadId ?? null,
-    rawEventCount: events.length,
-  };
+function recordCodexEvent(event, state) {
+  if (event.type === 'thread.started' && typeof event.thread_id === 'string') state.threadId = event.thread_id;
+  if (event.type === 'turn.completed') state.usage = parseUsage(event.usage);
+  if (event.type !== 'item.completed' || !event.item || typeof event.item !== 'object') return;
+  recordCompletedCodexItem(event.item, state);
+}
+
+function recordCompletedCodexItem(item, state) {
+  if (item.type === 'agent_message' && typeof item.text === 'string') state.answer = item.text;
+  if (!['command_execution', 'shell_command'].includes(item.type)) return;
+  const command = commandText(item.command);
+  const output = outputText(item);
+  state.calls.push({
+    ...classifyExplorationCommand(command),
+    command,
+    output: '',
+    outputCharacters: output.length,
+    outputSha256: createHash('sha256').update(output).digest('hex'),
+    preconditionRefusal: /NAVIGATION MAP REQUIRED|NAVIGATION MAP ALREADY RUNNING|MAP TRANSPORT INCOMPLETE/u.test(
+      output,
+    ),
+    exitCode: Number.isSafeInteger(item.exit_code) ? item.exit_code : null,
+  });
 }
 
 export function classifyExplorationCommand(command) {

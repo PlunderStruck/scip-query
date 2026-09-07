@@ -4,7 +4,7 @@
  * dispatcher branches on `detectAstLanguage` to pick a per-language AST
  * walker. Regex fallback covers all three with a single shape (`import …;`).
  */
-import type { Tree } from '../../source/ast.js';
+import type { Tree, SyntaxNode } from '../../source/ast.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { JVM_EXTENSIONS, resolveQualifiedImportPath } from '../../source/primitives/import-path-resolver.js';
 import type { ParsedSourceImport } from '../../domain/types.js';
@@ -126,57 +126,70 @@ function parseScalaImportsAst(db: ScipDatabase, importerPath: string, tree: Tree
     }
 
     if (tailSelector?.type === 'namespace_selectors') {
-      for (const sel of tailSelector.namedChildren) {
-        if (sel.type === 'arrow_renamed_identifier') {
-          const [orig, alias] = sel.namedChildren;
-          if (!orig) continue;
-          const importedName = orig.text;
-          const localName = alias?.text ?? importedName;
-          if (importedName === '_') continue;
-          results.push(
-            buildNamedImport(
-              importedName,
-              localName,
-              resolveQualifiedImportPath(db, `${prefix}.${importedName}`, JVM_EXTENSIONS),
-              usedNames,
-            ),
-          );
-        } else if (sel.type === 'identifier') {
-          const importedName = sel.text;
-          results.push(
-            buildNamedImport(
-              importedName,
-              importedName,
-              resolveQualifiedImportPath(db, `${prefix}.${importedName}`, JVM_EXTENSIONS),
-              usedNames,
-            ),
-          );
-        }
+      for (const selector of tailSelector.namedChildren) {
+        const imported = scalaSelectorImport(db, prefix, selector, usedNames);
+        if (imported) results.push(imported);
       }
       continue;
     }
 
-    // Bare `import x.Y` — last segment is the imported name.
-    const importedName = pathSegments[pathSegments.length - 1]?.text ?? prefix;
-    const qualifiedPrefix =
-      pathSegments
-        .slice(0, -1)
-        .map((s) => s.text)
-        .join('.') || prefix;
-    results.push(
-      buildNamedImport(
-        importedName,
-        importedName,
-        resolveQualifiedImportPath(
-          db,
-          qualifiedPrefix && pathSegments.length > 1 ? `${qualifiedPrefix}.${importedName}` : prefix,
-          JVM_EXTENSIONS,
-        ),
-        usedNames,
-      ),
-    );
+    results.push(scalaBareImport(db, prefix, pathSegments, usedNames));
   }
   return results;
+}
+
+function scalaBareImport(
+  db: ScipDatabase,
+  prefix: string,
+  pathSegments: SyntaxNode[],
+  usedNames: ReadonlySet<string>,
+): ParsedSourceImport {
+  // Bare `import x.Y` — last segment is the imported name.
+  const importedName = pathSegments[pathSegments.length - 1]?.text ?? prefix;
+  const qualifiedPrefix =
+    pathSegments
+      .slice(0, -1)
+      .map((s) => s.text)
+      .join('.') || prefix;
+  return buildNamedImport(
+    importedName,
+    importedName,
+    resolveQualifiedImportPath(
+      db,
+      qualifiedPrefix && pathSegments.length > 1 ? `${qualifiedPrefix}.${importedName}` : prefix,
+      JVM_EXTENSIONS,
+    ),
+    usedNames,
+  );
+}
+
+function scalaSelectorImport(
+  db: ScipDatabase,
+  prefix: string,
+  selector: SyntaxNode,
+  usedNames: ReadonlySet<string>,
+): ParsedSourceImport | null {
+  if (selector.type === 'arrow_renamed_identifier') {
+    const [original, alias] = selector.namedChildren;
+    if (!original) return null;
+    const importedName = original.text;
+    const localName = alias?.text ?? importedName;
+    if (importedName === '_') return null;
+    return buildNamedImport(
+      importedName,
+      localName,
+      resolveQualifiedImportPath(db, `${prefix}.${importedName}`, JVM_EXTENSIONS),
+      usedNames,
+    );
+  }
+  if (selector.type !== 'identifier') return null;
+  const importedName = selector.text;
+  return buildNamedImport(
+    importedName,
+    importedName,
+    resolveQualifiedImportPath(db, `${prefix}.${importedName}`, JVM_EXTENSIONS),
+    usedNames,
+  );
 }
 
 function parseJvmImportClause(

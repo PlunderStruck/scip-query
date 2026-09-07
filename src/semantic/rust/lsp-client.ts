@@ -357,58 +357,70 @@ export class RustAnalyzerLspClient {
     let offset = 0;
     while (offset < chunk.length && !this.transportFailure) {
       if (this.bodyBuffer) {
-        const copyLength = Math.min(chunk.length - offset, this.bodyBuffer.length - this.bodyLength);
-        chunk.copy(this.bodyBuffer, this.bodyLength, offset, offset + copyLength);
-        offset += copyLength;
-        this.bodyLength += copyLength;
-        if (this.bodyLength === this.bodyBuffer.length) {
-          const body = this.bodyBuffer.toString('utf8');
-          this.bodyBuffer = null;
-          this.bodyLength = 0;
-          let message: LspJsonMessage;
-          try {
-            message = parseJsonMessage(body);
-          } catch {
-            this.failProtocol('rust-analyzer LSP response body was not a valid JSON object');
-            continue;
-          }
-          try {
-            this.dispatchMessage(message);
-          } catch {
-            this.failTransport(new Error('rust-analyzer LSP message handling failed'), true);
-          }
-        }
+        offset = this.consumeBodyChunk(chunk, offset);
         continue;
       }
-
-      if (this.headerLength === this.headerBuffer.length) {
-        this.failProtocol(`rust-analyzer LSP header exceeded ${this.maxHeaderBytes} byte limit`);
-        return;
-      }
-      this.headerBuffer[this.headerLength++] = chunk[offset++]!;
-      if (!this.headerDelimiterComplete()) continue;
-
-      const headerLength = this.headerLength - LSP_HEADER_DELIMITER.length;
-      if (headerLength > this.maxHeaderBytes) {
-        this.failProtocol(`rust-analyzer LSP header exceeded ${this.maxHeaderBytes} byte limit`);
-        return;
-      }
-      const header = this.headerBuffer.subarray(0, headerLength).toString('ascii');
-      this.headerLength = 0;
-      let contentLength: number;
-      try {
-        contentLength = parseContentLength(header, this.maxMessageBytes);
-      } catch (error) {
-        this.failProtocol(error instanceof Error ? error.message : String(error));
-        return;
-      }
-      this.bodyBuffer = Buffer.allocUnsafe(contentLength);
-      this.bodyLength = 0;
-      if (contentLength === 0) {
-        this.bodyBuffer = null;
-        this.failProtocol('rust-analyzer LSP response body was not a valid JSON object');
-      }
+      const nextOffset = this.consumeHeaderByte(chunk, offset);
+      if (nextOffset === null) return;
+      offset = nextOffset;
     }
+  }
+
+  private consumeBodyChunk(chunk: Buffer, offset: number): number {
+    const bodyBuffer = this.bodyBuffer!;
+    const copyLength = Math.min(chunk.length - offset, bodyBuffer.length - this.bodyLength);
+    chunk.copy(bodyBuffer, this.bodyLength, offset, offset + copyLength);
+    this.bodyLength += copyLength;
+    if (this.bodyLength === bodyBuffer.length) this.dispatchCompletedBody();
+    return offset + copyLength;
+  }
+
+  private dispatchCompletedBody(): void {
+    const body = this.bodyBuffer!.toString('utf8');
+    this.bodyBuffer = null;
+    this.bodyLength = 0;
+    let message: LspJsonMessage;
+    try {
+      message = parseJsonMessage(body);
+    } catch {
+      this.failProtocol('rust-analyzer LSP response body was not a valid JSON object');
+      return;
+    }
+    try {
+      this.dispatchMessage(message);
+    } catch {
+      this.failTransport(new Error('rust-analyzer LSP message handling failed'), true);
+    }
+  }
+
+  private consumeHeaderByte(chunk: Buffer, offset: number): number | null {
+    if (this.headerLength === this.headerBuffer.length) {
+      this.failProtocol(`rust-analyzer LSP header exceeded ${this.maxHeaderBytes} byte limit`);
+      return null;
+    }
+    this.headerBuffer[this.headerLength++] = chunk[offset++]!;
+    if (!this.headerDelimiterComplete()) return offset;
+    const headerLength = this.headerLength - LSP_HEADER_DELIMITER.length;
+    if (headerLength > this.maxHeaderBytes) {
+      this.failProtocol(`rust-analyzer LSP header exceeded ${this.maxHeaderBytes} byte limit`);
+      return null;
+    }
+    const header = this.headerBuffer.subarray(0, headerLength).toString('ascii');
+    this.headerLength = 0;
+    let contentLength: number;
+    try {
+      contentLength = parseContentLength(header, this.maxMessageBytes);
+    } catch (error) {
+      this.failProtocol(error instanceof Error ? error.message : String(error));
+      return null;
+    }
+    this.bodyBuffer = Buffer.allocUnsafe(contentLength);
+    this.bodyLength = 0;
+    if (contentLength === 0) {
+      this.bodyBuffer = null;
+      this.failProtocol('rust-analyzer LSP response body was not a valid JSON object');
+    }
+    return offset;
   }
 
   private headerDelimiterComplete(): boolean {

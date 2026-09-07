@@ -59,6 +59,73 @@ const DEFAULT_DEPENDENCIES: EvidenceCommandFreshnessDependencies = {
   now: Date.now,
 };
 
+function prepareEvidenceGeneration(
+  workspace: EvidenceCommandWorkspace,
+  dependencies: EvidenceCommandFreshnessDependencies,
+) {
+  const watcherGeneration = trustedGeneration(workspace, dependencies);
+  const prepared = dependencies.prepare(workspace.projectRoot, workspace.config, workspace.paths, {
+    gitContext: workspace.gitContext,
+    gitObservation: workspace.gitObservation,
+    ...(watcherGeneration ? { watcherGeneration } : {}),
+  });
+  const freshness =
+    prepared.kind === 'local-fresh' && prepared.freshness
+      ? prepared.freshness
+      : dependencies.freshness(workspace.projectRoot, workspace.config, workspace.paths, {
+          gitContext: workspace.gitContext,
+        });
+  return { prepared, freshness };
+}
+
+async function prepareWatcherEvidence(
+  workspace: EvidenceCommandWorkspace,
+  freshness: IndexFreshness,
+  dependencies: EvidenceCommandFreshnessDependencies,
+  options: { waitMs?: number; pollMs?: number },
+  service: Extract<WatchServiceAutoEnsureResult, { kind: 'started' | 'reused' }>,
+): Promise<EvidenceCommandFreshnessResult | null> {
+  const watcherState = service.state.watcher.state;
+  if (watcherState === 'budget-paused' || watcherState === 'indexing') {
+    throw new Error(
+      `Could not prepare fresh evidence for scip-query ${workspace.commandName}: index remained ${freshness.state} (${freshness.reason}) while the watcher is ${watcherState}`,
+    );
+  }
+  const current = await waitForFreshness(workspace, freshness, dependencies, options, service);
+  if (current.state === 'fresh') return { source: 'watcher', service };
+  if (indexCanAnswerQueries(current)) return { source: 'stale', service };
+  return null;
+}
+
+async function reindexEvidenceSynchronously(
+  workspace: EvidenceCommandWorkspace,
+  dependencies: EvidenceCommandFreshnessDependencies,
+  service: WatchServiceAutoEnsureResult,
+): Promise<EvidenceCommandFreshnessResult> {
+  try {
+    await dependencies.reindex(workspace.projectRoot, workspace.config, workspace.paths, {
+      allowPartial: false,
+      skipAutoInstall: true,
+      trigger: { kind: 'watch-demand', detail: `scip-query ${workspace.commandName}` },
+      onStatus: () => {},
+    });
+  } catch (error) {
+    throw new Error(
+      `Could not prepare fresh evidence for scip-query ${workspace.commandName}: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+  const freshness = dependencies.freshness(workspace.projectRoot, workspace.config, workspace.paths, {
+    gitContext: workspace.gitContext,
+  });
+  if (freshness.state !== 'fresh' && !indexCanAnswerQueries(freshness)) {
+    throw new Error(
+      `Could not prepare fresh evidence for scip-query ${workspace.commandName}: index remained ${freshness.state} (${freshness.reason})`,
+    );
+  }
+  return { source: 'synchronous-reindex', service };
+}
+
 /**
  * Evidence commands reuse a readable SQLite generation immediately. They ask
  * the watcher to refresh in the background and only reindex synchronously when
@@ -73,18 +140,7 @@ export async function ensureEvidenceCommandFreshness(
     return { source: 'explicit-index', service: { kind: 'skipped', reason: 'environment' } };
   }
 
-  const watcherGeneration = trustedGeneration(workspace, dependencies);
-  const prepared = dependencies.prepare(workspace.projectRoot, workspace.config, workspace.paths, {
-    gitContext: workspace.gitContext,
-    gitObservation: workspace.gitObservation,
-    ...(watcherGeneration ? { watcherGeneration } : {}),
-  });
-  let freshness =
-    prepared.kind === 'local-fresh' && prepared.freshness
-      ? prepared.freshness
-      : dependencies.freshness(workspace.projectRoot, workspace.config, workspace.paths, {
-          gitContext: workspace.gitContext,
-        });
+  const { prepared, freshness } = prepareEvidenceGeneration(workspace, dependencies);
   const service = dependencies.ensureService({
     commandName: workspace.commandName,
     projectRoot: workspace.projectRoot,
@@ -113,39 +169,11 @@ export async function ensureEvidenceCommandFreshness(
   }
 
   if (watcherReady) {
-    const watcherState = service.state.watcher.state;
-    if (watcherState === 'budget-paused' || watcherState === 'indexing') {
-      throw new Error(
-        `Could not prepare fresh evidence for scip-query ${workspace.commandName}: index remained ${freshness.state} (${freshness.reason}) while the watcher is ${watcherState}`,
-      );
-    }
-    freshness = await waitForFreshness(workspace, freshness, dependencies, options, service);
-    if (freshness.state === 'fresh') return { source: 'watcher', service };
-    if (indexCanAnswerQueries(freshness)) return { source: 'stale', service };
+    const result = await prepareWatcherEvidence(workspace, freshness, dependencies, options, service);
+    if (result) return result;
   }
 
-  try {
-    await dependencies.reindex(workspace.projectRoot, workspace.config, workspace.paths, {
-      allowPartial: false,
-      skipAutoInstall: true,
-      trigger: { kind: 'watch-demand', detail: `scip-query ${workspace.commandName}` },
-      onStatus: () => {},
-    });
-  } catch (error) {
-    throw new Error(
-      `Could not prepare fresh evidence for scip-query ${workspace.commandName}: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
-    );
-  }
-  freshness = dependencies.freshness(workspace.projectRoot, workspace.config, workspace.paths, {
-    gitContext: workspace.gitContext,
-  });
-  if (freshness.state !== 'fresh' && !indexCanAnswerQueries(freshness)) {
-    throw new Error(
-      `Could not prepare fresh evidence for scip-query ${workspace.commandName}: index remained ${freshness.state} (${freshness.reason})`,
-    );
-  }
-  return { source: 'synchronous-reindex', service };
+  return reindexEvidenceSynchronously(workspace, dependencies, service);
 }
 
 function trustedGeneration(

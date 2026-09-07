@@ -336,43 +336,8 @@ export function createExplorationTopology(input: ExplorationTopologyInput): Expl
       }
     : undefined;
 
-  for (const anchor of anchors) {
-    assertReferencesExist(`anchor ${anchor.id}`, [...anchor.nodeIds, ...anchor.candidateNodeIds], nodeIds, 'node');
-  }
-  for (const node of nodes) assertReferencesExist(`node ${node.id}`, node.anchorIds, anchorIds, 'anchor');
-  for (const edge of edges) {
-    assertReferencesExist(`edge ${edge.id}`, [edge.fromNodeId, edge.toNodeId], nodeIds, 'node');
-    if (edge.evidence.length === 0) throw new Error(`Exploration edge ${edge.id} has no evidence source.`);
-    validateProgramEdgeSemantics(edge);
-  }
-  for (const path of paths) {
-    assertReferencesExist(`path ${path.id}`, [path.fromAnchorId, path.toAnchorId], anchorIds, 'anchor');
-    assertReferencesExist(`path ${path.id}`, path.nodeIds, nodeIds, 'node');
-    assertReferencesExist(`path ${path.id}`, path.edgeIds, edgeIds, 'edge');
-  }
-  for (const frontier of frontiers) {
-    assertReferencesExist(`frontier ${frontier.id}`, frontier.fromNodeIds, nodeIds, 'node');
-    assertReferencesExist(`frontier ${frontier.id}`, frontier.edgeIds, edgeIds, 'edge');
-    assertReferencesExist(`frontier ${frontier.id}`, frontier.memberNodeIds, nodeIds, 'node');
-    if (frontier.memberCount !== frontier.memberNodeIds.length) {
-      throw new Error(
-        `Exploration frontier ${frontier.id} reports ${frontier.memberCount} member(s) but identifies ${frontier.memberNodeIds.length}.`,
-      );
-    }
-  }
-  for (const route of routeCatalog?.routes ?? []) {
-    assertReferencesExist(`route ${route.id}`, route.nodeIds, nodeIds, 'node');
-    assertReferencesExist(`route ${route.id}`, route.edgeIds, edgeIds, 'edge');
-    assertReferencesExist(`route ${route.id}`, [route.anchorNodeId, route.endpointNodeId], nodeIds, 'node');
-  }
-  if (routeCatalog) {
-    assertReferencesExist(
-      'route catalog selection',
-      routeCatalog.selectedRouteIds,
-      new Set(routeCatalog.routes.map((route) => route.id)),
-      'route',
-    );
-  }
+  validateTopologyStructure(anchors, nodes, edges, paths, anchorIds, nodeIds, edgeIds);
+  validateTopologyFrontiersAndRoutes(frontiers, routeCatalog, nodeIds, edgeIds);
 
   const incompleteReasons = uniqueSorted(input.incompleteReasons ?? []);
   const status = incompleteReasons.length === 0 ? 'accounted' : 'incomplete';
@@ -404,6 +369,62 @@ export function createExplorationTopology(input: ExplorationTopologyInput): Expl
     completion: topologyCompletion(status, paths, input.scope),
     ...(routeCatalog ? { routeCatalog } : {}),
   };
+}
+
+function validateTopologyStructure(
+  anchors: ExplorationTopologyAnchor[],
+  nodes: ExplorationTopologyNode[],
+  edges: ExplorationTopologyEdge[],
+  paths: ExplorationTopologyPath[],
+  anchorIds: ReadonlySet<string>,
+  nodeIds: ReadonlySet<string>,
+  edgeIds: ReadonlySet<string>,
+): void {
+  for (const anchor of anchors) {
+    assertReferencesExist(`anchor ${anchor.id}`, [...anchor.nodeIds, ...anchor.candidateNodeIds], nodeIds, 'node');
+  }
+  for (const node of nodes) assertReferencesExist(`node ${node.id}`, node.anchorIds, anchorIds, 'anchor');
+  for (const edge of edges) {
+    assertReferencesExist(`edge ${edge.id}`, [edge.fromNodeId, edge.toNodeId], nodeIds, 'node');
+    if (edge.evidence.length === 0) throw new Error(`Exploration edge ${edge.id} has no evidence source.`);
+    validateProgramEdgeSemantics(edge);
+  }
+  for (const path of paths) {
+    assertReferencesExist(`path ${path.id}`, [path.fromAnchorId, path.toAnchorId], anchorIds, 'anchor');
+    assertReferencesExist(`path ${path.id}`, path.nodeIds, nodeIds, 'node');
+    assertReferencesExist(`path ${path.id}`, path.edgeIds, edgeIds, 'edge');
+  }
+}
+
+function validateTopologyFrontiersAndRoutes(
+  frontiers: ExplorationFrontierGroup[],
+  routeCatalog: ExplorationTopologyInput['routeCatalog'],
+  nodeIds: ReadonlySet<string>,
+  edgeIds: ReadonlySet<string>,
+): void {
+  for (const frontier of frontiers) {
+    assertReferencesExist(`frontier ${frontier.id}`, frontier.fromNodeIds, nodeIds, 'node');
+    assertReferencesExist(`frontier ${frontier.id}`, frontier.edgeIds, edgeIds, 'edge');
+    assertReferencesExist(`frontier ${frontier.id}`, frontier.memberNodeIds, nodeIds, 'node');
+    if (frontier.memberCount !== frontier.memberNodeIds.length) {
+      throw new Error(
+        `Exploration frontier ${frontier.id} reports ${frontier.memberCount} member(s) but identifies ${frontier.memberNodeIds.length}.`,
+      );
+    }
+  }
+  for (const route of routeCatalog?.routes ?? []) {
+    assertReferencesExist(`route ${route.id}`, route.nodeIds, nodeIds, 'node');
+    assertReferencesExist(`route ${route.id}`, route.edgeIds, edgeIds, 'edge');
+    assertReferencesExist(`route ${route.id}`, [route.anchorNodeId, route.endpointNodeId], nodeIds, 'node');
+  }
+  if (routeCatalog) {
+    assertReferencesExist(
+      'route catalog selection',
+      routeCatalog.selectedRouteIds,
+      new Set(routeCatalog.routes.map((route) => route.id)),
+      'route',
+    );
+  }
 }
 
 /** Flatten semantic annotations without weakening or duplicating their source evidence. */

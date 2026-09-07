@@ -555,29 +555,58 @@ function summarizeLanguageActivity(
 ): Partial<Record<SupportedLanguage, ReindexRunLanguageActivity>> {
   const byLanguage: Partial<Record<SupportedLanguage, ReindexRunLanguageActivity>> = {};
   for (const language of result.languages) {
-    const diagnostics = (result.shards ?? []).filter((shard) => shard.language === language);
-    const topLevel = diagnostics.find((shard) => shard.id === language);
-    const reused =
-      result.reused ||
-      (topLevel ? topLevel.reused : diagnostics.length > 0 && diagnostics.every((shard) => shard.reused));
-    const cachedOutputBytes = fileSize(join(dirname(result.dbPath), 'language-indexes', `${language}.scip`));
-    const outputBytes = cachedOutputBytes > 0 ? cachedOutputBytes : (topLevel?.outputBytes ?? cachedOutputBytes);
-    const durationMs = reused
-      ? 0
-      : (topLevel?.durationMs ??
-        diagnostics.filter((shard) => !shard.reused).reduce((total, shard) => total + shard.durationMs, 0));
-    byLanguage[language] = {
-      result: reused ? 'reused' : 'rebuilt',
-      strategy: reused ? 'reused' : (topLevel?.strategy ?? 'full'),
-      ...(topLevel?.strategy === 'full' && (topLevel.fallbackReason ?? topLevel.missReason)
-        ? { fallbackReason: topLevel.fallbackReason ?? topLevel.missReason }
-        : {}),
-      outputBytes,
-      producedOutputBytes: reused ? 0 : (topLevel?.producedOutputBytes ?? outputBytes),
-      durationMs,
-    };
+    byLanguage[language] = summarizeOneLanguageActivity(result, language);
   }
   return byLanguage;
+}
+
+function summarizeOneLanguageActivity(result: ReindexResult, language: SupportedLanguage): ReindexRunLanguageActivity {
+  const diagnostics = (result.shards ?? []).filter((shard) => shard.language === language);
+  const topLevel = diagnostics.find((shard) => shard.id === language);
+  const reused = languageShardsReused(result.reused, diagnostics, topLevel);
+  const cachedOutputBytes = fileSize(join(dirname(result.dbPath), 'language-indexes', `${language}.scip`));
+  const outputBytes = cachedOutputBytes > 0 ? cachedOutputBytes : (topLevel?.outputBytes ?? cachedOutputBytes);
+  const durationMs = languageShardDuration(reused, diagnostics, topLevel);
+  return {
+    result: reused ? 'reused' : 'rebuilt',
+    strategy: reused ? 'reused' : (topLevel?.strategy ?? 'full'),
+    ...languageFallbackReason(topLevel),
+    outputBytes,
+    producedOutputBytes: reused ? 0 : (topLevel?.producedOutputBytes ?? outputBytes),
+    durationMs,
+  };
+}
+
+type LanguageActivityShard = NonNullable<ReindexResult['shards']>[number];
+
+function languageFallbackReason(
+  topLevel: LanguageActivityShard | undefined,
+): Pick<ReindexRunLanguageActivity, 'fallbackReason'> {
+  return topLevel?.strategy === 'full' && (topLevel.fallbackReason ?? topLevel.missReason)
+    ? { fallbackReason: topLevel.fallbackReason ?? topLevel.missReason }
+    : {};
+}
+
+function languageShardsReused(
+  resultReused: boolean,
+  diagnostics: LanguageActivityShard[],
+  topLevel: LanguageActivityShard | undefined,
+): boolean {
+  return (
+    resultReused || (topLevel ? topLevel.reused : diagnostics.length > 0 && diagnostics.every((shard) => shard.reused))
+  );
+}
+
+function languageShardDuration(
+  reused: boolean,
+  diagnostics: LanguageActivityShard[],
+  topLevel: LanguageActivityShard | undefined,
+): number {
+  if (reused) return 0;
+  return (
+    topLevel?.durationMs ??
+    diagnostics.filter((shard) => !shard.reused).reduce((total, shard) => total + shard.durationMs, 0)
+  );
 }
 
 function parseLanguageActivity(value: unknown): {
