@@ -559,18 +559,30 @@ function isObservationReceiptV1(value: unknown): value is ObservationReceiptV1 {
     isTimestamp(value['observedAt']) &&
     isBoundedRecordString(value['projectIdentity']) &&
     isLegacyAuthorityKind(value['authorityKind']) &&
-    (index === undefined ||
-      (isRecordObject(index) &&
-        isBoundedRecordString(index['generationIdentity']) &&
-        (index['source'] === 'immutable' || index['source'] === 'legacy') &&
-        (index['alignment'] === 'not-certified' || index['alignment'] === 'leased'))) &&
-    (worktree === undefined ||
-      (isRecordObject(worktree) &&
-        isBoundedRecordString(worktree['identity']) &&
-        typeof worktree['clean'] === 'boolean' &&
-        (worktree['headCommit'] === undefined || isBoundedRecordString(worktree['headCommit'])) &&
-        (worktree['treeOid'] === undefined || isBoundedRecordString(worktree['treeOid'])))) &&
+    isLegacyReceiptIndex(index) &&
+    isLegacyReceiptWorktree(worktree) &&
     legacyAuthorityFieldsAgree(value['authorityKind'], index, worktree)
+  );
+}
+
+function isLegacyReceiptIndex(index: unknown): boolean {
+  return (
+    index === undefined ||
+    (isRecordObject(index) &&
+      isBoundedRecordString(index['generationIdentity']) &&
+      (index['source'] === 'immutable' || index['source'] === 'legacy') &&
+      (index['alignment'] === 'not-certified' || index['alignment'] === 'leased'))
+  );
+}
+
+function isLegacyReceiptWorktree(worktree: unknown): boolean {
+  return (
+    worktree === undefined ||
+    (isRecordObject(worktree) &&
+      isBoundedRecordString(worktree['identity']) &&
+      typeof worktree['clean'] === 'boolean' &&
+      (worktree['headCommit'] === undefined || isBoundedRecordString(worktree['headCommit'])) &&
+      (worktree['treeOid'] === undefined || isBoundedRecordString(worktree['treeOid'])))
   );
 }
 

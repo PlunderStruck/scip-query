@@ -96,50 +96,53 @@ export function stripCommentsAndStringsTsSafe(source: string): string {
 function tokenizeTsSafe(source: string, opts: { maskStrings: boolean }): string {
   let result = '';
   let i = 0;
-  const length = source.length;
-  while (i < length) {
-    if (source[i] === '/' && source[i + 1] === '/') {
-      const end = source.indexOf('\n', i);
-      const stop = end === -1 ? length : end;
-      result += maskRange(source, i, stop);
-      i = stop;
-      continue;
-    }
-    if (source[i] === '/' && source[i + 1] === '*') {
-      const closeIndex = source.indexOf('*/', i + 2);
-      const stop = closeIndex === -1 ? length : closeIndex + 2;
-      result += maskRange(source, i, stop);
-      i = stop;
+  while (i < source.length) {
+    const commentEnd = tsSafeCommentEnd(source, i);
+    if (commentEnd !== null) {
+      result += maskRange(source, i, commentEnd);
+      i = commentEnd;
       continue;
     }
     const char = source[i];
     if (char === '`' || char === "'" || char === '"') {
-      const quote = char;
-      let j = i + 1;
-      while (j < length) {
-        if (source[j] === '\\') {
-          j += 2;
-          continue;
-        }
-        if (source[j] === quote) {
-          j += 1;
-          break;
-        }
-        // Single/double-quoted strings can't span a real newline in valid
-        // JS — bail at the newline instead of accidentally swallowing the
-        // rest of the file when a quote is unterminated (e.g. an apostrophe
-        // inside a non-string comment survives this far in malformed input).
-        if (quote !== '`' && source[j] === '\n') break;
-        j += 1;
-      }
-      result += opts.maskStrings ? maskRange(source, i, j) : source.slice(i, j);
-      i = j;
+      const end = tsSafeQuotedEnd(source, i, char);
+      result += opts.maskStrings ? maskRange(source, i, end) : source.slice(i, end);
+      i = end;
       continue;
     }
     result += char;
     i += 1;
   }
   return result;
+}
+
+function tsSafeCommentEnd(source: string, start: number): number | null {
+  if (source[start] !== '/') return null;
+  if (source[start + 1] === '/') {
+    const end = source.indexOf('\n', start);
+    return end === -1 ? source.length : end;
+  }
+  if (source[start + 1] === '*') {
+    const closeIndex = source.indexOf('*/', start + 2);
+    return closeIndex === -1 ? source.length : closeIndex + 2;
+  }
+  return null;
+}
+
+function tsSafeQuotedEnd(source: string, start: number, quote: string): number {
+  let end = start + 1;
+  while (end < source.length) {
+    if (source[end] === '\\') {
+      end += 2;
+      continue;
+    }
+    if (source[end] === quote) return end + 1;
+    // Recover at a real newline for malformed single/double-quoted strings;
+    // template literals may span lines. Escapes retain their two-byte advance.
+    if (quote !== '`' && source[end] === '\n') break;
+    end += 1;
+  }
+  return end;
 }
 
 function maskRange(source: string, start: number, end: number): string {

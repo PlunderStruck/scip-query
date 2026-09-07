@@ -222,11 +222,31 @@ function buildHealthAxes(analyses: HealthAnalyses): HealthAxes {
   };
 }
 
+type HealthValidationFileStats = NonNullable<HealthAnalyses['gitEvidence']>['fileStats'];
+
 function buildHealthValidation(analyses: HealthAnalyses): HealthValidation | null {
   const fileStats = analyses.gitEvidence?.fileStats;
   if (!fileStats) return null;
+  const categories = healthValidationCategories(analyses);
+  const flagged = new Set<string>(Object.values(categories).flat());
+  const { flaggedFixDensity, baselineFixDensity } = healthValidationDensities(fileStats, flagged);
+  const byCategory = healthValidationByCategory(categories, fileStats, baselineFixDensity);
 
-  const categories: Record<string, string[]> = {
+  return {
+    flaggedFiles: flagged.size,
+    flaggedFixDensity,
+    baselineFixDensity,
+    ratio: flagged.size > 0 && baselineFixDensity > 0 ? round2(flaggedFixDensity / baselineFixDensity) : null,
+    byCategory,
+    validationBasis: {
+      method: 'subject-regex',
+      commitsScanned: analyses.gitEvidence?.commitsScanned ?? 0,
+    },
+  };
+}
+
+function healthValidationCategories(analyses: HealthAnalyses): Record<string, string[]> {
+  return {
     dead: analyses.dead.files ?? [],
     twinDrift: analyses.twinDrift.files ?? [],
     passthroughs: analyses.passthroughs.files ?? [],
@@ -237,8 +257,15 @@ function buildHealthValidation(analyses: HealthAnalyses): HealthValidation | nul
     vueComposables: analyses.vueComposableCandidates.files ?? [],
     vueLargeViews: analyses.vueLargeViewPressure.files ?? [],
   };
-  const flagged = new Set<string>(Object.values(categories).flat());
+}
 
+function healthValidationDensities(
+  fileStats: HealthValidationFileStats,
+  flagged: ReadonlySet<string>,
+): {
+  flaggedFixDensity: number;
+  baselineFixDensity: number;
+} {
   let flaggedFixes = 0;
   let baselineFixes = 0;
   let baselineFiles = 0;
@@ -254,6 +281,14 @@ function buildHealthValidation(analyses: HealthAnalyses): HealthValidation | nul
   const flaggedFixDensity = flagged.size > 0 ? round2(flaggedFixes / flagged.size) : 0;
   const baselineFixDensity = baselineFiles > 0 ? round2(baselineFixes / baselineFiles) : 0;
 
+  return { flaggedFixDensity, baselineFixDensity };
+}
+
+function healthValidationByCategory(
+  categories: Record<string, string[]>,
+  fileStats: HealthValidationFileStats,
+  baselineFixDensity: number,
+): HealthValidation['byCategory'] {
   const byCategory: HealthValidation['byCategory'] = {};
   for (const [category, files] of Object.entries(categories)) {
     const unique = new Set(files);
@@ -267,18 +302,7 @@ function buildHealthValidation(analyses: HealthAnalyses): HealthValidation | nul
       lift: baselineFixDensity > 0 ? round2(density / baselineFixDensity) : null,
     };
   }
-
-  return {
-    flaggedFiles: flagged.size,
-    flaggedFixDensity,
-    baselineFixDensity,
-    ratio: flagged.size > 0 && baselineFixDensity > 0 ? round2(flaggedFixDensity / baselineFixDensity) : null,
-    byCategory,
-    validationBasis: {
-      method: 'subject-regex',
-      commitsScanned: analyses.gitEvidence?.commitsScanned ?? 0,
-    },
-  };
+  return byCategory;
 }
 
 function round2(value: number): number {

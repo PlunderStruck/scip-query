@@ -559,6 +559,23 @@ function fingerprintProjectFile(
   canonicalProjectRoot: string,
   relativePath: string,
 ): ProjectFileFingerprint[] {
+  const snapshot = fingerprintSnapshotProjectFile(projectRoot, relativePath);
+  if (snapshot) return snapshot;
+  const absPath = join(projectRoot, relativePath);
+  try {
+    const stats = lstatSync(absPath);
+    return stats.isSymbolicLink()
+      ? fingerprintProjectSymlink(canonicalProjectRoot, relativePath, absPath, stats)
+      : fingerprintRegularProjectFile(canonicalProjectRoot, relativePath, absPath, stats);
+  } catch (error) {
+    // `git ls-files` includes tracked paths deleted in the working tree. Their
+    // absence is a proved deletion; other I/O failures remain conservative.
+    if (isMissingProjectFileError(error)) return [];
+    return [{ path: relativePath, size: -1, hash: 'unreadable' }];
+  }
+}
+
+function fingerprintSnapshotProjectFile(projectRoot: string, relativePath: string): ProjectFileFingerprint[] | null {
   const snapshotFingerprint = projectSnapshotFingerprint(projectRoot, relativePath);
   if (snapshotFingerprint) {
     return [
@@ -581,72 +598,78 @@ function fingerprintProjectFile(
       ];
     }
   }
-  const absPath = join(projectRoot, relativePath);
-  try {
-    const stats = lstatSync(absPath);
-    if (stats.isSymbolicLink()) {
-      const cached = lookupProjectFileFingerprint(
-        canonicalProjectRoot,
-        relativePath,
-        'symlink',
-        fileStatIdentity(stats),
-      );
-      if (cached) return [{ path: relativePath, size: cached.size, hash: cached.hash }];
-      const targetPath = realpathSync(absPath);
-      const relativeTarget = relative(canonicalProjectRoot, targetPath);
-      if (relativeTarget === '..' || relativeTarget.startsWith(`..${sep}`) || isAbsolute(relativeTarget)) {
-        throw new Error('external symlink');
-      }
-      const target = readlinkSync(absPath);
-      const hash = createHash('sha256').update('symlink\0').update(target).digest('hex');
-      const size = Buffer.byteLength(target);
-      rememberProjectFileFingerprint(canonicalProjectRoot, relativePath, 'symlink', fileStatIdentity(stats), {
-        hash,
-        size,
-      });
-      return [{ path: relativePath, size, hash }];
-    }
-    const requiresSemanticHash =
-      supportsTypeScriptSemanticHash(relativePath) || supportsTypeScriptPackageSemanticHash(relativePath);
-    const cached = lookupProjectFileFingerprint(canonicalProjectRoot, relativePath, 'file', fileStatIdentity(stats));
-    if (cached && (!requiresSemanticHash || cached.semanticHash !== undefined)) {
-      return [
-        {
-          path: relativePath,
-          size: cached.size,
-          hash: cached.hash,
-          ...(cached.semanticHash === undefined ? {} : { semanticHash: cached.semanticHash }),
-        },
-      ];
-    }
-    const hash = createHash('sha256');
-    const collectSemanticSource = requiresSemanticHash;
-    const sourceChunks: Buffer[] = [];
-    const size = hashFileWithinLimit(
-      absPath,
-      { inputKind: 'project fingerprint input', maxBytes: DEFAULT_PROJECT_SOURCE_LIMIT_BYTES },
-      (chunk) => {
-        hash.update(chunk);
-        if (collectSemanticSource) sourceChunks.push(Buffer.from(chunk));
-      },
-    );
-    const digest = hash.digest('hex');
-    const source = collectSemanticSource ? Buffer.concat(sourceChunks, size) : undefined;
-    const semanticHash = source
-      ? (typeScriptSemanticHash(relativePath, source) ?? typeScriptPackageSemanticHash(relativePath, source))
-      : undefined;
-    rememberProjectFileFingerprint(canonicalProjectRoot, relativePath, 'file', fileStatIdentity(stats), {
-      hash: digest,
-      size,
-      ...(semanticHash === undefined ? {} : { semanticHash }),
-    });
-    return [{ path: relativePath, size, hash: digest, ...(semanticHash === undefined ? {} : { semanticHash }) }];
-  } catch (error) {
-    // `git ls-files` includes tracked paths deleted in the working tree. Their
-    // absence is a proved deletion; other I/O failures remain conservative.
-    if (isMissingProjectFileError(error)) return [];
-    return [{ path: relativePath, size: -1, hash: 'unreadable' }];
+  return null;
+}
+
+function fingerprintProjectSymlink(
+  canonicalProjectRoot: string,
+  relativePath: string,
+  absPath: string,
+  stats: Stats,
+): ProjectFileFingerprint[] {
+  const cached = lookupProjectFileFingerprint(canonicalProjectRoot, relativePath, 'symlink', fileStatIdentity(stats));
+  if (cached) return [{ path: relativePath, size: cached.size, hash: cached.hash }];
+  const targetPath = realpathSync(absPath);
+  const relativeTarget = relative(canonicalProjectRoot, targetPath);
+  if (relativeTarget === '..' || relativeTarget.startsWith(`..${sep}`) || isAbsolute(relativeTarget)) {
+    throw new Error('external symlink');
   }
+  const target = readlinkSync(absPath);
+  const hash = createHash('sha256').update('symlink\0').update(target).digest('hex');
+  const size = Buffer.byteLength(target);
+  rememberProjectFileFingerprint(canonicalProjectRoot, relativePath, 'symlink', fileStatIdentity(stats), {
+    hash,
+    size,
+  });
+  return [{ path: relativePath, size, hash }];
+}
+
+function fingerprintRegularProjectFile(
+  canonicalProjectRoot: string,
+  relativePath: string,
+  absPath: string,
+  stats: Stats,
+): ProjectFileFingerprint[] {
+  const requiresSemanticHash =
+    supportsTypeScriptSemanticHash(relativePath) || supportsTypeScriptPackageSemanticHash(relativePath);
+  const cached = lookupProjectFileFingerprint(canonicalProjectRoot, relativePath, 'file', fileStatIdentity(stats));
+  if (cached && (!requiresSemanticHash || cached.semanticHash !== undefined)) {
+    return [
+      {
+        path: relativePath,
+        size: cached.size,
+        hash: cached.hash,
+        ...(cached.semanticHash === undefined ? {} : { semanticHash: cached.semanticHash }),
+      },
+    ];
+  }
+  const fingerprint = hashProjectFileContent(absPath, relativePath, requiresSemanticHash);
+  rememberProjectFileFingerprint(canonicalProjectRoot, relativePath, 'file', fileStatIdentity(stats), fingerprint);
+  return [{ path: relativePath, ...fingerprint }];
+}
+
+function hashProjectFileContent(
+  absPath: string,
+  relativePath: string,
+  requiresSemanticHash: boolean,
+): Omit<ProjectFileFingerprint, 'path'> {
+  const hash = createHash('sha256');
+  const collectSemanticSource = requiresSemanticHash;
+  const sourceChunks: Buffer[] = [];
+  const size = hashFileWithinLimit(
+    absPath,
+    { inputKind: 'project fingerprint input', maxBytes: DEFAULT_PROJECT_SOURCE_LIMIT_BYTES },
+    (chunk) => {
+      hash.update(chunk);
+      if (collectSemanticSource) sourceChunks.push(Buffer.from(chunk));
+    },
+  );
+  const digest = hash.digest('hex');
+  const source = collectSemanticSource ? Buffer.concat(sourceChunks, size) : undefined;
+  const semanticHash = source
+    ? (typeScriptSemanticHash(relativePath, source) ?? typeScriptPackageSemanticHash(relativePath, source))
+    : undefined;
+  return { size, hash: digest, ...(semanticHash === undefined ? {} : { semanticHash }) };
 }
 
 function fileStatIdentity(stats: Stats): {

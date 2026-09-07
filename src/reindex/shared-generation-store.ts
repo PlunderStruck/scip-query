@@ -1107,38 +1107,13 @@ function refreshWorktreeLeaseTimestamp(
 
 export function parseSharedGenerationManifest(value: string): SharedGenerationManifest {
   const parsed = JSON.parse(value) as Partial<SharedGenerationManifest>;
-  if (
-    parsed.version !== SHARED_GENERATION_FORMAT_VERSION ||
-    parsed.artifactCatalogVersion !== INDEX_ARTIFACT_CATALOG_VERSION ||
-    typeof parsed.generationId !== 'string' ||
-    !/^[a-f0-9]{64}$/.test(parsed.generationId) ||
-    typeof parsed.repositoryId !== 'string' ||
-    !/^[a-f0-9]{24}$/.test(parsed.repositoryId) ||
-    typeof parsed.treeOid !== 'string' ||
-    !parsed.treeOid ||
-    typeof parsed.producerIdentity !== 'string' ||
-    parsed.producerIdentity !== SHARED_GENERATION_PRODUCER_IDENTITY ||
-    typeof parsed.sourceProjectRoot !== 'string' ||
-    typeof parsed.scipProjectRoot !== 'string' ||
-    typeof parsed.createdAt !== 'string' ||
-    !Number.isFinite(Date.parse(parsed.createdAt)) ||
-    !parsed.fingerprint ||
-    !Array.isArray(parsed.artifacts)
-  ) {
+  if (!validSharedGenerationIdentity(parsed) || !validSharedGenerationProvenance(parsed)) {
     throw new Error('invalid shared generation manifest');
   }
+  if (!validSharedGenerationContents(parsed)) throw new Error('invalid shared generation manifest');
   const seen = new Set<string>();
-  for (const artifact of parsed.artifacts) {
-    if (
-      !artifact ||
-      typeof artifact.path !== 'string' ||
-      typeof artifact.size !== 'number' ||
-      artifact.size < 0 ||
-      typeof artifact.sha256 !== 'string' ||
-      !/^[a-f0-9]{64}$/.test(artifact.sha256)
-    ) {
-      throw new Error('invalid shared generation artifact');
-    }
+  for (const artifact of parsed.artifacts!) {
+    validateSharedGenerationArtifact(artifact);
     validateIndexArtifactRelativePath(artifact.path);
     if (seen.has(artifact.path)) throw new Error(`duplicate shared generation artifact: ${artifact.path}`);
     seen.add(artifact.path);
@@ -1147,6 +1122,50 @@ export function parseSharedGenerationManifest(value: string): SharedGenerationMa
     if (!seen.has(required)) throw new Error(`shared generation is missing ${required}`);
   }
   return parsed as SharedGenerationManifest;
+}
+
+function validSharedGenerationIdentity(parsed: Partial<SharedGenerationManifest>): boolean {
+  return (
+    parsed.version === SHARED_GENERATION_FORMAT_VERSION &&
+    parsed.artifactCatalogVersion === INDEX_ARTIFACT_CATALOG_VERSION &&
+    typeof parsed.generationId === 'string' &&
+    /^[a-f0-9]{64}$/.test(parsed.generationId) &&
+    typeof parsed.repositoryId === 'string' &&
+    /^[a-f0-9]{24}$/.test(parsed.repositoryId)
+  );
+}
+
+function validSharedGenerationProvenance(parsed: Partial<SharedGenerationManifest>): boolean {
+  return (
+    typeof parsed.treeOid === 'string' &&
+    parsed.treeOid !== '' &&
+    typeof parsed.producerIdentity === 'string' &&
+    parsed.producerIdentity === SHARED_GENERATION_PRODUCER_IDENTITY &&
+    typeof parsed.sourceProjectRoot === 'string' &&
+    typeof parsed.scipProjectRoot === 'string'
+  );
+}
+
+function validSharedGenerationContents(parsed: Partial<SharedGenerationManifest>): boolean {
+  return (
+    typeof parsed.createdAt === 'string' &&
+    Number.isFinite(Date.parse(parsed.createdAt)) &&
+    Boolean(parsed.fingerprint) &&
+    Array.isArray(parsed.artifacts)
+  );
+}
+
+function validateSharedGenerationArtifact(artifact: SharedGenerationManifest['artifacts'][number]): void {
+  if (
+    !artifact ||
+    typeof artifact.path !== 'string' ||
+    typeof artifact.size !== 'number' ||
+    artifact.size < 0 ||
+    typeof artifact.sha256 !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(artifact.sha256)
+  ) {
+    throw new Error('invalid shared generation artifact');
+  }
 }
 
 export function cloneArtifactFile(

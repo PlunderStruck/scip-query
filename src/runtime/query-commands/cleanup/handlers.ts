@@ -272,7 +272,7 @@ export const handleSliceCohesion = budgetedDbCommand('slice-cohesion', ({ db, ar
   const symbol = optionalStringArg(args, 0) || undefined;
   const explicitScanLimit = numberOptionValue(opts, 'scanLimit');
   const progress = candidateScanProgressReporter('slice-cohesion');
-  let counters: { scanLimitApplied: boolean; resultLimitApplied: boolean; matchedResults: number } | null = null;
+  let counters: SliceCohesionScanCounters | null = null;
   const results = queries.sliceCohesion(db, {
     symbol,
     scope: stringOptionValue(opts, 'scope'),
@@ -291,22 +291,8 @@ export const handleSliceCohesion = budgetedDbCommand('slice-cohesion', ({ db, ar
     // A targeted symbol is resolved completely. A scan is complete when every
     // candidate was analyzed and every finding printed; a capped scan cannot
     // know its total, and a capped report knows what it omitted.
-    const scan = counters as { scanLimitApplied: boolean; resultLimitApplied: boolean; matchedResults: number } | null;
-    const returned = results.length;
-    const coverage: InvocationCoverage =
-      symbol || !scan
-        ? { complete: true, totalKnown: true, returned, total: returned, omitted: 0 }
-        : scan.scanLimitApplied
-          ? { complete: false, totalKnown: false, returned }
-          : scan.resultLimitApplied
-            ? {
-                complete: false,
-                totalKnown: true,
-                returned,
-                total: scan.matchedResults,
-                omitted: scan.matchedResults - returned,
-              }
-            : { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
+    const scan = counters as SliceCohesionScanCounters | null;
+    const coverage = sliceCohesionInvocationCoverage(symbol, scan, results.length);
     printJsonEnvelope('slice-cohesion', args, opts, results, {
       coverage,
       ...(symbol ? {} : { analysisBudget: budget.analysisBudget }),
@@ -324,44 +310,69 @@ export const handleSliceCohesion = budgetedDbCommand('slice-cohesion', ({ db, ar
       `Bounded scan: at most ${budget.analysisBudget.scanLimit} candidates, largest first; the count below is not repository-wide.\n`,
     );
   }
-  for (const r of results) {
-    const extractions = r.clusters.filter((cluster) => cluster.role === 'extraction');
-    console.log(
-      `\n${displayPathRange(r.relativePath, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC, ${r.statementCount} statements, ${r.archetype}${r.operational ? ', operational' : ''})`,
-    );
-    console.log(
-      `  ${r.actionTier}; local model ${r.coverage.status}; ${extractions.length} extraction(s), ${extractions.filter((cluster) => cluster.narrow).length} narrow; ${r.tierReason}`,
-    );
-    console.log(`  Recommendation: ${displaySnippet(r.recommendation, 600)}`);
-    for (const reason of r.evidenceReasons) console.log(`  - ${displaySnippet(reason, 300)}`);
-    if (symbol) {
-      console.log('  Outputs:');
-      for (const output of r.outputs) {
-        console.log(
-          `    ${output.id}  [${output.kind}${output.guard ? ', guard' : ''}${output.hook ? ', hook' : ''}]  slice ${output.sliceSize} statement(s)`,
-        );
-      }
-      console.log('  Clusters:');
-      r.clusters.forEach((cluster, index) => {
-        const interfaceNote =
-          cluster.role === 'remainder'
-            ? ' (stays in place)'
-            : cluster.inputs.length > 0
-              ? `; parameters${cluster.narrow ? '' : ' (wide)'} ${cluster.inputs.join(', ')}`
-              : '; no parameters';
-        console.log(
-          `    ${index + 1}. ${cluster.kind}, ${cluster.role}: ${cluster.units.length} statement(s) producing ${cluster.outputs.join(', ')}${interfaceNote}`,
-        );
-      });
-      console.log('  Statements:');
-      for (const unit of r.units ?? [])
-        console.log(
-          `    ${String(unit.index).padStart(3)}  ${unit.kind.padEnd(11)} ${displayRange(unit.startLine, unit.endLine)}  ${displaySnippet(unit.label, 100)}`,
-        );
-    }
-  }
+  for (const result of results) renderSliceCohesionCandidate(result, Boolean(symbol));
   console.log(`\n${results.length} slice-cohesion candidate(s).`);
 });
+
+type SliceCohesionResult = ReturnType<typeof queries.sliceCohesion>[number];
+type SliceCohesionScanCounters = { scanLimitApplied: boolean; resultLimitApplied: boolean; matchedResults: number };
+
+function sliceCohesionInvocationCoverage(
+  symbol: string | undefined,
+  scan: SliceCohesionScanCounters | null,
+  returned: number,
+): InvocationCoverage {
+  if (symbol || !scan) return { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
+  if (scan.scanLimitApplied) return { complete: false, totalKnown: false, returned };
+  if (scan.resultLimitApplied)
+    return {
+      complete: false,
+      totalKnown: true,
+      returned,
+      total: scan.matchedResults,
+      omitted: scan.matchedResults - returned,
+    };
+  return { complete: true, totalKnown: true, returned, total: returned, omitted: 0 };
+}
+
+function renderSliceCohesionCandidate(r: SliceCohesionResult, targeted: boolean): void {
+  const extractions = r.clusters.filter((cluster) => cluster.role === 'extraction');
+  console.log(
+    `\n${displayPathRange(r.relativePath, r.startLine, r.endLine)}  ${r.shortName}  (${r.loc} LOC, ${r.statementCount} statements, ${r.archetype}${r.operational ? ', operational' : ''})`,
+  );
+  console.log(
+    `  ${r.actionTier}; local model ${r.coverage.status}; ${extractions.length} extraction(s), ${extractions.filter((cluster) => cluster.narrow).length} narrow; ${r.tierReason}`,
+  );
+  console.log(`  Recommendation: ${displaySnippet(r.recommendation, 600)}`);
+  for (const reason of r.evidenceReasons) console.log(`  - ${displaySnippet(reason, 300)}`);
+  if (targeted) renderSliceCohesionDetails(r);
+}
+
+function renderSliceCohesionDetails(r: SliceCohesionResult): void {
+  console.log('  Outputs:');
+  for (const output of r.outputs) {
+    console.log(
+      `    ${output.id}  [${output.kind}${output.guard ? ', guard' : ''}${output.hook ? ', hook' : ''}]  slice ${output.sliceSize} statement(s)`,
+    );
+  }
+  console.log('  Clusters:');
+  r.clusters.forEach((cluster, index) => {
+    const interfaceNote =
+      cluster.role === 'remainder'
+        ? ' (stays in place)'
+        : cluster.inputs.length > 0
+          ? `; parameters${cluster.narrow ? '' : ' (wide)'} ${cluster.inputs.join(', ')}`
+          : '; no parameters';
+    console.log(
+      `    ${index + 1}. ${cluster.kind}, ${cluster.role}: ${cluster.units.length} statement(s) producing ${cluster.outputs.join(', ')}${interfaceNote}`,
+    );
+  });
+  console.log('  Statements:');
+  for (const unit of r.units ?? [])
+    console.log(
+      `    ${String(unit.index).padStart(3)}  ${unit.kind.padEnd(11)} ${displayRange(unit.startLine, unit.endLine)}  ${displaySnippet(unit.label, 100)}`,
+    );
+}
 
 export const handleSimilar = budgetedReportCommand('similar', {
   query: ({ db, args, opts, budget }) => {

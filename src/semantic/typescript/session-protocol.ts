@@ -77,23 +77,8 @@ export function parseTypeScriptSemanticEnvelope(raw: string): TypeScriptSemantic
   const legacy = protocolVersion === TYPESCRIPT_SEMANTIC_LEGACY_PROTOCOL_VERSION;
   if (
     (!legacy && protocolVersion !== TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION) ||
-    typeof parsed.id !== 'string' ||
-    typeof parsed.generation !== 'string' ||
-    typeof parsed.deadlineAtMs !== 'number' ||
-    !Number.isFinite(parsed.deadlineAtMs) ||
-    (parsed.profileEnvironment !== undefined && !isStringOrNullRecord(parsed.profileEnvironment)) ||
-    !parsed.request ||
-    !isTypeScriptSemanticRequest(parsed.request) ||
-    (!legacy &&
-      (parsed.mailboxVersion !== BOUNDED_MAILBOX_VERSION ||
-        typeof parsed.operationKey !== 'string' ||
-        !/^[a-f0-9]{64}$/.test(parsed.operationKey) ||
-        parsed.id !== boundedMailboxRequestId(parsed.operationKey) ||
-        typeof parsed.clientId !== 'string' ||
-        !parsed.clientId ||
-        typeof parsed.enqueuedAtMs !== 'number' ||
-        !Number.isFinite(parsed.enqueuedAtMs) ||
-        parsed.deadlineAtMs < parsed.enqueuedAtMs))
+    !isSemanticEnvelopeHeader(parsed) ||
+    (!legacy && !validCurrentSemanticMailboxIdentity(parsed))
   ) {
     throw new Error('TypeScript semantic service received an invalid mailbox request.');
   }
@@ -126,6 +111,41 @@ export function parseTypeScriptSemanticEnvelope(raw: string): TypeScriptSemantic
     ...(parsed.profileEnvironment ? { profileEnvironment: parsed.profileEnvironment } : {}),
     request: parsed.request,
   };
+}
+
+type SemanticEnvelopeHeader = Pick<
+  TypeScriptSemanticMailboxEnvelope,
+  'id' | 'generation' | 'deadlineAtMs' | 'profileEnvironment' | 'request'
+>;
+
+function isSemanticEnvelopeHeader(
+  parsed: Partial<TypeScriptSemanticMailboxEnvelope>,
+): parsed is Partial<TypeScriptSemanticMailboxEnvelope> & SemanticEnvelopeHeader {
+  return (
+    typeof parsed.id === 'string' &&
+    typeof parsed.generation === 'string' &&
+    typeof parsed.deadlineAtMs === 'number' &&
+    Number.isFinite(parsed.deadlineAtMs) &&
+    (parsed.profileEnvironment === undefined || isStringOrNullRecord(parsed.profileEnvironment)) &&
+    Boolean(parsed.request) &&
+    isTypeScriptSemanticRequest(parsed.request)
+  );
+}
+
+function validCurrentSemanticMailboxIdentity(
+  parsed: Partial<TypeScriptSemanticMailboxEnvelope> & SemanticEnvelopeHeader,
+): boolean {
+  return (
+    parsed.mailboxVersion === BOUNDED_MAILBOX_VERSION &&
+    typeof parsed.operationKey === 'string' &&
+    /^[a-f0-9]{64}$/.test(parsed.operationKey) &&
+    parsed.id === boundedMailboxRequestId(parsed.operationKey) &&
+    typeof parsed.clientId === 'string' &&
+    parsed.clientId !== '' &&
+    typeof parsed.enqueuedAtMs === 'number' &&
+    Number.isFinite(parsed.enqueuedAtMs) &&
+    parsed.deadlineAtMs >= parsed.enqueuedAtMs
+  );
 }
 
 function isTypeScriptSemanticRequest(value: unknown): value is TypeScriptSemanticRequest {

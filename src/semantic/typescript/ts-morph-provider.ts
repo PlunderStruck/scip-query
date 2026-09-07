@@ -351,48 +351,55 @@ class TsMorphSemanticProvider implements SemanticProvider {
       result.set(definition.symbolId, []);
     }
 
+    const addPackageReferences = (): void => {
+      const packageRefsStart = profiling ? performance.now() : 0;
+      const packageReferenceIndex = originFiles
+        ? this.packageImportReferencesForFiles(originFiles)
+        : this.packageImportReferences();
+      for (const definition of definitions) {
+        const packageRefs = packageReferenceIndex.get(definition.symbolId) ?? [];
+        if (packageRefs.length > 0) {
+          const bucket = result.get(definition.symbolId) ?? [];
+          bucket.push(...packageRefs);
+          result.set(definition.symbolId, bucket);
+        }
+        if (profiling) stats.packageReferenceCount += packageRefs.length;
+      }
+      if (profiling) stats.packageRefsMs += performance.now() - packageRefsStart;
+    };
+    const scanReferenceSourceFiles = (): void => {
+      const symbolCache = new Map<TypeScriptSymbol, ResolvedCalleeTarget | null>();
+      const hierarchySymbolKeyCache = new Map<TypeScriptSymbol, string[]>();
+      const hierarchyTargets = this.hierarchyTargetsForDefinitions(definitions);
+      const referenceNames = new Set(definitions.map((definition) => definition.leaf).filter(Boolean));
+      const scanStart = profiling ? performance.now() : 0;
+      for (const relativePath of originFiles ?? this.sourceFiles.indexedTypeScriptLikeDocuments()) {
+        if (this.db.isIgnored(relativePath)) continue;
+        const sourceFile = this.sourceFiles.sourceFile(relativePath);
+        if (!sourceFile) continue;
+        if (profiling) stats.scanFiles += 1;
+        this.addReferencesFromSourceFileScan(
+          sourceFile,
+          relativePath,
+          requestedSymbolIds,
+          definitionBySymbolId,
+          hierarchyTargets,
+          referenceNames,
+          symbolCache,
+          hierarchySymbolKeyCache,
+          result,
+          profiling ? stats : undefined,
+        );
+      }
+      if (profiling) stats.scanMs += performance.now() - scanStart;
+    };
+
     profileSpan(
       'typescript.references-map.inverted-scan',
       () => {
-        const packageRefsStart = profiling ? performance.now() : 0;
-        const packageReferenceIndex = originFiles
-          ? this.packageImportReferencesForFiles(originFiles)
-          : this.packageImportReferences();
-        for (const definition of definitions) {
-          const packageRefs = packageReferenceIndex.get(definition.symbolId) ?? [];
-          if (packageRefs.length > 0) {
-            const bucket = result.get(definition.symbolId) ?? [];
-            bucket.push(...packageRefs);
-            result.set(definition.symbolId, bucket);
-          }
-          if (profiling) stats.packageReferenceCount += packageRefs.length;
-        }
-        if (profiling) stats.packageRefsMs += performance.now() - packageRefsStart;
+        addPackageReferences();
 
-        const symbolCache = new Map<TypeScriptSymbol, ResolvedCalleeTarget | null>();
-        const hierarchySymbolKeyCache = new Map<TypeScriptSymbol, string[]>();
-        const hierarchyTargets = this.hierarchyTargetsForDefinitions(definitions);
-        const referenceNames = new Set(definitions.map((definition) => definition.leaf).filter(Boolean));
-        const scanStart = profiling ? performance.now() : 0;
-        for (const relativePath of originFiles ?? this.sourceFiles.indexedTypeScriptLikeDocuments()) {
-          if (this.db.isIgnored(relativePath)) continue;
-          const sourceFile = this.sourceFiles.sourceFile(relativePath);
-          if (!sourceFile) continue;
-          if (profiling) stats.scanFiles += 1;
-          this.addReferencesFromSourceFileScan(
-            sourceFile,
-            relativePath,
-            requestedSymbolIds,
-            definitionBySymbolId,
-            hierarchyTargets,
-            referenceNames,
-            symbolCache,
-            hierarchySymbolKeyCache,
-            result,
-            profiling ? stats : undefined,
-          );
-        }
-        if (profiling) stats.scanMs += performance.now() - scanStart;
+        scanReferenceSourceFiles();
 
         const hierarchyStart = profiling ? performance.now() : 0;
         this.addHierarchyMemberReferences(definitions, result, profiling ? stats : undefined);
@@ -817,26 +824,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
           const caller = callerForNode(node);
           const coverage = caller ? result.get(caller.symbolId) : undefined;
           if (coverage) {
-            coverage.callSites += 1;
-            const render = this.tsMorph.ts.isJsxOpeningElement(node) || this.tsMorph.ts.isJsxSelfClosingElement(node);
-            const expression =
-              render && !this.tsMorph.ts.isJsxNamespacedName(node.tagName)
-                ? (node.tagName as ts.Expression)
-                : render
-                  ? null
-                  : node.expression;
-            const symbol = expression ? this.compilerSymbolForExpression(checker, expression) : undefined;
-            if (!symbol) {
-              coverage.unresolved += 1;
-            } else {
-              let target = symbolCache.get(symbol);
-              if (target === undefined) {
-                target = this.definitionFromCompilerSymbol(symbol);
-                symbolCache.set(symbol, target);
-              }
-              if (target) coverage.resolvedInRepository += 1;
-              else coverage.resolvedExternal += 1;
-            }
+            this.recordCallSiteCoverage(node, checker, coverage, symbolCache);
           }
         }
         this.tsMorph.ts.forEachChild(node, visit);
@@ -844,6 +832,37 @@ class TsMorphSemanticProvider implements SemanticProvider {
       visit(compilerSourceFile);
     }
     return result;
+  }
+
+  private callNodeExpression(
+    node: ts.CallExpression | ts.NewExpression | ts.JsxOpeningElement | ts.JsxSelfClosingElement,
+  ): ts.Expression | null {
+    const render = this.tsMorph.ts.isJsxOpeningElement(node) || this.tsMorph.ts.isJsxSelfClosingElement(node);
+    if (!render) return node.expression;
+    if (this.tsMorph.ts.isJsxNamespacedName(node.tagName)) return null;
+    return node.tagName as ts.Expression;
+  }
+
+  private recordCallSiteCoverage(
+    node: ts.CallExpression | ts.NewExpression | ts.JsxOpeningElement | ts.JsxSelfClosingElement,
+    checker: TypeScriptTypeChecker,
+    coverage: SemanticCalleeCoverage,
+    symbolCache: Map<TypeScriptSymbol, ResolvedCalleeTarget | null>,
+  ): void {
+    coverage.callSites += 1;
+    const expression = this.callNodeExpression(node);
+    const symbol = expression ? this.compilerSymbolForExpression(checker, expression) : undefined;
+    if (!symbol) {
+      coverage.unresolved += 1;
+      return;
+    }
+    let target = symbolCache.get(symbol);
+    if (target === undefined) {
+      target = this.definitionFromCompilerSymbol(symbol);
+      symbolCache.set(symbol, target);
+    }
+    if (target) coverage.resolvedInRepository += 1;
+    else coverage.resolvedExternal += 1;
   }
 
   private referencesForDefinitionNode(
@@ -1323,36 +1342,15 @@ class TsMorphSemanticProvider implements SemanticProvider {
     requestedSymbolIds?: ReadonlySet<number>,
     stats?: CalleeMapProfileStats,
   ): { callerId: number; target: SemanticCallee } | null {
-    const callerStart = stats ? performance.now() : 0;
-    const caller = callerForNode(node);
-    if (stats) stats.callerLookupMs += performance.now() - callerStart;
+    const caller = this.requestedCallSiteOwner(callerForNode, node, requestedSymbolIds, stats);
     if (!caller) return null;
-    if (requestedSymbolIds && !requestedSymbolIds.has(caller.symbolId)) {
-      if (stats) stats.skippedUnrequestedCallers += 1;
-      return null;
-    }
     const render = this.tsMorph.ts.isJsxOpeningElement(node) || this.tsMorph.ts.isJsxSelfClosingElement(node);
     // `isJsxComponentElement` admits only identifier and property-access tags,
     // both expressions; a namespaced tag (`<svg:rect>`) never reaches here.
     if (render && this.tsMorph.ts.isJsxNamespacedName(node.tagName)) return null;
     const expression = render ? (node.tagName as ts.Expression) : node.expression;
     const symbol = this.compilerSymbolForExpression(checker, expression, stats);
-    let target: ResolvedCalleeTarget | null = null;
-    if (symbol) {
-      if (stats) stats.targetSymbolHits += 1;
-      if (symbolCache.has(symbol)) {
-        if (stats) stats.compilerSymbolCacheHits += 1;
-        target = symbolCache.get(symbol) ?? null;
-      } else {
-        if (stats) stats.compilerSymbolCacheMisses += 1;
-        const targetStart = stats ? performance.now() : 0;
-        target = this.definitionFromCompilerSymbol(symbol, stats);
-        if (stats) stats.targetLookupMs += performance.now() - targetStart;
-        symbolCache.set(symbol, target);
-      }
-    } else if (stats) {
-      stats.targetMisses += 1;
-    }
+    const target = this.profiledCalleeTarget(symbol, symbolCache, stats);
     return target
       ? {
           callerId: caller.symbolId,
@@ -1365,6 +1363,45 @@ class TsMorphSemanticProvider implements SemanticProvider {
           },
         }
       : null;
+  }
+
+  private requestedCallSiteOwner(
+    callerForNode: (node: ts.Node) => IndexedDefinition | undefined,
+    node: ts.Node,
+    requestedSymbolIds?: ReadonlySet<number>,
+    stats?: CalleeMapProfileStats,
+  ): IndexedDefinition | null {
+    const callerStart = stats ? performance.now() : 0;
+    const caller = callerForNode(node);
+    if (stats) stats.callerLookupMs += performance.now() - callerStart;
+    if (!caller) return null;
+    if (requestedSymbolIds && !requestedSymbolIds.has(caller.symbolId)) {
+      if (stats) stats.skippedUnrequestedCallers += 1;
+      return null;
+    }
+    return caller;
+  }
+
+  private profiledCalleeTarget(
+    symbol: TypeScriptSymbol | undefined,
+    symbolCache: Map<TypeScriptSymbol, ResolvedCalleeTarget | null>,
+    stats?: CalleeMapProfileStats,
+  ): ResolvedCalleeTarget | null {
+    if (!symbol) {
+      if (stats) stats.targetMisses += 1;
+      return null;
+    }
+    if (stats) stats.targetSymbolHits += 1;
+    if (symbolCache.has(symbol)) {
+      if (stats) stats.compilerSymbolCacheHits += 1;
+      return symbolCache.get(symbol) ?? null;
+    }
+    if (stats) stats.compilerSymbolCacheMisses += 1;
+    const targetStart = stats ? performance.now() : 0;
+    const target = this.definitionFromCompilerSymbol(symbol, stats);
+    if (stats) stats.targetLookupMs += performance.now() - targetStart;
+    symbolCache.set(symbol, target);
+    return target;
   }
 
   private compilerSymbolForExpression(

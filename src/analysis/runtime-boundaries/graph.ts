@@ -881,6 +881,67 @@ const DIRECT_EXTRACTION_PRODUCT = createFileEvidenceProduct<DirectExtractionPayl
   },
 });
 
+function boundarySourceLineStarts(source: string): number[] {
+  const lineStarts = [0];
+  for (let index = 0; index < source.length; index += 1) {
+    if (source.charCodeAt(index) === 10) lineStarts.push(index + 1);
+  }
+  return lineStarts;
+}
+
+function rescanBoundaryTemplateToken(
+  scanner: TypeScript.Scanner,
+  token: TypeScript.SyntaxKind,
+  templateBraceDepths: readonly number[],
+): TypeScript.SyntaxKind {
+  if (
+    token === typescript.SyntaxKind.CloseBraceToken &&
+    templateBraceDepths.length > 0 &&
+    templateBraceDepths.at(-1) === 0
+  ) {
+    token = scanner.reScanTemplateToken(false);
+  }
+  return token;
+}
+
+function boundaryTokenLine(lineStarts: readonly number[], tokenLine: number, tokenPosition: number): number {
+  while (lineStarts[tokenLine + 1] !== undefined && lineStarts[tokenLine + 1]! <= tokenPosition) {
+    tokenLine += 1;
+  }
+  return tokenLine;
+}
+
+function hashBoundaryToken(
+  hash: ReturnType<typeof createHash>,
+  token: TypeScript.SyntaxKind,
+  tokenText: string,
+  tokenLine: number,
+  includeText: boolean,
+): void {
+  hash.update(String(token));
+  hash.update('\0');
+  if (includeText) hash.update(tokenText);
+  hash.update('\0');
+  hash.update(String(tokenLine));
+  hash.update('\0');
+}
+
+function updateBoundaryTemplateDepth(token: TypeScript.SyntaxKind, templateBraceDepths: number[]): void {
+  if (token === typescript.SyntaxKind.TemplateHead) {
+    templateBraceDepths.push(0);
+  } else if (token === typescript.SyntaxKind.TemplateTail) {
+    templateBraceDepths.pop();
+  } else if (token === typescript.SyntaxKind.OpenBraceToken && templateBraceDepths.length > 0) {
+    templateBraceDepths[templateBraceDepths.length - 1]! += 1;
+  } else if (
+    token === typescript.SyntaxKind.CloseBraceToken &&
+    templateBraceDepths.length > 0 &&
+    templateBraceDepths.at(-1)! > 0
+  ) {
+    templateBraceDepths[templateBraceDepths.length - 1]! -= 1;
+  }
+}
+
 function boundarySourceHashes(file: string, source: string): { syntaxHash: string; shapeHash: string } {
   if (!/\.(?:[cm]?[jt]sx?)$/iu.test(file)) {
     const hash = createHash('sha256').update(source).digest('hex');
@@ -893,52 +954,23 @@ function boundarySourceHashes(file: string, source: string): { syntaxHash: strin
   const syntaxHash = createHash('sha256');
   const shapeHash = createHash('sha256');
   const templateBraceDepths: number[] = [];
-  const lineStarts = [0];
-  for (let index = 0; index < source.length; index += 1) {
-    if (source.charCodeAt(index) === 10) lineStarts.push(index + 1);
-  }
+  const lineStarts = boundarySourceLineStarts(source);
   let tokenLine = 0;
   for (let token = scanner.scan(); token !== typescript.SyntaxKind.EndOfFileToken; token = scanner.scan()) {
-    if (
-      token === typescript.SyntaxKind.CloseBraceToken &&
-      templateBraceDepths.length > 0 &&
-      templateBraceDepths.at(-1) === 0
-    ) {
-      token = scanner.reScanTemplateToken(false);
-    }
+    token = rescanBoundaryTemplateToken(scanner, token, templateBraceDepths);
     if (TYPESCRIPT_TRIVIA.has(token)) continue;
     const tokenText = scanner.getTokenText();
-    while (lineStarts[tokenLine + 1] !== undefined && lineStarts[tokenLine + 1]! <= scanner.getTokenPos()) {
-      tokenLine += 1;
-    }
-    syntaxHash.update(String(token));
-    syntaxHash.update('\0');
-    syntaxHash.update(tokenText);
-    syntaxHash.update('\0');
-    syntaxHash.update(String(tokenLine));
-    syntaxHash.update('\0');
-    shapeHash.update(String(token));
-    shapeHash.update('\0');
-    if (!TYPESCRIPT_LITERAL_VALUES.has(token) && !isBoundaryAddressString(token, tokenText)) {
-      shapeHash.update(tokenText);
-    }
-    shapeHash.update('\0');
-    shapeHash.update(String(tokenLine));
-    shapeHash.update('\0');
+    tokenLine = boundaryTokenLine(lineStarts, tokenLine, scanner.getTokenPos());
+    hashBoundaryToken(syntaxHash, token, tokenText, tokenLine, true);
+    hashBoundaryToken(
+      shapeHash,
+      token,
+      tokenText,
+      tokenLine,
+      !TYPESCRIPT_LITERAL_VALUES.has(token) && !isBoundaryAddressString(token, tokenText),
+    );
 
-    if (token === typescript.SyntaxKind.TemplateHead) {
-      templateBraceDepths.push(0);
-    } else if (token === typescript.SyntaxKind.TemplateTail) {
-      templateBraceDepths.pop();
-    } else if (token === typescript.SyntaxKind.OpenBraceToken && templateBraceDepths.length > 0) {
-      templateBraceDepths[templateBraceDepths.length - 1]! += 1;
-    } else if (
-      token === typescript.SyntaxKind.CloseBraceToken &&
-      templateBraceDepths.length > 0 &&
-      templateBraceDepths.at(-1)! > 0
-    ) {
-      templateBraceDepths[templateBraceDepths.length - 1]! -= 1;
-    }
+    updateBoundaryTemplateDepth(token, templateBraceDepths);
   }
   return { syntaxHash: syntaxHash.digest('hex'), shapeHash: shapeHash.digest('hex') };
 }
@@ -1047,6 +1079,54 @@ function normalizeGroup(group: BoundaryRelationGroup): BoundaryRelationGroup {
   };
 }
 
+function groupFitsMaterializationBounds(
+  group: BoundaryRelationGroup,
+  rule: GroupRule,
+  fromIds: readonly string[],
+): boolean {
+  if (fromIds.length === 0 || group.consumerIds.length === 0) return false;
+  if (rule.requireUniquePair && (fromIds.length !== 1 || group.consumerIds.length !== 1)) return false;
+  if (rule.requireUniqueConsumer && group.consumerIds.length !== 1) return false;
+  return fromIds.length * group.consumerIds.length <= MAX_MATERIALIZED_PAIRS_PER_GROUP;
+}
+
+function materializableGroupSourceIds(group: BoundaryRelationGroup): readonly string[] {
+  const rule = GROUP_RULES.find((candidate) => candidate.id === group.joinRule);
+  if (!rule?.traversable) return [];
+  const fromIds = rule.linkFrom === 'declaration' ? group.declarationIds : group.producerIds;
+  return groupFitsMaterializationBounds(group, rule, fromIds) ? fromIds : [];
+}
+
+function materializeBoundaryLink(
+  group: BoundaryRelationGroup,
+  from: string,
+  to: string,
+  byId: ReadonlyMap<string, BoundaryObservation>,
+): BoundaryLink | null {
+  const left = byId.get(from);
+  const right = byId.get(to);
+  if (!left || !right || sameSite(left, right)) return null;
+  const strength: BoundaryEvidenceStrength =
+    left.strength === 'derived' || right.strength === 'derived' ? 'derived' : 'exact';
+  const identity = `${group.joinRule}\0${from}\0${to}`;
+  const link: BoundaryLink = {
+    id: `boundary-link:${createHash('sha256').update(identity).digest('hex').slice(0, 16)}`,
+    from,
+    to,
+    joinRule: group.joinRule,
+    matchedKeyParts: group.keyParts,
+    strength,
+    derivation: {
+      kind: 'mechanically-derived',
+      rule: group.joinRule,
+      ruleVersion: '2',
+      inputFactIds: [from, to],
+      sourceSpans: [left.source, right.source],
+    },
+  };
+  return link;
+}
+
 export function materializeBoundedLinks(
   observations: readonly BoundaryObservation[],
   groups: readonly BoundaryRelationGroup[],
@@ -1054,36 +1134,11 @@ export function materializeBoundedLinks(
   const byId = new Map(observations.map((observation) => [observation.id, observation]));
   const links = new Map<string, BoundaryLink>();
   for (const group of groups) {
-    const rule = GROUP_RULES.find((candidate) => candidate.id === group.joinRule);
-    if (!rule?.traversable) continue;
-    const fromIds = rule.linkFrom === 'declaration' ? group.declarationIds : group.producerIds;
-    if (fromIds.length === 0 || group.consumerIds.length === 0) continue;
-    if (rule.requireUniquePair && (fromIds.length !== 1 || group.consumerIds.length !== 1)) continue;
-    if (rule.requireUniqueConsumer && group.consumerIds.length !== 1) continue;
-    if (fromIds.length * group.consumerIds.length > MAX_MATERIALIZED_PAIRS_PER_GROUP) continue;
+    const fromIds = materializableGroupSourceIds(group);
     for (const from of fromIds) {
       for (const to of group.consumerIds) {
-        const left = byId.get(from);
-        const right = byId.get(to);
-        if (!left || !right || sameSite(left, right)) continue;
-        const strength: BoundaryEvidenceStrength =
-          left.strength === 'derived' || right.strength === 'derived' ? 'derived' : 'exact';
-        const identity = `${group.joinRule}\0${from}\0${to}`;
-        const link: BoundaryLink = {
-          id: `boundary-link:${createHash('sha256').update(identity).digest('hex').slice(0, 16)}`,
-          from,
-          to,
-          joinRule: group.joinRule,
-          matchedKeyParts: group.keyParts,
-          strength,
-          derivation: {
-            kind: 'mechanically-derived',
-            rule: group.joinRule,
-            ruleVersion: '2',
-            inputFactIds: [from, to],
-            sourceSpans: [left.source, right.source],
-          },
-        };
+        const link = materializeBoundaryLink(group, from, to, byId);
+        if (!link) continue;
         links.set(link.id, link);
       }
     }

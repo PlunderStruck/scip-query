@@ -402,6 +402,26 @@ export function handleInstallSkills(rawOpts: unknown): void {
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
 export function handleCheckDeps(): void {
+  let hasProblems = reportScipDependency();
+
+  const projectRoot = resolveProjectRoot();
+  const config = loadProjectConfig(projectRoot);
+  const readiness = getProjectReadiness(projectRoot, config);
+  if (readiness.languages.length === 0) {
+    console.log('\nNo supported project languages detected in the current directory.');
+    process.exitCode = hasProblems ? 1 : 0;
+    return;
+  }
+
+  const indexerProblems = reportIndexerReadiness(readiness);
+  hasProblems = hasProblems || indexerProblems;
+
+  reportSemanticReadiness(readiness);
+
+  process.exitCode = hasProblems ? 1 : 0;
+}
+
+function reportScipDependency(): boolean {
   let hasProblems = false;
   if (isScipInstalled()) {
     console.log('scip CLI: installed');
@@ -414,15 +434,11 @@ export function handleCheckDeps(): void {
     );
   }
 
-  const projectRoot = resolveProjectRoot();
-  const config = loadProjectConfig(projectRoot);
-  const readiness = getProjectReadiness(projectRoot, config);
-  if (readiness.languages.length === 0) {
-    console.log('\nNo supported project languages detected in the current directory.');
-    process.exitCode = hasProblems ? 1 : 0;
-    return;
-  }
+  return hasProblems;
+}
 
+function reportIndexerReadiness(readiness: ReturnType<typeof getProjectReadiness>): boolean {
+  let hasProblems = false;
   console.log(`\nDetected languages: ${readiness.languages.join(', ')}`);
   console.log('\nIndexer readiness:');
   for (const status of readiness.indexers) {
@@ -434,6 +450,10 @@ export function handleCheckDeps(): void {
     if (!status.runnable) hasProblems = true;
   }
 
+  return hasProblems;
+}
+
+function reportSemanticReadiness(readiness: ReturnType<typeof getProjectReadiness>): void {
   const semanticEntries = semanticReadinessEntries(readiness);
   if (semanticEntries.length > 0) {
     console.log('\nSemantic provider readiness:');
@@ -443,8 +463,6 @@ export function handleCheckDeps(): void {
     console.log(`${prefix} ${status.language}: ${semanticProviderLabel(status)}${semanticDetailSuffix(status)}`);
     if (status.reason) console.log(`    ${status.reason}`);
   }
-
-  process.exitCode = hasProblems ? 1 : 0;
 }
 
 // scip-query: ignore-passthrough — command handler is the CLI routing boundary for capability rendering.

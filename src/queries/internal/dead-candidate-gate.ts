@@ -32,6 +32,69 @@ export interface DeadCandidateDecision {
   rejectionReason?: DeadCandidateRejectionReason;
 }
 
+type DeadCandidateDefinition = Parameters<typeof deadCandidateDecision>[0];
+type DeadCandidateOptions = Parameters<typeof deadCandidateDecision>[1];
+
+function deadDefinitionShapeRejection(
+  definition: DeadCandidateDefinition,
+  opts: DeadCandidateOptions,
+): DeadCandidateRejectionReason | undefined {
+  if (opts.isIgnoredPath(definition.relativePath)) return 'ignored-file';
+  if (isModuleLikeSymbol(definition.symbol)) return 'module-like-symbol';
+  if (!looksValueLikeDefinition(definition.symbol)) return 'non-value-symbol';
+  if (!definition.isFunctionLike && definition.enclosingSymbol && looksValueLikeDefinition(definition.enclosingSymbol))
+    return 'nested-non-callable-value';
+  return undefined;
+}
+
+function deadFileRegionRejection(
+  definition: DeadCandidateDefinition,
+  opts: DeadCandidateOptions,
+): DeadCandidateRejectionReason | undefined {
+  if (!opts.includeTests && !passesDeadTestFileFilter(definition.relativePath)) return 'test-file';
+  if (
+    !opts.includeTests &&
+    opts.isExcludedRegion(definition.relativePath, definition.startLine, definition.symbol, definition.parentTypeName)
+  )
+    return 'excluded-file-region';
+  return undefined;
+}
+
+function deadImplicitInvocationRejection(
+  definition: DeadCandidateDefinition,
+): DeadCandidateRejectionReason | undefined {
+  // Constructors are invoked through instances/subclasses; Python protocol members
+  // and __all__ are consumed by the language without direct SCIP call edges.
+  const leaf = leafName(definition.symbol);
+  if (leaf === '<constructor>') return 'implicit-constructor';
+  if (!definition.symbol.startsWith('scip-python ')) return undefined;
+  if (leaf === '__all__') return 'python-runtime-metadata';
+  if (/^__[^_].*__$/.test(leaf)) return 'python-protocol-member';
+  return undefined;
+}
+
+function deadContractRejection(
+  definition: DeadCandidateDefinition,
+  opts: DeadCandidateOptions,
+): DeadCandidateRejectionReason | undefined {
+  // Abstract/interface contracts and Rust trait impl members can be consumed
+  // through dispatch without a direct call to the indexed declaration.
+  if (opts.isDeclarationOnlyCallable()) return 'declaration-only-callable';
+  if (opts.isFrameworkContractCallable()) return 'framework-contract-member';
+  if (isRustTraitImplMember(definition.symbol)) return 'rust-trait-impl-member';
+  return undefined;
+}
+
+function deadCandidateScopeRejection(
+  definition: DeadCandidateDefinition,
+  opts: DeadCandidateOptions,
+): DeadCandidateRejectionReason | undefined {
+  if (isInRustTestModule(definition.symbol)) return 'rust-test-module';
+  if (!opts.includeMembers && !isTopLevelOrCallable(definition)) return 'member';
+  if (definition.endLine - definition.startLine + 1 < opts.minLoc) return 'below-min-loc';
+  return undefined;
+}
+
 // scip-query: ignore-extract — this is the ordered dead-candidate rejection
 // gate; the first matching reason is part of the public diagnostic policy.
 export function deadCandidateDecision(
@@ -54,45 +117,13 @@ export function deadCandidateDecision(
     isFrameworkContractCallable: () => boolean;
   },
 ): DeadCandidateDecision {
-  if (opts.isIgnoredPath(definition.relativePath)) return rejectDeadCandidate('ignored-file');
-  if (isModuleLikeSymbol(definition.symbol)) return rejectDeadCandidate('module-like-symbol');
-  if (!looksValueLikeDefinition(definition.symbol)) return rejectDeadCandidate('non-value-symbol');
-  if (!definition.isFunctionLike && definition.enclosingSymbol && looksValueLikeDefinition(definition.enclosingSymbol))
-    return rejectDeadCandidate('nested-non-callable-value');
-  if (!opts.includeTests && !passesDeadTestFileFilter(definition.relativePath)) return rejectDeadCandidate('test-file');
-  if (
-    !opts.includeTests &&
-    opts.isExcludedRegion(definition.relativePath, definition.startLine, definition.symbol, definition.parentTypeName)
-  )
-    return rejectDeadCandidate('excluded-file-region');
-  // Constructors are invoked by creating an instance or subclass, not by a
-  // direct call to the synthetic `<constructor>` SCIP member.
-  const leaf = leafName(definition.symbol);
-  if (leaf === '<constructor>') return rejectDeadCandidate('implicit-constructor');
-  if (definition.symbol.startsWith('scip-python ')) {
-    // Python invokes data-model methods through syntax and protocols
-    // (`Class()` -> `__init__`, `with` -> `__enter__`, iteration, repr,
-    // serialization hooks, and so on). Their declarations rarely have a
-    // direct SCIP call edge, so they are not independent deletion candidates.
-    // `__all__` is read by Python's import machinery. A repository reference
-    // count of zero is expected and says nothing about whether it is useful.
-    if (leaf === '__all__') return rejectDeadCandidate('python-runtime-metadata');
-    if (/^__[^_].*__$/.test(leaf)) return rejectDeadCandidate('python-protocol-member');
-  }
-  // Interface and abstract method signatures are contracts. Implementations
-  // and property dispatch consume the contract without calling its declaration.
-  if (opts.isDeclarationOnlyCallable()) return rejectDeadCandidate('declaration-only-callable');
-  if (opts.isFrameworkContractCallable()) return rejectDeadCandidate('framework-contract-member');
-  // rust-analyzer encodes trait impls as `impl#[Type][Trait]Member.` and
-  // inherent impls as `impl#[Type]Member.`. Trait-impl members are reached
-  // through the trait, which SCIP rarely traces accurately.
-  if (isRustTraitImplMember(definition.symbol)) return rejectDeadCandidate('rust-trait-impl-member');
-  // Inline test mods (`#[cfg(test)] mod tests`) live in regular source files
-  // but the items inside them are not shippable code.
-  if (isInRustTestModule(definition.symbol)) return rejectDeadCandidate('rust-test-module');
-  if (!opts.includeMembers && !isTopLevelOrCallable(definition)) return rejectDeadCandidate('member');
-  if (definition.endLine - definition.startLine + 1 < opts.minLoc) return rejectDeadCandidate('below-min-loc');
-  return { accepted: true };
+  const reason =
+    deadDefinitionShapeRejection(definition, opts) ??
+    deadFileRegionRejection(definition, opts) ??
+    deadImplicitInvocationRejection(definition) ??
+    deadContractRejection(definition, opts) ??
+    deadCandidateScopeRejection(definition, opts);
+  return reason === undefined ? { accepted: true } : rejectDeadCandidate(reason);
 }
 
 /**

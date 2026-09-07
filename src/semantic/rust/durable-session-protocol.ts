@@ -232,6 +232,55 @@ export function decodeDurableRustMailboxRequest(
   };
 }
 
+function matchesResponseIdentity(
+  value: Record<string, unknown>,
+  expected: DurableRustMailboxResponseExpectation,
+): boolean {
+  return (
+    value.mailboxVersion === BOUNDED_MAILBOX_VERSION &&
+    value.id === expected.requestId &&
+    value.operationKey === expected.operationKey &&
+    value.sessionIdentity === expected.sessionIdentity &&
+    value.deadlineAtMs === expected.deadlineAtMs
+  );
+}
+
+function responseWithinDeadline(
+  value: Record<string, unknown>,
+  expected: DurableRustMailboxResponseExpectation,
+): boolean {
+  return (
+    typeof value.completedAtMs === 'number' &&
+    Number.isFinite(value.completedAtMs) &&
+    !(value.completedAtMs > expected.deadlineAtMs) &&
+    !(expected.nowMs > expected.deadlineAtMs)
+  );
+}
+
+function decodeCorrelatedResponsePayload(
+  value: Record<string, unknown>,
+  requestKind: DurableRustSessionRequest['kind'],
+): DurableRustMailboxResponseDecodeResult {
+  if (value.ok === false) {
+    if (typeof value.error !== 'string' || !isDurableRustMailboxErrorCode(value.errorCode)) {
+      return malformedResponse('helper wrote an invalid rejection response');
+    }
+    return { ok: false, code: value.errorCode, error: value.error };
+  }
+  if (
+    value.ok !== true ||
+    (value.session !== 'created' && value.session !== 'reused' && value.session !== 'invalidated') ||
+    !isResponseForKind(value.response, requestKind)
+  ) {
+    return malformedResponse('helper wrote an invalid success response');
+  }
+  return {
+    ok: true,
+    session: value.session,
+    response: value.response,
+  };
+}
+
 export function decodeDurableRustMailboxResponse(
   value: unknown,
   expected: DurableRustMailboxResponseExpectation,
@@ -246,21 +295,10 @@ export function decodeDurableRustMailboxResponse(
         : `helper wrote unsupported response protocol ${String(value.protocolVersion)}`,
     );
   }
-  if (
-    value.mailboxVersion !== BOUNDED_MAILBOX_VERSION ||
-    value.id !== expected.requestId ||
-    value.operationKey !== expected.operationKey ||
-    value.sessionIdentity !== expected.sessionIdentity ||
-    value.deadlineAtMs !== expected.deadlineAtMs
-  ) {
+  if (!matchesResponseIdentity(value, expected)) {
     return incompatibleResponse('helper wrote an incompatible response identity');
   }
-  if (
-    typeof value.completedAtMs !== 'number' ||
-    !Number.isFinite(value.completedAtMs) ||
-    value.completedAtMs > expected.deadlineAtMs ||
-    expected.nowMs > expected.deadlineAtMs
-  ) {
+  if (!responseWithinDeadline(value, expected)) {
     return {
       ok: false,
       code: 'expired-request',
@@ -268,24 +306,41 @@ export function decodeDurableRustMailboxResponse(
     };
   }
 
-  if (value.ok === false) {
-    if (typeof value.error !== 'string' || !isDurableRustMailboxErrorCode(value.errorCode)) {
-      return malformedResponse('helper wrote an invalid rejection response');
-    }
-    return { ok: false, code: value.errorCode, error: value.error };
+  return decodeCorrelatedResponsePayload(value, expected.requestKind);
+}
+
+function validCorrelationOperation(
+  value: Record<string, unknown>,
+): value is Record<string, unknown> & { operationKey: string; clientId: string } {
+  return (
+    value.mailboxVersion === BOUNDED_MAILBOX_VERSION &&
+    typeof value.protocolVersion === 'number' &&
+    Number.isInteger(value.protocolVersion) &&
+    typeof value.operationKey === 'string' &&
+    isSha256Hex(value.operationKey) &&
+    value.id === boundedMailboxRequestId(value.operationKey) &&
+    typeof value.clientId === 'string' &&
+    !!value.clientId
+  );
+}
+
+function validCorrelationTimes(
+  value: Record<string, unknown>,
+): value is Record<string, unknown> & { enqueuedAtMs: number; deadlineAtMs: number } {
+  return (
+    typeof value.enqueuedAtMs === 'number' &&
+    Number.isFinite(value.enqueuedAtMs) &&
+    typeof value.deadlineAtMs === 'number' &&
+    Number.isFinite(value.deadlineAtMs) &&
+    value.deadlineAtMs >= value.enqueuedAtMs
+  );
+}
+
+function validCorrelationSession(value: Record<string, unknown>): boolean {
+  if (value.sessionIdentity !== undefined) {
+    return typeof value.sessionIdentity === 'string' && isSha256Hex(value.sessionIdentity);
   }
-  if (
-    value.ok !== true ||
-    (value.session !== 'created' && value.session !== 'reused' && value.session !== 'invalidated') ||
-    !isResponseForKind(value.response, expected.requestKind)
-  ) {
-    return malformedResponse('helper wrote an invalid success response');
-  }
-  return {
-    ok: true,
-    session: value.session,
-    response: value.response,
-  };
+  return value.protocolVersion === DURABLE_RUST_SESSION_PROTOCOL_VERSION;
 }
 
 function decodeCurrentCorrelation(
@@ -306,24 +361,7 @@ function decodeCurrentCorrelation(
       priorSessionIdentity: boolean;
     }
   | Extract<DurableRustMailboxRequestDecodeResult, { ok: false }> {
-  if (
-    value.mailboxVersion !== BOUNDED_MAILBOX_VERSION ||
-    typeof value.protocolVersion !== 'number' ||
-    !Number.isInteger(value.protocolVersion) ||
-    typeof value.operationKey !== 'string' ||
-    !isSha256Hex(value.operationKey) ||
-    value.id !== boundedMailboxRequestId(value.operationKey) ||
-    typeof value.clientId !== 'string' ||
-    !value.clientId ||
-    typeof value.enqueuedAtMs !== 'number' ||
-    !Number.isFinite(value.enqueuedAtMs) ||
-    typeof value.deadlineAtMs !== 'number' ||
-    !Number.isFinite(value.deadlineAtMs) ||
-    value.deadlineAtMs < value.enqueuedAtMs ||
-    (value.sessionIdentity !== undefined &&
-      (typeof value.sessionIdentity !== 'string' || !isSha256Hex(value.sessionIdentity))) ||
-    (value.sessionIdentity === undefined && value.protocolVersion !== DURABLE_RUST_SESSION_PROTOCOL_VERSION)
-  ) {
+  if (!validCorrelationOperation(value) || !validCorrelationTimes(value) || !validCorrelationSession(value)) {
     return malformedRequest('Durable Rust semantic helper received an invalid mailbox lifecycle.');
   }
   const responseIdentity = {

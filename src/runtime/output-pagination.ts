@@ -1130,6 +1130,43 @@ function captureOutputSnapshotPage(
 } {
   ensureOutputSnapshotRoot(snapshotRoot);
   const metadata = readOutputSnapshotMetadata(cursor.snapshotId, snapshotRoot);
+  assertSnapshotCursorMatches(metadata, cursor, expectedInvocationHash, pageSize);
+  const page = metadata.pages[cursor.pageIndex];
+  if (!page) throw new Error('Output cursor points past the current result.');
+  if (metadata.totalCharacters > maxOutputCharacters) {
+    throw new Error(`Output snapshot exceeds the ${maxOutputCharacters}-character safety limit.`);
+  }
+  if (Date.now() - metadata.createdAtMs > OUTPUT_SNAPSHOT_TTL_MS) {
+    removeOutputSnapshot(cursor.snapshotId, snapshotRoot);
+    throw new Error('Output snapshot expired before all pages were read.');
+  }
+
+  const path = outputSnapshotPath(snapshotRoot, cursor.snapshotId, 'output');
+  const descriptor = openSync(path, 'r');
+  try {
+    const content = readSnapshotPageContent(descriptor, metadata, page, onRead);
+    return {
+      content,
+      offset: page.characterOffset,
+      pageIndex: cursor.pageIndex,
+      pageCount: metadata.pages.length,
+      totalCharacters: metadata.totalCharacters,
+      outputHash: metadata.outputHash,
+    };
+  } catch (error) {
+    removeOutputSnapshot(cursor.snapshotId, snapshotRoot);
+    throw error;
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+function assertSnapshotCursorMatches(
+  metadata: OutputSnapshotMetadata,
+  cursor: OutputCursorPayload,
+  expectedInvocationHash: string,
+  pageSize: number,
+): void {
   if (metadata.invocationHash !== expectedInvocationHash) {
     throw new Error(
       'This output cursor belongs to a different command, working directory, or argument set. Run again without --output-cursor.',
@@ -1145,59 +1182,50 @@ function captureOutputSnapshotPage(
   if (metadata.pageSize !== pageSize || (cursor.version === 3 && cursor.pageSize !== pageSize)) {
     throw new Error(`Output page size changed after this cursor was issued; use ${metadata.pageSize}.`);
   }
-  const page = metadata.pages[cursor.pageIndex];
-  if (!page) throw new Error('Output cursor points past the current result.');
-  if (metadata.totalCharacters > maxOutputCharacters) {
-    throw new Error(`Output snapshot exceeds the ${maxOutputCharacters}-character safety limit.`);
-  }
-  if (Date.now() - metadata.createdAtMs > OUTPUT_SNAPSHOT_TTL_MS) {
-    removeOutputSnapshot(cursor.snapshotId, snapshotRoot);
-    throw new Error('Output snapshot expired before all pages were read.');
-  }
+}
 
-  const path = outputSnapshotPath(snapshotRoot, cursor.snapshotId, 'output');
-  const descriptor = openSync(path, 'r');
-  try {
-    const before = fstatSync(descriptor);
-    if (!before.isFile() || before.size !== metadata.byteLength) {
-      throw new Error('Output snapshot size or type changed.');
-    }
-    const bytes = Buffer.allocUnsafe(page.byteLength);
-    let bytesRead = 0;
-    while (bytesRead < bytes.length) {
-      const count = readSync(descriptor, bytes, bytesRead, bytes.length - bytesRead, page.byteOffset + bytesRead);
-      if (count === 0) break;
-      bytesRead += count;
-      onRead?.(count);
-    }
-    const after = fstatSync(descriptor);
-    if (
-      after.dev !== before.dev ||
-      after.ino !== before.ino ||
-      after.size !== before.size ||
-      bytesRead !== page.byteLength
-    ) {
-      throw new Error('Output snapshot changed while it was being read.');
-    }
-    if (createHash('sha256').update(bytes).digest('hex') !== page.hash) {
-      throw new Error('Output snapshot page no longer matches its metadata.');
-    }
-    const content = bytes.toString('utf8');
-    if (content.length !== page.characterLength) throw new Error('Output snapshot page character count changed.');
-    return {
-      content,
-      offset: page.characterOffset,
-      pageIndex: cursor.pageIndex,
-      pageCount: metadata.pages.length,
-      totalCharacters: metadata.totalCharacters,
-      outputHash: metadata.outputHash,
-    };
-  } catch (error) {
-    removeOutputSnapshot(cursor.snapshotId, snapshotRoot);
-    throw error;
-  } finally {
-    closeSync(descriptor);
+function readSnapshotPageContent(
+  descriptor: number,
+  metadata: OutputSnapshotMetadata,
+  page: OutputSnapshotPage,
+  onRead?: (bytes: number) => void,
+): string {
+  const before = fstatSync(descriptor);
+  if (!before.isFile() || before.size !== metadata.byteLength) {
+    throw new Error('Output snapshot size or type changed.');
   }
+  const { bytes, bytesRead } = readSnapshotPageBytes(descriptor, page, onRead);
+  const after = fstatSync(descriptor);
+  if (
+    after.dev !== before.dev ||
+    after.ino !== before.ino ||
+    after.size !== before.size ||
+    bytesRead !== page.byteLength
+  ) {
+    throw new Error('Output snapshot changed while it was being read.');
+  }
+  if (createHash('sha256').update(bytes).digest('hex') !== page.hash) {
+    throw new Error('Output snapshot page no longer matches its metadata.');
+  }
+  const content = bytes.toString('utf8');
+  if (content.length !== page.characterLength) throw new Error('Output snapshot page character count changed.');
+  return content;
+}
+
+function readSnapshotPageBytes(
+  descriptor: number,
+  page: OutputSnapshotPage,
+  onRead?: (bytes: number) => void,
+): { bytes: Buffer; bytesRead: number } {
+  const bytes = Buffer.allocUnsafe(page.byteLength);
+  let bytesRead = 0;
+  while (bytesRead < bytes.length) {
+    const count = readSync(descriptor, bytes, bytesRead, bytes.length - bytesRead, page.byteOffset + bytesRead);
+    if (count === 0) break;
+    bytesRead += count;
+    onRead?.(count);
+  }
+  return { bytes, bytesRead };
 }
 
 function readOutputSnapshotMetadata(snapshotId: string, snapshotRoot: string): OutputSnapshotMetadata {

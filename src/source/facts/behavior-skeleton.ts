@@ -513,28 +513,10 @@ export function behaviorReceipt(
   const printable = candidates.filter((candidate) => candidate.text.length <= MAX_RECEIPT_LINE_CHARACTERS);
   if (printable.length === 0) return null;
   const effectSignals = RECEIPT_EFFECT_SIGNALS.filter((signal) => (signalCounts[signal] ?? 0) > 0);
-  const nonAwaitEffects = effectSignals.filter((signal) => signal !== 'await');
-  const shapeFields = collected.shapes.reduce((total, shape) => total + shape.fields.length, 0);
-  if (nonAwaitEffects.length === 0 && !((signalCounts.await ?? 0) > 0 && shapeFields > 0) && shapeFields < 3) {
-    return null;
-  }
+  if (!hasReceiptEffects(effectSignals, signalCounts, collected.shapes)) return null;
   const ranked = rankReceiptLines(printable, signalCounts);
-  const representatives = new Map<number, BehaviorReceiptLine>();
-  for (const signal of effectSignals) {
-    const representative = ranked.find((candidate) => candidate.signals.includes(signal));
-    if (representative) representatives.set(representative.line, representative);
-  }
-  if (representatives.size === 0) {
-    const branch = ranked.find((candidate) => candidate.signals.includes('branch'));
-    if (branch) representatives.set(branch.line, branch);
-  }
-  const maxLines = Math.min(10, Math.max(1, opts.maxLines ?? representatives.size));
-  const selected = new Map<number, BehaviorReceiptLine>();
-
-  for (const candidate of representatives.values()) {
-    if (selected.size >= maxLines) break;
-    selected.set(candidate.line, candidate);
-  }
+  const representatives = receiptRepresentatives(ranked, effectSignals);
+  const selected = boundedReceiptRepresentatives(representatives, opts.maxLines);
   if (selected.size >= candidates.length && collected.shapes.length === 0) return null;
 
   return {
@@ -547,6 +529,45 @@ export function behaviorReceipt(
     candidateLines: candidates.length,
     omittedLines: candidates.length - selected.size,
   };
+}
+
+function hasReceiptEffects(
+  effectSignals: readonly (BehaviorSignal | 'lifecycle')[],
+  signalCounts: BehaviorReceipt['signalCounts'],
+  shapes: BehaviorReceipt['shapes'],
+): boolean {
+  const nonAwaitEffects = effectSignals.filter((signal) => signal !== 'await');
+  const shapeFields = shapes.reduce((total, shape) => total + shape.fields.length, 0);
+  return !(nonAwaitEffects.length === 0 && !((signalCounts.await ?? 0) > 0 && shapeFields > 0) && shapeFields < 3);
+}
+
+function receiptRepresentatives(
+  ranked: BehaviorReceiptLine[],
+  effectSignals: readonly (BehaviorSignal | 'lifecycle')[],
+): Map<number, BehaviorReceiptLine> {
+  const representatives = new Map<number, BehaviorReceiptLine>();
+  for (const signal of effectSignals) {
+    const representative = ranked.find((candidate) => candidate.signals.includes(signal));
+    if (representative) representatives.set(representative.line, representative);
+  }
+  if (representatives.size === 0) {
+    const branch = ranked.find((candidate) => candidate.signals.includes('branch'));
+    if (branch) representatives.set(branch.line, branch);
+  }
+  return representatives;
+}
+
+function boundedReceiptRepresentatives(
+  representatives: ReadonlyMap<number, BehaviorReceiptLine>,
+  requestedMaxLines: number | undefined,
+): Map<number, BehaviorReceiptLine> {
+  const maxLines = Math.min(10, Math.max(1, requestedMaxLines ?? representatives.size));
+  const selected = new Map<number, BehaviorReceiptLine>();
+  for (const candidate of representatives.values()) {
+    if (selected.size >= maxLines) break;
+    selected.set(candidate.line, candidate);
+  }
+  return selected;
 }
 
 /**

@@ -19,6 +19,72 @@ const REPOS = {
   },
 };
 
+const VALUE_OPTIONS = new Map([
+  [
+    '--repo',
+    (out, value) => {
+      out.repos = value.split(',');
+    },
+  ],
+  [
+    '--limit',
+    (out, value) => {
+      out.limit = Number(value);
+    },
+  ],
+  [
+    '--max-mismatches',
+    (out, value) => {
+      out.maxMismatches = Number(value);
+    },
+  ],
+  [
+    '--scope',
+    (out, value) => {
+      out.scope = value;
+    },
+  ],
+  [
+    '--timeout-ms',
+    (out, value) => {
+      out.timeoutMs = Number(value);
+    },
+  ],
+  [
+    '--out',
+    (out, value) => {
+      out.out = resolve(value);
+    },
+  ],
+]);
+const BOOLEAN_OPTIONS = new Map([
+  ['--full', 'full'],
+  ['--reindex', 'reindex'],
+  ['--append', 'append'],
+]);
+
+function handleInformationalArgument(arg) {
+  if (arg === '--list') {
+    console.log(JSON.stringify({ repos: Object.keys(REPOS) }, null, 2));
+    process.exit(0);
+    return true;
+  }
+  if (arg === '--help' || arg === '-h') {
+    printHelp();
+    process.exit(0);
+    return true;
+  }
+  return false;
+}
+
+function validateArgs(out) {
+  if (!Number.isFinite(out.limit) || out.limit < 1) throw new Error('--limit must be >= 1');
+  if (!Number.isFinite(out.maxMismatches) || out.maxMismatches < 0) {
+    throw new Error('--max-mismatches must be >= 0');
+  }
+  if (!Number.isFinite(out.timeoutMs) || out.timeoutMs < 1000) throw new Error('--timeout-ms must be >= 1000');
+}
+
 function parseArgs(argv) {
   const out = {
     repos: ['scip-query'],
@@ -33,30 +99,12 @@ function parseArgs(argv) {
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === '--repo') out.repos = mustValue(argv, ++i, arg).split(',');
-    else if (arg === '--limit') out.limit = Number(mustValue(argv, ++i, arg));
-    else if (arg === '--max-mismatches') out.maxMismatches = Number(mustValue(argv, ++i, arg));
-    else if (arg === '--scope') out.scope = mustValue(argv, ++i, arg);
-    else if (arg === '--full') out.full = true;
-    else if (arg === '--reindex') out.reindex = true;
-    else if (arg === '--timeout-ms') out.timeoutMs = Number(mustValue(argv, ++i, arg));
-    else if (arg === '--out') out.out = resolve(mustValue(argv, ++i, arg));
-    else if (arg === '--append') out.append = true;
-    else if (arg === '--list') {
-      console.log(JSON.stringify({ repos: Object.keys(REPOS) }, null, 2));
-      process.exit(0);
-    } else if (arg === '--help' || arg === '-h') {
-      printHelp();
-      process.exit(0);
-    } else {
-      throw new Error(`Unknown argument: ${arg}`);
-    }
+    const setValue = VALUE_OPTIONS.get(arg);
+    if (setValue) setValue(out, mustValue(argv, ++i, arg));
+    else if (BOOLEAN_OPTIONS.has(arg)) out[BOOLEAN_OPTIONS.get(arg)] = true;
+    else if (!handleInformationalArgument(arg)) throw new Error(`Unknown argument: ${arg}`);
   }
-  if (!Number.isFinite(out.limit) || out.limit < 1) throw new Error('--limit must be >= 1');
-  if (!Number.isFinite(out.maxMismatches) || out.maxMismatches < 0) {
-    throw new Error('--max-mismatches must be >= 0');
-  }
-  if (!Number.isFinite(out.timeoutMs) || out.timeoutMs < 1000) throw new Error('--timeout-ms must be >= 1000');
+  validateArgs(out);
   return out;
 }
 

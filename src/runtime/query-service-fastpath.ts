@@ -657,77 +657,107 @@ function parseCodeInvocation(argv: readonly string[]): CodeFastPathInvocation | 
   return { kind: 'code', selectors, options: { context, members }, session };
 }
 
-function parseSourceSearchInvocation(argv: readonly string[]): SourceSearchFastPathInvocation | null {
-  let pattern: string | undefined;
-  let scope: string | undefined;
-  let context = 2;
-  let limit = 6;
-  let regexp = false;
-  let ignoreCase = false;
-  let json = false;
-  let resultOnly = false;
-  let compact = false;
+interface SourceSearchInvocationState {
+  pattern?: string;
+  scope?: string;
+  context: number;
+  limit: number;
+  regexp: boolean;
+  ignoreCase: boolean;
+  json: boolean;
+  resultOnly: boolean;
+  compact: boolean;
+}
 
+function parseSourceSearchInvocation(argv: readonly string[]): SourceSearchFastPathInvocation | null {
+  const state: SourceSearchInvocationState = {
+    context: 2,
+    limit: 6,
+    regexp: false,
+    ignoreCase: false,
+    json: false,
+    resultOnly: false,
+    compact: false,
+  };
   for (let index = 1; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--') {
       const remaining = argv.slice(index + 1);
-      if (remaining.length !== 1 || pattern !== undefined) return null;
-      pattern = remaining[0];
+      if (remaining.length !== 1 || state.pattern !== undefined) return null;
+      state.pattern = remaining[0];
       break;
     }
-    if (arg === '--json') {
-      json = true;
-      continue;
-    }
-    if (arg === '--result-only') {
-      resultOnly = true;
-      continue;
-    }
-    if (arg === '--compact') {
-      compact = true;
-      continue;
-    }
-    if (arg === '--regexp') {
-      regexp = true;
-      continue;
-    }
-    if (arg === '--ignore-case' || arg === '-i') {
-      ignoreCase = true;
-      continue;
-    }
-    const scopeOption = optionValue(argv, index, arg, '--scope', '-s');
-    if (scopeOption) {
-      scope = scopeOption.value;
-      index = scopeOption.nextIndex;
-      continue;
-    }
-    const contextOption = optionValue(argv, index, arg, '--context', '-C');
-    if (contextOption) {
-      const parsed = parseInteger(contextOption.value, 0);
-      if (parsed === null) return null;
-      context = parsed;
-      index = contextOption.nextIndex;
-      continue;
-    }
-    const limitOption = optionValue(argv, index, arg, '--limit', '-n');
-    if (limitOption) {
-      const parsed = parseInteger(limitOption.value, 1);
-      if (parsed === null) return null;
-      limit = parsed;
-      index = limitOption.nextIndex;
-      continue;
-    }
-    if (arg.startsWith('-') || pattern !== undefined) return null;
-    pattern = arg;
+    if (applySourceSearchFlag(state, arg)) continue;
+    const nextIndex = applySourceSearchOption(state, argv, index);
+    if (nextIndex === null) return null;
+    index = nextIndex;
   }
+  return sourceSearchInvocationResult(state);
+}
 
-  if (!json || !resultOnly || !compact || pattern === undefined) return null;
+function sourceSearchInvocationResult(state: SourceSearchInvocationState): SourceSearchFastPathInvocation | null {
+  if (!state.json || !state.resultOnly || !state.compact || state.pattern === undefined) return null;
+  const { pattern, scope, context, limit, regexp, ignoreCase } = state;
   return {
     kind: 'source-search',
     pattern,
     options: { scope, context, limit, regexp, ignoreCase, ranking: 'structural' },
   };
+}
+
+function applySourceSearchFlag(state: SourceSearchInvocationState, arg: string): boolean {
+  switch (arg) {
+    case '--json':
+      state.json = true;
+      return true;
+    case '--result-only':
+      state.resultOnly = true;
+      return true;
+    case '--compact':
+      state.compact = true;
+      return true;
+    case '--regexp':
+      state.regexp = true;
+      return true;
+    case '--ignore-case':
+    case '-i':
+      state.ignoreCase = true;
+      return true;
+    default:
+      return false;
+  }
+}
+
+function applySourceSearchOption(
+  state: SourceSearchInvocationState,
+  argv: readonly string[],
+  index: number,
+): number | null {
+  const arg = argv[index];
+  const scopeOption = optionValue(argv, index, arg, '--scope', '-s');
+  if (scopeOption) {
+    state.scope = scopeOption.value;
+    return scopeOption.nextIndex;
+  }
+  const contextOption = optionValue(argv, index, arg, '--context', '-C');
+  if (contextOption) return applySourceSearchInteger(state, 'context', contextOption, 0);
+  const limitOption = optionValue(argv, index, arg, '--limit', '-n');
+  if (limitOption) return applySourceSearchInteger(state, 'limit', limitOption, 1);
+  if (arg.startsWith('-') || state.pattern !== undefined) return null;
+  state.pattern = arg;
+  return index;
+}
+
+function applySourceSearchInteger(
+  state: SourceSearchInvocationState,
+  key: 'context' | 'limit',
+  option: { value: string; nextIndex: number },
+  minimum: number,
+): number | null {
+  const parsed = parseInteger(option.value, minimum);
+  if (parsed === null) return null;
+  state[key] = parsed;
+  return option.nextIndex;
 }
 
 function parseOutlineInvocation(argv: readonly string[]): OutlineFastPathInvocation | null {

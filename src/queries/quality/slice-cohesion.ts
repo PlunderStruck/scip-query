@@ -1303,63 +1303,93 @@ function summarizeClosures(
   body: BodyModel,
   closureNodes: ReadonlyMap<string, TypeScript.FunctionLikeDeclaration>,
 ): Map<string, ClosureSummary> {
-  const { ts } = body;
   const summaries = new Map<string, ClosureSummary>();
   for (const [name, node] of closureNodes) {
-    const declared = new Set<string>();
-    const summary: ClosureSummary = { reads: new Set(), writes: new Set(), stateWrites: new Set(), calls: new Set() };
-    for (const parameter of node.parameters) for (const bound of bindingNames(parameter.name)) declared.add(bound);
-    const declare = (inner: TypeScript.Node): void => {
-      if (ts.isVariableDeclaration(inner)) for (const bound of bindingNames(inner.name)) declared.add(bound);
-      else if (ts.isParameter(inner)) for (const bound of bindingNames(inner.name)) declared.add(bound);
-      else if ((ts.isFunctionDeclaration(inner) || ts.isClassDeclaration(inner)) && inner.name)
-        declared.add(inner.name.text);
-      inner.forEachChild(declare);
-    };
-    if (node.body) declare(node.body);
-    const visit = (inner: TypeScript.Node): void => {
-      if (ts.isTypeNode(inner)) return;
-      const written = writtenBase(body, inner as TypeScript.Expression);
-      if (written && !declared.has(written)) summary.writes.add(written);
-      if (ts.isCallExpression(inner)) {
-        const callee = unwrapExpression(ts, inner.expression);
-        if (ts.isIdentifier(callee) && !declared.has(callee.text)) {
-          if (closureNodes.has(callee.text)) summary.calls.add(callee.text);
-          const state = body.stateSetters.get(callee.text);
-          if (state) summary.stateWrites.add(state);
-        }
-      }
-      if (ts.isIdentifier(inner) && isReadIdentifier(ts, inner) && !declared.has(inner.text))
-        summary.reads.add(inner.text);
-      if (inner.kind === ts.SyntaxKind.ThisKeyword) summary.reads.add('this');
-      inner.forEachChild(visit);
-    };
-    if (node.body) visit(node.body);
-    summaries.set(name, summary);
+    summaries.set(name, summarizeClosureBody(body, node, closureNodes));
   }
   let changed = true;
   while (changed) {
     changed = false;
     for (const summary of summaries.values()) {
-      for (const callee of summary.calls) {
-        const target = summaries.get(callee);
-        if (!target) continue;
-        const merges: readonly [ReadonlySet<string>, Set<string>][] = [
-          [target.reads, summary.reads],
-          [target.writes, summary.writes],
-          [target.stateWrites, summary.stateWrites],
-        ];
-        for (const [from, to] of merges) {
-          for (const name of from) {
-            if (to.has(name)) continue;
-            to.add(name);
-            changed = true;
-          }
-        }
-      }
+      if (mergeCalledClosureEffects(summary, summaries)) changed = true;
     }
   }
   return summaries;
+}
+
+function closureDeclaredNames(ts: TypeScriptModule, node: TypeScript.FunctionLikeDeclaration): Set<string> {
+  const declared = new Set<string>();
+  for (const parameter of node.parameters) {
+    for (const bound of bindingNames(parameter.name)) declared.add(bound);
+  }
+  const declare = (inner: TypeScript.Node): void => {
+    if (ts.isVariableDeclaration(inner) || ts.isParameter(inner)) {
+      for (const bound of bindingNames(inner.name)) declared.add(bound);
+    } else if ((ts.isFunctionDeclaration(inner) || ts.isClassDeclaration(inner)) && inner.name) {
+      declared.add(inner.name.text);
+    }
+    inner.forEachChild(declare);
+  };
+  if (node.body) declare(node.body);
+  return declared;
+}
+
+function summarizeClosureBody(
+  body: BodyModel,
+  node: TypeScript.FunctionLikeDeclaration,
+  closureNodes: ReadonlyMap<string, TypeScript.FunctionLikeDeclaration>,
+): ClosureSummary {
+  const { ts } = body;
+  const declared = closureDeclaredNames(ts, node);
+  const summary: ClosureSummary = { reads: new Set(), writes: new Set(), stateWrites: new Set(), calls: new Set() };
+  const visit = (inner: TypeScript.Node): void => {
+    if (ts.isTypeNode(inner)) return;
+    const written = writtenBase(body, inner as TypeScript.Expression);
+    if (written && !declared.has(written)) summary.writes.add(written);
+    if (ts.isCallExpression(inner)) recordClosureCall(body, inner, declared, closureNodes, summary);
+    if (ts.isIdentifier(inner) && isReadIdentifier(ts, inner) && !declared.has(inner.text))
+      summary.reads.add(inner.text);
+    if (inner.kind === ts.SyntaxKind.ThisKeyword) summary.reads.add('this');
+    inner.forEachChild(visit);
+  };
+  if (node.body) visit(node.body);
+  return summary;
+}
+
+function recordClosureCall(
+  body: BodyModel,
+  call: TypeScript.CallExpression,
+  declared: ReadonlySet<string>,
+  closureNodes: ReadonlyMap<string, TypeScript.FunctionLikeDeclaration>,
+  summary: ClosureSummary,
+): void {
+  const callee = unwrapExpression(body.ts, call.expression);
+  if (!body.ts.isIdentifier(callee) || declared.has(callee.text)) return;
+  if (closureNodes.has(callee.text)) summary.calls.add(callee.text);
+  const state = body.stateSetters.get(callee.text);
+  if (state) summary.stateWrites.add(state);
+}
+
+function mergeCalledClosureEffects(summary: ClosureSummary, summaries: ReadonlyMap<string, ClosureSummary>): boolean {
+  let changed = false;
+  for (const callee of summary.calls) {
+    const target = summaries.get(callee);
+    if (!target) continue;
+    if (mergeClosureEffectNames(target.reads, summary.reads)) changed = true;
+    if (mergeClosureEffectNames(target.writes, summary.writes)) changed = true;
+    if (mergeClosureEffectNames(target.stateWrites, summary.stateWrites)) changed = true;
+  }
+  return changed;
+}
+
+function mergeClosureEffectNames(from: ReadonlySet<string>, to: Set<string>): boolean {
+  let changed = false;
+  for (const name of from) {
+    if (to.has(name)) continue;
+    to.add(name);
+    changed = true;
+  }
+  return changed;
 }
 
 function isReadIdentifier(ts: TypeScriptModule, node: TypeScript.Identifier): boolean {

@@ -284,22 +284,33 @@ export function findCallerFiles(
     const fileIdents = getFileIdentifiers(db, file);
     if (fileIdents.size === 0) continue;
 
-    for (const name of fileIdents) {
-      if (!candidateLeaves.has(name)) continue;
-      for (const ref of attributeIdentifier(db, file, name)) {
-        if (!candidateIds.has(ref.symbolId)) continue;
-        if (file === ref.relativePath) continue; // self-reference, not a caller
-        let bucket = result.get(ref.symbolId);
-        if (!bucket) {
-          bucket = new Set();
-          result.set(ref.symbolId, bucket);
-        }
-        bucket.add(file);
-      }
-    }
+    attributeCallerFile(db, file, fileIdents, candidateLeaves, candidateIds, result);
   }
 
   return result;
+}
+
+function attributeCallerFile(
+  db: ScipDatabase,
+  file: string,
+  fileIdents: ReadonlySet<string>,
+  candidateLeaves: ReadonlyMap<string, readonly IndexedDefinition[]>,
+  candidateIds: ReadonlySet<number>,
+  result: Map<number, Set<string>>,
+): void {
+  for (const name of fileIdents) {
+    if (!candidateLeaves.has(name)) continue;
+    for (const ref of attributeIdentifier(db, file, name)) {
+      if (!candidateIds.has(ref.symbolId)) continue;
+      if (file === ref.relativePath) continue; // self-reference, not a caller
+      let bucket = result.get(ref.symbolId);
+      if (!bucket) {
+        bucket = new Set();
+        result.set(ref.symbolId, bucket);
+      }
+      bucket.add(file);
+    }
+  }
 }
 
 // ── Internals ────────────────────────────────────────────────────

@@ -145,15 +145,11 @@ export function planTypeScriptIncrementalUpdate(
 ): TypeScriptIncrementalEligibility {
   const workspaceProjects = input.projectMode === 'workspace' ? (input.workspaceProjects ?? []) : ['.'];
   const activeTypeScriptConfigs = activeTypeScriptProjectConfigPaths(workspaceProjects);
-  if (workspaceProjects.length === 0) return { eligible: false, reason: 'workspace project roots unavailable' };
-  if (workspaceProjects.length === 1 && workspaceProjects[0] === '.' && !input.rootTsconfigExists) {
-    return { eligible: false, reason: 'root tsconfig unavailable' };
-  }
-  if (!input.previousSnapshot) return { eligible: false, reason: 'prior project snapshot unavailable' };
-  if (input.graph === null) return { eligible: false, reason: 'dependency graph unavailable' };
-  if (input.projectFiles.length === 0) return { eligible: false, reason: 'prior TypeScript documents unavailable' };
+  const prerequisites = incrementalPlanningPrerequisites(input, workspaceProjects);
+  if (!prerequisites.eligible) return prerequisites;
+  const { previousSnapshot, graph } = prerequisites;
 
-  const manifest = buildProjectChangeManifest(input.previousSnapshot, input.currentSnapshot);
+  const manifest = buildProjectChangeManifest(previousSnapshot, input.currentSnapshot);
   if (manifest.changes.length === 0) return { eligible: false, reason: 'no changed project inputs' };
   const typescriptSourceChanges = manifest.changes.filter(
     (change) => change.inputKind === 'source' && isTypeScriptLike(change.path),
@@ -171,7 +167,7 @@ export function planTypeScriptIncrementalUpdate(
     activeTypeScriptConfigs,
   );
   const previousProjectIdentity = typeScriptFragmentProjectIdentity(
-    input.previousSnapshot,
+    previousSnapshot,
     input.producerIdentity,
     activeTypeScriptConfigs,
   );
@@ -185,6 +181,95 @@ export function planTypeScriptIncrementalUpdate(
   if (typescriptSourceChanges.length === 0 && !replaceProject) {
     return { eligible: false, reason: 'change does not affect the configured TypeScript project' };
   }
+  const { effectiveDeletedPaths, incrementalManifest, affected } = planIncrementalChangedFiles(
+    input,
+    graph,
+    manifest,
+    compilerManifest,
+    typescriptSourceChanges,
+    modifiedChanges,
+    addedPaths,
+    deletedPaths,
+    replaceProject,
+  );
+  if (!affected.eligible) return affected;
+  const plan = affected.plan;
+  const deletedSet = new Set(effectiveDeletedPaths);
+  const projects = partitionWorkspacePlan(plan, workspaceProjects, graph, deletedSet);
+  if (!projects) {
+    return { eligible: false, reason: 'affected files cross or ambiguously match TypeScript projects' };
+  }
+  return incrementalEligibilityResult(
+    input,
+    previousSnapshot,
+    incrementalManifest,
+    plan,
+    projectIdentity,
+    projects,
+    effectiveDeletedPaths,
+    replaceProject,
+    dependencyGraphUnchanged,
+  );
+}
+
+function incrementalEligibilityResult(
+  input: TypeScriptIncrementalEligibilityInput,
+  previousSnapshot: ProjectInputSnapshot,
+  incrementalManifest: ProjectChangeManifest,
+  plan: AffectedFilePlan,
+  projectIdentity: string,
+  projects: TypeScriptIncrementalProjectPlan[],
+  effectiveDeletedPaths: string[],
+  replaceProject: boolean,
+  dependencyGraphUnchanged: boolean,
+): TypeScriptIncrementalEligibility {
+  const singleProject = projects.length === 1 ? projects[0] : undefined;
+  return {
+    eligible: true,
+    manifest: incrementalManifest,
+    plan,
+    projectIdentity,
+    previousFragmentGeneration:
+      input.previousOverlayGeneration ?? typeScriptFragmentGenerationIdentity(previousSnapshot, input.producerIdentity),
+    nextFragmentGeneration: typeScriptFragmentGenerationIdentity(input.currentSnapshot, input.producerIdentity),
+    projects,
+    deletedFiles: effectiveDeletedPaths,
+    replaceProject,
+    dependencyGraphUnchanged,
+    ...(singleProject
+      ? { tsconfigPath: singleProject.tsconfigPath, projectArgument: singleProject.projectArgument }
+      : {}),
+  };
+}
+
+function incrementalPlanningPrerequisites(
+  input: TypeScriptIncrementalEligibilityInput,
+  workspaceProjects: readonly string[],
+):
+  | { eligible: false; reason: string }
+  | { eligible: true; previousSnapshot: ProjectInputSnapshot; graph: FileDependencyGraph } {
+  if (workspaceProjects.length === 0) return { eligible: false, reason: 'workspace project roots unavailable' };
+  if (workspaceProjects.length === 1 && workspaceProjects[0] === '.' && !input.rootTsconfigExists) {
+    return { eligible: false, reason: 'root tsconfig unavailable' };
+  }
+  if (!input.previousSnapshot) return { eligible: false, reason: 'prior project snapshot unavailable' };
+  if (input.graph === null) return { eligible: false, reason: 'dependency graph unavailable' };
+  if (input.projectFiles.length === 0) return { eligible: false, reason: 'prior TypeScript documents unavailable' };
+
+  return { eligible: true, previousSnapshot: input.previousSnapshot, graph: input.graph };
+}
+
+function planIncrementalChangedFiles(
+  input: TypeScriptIncrementalEligibilityInput,
+  graph: FileDependencyGraph,
+  manifest: ProjectChangeManifest,
+  compilerManifest: ProjectChangeManifest,
+  typescriptSourceChanges: ProjectFileChange[],
+  modifiedChanges: ProjectFileChange[],
+  addedPaths: string[],
+  deletedPaths: string[],
+  replaceProject: boolean,
+) {
   const currentTypeScriptFiles = input.currentSnapshot.files
     .filter(
       (file) =>
@@ -202,7 +287,7 @@ export function planTypeScriptIncrementalUpdate(
     ? {
         eligible: true as const,
         plan: {
-          ...planAffectedFiles(compilerManifest, input.graph, [
+          ...planAffectedFiles(compilerManifest, graph, [
             ...new Set([...currentTypeScriptFiles, ...effectiveDeletedPaths]),
           ]),
           mode: 'full-project' as const,
@@ -212,34 +297,10 @@ export function planTypeScriptIncrementalUpdate(
         modifiedChanges,
         addedPaths,
         effectiveDeletedPaths,
-        input.graph,
+        graph,
         input.projectFiles,
       );
-  if (!affected.eligible) return affected;
-  const plan = affected.plan;
-  const deletedSet = new Set(effectiveDeletedPaths);
-  const projects = partitionWorkspacePlan(plan, workspaceProjects, input.graph, deletedSet);
-  if (!projects) {
-    return { eligible: false, reason: 'affected files cross or ambiguously match TypeScript projects' };
-  }
-  const singleProject = projects.length === 1 ? projects[0] : undefined;
-  return {
-    eligible: true,
-    manifest: incrementalManifest,
-    plan,
-    projectIdentity,
-    previousFragmentGeneration:
-      input.previousOverlayGeneration ??
-      typeScriptFragmentGenerationIdentity(input.previousSnapshot, input.producerIdentity),
-    nextFragmentGeneration: typeScriptFragmentGenerationIdentity(input.currentSnapshot, input.producerIdentity),
-    projects,
-    deletedFiles: effectiveDeletedPaths,
-    replaceProject,
-    dependencyGraphUnchanged,
-    ...(singleProject
-      ? { tsconfigPath: singleProject.tsconfigPath, projectArgument: singleProject.projectArgument }
-      : {}),
-  };
+  return { effectiveDeletedPaths, incrementalManifest, affected };
 }
 
 function typeScriptCompilerChanges(

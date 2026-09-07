@@ -129,6 +129,38 @@ export function sameProjectInputSnapshotContent(
   );
 }
 
+function projectFileChange(
+  path: string,
+  inputKind: ProjectFileChange['inputKind'],
+  before: ProjectFileFingerprint | undefined,
+  after: ProjectFileFingerprint | undefined,
+): ProjectFileChange | undefined {
+  if (!before && after) return { kind: 'added', path, inputKind, after };
+  if (before && !after) return { kind: 'deleted', path, inputKind, before };
+  if (before && after && (before.hash !== after.hash || before.size !== after.size)) {
+    return { kind: 'modified', path, inputKind, before, after };
+  }
+  return undefined;
+}
+
+function projectChangeUncertainty(
+  previous: ProjectInputSnapshot | null,
+  current: ProjectInputSnapshot,
+): ProjectChangeUncertainty[] {
+  const previousInputs = previous?.files ?? [];
+  const uncertainty = new Set<ProjectChangeUncertainty>();
+  if (!previous) uncertainty.add('prior-snapshot-unavailable');
+  if (previous && previous.version !== current.version) uncertainty.add('snapshot-version-changed');
+  if (hasDuplicatePaths(previousInputs) || hasDuplicatePaths(current.files)) {
+    uncertainty.add('duplicate-input-path');
+  }
+  if ([...previousInputs, ...current.files].some(isUnreadableFingerprint)) {
+    uncertainty.add('unreadable-input');
+  }
+
+  return [...uncertainty].sort();
+}
+
 export function buildProjectChangeManifest(
   previous: ProjectInputSnapshot | null,
   current: ProjectInputSnapshot,
@@ -142,30 +174,17 @@ export function buildProjectChangeManifest(
     const before = previousFiles.get(path);
     const after = currentFiles.get(path);
     const inputKind = classifyProjectInputPath(path, current.languages);
-    if (!before && after) {
-      changes.push({ kind: 'added', path, inputKind, after });
-    } else if (before && !after) {
-      changes.push({ kind: 'deleted', path, inputKind, before });
-    } else if (before && after && (before.hash !== after.hash || before.size !== after.size)) {
-      changes.push({ kind: 'modified', path, inputKind, before, after });
-    }
+    const change = projectFileChange(path, inputKind, before, after);
+    if (change) changes.push(change);
   }
 
-  const uncertainty = new Set<ProjectChangeUncertainty>();
-  if (!previous) uncertainty.add('prior-snapshot-unavailable');
-  if (previous && previous.version !== current.version) uncertainty.add('snapshot-version-changed');
-  if (hasDuplicatePaths(previous?.files ?? []) || hasDuplicatePaths(current.files)) {
-    uncertainty.add('duplicate-input-path');
-  }
-  if ([...(previous?.files ?? []), ...current.files].some(isUnreadableFingerprint)) {
-    uncertainty.add('unreadable-input');
-  }
+  const uncertainty = projectChangeUncertainty(previous, current);
 
   return {
     version: 1,
     changes,
     projectIdentityChanged: previous ? !sameProjectIdentity(previous, current) : true,
-    uncertainty: [...uncertainty].sort(),
+    uncertainty,
   };
 }
 

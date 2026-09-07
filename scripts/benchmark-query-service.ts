@@ -150,35 +150,31 @@ function startClient(service: boolean): {
 }
 
 function benchmarkArguments(): string[] {
-  if (benchmarkCommand === 'search') {
-    return ['search', operand, '--limit', '1', '--context', '0', '--json', '--result-only', '--compact'];
-  }
-  if (benchmarkCommand === 'outline') return ['outline', operand, '--json', '--result-only', '--compact'];
-  if (benchmarkCommand === 'entrypoints') return ['entrypoints', operand, '--json', '--result-only', '--compact'];
-  if (benchmarkCommand === 'files') return ['files', operand, '--json', '--result-only', '--compact'];
-  if (benchmarkCommand === 'stats') return ['stats', '--json', '--result-only', '--compact'];
-  if (benchmarkCommand === 'members') return ['members', operand, '--json', '--result-only', '--compact'];
-  if (benchmarkCommand === 'methods') return ['methods', operand, '--json', '--result-only', '--compact'];
-  if (benchmarkCommand === 'kind-counts') return ['kind-counts', '--json', '--result-only', '--compact'];
-  if (
-    benchmarkCommand === 'imported-by' ||
-    benchmarkCommand === 'hierarchy' ||
-    benchmarkCommand === 'by-kind' ||
-    benchmarkCommand === 'refs' ||
-    benchmarkCommand === 'call-graph' ||
-    benchmarkCommand === 'dependence-slice' ||
-    benchmarkCommand === 'value-flow' ||
-    benchmarkCommand === 'imports' ||
-    benchmarkCommand === 'unused-imports' ||
-    benchmarkCommand === 'system' ||
-    benchmarkCommand === 'surface'
-  ) {
-    return [benchmarkCommand, operand, '--json', '--result-only', '--compact'];
-  }
-  if (benchmarkCommand === 'deps' || benchmarkCommand === 'rdeps') {
-    return [benchmarkCommand, operand, '--json', '--result-only', '--compact'];
-  }
-  return ['code', operand, '--json', '--result-only', '--compact', '--no-session'];
+  const outputOptions = ['--json', '--result-only', '--compact'];
+  if (benchmarkCommand === 'search') return ['search', operand, '--limit', '1', '--context', '0', ...outputOptions];
+  if (benchmarkCommand === 'stats' || benchmarkCommand === 'kind-counts') return [benchmarkCommand, ...outputOptions];
+  const operandCommands: readonly BenchmarkCommand[] = [
+    'outline',
+    'entrypoints',
+    'files',
+    'members',
+    'methods',
+    'imported-by',
+    'hierarchy',
+    'by-kind',
+    'refs',
+    'call-graph',
+    'dependence-slice',
+    'value-flow',
+    'imports',
+    'unused-imports',
+    'system',
+    'surface',
+    'deps',
+    'rdeps',
+  ];
+  if (operandCommands.includes(benchmarkCommand)) return [benchmarkCommand, operand, ...outputOptions];
+  return ['code', operand, ...outputOptions, '--no-session'];
 }
 
 function processSnapshot(): Array<{ pid: number; rssKiB: number; command: string }> {

@@ -177,60 +177,93 @@ export function programDataElementsForSystemMapRelations(
   const seenCallsites = new Set<string>();
 
   for (const relation of relations) {
-    if (relation.kind !== 'call' || !relation.fromSymbol || !relation.toSymbol || relation.line === null) continue;
-    const callee = definitionCacheEntry(definitionCache, db, relation.toFile, relation.toSymbol);
-    if (!callee) continue;
-    const resolved = resolvedCallSitesForDefinition(db, callee);
-    const sites = resolved.sites.filter(
-      (site) =>
-        site.file === relation.fromFile &&
-        site.startLine <= relation.line! &&
-        site.endLine >= relation.line! &&
-        site.caller?.symbol === relation.fromSymbol,
-    );
-    if (sites.length !== 1) {
-      const unresolved = resolved.unresolved.find(
-        (site) => site.file === relation.fromFile && site.line === relation.line,
-      );
-      if (unresolved) {
-        result.blindSpots.push(
-          `Parameter flow unresolved at ${relation.fromFile}:${relation.line + 1}: ${unresolved.reason}.`,
-        );
-      }
-      continue;
-    }
-    const site = sites[0]!;
-    const callsiteKey = `${site.file}\0${site.callNode.startIndex}\0${site.callNode.endIndex}\0${callee.symbol}`;
-    if (seenCallsites.has(callsiteKey)) continue;
-    seenCallsites.add(callsiteKey);
-    const flow = parameterValueFlowAtCall(db, site);
-    const root = getAst(db, site.file)?.rootNode;
-    const staticArguments = new Map<number, EvaluatedStaticValue>();
-    if (root) {
-      for (const unknown of flow.unknown) {
-        const value = evaluateStaticValue({ db, file: site.file, root }, site.arguments[unknown.calleePosition]);
-        if (value) staticArguments.set(unknown.calleePosition, value);
-      }
-    }
-    mergeElements(result, programDataElementsForParameterFlow(flow, staticArguments));
-    if (flow.caller && callResultIsUsed(site.callNode)) addCallResultTransfer(result, flow, site.callNode);
+    enrichSystemMapCallRelation(db, relation, definitionCache, seenCallsites, result);
   }
-
-  for (const owner of topologyNodes) {
-    if (!owner.location || !['source-construct', 'symbol'].includes(owner.kind)) continue;
-    const endLine = owner.location.endLine ?? owner.location.line;
-    const analysis = semanticLocalFlowForRange(db, owner.location.file, owner.location.line, endLine);
-    if (!analysis) continue;
-    mergeElements(result, programDataElementsForLocalFlow(owner, analysis.points, analysis.edges));
-    for (const reason of analysis.coverage.unsupported) {
-      result.blindSpots.push(
-        `TypeScript local flow is partial for ${owner.location.file}:${owner.location.line + 1}-${endLine + 1}: ${reason} Recover with: scip-query inspect --at '${owner.location.file}:${owner.location.line + 1}-${endLine + 1}' --view behavior.`,
-      );
-    }
-  }
+  for (const owner of topologyNodes) enrichTopologyLocalFlow(db, owner, result);
 
   result.blindSpots = [...new Set(result.blindSpots)].sort();
   return result;
+}
+
+type ResolvedSystemMapCallsite = ReturnType<typeof resolvedCallSitesForDefinition>['sites'][number];
+
+function resolveSystemMapRelationCallsite(
+  db: ScipDatabase,
+  relation: SystemMapCallRelation,
+  definitionCache: Map<string, IndexedDefinition | null>,
+  result: ProgramDataElements,
+): { site: ResolvedSystemMapCallsite; callee: IndexedDefinition } | null {
+  if (relation.kind !== 'call' || !relation.fromSymbol || !relation.toSymbol || relation.line === null) return null;
+  const callee = definitionCacheEntry(definitionCache, db, relation.toFile, relation.toSymbol);
+  if (!callee) return null;
+  const resolved = resolvedCallSitesForDefinition(db, callee);
+  const sites = resolved.sites.filter(
+    (site) =>
+      site.file === relation.fromFile &&
+      site.startLine <= relation.line! &&
+      site.endLine >= relation.line! &&
+      site.caller?.symbol === relation.fromSymbol,
+  );
+  if (sites.length !== 1) {
+    const unresolved = resolved.unresolved.find(
+      (site) => site.file === relation.fromFile && site.line === relation.line,
+    );
+    if (unresolved) {
+      result.blindSpots.push(
+        `Parameter flow unresolved at ${relation.fromFile}:${relation.line + 1}: ${unresolved.reason}.`,
+      );
+    }
+    return null;
+  }
+  return { site: sites[0]!, callee };
+}
+
+function enrichSystemMapCallRelation(
+  db: ScipDatabase,
+  relation: SystemMapCallRelation,
+  definitionCache: Map<string, IndexedDefinition | null>,
+  seenCallsites: Set<string>,
+  result: ProgramDataElements,
+): void {
+  const resolved = resolveSystemMapRelationCallsite(db, relation, definitionCache, result);
+  if (!resolved) return;
+  const { site, callee } = resolved;
+  const callsiteKey = `${site.file}\0${site.callNode.startIndex}\0${site.callNode.endIndex}\0${callee.symbol}`;
+  if (seenCallsites.has(callsiteKey)) return;
+  seenCallsites.add(callsiteKey);
+  const flow = parameterValueFlowAtCall(db, site);
+  const staticArguments = staticArgumentsForCall(db, site, flow);
+  mergeElements(result, programDataElementsForParameterFlow(flow, staticArguments));
+  if (flow.caller && callResultIsUsed(site.callNode)) addCallResultTransfer(result, flow, site.callNode);
+}
+
+function staticArgumentsForCall(
+  db: ScipDatabase,
+  site: ResolvedSystemMapCallsite,
+  flow: CallParameterValueFlow,
+): Map<number, EvaluatedStaticValue> {
+  const root = getAst(db, site.file)?.rootNode;
+  const staticArguments = new Map<number, EvaluatedStaticValue>();
+  if (root) {
+    for (const unknown of flow.unknown) {
+      const value = evaluateStaticValue({ db, file: site.file, root }, site.arguments[unknown.calleePosition]);
+      if (value) staticArguments.set(unknown.calleePosition, value);
+    }
+  }
+  return staticArguments;
+}
+
+function enrichTopologyLocalFlow(db: ScipDatabase, owner: ExplorationTopologyNode, result: ProgramDataElements): void {
+  if (!owner.location || !['source-construct', 'symbol'].includes(owner.kind)) return;
+  const endLine = owner.location.endLine ?? owner.location.line;
+  const analysis = semanticLocalFlowForRange(db, owner.location.file, owner.location.line, endLine);
+  if (!analysis) return;
+  mergeElements(result, programDataElementsForLocalFlow(owner, analysis.points, analysis.edges));
+  for (const reason of analysis.coverage.unsupported) {
+    result.blindSpots.push(
+      `TypeScript local flow is partial for ${owner.location.file}:${owner.location.line + 1}-${endLine + 1}: ${reason} Recover with: scip-query inspect --at '${owner.location.file}:${owner.location.line + 1}-${endLine + 1}' --view behavior.`,
+    );
+  }
 }
 
 function programDataElementsForLocalFlow(

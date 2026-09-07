@@ -233,25 +233,8 @@ function deserializeDefinitionEvidence(
 
 function parseCachedDefinition(value: unknown, relativePath: string): IndexedDefinition | null {
   if (!isRecord(value)) return null;
-  if (
-    typeof value.symbolId !== 'number' ||
-    typeof value.symbol !== 'string' ||
-    typeof value.documentId !== 'number' ||
-    typeof value.startLine !== 'number' ||
-    (typeof value.startChar !== 'number' && value.startChar !== undefined) ||
-    typeof value.endLine !== 'number' ||
-    (typeof value.endChar !== 'number' && value.endChar !== undefined) ||
-    value.relativePath !== relativePath ||
-    typeof value.leaf !== 'string' ||
-    (typeof value.parentTypeName !== 'string' && value.parentTypeName !== null) ||
-    typeof value.isFunctionLike !== 'boolean' ||
-    typeof value.isTypeLike !== 'boolean' ||
-    (typeof value.kind !== 'number' && value.kind !== null) ||
-    (typeof value.documentation !== 'string' && value.documentation !== null) ||
-    (typeof value.enclosingSymbol !== 'string' && value.enclosingSymbol !== null)
-  ) {
-    return null;
-  }
+  if (!isCachedDefinitionIdentity(value) || !isCachedDefinitionLocation(value, relativePath)) return null;
+  if (!isCachedDefinitionClassification(value) || !isCachedDefinitionDescription(value)) return null;
 
   return {
     symbolId: value.symbolId,
@@ -270,6 +253,48 @@ function parseCachedDefinition(value: unknown, relativePath: string): IndexedDef
     documentation: value.documentation,
     enclosingSymbol: value.enclosingSymbol,
   };
+}
+
+function isCachedDefinitionIdentity(
+  value: Record<string, unknown>,
+): value is Record<string, unknown> & Pick<IndexedDefinition, 'symbolId' | 'symbol' | 'documentId'> {
+  return typeof value.symbolId === 'number' && typeof value.symbol === 'string' && typeof value.documentId === 'number';
+}
+
+function isCachedDefinitionLocation(
+  value: Record<string, unknown>,
+  relativePath: string,
+): value is Record<string, unknown> &
+  Pick<IndexedDefinition, 'startLine' | 'startChar' | 'endLine' | 'endChar' | 'relativePath'> {
+  return (
+    typeof value.startLine === 'number' &&
+    (typeof value.startChar === 'number' || value.startChar === undefined) &&
+    typeof value.endLine === 'number' &&
+    (typeof value.endChar === 'number' || value.endChar === undefined) &&
+    value.relativePath === relativePath
+  );
+}
+
+function isCachedDefinitionClassification(
+  value: Record<string, unknown>,
+): value is Record<string, unknown> &
+  Pick<IndexedDefinition, 'leaf' | 'parentTypeName' | 'isFunctionLike' | 'isTypeLike' | 'kind'> {
+  return (
+    typeof value.leaf === 'string' &&
+    (typeof value.parentTypeName === 'string' || value.parentTypeName === null) &&
+    typeof value.isFunctionLike === 'boolean' &&
+    typeof value.isTypeLike === 'boolean' &&
+    (typeof value.kind === 'number' || value.kind === null)
+  );
+}
+
+function isCachedDefinitionDescription(
+  value: Record<string, unknown>,
+): value is Record<string, unknown> & Pick<IndexedDefinition, 'documentation' | 'enclosingSymbol'> {
+  return (
+    (typeof value.documentation === 'string' || value.documentation === null) &&
+    (typeof value.enclosingSymbol === 'string' || value.enclosingSymbol === null)
+  );
 }
 
 function computeDefinitionsForFile(

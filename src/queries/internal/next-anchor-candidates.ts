@@ -795,167 +795,10 @@ export function sourceRangeNextAnchorPacket(
   const ambiguousCallsites = 0;
   let unresolvedCallsites = 0;
   for (const seed of seeds) {
-    const sourceLines = getSourceLines(db, seed.file);
-    const facts = getSourceFacts(db, seed.file);
-    const callsites = (facts?.callSites ?? []).filter(
-      (callsite) => callsite.line >= seed.startLine && callsite.line <= seed.endLine,
-    );
-    visibleCallsites += callsites.length;
-    const signalsByLine = behaviorSignalsByLine(db, seed.file, seed.startLine, seed.endLine);
-    const exact = scipOccurrenceCallTargetsForRange(db, seed.file, seed.startLine, seed.endLine);
-    const exactCallsiteKeys = new Set<string>();
-
-    for (const target of exact.targets) {
-      if (!sourceAllowed(target.definition.relativePath)) continue;
-      if (
-        materializedRanges.some(
-          (range) =>
-            range.file === target.definition.relativePath &&
-            range.startLine <= target.definition.startLine &&
-            range.endLine >= target.definition.endLine,
-        )
-      ) {
-        continue;
-      }
-      const key = sourceCallsiteKey(seed.file, target.sourceLine, target.calleeLeaf);
-      exactCallsiteKeys.add(key);
-      const signals = callsiteSignals(signalsByLine.get(target.sourceLine));
-      const alternative: SystemMapNextAnchorAlternative = {
-        symbol: target.definition.symbol,
-        label: target.definition.leaf,
-        file: target.definition.relativePath,
-        line: target.definition.startLine,
-        endLine: target.definition.endLine,
-      };
-      candidates.push({
-        anchor: {
-          id: nextAnchorId(seed.id, target.sourceLine, target.definition.symbol),
-          status: 'exact',
-          source: 'graph-call',
-          direction: 'downstream',
-          causalRole: 'callee',
-          relationKind: 'call',
-          fromStepId: seed.id,
-          fromLabel: seed.label,
-          callsite: {
-            file: seed.file,
-            line: target.sourceLine,
-            endLine: target.sourceLine,
-            text: sourceLines[target.sourceLine]?.trim() || `${target.calleeLeaf}()`,
-            signals,
-            calleeLeaf: target.calleeLeaf,
-          },
-          alternatives: [alternative],
-          alternativeCount: 1,
-          evidence: [
-            {
-              method: 'scip-occurrence-callsite',
-              strength: 'exact',
-              identity: target.definition.symbol,
-              location: { file: seed.file, line: target.sourceLine },
-            },
-          ],
-        },
-      });
-    }
-    graphEvidencedCallsites += exact.resolvedCallsites;
-
-    const memberTargets = importedMemberCallTargets(db, seed.file, {
-      ranges: [{ startLine: seed.startLine, endLine: seed.endLine }],
-    });
-    const memberTargetsByCallsite = new Map<string, typeof memberTargets.targets>();
-    for (const target of memberTargets.targets) {
-      const callsiteLeaf = callsites.find((callsite) => callsite.line === target.line)?.calleeLeaf ?? target.calleeLeaf;
-      const key = sourceCallsiteKey(seed.file, target.line, callsiteLeaf);
-      const group = memberTargetsByCallsite.get(key) ?? [];
-      group.push(target);
-      memberTargetsByCallsite.set(key, group);
-    }
-    for (const [key, groupedTargets] of memberTargetsByCallsite) {
-      if (exactCallsiteKeys.has(key)) continue;
-      exactCallsiteKeys.add(key);
-      const targets = groupedTargets.filter(
-        (target) =>
-          sourceAllowed(target.targetFile) &&
-          !materializedRanges.some(
-            (range) =>
-              range.file === target.targetFile &&
-              range.startLine <= target.targetStartLine &&
-              range.endLine >= target.targetEndLine,
-          ),
-      );
-      if (targets.length === 0) continue;
-      const target = targets[0]!;
-      const callsiteLeaf = callsites.find((callsite) => callsite.line === target.line)?.calleeLeaf ?? target.calleeLeaf;
-      const signals = callsiteSignals(signalsByLine.get(target.line));
-      const alternatives = uniqueAlternatives(
-        targets.map((candidate) => ({
-          symbol: candidate.targetSymbol ?? null,
-          label: candidate.calleeLeaf,
-          file: candidate.targetFile,
-          line: candidate.targetStartLine,
-          endLine: candidate.targetEndLine,
-        })),
-      );
-      const strength: ExplorationEvidenceStrength = targets.some(
-        (candidate) => (candidate.resolutionAlternativeCount ?? 0) > 1,
-      )
-        ? 'candidate'
-        : targets.every((candidate) => candidate.strength === 'exact')
-          ? 'exact'
-          : 'derived';
-      candidates.push({
-        anchor: {
-          id: nextAnchorId(
-            seed.id,
-            target.line,
-            alternatives.map((alternative) => `${alternative.file}:${alternative.line}`).join('|'),
-          ),
-          status: alternatives.length > 1 ? 'ambiguous' : strength,
-          source: 'graph-call',
-          direction: 'downstream',
-          causalRole: 'callee',
-          relationKind: 'call',
-          fromStepId: seed.id,
-          fromLabel: seed.label,
-          callsite: {
-            file: seed.file,
-            line: target.line,
-            endLine: target.line,
-            text: sourceLines[target.line]?.trim() || `${target.calleeLeaf}()`,
-            signals,
-            calleeLeaf: callsiteLeaf,
-          },
-          alternatives: alternatives.slice(0, 3),
-          alternativeCount: alternatives.length,
-          evidence: targets.map((candidate) => ({
-            method:
-              candidate.resolution === 'constructed-member-receiver'
-                ? 'ast-constructed-member-callsite'
-                : candidate.resolution === 'factory-callback-member'
-                  ? 'ast-factory-callback-callsite'
-                  : candidate.resolution === 'imported-service-object-member'
-                    ? 'ast-service-member-callsite'
-                    : 'ast-import-member-callsite',
-            strength,
-            identity:
-              candidate.targetSymbol ??
-              `${candidate.targetFile}:${candidate.targetStartLine}-${candidate.targetEndLine}`,
-            location: { file: seed.file, line: target.line },
-          })),
-        },
-      });
-    }
-    graphEvidencedCallsites += memberTargetsByCallsite.size;
-
-    for (const callsite of callsites) {
-      const key = sourceCallsiteKey(seed.file, callsite.line, callsite.calleeLeaf);
-      if (exactCallsiteKeys.has(key)) continue;
-      // A repository-wide same-leaf match is not call-target evidence. Keep
-      // the callsite visible in unresolved accounting until SCIP/compiler or
-      // source-grounded member resolution establishes its identity.
-      unresolvedCallsites += 1;
-    }
+    const counts = collectSourceRangeSeedCandidates(db, seed, sourceAllowed, materializedRanges, candidates);
+    visibleCallsites += counts.visibleCallsites;
+    graphEvidencedCallsites += counts.graphEvidencedCallsites;
+    unresolvedCallsites += counts.unresolvedCallsites;
   }
 
   return nextAnchorPacketFromCandidates(db, candidates, steps, limit, {
@@ -969,6 +812,248 @@ export function sourceRangeNextAnchorPacket(
     resultCandidates: 0,
     runtimeCandidates: 0,
   });
+}
+
+interface SourceRangeCandidateContext {
+  seed: SourceRangeNextAnchorSeed;
+  sourceLines: readonly string[];
+  callsites: NonNullable<ReturnType<typeof getSourceFacts>>['callSites'];
+  signalsByLine: ReturnType<typeof behaviorSignalsByLine>;
+  sourceAllowed: (file: string) => boolean;
+  materializedRanges: readonly { file: string; startLine: number; endLine: number }[];
+}
+
+type ExactRangeCallTarget = ReturnType<typeof scipOccurrenceCallTargetsForRange>['targets'][number];
+type MemberRangeCallTarget = ReturnType<typeof importedMemberCallTargets>['targets'][number];
+
+function collectSourceRangeSeedCandidates(
+  db: ScipDatabase,
+  seed: SourceRangeNextAnchorSeed,
+  sourceAllowed: (file: string) => boolean,
+  materializedRanges: SourceRangeCandidateContext['materializedRanges'],
+  candidates: NextAnchorCandidate[],
+) {
+  let unresolvedCallsites = 0;
+  const sourceLines = getSourceLines(db, seed.file);
+  const facts = getSourceFacts(db, seed.file);
+  const callsites = (facts?.callSites ?? []).filter(
+    (callsite) => callsite.line >= seed.startLine && callsite.line <= seed.endLine,
+  );
+  const visibleCallsites = callsites.length;
+  const signalsByLine = behaviorSignalsByLine(db, seed.file, seed.startLine, seed.endLine);
+  const exact = scipOccurrenceCallTargetsForRange(db, seed.file, seed.startLine, seed.endLine);
+  const exactCallsiteKeys = new Set<string>();
+
+  const context: SourceRangeCandidateContext = {
+    seed,
+    sourceLines,
+    callsites,
+    signalsByLine,
+    sourceAllowed,
+    materializedRanges,
+  };
+  appendExactRangeCandidates(context, exact.targets, exactCallsiteKeys, candidates);
+  let graphEvidencedCallsites = exact.resolvedCallsites;
+
+  const memberTargets = importedMemberCallTargets(db, seed.file, {
+    ranges: [{ startLine: seed.startLine, endLine: seed.endLine }],
+  });
+  const memberTargetsByCallsite = groupRangeMemberTargets(seed, callsites, memberTargets.targets);
+  appendMemberRangeCandidates(context, memberTargetsByCallsite, exactCallsiteKeys, candidates);
+  graphEvidencedCallsites += memberTargetsByCallsite.size;
+
+  for (const callsite of callsites) {
+    const key = sourceCallsiteKey(seed.file, callsite.line, callsite.calleeLeaf);
+    if (exactCallsiteKeys.has(key)) continue;
+    // A repository-wide same-leaf match is not call-target evidence. Keep
+    // the callsite visible in unresolved accounting until SCIP/compiler or
+    // source-grounded member resolution establishes its identity.
+    unresolvedCallsites += 1;
+  }
+  return { visibleCallsites, graphEvidencedCallsites, unresolvedCallsites };
+}
+
+function appendExactRangeCandidates(
+  context: SourceRangeCandidateContext,
+  targets: readonly ExactRangeCallTarget[],
+  exactCallsiteKeys: Set<string>,
+  candidates: NextAnchorCandidate[],
+): void {
+  const { seed, sourceLines, signalsByLine, sourceAllowed, materializedRanges } = context;
+  for (const target of targets) {
+    if (!sourceAllowed(target.definition.relativePath)) continue;
+    if (
+      materializedRanges.some(
+        (range) =>
+          range.file === target.definition.relativePath &&
+          range.startLine <= target.definition.startLine &&
+          range.endLine >= target.definition.endLine,
+      )
+    ) {
+      continue;
+    }
+    const key = sourceCallsiteKey(seed.file, target.sourceLine, target.calleeLeaf);
+    exactCallsiteKeys.add(key);
+    const signals = callsiteSignals(signalsByLine.get(target.sourceLine));
+    const alternative: SystemMapNextAnchorAlternative = {
+      symbol: target.definition.symbol,
+      label: target.definition.leaf,
+      file: target.definition.relativePath,
+      line: target.definition.startLine,
+      endLine: target.definition.endLine,
+    };
+    candidates.push({
+      anchor: {
+        id: nextAnchorId(seed.id, target.sourceLine, target.definition.symbol),
+        status: 'exact',
+        source: 'graph-call',
+        direction: 'downstream',
+        causalRole: 'callee',
+        relationKind: 'call',
+        fromStepId: seed.id,
+        fromLabel: seed.label,
+        callsite: {
+          file: seed.file,
+          line: target.sourceLine,
+          endLine: target.sourceLine,
+          text: sourceLines[target.sourceLine]?.trim() || `${target.calleeLeaf}()`,
+          signals,
+          calleeLeaf: target.calleeLeaf,
+        },
+        alternatives: [alternative],
+        alternativeCount: 1,
+        evidence: [
+          {
+            method: 'scip-occurrence-callsite',
+            strength: 'exact',
+            identity: target.definition.symbol,
+            location: { file: seed.file, line: target.sourceLine },
+          },
+        ],
+      },
+    });
+  }
+}
+
+function groupRangeMemberTargets(
+  seed: SourceRangeNextAnchorSeed,
+  callsites: SourceRangeCandidateContext['callsites'],
+  targets: MemberRangeCallTarget[],
+): Map<string, MemberRangeCallTarget[]> {
+  const memberTargetsByCallsite = new Map<string, MemberRangeCallTarget[]>();
+  for (const target of targets) {
+    const callsiteLeaf = callsites.find((callsite) => callsite.line === target.line)?.calleeLeaf ?? target.calleeLeaf;
+    const key = sourceCallsiteKey(seed.file, target.line, callsiteLeaf);
+    const group = memberTargetsByCallsite.get(key) ?? [];
+    group.push(target);
+    memberTargetsByCallsite.set(key, group);
+  }
+  return memberTargetsByCallsite;
+}
+
+function appendMemberRangeCandidates(
+  context: SourceRangeCandidateContext,
+  memberTargetsByCallsite: ReadonlyMap<string, MemberRangeCallTarget[]>,
+  exactCallsiteKeys: Set<string>,
+  candidates: NextAnchorCandidate[],
+): void {
+  const { sourceAllowed, materializedRanges } = context;
+  for (const [key, groupedTargets] of memberTargetsByCallsite) {
+    if (exactCallsiteKeys.has(key)) continue;
+    exactCallsiteKeys.add(key);
+    const targets = groupedTargets.filter(
+      (target) =>
+        sourceAllowed(target.targetFile) &&
+        !materializedRanges.some(
+          (range) =>
+            range.file === target.targetFile &&
+            range.startLine <= target.targetStartLine &&
+            range.endLine >= target.targetEndLine,
+        ),
+    );
+    if (targets.length === 0) continue;
+    candidates.push(memberRangeCandidate(context, targets));
+  }
+}
+
+function memberRangeCandidate(
+  context: SourceRangeCandidateContext,
+  targets: MemberRangeCallTarget[],
+): NextAnchorCandidate {
+  const { seed, sourceLines, callsites, signalsByLine } = context;
+  const target = targets[0]!;
+  const callsiteLeaf = callsites.find((callsite) => callsite.line === target.line)?.calleeLeaf ?? target.calleeLeaf;
+  const signals = callsiteSignals(signalsByLine.get(target.line));
+  const alternatives = uniqueAlternatives(
+    targets.map((candidate) => ({
+      symbol: candidate.targetSymbol ?? null,
+      label: candidate.calleeLeaf,
+      file: candidate.targetFile,
+      line: candidate.targetStartLine,
+      endLine: candidate.targetEndLine,
+    })),
+  );
+  const strength = rangeMemberEvidenceStrength(targets);
+  return {
+    anchor: {
+      id: nextAnchorId(
+        seed.id,
+        target.line,
+        alternatives.map((alternative) => `${alternative.file}:${alternative.line}`).join('|'),
+      ),
+      status: alternatives.length > 1 ? 'ambiguous' : strength,
+      source: 'graph-call',
+      direction: 'downstream',
+      causalRole: 'callee',
+      relationKind: 'call',
+      fromStepId: seed.id,
+      fromLabel: seed.label,
+      callsite: {
+        file: seed.file,
+        line: target.line,
+        endLine: target.line,
+        text: sourceLines[target.line]?.trim() || `${target.calleeLeaf}()`,
+        signals,
+        calleeLeaf: callsiteLeaf,
+      },
+      alternatives: alternatives.slice(0, 3),
+      alternativeCount: alternatives.length,
+      evidence: targets.map((candidate) => rangeMemberEvidence(candidate, seed.file, target.line, strength)),
+    },
+  };
+}
+
+function rangeMemberEvidenceStrength(targets: readonly MemberRangeCallTarget[]): ExplorationEvidenceStrength {
+  if (targets.some((candidate) => (candidate.resolutionAlternativeCount ?? 0) > 1)) return 'candidate';
+  return targets.every((candidate) => candidate.strength === 'exact') ? 'exact' : 'derived';
+}
+
+function rangeMemberEvidence(
+  candidate: MemberRangeCallTarget,
+  file: string,
+  line: number,
+  strength: ExplorationEvidenceStrength,
+): ExplorationEvidenceSource {
+  return {
+    method: rangeMemberEvidenceMethod(candidate.resolution),
+    strength,
+    identity:
+      candidate.targetSymbol ?? `${candidate.targetFile}:${candidate.targetStartLine}-${candidate.targetEndLine}`,
+    location: { file, line },
+  };
+}
+
+function rangeMemberEvidenceMethod(resolution: MemberRangeCallTarget['resolution']): string {
+  switch (resolution) {
+    case 'constructed-member-receiver':
+      return 'ast-constructed-member-callsite';
+    case 'factory-callback-member':
+      return 'ast-factory-callback-callsite';
+    case 'imported-service-object-member':
+      return 'ast-service-member-callsite';
+    default:
+      return 'ast-import-member-callsite';
+  }
 }
 
 interface NextAnchorPacketStats {

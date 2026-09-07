@@ -107,56 +107,67 @@ export function normalizeDeclarationText(source, fileName = 'api.d.ts') {
 
 export function extractPublicExports(source, fileName = 'api.d.ts', resolveExport) {
   const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-  const declarations = declarationStatementsByName(sourceFile);
-  const imports = importBindingsByName(sourceFile);
-  const importDetails = importBindingDetailsByName(sourceFile);
+  const context = {
+    sourceFile,
+    fileName,
+    resolveExport,
+    declarations: declarationStatementsByName(sourceFile),
+    imports: importBindingsByName(sourceFile),
+    importDetails: importBindingDetailsByName(sourceFile),
+  };
   const exports = [];
-
   for (const statement of sourceFile.statements) {
     if (ts.isExportDeclaration(statement)) {
-      if (statement.exportClause === undefined) {
-        throw new Error(`Unsupported export-star declaration in ${fileName}; public names must be explicit.`);
-      }
-      if (!ts.isNamedExports(statement.exportClause)) continue;
-      for (const element of statement.exportClause.elements) {
-        const localName = element.propertyName?.text ?? element.name.text;
-        const declaration = declarations.get(localName);
-        const resolved =
-          resolveExport && statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
-            ? resolveExport(fileName, statement.moduleSpecifier.text, localName)
-            : resolveImportedBinding(fileName, importDetails.get(localName), resolveExport);
-        exports.push({
-          name: element.name.text,
-          kind:
-            statement.isTypeOnly || element.isTypeOnly
-              ? 'type'
-              : (resolved?.kind ?? exportedDeclarationKind(declaration)),
-          signature: declaration
-            ? declaration
-                .map((node) =>
-                  declarationPrinter
-                    .printNode(ts.EmitHint.Unspecified, normalizeNamedBindings(node), sourceFile)
-                    .trim(),
-                )
-                .join('\n')
-            : (resolved?.signature ?? imports.get(localName) ?? `unresolved ${localName}`),
-        });
-      }
+      exports.push(...namedPublicExports(statement, context));
       continue;
     }
-
     if (!hasExportModifier(statement)) continue;
     for (const name of declarationNames(statement)) {
       exports.push({
         name,
         kind: exportedDeclarationKind([statement]),
-        signature: declarationPrinter
-          .printNode(ts.EmitHint.Unspecified, normalizeNamedBindings(statement), sourceFile)
-          .trim(),
+        signature: printExportDeclaration(statement, sourceFile),
       });
     }
   }
+  return mergePublicExports(exports);
+}
 
+function printExportDeclaration(node, sourceFile) {
+  return declarationPrinter.printNode(ts.EmitHint.Unspecified, normalizeNamedBindings(node), sourceFile).trim();
+}
+
+function namedPublicExports(statement, context) {
+  if (statement.exportClause === undefined) {
+    throw new Error(`Unsupported export-star declaration in ${context.fileName}; public names must be explicit.`);
+  }
+  if (!ts.isNamedExports(statement.exportClause)) return [];
+  return statement.exportClause.elements.map((element) => namedPublicExport(statement, element, context));
+}
+
+function namedPublicExport(statement, element, context) {
+  const { sourceFile, fileName, resolveExport, declarations, imports, importDetails } = context;
+  const localName = element.propertyName?.text ?? element.name.text;
+  const declaration = declarations.get(localName);
+  const resolved =
+    resolveExport && statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
+      ? resolveExport(fileName, statement.moduleSpecifier.text, localName)
+      : resolveImportedBinding(fileName, importDetails.get(localName), resolveExport);
+  return {
+    name: element.name.text,
+    kind:
+      statement.isTypeOnly || element.isTypeOnly ? 'type' : (resolved?.kind ?? exportedDeclarationKind(declaration)),
+    signature: publicExportSignature(declaration, resolved, imports.get(localName), localName, sourceFile),
+  };
+}
+
+function publicExportSignature(declaration, resolved, imported, localName, sourceFile) {
+  return declaration
+    ? declaration.map((node) => printExportDeclaration(node, sourceFile)).join('\n')
+    : (resolved?.signature ?? imported ?? `unresolved ${localName}`);
+}
+
+function mergePublicExports(exports) {
   const merged = new Map();
   for (const item of exports) {
     const previous = merged.get(item.name);

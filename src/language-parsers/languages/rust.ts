@@ -61,6 +61,56 @@ function parseRustImportsAst(db: ScipDatabase, importerPath: string, tree: Tree)
 }
 
 function flattenRustUseTree(node: SyntaxNode, prefix: string): RustImportLeaf[] {
+  const leaf = rustUseLeaf(node, prefix);
+  if (leaf) return leaf;
+  switch (node.type) {
+    case 'scoped_use_list': {
+      return flattenRustScopedUseList(node, prefix);
+    }
+    case 'use_list': {
+      const out: RustImportLeaf[] = [];
+      for (const child of node.namedChildren) {
+        out.push(...flattenRustUseTree(child, prefix));
+      }
+      return out;
+    }
+    case 'use_as_clause': {
+      const path = node.namedChild(0);
+      const alias = node.namedChild(1);
+      if (!path || !alias) return [];
+      const subItems = flattenRustUseTree(path, prefix);
+      const aliasName = alias.text;
+      return subItems.map((leaf) => ({ ...leaf, localName: aliasName }));
+    }
+    case 'use_wildcard': {
+      const path = node.namedChild(0);
+      const text = path ? path.text : '';
+      return [
+        {
+          qualifiedName: joinRustPath(prefix, `${text}::*`),
+          importedName: '*',
+          localName: '*',
+        },
+      ];
+    }
+    default:
+      return [];
+  }
+}
+
+function flattenRustScopedUseList(node: SyntaxNode, prefix: string): RustImportLeaf[] {
+  const pathNode = node.namedChild(0);
+  const list = node.namedChild(1);
+  if (!pathNode || !list) return [];
+  const newPrefix = joinRustPath(prefix, pathNode.text);
+  const out: RustImportLeaf[] = [];
+  for (const child of list.namedChildren) {
+    out.push(...flattenRustUseTree(child, newPrefix));
+  }
+  return out;
+}
+
+function rustUseLeaf(node: SyntaxNode, prefix: string): RustImportLeaf[] | null {
   switch (node.type) {
     case 'identifier':
     case 'super':
@@ -95,45 +145,8 @@ function flattenRustUseTree(node: SyntaxNode, prefix: string): RustImportLeaf[] 
         },
       ];
     }
-    case 'scoped_use_list': {
-      const pathNode = node.namedChild(0);
-      const list = node.namedChild(1);
-      if (!pathNode || !list) return [];
-      const newPrefix = joinRustPath(prefix, pathNode.text);
-      const out: RustImportLeaf[] = [];
-      for (const child of list.namedChildren) {
-        out.push(...flattenRustUseTree(child, newPrefix));
-      }
-      return out;
-    }
-    case 'use_list': {
-      const out: RustImportLeaf[] = [];
-      for (const child of node.namedChildren) {
-        out.push(...flattenRustUseTree(child, prefix));
-      }
-      return out;
-    }
-    case 'use_as_clause': {
-      const path = node.namedChild(0);
-      const alias = node.namedChild(1);
-      if (!path || !alias) return [];
-      const subItems = flattenRustUseTree(path, prefix);
-      const aliasName = alias.text;
-      return subItems.map((leaf) => ({ ...leaf, localName: aliasName }));
-    }
-    case 'use_wildcard': {
-      const path = node.namedChild(0);
-      const text = path ? path.text : '';
-      return [
-        {
-          qualifiedName: joinRustPath(prefix, `${text}::*`),
-          importedName: '*',
-          localName: '*',
-        },
-      ];
-    }
     default:
-      return [];
+      return null;
   }
 }
 

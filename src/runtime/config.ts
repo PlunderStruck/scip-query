@@ -361,6 +361,26 @@ function validateIndexerAndSemanticConfig(
       message: 'Must be "single" or "workspace".',
     });
   }
+  validateTypeScriptProjectPaths(typescriptIndexer, diagnostics, opts);
+  if (typescriptIndexer?.projectMode === 'workspace' && typescriptIndexer.pnpmWorkspaces === true) {
+    diagnostics.push({
+      level: 'warning',
+      path: 'indexer.typescript.pnpmWorkspaces',
+      message: 'Ignored when projectMode is "workspace"; explicit TypeScript projects are indexed directly.',
+    });
+  }
+  validateTypeScriptWorkerBudgets(typescriptIndexer, diagnostics);
+  validateRustAnalyzerPath(config, diagnostics);
+  validateClojureIndexerPath(config, diagnostics, opts);
+}
+
+type TypeScriptIndexerConfig = NonNullable<ProjectConfig['indexer']>['typescript'];
+
+function validateTypeScriptProjectPaths(
+  typescriptIndexer: TypeScriptIndexerConfig,
+  diagnostics: ConfigDiagnostic[],
+  opts: { projectRoot?: string },
+): void {
   if (typescriptIndexer?.projects !== undefined) {
     if (!Array.isArray(typescriptIndexer.projects)) {
       diagnostics.push({ level: 'error', path: 'indexer.typescript.projects', message: 'Must be an array.' });
@@ -378,13 +398,12 @@ function validateIndexerAndSemanticConfig(
       }
     }
   }
-  if (typescriptIndexer?.projectMode === 'workspace' && typescriptIndexer.pnpmWorkspaces === true) {
-    diagnostics.push({
-      level: 'warning',
-      path: 'indexer.typescript.pnpmWorkspaces',
-      message: 'Ignored when projectMode is "workspace"; explicit TypeScript projects are indexed directly.',
-    });
-  }
+}
+
+function validateTypeScriptWorkerBudgets(
+  typescriptIndexer: TypeScriptIndexerConfig,
+  diagnostics: ConfigDiagnostic[],
+): void {
   for (const [key, value] of [
     ['maxWarmSessions', typescriptIndexer?.maxWarmSessions],
     ['workerSoftMemoryMb', typescriptIndexer?.workerSoftMemoryMb],
@@ -409,6 +428,9 @@ function validateIndexerAndSemanticConfig(
       message: 'Must be a non-negative integer.',
     });
   }
+}
+
+function validateRustAnalyzerPath(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
   const rustSemantic = config.semantic?.rust;
   if (
     rustSemantic?.rustAnalyzerPath !== undefined &&
@@ -420,6 +442,13 @@ function validateIndexerAndSemanticConfig(
       message: 'Rust analyzer path must be a non-empty string.',
     });
   }
+}
+
+function validateClojureIndexerPath(
+  config: ProjectConfig,
+  diagnostics: ConfigDiagnostic[],
+  opts: { projectRoot?: string },
+): void {
   const clojureIndexer = config.indexer?.clojure;
   if (clojureIndexer?.configPath !== undefined) {
     const path = 'indexer.clojure.configPath';

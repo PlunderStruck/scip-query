@@ -139,6 +139,12 @@ function validateSupportedMetadata(value: Record<string, unknown>, version: numb
   if (value['updatedAt'] !== undefined && !isValidRecordTimestamp(value['updatedAt'])) {
     return 'updatedAt must be a valid timestamp';
   }
+  const languageError = validateMetadataLanguages(value);
+  if (languageError) return languageError;
+  return version === CURRENT_REINDEX_METADATA_VERSION ? validateCurrentMetadataStorage(value) : null;
+}
+
+function validateMetadataLanguages(value: Record<string, unknown>): string | null {
   for (const field of ['requestedLanguages', 'indexedLanguages'] as const) {
     if (value[field] !== undefined && !isSupportedLanguageArray(value[field])) {
       return `${field} must contain unique supported languages`;
@@ -154,22 +160,20 @@ function validateSupportedMetadata(value: Record<string, unknown>, version: numb
   ) {
     return 'scipCompanion must be current or deferred';
   }
+  return null;
+}
+
+function validateCurrentMetadataStorage(value: Record<string, unknown>): string | null {
   if (
-    version === CURRENT_REINDEX_METADATA_VERSION &&
     value['sqliteLayoutVersion'] !== undefined &&
     (!Number.isSafeInteger(value['sqliteLayoutVersion']) || (value['sqliteLayoutVersion'] as number) < 1)
   ) {
     return 'sqliteLayoutVersion must be a positive safe integer';
   }
-  if (
-    version === CURRENT_REINDEX_METADATA_VERSION &&
-    value['languageFingerprints'] !== undefined &&
-    !isLanguageFingerprintMap(value['languageFingerprints'])
-  ) {
+  if (value['languageFingerprints'] !== undefined && !isLanguageFingerprintMap(value['languageFingerprints'])) {
     return 'languageFingerprints must map supported languages to fingerprint objects';
   }
   if (
-    version === CURRENT_REINDEX_METADATA_VERSION &&
     value['typescriptProjectShards'] !== undefined &&
     !isTypeScriptProjectShardMap(value['typescriptProjectShards'])
   ) {

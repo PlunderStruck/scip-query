@@ -701,6 +701,86 @@ export function maintainBoundedMailbox(
   );
 }
 
+function maintainInflightClaim(
+  paths: BoundedMailboxPaths,
+  claim: BoundedMailboxClaim,
+  nowMs: number,
+  liveness: MailboxLivenessRuntime,
+  result: MailboxMaintenanceResult,
+): boolean {
+  const responsePath = join(paths.responseDir, `${claim.requestId}.json`);
+  if (existsSync(responsePath)) {
+    rmSync(claim.path, { force: true });
+    result.completedClaimsRemoved++;
+    return true;
+  }
+  if (claim.claimExpiresAtMs > nowMs || mailboxOwnerState(paths, claim.ownerId, liveness) !== 'dead') return false;
+  const target = join(paths.pendingDir, claim.originalFile);
+  try {
+    renameSync(claim.path, target);
+    result.reclaimed++;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== 'EEXIST') throw error;
+    rmSync(claim.path, { force: true });
+  }
+  syncDirectoryDurable(dirname(claim.path));
+  syncDirectoryDurable(paths.pendingDir);
+  return true;
+}
+
+function maintainInflightClaims(
+  paths: BoundedMailboxPaths,
+  nowMs: number,
+  remaining: number,
+  liveness: MailboxLivenessRuntime,
+  result: MailboxMaintenanceResult,
+): number {
+  for (const claim of inflightClaims(paths.inflightDir)) {
+    if (remaining <= 0) break;
+    if (maintainInflightClaim(paths, claim, nowMs, liveness, result)) remaining--;
+  }
+  return remaining;
+}
+
+function removeExpiredMailboxTemporaryFile(path: string, nowMs: number, retentionMs: number): boolean {
+  if (!basename(path).includes('.tmp-')) return false;
+  let mtimeMs: number;
+  try {
+    mtimeMs = lstatSync(path).mtimeMs;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw error;
+  }
+  if (mtimeMs + retentionMs > nowMs) return false;
+  rmSync(path, { force: true });
+  return true;
+}
+
+function removeExpiredMailboxTemporaryFiles(
+  paths: BoundedMailboxPaths,
+  nowMs: number,
+  limits: BoundedMailboxLimits,
+  remaining: number,
+  result: MailboxMaintenanceResult,
+): void {
+  for (const directory of [
+    paths.pendingDir,
+    paths.inflightDir,
+    paths.responseDir,
+    paths.deadLetterDir,
+    paths.legacyRequestDir,
+  ]) {
+    if (remaining <= 0) break;
+    for (const path of regularFilesRecursive(directory)) {
+      if (remaining <= 0) break;
+      if (!removeExpiredMailboxTemporaryFile(path, nowMs, limits.temporaryRetentionMs)) continue;
+      result.temporaryFilesRemoved++;
+      remaining--;
+    }
+  }
+}
+
 function maintainBoundedMailboxUnlocked(
   paths: BoundedMailboxPaths,
   nowMs: number,
@@ -715,29 +795,7 @@ function maintainBoundedMailboxUnlocked(
     temporaryFilesRemoved: 0,
   };
   let remaining = limits.cleanupBatch;
-  for (const claim of inflightClaims(paths.inflightDir)) {
-    if (remaining <= 0) break;
-    const responsePath = join(paths.responseDir, `${claim.requestId}.json`);
-    if (existsSync(responsePath)) {
-      rmSync(claim.path, { force: true });
-      result.completedClaimsRemoved++;
-      remaining--;
-      continue;
-    }
-    if (claim.claimExpiresAtMs > nowMs || mailboxOwnerState(paths, claim.ownerId, liveness) !== 'dead') continue;
-    const target = join(paths.pendingDir, claim.originalFile);
-    try {
-      renameSync(claim.path, target);
-      result.reclaimed++;
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code !== 'EEXIST') throw error;
-      rmSync(claim.path, { force: true });
-    }
-    syncDirectoryDurable(dirname(claim.path));
-    syncDirectoryDurable(paths.pendingDir);
-    remaining--;
-  }
+  remaining = maintainInflightClaims(paths, nowMs, remaining, liveness, result);
   remaining = removeExpiredFiles(
     paths.responseDir,
     remaining,
@@ -756,30 +814,7 @@ function maintainBoundedMailboxUnlocked(
       result.deadLettersRemoved++;
     },
   );
-  for (const directory of [
-    paths.pendingDir,
-    paths.inflightDir,
-    paths.responseDir,
-    paths.deadLetterDir,
-    paths.legacyRequestDir,
-  ]) {
-    if (remaining <= 0) break;
-    for (const path of regularFilesRecursive(directory)) {
-      if (remaining <= 0) break;
-      if (!basename(path).includes('.tmp-')) continue;
-      let mtimeMs: number;
-      try {
-        mtimeMs = lstatSync(path).mtimeMs;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
-        throw error;
-      }
-      if (mtimeMs + limits.temporaryRetentionMs > nowMs) continue;
-      rmSync(path, { force: true });
-      result.temporaryFilesRemoved++;
-      remaining--;
-    }
-  }
+  removeExpiredMailboxTemporaryFiles(paths, nowMs, limits, remaining, result);
   removeEmptyOwnerDirectories(paths.inflightDir);
   return result;
 }

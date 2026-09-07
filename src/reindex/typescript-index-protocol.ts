@@ -206,16 +206,29 @@ function isTypeScriptIndexRequest(value: unknown): value is TypeScriptIndexDocum
   const modifiedFiles = stringArray(request.modifiedFiles) ? request.modifiedFiles : null;
   const removedFiles = stringArray(request.removedFiles) ? request.removedFiles : null;
   const affectedFiles = stringArray(request.affectedFiles) ? request.affectedFiles : null;
+  return isIndexRequestProject(request) && isIndexRequestFileSet(modifiedFiles, removedFiles, affectedFiles);
+}
+
+function isIndexRequestProject(request: Partial<TypeScriptIndexDocumentRequest>): boolean {
   return (
     request.kind === 'emit-documents' &&
-    typeof request.tsconfigPath === 'string' &&
-    Boolean(request.tsconfigPath) &&
-    typeof request.projectArgument === 'string' &&
-    Boolean(request.projectArgument) &&
-    typeof request.projectIdentity === 'string' &&
-    Boolean(request.projectIdentity) &&
-    typeof request.producerIdentity === 'string' &&
-    Boolean(request.producerIdentity) &&
+    isIndexRequestIdentity(request.tsconfigPath) &&
+    isIndexRequestIdentity(request.projectArgument) &&
+    isIndexRequestIdentity(request.projectIdentity) &&
+    isIndexRequestIdentity(request.producerIdentity)
+  );
+}
+
+function isIndexRequestIdentity(value: unknown): value is string {
+  return typeof value === 'string' && Boolean(value);
+}
+
+function isIndexRequestFileSet(
+  modifiedFiles: string[] | null,
+  removedFiles: string[] | null,
+  affectedFiles: string[] | null,
+): boolean {
+  return (
     modifiedFiles !== null &&
     new Set(modifiedFiles).size === modifiedFiles.length &&
     removedFiles !== null &&

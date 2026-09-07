@@ -193,6 +193,16 @@ function targetedCallerRowsMapForSymbols(
   const definitionBySymbolId = new Map(definitions.map((definition) => [definition.symbolId, definition]));
   const semanticReferences = opts.semanticEvidence?.referenceMap(db, definitions) ?? new Map();
   const resolvedReferences = getResolvedReferenceSitesMap(db, symbols);
+  const astCallersByTarget = targetedAstCallerRows(db, symbols);
+  const result = new Map<number, CallerRow[]>();
+
+  const evidence = { astCallersByTarget, resolvedReferences, definitionBySymbolId, semanticReferences };
+  for (const symbol of symbols) result.set(symbol.symbolId, mergeTargetedCallerRows(db, symbol, evidence));
+
+  return result;
+}
+
+function targetedAstCallerRows(db: ScipDatabase, symbols: ReadonlyArray<SymbolMatch>): Map<string, CallerRow[]> {
   const targetSymbols = new Set(symbols.map((symbol) => symbol.symbol));
   const importerFiles = new Set(symbols.flatMap((symbol) => fileDependencyPaths(db, 'reverse', [symbol.relativePath])));
   const importerDefinitions = [...importerFiles].flatMap((file) => getDefinitionsForFile(db, file));
@@ -211,49 +221,63 @@ function targetedCallerRowsMapForSymbols(
       astCallersByTarget.set(callee.symbol, rows);
     }
   }
-  const result = new Map<number, CallerRow[]>();
+  return astCallersByTarget;
+}
 
-  for (const symbol of symbols) {
-    const rows: CallerRow[] = [];
-    const seen = new Set<string>();
-    const add = (row: CallerRow): void => {
-      if (row.symbol === symbol.symbol) return;
-      const key = `${row.symbol}|${row.file}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      rows.push(row);
-    };
+interface TargetedCallerEvidence {
+  astCallersByTarget: ReadonlyMap<string, readonly CallerRow[]>;
+  resolvedReferences: ReturnType<typeof getResolvedReferenceSitesMap>;
+  definitionBySymbolId: ReadonlyMap<number, IndexedDefinition>;
+  semanticReferences: ReturnType<SymbolSemanticEvidencePort['referenceMap']>;
+}
 
-    // Prefer syntax-confirmed calls over broad reference hits for the same
-    // caller. The stable de-duplication key below keeps the first observation.
-    for (const caller of astCallersByTarget.get(symbol.symbol) ?? []) add(caller);
+function mergeTargetedCallerRows(db: ScipDatabase, symbol: SymbolMatch, evidence: TargetedCallerEvidence): CallerRow[] {
+  const rows: CallerRow[] = [];
+  const seen = new Set<string>();
+  const add = (row: CallerRow): void => {
+    if (row.symbol === symbol.symbol) return;
+    const key = `${row.symbol}|${row.file}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push(row);
+  };
 
-    for (const site of resolvedReferences.get(symbol.symbolId) ?? []) {
-      if (site.file === symbol.relativePath) continue;
-      add({
-        symbol: site.enclosingSymbol ?? site.file,
-        file: site.file,
-        source: 'resolved-reference',
-      });
-    }
+  // Prefer syntax-confirmed calls over broad reference hits for the same
+  // caller. The stable de-duplication key below keeps the first observation.
+  for (const caller of evidence.astCallersByTarget.get(symbol.symbol) ?? []) add(caller);
 
-    const definition = definitionBySymbolId.get(symbol.symbolId);
-    if (definition) {
-      for (const reference of semanticReferences.get(definition.symbolId) ?? []) {
-        if (reference.file === symbol.relativePath || db.isIgnored(reference.file)) continue;
-        const enclosing = findEnclosingDefinition(getDefinitionsForFile(db, reference.file), reference.line);
-        add({
-          symbol: enclosing?.symbol ?? reference.file,
-          file: reference.file,
-          source: 'semantic-reference',
-        });
-      }
-    }
-
-    result.set(symbol.symbolId, rows);
+  for (const site of evidence.resolvedReferences.get(symbol.symbolId) ?? []) {
+    if (site.file === symbol.relativePath) continue;
+    add({
+      symbol: site.enclosingSymbol ?? site.file,
+      file: site.file,
+      source: 'resolved-reference',
+    });
   }
 
-  return result;
+  addTargetedSemanticCallers(db, symbol, evidence, add);
+
+  return rows;
+}
+
+function addTargetedSemanticCallers(
+  db: ScipDatabase,
+  symbol: SymbolMatch,
+  evidence: TargetedCallerEvidence,
+  add: (row: CallerRow) => void,
+): void {
+  const definition = evidence.definitionBySymbolId.get(symbol.symbolId);
+  if (definition) {
+    for (const reference of evidence.semanticReferences.get(definition.symbolId) ?? []) {
+      if (reference.file === symbol.relativePath || db.isIgnored(reference.file)) continue;
+      const enclosing = findEnclosingDefinition(getDefinitionsForFile(db, reference.file), reference.line);
+      add({
+        symbol: enclosing?.symbol ?? reference.file,
+        file: reference.file,
+        source: 'semantic-reference',
+      });
+    }
+  }
 }
 
 function indexedDefinitionForSymbol(db: ScipDatabase, symbol: SymbolMatch): IndexedDefinition | null {

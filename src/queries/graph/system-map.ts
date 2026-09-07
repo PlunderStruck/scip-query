@@ -2097,47 +2097,16 @@ function executeSystemMap(
 ): SystemMapResult | ExplorationTopology {
   const searches = uniqueNonEmpty(opts.searches ?? []);
   const symbolQueries = uniqueNonEmpty(opts.symbols ?? []);
-  const requestedRelationKinds = uniqueNonEmpty(
-    opts.relations && opts.relations.length > 0 ? opts.relations : ALL_RELATION_KINDS,
-  ) as SystemMapRelationKind[];
-  const invalidRelations = requestedRelationKinds.filter((kind) => !ALL_RELATION_KINDS.includes(kind));
-  if (invalidRelations.length > 0) {
-    throw new Error(`Unsupported system-map relation kind(s): ${invalidRelations.join(', ')}`);
-  }
+  const requestedRelationKinds = validatedSystemMapRelations(opts.relations);
   const relationPolicy = new Set(requestedRelationKinds);
-  const evidenceFloor = opts.evidenceFloor ?? 'derived';
-  if (evidenceFloor !== 'exact' && evidenceFloor !== 'derived') {
-    throw new Error(`Unsupported system-map evidence floor: ${evidenceFloor}`);
-  }
-  const includedSourceScopes = uniqueNonEmpty(
-    opts.sourceScopes && opts.sourceScopes.length > 0 ? opts.sourceScopes : ['production'],
-  ) as BoundarySourceScope[];
-  const validSourceScopes: readonly BoundarySourceScope[] = [
-    'production',
-    'test',
-    'fixture',
-    'example',
-    'generated',
-    'script',
-    'unknown',
-  ];
-  const invalidSourceScopes = includedSourceScopes.filter((scope) => !validSourceScopes.includes(scope));
-  if (invalidSourceScopes.length > 0) {
-    throw new Error(`Unsupported system-map source scope(s): ${invalidSourceScopes.join(', ')}`);
-  }
+  const evidenceFloor = validatedSystemMapEvidenceFloor(opts.evidenceFloor);
+  const includedSourceScopes = validatedSystemMapSourceScopes(opts.sourceScopes);
   const sourceScopePolicy = new Set(includedSourceScopes);
   const sourceAllowed = (file: string): boolean => sourceScopePolicy.has(runtimeBoundarySourceScope(file));
   if (searches.length === 0 && symbolQueries.length === 0) {
     throw new Error('system-map requires at least one --search or --symbol anchor.');
   }
-  const maxDepth = opts.maxDepth ?? DEFAULT_MAX_DEPTH;
-  if (!Number.isSafeInteger(maxDepth) || maxDepth < 0) {
-    throw new RangeError(`maxDepth must be a non-negative safe integer; received ${maxDepth}`);
-  }
-  const maxTopologyCharacters = opts.maxTopologyCharacters ?? DEFAULT_TOPOLOGY_CHARACTERS;
-  if (!Number.isSafeInteger(maxTopologyCharacters) || maxTopologyCharacters <= 0) {
-    throw new RangeError(`maxTopologyCharacters must be a positive safe integer; received ${maxTopologyCharacters}`);
-  }
+  const { maxDepth, maxTopologyCharacters } = validatedSystemMapBounds(opts);
 
   const index = new ProjectIndex(db);
   const { fileGraph, reverseFileGraph, workspaces, runtimeBoundaries } = systemMapGenerationContext(db, index);
@@ -2311,6 +2280,58 @@ function executeSystemMap(
     unresolvedMemberCallsites: traversalMetrics.unresolvedMemberCallsites,
     sourceAllowed,
   });
+}
+
+function validatedSystemMapRelations(relations: SystemMapOptions['relations']): SystemMapRelationKind[] {
+  const requestedRelationKinds = uniqueNonEmpty(
+    relations && relations.length > 0 ? relations : ALL_RELATION_KINDS,
+  ) as SystemMapRelationKind[];
+  const invalidRelations = requestedRelationKinds.filter((kind) => !ALL_RELATION_KINDS.includes(kind));
+  if (invalidRelations.length > 0) {
+    throw new Error(`Unsupported system-map relation kind(s): ${invalidRelations.join(', ')}`);
+  }
+  return requestedRelationKinds;
+}
+
+function validatedSystemMapEvidenceFloor(floor: SystemMapOptions['evidenceFloor']): SystemMapEvidenceFloor {
+  const evidenceFloor = floor ?? 'derived';
+  if (evidenceFloor !== 'exact' && evidenceFloor !== 'derived') {
+    throw new Error(`Unsupported system-map evidence floor: ${evidenceFloor}`);
+  }
+  return evidenceFloor;
+}
+
+function validatedSystemMapSourceScopes(sourceScopes: SystemMapOptions['sourceScopes']): BoundarySourceScope[] {
+  const includedSourceScopes = uniqueNonEmpty(
+    sourceScopes && sourceScopes.length > 0 ? sourceScopes : ['production'],
+  ) as BoundarySourceScope[];
+  const validSourceScopes: readonly BoundarySourceScope[] = [
+    'production',
+    'test',
+    'fixture',
+    'example',
+    'generated',
+    'script',
+    'unknown',
+  ];
+  const invalidSourceScopes = includedSourceScopes.filter((scope) => !validSourceScopes.includes(scope));
+  if (invalidSourceScopes.length > 0) {
+    throw new Error(`Unsupported system-map source scope(s): ${invalidSourceScopes.join(', ')}`);
+  }
+  return includedSourceScopes;
+}
+
+function validatedSystemMapBounds(opts: SystemMapOptions): { maxDepth: number; maxTopologyCharacters: number } {
+  const maxDepth = opts.maxDepth ?? DEFAULT_MAX_DEPTH;
+  if (!Number.isSafeInteger(maxDepth) || maxDepth < 0) {
+    throw new RangeError(`maxDepth must be a non-negative safe integer; received ${maxDepth}`);
+  }
+  const maxTopologyCharacters = opts.maxTopologyCharacters ?? DEFAULT_TOPOLOGY_CHARACTERS;
+  if (!Number.isSafeInteger(maxTopologyCharacters) || maxTopologyCharacters <= 0) {
+    throw new RangeError(`maxTopologyCharacters must be a positive safe integer; received ${maxTopologyCharacters}`);
+  }
+
+  return { maxDepth, maxTopologyCharacters };
 }
 
 function causalCorridorFocusLocations(
@@ -2672,67 +2693,9 @@ function systemMapTopologyOwnerNodes(
       expanded: region.expanded,
     },
   }));
-  for (const state of input.symbolStates.values()) {
-    const regionId = input.regionForFile.get(state.definition.relativePath)?.id;
-    if (!regionId) throw new Error(`System-map symbol ${state.definition.symbol} has no structural region.`);
-    const id = symbolTopologyNodeId(state.definition.symbol);
-    const publicEntry = publicEntryEvidenceForDefinition(input.db, state.definition);
-    nodes.push({
-      id,
-      kind: 'symbol',
-      label: shortenSymbol(state.definition.symbol),
-      disposition: (anchorIdsByNode.get(id)?.length ?? 0) > 0 ? 'emitted' : 'folded',
-      location: {
-        file: state.definition.relativePath,
-        line: state.definition.startLine,
-        endLine: state.definition.endLine,
-      },
-      anchorIds: uniqueSorted(anchorIdsByNode.get(id) ?? []),
-      attributes: {
-        regionId,
-        depth: state.depth,
-        leaf: state.definition.leaf ?? shortenSymbol(state.definition.symbol),
-        referenceScope: state.referenceScope,
-        ...(publicEntry.evidence.length > 0
-          ? {
-              publicEntry: true,
-              publicEntryPriority: publicEntry.priority,
-              publicEntryEvidence: publicEntry.evidence.join(','),
-            }
-          : {}),
-      },
-    });
-  }
+  for (const state of input.symbolStates.values()) nodes.push(systemMapSymbolOwnerNode(input, state, anchorIdsByNode));
   for (const hit of sourceConstructHits) {
-    const regionId = input.regionForFile.get(hit.file)?.id;
-    if (!regionId) throw new Error(`Source construct ${hit.name} has no structural region.`);
-    const id = sourceConstructTopologyNodeId(hit);
-    const boundaryOwnerName = boundaryOwnerNames.find(
-      (participant) =>
-        participant.file === hit.file && participant.line >= hit.startLine && participant.line <= hit.endLine,
-    )?.ownerName;
-    const label = boundaryOwnerName ?? hit.name;
-    const publicEntry = publicEntryForSourceConstruct(input.db, hit);
-    nodes.push({
-      id,
-      kind: 'source-construct',
-      label,
-      disposition: (anchorIdsByNode.get(id)?.length ?? 0) > 0 ? 'emitted' : 'folded',
-      location: { file: hit.file, line: hit.startLine, endLine: hit.endLine },
-      anchorIds: uniqueSorted(anchorIdsByNode.get(id) ?? []),
-      attributes: {
-        regionId,
-        leaf: label,
-        sourceOwned: true,
-        ...(publicEntry.evidence.length > 0
-          ? {
-              publicEntry: true,
-              publicEntryPriority: publicEntry.priority,
-              publicEntryEvidence: publicEntry.evidence.join(','),
-            }
-          : {}),
-      },
-    });
+    nodes.push(systemMapConstructOwnerNode(input, hit, anchorIdsByNode, boundaryOwnerNames));
   }
   const boundaryParticipants = new Map<string, SystemMapBoundaryParticipant>();
   for (const relation of input.relations) {
@@ -2746,27 +2709,106 @@ function systemMapTopologyOwnerNodes(
   for (const participant of [...boundaryParticipants.values()].sort((left, right) =>
     left.observationId.localeCompare(right.observationId),
   )) {
-    const regionId = input.regionForFile.get(participant.file)?.id;
-    if (!regionId)
-      throw new Error(`Runtime-boundary participant ${participant.observationId} has no structural region.`);
-    nodes.push({
-      id: runtimeBoundaryParticipantTopologyNodeId(participant.observationId),
-      kind: 'runtime-boundary-participant',
-      label: participant.address || participant.ownerName || `${participant.role} ${participant.action}`,
-      disposition: 'folded',
-      location: { file: participant.file, line: participant.line, endLine: participant.endLine },
-      anchorIds: [],
-      attributes: {
-        regionId,
-        action: participant.action,
-        protocol: participant.protocol,
-        role: participant.role,
-        ...(participant.address ? { address: participant.address } : {}),
-        ownerSymbol: participant.ownerSymbol,
-      },
-    });
+    nodes.push(systemMapBoundaryOwnerNode(input, participant));
   }
   return nodes;
+}
+
+function systemMapSymbolOwnerNode(
+  input: SystemMapTopologyInput,
+  state: SymbolState,
+  anchorIdsByNode: ReadonlyMap<string, string[]>,
+): ExplorationTopologyNode {
+  const regionId = input.regionForFile.get(state.definition.relativePath)?.id;
+  if (!regionId) throw new Error(`System-map symbol ${state.definition.symbol} has no structural region.`);
+  const id = symbolTopologyNodeId(state.definition.symbol);
+  const publicEntry = publicEntryEvidenceForDefinition(input.db, state.definition);
+  return {
+    id,
+    kind: 'symbol',
+    label: shortenSymbol(state.definition.symbol),
+    disposition: (anchorIdsByNode.get(id)?.length ?? 0) > 0 ? 'emitted' : 'folded',
+    location: {
+      file: state.definition.relativePath,
+      line: state.definition.startLine,
+      endLine: state.definition.endLine,
+    },
+    anchorIds: uniqueSorted(anchorIdsByNode.get(id) ?? []),
+    attributes: {
+      regionId,
+      depth: state.depth,
+      leaf: state.definition.leaf ?? shortenSymbol(state.definition.symbol),
+      referenceScope: state.referenceScope,
+      ...(publicEntry.evidence.length > 0
+        ? {
+            publicEntry: true,
+            publicEntryPriority: publicEntry.priority,
+            publicEntryEvidence: publicEntry.evidence.join(','),
+          }
+        : {}),
+    },
+  };
+}
+
+function systemMapConstructOwnerNode(
+  input: SystemMapTopologyInput,
+  hit: SourceConstructHit,
+  anchorIdsByNode: ReadonlyMap<string, string[]>,
+  boundaryOwnerNames: readonly SystemMapBoundaryParticipant[],
+): ExplorationTopologyNode {
+  const regionId = input.regionForFile.get(hit.file)?.id;
+  if (!regionId) throw new Error(`Source construct ${hit.name} has no structural region.`);
+  const id = sourceConstructTopologyNodeId(hit);
+  const boundaryOwnerName = boundaryOwnerNames.find(
+    (participant) =>
+      participant.file === hit.file && participant.line >= hit.startLine && participant.line <= hit.endLine,
+  )?.ownerName;
+  const label = boundaryOwnerName ?? hit.name;
+  const publicEntry = publicEntryForSourceConstruct(input.db, hit);
+  return {
+    id,
+    kind: 'source-construct',
+    label,
+    disposition: (anchorIdsByNode.get(id)?.length ?? 0) > 0 ? 'emitted' : 'folded',
+    location: { file: hit.file, line: hit.startLine, endLine: hit.endLine },
+    anchorIds: uniqueSorted(anchorIdsByNode.get(id) ?? []),
+    attributes: {
+      regionId,
+      leaf: label,
+      sourceOwned: true,
+      ...(publicEntry.evidence.length > 0
+        ? {
+            publicEntry: true,
+            publicEntryPriority: publicEntry.priority,
+            publicEntryEvidence: publicEntry.evidence.join(','),
+          }
+        : {}),
+    },
+  };
+}
+
+function systemMapBoundaryOwnerNode(
+  input: SystemMapTopologyInput,
+  participant: SystemMapBoundaryParticipant,
+): ExplorationTopologyNode {
+  const regionId = input.regionForFile.get(participant.file)?.id;
+  if (!regionId) throw new Error(`Runtime-boundary participant ${participant.observationId} has no structural region.`);
+  return {
+    id: runtimeBoundaryParticipantTopologyNodeId(participant.observationId),
+    kind: 'runtime-boundary-participant',
+    label: participant.address || participant.ownerName || `${participant.role} ${participant.action}`,
+    disposition: 'folded',
+    location: { file: participant.file, line: participant.line, endLine: participant.endLine },
+    anchorIds: [],
+    attributes: {
+      regionId,
+      action: participant.action,
+      protocol: participant.protocol,
+      role: participant.role,
+      ...(participant.address ? { address: participant.address } : {}),
+      ownerSymbol: participant.ownerSymbol,
+    },
+  };
 }
 
 function systemMapTopologyRelationEndpoint(
@@ -3546,42 +3588,91 @@ function systemMapLiteralMatches(
 ): LiteralMatch[] {
   const matches: LiteralMatch[] = [];
   for (const relativePath of indexedDocumentPaths(db, { includeIgnored: false })) {
-    const lines = getSourceLines(db, relativePath);
-    if (lines.length === 0) continue;
-    const literalLines: Array<{ line: number; sourceLine: string }> = [];
-    for (let line = 0; line < lines.length; line += 1) {
-      const sourceLine = lines[line] ?? '';
-      if (sourceLine.includes(pattern)) literalLines.push({ line, sourceLine });
-    }
-    if (literalLines.length === 0) continue;
-    const definitions = index.definitionsForFile(relativePath);
-    const callables = getSourceFacts(db, relativePath)?.callables ?? [];
-    for (const { line, sourceLine } of literalLines) {
-      const owner = findEnclosingDefinition(definitions, line);
-      const callableOwner = smallestSourceCallableAtLine(callables, line);
-      const preciseCompilerOwner = owner && !isModuleLikeSymbol(owner.symbol) ? owner : null;
-      const enclosingStartLine =
-        preciseCompilerOwner?.startLine ?? callableOwner?.startLine ?? owner?.startLine ?? line;
-      const enclosingEndLine = preciseCompilerOwner?.endLine ?? callableOwner?.endLine ?? owner?.endLine ?? line;
-      const focusedOwner = focusedSourceConstructRange(db, relativePath, line, enclosingStartLine, enclosingEndLine);
-      const runtimeObservation = boundaryObservationLocations.has(`${relativePath}\0${line}`);
-      const executableOwner = Boolean(preciseCompilerOwner?.isFunctionLike || callableOwner);
-      matches.push({
-        relativePath,
-        line,
-        sourceLine,
-        ownerSymbol: preciseCompilerOwner?.symbol ?? null,
-        ownerShortName: preciseCompilerOwner
-          ? shortenSymbol(preciseCompilerOwner.symbol)
-          : (callableOwner?.name ?? (owner ? shortenSymbol(owner.symbol) : null)),
-        ownerStartLine: focusedOwner.startLine,
-        ownerEndLine: focusedOwner.endLine,
-        matchKind: literalMatchKind(sourceLine, pattern),
-        seedPriority: runtimeObservation ? 0 : executableOwner ? 1 : 2,
-      });
-    }
+    appendSystemMapLiteralFileMatches(db, index, relativePath, pattern, boundaryObservationLocations, matches);
   }
   return matches;
+}
+
+interface SystemMapLiteralMatchContext {
+  db: ScipDatabase;
+  relativePath: string;
+  definitions: ReturnType<ProjectIndex['definitionsForFile']>;
+  callables: NonNullable<ReturnType<typeof getSourceFacts>>['callables'];
+  boundaryObservationLocations: ReadonlySet<string>;
+}
+
+function appendSystemMapLiteralFileMatches(
+  db: ScipDatabase,
+  index: ProjectIndex,
+  relativePath: string,
+  pattern: string,
+  boundaryObservationLocations: ReadonlySet<string>,
+  matches: LiteralMatch[],
+): void {
+  const lines = getSourceLines(db, relativePath);
+  if (lines.length === 0) return;
+  const literalLines: Array<{ line: number; sourceLine: string }> = [];
+  for (let line = 0; line < lines.length; line += 1) {
+    const sourceLine = lines[line] ?? '';
+    if (sourceLine.includes(pattern)) literalLines.push({ line, sourceLine });
+  }
+  if (literalLines.length === 0) return;
+  const definitions = index.definitionsForFile(relativePath);
+  const callables = getSourceFacts(db, relativePath)?.callables ?? [];
+  const context = { db, relativePath, definitions, callables, boundaryObservationLocations };
+  for (const { line, sourceLine } of literalLines) {
+    matches.push(systemMapLiteralLineMatch(context, line, sourceLine, pattern));
+  }
+}
+
+function systemMapLiteralLineMatch(
+  context: SystemMapLiteralMatchContext,
+  line: number,
+  sourceLine: string,
+  pattern: string,
+): LiteralMatch {
+  const { definitions, callables, boundaryObservationLocations, relativePath } = context;
+  const owner = findEnclosingDefinition(definitions, line);
+  const callableOwner = smallestSourceCallableAtLine(callables, line);
+  const preciseCompilerOwner = owner && !isModuleLikeSymbol(owner.symbol) ? owner : null;
+  const focusedOwner = focusedLiteralOwnerRange(context, line, preciseCompilerOwner, callableOwner, owner);
+  const runtimeObservation = boundaryObservationLocations.has(`${relativePath}\0${line}`);
+  const executableOwner = Boolean(preciseCompilerOwner?.isFunctionLike || callableOwner);
+  return {
+    relativePath,
+    line,
+    sourceLine,
+    ownerSymbol: preciseCompilerOwner?.symbol ?? null,
+    ownerShortName: literalOwnerShortName(preciseCompilerOwner, callableOwner, owner),
+    ownerStartLine: focusedOwner.startLine,
+    ownerEndLine: focusedOwner.endLine,
+    matchKind: literalMatchKind(sourceLine, pattern),
+    seedPriority: runtimeObservation ? 0 : executableOwner ? 1 : 2,
+  };
+}
+
+function focusedLiteralOwnerRange(
+  context: SystemMapLiteralMatchContext,
+  line: number,
+  preciseCompilerOwner: IndexedDefinition | null,
+  callableOwner: SystemMapLiteralMatchContext['callables'][number] | null,
+  owner: ReturnType<typeof findEnclosingDefinition>,
+): ReturnType<typeof focusedSourceConstructRange> {
+  const { db, relativePath } = context;
+  const enclosingStartLine = preciseCompilerOwner?.startLine ?? callableOwner?.startLine ?? owner?.startLine ?? line;
+  const enclosingEndLine = preciseCompilerOwner?.endLine ?? callableOwner?.endLine ?? owner?.endLine ?? line;
+  const focusedOwner = focusedSourceConstructRange(db, relativePath, line, enclosingStartLine, enclosingEndLine);
+  return focusedOwner;
+}
+
+function literalOwnerShortName(
+  preciseCompilerOwner: IndexedDefinition | null,
+  callableOwner: SystemMapLiteralMatchContext['callables'][number] | null,
+  owner: ReturnType<typeof findEnclosingDefinition>,
+): string | null {
+  return preciseCompilerOwner
+    ? shortenSymbol(preciseCompilerOwner.symbol)
+    : (callableOwner?.name ?? (owner ? shortenSymbol(owner.symbol) : null));
 }
 
 function compareLiteralTraversalSeedCandidates(left: LiteralMatch, right: LiteralMatch): number {

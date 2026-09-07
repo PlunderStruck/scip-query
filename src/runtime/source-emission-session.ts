@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
-import { isSha256Hex } from '../domain/record-validation.js';
+import { isRecordObject, isSha256Hex } from '../domain/record-validation.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { tryAcquireProcessFileLock, type ProcessFileLock } from '../platform/process-file-lock.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
@@ -589,21 +589,38 @@ function emptyLedger(invocation: SourceEmissionInvocation): SourceEmissionLedger
   };
 }
 
+function hasExpectedLedgerIdentity(
+  parsed: Partial<SourceEmissionLedger>,
+  expected: Pick<SourceEmissionLedger, 'projectRoot' | 'generationIdentity' | 'sessionIdentity'>,
+): boolean {
+  return (
+    parsed.projectRoot === expected.projectRoot &&
+    parsed.generationIdentity === expected.generationIdentity &&
+    parsed.sessionIdentity === expected.sessionIdentity
+  );
+}
+
+function hasValidLedgerOrdinal(parsed: Partial<SourceEmissionLedger>): boolean {
+  return Number.isSafeInteger(parsed.nextOrdinal) && (parsed.nextOrdinal ?? 0) > 0;
+}
+
+function hasValidLedgerContents(parsed: Partial<SourceEmissionLedger>): boolean {
+  return (
+    Array.isArray(parsed.ranges) &&
+    parsed.ranges.every(validPersistedRange) &&
+    Array.isArray(parsed.evidence) &&
+    parsed.evidence.every(validPersistedEvidenceItem)
+  );
+}
+
 function parseLedger(
   value: unknown,
   expected: Pick<SourceEmissionLedger, 'projectRoot' | 'generationIdentity' | 'sessionIdentity'>,
 ): SourceEmissionLedger {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid source emission ledger.');
+  if (!isRecordObject(value)) throw new Error('Invalid source emission ledger.');
   const parsed = value as Partial<SourceEmissionLedger>;
   const legacyVersion = (value as { version?: unknown }).version;
-  if (
-    legacyVersion === 1 &&
-    parsed.projectRoot === expected.projectRoot &&
-    parsed.generationIdentity === expected.generationIdentity &&
-    parsed.sessionIdentity === expected.sessionIdentity &&
-    Number.isSafeInteger(parsed.nextOrdinal) &&
-    (parsed.nextOrdinal ?? 0) > 0
-  ) {
+  if (legacyVersion === 1 && hasExpectedLedgerIdentity(parsed, expected) && hasValidLedgerOrdinal(parsed)) {
     return {
       version: SOURCE_EMISSION_LEDGER_VERSION,
       projectRoot: expected.projectRoot,
@@ -617,15 +634,9 @@ function parseLedger(
   }
   if (
     parsed.version !== SOURCE_EMISSION_LEDGER_VERSION ||
-    parsed.projectRoot !== expected.projectRoot ||
-    parsed.generationIdentity !== expected.generationIdentity ||
-    parsed.sessionIdentity !== expected.sessionIdentity ||
-    !Number.isSafeInteger(parsed.nextOrdinal) ||
-    (parsed.nextOrdinal ?? 0) <= 0 ||
-    !Array.isArray(parsed.ranges) ||
-    !parsed.ranges.every(validPersistedRange) ||
-    !Array.isArray(parsed.evidence) ||
-    !parsed.evidence.every(validPersistedEvidenceItem)
+    !hasExpectedLedgerIdentity(parsed, expected) ||
+    !hasValidLedgerOrdinal(parsed) ||
+    !hasValidLedgerContents(parsed)
   ) {
     throw new Error('Invalid source emission ledger.');
   }

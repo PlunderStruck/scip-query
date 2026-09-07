@@ -115,24 +115,20 @@ export function registerCommandDescriptors(
 }
 
 function validateJsonOutputOptions(options: Readonly<Record<string, unknown>>): void {
-  if (options['resultOnly'] === true && options['json'] !== true) {
-    throw new Error('--result-only requires --json.');
-  }
-  if (options['compact'] === true && options['json'] !== true) {
-    throw new Error('--compact requires --json.');
-  }
-  if (options['agentOutput'] === true && options['json'] !== true) {
-    throw new Error('--agent-output requires --json.');
-  }
-  if (typeof options['jsonOutput'] === 'string' && options['json'] !== true) {
-    throw new Error('--json-output requires --json.');
-  }
-  if (options['rawJson'] === true && options['json'] !== true) {
-    throw new Error('--raw-json requires --json.');
-  }
+  validateJsonRequiredOptions(options);
   if (options['agentOutput'] === true && options['rawJson'] === true) {
     throw new Error('--agent-output cannot be combined with --raw-json.');
   }
+  validateJsonFileOutputOptions(options);
+  if (
+    options['rawJson'] === true &&
+    (options['outputPageSize'] !== undefined || options['outputCursor'] !== undefined)
+  ) {
+    throw new Error('--raw-json cannot be combined with output pagination.');
+  }
+}
+
+function validateJsonFileOutputOptions(options: Readonly<Record<string, unknown>>): void {
   if (typeof options['jsonOutput'] === 'string') {
     if (options['agentOutput'] === true || options['rawJson'] === true) {
       throw new Error('--json-output cannot be combined with --agent-output or --raw-json.');
@@ -141,12 +137,17 @@ function validateJsonOutputOptions(options: Readonly<Record<string, unknown>>): 
       throw new Error('--json-output cannot be combined with output pagination.');
     }
   }
-  if (
-    options['rawJson'] === true &&
-    (options['outputPageSize'] !== undefined || options['outputCursor'] !== undefined)
-  ) {
-    throw new Error('--raw-json cannot be combined with output pagination.');
-  }
+}
+
+function validateJsonRequiredOptions(options: Readonly<Record<string, unknown>>): void {
+  const requireJson = (flag: string, enabled: boolean): void => {
+    if (enabled && options['json'] !== true) throw new Error(`${flag} requires --json.`);
+  };
+  requireJson('--result-only', options['resultOnly'] === true);
+  requireJson('--compact', options['compact'] === true);
+  requireJson('--agent-output', options['agentOutput'] === true);
+  requireJson('--json-output', typeof options['jsonOutput'] === 'string');
+  requireJson('--raw-json', options['rawJson'] === true);
 }
 
 export function commandResultUnitPolicy(descriptor: CommandDescriptor): CommandResultUnitPolicy {

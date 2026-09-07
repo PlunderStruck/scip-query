@@ -74,24 +74,68 @@ export function productionCallableDefinitions(
     return value;
   };
 
+  const selection = {
+    excludeEntrySurfaces,
+    requireFunctionLikeSymbol,
+    requireCallableSymbol,
+    excludeSymbol,
+    minLoc,
+    maxLoc,
+  };
+  const ownership = { excludeTypesFiles, excludeRootedSymbols, excludeRustTraitImplMembers };
   for (const definition of candidates) {
-    const relativePath = definition.relativePath;
-    if (db.isIgnored(relativePath)) continue;
-    if (excludeEntrySurfaces && getEntrySurface(relativePath)) continue;
-    if (!matchesCallableMode(definition, { requireFunctionLikeSymbol, requireCallableSymbol })) continue;
-    if (excludeSymbol !== undefined && definition.symbol === excludeSymbol) continue;
-    const loc = definitionLoc(definition);
-    if (loc < minLoc || loc > maxLoc) continue;
-    if (excludeTypesFiles && isTypesFile(relativePath)) continue;
-    if (excludeRootedSymbols && isRootedSymbol(db, definition.symbol, relativePath)) continue;
-    if (excludeRustTraitImplMembers && isRustTraitImplMember(definition.symbol)) continue;
-    if (getFileKind(relativePath) === 'test') continue;
-    if (isInRustTestModule(definition.symbol)) continue;
-    if (!includeSuppressed && hasSuppressionComment(db, relativePath, definition.startLine)) continue;
+    if (!matchesProductionCallableSelection(db, definition, selection, getEntrySurface)) continue;
+    if (!matchesProductionCallableOwnership(db, definition, ownership)) continue;
+    if (!isUnsuppressedProductionCallable(db, definition, includeSuppressed, getFileKind)) continue;
     definitions.push(definition);
   }
 
   return sortByLocDesc ? definitions.sort((left, right) => definitionLoc(right) - definitionLoc(left)) : definitions;
+}
+
+function matchesProductionCallableSelection(
+  db: ScipDatabase,
+  definition: IndexedDefinition,
+  opts: {
+    excludeEntrySurfaces: boolean;
+    requireFunctionLikeSymbol: boolean;
+    requireCallableSymbol: boolean;
+    excludeSymbol: string | undefined;
+    minLoc: number;
+    maxLoc: number;
+  },
+  getEntrySurface: (relativePath: string) => boolean,
+): boolean {
+  const relativePath = definition.relativePath;
+  if (db.isIgnored(relativePath)) return false;
+  if (opts.excludeEntrySurfaces && getEntrySurface(relativePath)) return false;
+  if (!matchesCallableMode(definition, opts)) return false;
+  if (opts.excludeSymbol !== undefined && definition.symbol === opts.excludeSymbol) return false;
+  const loc = definitionLoc(definition);
+  return !(loc < opts.minLoc || loc > opts.maxLoc);
+}
+
+function matchesProductionCallableOwnership(
+  db: ScipDatabase,
+  definition: IndexedDefinition,
+  opts: { excludeTypesFiles: boolean; excludeRootedSymbols: boolean; excludeRustTraitImplMembers: boolean },
+): boolean {
+  const relativePath = definition.relativePath;
+  if (opts.excludeTypesFiles && isTypesFile(relativePath)) return false;
+  if (opts.excludeRootedSymbols && isRootedSymbol(db, definition.symbol, relativePath)) return false;
+  return !opts.excludeRustTraitImplMembers || !isRustTraitImplMember(definition.symbol);
+}
+
+function isUnsuppressedProductionCallable(
+  db: ScipDatabase,
+  definition: IndexedDefinition,
+  includeSuppressed: boolean,
+  getFileKind: (relativePath: string) => ReturnType<typeof classifyFile>,
+): boolean {
+  const relativePath = definition.relativePath;
+  if (getFileKind(relativePath) === 'test') return false;
+  if (isInRustTestModule(definition.symbol)) return false;
+  return includeSuppressed || !hasSuppressionComment(db, relativePath, definition.startLine);
 }
 
 function candidateDefinitions(

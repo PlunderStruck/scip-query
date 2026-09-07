@@ -231,44 +231,7 @@ function sweepRepositoryCacheDirectory(
         budgetBytes: opts.policy?.budgetBytes ?? DEFAULT_REPOSITORY_CACHE_BUDGET_BYTES,
       },
     });
-    let deletedBytes = 0;
-    let deletedWorktrees = 0;
-    for (const entry of plan.deleteWorktrees) {
-      if (!validManagedWorktreeLease(entry.lease)) continue;
-      if (!existsSync(entry.lease.localCacheDir)) {
-        rmSync(entry.leasePath, { force: true });
-        deletedWorktrees += 1;
-        continue;
-      }
-      if (!safeManagedWorktreeCache(entry.lease)) continue;
-      const localLock = acquireProcessFileLock(join(entry.lease.localCacheDir, 'cache-lifecycle.lock'));
-      if (!localLock) continue;
-      try {
-        if (hasLiveLocalCacheProcess(entry.lease, true)) continue;
-        try {
-          stopWatchService({
-            projectRoot: entry.lease.projectRoot,
-            cacheDir: entry.lease.localCacheDir,
-            cliVersion,
-          });
-        } catch {
-          continue;
-        }
-        if (hasLiveLocalCacheProcess(entry.lease, true)) continue;
-        rmSync(entry.lease.localCacheDir, { recursive: true, force: true });
-        rmSync(entry.leasePath, { force: true });
-        deletedWorktrees += 1;
-      } finally {
-        localLock.release();
-      }
-    }
-    for (const lock of plan.deleteLocks) rmSync(lock.path, { force: true });
-    for (const temporary of plan.deleteTemporaries) rmSync(temporary.path, { recursive: true, force: true });
-    for (const generation of plan.deleteGenerations) {
-      rmSync(generation.path, { recursive: true, force: true });
-      deletedBytes += generation.size;
-    }
-    maintainSharedEvidenceCache(join(repositoryDir, 'evidence.db'));
+    const { deletedBytes, deletedWorktrees } = applyRepositoryCacheSweepPlan(plan, repositoryDir, cliVersion);
     const result: RepositoryCacheSweepResult = {
       kind: 'swept',
       sweptAt: new Date(nowMs).toISOString(),
@@ -289,6 +252,55 @@ function sweepRepositoryCacheDirectory(
     return { kind: 'failed', error: error instanceof Error ? error.message : String(error) };
   } finally {
     repositoryLock.release();
+  }
+}
+
+function applyRepositoryCacheSweepPlan(
+  plan: RepositoryCacheSweepPlan,
+  repositoryDir: string,
+  cliVersion: string,
+): { deletedBytes: number; deletedWorktrees: number } {
+  let deletedBytes = 0;
+  let deletedWorktrees = 0;
+  for (const entry of plan.deleteWorktrees) {
+    if (deleteManagedWorktreeCache(entry, cliVersion)) deletedWorktrees += 1;
+  }
+  for (const lock of plan.deleteLocks) rmSync(lock.path, { force: true });
+  for (const temporary of plan.deleteTemporaries) rmSync(temporary.path, { recursive: true, force: true });
+  for (const generation of plan.deleteGenerations) {
+    rmSync(generation.path, { recursive: true, force: true });
+    deletedBytes += generation.size;
+  }
+  maintainSharedEvidenceCache(join(repositoryDir, 'evidence.db'));
+  return { deletedBytes, deletedWorktrees };
+}
+
+function deleteManagedWorktreeCache(entry: RepositoryCacheLeaseInventory, cliVersion: string): boolean {
+  if (!validManagedWorktreeLease(entry.lease)) return false;
+  if (!existsSync(entry.lease.localCacheDir)) {
+    rmSync(entry.leasePath, { force: true });
+    return true;
+  }
+  if (!safeManagedWorktreeCache(entry.lease)) return false;
+  const localLock = acquireProcessFileLock(join(entry.lease.localCacheDir, 'cache-lifecycle.lock'));
+  if (!localLock) return false;
+  try {
+    if (hasLiveLocalCacheProcess(entry.lease, true)) return false;
+    try {
+      stopWatchService({
+        projectRoot: entry.lease.projectRoot,
+        cacheDir: entry.lease.localCacheDir,
+        cliVersion,
+      });
+    } catch {
+      return false;
+    }
+    if (hasLiveLocalCacheProcess(entry.lease, true)) return false;
+    rmSync(entry.lease.localCacheDir, { recursive: true, force: true });
+    rmSync(entry.leasePath, { force: true });
+    return true;
+  } finally {
+    localLock.release();
   }
 }
 

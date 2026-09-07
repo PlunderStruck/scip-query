@@ -28,54 +28,55 @@ export function stronglyConnectedComponents<Node>(
   type Frame = { node: Node; iter: Iterator<Node>; pendingChild: Node | null };
   const neighborsOf = (node: Node): Iterator<Node> => (graph.get(node) ?? []).values();
 
+  function enterNode(node: Node, callStack: Frame[]): void {
+    indices.set(node, nextIndex);
+    lowlink.set(node, nextIndex);
+    nextIndex += 1;
+    stack.push(node);
+    onStack.add(node);
+    callStack.push({ node, iter: neighborsOf(node), pendingChild: null });
+  }
+
+  function emitComponent(root: Node): void {
+    if (lowlink.get(root) !== indices.get(root)) return;
+    const component: Node[] = [];
+    while (true) {
+      const member = stack.pop()!;
+      onStack.delete(member);
+      component.push(member);
+      componentOf.set(member, components.length);
+      if (member === root) break;
+    }
+    components.push(component);
+  }
+
+  function advanceFrame(callStack: Frame[]): void {
+    const frame = callStack[callStack.length - 1]!;
+    if (frame.pendingChild !== null) {
+      const child = frame.pendingChild;
+      frame.pendingChild = null;
+      lowlink.set(frame.node, Math.min(lowlink.get(frame.node)!, lowlink.get(child)!));
+    }
+    const next = frame.iter.next();
+    if (next.done) {
+      emitComponent(frame.node);
+      callStack.pop();
+      return;
+    }
+    const child = next.value;
+    if (!indices.has(child)) {
+      frame.pendingChild = child;
+      enterNode(child, callStack);
+    } else if (onStack.has(child)) {
+      lowlink.set(frame.node, Math.min(lowlink.get(frame.node)!, indices.get(child)!));
+    }
+  }
+
   for (const start of graph.keys()) {
     if (indices.has(start)) continue;
     const callStack: Frame[] = [];
-    indices.set(start, nextIndex);
-    lowlink.set(start, nextIndex);
-    nextIndex += 1;
-    stack.push(start);
-    onStack.add(start);
-    callStack.push({ node: start, iter: neighborsOf(start), pendingChild: null });
-
-    while (callStack.length > 0) {
-      const frame = callStack[callStack.length - 1]!;
-      if (frame.pendingChild !== null) {
-        const child = frame.pendingChild;
-        frame.pendingChild = null;
-        lowlink.set(frame.node, Math.min(lowlink.get(frame.node)!, lowlink.get(child)!));
-      }
-
-      const next = frame.iter.next();
-      if (next.done) {
-        if (lowlink.get(frame.node) === indices.get(frame.node)) {
-          const component: Node[] = [];
-          while (true) {
-            const member = stack.pop()!;
-            onStack.delete(member);
-            component.push(member);
-            componentOf.set(member, components.length);
-            if (member === frame.node) break;
-          }
-          components.push(component);
-        }
-        callStack.pop();
-        continue;
-      }
-
-      const child = next.value;
-      if (!indices.has(child)) {
-        indices.set(child, nextIndex);
-        lowlink.set(child, nextIndex);
-        nextIndex += 1;
-        stack.push(child);
-        onStack.add(child);
-        frame.pendingChild = child;
-        callStack.push({ node: child, iter: neighborsOf(child), pendingChild: null });
-      } else if (onStack.has(child)) {
-        lowlink.set(frame.node, Math.min(lowlink.get(frame.node)!, indices.get(child)!));
-      }
-    }
+    enterNode(start, callStack);
+    while (callStack.length > 0) advanceFrame(callStack);
   }
 
   return { components, componentOf };

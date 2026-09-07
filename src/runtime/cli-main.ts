@@ -77,6 +77,65 @@ program.configureHelp({
   formatHelp: (command, helper) =>
     command === program ? renderRootCommandHelp(program, commandDescriptors) : defaultHelp.formatHelp(command, helper),
 });
+async function prepareCommandProjectContext(commandName: string) {
+  const projectRoot = resolveProjectRoot();
+  let projectContext = resolveCliProjectContext(projectRoot);
+  activateCliProjectContext(projectContext);
+  initializeProfileContext();
+  await maybePrintUpdateNotice({ commandName });
+  const gitObservation = observeGitWorktreeContextWithCache(projectRoot, projectContext.paths.cacheDir);
+  const gitContext = gitObservation?.context;
+  projectContext = { ...projectContext, gitContext };
+  activateCliProjectContext(projectContext);
+  return { projectRoot, projectContext, gitObservation };
+}
+
+async function prepareCommandEvidence(
+  commandName: string,
+  prepared: Awaited<ReturnType<typeof prepareCommandProjectContext>>,
+): Promise<void> {
+  const { projectRoot, projectContext, gitObservation } = prepared;
+  const { config, paths, gitContext } = projectContext;
+  let freshness;
+  try {
+    freshness = await ensureEvidenceCommandFreshness({
+      commandName,
+      projectRoot,
+      config,
+      paths,
+      dbPathSource: projectContext.dbPathSource,
+      gitContext,
+      gitObservation,
+    });
+  } catch (error) {
+    if (!existingIndexFallbackEligible(commandName) || !existsSync(projectContext.dbPath)) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(
+      `warning: index refresh failed; ${commandName} is using the existing index. Current file text remains exact, but index-derived symbols and relationships may be stale. ${message}`,
+    );
+    maybeSweepRepositoryCache(projectRoot, cliVersion, { repositoryId: gitContext?.repositoryId ?? null });
+    return;
+  }
+  if (process.env['SCIP_QUERY_DEBUG']) {
+    console.error(`evidence-freshness: ${freshness.source}`);
+  }
+  reportCommandWatchService(freshness.service, projectRoot, gitContext);
+  return;
+}
+
+function reportCommandWatchService(
+  service: ReturnType<typeof ensureWatchServiceForCommand>,
+  projectRoot: string,
+  gitContext: ReturnType<typeof resolveCliProjectContext>['gitContext'],
+): void {
+  if (service.kind === 'failed') {
+    console.error(`warning: scip-query watch service did not start: ${service.message}`);
+  }
+  if (service.kind === 'failed' || service.kind === 'skipped') {
+    maybeSweepRepositoryCache(projectRoot, cliVersion, { repositoryId: gitContext?.repositoryId ?? null });
+  }
+}
+
 program.hook('preAction', async (_thisCommand, actionCommand) => {
   const commandName = actionCommand.name();
   if (commandName === 'continue') {
@@ -90,46 +149,11 @@ program.hook('preAction', async (_thisCommand, actionCommand) => {
     await maybePrintUpdateNotice({ commandName });
     return;
   }
-  const projectRoot = resolveProjectRoot();
-  let projectContext = resolveCliProjectContext(projectRoot);
-  activateCliProjectContext(projectContext);
-  initializeProfileContext();
-  await maybePrintUpdateNotice({ commandName });
-  const gitObservation = observeGitWorktreeContextWithCache(projectRoot, projectContext.paths.cacheDir);
-  const gitContext = gitObservation?.context;
-  projectContext = { ...projectContext, gitContext };
-  activateCliProjectContext(projectContext);
-  const { config, paths } = projectContext;
+  const prepared = await prepareCommandProjectContext(commandName);
+  const { projectRoot, projectContext } = prepared;
+  const { config, paths, gitContext } = projectContext;
   if (prepareSharedCache) {
-    let freshness;
-    try {
-      freshness = await ensureEvidenceCommandFreshness({
-        commandName,
-        projectRoot,
-        config,
-        paths,
-        dbPathSource: projectContext.dbPathSource,
-        gitContext,
-        gitObservation,
-      });
-    } catch (error) {
-      if (!existingIndexFallbackEligible(commandName) || !existsSync(projectContext.dbPath)) throw error;
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(
-        `warning: index refresh failed; ${commandName} is using the existing index. Current file text remains exact, but index-derived symbols and relationships may be stale. ${message}`,
-      );
-      maybeSweepRepositoryCache(projectRoot, cliVersion, { repositoryId: gitContext?.repositoryId ?? null });
-      return;
-    }
-    if (process.env['SCIP_QUERY_DEBUG']) {
-      console.error(`evidence-freshness: ${freshness.source}`);
-    }
-    if (freshness.service.kind === 'failed') {
-      console.error(`warning: scip-query watch service did not start: ${freshness.service.message}`);
-    }
-    if (freshness.service.kind === 'failed' || freshness.service.kind === 'skipped') {
-      maybeSweepRepositoryCache(projectRoot, cliVersion, { repositoryId: gitContext?.repositoryId ?? null });
-    }
+    await prepareCommandEvidence(commandName, prepared);
     return;
   }
   if (!startWatchService) {
@@ -144,12 +168,7 @@ program.hook('preAction', async (_thisCommand, actionCommand) => {
     config,
     gitContext,
   });
-  if (service.kind === 'failed') {
-    console.error(`warning: scip-query watch service did not start: ${service.message}`);
-  }
-  if (service.kind === 'failed' || service.kind === 'skipped') {
-    maybeSweepRepositoryCache(projectRoot, cliVersion, { repositoryId: gitContext?.repositoryId ?? null });
-  }
+  reportCommandWatchService(service, projectRoot, gitContext);
 });
 program.hook('postAction', () => {
   activateCliProjectContext(undefined);

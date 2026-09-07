@@ -204,36 +204,40 @@ function recordClojureMembers(
   },
 ): void {
   const head = clojureLeaf(frame.tokens[0]?.text ?? '');
-  if (head === 'defprotocol') {
-    const owner = clojureLeaf(frame.tokens[1]?.text ?? '');
-    if (!owner) return;
-    for (const child of memberForms(frame)) recordMember(out, owner, 'protocol', child, 'protocol-method');
-    return;
-  }
-
-  if (head === 'defrecord' || head === 'deftype') {
-    const owner = clojureLeaf(frame.tokens[1]?.text ?? '');
-    if (!owner) return;
-    const ownerKind = head === 'defrecord' ? 'record' : 'type';
-    const memberKind = head === 'defrecord' ? 'record-method' : 'type-method';
-    for (const child of memberForms(frame)) recordMember(out, owner, ownerKind, child, memberKind);
-    return;
-  }
-
-  if (head === 'extend-type') {
-    const owner = clojureLeaf(frame.tokens[1]?.text ?? '');
-    if (!owner) return;
-    for (const child of memberForms(frame)) recordMember(out, owner, 'extension', child, 'extension-method');
-    return;
-  }
-
   if (head === 'extend-protocol') {
-    const protocol = clojureLeaf(frame.tokens[1]?.text ?? '');
-    for (const child of memberForms(frame)) {
-      if (protocol) recordMember(out, protocol, 'extension', child, 'extension-method');
-      const owner = extensionOwnerBefore(frame, child.startLine);
-      if (owner && owner !== protocol) recordMember(out, owner, 'extension', child, 'extension-method');
-    }
+    recordProtocolExtensionMembers(frame, out);
+    return;
+  }
+  const kinds = clojureMemberKinds(head);
+  if (!kinds) return;
+  const owner = clojureLeaf(frame.tokens[1]?.text ?? '');
+  if (!owner) return;
+  for (const child of memberForms(frame)) recordMember(out, owner, kinds.ownerKind, child, kinds.memberKind);
+}
+
+function clojureMemberKinds(
+  head: string,
+): Pick<SourceFacts['clojureMembers'][number], 'ownerKind' | 'memberKind'> | null {
+  switch (head) {
+    case 'defprotocol':
+      return { ownerKind: 'protocol', memberKind: 'protocol-method' };
+    case 'defrecord':
+      return { ownerKind: 'record', memberKind: 'record-method' };
+    case 'deftype':
+      return { ownerKind: 'type', memberKind: 'type-method' };
+    case 'extend-type':
+      return { ownerKind: 'extension', memberKind: 'extension-method' };
+    default:
+      return null;
+  }
+}
+
+function recordProtocolExtensionMembers(frame: ClojureForm, out: Parameters<typeof recordMember>[0]): void {
+  const protocol = clojureLeaf(frame.tokens[1]?.text ?? '');
+  for (const child of memberForms(frame)) {
+    if (protocol) recordMember(out, protocol, 'extension', child, 'extension-method');
+    const owner = extensionOwnerBefore(frame, child.startLine);
+    if (owner && owner !== protocol) recordMember(out, owner, 'extension', child, 'extension-method');
   }
 }
 
