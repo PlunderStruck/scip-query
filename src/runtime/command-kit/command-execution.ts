@@ -543,65 +543,79 @@ export function validateInvocationCoverage(coverage: InvocationCoverage): void {
   if (coverage.complete !== true && coverage.complete !== false && coverage.complete !== null) {
     throw new Error('Invocation coverage complete must be true, false, or null.');
   }
-  if (coverage.complete === true) {
-    if (!coverage.totalKnown) {
-      throw new Error('Complete invocation coverage must know its total.');
-    }
-    if (!Number.isSafeInteger(coverage.total) || coverage.total !== coverage.returned) {
-      throw new Error('Complete invocation coverage total must equal returned.');
-    }
-    if (coverage.omitted !== 0) {
-      throw new Error('Complete invocation coverage cannot omit results.');
-    }
-    if (coverage.omittedIdentities !== undefined) {
-      throw new Error('Complete invocation coverage cannot name omitted identities.');
-    }
-    if (coverage.continuation !== undefined) {
-      throw new Error('Complete invocation coverage cannot provide a continuation.');
-    }
-  } else if (coverage.totalKnown) {
-    if (coverage.complete !== false) {
-      throw new Error('Known incomplete invocation coverage must set complete to false.');
-    }
-    if (!Number.isSafeInteger(coverage.total) || coverage.total < coverage.returned) {
-      throw new Error('Known invocation coverage total must be a safe integer at least as large as returned.');
-    }
-    const omitted = coverage.total - coverage.returned;
-    if (coverage.omitted !== omitted) {
-      throw new Error('Known invocation coverage omitted count must equal total minus returned.');
-    }
-    if (omitted === 0) {
-      throw new Error('Known incomplete invocation coverage must omit at least one result.');
-    }
-    if (coverage.omittedIdentities && coverage.omittedIdentities.length !== omitted) {
-      throw new Error('Omitted identity count must equal the disclosed omitted count.');
-    }
-  } else {
-    if (coverage.total !== undefined || coverage.omitted !== undefined) {
-      throw new Error('Unknown invocation coverage cannot claim a total or omitted count.');
-    }
-    if (coverage.omittedIdentities !== undefined) {
-      throw new Error('Unknown invocation coverage cannot claim omitted identities.');
-    }
+  if (coverage.complete === true) validateCompleteInvocationCoverage(coverage);
+  else if (coverage.totalKnown) validateKnownIncompleteInvocationCoverage(coverage);
+  else validateUnknownInvocationCoverage(coverage);
+  validateInvocationContinuation(coverage.continuation);
+  if (coverage.resolution) validateInvocationResolution(coverage.resolution);
+}
+
+function validateCompleteInvocationCoverage(coverage: InvocationCoverage): void {
+  if (!coverage.totalKnown) {
+    throw new Error('Complete invocation coverage must know its total.');
   }
-  if (coverage.continuation) {
-    if (coverage.continuation.cursor.length === 0 || coverage.continuation.indexGeneration.length === 0) {
+  if (!Number.isSafeInteger(coverage.total) || coverage.total !== coverage.returned) {
+    throw new Error('Complete invocation coverage total must equal returned.');
+  }
+  if (coverage.omitted !== 0) {
+    throw new Error('Complete invocation coverage cannot omit results.');
+  }
+  if (coverage.omittedIdentities !== undefined) {
+    throw new Error('Complete invocation coverage cannot name omitted identities.');
+  }
+  if (coverage.continuation !== undefined) {
+    throw new Error('Complete invocation coverage cannot provide a continuation.');
+  }
+}
+
+function validateKnownIncompleteInvocationCoverage(coverage: InvocationCoverage & { totalKnown: true }): void {
+  if (coverage.complete !== false) {
+    throw new Error('Known incomplete invocation coverage must set complete to false.');
+  }
+  if (!Number.isSafeInteger(coverage.total) || coverage.total < coverage.returned) {
+    throw new Error('Known invocation coverage total must be a safe integer at least as large as returned.');
+  }
+  const omitted = coverage.total - coverage.returned;
+  if (coverage.omitted !== omitted) {
+    throw new Error('Known invocation coverage omitted count must equal total minus returned.');
+  }
+  if (omitted === 0) {
+    throw new Error('Known incomplete invocation coverage must omit at least one result.');
+  }
+  if (coverage.omittedIdentities && coverage.omittedIdentities.length !== omitted) {
+    throw new Error('Omitted identity count must equal the disclosed omitted count.');
+  }
+}
+
+function validateUnknownInvocationCoverage(coverage: InvocationCoverage): void {
+  if (coverage.total !== undefined || coverage.omitted !== undefined) {
+    throw new Error('Unknown invocation coverage cannot claim a total or omitted count.');
+  }
+  if (coverage.omittedIdentities !== undefined) {
+    throw new Error('Unknown invocation coverage cannot claim omitted identities.');
+  }
+}
+
+function validateInvocationContinuation(continuation: InvocationCoverage['continuation']): void {
+  if (continuation) {
+    if (continuation.cursor.length === 0 || continuation.indexGeneration.length === 0) {
       throw new Error('Invocation coverage continuation requires a cursor and index generation.');
     }
   }
-  if (coverage.resolution) {
-    if (!Number.isSafeInteger(coverage.resolution.totalCandidates) || coverage.resolution.totalCandidates < 0) {
-      throw new Error('Invocation resolution candidate count must be a non-negative safe integer.');
-    }
-    if (coverage.resolution.state === 'exact' && coverage.resolution.totalCandidates !== 1) {
-      throw new Error('Exact invocation resolution must name exactly one candidate.');
-    }
-    if (coverage.resolution.state === 'missing' && coverage.resolution.totalCandidates !== 0) {
-      throw new Error('Missing invocation resolution cannot name candidates.');
-    }
-    if (coverage.resolution.state === 'ambiguous' && coverage.resolution.totalCandidates < 2) {
-      throw new Error('Ambiguous invocation resolution must name at least two candidates.');
-    }
+}
+
+function validateInvocationResolution(resolution: NonNullable<InvocationCoverage['resolution']>): void {
+  if (!Number.isSafeInteger(resolution.totalCandidates) || resolution.totalCandidates < 0) {
+    throw new Error('Invocation resolution candidate count must be a non-negative safe integer.');
+  }
+  if (resolution.state === 'exact' && resolution.totalCandidates !== 1) {
+    throw new Error('Exact invocation resolution must name exactly one candidate.');
+  }
+  if (resolution.state === 'missing' && resolution.totalCandidates !== 0) {
+    throw new Error('Missing invocation resolution cannot name candidates.');
+  }
+  if (resolution.state === 'ambiguous' && resolution.totalCandidates < 2) {
+    throw new Error('Ambiguous invocation resolution must name at least two candidates.');
   }
 }
 

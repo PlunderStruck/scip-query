@@ -621,9 +621,13 @@
           "name": "connectedBehaviorPacket"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated bounded node selection, expansion, step/transition/path assembly, coverage and status. Removed a redundant status test while preserving outcomes and required-node overflow. Now cyclomatic 5, cognitive 2.",
+      "verification": [
+        "146 focused tests across five files passed; full suite 3112 tests across 350 files passed.",
+        "Build, source types, changed-file lint, formatting, public API contract/consumer and skill links passed.",
+        "Fresh index/diff-impact mapped 36 changed symbols in five files to eight affected files. Source scan accounted across 563 files with 632 complexity findings."
+      ]
     },
     {
       "id": "complexity:src/reindex/affected-shadow.ts:readAffectedSetShadowStatus",
@@ -636,9 +640,13 @@
           "name": "readAffectedSetShadowStatus"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated telemetry I/O from base decoding, plan/evaluation validation and consistency checks, preserving missing/malformed/version reasons and report shape. Now cyclomatic 5, cognitive 8.",
+      "verification": [
+        "146 focused tests across five files passed; full suite 3112 tests across 350 files passed.",
+        "Build, source types, changed-file lint, formatting, public API contract/consumer and skill links passed.",
+        "Fresh index/diff-impact mapped 36 changed symbols in five files to eight affected files. Source scan accounted across 563 files with 632 complexity findings."
+      ]
     },
     {
       "id": "complexity:src/runtime/command-kit/command-execution.ts:validateInvocationCoverage",
@@ -651,9 +659,13 @@
           "name": "validateInvocationCoverage"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated complete, known-incomplete and unknown coverage rules from continuation/resolution validation; preserved all diagnostics and their order. Now cyclomatic 9, cognitive 8.",
+      "verification": [
+        "146 focused tests across five files passed; full suite 3112 tests across 350 files passed.",
+        "Build, source types, changed-file lint, formatting, public API contract/consumer and skill links passed.",
+        "Fresh index/diff-impact mapped 36 changed symbols in five files to eight affected files. Source scan accounted across 563 files with 632 complexity findings."
+      ]
     },
     {
       "id": "complexity:src/symbols/graph/member-call-targets.ts:factoryReturnedMemberCallbackImplementations",
@@ -666,9 +678,13 @@
           "name": "factoryReturnedMemberCallbackImplementations"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated unique factory discovery, parameter identification, bounded option-member traversal and callback target resolution; preserved the 32-owner cap and deduplication. Now cyclomatic 7, cognitive 6.",
+      "verification": [
+        "146 focused tests across five files passed; full suite 3112 tests across 350 files passed.",
+        "Build, source types, changed-file lint, formatting, public API contract/consumer and skill links passed.",
+        "Fresh index/diff-impact mapped 36 changed symbols in five files to eight affected files. Source scan accounted across 563 files with 632 complexity findings."
+      ]
     },
     {
       "id": "complexity:src/semantic/rust/default-impl-references.ts:rustDefaultImplReferencesForDefinition",
@@ -681,9 +697,13 @@
           "name": "rustDefaultImplReferencesForDefinition"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated chunk scanning, explicit owner calls, struct-literal scope and unattributed trait-call refusal, preserving source matching, order and null outcomes. Used iteration for unbounded result appends. Now cyclomatic 7, cognitive 9.",
+      "verification": [
+        "146 focused tests across five files passed; full suite 3112 tests across 350 files passed.",
+        "Build, source types, changed-file lint, formatting, public API contract/consumer and skill links passed.",
+        "Fresh index/diff-impact mapped 36 changed symbols in five files to eight affected files. Source scan accounted across 563 files with 632 complexity findings."
+      ]
     },
     {
       "id": "complexity:src/semantic/shared-primitives.ts:semanticReferenceMap.<callback:profileSpan:1>",

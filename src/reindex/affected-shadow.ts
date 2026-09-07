@@ -516,68 +516,120 @@ export function readAffectedSetShadowStatus(
     );
   }
 
+  return decodeAffectedShadowStatus(raw, paths);
+}
+
+interface ShadowRecordBase extends Record<string, unknown> {
+  version: 1;
+  recordedAt: string;
+  refreshResult: 'rebuilt' | 'reused';
+  durationMs: number;
+}
+
+function decodeAffectedShadowStatus(
+  raw: unknown,
+  paths: ReturnType<typeof affectedSetShadowPaths>,
+): AffectedSetShadowStatus {
   if (isRecord(raw) && typeof raw['version'] === 'number' && raw['version'] !== 1) {
     return unavailableShadowStatus(paths, 'unsupported-record-version', `Unsupported version ${raw['version']}.`);
   }
   if (!hasValidShadowRecordBase(raw)) {
     return unavailableShadowStatus(paths, 'telemetry-malformed');
   }
-  if (raw['status'] === 'unavailable') {
-    if (!isShadowUnavailableReason(raw['reason'])) return unavailableShadowStatus(paths, 'telemetry-malformed');
-    return {
-      state: 'unavailable',
-      ...paths,
-      reason: raw['reason'],
-      recordedAt: raw['recordedAt'],
-      refreshResult: raw['refreshResult'],
-      durationMs: raw['durationMs'],
-      ...(typeof raw['error'] === 'string' ? { error: raw['error'] } : {}),
-    };
-  }
+  if (raw['status'] === 'unavailable') return recordedUnavailableShadowStatus(raw, paths);
   if (raw['status'] !== 'evaluated') return unavailableShadowStatus(paths, 'telemetry-malformed');
+  return evaluatedShadowStatus(raw, paths);
+}
+
+function recordedUnavailableShadowStatus(
+  raw: ShadowRecordBase,
+  paths: ReturnType<typeof affectedSetShadowPaths>,
+): AffectedSetShadowStatus {
+  if (!isShadowUnavailableReason(raw['reason'])) return unavailableShadowStatus(paths, 'telemetry-malformed');
+  return {
+    state: 'unavailable',
+    ...paths,
+    reason: raw['reason'],
+    recordedAt: raw['recordedAt'],
+    refreshResult: raw['refreshResult'],
+    durationMs: raw['durationMs'],
+    ...(typeof raw['error'] === 'string' ? { error: raw['error'] } : {}),
+  };
+}
+
+function shadowPlanSummary(plan: Record<string, unknown>) {
+  const mode = plan['mode'];
+  const affectedFiles = stringArray(plan['affectedFiles']);
+  const fallbackReasons = stringArray(plan['reasons']);
+  if (
+    (mode !== 'none' && mode !== 'closure' && mode !== 'full-project') ||
+    affectedFiles === null ||
+    fallbackReasons === null
+  )
+    return null;
+  return { mode, affectedFiles, fallbackReasons } as const;
+}
+
+function shadowEvaluationSummary(evaluation: Record<string, unknown>) {
+  const predictedFiles = stringArray(evaluation['predictedFiles']);
+  const actualFiles = stringArray(evaluation['actualFiles']);
+  const missingFiles = stringArray(evaluation['missingFiles']);
+  const recall = evaluation['recall'];
+  const affectedRatio = evaluation['affectedRatio'];
+  const passed = evaluation['passed'];
+  if (
+    predictedFiles === null ||
+    actualFiles === null ||
+    missingFiles === null ||
+    typeof passed !== 'boolean' ||
+    !isUnitRatio(recall) ||
+    !isUnitRatio(affectedRatio)
+  )
+    return null;
+  return { predictedFiles, actualFiles, missingFiles, recall, affectedRatio, passed };
+}
+
+function shadowEvaluationIsConsistent(
+  plan: NonNullable<ReturnType<typeof shadowPlanSummary>>,
+  evaluation: NonNullable<ReturnType<typeof shadowEvaluationSummary>>,
+  changedFiles: string[],
+): boolean {
+  const { predictedFiles, actualFiles, missingFiles, recall, passed } = evaluation;
+  const expectedRecall = actualFiles.length === 0 ? 1 : (actualFiles.length - missingFiles.length) / actualFiles.length;
+  return (
+    sameOrderedStrings(plan.affectedFiles, predictedFiles) &&
+    sameOrderedStrings(changedFiles, actualFiles) &&
+    passed === (missingFiles.length === 0) &&
+    Math.abs(recall - expectedRecall) <= Number.EPSILON &&
+    !missingFiles.some((file) => !actualFiles.includes(file) || predictedFiles.includes(file))
+  );
+}
+
+function evaluatedShadowStatus(
+  raw: ShadowRecordBase,
+  paths: ReturnType<typeof affectedSetShadowPaths>,
+): AffectedSetShadowStatus {
   const plan = raw['plan'];
   const comparison = raw['comparison'];
   const evaluation = raw['evaluation'];
   if (!isRecord(raw['manifest']) || !isRecord(plan) || !isRecord(comparison) || !isRecord(evaluation)) {
     return unavailableShadowStatus(paths, 'telemetry-malformed');
   }
-
-  const mode = plan['mode'];
-  const planAffectedFiles = stringArray(plan['affectedFiles']);
-  const fallbackReasons = stringArray(plan['reasons']);
+  const decodedPlan = shadowPlanSummary(plan);
+  const decodedEvaluation = shadowEvaluationSummary(evaluation);
   const changedFiles = stringArray(comparison['changedFiles']);
-  const predictedFiles = stringArray(evaluation['predictedFiles']);
-  const actualFiles = stringArray(evaluation['actualFiles']);
-  const missingFiles = stringArray(evaluation['missingFiles']);
-  const recall = evaluation['recall'];
-  const affectedRatio = evaluation['affectedRatio'];
   if (
-    (mode !== 'none' && mode !== 'closure' && mode !== 'full-project') ||
-    planAffectedFiles === null ||
-    fallbackReasons === null ||
+    !decodedPlan ||
+    !decodedEvaluation ||
     changedFiles === null ||
-    predictedFiles === null ||
-    actualFiles === null ||
-    missingFiles === null ||
-    typeof evaluation['passed'] !== 'boolean' ||
-    !isUnitRatio(recall) ||
-    !isUnitRatio(affectedRatio)
+    !shadowEvaluationIsConsistent(decodedPlan, decodedEvaluation, changedFiles)
   ) {
     return unavailableShadowStatus(paths, 'telemetry-malformed');
   }
-  const expectedRecall = actualFiles.length === 0 ? 1 : (actualFiles.length - missingFiles.length) / actualFiles.length;
-  if (
-    !sameOrderedStrings(planAffectedFiles, predictedFiles) ||
-    !sameOrderedStrings(changedFiles, actualFiles) ||
-    evaluation['passed'] !== (missingFiles.length === 0) ||
-    Math.abs(recall - expectedRecall) > Number.EPSILON ||
-    missingFiles.some((file) => !actualFiles.includes(file) || predictedFiles.includes(file))
-  ) {
-    return unavailableShadowStatus(paths, 'telemetry-malformed');
-  }
-
+  const { mode, fallbackReasons } = decodedPlan;
+  const { recall, affectedRatio, predictedFiles, actualFiles, missingFiles, passed } = decodedEvaluation;
   return {
-    state: evaluation['passed'] ? 'passing' : 'failing',
+    state: passed ? 'passing' : 'failing',
     ...paths,
     recordedAt: raw['recordedAt'],
     refreshResult: raw['refreshResult'],
@@ -715,12 +767,7 @@ function closeShadowDatabase(db: AffectedShadowDatabase | null): void {
   }
 }
 
-function hasValidShadowRecordBase(value: unknown): value is Record<string, unknown> & {
-  version: 1;
-  recordedAt: string;
-  refreshResult: 'rebuilt' | 'reused';
-  durationMs: number;
-} {
+function hasValidShadowRecordBase(value: unknown): value is ShadowRecordBase {
   return (
     isRecord(value) &&
     value['version'] === 1 &&

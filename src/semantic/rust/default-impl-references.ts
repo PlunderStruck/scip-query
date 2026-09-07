@@ -47,76 +47,123 @@ export function rustDefaultImplReferencesForDefinition(
   const ownerDefaultCall = new RegExp(`(^|[^A-Za-z0-9_])${escapeRegex(owner)}::default\\b`, 'g');
   const ownerLiteralBeforeBrace = new RegExp(`(^|[^A-Za-z0-9_])${escapeRegex(owner)}\\s*$`);
   const canUseStructUpdateDefault = hasDefinitionMention(db, definition.symbolId);
+  const policy = { owner, ownerDefaultCall, ownerLiteralBeforeBrace, canUseStructUpdateDefault };
   const references: SemanticReference[] = [];
   for (const chunk of chunks) {
     const source = sourceText(db, chunk.relative_path, sourceTextCache);
     if (source === null) return null;
-
-    const lines = source.split(/\r?\n/);
-    let braceDepth = 0;
-    const ownerLiteralDepths: number[] = [];
-    let chunkReferences = 0;
-    for (
-      let lineNumber = chunk.chunk_start;
-      lineNumber <= chunk.chunk_end && lineNumber < lines.length;
-      lineNumber += 1
-    ) {
-      const line = lines[lineNumber] ?? '';
-      const codeLine = line;
-      const defaultTraitReferenceColumns = new Set<number>();
-      ownerDefaultCall.lastIndex = 0;
-      let match: RegExpExecArray | null;
-      while ((match = ownerDefaultCall.exec(codeLine))) {
-        references.push({
-          file: chunk.relative_path,
-          line: lineNumber,
-          column: match.index + match[1]!.length + owner.length + '::'.length,
-        });
-        chunkReferences += 1;
-      }
-
-      for (let column = 0; column < codeLine.length; column += 1) {
-        const structUpdateDefault = STRUCT_UPDATE_DEFAULT_CALL.exec(codeLine.slice(column));
-        if (structUpdateDefault) {
-          if (canUseStructUpdateDefault && ownerLiteralDepths.includes(braceDepth)) {
-            const methodColumn = column + structUpdateDefault[0].lastIndexOf('default');
-            references.push({
-              file: chunk.relative_path,
-              line: lineNumber,
-              column: methodColumn,
-            });
-            defaultTraitReferenceColumns.add(methodColumn);
-            chunkReferences += 1;
-          }
-          column += structUpdateDefault[0].length - 1;
-          continue;
-        }
-
-        const char = codeLine[column];
-        if (char === '{') {
-          const opensOwnerLiteral = ownerLiteralBeforeBrace.test(codeLine.slice(0, column));
-          braceDepth += 1;
-          if (opensOwnerLiteral) ownerLiteralDepths.push(braceDepth);
-          continue;
-        }
-        if (char === '}') {
-          braceDepth = Math.max(0, braceDepth - 1);
-          while (ownerLiteralDepths.length > 0 && ownerLiteralDepths[ownerLiteralDepths.length - 1]! > braceDepth) {
-            ownerLiteralDepths.pop();
-          }
-        }
-      }
-
-      DEFAULT_TRAIT_CALL.lastIndex = 0;
-      while ((match = DEFAULT_TRAIT_CALL.exec(codeLine))) {
-        const methodColumn = match.index + 'Default::'.length;
-        if (!defaultTraitReferenceColumns.has(methodColumn)) return null;
-      }
-    }
-    if (chunkReferences === 0) return null;
+    const found = rustDefaultChunkReferences(chunk, source, policy);
+    if (found === null) return null;
+    for (const reference of found) references.push(reference);
   }
-
   return dedupeSemanticReferences(references);
+}
+
+interface RustDefaultReferencePolicy {
+  owner: string;
+  ownerDefaultCall: RegExp;
+  ownerLiteralBeforeBrace: RegExp;
+  canUseStructUpdateDefault: boolean;
+}
+
+interface RustOwnerLiteralScope {
+  braceDepth: number;
+  ownerLiteralDepths: number[];
+}
+
+function rustDefaultChunkReferences(
+  chunk: ReturnType<typeof mentionReferenceChunkRows>[number],
+  source: string,
+  policy: RustDefaultReferencePolicy,
+): SemanticReference[] | null {
+  const lines = source.split(/\r?\n/);
+  const scope: RustOwnerLiteralScope = { braceDepth: 0, ownerLiteralDepths: [] };
+  const references: SemanticReference[] = [];
+  for (
+    let lineNumber = chunk.chunk_start;
+    lineNumber <= chunk.chunk_end && lineNumber < lines.length;
+    lineNumber += 1
+  ) {
+    const line = lines[lineNumber] ?? '';
+    for (const reference of explicitOwnerDefaultReferences(chunk.relative_path, lineNumber, line, policy)) {
+      references.push(reference);
+    }
+    const structReferences = structUpdateDefaultReferences(chunk.relative_path, lineNumber, line, policy, scope);
+    for (const reference of structReferences) references.push(reference);
+    const attributedColumns = new Set(structReferences.map((reference) => reference.column!));
+    if (hasUnattributedDefaultTraitCall(line, attributedColumns)) return null;
+  }
+  return references.length === 0 ? null : references;
+}
+
+function explicitOwnerDefaultReferences(
+  file: string,
+  line: number,
+  codeLine: string,
+  { owner, ownerDefaultCall }: RustDefaultReferencePolicy,
+): SemanticReference[] {
+  const references: SemanticReference[] = [];
+  ownerDefaultCall.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = ownerDefaultCall.exec(codeLine))) {
+    references.push({ file, line, column: match.index + match[1]!.length + owner.length + '::'.length });
+  }
+  return references;
+}
+
+function structUpdateDefaultReferences(
+  file: string,
+  line: number,
+  codeLine: string,
+  policy: RustDefaultReferencePolicy,
+  scope: RustOwnerLiteralScope,
+): SemanticReference[] {
+  const references: SemanticReference[] = [];
+  for (let column = 0; column < codeLine.length; column += 1) {
+    const structUpdateDefault = STRUCT_UPDATE_DEFAULT_CALL.exec(codeLine.slice(column));
+    if (structUpdateDefault) {
+      if (policy.canUseStructUpdateDefault && scope.ownerLiteralDepths.includes(scope.braceDepth)) {
+        references.push({ file, line, column: column + structUpdateDefault[0].lastIndexOf('default') });
+      }
+      column += structUpdateDefault[0].length - 1;
+      continue;
+    }
+    trackRustOwnerLiteralScope(codeLine, column, policy.ownerLiteralBeforeBrace, scope);
+  }
+  return references;
+}
+
+function trackRustOwnerLiteralScope(
+  codeLine: string,
+  column: number,
+  ownerLiteralBeforeBrace: RegExp,
+  scope: RustOwnerLiteralScope,
+): void {
+  const char = codeLine[column];
+  if (char === '{') {
+    const opensOwnerLiteral = ownerLiteralBeforeBrace.test(codeLine.slice(0, column));
+    scope.braceDepth += 1;
+    if (opensOwnerLiteral) scope.ownerLiteralDepths.push(scope.braceDepth);
+    return;
+  }
+  if (char === '}') {
+    scope.braceDepth = Math.max(0, scope.braceDepth - 1);
+    while (
+      scope.ownerLiteralDepths.length > 0 &&
+      scope.ownerLiteralDepths[scope.ownerLiteralDepths.length - 1]! > scope.braceDepth
+    ) {
+      scope.ownerLiteralDepths.pop();
+    }
+  }
+}
+
+function hasUnattributedDefaultTraitCall(codeLine: string, attributedColumns: ReadonlySet<number>): boolean {
+  DEFAULT_TRAIT_CALL.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = DEFAULT_TRAIT_CALL.exec(codeLine))) {
+    if (!attributedColumns.has(match.index + 'Default::'.length)) return true;
+  }
+  return false;
 }
 
 function hasDefinitionMention(db: ScipDatabase, symbolId: number): boolean {

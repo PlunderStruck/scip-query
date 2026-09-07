@@ -142,3 +142,23 @@ The fresh batch-four scan reports 634 findings: six prior warnings resolved (the
 ### Batch four completion
 
 All verification passed: 176 distinct focused tests, 3,112 full-suite tests across 350 files, build, source types, changed-file lint, format, API/consumer, and skill links. Fresh index and diff-impact map 31 changed symbols in five source files to 11 affected files; documentation and tests are outside the index. Source scan accounted across 563 files and 12,340 functions, with 634 complexity findings. Six historical findings marked fixed, including the nested direct-declaration callback; two newly extracted helper warnings remain queued. Historical inventory: 39 fixed, six assessed-retained, 610 pending. Continue batch five above.
+
+### Batch five implementation checkpoint
+
+Separated behavior node selection, expansion, steps, transitions, paths and final status; eliminated a redundant connected-status test without changing results. Split shadow telemetry reading from decoding and consistency validation. Split invocation coverage validation by complete, known-incomplete and unknown totals, with separate continuation/resolution validation and unchanged error precedence. Separated factory discovery, parameter identification, bounded option-member traversal and callback target resolution. Split Rust default references into per-chunk accounting, explicit owner calls, struct update/literal scope and unattributed trait-call refusal. Preserved the existing source matching model; this is not a parser migration. Rust reference collection uses iteration so large result sets cannot exceed JavaScript call-argument limits.
+
+| Target                                       | Before cyclomatic/cognitive | After |
+| -------------------------------------------- | --------------------------- | ----- |
+| connectedBehaviorPacket                      | 36/44                       | 5/2   |
+| readAffectedSetShadowStatus                  | 36/26                       | 5/8   |
+| validateInvocationCoverage                   | 36/52                       | 9/8   |
+| rustDefaultImplReferencesForDefinition       | 21/52                       | 7/9   |
+| factoryReturnedMemberCallbackImplementations | 36/38                       | 7/6   |
+
+All 146 focused tests across five files pass. Source types and changed-file lint pass. Current-source review is accounted across 563 files and 12,367 functions. Three smaller helpers remain queued: reachedFactoryOptionMembers 12/16, expansiveBehaviorNodeIds 11/11, factoryOptionCallbackTargets 11/10. Source diff reviewed for policy, ordering and null/empty-result preservation. Build/full suite/API/index verification is next; batch five is not yet complete. No thresholds, suppressions or architecture rules changed, and no VM reinstall is needed.
+
+Batch-six queue from the complete 632-finding scan: semanticReferenceMap profileSpan callback 26/52 (src/semantic/shared-primitives.ts:631), collectNextAnchorCallsiteCandidates 34/47 (src/queries/internal/next-anchor-candidates.ts:439), normalizeRequest 34/22 (src/queries/navigation/source-inspection.ts:494), isObservationReceiptV2 33/18 (src/domain/observation-receipt.ts:577), validateSuppressions 33/48 (src/runtime/config.ts:504). Bodies inspected. Preserve semantic fast-path precedence and optional callee prefetch/provider batching/profile counters; the three ordered candidate-evidence passes and their callsite-key reservation points, exact versus ambiguous counts and first-three alternative display; selector validation/error order and full/bounded inspection rules; receipt source/proof uniqueness, identity agreement and optional field validation; suppression diagnostic ordering, expiry and evidence checks without weakening any policy. Begin after batch-five verification and commit.
+
+### Batch five completion
+
+All checks passed: 146 focused tests, 3,112 full-suite tests across 350 files, build, source types, changed-file lint, format, API/consumer and skill links. Fresh index/diff-impact maps 36 changed symbols in five source files to eight affected files. Source scan accounted across 563 files and 12,367 functions; 632 complexity findings remain, with three extracted helper warnings explicitly queued. No configuration policy or suppression changes. Historical inventory now 44 fixed, six assessed-retained, 605 pending. Continue with batch six above; VM installation remains the verified build because these refactors preserve behavior.

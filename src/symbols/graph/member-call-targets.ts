@@ -711,20 +711,39 @@ function factoryReturnedMemberCallbackImplementations(
   sourceFile: string,
   expression: string,
 ): Array<{ name: string; startLine: number; endLine: number; file: string }> {
-  const member = /^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/u.exec(expression.replace(/\s+/gu, ''));
-  if (!member) return [];
-  const sourceRoot = getAst(db, sourceFile)?.rootNode;
-  if (!sourceRoot) return [];
-  const initializer = findVariableInitializer(sourceRoot, member[1]!);
-  const factoryCall = initializer ? firstValueCall(initializer) : null;
-  const callee = factoryCall?.childForFieldName('function') ?? factoryCall?.namedChild(0);
-  const factories = callee ? resolveCallableTargetDefinitions(db, sourceFile, callee.text) : [];
-  if (factories.length !== 1 || !factoryCall) return [];
-  const factory = factories[0]!;
+  const resolved = returnedMemberFactoryCall(db, sourceFile, expression);
+  if (!resolved) return [];
+  const { factory, factoryCall } = resolved;
   const factoryRoot = getAst(db, factory.relativePath)?.rootNode;
   if (!factoryRoot) return [];
   const factoryCallable = smallestCoveringCallable(factoryRoot, factory.startLine, factory.endLine);
   if (!factoryCallable) return [];
+  const parameterNames = returnedCallbackParameterNames(factoryCallable);
+  if (parameterNames.size === 0) return [];
+
+  const returnedMembers = factoryReturnedMemberImplementations(db, sourceFile, expression);
+  if (returnedMembers.length === 0) return [];
+  const reachedOptionMembers = reachedFactoryOptionMembers(db, factory, returnedMembers, parameterNames);
+  if (reachedOptionMembers.size === 0) return [];
+
+  return factoryOptionCallbackTargets(db, sourceFile, factoryCall, reachedOptionMembers);
+}
+
+function returnedMemberFactoryCall(db: ScipDatabase, sourceFile: string, expression: string) {
+  const member = /^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/u.exec(expression.replace(/\s+/gu, ''));
+  if (!member) return null;
+  const sourceRoot = getAst(db, sourceFile)?.rootNode;
+  if (!sourceRoot) return null;
+  const initializer = findVariableInitializer(sourceRoot, member[1]!);
+  const factoryCall = initializer ? firstValueCall(initializer) : null;
+  const callee = factoryCall?.childForFieldName('function') ?? factoryCall?.namedChild(0);
+  const factories = callee ? resolveCallableTargetDefinitions(db, sourceFile, callee.text) : [];
+  if (factories.length !== 1 || !factoryCall) return null;
+  const factory = factories[0]!;
+  return { factory, factoryCall };
+}
+
+function returnedCallbackParameterNames(factoryCallable: SyntaxNode): Set<string> {
   const parameterNames = new Set<string>();
   const parameters = factoryCallable.childForFieldName('parameters') ?? factoryCallable.childForFieldName('parameter');
   if (parameters) {
@@ -732,10 +751,15 @@ function factoryReturnedMemberCallbackImplementations(
       if (candidate.type === 'identifier') parameterNames.add(candidate.text);
     });
   }
-  if (parameterNames.size === 0) return [];
+  return parameterNames;
+}
 
-  const returnedMembers = factoryReturnedMemberImplementations(db, sourceFile, expression);
-  if (returnedMembers.length === 0) return [];
+function reachedFactoryOptionMembers(
+  db: ScipDatabase,
+  factory: NonNullable<ReturnType<typeof returnedMemberFactoryCall>>['factory'],
+  returnedMembers: ReturnType<typeof factoryReturnedMemberImplementations>,
+  parameterNames: ReadonlySet<string>,
+): Set<string> {
   const factoryCallables = (getCallableSites(db, factory.relativePath) ?? []).filter(
     (callable) => callable.startLine >= factory.startLine && callable.endLine <= factory.endLine,
   );
@@ -766,8 +790,15 @@ function factoryReturnedMemberCallbackImplementations(
       if (localTargets.length === 1) queue.push(localTargets[0]!);
     }
   }
-  if (reachedOptionMembers.size === 0) return [];
+  return reachedOptionMembers;
+}
 
+function factoryOptionCallbackTargets(
+  db: ScipDatabase,
+  sourceFile: string,
+  factoryCall: SyntaxNode,
+  reachedOptionMembers: ReadonlySet<string>,
+): Array<{ name: string; startLine: number; endLine: number; file: string }> {
   const argumentsNode = factoryCall.childForFieldName('arguments');
   const object = argumentsNode?.namedChildren.find((argument) => unwrap(argument).type === 'object');
   if (!object) return [];

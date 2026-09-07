@@ -161,9 +161,51 @@ export function connectedBehaviorPacket(
     throw new RangeError(`maxSteps must be a positive safe integer; received ${maxSteps}`);
   }
 
-  const nodeById = new Map(topology.nodes.map((node) => [node.id, node]));
   const requestedFocusLocations = orderedFocusLocations(options.focusLocations ?? []);
-  const matchedFocusLocations = new Set<string>();
+  const selection = selectConnectedBehaviorNodes(topology, requestedFocusLocations, maxSteps);
+  const { candidateNodeIds, selectedNodeIds, selectedNodeIdSet } = selection;
+  const stepIdByNode = new Map(selectedNodeIds.map((nodeId) => [nodeId, connectedStepId(nodeId)]));
+  const { steps, matchedFocusLocations } = connectedBehaviorSteps(
+    db,
+    topology,
+    selection,
+    requestedFocusLocations,
+    stepIdByNode,
+  );
+  const transitions = connectedBehaviorTransitions(topology, selection, stepIdByNode);
+  const transitionIdByEdge = new Map(transitions.map((transition) => [transition.edgeId, transition.id]));
+  const paths = connectedBehaviorPaths(topology, stepIdByNode, transitionIdByEdge);
+  const locations = steps.flatMap((step) => (step.location ? [`${step.location.file}:${step.location.line + 1}`] : []));
+  return {
+    status: connectedBehaviorStatus(topology, steps, paths),
+    steps,
+    transitions,
+    paths,
+    coverage: {
+      candidateNodes: candidateNodeIds.length,
+      returnedNodes: selectedNodeIds.length,
+      omittedNodeIds: candidateNodeIds.filter((nodeId) => !selectedNodeIdSet.has(nodeId)),
+      returnedTransitions: transitions.length,
+      withheldStatements: steps.reduce((total, step) => total + (step.behavior?.coverage.omittedStatements ?? 0), 0),
+      requestedFocusLocations,
+      matchedFocusLocations: requestedFocusLocations.filter((location) =>
+        matchedFocusLocations.has(focusLocationKey(location.file, location.line)),
+      ),
+      unmatchedFocusLocations: requestedFocusLocations.filter(
+        (location) => !matchedFocusLocations.has(focusLocationKey(location.file, location.line)),
+      ),
+    },
+    behaviorCommand: inspectionCommand(locations, 'behavior'),
+    exactSourceCommand: inspectionCommand(locations, 'source'),
+  };
+}
+
+function selectConnectedBehaviorNodes(
+  topology: ExplorationTopology,
+  requestedFocusLocations: ReturnType<typeof orderedFocusLocations>,
+  maxSteps: number,
+) {
+  const nodeById = new Map(topology.nodes.map((node) => [node.id, node]));
   const edgeById = new Map(topology.edges.map((edge) => [edge.id, edge]));
   const pathNodeIds = orderedUnique(topology.paths.flatMap((path) => path.nodeIds));
   const matchedAnchorNodeIds = orderedUnique(
@@ -203,25 +245,7 @@ export function connectedBehaviorPacket(
       .map((edge) => edge.id),
   ]);
   const hasConnectorPath = topology.paths.some((path) => path.edgeIds.length > 0);
-  // An explicit anchor owns behavior the caller deliberately selected. Connector
-  // direction must not reduce an anchor to only the callsite that happened to
-  // place it on the shortest path; otherwise a reverse-traversed anchor loses
-  // its own direct effects and control decisions.
-  const expansiveNodeIds = new Set<string>(matchedAnchorNodeIds);
-  for (const nodeId of causalSpineNodeIds) expansiveNodeIds.add(nodeId);
-  for (const path of topology.paths) {
-    const firstNodeId = path.nodeIds[0];
-    const firstEdge = edgeById.get(path.edgeIds[0] ?? '');
-    const secondNodeId = path.nodeIds[1];
-    if (firstNodeId && secondNodeId && firstEdge?.fromNodeId === firstNodeId && firstEdge.toNodeId === secondNodeId) {
-      expansiveNodeIds.add(firstNodeId);
-    }
-  }
-  if (topology.paths.every((path) => path.nodeIds.length === 0)) {
-    for (const anchor of topology.anchors) {
-      for (const nodeId of anchor.nodeIds) expansiveNodeIds.add(nodeId);
-    }
-  }
+  const expansiveNodeIds = expansiveBehaviorNodeIds(topology, edgeById, matchedAnchorNodeIds, causalSpineNodeIds);
   const upstreamContextNodeIds = mostSpecificCallerSpine(
     matchedAnchorNodeIds,
     knownCausalEdges,
@@ -265,6 +289,66 @@ export function connectedBehaviorPacket(
     ...adjacentNodeIds,
     ...remainingEmittedNodeIds,
   ]).filter((id) => nodeById.has(id));
+  const selectedNodeIds = chooseConnectedBehaviorNodeIds(
+    candidateNodeIds,
+    maxSteps,
+    hasConnectorPath,
+    requiredNodeIds,
+    causalSpineNodeIdSet,
+    supplementalNodeIds,
+  );
+  const selectedNodeIdSet = new Set(selectedNodeIds);
+  return {
+    nodeById,
+    edgeById,
+    knownCausalEdges,
+    candidateNodeIds,
+    selectedNodeIds,
+    selectedNodeIdSet,
+    connectorNodeIds: new Set([...pathNodeIds, ...upstreamCausalNodeIds]),
+    expansiveNodeIds,
+    supplementalNodeIds,
+    completeOutlineNodeIds,
+    pathEdgeIds,
+  };
+}
+
+function expansiveBehaviorNodeIds(
+  topology: ExplorationTopology,
+  edgeById: ReadonlyMap<string, ExplorationTopologyEdge>,
+  matchedAnchorNodeIds: readonly string[],
+  causalSpineNodeIds: readonly string[],
+): Set<string> {
+  // An explicit anchor owns behavior the caller deliberately selected. Connector
+  // direction must not reduce an anchor to only the callsite that happened to
+  // place it on the shortest path; otherwise a reverse-traversed anchor loses
+  // its own direct effects and control decisions.
+  const expansiveNodeIds = new Set<string>(matchedAnchorNodeIds);
+  for (const nodeId of causalSpineNodeIds) expansiveNodeIds.add(nodeId);
+  for (const path of topology.paths) {
+    const firstNodeId = path.nodeIds[0];
+    const firstEdge = edgeById.get(path.edgeIds[0] ?? '');
+    const secondNodeId = path.nodeIds[1];
+    if (firstNodeId && secondNodeId && firstEdge?.fromNodeId === firstNodeId && firstEdge.toNodeId === secondNodeId) {
+      expansiveNodeIds.add(firstNodeId);
+    }
+  }
+  if (topology.paths.every((path) => path.nodeIds.length === 0)) {
+    for (const anchor of topology.anchors) {
+      for (const nodeId of anchor.nodeIds) expansiveNodeIds.add(nodeId);
+    }
+  }
+  return expansiveNodeIds;
+}
+
+function chooseConnectedBehaviorNodeIds(
+  candidateNodeIds: readonly string[],
+  maxSteps: number,
+  hasConnectorPath: boolean,
+  requiredNodeIds: ReadonlySet<string>,
+  causalSpineNodeIdSet: ReadonlySet<string>,
+  supplementalNodeIds: ReadonlySet<string>,
+): string[] {
   const selectedNodeIds: string[] = [];
   for (const nodeId of candidateNodeIds) {
     if (
@@ -278,9 +362,27 @@ export function connectedBehaviorPacket(
     if (selectedNodeIds.length >= maxSteps && !requiredNodeIds.has(nodeId)) continue;
     selectedNodeIds.push(nodeId);
   }
-  const selectedNodeIdSet = new Set(selectedNodeIds);
-  const stepIdByNode = new Map(selectedNodeIds.map((nodeId) => [nodeId, connectedStepId(nodeId)]));
-  const connectorNodeIds = new Set([...pathNodeIds, ...upstreamCausalNodeIds]);
+  return selectedNodeIds;
+}
+
+function connectedBehaviorSteps(
+  db: ScipDatabase,
+  topology: ExplorationTopology,
+  selection: ReturnType<typeof selectConnectedBehaviorNodes>,
+  requestedFocusLocations: ReturnType<typeof orderedFocusLocations>,
+  stepIdByNode: ReadonlyMap<string, string>,
+) {
+  const {
+    connectorNodeIds,
+    selectedNodeIds,
+    nodeById,
+    knownCausalEdges,
+    pathEdgeIds,
+    expansiveNodeIds,
+    supplementalNodeIds,
+    completeOutlineNodeIds,
+  } = selection;
+  const matchedFocusLocations = new Set<string>();
   const anchorNodeIds = new Set(topology.anchors.flatMap((anchor) => anchor.nodeIds));
   const steps = selectedNodeIds.map((nodeId, order): ConnectedBehaviorStep => {
     const node = nodeById.get(nodeId)!;
@@ -312,6 +414,15 @@ export function connectedBehaviorPacket(
     };
   });
 
+  return { steps, matchedFocusLocations };
+}
+
+function connectedBehaviorTransitions(
+  topology: ExplorationTopology,
+  selection: ReturnType<typeof selectConnectedBehaviorNodes>,
+  stepIdByNode: ReadonlyMap<string, string>,
+): ConnectedBehaviorTransition[] {
+  const { edgeById, knownCausalEdges, selectedNodeIdSet } = selection;
   const pathTraversalByEdge = new Map<string, 'forward' | 'reverse'>();
   for (const path of topology.paths) {
     for (let index = 0; index < path.edgeIds.length; index += 1) {
@@ -341,7 +452,14 @@ export function connectedBehaviorPacket(
       evidence: edge.evidence,
     }),
   );
-  const transitionIdByEdge = new Map(transitions.map((transition) => [transition.edgeId, transition.id]));
+  return transitions;
+}
+
+function connectedBehaviorPaths(
+  topology: ExplorationTopology,
+  stepIdByNode: ReadonlyMap<string, string>,
+  transitionIdByEdge: ReadonlyMap<string, string>,
+): ConnectedBehaviorPath[] {
   const paths = topology.paths.map(
     (path): ConnectedBehaviorPath => ({
       id: path.id,
@@ -356,42 +474,18 @@ export function connectedBehaviorPacket(
       }),
     }),
   );
-  const locations = steps.flatMap((step) => (step.location ? [`${step.location.file}:${step.location.line + 1}`] : []));
-  const ambiguous = topology.anchors.some((anchor) => anchor.status === 'ambiguous');
-  const connected = paths.some((path) => path.status === 'connected' || path.status === 'candidate');
-  const partial = paths.some((path) => path.status === 'partial');
+  return paths;
+}
 
-  return {
-    status:
-      steps.length === 0
-        ? 'unavailable'
-        : ambiguous
-          ? 'ambiguous'
-          : connected && !partial
-            ? 'connected'
-            : partial
-              ? 'partial'
-              : 'connected',
-    steps,
-    transitions,
-    paths,
-    coverage: {
-      candidateNodes: candidateNodeIds.length,
-      returnedNodes: selectedNodeIds.length,
-      omittedNodeIds: candidateNodeIds.filter((nodeId) => !selectedNodeIdSet.has(nodeId)),
-      returnedTransitions: transitions.length,
-      withheldStatements: steps.reduce((total, step) => total + (step.behavior?.coverage.omittedStatements ?? 0), 0),
-      requestedFocusLocations,
-      matchedFocusLocations: requestedFocusLocations.filter((location) =>
-        matchedFocusLocations.has(focusLocationKey(location.file, location.line)),
-      ),
-      unmatchedFocusLocations: requestedFocusLocations.filter(
-        (location) => !matchedFocusLocations.has(focusLocationKey(location.file, location.line)),
-      ),
-    },
-    behaviorCommand: inspectionCommand(locations, 'behavior'),
-    exactSourceCommand: inspectionCommand(locations, 'source'),
-  };
+function connectedBehaviorStatus(
+  topology: ExplorationTopology,
+  steps: readonly ConnectedBehaviorStep[],
+  paths: readonly ConnectedBehaviorPath[],
+): ConnectedBehaviorPacket['status'] {
+  if (steps.length === 0) return 'unavailable';
+  if (topology.anchors.some((anchor) => anchor.status === 'ambiguous')) return 'ambiguous';
+  if (paths.some((path) => path.status === 'partial')) return 'partial';
+  return 'connected';
 }
 
 function focusAlignedCausalTargetNodeIds(
