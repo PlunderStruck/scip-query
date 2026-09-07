@@ -170,13 +170,52 @@ export function readReindexActivitySummary(
 ): ReindexActivitySummary {
   const endedAtMs = now.getTime();
   const startedAtMs = endedAtMs - windowMs;
-  const summary: ReindexActivitySummary &
-    Required<
-      Pick<
-        ReindexActivitySummary,
-        'confidence' | 'recordsRead' | 'invalidRecords' | 'skippedRecords' | 'readErrors' | 'ignoredPartialTailBytes'
-      >
-    > = {
+  const summary = emptyActivitySummary(startedAtMs, now);
+  const lines = readActivityLines(reindexActivityPath(outputDb), readFile, summary);
+  if (lines === null) return summary;
+  for (const line of lines) {
+    const parsed = includedActivityRecord(line, startedAtMs, endedAtMs, summary);
+    if (!parsed) continue;
+    const { record } = parsed;
+    summary.invalidLanguageDetails += parsed.invalidLanguageDetails;
+    summary.byTrigger[record.trigger.kind] = (summary.byTrigger[record.trigger.kind] ?? 0) + 1;
+    if (record.event === 'suppressed') {
+      summary.suppressed += 1;
+      continue;
+    }
+    accumulateReindexActivityRun(summary, parsed, record);
+  }
+  if (summary.ignoredPartialTailBytes > 0 && summary.confidence !== 'unavailable') {
+    summary.confidence = 'partial';
+  }
+  summary.languageAttribution = languageAttribution(summary);
+  return summary;
+}
+
+type CollectedActivitySummary = ReindexActivitySummary &
+  Required<
+    Pick<
+      ReindexActivitySummary,
+      | 'confidence'
+      | 'recordsRead'
+      | 'invalidRecords'
+      | 'skippedRecords'
+      | 'readErrors'
+      | 'ignoredPartialTailBytes'
+      | 'estimatedWriteBytes'
+      | 'reflinkedBytes'
+      | 'fallbackCopiedBytes'
+      | 'attributedRuns'
+      | 'unattributedRuns'
+      | 'invalidLanguageDetails'
+      | 'fullRebuilds'
+      | 'byLanguage'
+      | 'automatic'
+    >
+  >;
+
+function emptyActivitySummary(startedAtMs: number, now: Date): CollectedActivitySummary {
+  return {
     confidence: 'complete',
     recordsRead: 0,
     invalidRecords: 0,
@@ -203,12 +242,17 @@ export function readReindexActivitySummary(
     byTrigger: {},
     automatic: { runs: 0, rebuilt: 0, fullRebuilds: 0, estimatedWriteBytes: 0 },
   };
-  const automatic = summary.automatic!;
-  const path = reindexActivityPath(outputDb);
+}
+
+function readActivityLines(
+  path: string,
+  readFile: (path: string) => string,
+  summary: CollectedActivitySummary,
+): string[] | null {
   let lines: string[] = [];
   if (readFile === defaultReadFile) {
     if (!existsSync(path) && !existsSync(`${path}${REINDEX_ACTIVITY_PREVIOUS_SUFFIX}`)) {
-      return summary;
+      return null;
     }
     try {
       const read = readRotatingJsonlLines(path, {
@@ -233,73 +277,94 @@ export function readReindexActivitySummary(
     if (segmentsRead === 0) summary.confidence = 'unavailable';
     else if (summary.readErrors > 0) summary.confidence = 'partial';
   }
-  for (const line of lines) {
-    summary.recordsRead += 1;
-    const parsed = parseReindexActivityRecord(line);
-    if (!parsed) {
-      summary.invalidRecords += 1;
-      if (summary.confidence !== 'unavailable') summary.confidence = 'partial';
-      continue;
+  return lines;
+}
+
+function includedActivityRecord(
+  line: string,
+  startedAtMs: number,
+  endedAtMs: number,
+  summary: CollectedActivitySummary,
+): ReturnType<typeof parseReindexActivityRecord> {
+  summary.recordsRead += 1;
+  const parsed = parseReindexActivityRecord(line);
+  if (!parsed) {
+    summary.invalidRecords += 1;
+    if (summary.confidence !== 'unavailable') summary.confidence = 'partial';
+    return null;
+  }
+  const { record } = parsed;
+  const recordedAtMs = Date.parse(record.recordedAt);
+  if (recordedAtMs < startedAtMs || recordedAtMs > endedAtMs) {
+    summary.skippedRecords += 1;
+    return null;
+  }
+  return parsed;
+}
+
+function accumulateReindexActivityRun(
+  summary: CollectedActivitySummary,
+  parsed: NonNullable<ReturnType<typeof parseReindexActivityRecord>>,
+  record: ReindexRunActivity,
+): void {
+  summary.runs += 1;
+  summary[record.result] += 1;
+  summary.estimatedLogicalOutputBytes += record.estimatedLogicalOutputBytes;
+  const estimatedWriteBytes = effectiveRecordedWriteBytes(record);
+  summary.estimatedWriteBytes += estimatedWriteBytes;
+  summary.reflinkedBytes += record.reflinkedBytes ?? 0;
+  summary.fallbackCopiedBytes += record.fallbackCopiedBytes ?? 0;
+  accumulateActivityLanguages(summary, parsed, record);
+  const expensiveRebuild = isExpensiveRebuild(record);
+  if (expensiveRebuild && summary.oldestRebuildAt === undefined) {
+    summary.oldestRebuildAt = record.recordedAt;
+  }
+  if (expensiveRebuild) {
+    summary.fullRebuilds += 1;
+  }
+  if (estimatedWriteBytes > 0 && summary.oldestWriteAt === undefined) {
+    summary.oldestWriteAt = record.recordedAt;
+  }
+  accumulateAutomaticActivity(summary.automatic, record, expensiveRebuild, estimatedWriteBytes);
+}
+
+function accumulateActivityLanguages(
+  summary: CollectedActivitySummary,
+  parsed: NonNullable<ReturnType<typeof parseReindexActivityRecord>>,
+  record: ReindexRunActivity,
+): void {
+  if (record.result !== 'failed') {
+    if (parsed.hasLanguageDetails) {
+      summary.attributedRuns += 1;
+    } else {
+      summary.unattributedRuns += 1;
     }
-    const { record } = parsed;
-    const recordedAtMs = Date.parse(record.recordedAt);
-    if (recordedAtMs < startedAtMs || recordedAtMs > endedAtMs) {
-      summary.skippedRecords += 1;
-      continue;
-    }
-    summary.invalidLanguageDetails = (summary.invalidLanguageDetails ?? 0) + parsed.invalidLanguageDetails;
-    summary.byTrigger[record.trigger.kind] = (summary.byTrigger[record.trigger.kind] ?? 0) + 1;
-    if (record.event === 'suppressed') {
-      summary.suppressed += 1;
-      continue;
-    }
-    summary.runs += 1;
-    summary[record.result] += 1;
-    summary.estimatedLogicalOutputBytes += record.estimatedLogicalOutputBytes;
-    const estimatedWriteBytes = effectiveRecordedWriteBytes(record);
-    summary.estimatedWriteBytes = (summary.estimatedWriteBytes ?? 0) + estimatedWriteBytes;
-    summary.reflinkedBytes = (summary.reflinkedBytes ?? 0) + (record.reflinkedBytes ?? 0);
-    summary.fallbackCopiedBytes = (summary.fallbackCopiedBytes ?? 0) + (record.fallbackCopiedBytes ?? 0);
-    if (record.result !== 'failed') {
-      if (parsed.hasLanguageDetails) {
-        summary.attributedRuns = (summary.attributedRuns ?? 0) + 1;
-      } else {
-        summary.unattributedRuns = (summary.unattributedRuns ?? 0) + 1;
-      }
-    }
-    for (const [language, detail] of typedLanguageEntries(record.byLanguage)) {
-      const languageSummary = ((summary.byLanguage ??= {})[language] ??= emptyLanguageSummary());
-      languageSummary.runs += 1;
-      languageSummary[detail.result] += 1;
-      languageSummary.producedOutputBytes += detail.producedOutputBytes;
-      languageSummary.durationMs += detail.durationMs;
-    }
-    const expensiveRebuild = isExpensiveRebuild(record);
-    if (expensiveRebuild && summary.oldestRebuildAt === undefined) {
-      summary.oldestRebuildAt = record.recordedAt;
-    }
+  }
+  for (const [language, detail] of typedLanguageEntries(record.byLanguage)) {
+    const languageSummary = (summary.byLanguage[language] ??= emptyLanguageSummary());
+    languageSummary.runs += 1;
+    languageSummary[detail.result] += 1;
+    languageSummary.producedOutputBytes += detail.producedOutputBytes;
+    languageSummary.durationMs += detail.durationMs;
+  }
+}
+
+function accumulateAutomaticActivity(
+  automatic: NonNullable<ReindexActivitySummary['automatic']>,
+  record: ReindexRunActivity,
+  expensiveRebuild: boolean,
+  estimatedWriteBytes: number,
+): void {
+  if (isAutomaticTrigger(record.trigger)) {
+    automatic.runs += 1;
+    if (record.result === 'rebuilt') automatic.rebuilt += 1;
     if (expensiveRebuild) {
-      summary.fullRebuilds = (summary.fullRebuilds ?? 0) + 1;
+      automatic.fullRebuilds += 1;
+      automatic.oldestRebuildAt ??= record.recordedAt;
     }
-    if (estimatedWriteBytes > 0 && summary.oldestWriteAt === undefined) {
-      summary.oldestWriteAt = record.recordedAt;
-    }
-    if (isAutomaticTrigger(record.trigger)) {
-      automatic.runs += 1;
-      if (record.result === 'rebuilt') automatic.rebuilt += 1;
-      if (expensiveRebuild) {
-        automatic.fullRebuilds += 1;
-        automatic.oldestRebuildAt ??= record.recordedAt;
-      }
-      automatic.estimatedWriteBytes += estimatedWriteBytes;
-      if (estimatedWriteBytes > 0) automatic.oldestWriteAt ??= record.recordedAt;
-    }
+    automatic.estimatedWriteBytes += estimatedWriteBytes;
+    if (estimatedWriteBytes > 0) automatic.oldestWriteAt ??= record.recordedAt;
   }
-  if (summary.ignoredPartialTailBytes > 0 && summary.confidence !== 'unavailable') {
-    summary.confidence = 'partial';
-  }
-  summary.languageAttribution = languageAttribution(summary);
-  return summary;
 }
 
 function writeReindexActivityBestEffort(path: string, record: ReindexActivityRecord): ReindexActivityWriteResult {

@@ -458,9 +458,13 @@
           "name": "withCompilerReferencedSupportingDeclarations"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated direct and bounded nested discovery, shared eligibility checks and source materialization while preserving deduplication, ordering and omission coverage. Now cyclomatic 7, cognitive 8.",
+      "verification": [
+        "176 focused tests passed, including 24 saved-page tampering cases; full suite 3112 tests / 350 files passed.",
+        "Build, source types, changed-file lint, formatting, public API contract/consumer and skill links passed.",
+        "Fresh index and diff-impact mapped 31 changed symbols in five files to 11 affected files; current-source scan accounted across 563 files with 634 complexity findings."
+      ]
     },
     {
       "id": "complexity:src/runtime/query-commands/cleanup/handlers.ts:handleCleanupPlan.<callback:budgetedDbCommand:1>",
@@ -526,9 +530,13 @@
           "name": "readReindexActivitySummary"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated activity reads, record/window validation, aggregate counters, language attribution and automatic-run accounting. Strengthened the initialized summary contract. Now cyclomatic 8, cognitive 8.",
+      "verification": [
+        "176 focused tests passed, including 24 saved-page tampering cases; full suite 3112 tests / 350 files passed.",
+        "Build, source types, changed-file lint, formatting, public API contract/consumer and skill links passed.",
+        "Fresh index and diff-impact mapped 31 changed symbols in five files to 11 affected files; current-source scan accounted across 563 files with 634 complexity findings."
+      ]
     },
     {
       "id": "complexity:src/semantic/typescript/ts-morph-provider.ts:TsMorphSemanticProvider.addReferencesFromSourceFileScan.visit",
@@ -541,9 +549,13 @@
           "name": "TsMorphSemanticProvider.addReferencesFromSourceFileScan.visit"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated identifier eligibility and symbol cache lookup from traversal; unified direct and hierarchy location insertion with unchanged attribution and counters. Now cyclomatic 2, cognitive 1.",
+      "verification": [
+        "176 focused tests passed, including 24 saved-page tampering cases; full suite 3112 tests / 350 files passed.",
+        "Build, source types, changed-file lint, formatting, public API contract/consumer and skill links passed.",
+        "Fresh index and diff-impact mapped 31 changed symbols in five files to 11 affected files; current-source scan accounted across 563 files with 634 complexity findings."
+      ]
     },
     {
       "id": "complexity:src/runtime/index-freshness.ts:getIndexFreshness",
@@ -556,9 +568,13 @@
           "name": "getIndexFreshness"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated metadata I/O and decoding from fingerprint reuse, fresh-generation interpretation and document diagnostics; preserved guard and error precedence. Now cyclomatic 7, cognitive 7.",
+      "verification": [
+        "176 focused tests passed, including 24 saved-page tampering cases; full suite 3112 tests / 350 files passed.",
+        "Build, source types, changed-file lint, formatting, public API contract/consumer and skill links passed.",
+        "Fresh index and diff-impact mapped 31 changed symbols in five files to 11 affected files; current-source scan accounted across 563 files with 634 complexity findings."
+      ]
     },
     {
       "id": "complexity:src/runtime/output-pagination.ts:isOutputSnapshotMetadata",
@@ -571,9 +587,13 @@
           "name": "isOutputSnapshotMetadata"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Grouped complete invocation identity, page-table/content integrity and timestamp validation; reused safe integer validation. Now cyclomatic 6, cognitive 3.",
+      "verification": [
+        "176 focused tests passed, including 24 saved-page tampering cases; full suite 3112 tests / 350 files passed.",
+        "Build, source types, changed-file lint, formatting, public API contract/consumer and skill links passed.",
+        "Fresh index and diff-impact mapped 31 changed symbols in five files to 11 affected files; current-source scan accounted across 563 files with 634 complexity findings."
+      ]
     },
     {
       "id": "complexity:src/platform/watch-service-state.ts:parseWatchServiceState",
@@ -6436,9 +6456,13 @@
           "name": "withCompilerReferencedSupportingDeclarations.directDeclarations.<callback:referenced.targets.flatMap:0>"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Replaced callback policy with a named direct-declaration selector and shared type/owner-range eligibility. Direct selector now cyclomatic 10, cognitive 8; original callback warning resolved.",
+      "verification": [
+        "176 focused tests passed, including 24 saved-page tampering cases; full suite 3112 tests / 350 files passed.",
+        "Build, source types, changed-file lint, formatting, public API contract/consumer and skill links passed.",
+        "Fresh index and diff-impact mapped 31 changed symbols in five files to 11 affected files; current-source scan accounted across 563 files with 634 complexity findings."
+      ]
     },
     {
       "id": "complexity:src/queries/internal/consumer-evidence.ts:classifyDefinitionConsumersNative",

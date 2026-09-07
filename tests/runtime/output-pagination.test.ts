@@ -750,6 +750,82 @@ describe('universal CLI output pagination', () => {
     ).rejects.toThrow(/page no longer matches/u);
   });
 
+  it.each([
+    { field: 'version', value: 2 },
+    { field: 'snapshotId', value: '../outside' },
+    { field: 'invocationHash', value: 'not-a-hash' },
+    { field: 'invocationPrefix', value: [] },
+    { field: 'command', value: '' },
+    { field: 'command', value: 'x'.repeat(257) },
+    { field: 'command', value: 'different-command' },
+    { field: 'cwd', value: '' },
+    { field: 'cwd', value: 'x'.repeat(8_193) },
+    { field: 'argv', value: [42] },
+    { field: 'outputHash', value: 'not-a-hash' },
+    { field: 'pageSize', value: 255 },
+    { field: 'pageSize', value: MAX_OUTPUT_PAGE_SIZE + 1 },
+    { field: 'pageSize', value: 256.5 },
+    { field: 'pages', value: [] },
+    { field: 'pages', value: [null, null] },
+    { field: 'totalCharacters', value: -1 },
+    { field: 'totalCharacters', value: 600.5 },
+    { field: 'totalCharacters', value: 601 },
+    { field: 'byteLength', value: -1 },
+    { field: 'byteLength', value: 601 },
+    { field: 'createdAtMs', value: -1 },
+    { field: 'createdAtMs', value: Number.MAX_SAFE_INTEGER + 1 },
+  ])('rejects invalid saved-page $field before running the original action', async ({ field, value }) => {
+    const root = freshSnapshotRoot();
+    const first = parsePage(
+      (
+        await invoke('x'.repeat(600), {
+          argv: ['demo', '--json', '--output-page-size', '256'],
+          json: true,
+          pageSize: 256,
+          snapshotRoot: root,
+        })
+      ).stdout,
+    );
+    const cursor = first.page.continuation!.cursor;
+    const pending = inspectPendingCliOutputCursor(cursor, root)!;
+    const path = join(root, `${pending.snapshotId}.json`);
+    const metadata = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    metadata[field] = value;
+    writeFileSync(path, JSON.stringify(metadata));
+    const action = vi.fn();
+    await expect(
+      invoke(action, {
+        argv: ['demo', '--json', '--output-page-size', '256', '--output-cursor', cursor],
+        json: true,
+        pageSize: 256,
+        cursor,
+        snapshotRoot: root,
+      }),
+    ).rejects.toThrow();
+    expect(action).not.toHaveBeenCalled();
+  });
+
+  it('rejects a gap in a saved page table even when its individual page records remain valid', async () => {
+    const root = freshSnapshotRoot();
+    const first = parsePage(
+      (
+        await invoke('x'.repeat(600), {
+          argv: ['demo', '--json', '--output-page-size', '256'],
+          json: true,
+          pageSize: 256,
+          snapshotRoot: root,
+        })
+      ).stdout,
+    );
+    const cursor = first.page.continuation!.cursor;
+    const pending = inspectPendingCliOutputCursor(cursor, root)!;
+    const path = join(root, `${pending.snapshotId}.json`);
+    const metadata = JSON.parse(readFileSync(path, 'utf8')) as { pages: Array<{ characterOffset: number }> };
+    metadata.pages[1]!.characterOffset += 1;
+    writeFileSync(path, JSON.stringify(metadata));
+    await expect(continueOutput(cursor, root)).rejects.toThrow();
+  });
+
   it('continues from an immutable snapshot without rerunning a nondeterministic command', async () => {
     let executions = 0;
     const render = () => {

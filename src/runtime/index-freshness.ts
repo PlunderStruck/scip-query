@@ -89,68 +89,7 @@ export function getIndexFreshness(
         remedy: 'Run: scip-query reindex',
       };
     }
-    const metadata = decoded.metadata;
-    const languages = config.languages ?? detectLanguages(projectRoot);
-    const storedFingerprint = metadata.fingerprint;
-    const managedFingerprint =
-      paths.cacheDir &&
-      opts.gitContext &&
-      managedGenerationMatchesFingerprint(opts.gitContext, paths.cacheDir, storedFingerprint)
-        ? storedFingerprint
-        : undefined;
-    const observedGitContext =
-      paths.cacheDir &&
-      opts.gitContext &&
-      managedFingerprint &&
-      fingerprintConfigurationMatches(managedFingerprint, languages, config) &&
-      projectSelectionIsTreeOwned(projectRoot, managedFingerprint, config)
-        ? opts.gitObservation?.context === opts.gitContext
-          ? opts.gitContext
-          : refreshGitWorktreeContext(opts.gitContext)
-        : undefined;
-    const cachedInventoryAfterSequence =
-      opts.gitObservation && opts.gitObservation.context === opts.gitContext
-        ? opts.gitObservation.projectFileInventorySequence
-        : undefined;
-    const currentGitContext =
-      observedGitContext?.clean &&
-      gitIndexAllowsTreeFingerprintReuse(projectRoot, undefined, { cachedInventoryAfterSequence })
-        ? observedGitContext
-        : undefined;
-    const current =
-      paths.cacheDir &&
-      currentGitContext &&
-      managedFingerprint &&
-      managedGenerationMatchesFingerprint(currentGitContext, paths.cacheDir, managedFingerprint)
-        ? managedFingerprint
-        : runtimeFingerprint(projectRoot, languages, config);
-    const metadataLanguages = [...(metadata.indexedLanguages ?? [])].sort();
-    const fresh =
-      decoded.capabilities.publishableGeneration &&
-      sameProjectInputSnapshotContent(projectInputSnapshotOrNull(metadata.fingerprint), current) &&
-      JSON.stringify(metadataLanguages) === JSON.stringify(current.languages);
-    const generation = inspectSqliteGeneration(paths.dbPath, paths.metaPath);
-    const generationDrift = generation.state === 'invalid' || generation.state === 'drifted';
-    const documentCoverage = fresh
-      ? inspectIndexDocumentCoverage(paths.dbPath, current, metadataLanguages as SupportedLanguage[])
-      : undefined;
-    const incompleteDocuments = documentCoverage?.state === 'incomplete';
-    const accepted = fresh && !generationDrift && !incompleteDocuments;
-    return {
-      state: accepted ? 'fresh' : 'stale',
-      checkedAt,
-      metaPath: paths.metaPath,
-      updatedAt: metadata.updatedAt,
-      lastRefresh: metadata.lastRefresh,
-      reason: generationDrift
-        ? `SQLite generation requires repair: ${generation.reason}`
-        : incompleteDocuments
-          ? `SQLite generation is missing ${documentCoverage.missingDocumentCount} indexed source document(s): ${documentCoverage.missingPaths.join(', ')}`
-          : fresh
-            ? 'Index metadata fingerprint matches current source files.'
-            : 'Index metadata fingerprint differs from current source files.',
-      remedy: accepted ? undefined : 'Run: scip-query reindex',
-    };
+    return decodedIndexFreshness(projectRoot, config, paths, opts, decoded, checkedAt);
   } catch (error) {
     return {
       state: 'unknown',
@@ -160,6 +99,139 @@ export function getIndexFreshness(
       remedy: 'Run: scip-query reindex',
     };
   }
+}
+
+function decodedIndexFreshness(
+  projectRoot: string,
+  config: ProjectConfig,
+  paths: Parameters<typeof getIndexFreshness>[2],
+  opts: NonNullable<Parameters<typeof getIndexFreshness>[3]>,
+  decoded: Exclude<ReturnType<typeof decodeReindexMetadata>, { kind: 'unsupported' | 'malformed' }>,
+  checkedAt: string,
+): IndexFreshness {
+  const metadata = decoded.metadata;
+  const languages = config.languages ?? detectLanguages(projectRoot);
+  const current = currentFingerprintForFreshness(projectRoot, config, paths, opts, languages, metadata.fingerprint);
+  const metadataLanguages = [...(metadata.indexedLanguages ?? [])].sort();
+  const fresh =
+    decoded.capabilities.publishableGeneration &&
+    sameProjectInputSnapshotContent(projectInputSnapshotOrNull(metadata.fingerprint), current) &&
+    JSON.stringify(metadataLanguages) === JSON.stringify(current.languages);
+  const { accepted, reason } = indexGenerationFreshness(paths, current, metadataLanguages, fresh);
+  return {
+    state: accepted ? 'fresh' : 'stale',
+    checkedAt,
+    metaPath: paths.metaPath,
+    updatedAt: metadata.updatedAt,
+    lastRefresh: metadata.lastRefresh,
+    reason,
+    remedy: accepted ? undefined : 'Run: scip-query reindex',
+  };
+}
+
+function currentFingerprintForFreshness(
+  projectRoot: string,
+  config: ProjectConfig,
+  paths: Parameters<typeof getIndexFreshness>[2],
+  opts: NonNullable<Parameters<typeof getIndexFreshness>[3]>,
+  languages: SupportedLanguage[],
+  storedFingerprint: Parameters<typeof managedGenerationMatchesFingerprint>[2],
+): ReturnType<typeof runtimeFingerprint> {
+  const managed = reusableManagedFingerprintForFreshness(
+    projectRoot,
+    config,
+    paths,
+    opts,
+    languages,
+    storedFingerprint,
+  );
+  return managed ?? runtimeFingerprint(projectRoot, languages, config);
+}
+
+function reusableManagedFingerprintForFreshness(
+  projectRoot: string,
+  config: ProjectConfig,
+  paths: Parameters<typeof getIndexFreshness>[2],
+  opts: NonNullable<Parameters<typeof getIndexFreshness>[3]>,
+  languages: SupportedLanguage[],
+  storedFingerprint: Parameters<typeof managedGenerationMatchesFingerprint>[2],
+): ProjectInputFingerprint | undefined {
+  if (
+    !paths.cacheDir ||
+    !opts.gitContext ||
+    !managedGenerationMatchesFingerprint(opts.gitContext, paths.cacheDir, storedFingerprint)
+  )
+    return undefined;
+  const currentGitContext = observedManagedGitContext(
+    projectRoot,
+    config,
+    languages,
+    opts.gitContext,
+    opts.gitObservation,
+    storedFingerprint,
+  );
+  if (
+    !currentGitContext ||
+    !managedGenerationMatchesFingerprint(currentGitContext, paths.cacheDir, storedFingerprint)
+  ) {
+    return undefined;
+  }
+  return storedFingerprint;
+}
+
+function observedManagedGitContext(
+  projectRoot: string,
+  config: ProjectConfig,
+  languages: SupportedLanguage[],
+  gitContext: GitWorktreeContext,
+  gitObservation: GitWorktreeContextObservation | undefined,
+  managedFingerprint: ProjectInputFingerprint,
+): GitWorktreeContext | undefined {
+  if (
+    !fingerprintConfigurationMatches(managedFingerprint, languages, config) ||
+    !projectSelectionIsTreeOwned(projectRoot, managedFingerprint, config)
+  )
+    return undefined;
+  const observedGitContext =
+    gitObservation?.context === gitContext ? gitContext : refreshGitWorktreeContext(gitContext);
+  const cachedInventoryAfterSequence =
+    gitObservation && gitObservation.context === gitContext ? gitObservation.projectFileInventorySequence : undefined;
+  return observedGitContext?.clean &&
+    gitIndexAllowsTreeFingerprintReuse(projectRoot, undefined, { cachedInventoryAfterSequence })
+    ? observedGitContext
+    : undefined;
+}
+
+function indexGenerationFreshness(
+  paths: Parameters<typeof getIndexFreshness>[2],
+  current: ReturnType<typeof runtimeFingerprint>,
+  metadataLanguages: string[],
+  fresh: boolean,
+): { accepted: boolean; reason: string } {
+  const generation = inspectSqliteGeneration(paths.dbPath, paths.metaPath);
+  const generationDrift = generation.state === 'invalid' || generation.state === 'drifted';
+  const documentCoverage = fresh
+    ? inspectIndexDocumentCoverage(paths.dbPath, current, metadataLanguages as SupportedLanguage[])
+    : undefined;
+  const incompleteDocuments = documentCoverage?.state === 'incomplete';
+  const accepted = fresh && !generationDrift && !incompleteDocuments;
+  return { accepted, reason: generationFreshnessReason(generation, documentCoverage, fresh) };
+}
+
+function generationFreshnessReason(
+  generation: ReturnType<typeof inspectSqliteGeneration>,
+  documentCoverage: ReturnType<typeof inspectIndexDocumentCoverage> | undefined,
+  fresh: boolean,
+): string {
+  if (generation.state === 'invalid' || generation.state === 'drifted') {
+    return `SQLite generation requires repair: ${generation.reason}`;
+  }
+  if (documentCoverage?.state === 'incomplete') {
+    return `SQLite generation is missing ${documentCoverage.missingDocumentCount} indexed source document(s): ${documentCoverage.missingPaths.join(', ')}`;
+  }
+  return fresh
+    ? 'Index metadata fingerprint matches current source files.'
+    : 'Index metadata fingerprint differs from current source files.';
 }
 
 /**

@@ -543,6 +543,12 @@ function behaviorForNode(
   });
 }
 
+type CompilerDeclarationTarget = ReturnType<typeof scipOccurrenceDefinitionTargetsForRange>['targets'][number];
+interface SupportingDeclarationCandidate {
+  definition: CompilerDeclarationTarget['definition'];
+  kind: ConnectedBehaviorSupportingDeclaration['kind'];
+}
+
 function withCompilerReferencedSupportingDeclarations(
   db: ScipDatabase,
   node: ExplorationTopologyNode,
@@ -554,93 +560,15 @@ function withCompilerReferencedSupportingDeclarations(
   if (!node.location) return representation;
   const referenced = scipOccurrenceDefinitionTargetsForRange(db, node.location.file, startLine, endLine);
   if (!referenced.available) return representation;
-  const signalsByLine = behaviorSignalsByLine(db, node.location.file, startLine, endLine);
-  const causalTargetLines = new Set(focusLines);
-  for (const focusLine of focusLines) {
-    const firstUse = bindingUsesAfterLine(db, node.location.file, focusLine, endLine)[0];
-    if (firstUse !== undefined) causalTargetLines.add(firstUse);
-  }
-  const directDeclarations = [
-    ...new Map(
-      referenced.targets.flatMap((target) => {
-        const definition = target.definition;
-        const overlapsSelectedRange =
-          definition.relativePath === node.location!.file &&
-          definition.startLine <= endLine &&
-          definition.endLine >= startLine;
-        if (definition.isTypeLike || overlapsSelectedRange) return [];
-        const callable = scipDefinitionSourceConfirmsCallable(db, definition);
-        const returnValueTransformer =
-          focusLines.length > 0 && callable && signalsByLine.get(target.sourceLine)?.includes('return');
-        const focusedCausalTarget = callable && causalTargetLines.has(target.sourceLine);
-        if (callable && !returnValueTransformer && !focusedCausalTarget) return [];
-        return [
-          [
-            definition.symbol,
-            {
-              definition,
-              kind: returnValueTransformer
-                ? ('return-value-transformer' as const)
-                : focusedCausalTarget
-                  ? ('focused-causal-target' as const)
-                  : ('compiler-referenced-declaration' as const),
-            },
-          ] as const,
-        ];
-      }),
-    ).values(),
-  ].sort(
-    (left, right) =>
-      left.definition.relativePath.localeCompare(right.definition.relativePath) ||
-      left.definition.startLine - right.definition.startLine ||
-      left.definition.symbol.localeCompare(right.definition.symbol),
+  const directDeclarations = directSupportingDeclarations(
+    db,
+    node.location.file,
+    startLine,
+    endLine,
+    focusLines,
+    referenced.targets,
   );
-  const nestedDeclarations: Array<(typeof directDeclarations)[number]> = [];
-  const nestedQueue = directDeclarations
-    .filter(({ kind }) => kind !== 'compiler-referenced-declaration')
-    .map(({ definition }) => ({ owner: definition, depth: 1 }));
-  const expandedOwnerSymbols = new Set<string>();
-  const discoveredDeclarationSymbols = new Set(directDeclarations.map(({ definition }) => definition.symbol));
-  while (nestedQueue.length > 0) {
-    const next = nestedQueue.shift();
-    if (!next || expandedOwnerSymbols.has(next.owner.symbol)) continue;
-    expandedOwnerSymbols.add(next.owner.symbol);
-    const { owner, depth } = next;
-    const nested = scipOccurrenceDefinitionTargetsForRange(db, owner.relativePath, owner.startLine, owner.endLine);
-    if (!nested.available) continue;
-    const nestedSignals = behaviorSignalsByLine(db, owner.relativePath, owner.startLine, owner.endLine);
-    for (const target of nested.targets) {
-      const definition = target.definition;
-      const overlapsOwner =
-        definition.relativePath === owner.relativePath &&
-        definition.startLine <= owner.endLine &&
-        definition.endLine >= owner.startLine;
-      if (definition.isTypeLike || overlapsOwner) continue;
-      const callable = scipDefinitionSourceConfirmsCallable(db, definition);
-      const boundValueFeedsMaterialPredicate =
-        callable &&
-        bindingUsesAfterLine(db, owner.relativePath, target.sourceLine, owner.endLine).some((line) =>
-          (nestedSignals.get(line) ?? []).some((signal) => ['branch', 'return', 'throw'].includes(signal)),
-        );
-      const materialPredicateTarget =
-        callable &&
-        ((nestedSignals.get(target.sourceLine) ?? []).some((signal) =>
-          ['branch', 'return', 'throw'].includes(signal),
-        ) ||
-          boundValueFeedsMaterialPredicate);
-      if (callable && !materialPredicateTarget) continue;
-      if (!discoveredDeclarationSymbols.has(definition.symbol)) {
-        discoveredDeclarationSymbols.add(definition.symbol);
-        nestedDeclarations.push({
-          definition,
-          kind: callable ? 'focused-causal-target' : 'compiler-referenced-declaration',
-        });
-      }
-      // Two compiler-resolved causal hops cover normalization and guard helpers
-      // without making declaration count or source order an accidental stopping rule.
-      if (callable && depth < 2) nestedQueue.push({ owner: definition, depth: depth + 1 });
-    }
-  }
+  const nestedDeclarations = nestedSupportingDeclarations(db, directDeclarations);
   const declarations = [
     ...new Map(
       [...directDeclarations, ...nestedDeclarations].map((declaration) => [declaration.definition.symbol, declaration]),
@@ -655,46 +583,189 @@ function withCompilerReferencedSupportingDeclarations(
   const omittedSupportingDeclarations: NonNullable<ConnectedBehaviorRepresentation['omittedSupportingDeclarations']> =
     [];
   for (const { definition, kind } of declarations) {
-    const declarationRange =
-      kind === 'compiler-referenced-declaration'
-        ? supportingDeclarationRange(db, definition.relativePath, definition.startLine, definition.endLine)
-        : { startLine: definition.startLine, endLine: definition.endLine };
-    const sourceText = getSourceLines(db, definition.relativePath)
-      .slice(declarationRange.startLine, declarationRange.endLine + 1)
-      .join('\n');
-    const callableOutline =
-      kind === 'compiler-referenced-declaration'
-        ? null
-        : behaviorSkeleton(db, definition.relativePath, definition.startLine, definition.endLine, []);
-    const outlineText = callableOutline
-      ? [
-          callableOutline.signature,
-          ...callableOutline.lines.map(
-            (line) => `${line.line + 1}${line.signals.length > 0 ? `[${line.signals.join(',')}]` : ''} ${line.text}`,
-          ),
-        ].join(' | ')
-      : null;
-    const text = outlineText && outlineText.length < sourceText.length ? outlineText : sourceText;
-    const base = {
-      symbol: definition.symbol,
-      label: definition.leaf,
-      file: definition.relativePath,
-      line: declarationRange.startLine,
-      endLine: declarationRange.endLine,
-    };
-    const characterLimit = kind === 'compiler-referenced-declaration' ? 1_000 : 8_000;
-    const lineLimit = kind === 'compiler-referenced-declaration' ? 12 : 120;
-    if (text.length > characterLimit || declarationRange.endLine - declarationRange.startLine > lineLimit) {
-      omittedSupportingDeclarations.push({ ...base, reason: 'source-too-large' });
-      continue;
-    }
-    supportingDeclarations.push({ kind, ...base, text });
+    const rendered = renderSupportingDeclaration(db, { definition, kind });
+    if ('reason' in rendered) omittedSupportingDeclarations.push(rendered);
+    else supportingDeclarations.push(rendered);
   }
   return {
     ...representation,
     ...(supportingDeclarations.length === 0 ? {} : { supportingDeclarations }),
     ...(omittedSupportingDeclarations.length === 0 ? {} : { omittedSupportingDeclarations }),
   };
+}
+
+function directSupportingDeclarations(
+  db: ScipDatabase,
+  file: string,
+  startLine: number,
+  endLine: number,
+  focusLines: readonly number[],
+  targets: readonly CompilerDeclarationTarget[],
+): SupportingDeclarationCandidate[] {
+  const signalsByLine = behaviorSignalsByLine(db, file, startLine, endLine);
+  const causalTargetLines = new Set(focusLines);
+  for (const focusLine of focusLines) {
+    const firstUse = bindingUsesAfterLine(db, file, focusLine, endLine)[0];
+    if (firstUse !== undefined) causalTargetLines.add(firstUse);
+  }
+  return [
+    ...new Map(
+      targets.flatMap((target) => {
+        const selected = directSupportingDeclaration(
+          db,
+          file,
+          startLine,
+          endLine,
+          focusLines,
+          signalsByLine,
+          causalTargetLines,
+          target,
+        );
+        return selected ? [[selected.definition.symbol, selected] as const] : [];
+      }),
+    ).values(),
+  ].sort(
+    (left, right) =>
+      left.definition.relativePath.localeCompare(right.definition.relativePath) ||
+      left.definition.startLine - right.definition.startLine ||
+      left.definition.symbol.localeCompare(right.definition.symbol),
+  );
+}
+
+function isSupportingDefinition(
+  definition: CompilerDeclarationTarget['definition'],
+  file: string,
+  startLine: number,
+  endLine: number,
+): boolean {
+  const overlapsOwner =
+    definition.relativePath === file && definition.startLine <= endLine && definition.endLine >= startLine;
+  return !definition.isTypeLike && !overlapsOwner;
+}
+
+function directSupportingDeclaration(
+  db: ScipDatabase,
+  file: string,
+  startLine: number,
+  endLine: number,
+  focusLines: readonly number[],
+  signalsByLine: ReturnType<typeof behaviorSignalsByLine>,
+  causalTargetLines: ReadonlySet<number>,
+  target: CompilerDeclarationTarget,
+): SupportingDeclarationCandidate | null {
+  const definition = target.definition;
+  if (!isSupportingDefinition(definition, file, startLine, endLine)) return null;
+  const callable = scipDefinitionSourceConfirmsCallable(db, definition);
+  const returnValueTransformer =
+    focusLines.length > 0 && callable && signalsByLine.get(target.sourceLine)?.includes('return');
+  const focusedCausalTarget = callable && causalTargetLines.has(target.sourceLine);
+  if (callable && !returnValueTransformer && !focusedCausalTarget) return null;
+  return {
+    definition,
+    kind: returnValueTransformer
+      ? 'return-value-transformer'
+      : focusedCausalTarget
+        ? 'focused-causal-target'
+        : 'compiler-referenced-declaration',
+  };
+}
+
+function nestedSupportingDeclarations(
+  db: ScipDatabase,
+  directDeclarations: readonly SupportingDeclarationCandidate[],
+): SupportingDeclarationCandidate[] {
+  const nestedDeclarations: SupportingDeclarationCandidate[] = [];
+  const nestedQueue = directDeclarations
+    .filter(({ kind }) => kind !== 'compiler-referenced-declaration')
+    .map(({ definition }) => ({ owner: definition, depth: 1 }));
+  const expandedOwnerSymbols = new Set<string>();
+  const discoveredDeclarationSymbols = new Set(directDeclarations.map(({ definition }) => definition.symbol));
+  while (nestedQueue.length > 0) {
+    const next = nestedQueue.shift();
+    if (!next || expandedOwnerSymbols.has(next.owner.symbol)) continue;
+    expandedOwnerSymbols.add(next.owner.symbol);
+    const { owner, depth } = next;
+    const nested = scipOccurrenceDefinitionTargetsForRange(db, owner.relativePath, owner.startLine, owner.endLine);
+    if (!nested.available) continue;
+    const nestedSignals = behaviorSignalsByLine(db, owner.relativePath, owner.startLine, owner.endLine);
+    for (const target of nested.targets) {
+      const declaration = nestedSupportingDeclaration(db, owner, target, nestedSignals);
+      if (!declaration) continue;
+      const { definition } = declaration;
+      if (!discoveredDeclarationSymbols.has(definition.symbol)) {
+        discoveredDeclarationSymbols.add(definition.symbol);
+        nestedDeclarations.push(declaration);
+      }
+      // Two compiler-resolved causal hops cover normalization and guard helpers
+      // without making declaration count or source order an accidental stopping rule.
+      if (declaration.kind === 'focused-causal-target' && depth < 2)
+        nestedQueue.push({ owner: definition, depth: depth + 1 });
+    }
+  }
+  return nestedDeclarations;
+}
+
+function nestedSupportingDeclaration(
+  db: ScipDatabase,
+  owner: CompilerDeclarationTarget['definition'],
+  target: CompilerDeclarationTarget,
+  nestedSignals: ReturnType<typeof behaviorSignalsByLine>,
+): SupportingDeclarationCandidate | null {
+  const definition = target.definition;
+  if (!isSupportingDefinition(definition, owner.relativePath, owner.startLine, owner.endLine)) return null;
+  const callable = scipDefinitionSourceConfirmsCallable(db, definition);
+  const boundValueFeedsMaterialPredicate =
+    callable &&
+    bindingUsesAfterLine(db, owner.relativePath, target.sourceLine, owner.endLine).some((line) =>
+      (nestedSignals.get(line) ?? []).some((signal) => ['branch', 'return', 'throw'].includes(signal)),
+    );
+  const materialPredicateTarget =
+    callable &&
+    ((nestedSignals.get(target.sourceLine) ?? []).some((signal) => ['branch', 'return', 'throw'].includes(signal)) ||
+      boundValueFeedsMaterialPredicate);
+  if (callable && !materialPredicateTarget) return null;
+  return { definition, kind: callable ? 'focused-causal-target' : 'compiler-referenced-declaration' };
+}
+
+function renderSupportingDeclaration(
+  db: ScipDatabase,
+  { definition, kind }: SupportingDeclarationCandidate,
+):
+  | ConnectedBehaviorSupportingDeclaration
+  | NonNullable<ConnectedBehaviorRepresentation['omittedSupportingDeclarations']>[number] {
+  const declarationRange =
+    kind === 'compiler-referenced-declaration'
+      ? supportingDeclarationRange(db, definition.relativePath, definition.startLine, definition.endLine)
+      : { startLine: definition.startLine, endLine: definition.endLine };
+  const sourceText = getSourceLines(db, definition.relativePath)
+    .slice(declarationRange.startLine, declarationRange.endLine + 1)
+    .join('\n');
+  const callableOutline =
+    kind === 'compiler-referenced-declaration'
+      ? null
+      : behaviorSkeleton(db, definition.relativePath, definition.startLine, definition.endLine, []);
+  const outlineText = callableOutline
+    ? [
+        callableOutline.signature,
+        ...callableOutline.lines.map(
+          (line) => `${line.line + 1}${line.signals.length > 0 ? `[${line.signals.join(',')}]` : ''} ${line.text}`,
+        ),
+      ].join(' | ')
+    : null;
+  const text = outlineText && outlineText.length < sourceText.length ? outlineText : sourceText;
+  const base = {
+    symbol: definition.symbol,
+    label: definition.leaf,
+    file: definition.relativePath,
+    line: declarationRange.startLine,
+    endLine: declarationRange.endLine,
+  };
+  const characterLimit = kind === 'compiler-referenced-declaration' ? 1_000 : 8_000;
+  const lineLimit = kind === 'compiler-referenced-declaration' ? 12 : 120;
+  if (text.length > characterLimit || declarationRange.endLine - declarationRange.startLine > lineLimit) {
+    return { ...base, reason: 'source-too-large' };
+  }
+  return { kind, ...base, text };
 }
 
 function supportingDeclarationRange(

@@ -1196,36 +1196,50 @@ function isOutputSnapshotMetadata(value: unknown): value is OutputSnapshotMetada
   const metadata = value as Partial<OutputSnapshotMetadata>;
   return (
     metadata.version === OUTPUT_SNAPSHOT_VERSION &&
+    isOutputSnapshotInvocation(metadata) &&
+    isOutputSnapshotContent(metadata) &&
+    isNonNegativeInteger(metadata.createdAtMs)
+  );
+}
+
+function isBoundedOutputText(value: unknown, maxLength: number): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= maxLength;
+}
+
+function isOutputSnapshotInvocation(metadata: Partial<OutputSnapshotMetadata>): boolean {
+  return (
     typeof metadata.snapshotId === 'string' &&
     isOutputSnapshotId(metadata.snapshotId) &&
     isSha256Hex(metadata.invocationHash) &&
     isInvocationPrefix(metadata.invocationPrefix) &&
-    typeof metadata.command === 'string' &&
-    metadata.command.length > 0 &&
-    metadata.command.length <= 256 &&
-    typeof metadata.cwd === 'string' &&
-    metadata.cwd.length > 0 &&
-    metadata.cwd.length <= 8_192 &&
+    isBoundedOutputText(metadata.command, 256) &&
+    isBoundedOutputText(metadata.cwd, 8_192) &&
     isInvocationArgv(metadata.argv) &&
-    hashInvocation(metadata.command, metadata.cwd, metadata.invocationPrefix, metadata.argv) ===
-      metadata.invocationHash &&
+    hashInvocation(metadata.command, metadata.cwd, metadata.invocationPrefix, metadata.argv) === metadata.invocationHash
+  );
+}
+
+function isOutputSnapshotPageTable(pages: unknown): pages is OutputSnapshotPage[] {
+  return (
+    Array.isArray(pages) &&
+    pages.length > 1 &&
+    pages.length <= MAX_OUTPUT_SNAPSHOT_PAGES &&
+    pages.every(isOutputSnapshotPage) &&
+    pagesAreContiguous(pages)
+  );
+}
+
+function isOutputSnapshotContent(metadata: Partial<OutputSnapshotMetadata>): boolean {
+  return (
     isSha256Hex(metadata.outputHash) &&
-    Number.isSafeInteger(metadata.pageSize) &&
-    (metadata.pageSize ?? 0) >= MIN_OUTPUT_PAGE_SIZE &&
-    (metadata.pageSize ?? 0) <= MAX_OUTPUT_PAGE_SIZE &&
-    Array.isArray(metadata.pages) &&
-    metadata.pages.length > 1 &&
-    metadata.pages.length <= MAX_OUTPUT_SNAPSHOT_PAGES &&
-    metadata.pages.every(isOutputSnapshotPage) &&
-    pagesAreContiguous(metadata.pages) &&
-    Number.isSafeInteger(metadata.totalCharacters) &&
-    (metadata.totalCharacters ?? -1) >= 0 &&
+    isNonNegativeInteger(metadata.pageSize) &&
+    metadata.pageSize >= MIN_OUTPUT_PAGE_SIZE &&
+    metadata.pageSize <= MAX_OUTPUT_PAGE_SIZE &&
+    isOutputSnapshotPageTable(metadata.pages) &&
+    isNonNegativeInteger(metadata.totalCharacters) &&
     metadata.pages.reduce((total, page) => total + page.characterLength, 0) === metadata.totalCharacters &&
-    Number.isSafeInteger(metadata.byteLength) &&
-    (metadata.byteLength ?? -1) >= 0 &&
-    metadata.pages.reduce((total, page) => total + page.byteLength, 0) === metadata.byteLength &&
-    Number.isSafeInteger(metadata.createdAtMs) &&
-    (metadata.createdAtMs ?? -1) >= 0
+    isNonNegativeInteger(metadata.byteLength) &&
+    metadata.pages.reduce((total, page) => total + page.byteLength, 0) === metadata.byteLength
   );
 }
 

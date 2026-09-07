@@ -429,58 +429,52 @@ class TsMorphSemanticProvider implements SemanticProvider {
     const checker = this.compilerCheckerForSourceFile(sourceFile);
     const compilerSourceFile = sourceFile.compilerNode;
     const importedLocalNames = importLocalNames(sourceFile);
-    const visit = (node: ts.Node): void => {
-      if (this.tsMorph.ts.isIdentifier(node)) {
-        if (stats) stats.identifiers += 1;
-        if (!referenceNames.has(node.text) && !importedLocalNames.has(node.text)) {
-          this.tsMorph.ts.forEachChild(node, visit);
-          return;
+    const targetForSymbol = (symbol: TypeScriptSymbol): ResolvedCalleeTarget | null => {
+      let target: ResolvedCalleeTarget | null;
+      if (symbolCache.has(symbol)) {
+        target = symbolCache.get(symbol) ?? null;
+      } else {
+        target = this.referenceDefinitionFromCompilerSymbol(symbol);
+        symbolCache.set(symbol, target);
+      }
+      if (stats) {
+        if (target) stats.targetHits += 1;
+        else stats.targetMisses += 1;
+      }
+      return target;
+    };
+    const addIdentifierReferences = (node: ts.Identifier): void => {
+      if (stats) stats.identifiers += 1;
+      if (!referenceNames.has(node.text) && !importedLocalNames.has(node.text)) return;
+      const symbol = this.compilerReferenceSymbol(checker, node, stats);
+      if (!symbol) return;
+      const target = targetForSymbol(symbol);
+      const hierarchySymbolKeys = cached(hierarchySymbolKeyCache, symbol, () => this.compilerSymbolKeys(symbol));
+      let line: number | null = null;
+      let location: SemanticReference | null = null;
+      const addDefinitionReference = (definition: IndexedDefinition): void => {
+        line ??= lineOfCompilerNode(compilerSourceFile, node);
+        if (isDefinitionSelfLocation(definition, relativePath, line)) return;
+        if (!location) {
+          const position = compilerSourceFile.getLineAndCharacterOfPosition(node.getStart(compilerSourceFile));
+          location = { file: relativePath, line: position.line, column: position.character };
         }
-        const symbol = this.compilerReferenceSymbol(checker, node, stats);
-        if (symbol) {
-          let target: ResolvedCalleeTarget | null;
-          if (symbolCache.has(symbol)) {
-            target = symbolCache.get(symbol) ?? null;
-          } else {
-            target = this.referenceDefinitionFromCompilerSymbol(symbol);
-            symbolCache.set(symbol, target);
-          }
-          if (stats) {
-            if (target) stats.targetHits += 1;
-            else stats.targetMisses += 1;
-          }
-          const hierarchySymbolKeys = cached(hierarchySymbolKeyCache, symbol, () => this.compilerSymbolKeys(symbol));
-          let line: number | null = null;
-          let location: SemanticReference | null = null;
-          const directDefinition =
-            target && requestedSymbolIds.has(target.symbolId) ? definitionBySymbolId.get(target.symbolId) : undefined;
-          if (directDefinition) {
-            line = lineOfCompilerNode(compilerSourceFile, node);
-            if (!isDefinitionSelfLocation(directDefinition, relativePath, line)) {
-              const position = compilerSourceFile.getLineAndCharacterOfPosition(node.getStart(compilerSourceFile));
-              location = { file: relativePath, line: position.line, column: position.character };
-              const bucket = result.get(directDefinition.symbolId) ?? [];
-              bucket.push(location);
-              result.set(directDefinition.symbolId, bucket);
-              if (stats) stats.requestedHits += 1;
-            }
-          }
-          for (const symbolKey of hierarchySymbolKeys) {
-            for (const definition of hierarchyTargets.get(symbolKey)?.values() ?? []) {
-              line ??= lineOfCompilerNode(compilerSourceFile, node);
-              if (isDefinitionSelfLocation(definition, relativePath, line)) continue;
-              if (!location) {
-                const position = compilerSourceFile.getLineAndCharacterOfPosition(node.getStart(compilerSourceFile));
-                location = { file: relativePath, line: position.line, column: position.character };
-              }
-              const bucket = result.get(definition.symbolId) ?? [];
-              bucket.push(location);
-              result.set(definition.symbolId, bucket);
-              if (stats) stats.requestedHits += 1;
-            }
-          }
+        const bucket = result.get(definition.symbolId) ?? [];
+        bucket.push(location);
+        result.set(definition.symbolId, bucket);
+        if (stats) stats.requestedHits += 1;
+      };
+      const directDefinition =
+        target && requestedSymbolIds.has(target.symbolId) ? definitionBySymbolId.get(target.symbolId) : undefined;
+      if (directDefinition) addDefinitionReference(directDefinition);
+      for (const symbolKey of hierarchySymbolKeys) {
+        for (const definition of hierarchyTargets.get(symbolKey)?.values() ?? []) {
+          addDefinitionReference(definition);
         }
       }
+    };
+    const visit = (node: ts.Node): void => {
+      if (this.tsMorph.ts.isIdentifier(node)) addIdentifierReferences(node);
       this.tsMorph.ts.forEachChild(node, visit);
     };
     visit(compilerSourceFile);
