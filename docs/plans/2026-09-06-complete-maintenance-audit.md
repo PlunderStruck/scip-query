@@ -160,3 +160,23 @@ Cleanup ownership follow-up: execution evidence identifies ensureWatchService an
 Full results and limitations: docs/benchmarks/2026-09-06-maintenance-vm-revalidation.md. Accounted TS/JS scan: 5,652 files, 58,723 functions; one static import cycle, 77 duplicate candidates, 2,275 complexity candidates. All four cycle imports and two complete duplicate function bodies checked against current source. Full module inventory contains 1,386 groups, including 915 without findings. Existing architecture policy covers only 28 files; no whole-repository architectural quality claim is supported. Main index remains fresh and watcher idle after global replacement. Application source was not changed.
 
 Still open: 633 original maintenance records remain pending; current command/skill contract coverage and a controlled cheaper-model usefulness trial are not complete. A live VM observation also showed activity-window timestamps older than the latest heartbeat; inspect whether rendering clearly qualifies the observation time before treating this as a reporting bug.
+
+### Cached activity-window label
+
+VM observation confirmed the daemon retains its activity summary between reindex/suppression events. A fresh heartbeat does not refresh that summary. Human watch output previously called it Reindex activity (24h), omitting the summary window and implying a current rolling period. The label now prints Recorded reindex activity with the actual start/end timestamps. This is a display correction, not a change to refresh-budget accounting. Typecheck/lint and a built CLI smoke check remain required. Do not rebuild while the model trial is using the frozen dist runtime.
+
+### Cheaper-model trial in progress
+
+Existing runner: scripts/codex-change-trial.mjs, task shared-rule, treatment first, gpt-5.6-sol medium, 300-second per-phase deadline, /tmp/scip-maintenance-sol-treatment-20260906. Two phases: initial ownership repair and follow-up rule change. The fixture is a detached temporary worktree, not a security boundary. No efficacy conclusion until behavior/ownership results and a matched control are available. Do not change benchmark/evaluator inputs or rebuild dist during the trial.
+
+#### Sol treatment completed; matched control running
+
+Treatment shared-rule passed every independent obligation in both phases. Initial 164,797ms, follow-up139,312ms; 25 classified scip-query calls total. Usage: initial479,778 input /430,464 cached /6,217 output; follow-up493,831 input /421,760 cached /4,804 output. This is substantial overhead for a tiny fixture. Raw events show additional mixed shell calls loading host-installed scip skills and CLI help; command classification undercounts embedded commands, so 25 is not an exhaustive invocation count. The initial source patch routes the job through the existing owner and changes the existing policy, with executable channel tests. A matched control (same Sol medium, shared-rule, build, and timeout) is running at /tmp/scip-maintenance-sol-control-20260906. Do not rebuild dist until it finishes; record host-skill exposure and single-pair limitations when interpreting efficacy.
+
+#### Paired Sol trial completed
+
+Both control and treatment pass 17/17 obligations in each phase. Control188,661ms versus treatment304,109ms; cumulative input438,615 versus973,609 (uncached63,575 versus121,385). Matching fixture/evaluator/runtime identities verified; both sandboxes cleaned. There is no measured correctness gain in this pair. Preserve this negative efficiency result rather than changing the benchmark to favor the tool. Report and machine summary: docs/benchmarks/2026-09-06-maintenance-sol-shared-rule.md and .json. Remaining three fixture tasks and repetitions are not complete. Dist can now be rebuilt for the activity-window label correction.
+
+#### Final activity-label verification
+
+Build, TypeScript, lint, public API, consumer compilation and accounted source review pass for the one-line label correction. Full suite remains the 3,058-test run from the immediately preceding lifecycle batch; no claim of another full run after a display-only edit. Installed the final tarball on dev-agent and verified all452 packaged files again; all four watchers restarted successfully. Main PID885079; worktree PIDs885127,885181,885276. Built watch --status succeeds; full output is saved in /tmp/scip-maintenance-final-rollout.json and the recorded window label is checked separately. Previous9ce8a0de package remains available for rollback. Other pending maintenance findings remain open.

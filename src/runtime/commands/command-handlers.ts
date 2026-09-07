@@ -1092,7 +1092,7 @@ function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>)
   if ('reindexActivity' in report && report.reindexActivity) {
     const activity = report.reindexActivity;
     console.log(
-      `Reindex activity (24h): ${activity.runs} run(s) ` +
+      `Recorded reindex activity (${activity.windowStartedAt} to ${activity.windowEndedAt}): ${activity.runs} run(s) ` +
         `(${activity.rebuilt} rebuilt, ${activity.reused} reused, ${activity.failed} failed), ` +
         `${activity.suppressed} redundant refresh(es) suppressed, ` +
         `${formatBytes(activity.estimatedWriteBytes ?? activity.estimatedLogicalOutputBytes)} estimated writes ` +

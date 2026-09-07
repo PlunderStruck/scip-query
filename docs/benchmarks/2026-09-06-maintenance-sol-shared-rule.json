@@ -1,0 +1,82 @@
+{
+  "runtimeCommit": "9ce8a0de",
+  "task": "shared-rule",
+  "model": "gpt-5.6-sol",
+  "reasoning": "medium",
+  "repetitions": 1,
+  "comparison": {
+    "taskId": "shared-rule",
+    "repetition": 1,
+    "model": "gpt-5.6-sol",
+    "reasoning": "medium",
+    "control": {
+      "completed": true,
+      "initialPass": true,
+      "followUpPass": true,
+      "inputTokens": 438615,
+      "cachedInputTokens": 375040,
+      "outputTokens": 7154,
+      "durationMs": 188661,
+      "indexDurationMs": null,
+      "failedObligations": []
+    },
+    "treatment": {
+      "completed": true,
+      "initialPass": true,
+      "followUpPass": true,
+      "inputTokens": 973609,
+      "cachedInputTokens": 852224,
+      "outputTokens": 11021,
+      "durationMs": 304109,
+      "indexDurationMs": 791,
+      "failedObligations": []
+    }
+  },
+  "skillIdentities": [
+    {
+      "path": "scip-query/SKILL.md",
+      "hostExists": true,
+      "repoBytes": 6088,
+      "hostBytes": 6088,
+      "repoSha256": "f9823535d8b2a633976250ee2d6df5c4a88a24ae0835d95eba2b75f764698c37",
+      "hostSha256": "f9823535d8b2a633976250ee2d6df5c4a88a24ae0835d95eba2b75f764698c37",
+      "identical": true
+    },
+    {
+      "path": "scip-explore/SKILL.md",
+      "hostExists": true,
+      "repoBytes": 5137,
+      "hostBytes": 5137,
+      "repoSha256": "0251c009fb87f01de0c418f69b21b090374c09d740cb5a73e2de64f9e525c6b5",
+      "hostSha256": "0251c009fb87f01de0c418f69b21b090374c09d740cb5a73e2de64f9e525c6b5",
+      "identical": true
+    },
+    {
+      "path": "scip-query/references/command-guide.md",
+      "hostExists": true,
+      "repoBytes": 25376,
+      "hostBytes": 25376,
+      "repoSha256": "cb5c4b09bc78699e80f7fccc2258c861064865ae3ad01fff503810028c6b5d66",
+      "hostSha256": "cb5c4b09bc78699e80f7fccc2258c861064865ae3ad01fff503810028c6b5d66",
+      "identical": true
+    }
+  ],
+  "limitations": [
+    "One small fixture and one pair; not an estimate of production-wide efficacy.",
+    "Treatment ran before control; host order and model variability are not randomized away.",
+    "Detached worktrees are repository isolation, not a security boundary.",
+    "Host-installed scip skills were visible; read skill files were byte-identical to this repository.",
+    "Command classifier misses embedded commands in mixed shell calls; do not interpret its counts as exhaustive.",
+    "Cumulative input counts sum tokens processed across model calls, including cached context; they are not distinct source tokens."
+  ],
+  "identities": {
+    "baselineCommit": "f2fb6e282961869f969f639a5fb12665199f926e",
+    "suiteDigest": "8c9fafcbbe7292c3793cc107135680051e01cf7133f1cb102c0c03159e85d4c4",
+    "evaluatorDigest": "5e1167a7f36a2ad7e73b7cde2ed279e3965976f2adf44fe6d9d4170e0e741b8e",
+    "toolDigest": "0bb33f025861e8dd826ee2d33d94a79d35007fd804a85734d4d41c8133f8ba05"
+  },
+  "codexRuntime": {
+    "node": "v26.8.1",
+    "codex": "codex-cli 0.153.4"
+  }
+}
