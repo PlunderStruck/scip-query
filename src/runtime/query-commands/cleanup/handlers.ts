@@ -735,23 +735,40 @@ export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, 
   }
 
   if (wantsPatch) {
-    const failures = cleanupVerificationFailures(verification!, selectedBatches);
-    if (failures.length > 0) {
-      for (const failure of failures) console.error(`error: ${failure}`);
-      process.exitCode = 1;
-      return;
-    }
-    const patch = createCleanupPatch(projectRoot, selectedBatches);
-    if (patch.trim() === '') {
-      console.error('error: verified cleanup plan produced an empty patch.');
-      process.exitCode = 1;
-      return;
-    }
-    console.error(`cleanup-plan --patch: ${selectedBatches.length} verified batch(es), ${result.totalLoc} LOC.`);
-    console.log(patch);
+    renderVerifiedCleanupPatch(projectRoot, result, selectedBatches, verification!);
     return;
   }
+  renderCleanupPlan(result);
+  if (verification) renderCleanupVerification(verification);
+});
 
+type CleanupPlanResult = ReturnType<typeof queries.cleanupPlan>;
+type CleanupVerification = ReturnType<typeof verifyCleanupPlan>;
+
+function renderVerifiedCleanupPatch(
+  projectRoot: string,
+  result: CleanupPlanResult,
+  selectedBatches: ReturnType<typeof selectCleanupBatches>,
+  verification: CleanupVerification,
+): void {
+  const failures = cleanupVerificationFailures(verification, selectedBatches);
+  if (failures.length > 0) {
+    for (const failure of failures) console.error(`error: ${failure}`);
+    process.exitCode = 1;
+    return;
+  }
+  const patch = createCleanupPatch(projectRoot, selectedBatches);
+  if (patch.trim() === '') {
+    console.error('error: verified cleanup plan produced an empty patch.');
+    process.exitCode = 1;
+    return;
+  }
+  console.error(`cleanup-plan --patch: ${selectedBatches.length} verified batch(es), ${result.totalLoc} LOC.`);
+  console.log(patch);
+  return;
+}
+
+function renderCleanupPlan(result: CleanupPlanResult): void {
   console.log(
     `Cleanup plan: ${result.totalSymbols} symbol(s), ${result.totalLoc} LOC across ${result.batches.length} batch(es).`,
   );
@@ -780,63 +797,67 @@ export const handleCleanupPlan = budgetedDbCommand('cleanup-plan', ({ db, args, 
       console.log(`  ${entry.shortName}  (${entry.file})  blocked by ${entry.blockingFiles.join(', ')}`);
     }
   }
+}
 
-  if (verification) {
-    console.log('\nVerifying batches against the project checker (isolated snapshot of committed HEAD)...');
-    if (verification.checkers.length === 0) {
+function renderCleanupVerification(verification: CleanupVerification): void {
+  console.log('\nVerifying batches against the project checker (isolated snapshot of committed HEAD)...');
+  if (verification.checkers.length === 0) {
+    console.log(
+      '  No checker detected (need tsconfig.json, go.mod, Python project markers, Clojure project markers, or Cargo.toml) -- skipped.',
+    );
+    return;
+  }
+  for (const checker of verification.checkers) {
+    console.log(`  Checker: ${checker}`);
+  }
+  if (verification.unavailableReason) {
+    console.log(`  UNAVAILABLE: ${verification.unavailableReason}.`);
+    return;
+  }
+  renderCleanupVerificationWarnings(verification);
+  const oracleSummary = verificationOracleSummary(verification.checkers);
+  const caveat = verificationLintCaveat(verification.checkers);
+  for (const batch of verification.batches) {
+    if (batch.status === 'verified') {
+      console.log(`  Batch ${batch.depth}: VERIFIED (${oracleSummary})${caveat}`);
+    } else {
       console.log(
-        '  No checker detected (need tsconfig.json, go.mod, Python project markers, Clojure project markers, or Cargo.toml) -- skipped.',
+        `  Batch ${batch.depth}: FAILED${batch.reason ? ` (${batch.reason})` : ''} -- the output below names references the static evidence missed or unparsed checker output:`,
       );
-      return;
-    }
-    for (const checker of verification.checkers) {
-      console.log(`  Checker: ${checker}`);
-    }
-    if (verification.unavailableReason) {
-      console.log(`  UNAVAILABLE: ${verification.unavailableReason}.`);
-      return;
-    }
-    if (verification.uncoveredFiles.length > 0) {
-      console.log(
-        `  WARNING: no checker covers these plan files (entries there are NOT verified): ${verification.uncoveredFiles.join(', ')}`,
-      );
-    }
-    if (verification.baselineErrors > 0) {
-      console.log(
-        `  Baseline has ${verification.baselineErrors} pre-existing error(s) — verifying differentially (no NEW errors).`,
-      );
-    }
-    if (verification.workingTree.state === 'unavailable') {
-      console.log(`  WARNING: working-tree inspection unavailable: ${verification.workingTree.reason}`);
-    }
-    if (verification.dirtyOverlap.length > 0) {
-      console.log(
-        `  WARNING: plan files dirty in working tree (verification runs at HEAD): ${verification.dirtyOverlap.join(', ')}`,
-      );
-    }
-    if (verification.dirtyWorkingTree.length > 0) {
-      const shown = verification.dirtyWorkingTree.slice(0, 5);
-      const omitted = verification.dirtyWorkingTree.length - shown.length;
-      console.log(
-        `  WARNING: verification ran at HEAD; ${verification.dirtyWorkingTree.length} working-tree change(s) were not compiled: ${shown.join(', ')}${omitted > 0 ? `, ... ${omitted} more` : ''}`,
-      );
-    }
-    const oracleSummary = verificationOracleSummary(verification.checkers);
-    const caveat = verificationLintCaveat(verification.checkers);
-    for (const batch of verification.batches) {
-      if (batch.status === 'verified') {
-        console.log(`  Batch ${batch.depth}: VERIFIED (${oracleSummary})${caveat}`);
-      } else {
-        console.log(
-          `  Batch ${batch.depth}: FAILED${batch.reason ? ` (${batch.reason})` : ''} -- the output below names references the static evidence missed or unparsed checker output:`,
-        );
-        for (const error of batch.errors ?? []) {
-          console.log(`    ${error}`);
-        }
+      for (const error of batch.errors ?? []) {
+        console.log(`    ${error}`);
       }
     }
   }
-});
+}
+
+function renderCleanupVerificationWarnings(verification: CleanupVerification): void {
+  if (verification.uncoveredFiles.length > 0) {
+    console.log(
+      `  WARNING: no checker covers these plan files (entries there are NOT verified): ${verification.uncoveredFiles.join(', ')}`,
+    );
+  }
+  if (verification.baselineErrors > 0) {
+    console.log(
+      `  Baseline has ${verification.baselineErrors} pre-existing error(s) — verifying differentially (no NEW errors).`,
+    );
+  }
+  if (verification.workingTree.state === 'unavailable') {
+    console.log(`  WARNING: working-tree inspection unavailable: ${verification.workingTree.reason}`);
+  }
+  if (verification.dirtyOverlap.length > 0) {
+    console.log(
+      `  WARNING: plan files dirty in working tree (verification runs at HEAD): ${verification.dirtyOverlap.join(', ')}`,
+    );
+  }
+  if (verification.dirtyWorkingTree.length > 0) {
+    const shown = verification.dirtyWorkingTree.slice(0, 5);
+    const omitted = verification.dirtyWorkingTree.length - shown.length;
+    console.log(
+      `  WARNING: verification ran at HEAD; ${verification.dirtyWorkingTree.length} working-tree change(s) were not compiled: ${shown.join(', ')}${omitted > 0 ? `, ... ${omitted} more` : ''}`,
+    );
+  }
+}
 
 function verificationOracleSummary(checkers: readonly string[]): string {
   return checkers.join(', ');

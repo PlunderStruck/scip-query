@@ -370,122 +370,192 @@ async function runWithCliOutputPaginationInSession(
   const pageSize = options.pageSize ?? DEFAULT_OUTPUT_PAGE_SIZE;
   const snapshotRoot = options.snapshotRoot ?? outputSnapshotRoot();
   const snapshotLimits = resolveOutputSnapshotLimits(options.snapshotLimits);
+  const maxOutputCharacters = resolveOutputCharacterLimit(options);
+  validatePaginationRequest(options, pageSize);
+  switch (directOutputMode(options, runtime)) {
+    case 'json-file':
+      await runJsonToOutputFile(options, action, runtime, maxOutputCharacters);
+      return;
+    case 'json':
+      await runJsonWithOversizeWarning(options, action, runtime);
+      return;
+    case 'human-file':
+      await runHumanToRegularFile(options, action, maxOutputCharacters);
+      return;
+  }
+  const filteredArgv = withoutOutputPaginationArgs(options.argv);
+  const invocationPrefix = normalizeInvocationPrefix(options.invocationPrefix);
+  const invocationHash = hashInvocation(options.command, options.cwd, invocationPrefix, filteredArgv);
+  const context = {
+    pageSize,
+    snapshotRoot,
+    snapshotLimits,
+    maxOutputCharacters,
+    filteredArgv,
+    invocationPrefix,
+    invocationHash,
+  };
+  const decodedCursor = options.cursor === undefined ? undefined : decodeOutputCursor(options.cursor, invocationHash);
+  const captured = decodedCursor
+    ? readCapturedOutputPage(decodedCursor, options, context)
+    : await captureInitialOutputPage(options, action, context);
+  emitCapturedOutputPage(options, runtime, context, captured);
+}
+
+function resolveOutputCharacterLimit(options: CliOutputPaginationOptions): number {
   const requestedMaxOutputCharacters = options.maxOutputCharacters ?? MAX_TRACKED_OUTPUT_CHARACTERS;
   if (!Number.isSafeInteger(requestedMaxOutputCharacters) || requestedMaxOutputCharacters <= 0) {
     throw new Error('Output character safety limit must be a positive integer.');
   }
-  const maxOutputCharacters = Math.min(
+  return Math.min(
     requestedMaxOutputCharacters,
     MAX_TRACKED_OUTPUT_CHARACTERS,
     options.agentOutput ? MAX_AGENT_OUTPUT_CHARACTERS : MAX_TRACKED_OUTPUT_CHARACTERS,
   );
+}
+
+function validatePaginationRequest(options: CliOutputPaginationOptions, pageSize: number): void {
   validatePageSize(pageSize);
   if (options.cursor !== undefined && options.cursor.length > MAX_OUTPUT_CURSOR_LENGTH) {
     throw new Error(
       `Output cursor exceeds the ${MAX_OUTPUT_CURSOR_LENGTH}-character limit. Run the command again without --output-cursor.`,
     );
   }
+}
 
+function validateJsonOutputMode(options: CliOutputPaginationOptions): void {
+  if (!options.json) throw new Error('--json-output requires --json.');
+  if (options.agentOutput || options.pageSize !== undefined || options.cursor !== undefined) {
+    throw new Error('--json-output cannot be combined with --agent-output or output pagination.');
+  }
+}
+
+function directOutputMode(
+  options: CliOutputPaginationOptions,
+  runtime: CliOutputPaginationRuntime,
+): 'json-file' | 'json' | 'human-file' | undefined {
   if (options.jsonOutputPath !== undefined) {
-    if (!options.json) throw new Error('--json-output requires --json.');
-    if (options.agentOutput || options.pageSize !== undefined || options.cursor !== undefined) {
-      throw new Error('--json-output cannot be combined with --agent-output or output pagination.');
-    }
-    await runJsonToOutputFile(options, action, runtime, maxOutputCharacters);
-    return;
+    validateJsonOutputMode(options);
+    return 'json-file';
   }
-
-  if (options.json && !options.agentOutput && options.pageSize === undefined && options.cursor === undefined) {
-    await runJsonWithOversizeWarning(options, action, runtime);
-    return;
+  if (options.json) {
+    if (!options.agentOutput && options.pageSize === undefined && options.cursor === undefined) return 'json';
+    return undefined;
   }
-
-  // Human output redirected to a regular file is a document read later in
-  // full; a page cursor there would truncate it. Cursors stay for terminals
-  // and pipes, where the reader is an agent whose context the page budget
-  // protects from a client that truncates long tool results mid-way.
-  if (
-    !options.json &&
-    options.cursor === undefined &&
-    options.pageSize === undefined &&
-    runtime.stdoutIsRegularFile?.() === true
-  ) {
-    await runHumanToRegularFile(options, action, maxOutputCharacters);
-    return;
+  // A regular file is read later as a complete document. Terminals and pipes
+  // retain cursors to protect readers whose clients truncate long tool output.
+  if (options.cursor === undefined && options.pageSize === undefined && runtime.stdoutIsRegularFile?.() === true) {
+    return 'human-file';
   }
+  return undefined;
+}
 
-  const filteredArgv = withoutOutputPaginationArgs(options.argv);
-  const invocationPrefix = normalizeInvocationPrefix(options.invocationPrefix);
-  const invocationHash = hashInvocation(options.command, options.cwd, invocationPrefix, filteredArgv);
-  const decodedCursor = options.cursor === undefined ? undefined : decodeOutputCursor(options.cursor, invocationHash);
-  let snapshotId = decodedCursor?.snapshotId;
-  let completed: {
-    content: string;
-    offset: number;
-    pageIndex: number;
-    pageCount: number;
-    totalCharacters: number;
-    outputHash: string;
-  };
-  if (decodedCursor) {
-    try {
-      completed = captureOutputSnapshotPage(
+interface OutputPaginationContext {
+  pageSize: number;
+  snapshotRoot: string;
+  snapshotLimits: OutputSnapshotLimits;
+  maxOutputCharacters: number;
+  filteredArgv: string[];
+  invocationPrefix: string[];
+  invocationHash: string;
+}
+
+interface CapturedOutputPage {
+  snapshotId?: string;
+  completed: ReturnType<typeof captureOutputSnapshotPage>;
+}
+
+function readCapturedOutputPage(
+  decodedCursor: OutputCursorPayload,
+  options: CliOutputPaginationOptions,
+  context: OutputPaginationContext,
+): CapturedOutputPage {
+  const { invocationHash, pageSize, maxOutputCharacters, snapshotRoot, invocationPrefix, filteredArgv } = context;
+  try {
+    return {
+      snapshotId: decodedCursor.snapshotId,
+      completed: captureOutputSnapshotPage(
         decodedCursor,
         invocationHash,
         pageSize,
         maxOutputCharacters,
         snapshotRoot,
         options.onSnapshotRead,
-      );
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      throw new Error(`${reason} Restart with: ${renderInitialPageCommand(invocationPrefix, filteredArgv, pageSize)}`, {
-        cause: error,
-      });
-    }
-  } else {
-    const snapshot = new OutputSnapshotWriter(
-      invocationHash,
-      invocationPrefix,
-      options.command,
-      options.cwd,
-      filteredArgv,
-      pageSize,
-      maxOutputCharacters,
-      pageContentByteLimit(options, invocationPrefix),
-      snapshotRoot,
-      snapshotLimits,
-      options.agentOutput ? MAX_AGENT_OUTPUT_PAGES : MAX_OUTPUT_SNAPSHOT_PAGES,
-      !options.json,
-      outputSafetyLimitMessage(maxOutputCharacters, options.agentOutput === true),
-    );
-    const restore = installStdoutCapture((bytes) => snapshot.write(bytes));
-    let actionCompleted = false;
-    try {
-      await action();
-      actionCompleted = true;
-    } finally {
-      restore();
-      if (!actionCompleted) snapshot.abort();
-    }
-    let captured: ReturnType<OutputSnapshotWriter['complete']>;
-    try {
-      captured = snapshot.complete();
-    } catch (error) {
-      snapshot.abort();
-      throw error;
-    }
-    snapshotId = captured.snapshotId;
-    completed = {
+      ),
+    };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`${reason} Restart with: ${renderInitialPageCommand(invocationPrefix, filteredArgv, pageSize)}`, {
+      cause: error,
+    });
+  }
+}
+
+async function captureInitialOutputPage(
+  options: CliOutputPaginationOptions,
+  action: () => void | Promise<void>,
+  context: OutputPaginationContext,
+): Promise<CapturedOutputPage> {
+  const {
+    invocationHash,
+    invocationPrefix,
+    filteredArgv,
+    pageSize,
+    maxOutputCharacters,
+    snapshotRoot,
+    snapshotLimits,
+  } = context;
+  const snapshot = new OutputSnapshotWriter(
+    invocationHash,
+    invocationPrefix,
+    options.command,
+    options.cwd,
+    filteredArgv,
+    pageSize,
+    maxOutputCharacters,
+    pageContentByteLimit(options, invocationPrefix),
+    snapshotRoot,
+    snapshotLimits,
+    options.agentOutput ? MAX_AGENT_OUTPUT_PAGES : MAX_OUTPUT_SNAPSHOT_PAGES,
+    !options.json,
+    outputSafetyLimitMessage(maxOutputCharacters, options.agentOutput === true),
+  );
+  const restore = installStdoutCapture((bytes) => snapshot.write(bytes));
+  let actionCompleted = false;
+  try {
+    await action();
+    actionCompleted = true;
+  } finally {
+    restore();
+    if (!actionCompleted) snapshot.abort();
+  }
+  let captured: ReturnType<OutputSnapshotWriter['complete']>;
+  try {
+    captured = snapshot.complete();
+  } catch (error) {
+    snapshot.abort();
+    throw error;
+  }
+  return {
+    snapshotId: captured.snapshotId,
+    completed: {
       content: captured.content,
       offset: 0,
       pageIndex: 0,
       pageCount: captured.pageCount,
       totalCharacters: captured.totalCharacters,
       outputHash: captured.outputHash,
-    };
-  }
+    },
+  };
+}
 
+function emitCapturedOutputPage(
+  options: CliOutputPaginationOptions,
+  runtime: CliOutputPaginationRuntime,
+  context: OutputPaginationContext,
+  { snapshotId, completed }: CapturedOutputPage,
+): void {
+  const { invocationPrefix, snapshotRoot } = context;
   const nextOffset = completed.offset + completed.content.length;
   const complete = completed.pageIndex + 1 >= completed.pageCount;
   const continuation = complete
@@ -503,6 +573,13 @@ async function runWithCliOutputPaginationInSession(
     return;
   }
 
+  const pageCounts = {
+    offset: completed.offset,
+    returnedCharacters: completed.content.length,
+    totalCharacters: completed.totalCharacters,
+    omittedCharacters: completed.totalCharacters - completed.content.length,
+    remainingCharacters: completed.totalCharacters - nextOffset,
+  };
   const envelope: CliOutputPageEnvelopeV1 = {
     kind: CLI_OUTPUT_PAGE_KIND,
     schemaVersion: CLI_OUTPUT_PAGE_SCHEMA_VERSION,
@@ -513,34 +590,16 @@ async function runWithCliOutputPaginationInSession(
       ? 'INCOMPLETE EVIDENCE: do not draw conclusions or report completion from this partial page. Run page.continuation.command exactly, then repeat until page.complete is true.'
       : "OUTPUT COMPLETE: all rendered characters have been retrieved. Evaluate the command result's own coverage separately.",
     page: continuation
-      ? {
-          offset: completed.offset,
-          returnedCharacters: completed.content.length,
-          totalCharacters: completed.totalCharacters,
-          omittedCharacters: completed.totalCharacters - completed.content.length,
-          remainingCharacters: completed.totalCharacters - nextOffset,
-          complete: false,
-          outputHash: completed.outputHash,
-          continuation,
-        }
-      : {
-          offset: completed.offset,
-          returnedCharacters: completed.content.length,
-          totalCharacters: completed.totalCharacters,
-          omittedCharacters: completed.totalCharacters - completed.content.length,
-          remainingCharacters: completed.totalCharacters - nextOffset,
-          complete: true,
-          outputHash: completed.outputHash,
-        },
+      ? { ...pageCounts, complete: false, outputHash: completed.outputHash, continuation }
+      : { ...pageCounts, complete: true, outputHash: completed.outputHash },
     content: completed.content,
   };
 
   if (options.json) {
     runtime.writeStdout(`${JSON.stringify(envelope)}\n`);
-    if (complete && snapshotId) removeOutputSnapshot(snapshotId, snapshotRoot);
-    return;
+  } else {
+    runtime.writeStdout(renderHumanOutputPage(envelope));
   }
-  runtime.writeStdout(renderHumanOutputPage(envelope));
   if (complete && snapshotId) removeOutputSnapshot(snapshotId, snapshotRoot);
 }
 

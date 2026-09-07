@@ -102,3 +102,23 @@ Batch three, in rank order: runLanguageIndexersForFreshReindex 42/41 (src/reinde
 ### Batch two completion
 
 All verification is complete: 200 focused tests and the full 3,079-test suite (348 files) passed. Build, type checks, changed-file lint, formatting, public API contract and consumer, and skill links passed. After reindexing, diff-impact mapped 27 changed symbols in four source files to eight affected files; documentation and tests are outside this index. Configured architecture checks passed (559 indexed files, 47 declared dependency rows). Current-source review covers 563 files and reports 642 complexity findings. The four new helper warnings remain in the ranked queue; no thresholds or suppressions changed. Five original inventory findings marked fixed. Continue with the five batch-three targets above.
+
+### Batch three implementation checkpoint
+
+Separated language reuse classification, accepted incremental-generation facts, expensive-rebuild gating, project shard planning, measurements, and cached output materialization. The coordinator preserves forced rebuild policy, refusal before compiler execution, and caching before destructive shard collection. Split pagination into validation, output mode selection, immutable snapshot reads, stdout capture/restoration, and emission. Factored additive symbol ranking by match kind without changing weights. Split cleanup-plan policy from plan, patch, verification, and warning rendering. Split chunk call evidence loading from the document range sweep and source-confirmed matching; retained SQL batching and symbol/chunk deduplication.
+
+| Target                              | Before cyclomatic/cognitive | After |
+| ----------------------------------- | --------------------------- | ----- |
+| runLanguageIndexersForFreshReindex  | 42/41                       | 8/6   |
+| runWithCliOutputPaginationInSession | 42/43                       | 8/3   |
+| scoreSymbolCandidate                | 41/39                       | 6/4   |
+| handleCleanupPlan callback          | 33/60                       | 10/10 |
+| buildChunkCalleeMap                 | 25/59                       | 5/4   |
+
+Validation so far: 157 pre-change tests passed; 166 focused tests across 12 files passed after the edits (eight new cleanup-output cases plus one score contract covering eight lookup patterns). Source type checking passed. Current-source review is accounted across 563 files and 12,315 implemented functions. One extracted helper remains above threshold: emitCapturedOutputPage 12/12. No thresholds or suppressions changed. Build/full suite/API/index verification is in progress; do not mark this batch complete before those checks finish. VM installation remains the independently verified 931fe6c1 build as requested for behavior-preserving refactors.
+
+Batch-four queue from the complete current-source scan (638 findings): readReindexActivitySummary 39/55 (src/reindex/reindex-activity.ts:165), TsMorphSemanticProvider.addReferencesFromSourceFileScan.visit 23/58 (src/semantic/typescript/ts-morph-provider.ts:432), getIndexFreshness 37/31 (src/runtime/index-freshness.ts:46), isOutputSnapshotMetadata 37/3 (src/runtime/output-pagination.ts:1194), and withCompilerReferencedSupportingDeclarations 36/55 (src/queries/internal/connected-behavior.ts:546). Preserve partial telemetry confidence and counters; compiler symbol-cache and hierarchy-reference attribution; managed fingerprint reuse guards and generation/document checks; complete snapshot schema and hash validation; bounded causal traversal, stable deduplication/order, and source omission accounting. Exact source has been inspected for these targets. Start edits only after batch-three full-suite verification and commit.
+
+### Batch three completion
+
+All checks passed: 166 focused tests; full suite 3,088 tests across 350 files; build, source types, changed-file lint, format, public API and consumer, and skill links. Fresh indexed diff-impact maps 40 changed symbols in five source files to three affected files (documentation/tests excluded from the index). Current-source scan is accounted across 563 files, 12,315 implemented functions, with 638 complexity findings; all 563 files mapped, 47/47 dependency rows declared, no reported cycles or configured violations. Historical inventory now 33 fixed, six assessed-retained, 616 pending. The extracted emitCapturedOutputPage warning remains queued. Proceed with batch four above.

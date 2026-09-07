@@ -401,9 +401,13 @@
           "name": "runLanguageIndexersForFreshReindex"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated reuse, incremental eligibility, rebuild policy, project caching and measurement responsibilities; forced rebuilds and cache-before-collection order preserved. Now cyclomatic 8, cognitive 6.",
+      "verification": [
+        "166 focused tests across 12 files passed; full suite 3088 tests across 350 files passed.",
+        "Build, source typecheck, changed-file lint, formatting, public API contract/consumer, and skill links passed.",
+        "Current-source scan accounted across 563 files; 638 complexity findings remain. Fresh diff-impact mapped 40 changed symbols in five files to three downstream affected files."
+      ]
     },
     {
       "id": "complexity:src/runtime/output-pagination.ts:runWithCliOutputPaginationInSession",
@@ -416,9 +420,13 @@
           "name": "runWithCliOutputPaginationInSession"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, output mode selection, snapshot reading/capture and page emission. Stdout restoration, abort, and snapshot removal ordering preserved. Now cyclomatic 8, cognitive 3.",
+      "verification": [
+        "166 focused tests across 12 files passed; full suite 3088 tests across 350 files passed.",
+        "Build, source typecheck, changed-file lint, formatting, public API contract/consumer, and skill links passed.",
+        "Current-source scan accounted across 563 files; 638 complexity findings remain. Fresh diff-impact mapped 40 changed symbols in five files to three downstream affected files."
+      ]
     },
     {
       "id": "complexity:src/symbols/symbol-lookup.ts:scoreSymbolCandidate",
@@ -431,9 +439,13 @@
           "name": "scoreSymbolCandidate"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Grouped additive exact, case-folded, partial and path-qualified scoring rules without changing weights or penalties. Now cyclomatic 6, cognitive 4.",
+      "verification": [
+        "166 focused tests across 12 files passed; full suite 3088 tests across 350 files passed.",
+        "Build, source typecheck, changed-file lint, formatting, public API contract/consumer, and skill links passed.",
+        "Current-source scan accounted across 563 files; 638 complexity findings remain. Fresh diff-impact mapped 40 changed symbols in five files to three downstream affected files."
+      ]
     },
     {
       "id": "complexity:src/queries/internal/connected-behavior.ts:withCompilerReferencedSupportingDeclarations",
@@ -461,9 +473,13 @@
           "name": "handleCleanupPlan.<callback:budgetedDbCommand:1>"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated policy dispatch from patch, plan, verification and warning rendering. Verification requirement and JSON precedence preserved. Now cyclomatic 10, cognitive 10.",
+      "verification": [
+        "166 focused tests across 12 files passed; full suite 3088 tests across 350 files passed.",
+        "Build, source typecheck, changed-file lint, formatting, public API contract/consumer, and skill links passed.",
+        "Current-source scan accounted across 563 files; 638 complexity findings remain. Fresh diff-impact mapped 40 changed symbols in five files to three downstream affected files."
+      ]
     },
     {
       "id": "complexity:src/symbols/graph/call-graph-evidence.ts:buildChunkCalleeMap",
@@ -476,9 +492,13 @@
           "name": "buildChunkCalleeMap"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated SQL evidence loading from per-document range scanning and source-confirmed mention matching. SQL batching and symbol/chunk deduplication preserved. Now cyclomatic 5, cognitive 4.",
+      "verification": [
+        "166 focused tests across 12 files passed; full suite 3088 tests across 350 files passed.",
+        "Build, source typecheck, changed-file lint, formatting, public API contract/consumer, and skill links passed.",
+        "Current-source scan accounted across 563 files; 638 complexity findings remain. Fresh diff-impact mapped 40 changed symbols in five files to three downstream affected files."
+      ]
     },
     {
       "id": "complexity:src/platform/watch-service-state.ts:validTypeScriptIndexStatus",

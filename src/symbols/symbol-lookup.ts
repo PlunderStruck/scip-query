@@ -334,84 +334,96 @@ export function getSymbolLookupCandidates(db: ScipDatabase, tokens: string[]): S
   return mergeMixedSymbolQueryRows(primary, fallback);
 }
 
+interface SymbolCandidateNames {
+  raw: string;
+  short: string;
+  leaf: string;
+  display: string;
+  path: string;
+}
+
+function scoreEqualMatches(rules: readonly (readonly [string, readonly string[], number])[]): number {
+  return rules.reduce((score, [value, alternatives, weight]) => score + (alternatives.includes(value) ? weight : 0), 0);
+}
+
+function scoreCaseSensitiveNames(names: SymbolCandidateNames, original: string, cleaned: string): number {
+  const noParens = cleaned.replace(/\(\)$/, '');
+  return scoreEqualMatches([
+    [names.raw, [original, cleaned], 1150],
+    [names.short, [original, cleaned], 1100],
+    [names.display, [noParens], 1180],
+    [names.leaf, [noParens], 1160],
+    [`${names.leaf}()`, [original, cleaned], 955],
+  ]);
+}
+
+function scoreNormalizedNames(names: SymbolCandidateNames, original: string, cleaned: string): number {
+  const noParens = cleaned.replace(/\(\)$/, '');
+  const exact = scoreEqualMatches([
+    [names.raw, [original, cleaned], 1000],
+    [names.short, [original, cleaned], 950],
+    [names.path, [original, cleaned], 925],
+    [names.display, [noParens], 850],
+    [names.leaf, [noParens], 825],
+    [`${names.leaf}()`, [original, cleaned], 820],
+  ]);
+  const pathSuffix = [cleaned, original].some((pattern) => names.path.endsWith(`/${pattern}`));
+  const qualifiedSuffix = [cleaned, noParens, `${noParens}()`].some((pattern) => names.short.endsWith(`:${pattern}`));
+  return exact + (pathSuffix ? 875 : 0) + (qualifiedSuffix ? 800 : 0);
+}
+
+function scorePartialNames(names: SymbolCandidateNames, cleaned: string, tokens: string[]): number {
+  const contains: readonly (readonly [string, number])[] = [
+    [names.raw, 120],
+    [names.short, 140],
+    [names.path, 140],
+    [names.display, 110],
+  ];
+  const partial = contains.reduce((score, [value, weight]) => score + (value.includes(cleaned) ? weight : 0), 0);
+  const allTokensMatch = tokens.every((token) => contains.some(([value]) => value.includes(token.toLowerCase())));
+  return partial + (allTokensMatch ? 100 + tokens.length * 15 : 0);
+}
+
+function scorePathQualifiedName(names: SymbolCandidateNames, symbol: string, pattern: string): number {
+  const pathLeaf = pathQualifiedLookup(pattern);
+  if (!pathLeaf || !names.path.includes(pathLeaf.path.toLowerCase())) return 0;
+  const requestedLeaf = pathLeaf.leaf.toLowerCase();
+  const matchesLeaf =
+    requestedLeaf &&
+    (names.leaf === requestedLeaf || `${names.leaf}()` === requestedLeaf || `${names.leaf}()` === `${requestedLeaf}()`);
+  return 360 + (matchesLeaf ? 700 : 0) + (isCallableSymbol(symbol) ? 180 : 0);
+}
+
 export function scoreSymbolCandidate(
   row: SymbolQueryRow,
   originalPattern: string,
   cleanedPattern: string,
   tokens: string[],
 ): number {
-  const originalCase = originalPattern.trim();
-  const cleanedCase = cleanedPattern;
-  const noParensCase = cleanedCase.replace(/\(\)$/, '');
-  const original = originalPattern.toLowerCase();
+  const names = {
+    raw: row.symbol,
+    short: shortenSymbol(row.symbol),
+    leaf: leafName(row.symbol),
+    display: row.display_name ?? '',
+    path: row.relative_path,
+  };
+  const normalized = {
+    raw: names.raw.toLowerCase(),
+    short: names.short.toLowerCase(),
+    leaf: names.leaf.toLowerCase(),
+    display: names.display.toLowerCase(),
+    path: names.path.toLowerCase(),
+  };
   const cleaned = cleanedPattern.toLowerCase();
-  const noParens = cleaned.replace(/\(\)$/, '');
-  const rawCase = row.symbol;
-  const shortCase = shortenSymbol(row.symbol);
-  const leafCase = leafName(row.symbol);
-  const displayCase = row.display_name ?? '';
-  const raw = row.symbol.toLowerCase();
-  const short = shortCase.toLowerCase();
-  const leaf = leafCase.toLowerCase();
-  const display = displayCase.toLowerCase();
-  const path = row.relative_path.toLowerCase();
-  const looksPathLike = /[/:.]/.test(cleanedPattern);
-  const pathLeaf = pathQualifiedLookup(cleanedPattern);
-  const requestedLeaf = pathLeaf?.leaf.toLowerCase();
-
-  let score = 0;
-
-  if (rawCase === originalCase || rawCase === cleanedCase) score += 1150;
-  if (shortCase === originalCase || shortCase === cleanedCase) score += 1100;
-  if (displayCase === noParensCase) score += 1180;
-  if (leafCase === noParensCase) score += 1160;
-  if (`${leafCase}()` === originalCase || `${leafCase}()` === cleanedCase) score += 955;
-  if (raw === original || raw === cleaned) score += 1000;
-  if (short === original || short === cleaned) score += 950;
-  if (path === original || path === cleaned) score += 925;
-  if (path.endsWith(`/${cleaned}`) || path.endsWith(`/${original}`)) score += 875;
-  if (display === noParens) score += 850;
-  if (leaf === noParens) score += 825;
-  if (`${leaf}()` === original || `${leaf}()` === cleaned) score += 820;
-  if (short.endsWith(`:${cleaned}`) || short.endsWith(`:${noParens}`) || short.endsWith(`:${noParens}()`)) score += 800;
-
-  if (raw.includes(cleaned)) score += 120;
-  if (short.includes(cleaned)) score += 140;
-  if (path.includes(cleaned)) score += 140;
-  if (display.includes(cleaned)) score += 110;
-
-  if (
-    tokens.every((token) => {
-      const lower = token.toLowerCase();
-      return raw.includes(lower) || short.includes(lower) || path.includes(lower) || display.includes(lower);
-    })
-  ) {
-    score += 100 + tokens.length * 15;
-  }
-
-  if (pathLeaf && path.includes(pathLeaf.path.toLowerCase())) {
-    score += 360;
-    if (
-      requestedLeaf &&
-      (leaf === requestedLeaf || `${leaf}()` === requestedLeaf || `${leaf}()` === `${requestedLeaf}()`)
-    ) {
-      score += 700;
-    }
-    if (isCallableSymbol(row.symbol)) score += 180;
-  }
-
-  if (isFunctionLikeSymbol(row.symbol) && leaf === noParens) {
-    score += 60;
-  }
-
-  if (!looksPathLike && isModuleLikeSymbol(row.symbol)) {
-    score -= 160;
-  }
-
+  let score =
+    scoreCaseSensitiveNames(names, originalPattern.trim(), cleanedPattern) +
+    scoreNormalizedNames(normalized, originalPattern.toLowerCase(), cleaned) +
+    scorePartialNames(normalized, cleaned, tokens) +
+    scorePathQualifiedName(normalized, row.symbol, cleanedPattern);
+  if (isFunctionLikeSymbol(row.symbol) && normalized.leaf === cleaned.replace(/\(\)$/, '')) score += 60;
+  if (!/[/:.]/.test(cleanedPattern) && isModuleLikeSymbol(row.symbol)) score -= 160;
   // Prefer narrower matches when everything else is close.
-  score -= Math.min(50, Math.max(0, row.end_line - row.start_line));
-
-  return score;
+  return score - Math.min(50, Math.max(0, row.end_line - row.start_line));
 }
 
 function pathQualifiedLookup(pattern: string): { path: string; leaf: string } | null {

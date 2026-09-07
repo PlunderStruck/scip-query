@@ -1065,115 +1065,21 @@ async function runLanguageIndexersForFreshReindex(
   // would each carry distrusted state forward, which is exactly what --force
   // exists to escape.
   const forcedRebuild = opts.opts.skipIfUnchanged === false;
-  const classification = classifyLanguageShardReuse({
-    paths: opts.paths,
-    projectRoot: opts.projectRoot,
-    languages: opts.languages,
-    pnpmWorkspaces: opts.opts.pnpmWorkspaces,
-    typescriptProjectMode: opts.opts.typescriptProjectMode,
-    typescriptProjects: opts.opts.typescriptProjects,
-    clojureConfigPath: opts.opts.clojureConfigPath,
-    projectFingerprint: opts.fingerprint,
-  });
-  if (forcedRebuild) {
-    for (const [language, info] of classification) {
-      if (info.reused) {
-        classification.set(language, { ...info, reused: false, reason: 'forced reindex requested' });
-      }
-    }
-  }
-  const reusableOutputs: IndexedOutput[] = [];
-  const reused = new Set<SupportedLanguage>();
-  for (const [language, info] of classification) {
-    if (info.reused) {
-      reusableOutputs.push({ language, scipPath: info.scipPath });
-      reused.add(language);
-    }
-  }
-  for (const language of reused) {
-    opts.onStatus(`Reusing cached ${language} SCIP shard (language inputs unchanged).`);
-  }
-
-  const typescriptClassification = classification.get('typescript');
-  const acceptedGeneration = inspectSqliteGeneration(opts.paths.outputDb, opts.paths.metaPath);
-  const acceptedMetadata = readReindexMetaOrNull(opts.paths.metaPath);
-  const incrementalGenerationUsable = acceptedGeneration.state === 'legacy' || acceptedGeneration.state === 'current';
-  const baseShardCurrent =
-    acceptedMetadata?.scipCompanion !== 'deferred' &&
-    (acceptedGeneration.state !== 'current' || acceptedGeneration.generation.publication?.scipCompanion !== 'deferred');
-  let typescriptIncrementalUnavailableReason: string | undefined;
-  if (forcedRebuild && typescriptClassification && !typescriptClassification.reused) {
-    typescriptIncrementalUnavailableReason = 'forced reindex rebuilds from the compilers';
-  }
-  const incrementalTypeScript =
-    !forcedRebuild && typescriptClassification && !typescriptClassification.reused && incrementalGenerationUsable
-      ? tryMaterializeTypeScriptIncrementalIndex({
-          projectRoot: opts.projectRoot,
-          cacheDir: dirname(opts.paths.outputDb),
-          previousDbPath: opts.paths.outputDb,
-          previousIndexPath: opts.paths.outputScip,
-          previousShardPath: typescriptClassification.scipPath,
-          candidateShardPath: tempScipPath(opts.tempPaths.tempOutputScip, 'typescript-incremental', 0),
-          candidateAffectedScipPath: tempScipPath(opts.tempPaths.tempOutputScip, 'typescript-affected', 0),
-          baseShardCurrent,
-          previousSnapshot: previousProjectInputSnapshot(opts.paths.metaPath),
-          currentSnapshot: opts.fingerprint,
-          projectMode: opts.opts.typescriptProjectMode,
-          ...(acceptedGeneration.state === 'current' &&
-          acceptedGeneration.generation.publication?.scipCompanion === 'deferred' &&
-          acceptedGeneration.generation.publication.typescriptOverlayGeneration
-            ? { previousOverlayGeneration: acceptedGeneration.generation.publication.typescriptOverlayGeneration }
-            : {}),
-          onStatus: opts.onStatus,
-          onUnavailable: (reason) => {
-            typescriptIncrementalUnavailableReason = reason;
-          },
-        })
-      : null;
+  const { classification, reusableOutputs, reused } = classifyFreshLanguageShards(opts, forcedRebuild);
+  const { incrementalTypeScript, typescriptIncrementalUnavailableReason } = tryFreshTypeScriptIncrementalIndex(
+    opts,
+    classification,
+    forcedRebuild,
+  );
   const incrementallyIndexed = new Set<SupportedLanguage>(incrementalTypeScript ? ['typescript'] : []);
 
-  if (opts.opts.allowExpensiveRebuild === false) {
-    const unavailable = opts.languages.filter(
-      (language) => !reused.has(language) && !incrementallyIndexed.has(language),
-    );
-    if (unavailable.length > 0) {
-      const detail =
-        unavailable.length === 1 && unavailable[0] === 'typescript' && typescriptIncrementalUnavailableReason
-          ? `: ${typescriptIncrementalUnavailableReason}`
-          : '';
-      throw new Error(
-        `Incremental indexing is unavailable for ${unavailable.join(', ')}${detail}. ` +
-          'The accepted index was preserved because whole-project rebuilds are disabled; run scip-query reindex --allow-expensive-rebuild only when you explicitly want that fallback.',
-      );
-    }
-  }
-
-  // Plan6 per-project TS shard caching (2.2): only relevant when the whole
-  // typescript language shard missed in workspace mode — an untouched
-  // typescript language shard already proves every project unchanged
-  // (invariant: the language fingerprint covers the same files every
-  // project's fingerprint is built from), so the classification below is
-  // skipped entirely on that path (today's behavior, untouched).
-  const plannedProjectShards =
-    incrementalTypeScript || reused.has('typescript')
-      ? undefined
-      : planTypeScriptProjectShardReuse(opts, classification);
-  // Forced runs still plan (so freshly built project shards are fingerprinted
-  // and cached for later reuse) but never serve a cached shard.
-  const tsProjectShards =
-    plannedProjectShards && forcedRebuild
-      ? {
-          ...plannedProjectShards,
-          classification: new Map(
-            [...plannedProjectShards.classification].map(([project, info]) => [
-              project,
-              info.reused ? { ...info, reused: false, reason: 'forced reindex requested' } : info,
-            ]),
-          ),
-          reusedProjects: [],
-          missedProjectIds: new Set(plannedProjectShards.allProjects.map((project) => `typescript:${project}`)),
-        }
-      : plannedProjectShards;
+  requireAvailableIncrementalLanguages(opts, reused, incrementallyIndexed, typescriptIncrementalUnavailableReason);
+  const tsProjectShards = freshTypeScriptProjectShardPlan(
+    opts,
+    classification,
+    Boolean(incrementalTypeScript) || reused.has('typescript'),
+    forcedRebuild,
+  );
 
   const {
     preparedRuns: preparedRunsAll,
@@ -1209,38 +1115,8 @@ async function runLanguageIndexersForFreshReindex(
     opts.opts.indexerConcurrency,
     opts.opts.signal,
   );
-  if (profileEnabled()) {
-    for (const result of runResults) {
-      writeProfileEvent({
-        type: 'span',
-        name: `reindex.language-indexer.${result.id}`,
-        durationMs: Math.round(result.durationMs),
-        ok: !result.skipped,
-        language: result.language,
-        indexerCommand: result.command,
-        outputBytes: result.outputBytes,
-        measurement: 'indexer-run-result',
-      });
-    }
-  }
-  recordTypeScriptCompilerShardCosts(dirname(opts.paths.outputDb), opts.projectRoot, preparedRuns, runResults);
-
-  // Cache freshly produced project shards BEFORE collectIndexerOutputs runs
-  // — a single-run group gets renameSync'd into its outputScipPath, which
-  // would otherwise destroy the only copy of a freshly-indexed shard before
-  // it could be cached.
-  let syntheticResults: IndexerRunResult[] = [];
-  if (tsProjectShards) {
-    cacheFreshTypeScriptProjectShards(opts.paths.outputDb, runResults, opts.writeTelemetry);
-    const typescriptOutputScipPath = languageOutputScipPaths['typescript'] ?? opts.tempPaths.tempOutputScip;
-    syntheticResults = buildCachedTypeScriptProjectRunResults({
-      outputDb: opts.paths.outputDb,
-      tempOutputScip: opts.tempPaths.tempOutputScip,
-      outputScipPath: typescriptOutputScipPath,
-      reusedProjects: tsProjectShards.reusedProjects,
-      writeTelemetry: opts.writeTelemetry,
-    });
-  }
+  recordLanguageIndexerMeasurements(opts, preparedRuns, runResults);
+  const syntheticResults = cachedTypeScriptProjectResults(opts, tsProjectShards, runResults, languageOutputScipPaths);
 
   const combinedResults = [...runResults, ...syntheticResults];
   const { indexedOutputs } = collectIndexerOutputs(combinedResults, skippedLanguages);
@@ -1249,21 +1125,7 @@ async function runLanguageIndexersForFreshReindex(
     : [];
   const allIndexedOutputs = [...reusableOutputs, ...incrementalOutputs, ...indexedOutputs];
   validateIndexingOutcome(allIndexedOutputs, skippedLanguages, opts.languages, opts.opts.allowPartial, opts.onStatus);
-  const incrementalRunResults: IndexerRunResult[] = incrementalTypeScript
-    ? [
-        {
-          id: 'typescript',
-          language: 'typescript',
-          label: 'typescript (incremental documents)',
-          scipPath: incrementalTypeScript.scipPath,
-          outputScipPath: incrementalTypeScript.scipPath,
-          durationMs: incrementalTypeScript.durationMs,
-          command: 'watch-service:typescript-index',
-          outputBytes: fileSizeOrNull(incrementalTypeScript.scipPath) ?? undefined,
-          producedOutputBytes: fileSizeOrNull(incrementalTypeScript.affectedScipPath) ?? undefined,
-        },
-      ]
-    : [];
+  const incrementalRunResults = incrementalTypeScriptRunResults(incrementalTypeScript);
   const shards = buildFreshReindexShardDiagnostics(
     classification,
     [...runResults, ...incrementalRunResults],
@@ -1281,6 +1143,213 @@ async function runLanguageIndexersForFreshReindex(
       : undefined,
     incrementalTypeScript: incrementalTypeScript ?? undefined,
   };
+}
+
+function classifyFreshLanguageShards(opts: Parameters<typeof runFreshReindex>[0], forcedRebuild: boolean) {
+  const classification = classifyLanguageShardReuse({
+    paths: opts.paths,
+    projectRoot: opts.projectRoot,
+    languages: opts.languages,
+    pnpmWorkspaces: opts.opts.pnpmWorkspaces,
+    typescriptProjectMode: opts.opts.typescriptProjectMode,
+    typescriptProjects: opts.opts.typescriptProjects,
+    clojureConfigPath: opts.opts.clojureConfigPath,
+    projectFingerprint: opts.fingerprint,
+  });
+  if (forcedRebuild) {
+    for (const [language, info] of classification) {
+      if (info.reused) {
+        classification.set(language, { ...info, reused: false, reason: 'forced reindex requested' });
+      }
+    }
+  }
+  const reusableOutputs: IndexedOutput[] = [];
+  const reused = new Set<SupportedLanguage>();
+  for (const [language, info] of classification) {
+    if (info.reused) {
+      reusableOutputs.push({ language, scipPath: info.scipPath });
+      reused.add(language);
+    }
+  }
+  for (const language of reused) {
+    opts.onStatus(`Reusing cached ${language} SCIP shard (language inputs unchanged).`);
+  }
+
+  return { classification, reusableOutputs, reused };
+}
+
+function tryFreshTypeScriptIncrementalIndex(
+  opts: Parameters<typeof runFreshReindex>[0],
+  classification: ReadonlyMap<SupportedLanguage, LanguageShardClassification>,
+  forcedRebuild: boolean,
+) {
+  const typescriptClassification = classification.get('typescript');
+  const { incrementalGenerationUsable, baseShardCurrent, previousOverlay } = acceptedTypeScriptBase(opts.paths);
+  let typescriptIncrementalUnavailableReason: string | undefined;
+  if (forcedRebuild && typescriptClassification && !typescriptClassification.reused) {
+    typescriptIncrementalUnavailableReason = 'forced reindex rebuilds from the compilers';
+  }
+  const incrementalTypeScript =
+    !forcedRebuild && typescriptClassification && !typescriptClassification.reused && incrementalGenerationUsable
+      ? tryMaterializeTypeScriptIncrementalIndex({
+          projectRoot: opts.projectRoot,
+          cacheDir: dirname(opts.paths.outputDb),
+          previousDbPath: opts.paths.outputDb,
+          previousIndexPath: opts.paths.outputScip,
+          previousShardPath: typescriptClassification.scipPath,
+          candidateShardPath: tempScipPath(opts.tempPaths.tempOutputScip, 'typescript-incremental', 0),
+          candidateAffectedScipPath: tempScipPath(opts.tempPaths.tempOutputScip, 'typescript-affected', 0),
+          baseShardCurrent,
+          previousSnapshot: previousProjectInputSnapshot(opts.paths.metaPath),
+          currentSnapshot: opts.fingerprint,
+          projectMode: opts.opts.typescriptProjectMode,
+          ...previousOverlay,
+          onStatus: opts.onStatus,
+          onUnavailable: (reason) => {
+            typescriptIncrementalUnavailableReason = reason;
+          },
+        })
+      : null;
+  return { incrementalTypeScript, typescriptIncrementalUnavailableReason };
+}
+
+function acceptedTypeScriptBase(paths: Parameters<typeof runFreshReindex>[0]['paths']) {
+  const acceptedGeneration = inspectSqliteGeneration(paths.outputDb, paths.metaPath);
+  const acceptedMetadata = readReindexMetaOrNull(paths.metaPath);
+  const incrementalGenerationUsable = acceptedGeneration.state === 'legacy' || acceptedGeneration.state === 'current';
+  const baseShardCurrent =
+    acceptedMetadata?.scipCompanion !== 'deferred' &&
+    (acceptedGeneration.state !== 'current' || acceptedGeneration.generation.publication?.scipCompanion !== 'deferred');
+  const previousOverlay =
+    acceptedGeneration.state === 'current' &&
+    acceptedGeneration.generation.publication?.scipCompanion === 'deferred' &&
+    acceptedGeneration.generation.publication.typescriptOverlayGeneration
+      ? { previousOverlayGeneration: acceptedGeneration.generation.publication.typescriptOverlayGeneration }
+      : {};
+  return { incrementalGenerationUsable, baseShardCurrent, previousOverlay };
+}
+
+function requireAvailableIncrementalLanguages(
+  opts: Parameters<typeof runFreshReindex>[0],
+  reused: ReadonlySet<SupportedLanguage>,
+  incrementallyIndexed: ReadonlySet<SupportedLanguage>,
+  typescriptIncrementalUnavailableReason: string | undefined,
+): void {
+  if (opts.opts.allowExpensiveRebuild === false) {
+    const unavailable = opts.languages.filter(
+      (language) => !reused.has(language) && !incrementallyIndexed.has(language),
+    );
+    if (unavailable.length > 0) {
+      const detail =
+        unavailable.length === 1 && unavailable[0] === 'typescript' && typescriptIncrementalUnavailableReason
+          ? `: ${typescriptIncrementalUnavailableReason}`
+          : '';
+      throw new Error(
+        `Incremental indexing is unavailable for ${unavailable.join(', ')}${detail}. ` +
+          'The accepted index was preserved because whole-project rebuilds are disabled; run scip-query reindex --allow-expensive-rebuild only when you explicitly want that fallback.',
+      );
+    }
+  }
+}
+
+function freshTypeScriptProjectShardPlan(
+  opts: Parameters<typeof runFreshReindex>[0],
+  classification: ReadonlyMap<SupportedLanguage, LanguageShardClassification>,
+  alreadyIndexed: boolean,
+  forcedRebuild: boolean,
+): TypeScriptProjectShardPlan | undefined {
+  // Plan6 per-project TS shard caching (2.2): only relevant when the whole
+  // typescript language shard missed in workspace mode — an untouched
+  // typescript language shard already proves every project unchanged
+  // (invariant: the language fingerprint covers the same files every
+  // project's fingerprint is built from), so the classification below is
+  // skipped entirely on that path (today's behavior, untouched).
+  const plannedProjectShards = alreadyIndexed ? undefined : planTypeScriptProjectShardReuse(opts, classification);
+  // Forced runs still plan (so freshly built project shards are fingerprinted
+  // and cached for later reuse) but never serve a cached shard.
+  const tsProjectShards =
+    plannedProjectShards && forcedRebuild
+      ? {
+          ...plannedProjectShards,
+          classification: new Map(
+            [...plannedProjectShards.classification].map(([project, info]) => [
+              project,
+              info.reused ? { ...info, reused: false, reason: 'forced reindex requested' } : info,
+            ]),
+          ),
+          reusedProjects: [],
+          missedProjectIds: new Set(plannedProjectShards.allProjects.map((project) => `typescript:${project}`)),
+        }
+      : plannedProjectShards;
+  return tsProjectShards;
+}
+
+function recordLanguageIndexerMeasurements(
+  opts: Parameters<typeof runFreshReindex>[0],
+  preparedRuns: Parameters<typeof runPreparedIndexers>[0],
+  runResults: IndexerRunResult[],
+): void {
+  if (profileEnabled()) {
+    for (const result of runResults) {
+      writeProfileEvent({
+        type: 'span',
+        name: `reindex.language-indexer.${result.id}`,
+        durationMs: Math.round(result.durationMs),
+        ok: !result.skipped,
+        language: result.language,
+        indexerCommand: result.command,
+        outputBytes: result.outputBytes,
+        measurement: 'indexer-run-result',
+      });
+    }
+  }
+  recordTypeScriptCompilerShardCosts(dirname(opts.paths.outputDb), opts.projectRoot, preparedRuns, runResults);
+}
+
+function cachedTypeScriptProjectResults(
+  opts: Parameters<typeof runFreshReindex>[0],
+  tsProjectShards: TypeScriptProjectShardPlan | undefined,
+  runResults: IndexerRunResult[],
+  languageOutputScipPaths: ReturnType<typeof prepareIndexerRuns>['languageOutputScipPaths'],
+): IndexerRunResult[] {
+  // Cache freshly produced project shards BEFORE collectIndexerOutputs runs
+  // — a single-run group gets renameSync'd into its outputScipPath, which
+  // would otherwise destroy the only copy of a freshly-indexed shard before
+  // it could be cached.
+  let syntheticResults: IndexerRunResult[] = [];
+  if (tsProjectShards) {
+    cacheFreshTypeScriptProjectShards(opts.paths.outputDb, runResults, opts.writeTelemetry);
+    const typescriptOutputScipPath = languageOutputScipPaths['typescript'] ?? opts.tempPaths.tempOutputScip;
+    syntheticResults = buildCachedTypeScriptProjectRunResults({
+      outputDb: opts.paths.outputDb,
+      tempOutputScip: opts.tempPaths.tempOutputScip,
+      outputScipPath: typescriptOutputScipPath,
+      reusedProjects: tsProjectShards.reusedProjects,
+      writeTelemetry: opts.writeTelemetry,
+    });
+  }
+  return syntheticResults;
+}
+
+function incrementalTypeScriptRunResults(
+  incrementalTypeScript: ReturnType<typeof tryMaterializeTypeScriptIncrementalIndex>,
+): IndexerRunResult[] {
+  const incrementalRunResults: IndexerRunResult[] = incrementalTypeScript
+    ? [
+        {
+          id: 'typescript',
+          language: 'typescript',
+          label: 'typescript (incremental documents)',
+          scipPath: incrementalTypeScript.scipPath,
+          outputScipPath: incrementalTypeScript.scipPath,
+          durationMs: incrementalTypeScript.durationMs,
+          command: 'watch-service:typescript-index',
+          outputBytes: fileSizeOrNull(incrementalTypeScript.scipPath) ?? undefined,
+          producedOutputBytes: fileSizeOrNull(incrementalTypeScript.affectedScipPath) ?? undefined,
+        },
+      ]
+    : [];
+  return incrementalRunResults;
 }
 
 interface TypeScriptProjectShardPlan {

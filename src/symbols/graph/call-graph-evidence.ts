@@ -572,21 +572,33 @@ function pickClojureQualifiedCandidate<T extends { symbol: string; file: string 
   return candidates.find((candidate) => /`([^`]+)`\//.exec(candidate.symbol)?.[1] === qualifier) ?? null;
 }
 
-// scip-query: ignore-extract - this pass keeps SQL fetches, range matching, and source confirmation together.
+type ChunkMentionRow = {
+  document_id: number;
+  chunk_id: number;
+  start_line: number;
+  end_line: number;
+  symbol_id: number;
+};
+
 export function buildChunkCalleeMap(
   db: ScipDatabase,
   definitions: ReadonlyArray<SymbolLocation>,
 ): Map<number, CalleeRow[]> {
   if (definitions.length === 0) return new Map();
+  const evidence = loadChunkCalleeEvidence(db, definitions);
+  const result = new Map<number, CalleeRow[]>();
+  for (const [documentId, docDefinitions] of symbolLocationsByDocument(definitions)) {
+    const docMentions = evidence.byDoc.get(documentId) ?? [];
+    for (const [symbolId, callees] of documentChunkCallees(db, docDefinitions, docMentions, evidence)) {
+      result.set(symbolId, callees);
+    }
+  }
+  return result;
+}
+
+function loadChunkCalleeEvidence(db: ScipDatabase, definitions: ReadonlyArray<SymbolLocation>) {
   const definitionDocumentIds = uniqueNumbers(definitions.map((def) => def.documentId));
 
-  type ChunkMentionRow = {
-    document_id: number;
-    chunk_id: number;
-    start_line: number;
-    end_line: number;
-    symbol_id: number;
-  };
   const refRows = definitionDocumentIds.flatMap((documentIds) =>
     db.all<ChunkMentionRow>(
       `SELECT c.document_id, c.id AS chunk_id, c.start_line, c.end_line, m.symbol_id
@@ -657,6 +669,15 @@ export function buildChunkCalleeMap(
     });
   }
 
+  return { byDoc, docPaths, calleeInfo };
+}
+
+function documentChunkCallees(
+  db: ScipDatabase,
+  docDefinitions: readonly SymbolLocation[],
+  docMentions: readonly ChunkMentionRow[],
+  evidence: ReturnType<typeof loadChunkCalleeEvidence>,
+): Map<number, CalleeRow[]> {
   // Match each definition against mentions in its document/range. Two passes:
   //   1. SCIP-only: chunk is fully inside the def's range — count.
   //   2. Source-text confirm: chunk *overlaps* the def's range (but isn't
@@ -671,71 +692,84 @@ export function buildChunkCalleeMap(
   // (e.g. Rust without defn_enclosing_ranges) where chunks are file-wide and
   // every mention triggers the source-confirm path.
   const result = new Map<number, CalleeRow[]>();
-  const filePathById = docPaths;
-  const definitionsByDoc = symbolLocationsByDocument(definitions);
-  for (const [documentId, docDefinitions] of definitionsByDoc) {
-    const docMentions = byDoc.get(documentId) ?? [];
-    const orderedMentions = [...docMentions].sort(
-      (left, right) => left.start_line - right.start_line || left.end_line - right.end_line,
-    );
-    const orderedDefinitions = [...docDefinitions].sort(
-      (left, right) => left.startLine - right.startLine || left.endLine - right.endLine,
-    );
-    const activeMentions = new Set<ChunkMentionRow>();
-    let mentionCursor = 0;
+  const orderedMentions = [...docMentions].sort(
+    (left, right) => left.start_line - right.start_line || left.end_line - right.end_line,
+  );
+  const orderedDefinitions = [...docDefinitions].sort(
+    (left, right) => left.startLine - right.startLine || left.endLine - right.endLine,
+  );
+  const activeMentions = new Set<ChunkMentionRow>();
+  let mentionCursor = 0;
 
-    for (const def of orderedDefinitions) {
-      while (mentionCursor < orderedMentions.length && orderedMentions[mentionCursor]!.start_line <= def.endLine) {
-        activeMentions.add(orderedMentions[mentionCursor]!);
-        mentionCursor += 1;
-      }
-      for (const mention of activeMentions) {
-        if (mention.end_line < def.startLine) activeMentions.delete(mention);
-      }
-
-      const seenKey = new Set<string>();
-      const callees: CalleeRow[] = [];
-      let identsInRange: Set<string> | null = null;
-      const computeIdentsInRange = (): Set<string> => {
-        if (identsInRange) return identsInRange;
-        const filePath = filePathById.get(def.documentId) ?? '';
-        const out = new Set<string>();
-        if (filePath) {
-          const byLine = getIdentifiersByLine(db, filePath);
-          const start = Math.max(0, def.startLine);
-          const end = Math.min(byLine.length - 1, def.endLine);
-          for (let i = start; i <= end; i += 1) {
-            for (const name of byLine[i]!) out.add(name);
-          }
-        }
-        identsInRange = out;
-        return out;
-      };
-
-      for (const m of activeMentions) {
-        if (m.symbol_id === def.symbolId) continue;
-        const info = calleeInfo.get(m.symbol_id);
-        if (!info) continue;
-
-        const containedInRange = m.start_line >= def.startLine && m.end_line <= def.endLine;
-        if (!containedInRange) {
-          const overlapsRange = m.start_line <= def.endLine && m.end_line >= def.startLine;
-          if (!overlapsRange) continue;
-          const leaf = leafName(info.symbol);
-          if (!leaf) continue;
-          if (!computeIdentsInRange().has(leaf)) continue;
-        }
-
-        const key = `${info.symbol}|${m.chunk_id}`;
-        if (seenKey.has(key)) continue;
-        seenKey.add(key);
-        callees.push({ ...info, chunkId: m.chunk_id, source: 'scip-chunk' });
-      }
-      result.set(def.symbolId, callees);
+  for (const def of orderedDefinitions) {
+    while (mentionCursor < orderedMentions.length && orderedMentions[mentionCursor]!.start_line <= def.endLine) {
+      activeMentions.add(orderedMentions[mentionCursor]!);
+      mentionCursor += 1;
     }
+    for (const mention of activeMentions) {
+      if (mention.end_line < def.startLine) activeMentions.delete(mention);
+    }
+
+    result.set(def.symbolId, definitionChunkCallees(db, def, activeMentions, evidence));
+  }
+  return result;
+}
+
+function identifiersInDefinition(db: ScipDatabase, filePath: string, def: SymbolLocation): Set<string> {
+  const out = new Set<string>();
+  if (!filePath) return out;
+  const byLine = getIdentifiersByLine(db, filePath);
+  const start = Math.max(0, def.startLine);
+  const end = Math.min(byLine.length - 1, def.endLine);
+  for (let i = start; i <= end; i += 1) {
+    for (const name of byLine[i]!) out.add(name);
+  }
+  return out;
+}
+
+function chunkMentionMatchesDefinition(
+  mention: ChunkMentionRow,
+  def: SymbolLocation,
+  symbol: string,
+  computeIdentsInRange: () => Set<string>,
+): boolean {
+  const containedInRange = mention.start_line >= def.startLine && mention.end_line <= def.endLine;
+  if (!containedInRange) {
+    const overlapsRange = mention.start_line <= def.endLine && mention.end_line >= def.startLine;
+    if (!overlapsRange) return false;
+    const leaf = leafName(symbol);
+    if (!leaf) return false;
+    if (!computeIdentsInRange().has(leaf)) return false;
+  }
+  return true;
+}
+
+function definitionChunkCallees(
+  db: ScipDatabase,
+  def: SymbolLocation,
+  activeMentions: ReadonlySet<ChunkMentionRow>,
+  { docPaths, calleeInfo }: ReturnType<typeof loadChunkCalleeEvidence>,
+): CalleeRow[] {
+  const seenKey = new Set<string>();
+  const callees: CalleeRow[] = [];
+  let identsInRange: Set<string> | null = null;
+  const computeIdentsInRange = (): Set<string> =>
+    (identsInRange ??= identifiersInDefinition(db, docPaths.get(def.documentId) ?? '', def));
+
+  for (const m of activeMentions) {
+    if (m.symbol_id === def.symbolId) continue;
+    const info = calleeInfo.get(m.symbol_id);
+    if (!info) continue;
+
+    if (!chunkMentionMatchesDefinition(m, def, info.symbol, computeIdentsInRange)) continue;
+
+    const key = `${info.symbol}|${m.chunk_id}`;
+    if (seenKey.has(key)) continue;
+    seenKey.add(key);
+    callees.push({ ...info, chunkId: m.chunk_id, source: 'scip-chunk' });
   }
 
-  return result;
+  return callees;
 }
 
 const SQLITE_IN_BATCH_SIZE = 500;
