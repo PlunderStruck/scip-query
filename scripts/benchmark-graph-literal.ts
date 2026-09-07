@@ -1,3 +1,4 @@
+import { summarizeTimings as summarize, rounded } from './benchmark-statistics.js';
 import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { resolve } from 'node:path';
@@ -60,18 +61,4 @@ try {
 
 function resultIdentity(result: ReturnType<typeof graphEvidence>): string {
   return createHash('sha256').update(JSON.stringify(result)).digest('hex');
-}
-
-function summarize(values: readonly number[]): { iterations: number; min: number; median: number; max: number } {
-  const sorted = [...values].sort((left, right) => left - right);
-  return {
-    iterations: sorted.length,
-    min: rounded(sorted[0] ?? 0),
-    median: rounded(sorted[Math.floor(sorted.length / 2)] ?? 0),
-    max: rounded(sorted.at(-1) ?? 0),
-  };
-}
-
-function rounded(value: number): number {
-  return Number(value.toFixed(3));
 }

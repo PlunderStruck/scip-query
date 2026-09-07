@@ -366,3 +366,28 @@ function requireEqual(actual: unknown, expected: unknown, field: string): void {
     throw new Error(`${field} mismatch: expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}.`);
   }
 }
+
+export interface PackageRecord {
+  name: string;
+  version: string;
+  optionalDependencies?: Record<string, string>;
+}
+
+export function parsePackage(bytes: Buffer, label: string): PackageRecord {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(bytes.toString('utf8'));
+  } catch {
+    throw new Error(`${label} package.json is malformed.`);
+  }
+  if (
+    parsed === null ||
+    typeof parsed !== 'object' ||
+    Array.isArray(parsed) ||
+    typeof (parsed as Partial<PackageRecord>).name !== 'string' ||
+    typeof (parsed as Partial<PackageRecord>).version !== 'string'
+  ) {
+    throw new Error(`${label} package.json is missing its name or version.`);
+  }
+  return parsed as PackageRecord;
+}

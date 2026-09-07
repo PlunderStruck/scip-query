@@ -8,6 +8,7 @@ import {
   type RegistryDistIdentity,
   type VerifiedSidecarPackageIdentity,
   verifyRegistryTarballIdentity,
+  parsePackage,
 } from './scip-windows-package-identity.js';
 import {
   DEFAULT_SCIP_REPOSITORY,
@@ -21,12 +22,6 @@ const PACK_TIMEOUT_MS = 120_000;
 const REGISTRY_TIMEOUT_MS = 30_000;
 const PUBLISH_TIMEOUT_MS = 180_000;
 const COMMAND_OUTPUT_LIMIT_BYTES = 4 * 1024 * 1024;
-
-interface PackageRecord {
-  name: string;
-  version: string;
-  optionalDependencies?: Record<string, string>;
-}
 
 export interface WindowsSidecarCommandOptions {
   cwd?: string;
@@ -289,25 +284,6 @@ export function createWindowsSidecarReleaseRuntime(): WindowsSidecarReleaseRunti
 function isRegistryNotFound(error: WindowsSidecarCommandError): boolean {
   const evidence = `${error.stderr}\n${error.stdout}`;
   return /\bE404\b/.test(evidence);
-}
-
-function parsePackage(bytes: Buffer, label: string): PackageRecord {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(bytes.toString('utf8'));
-  } catch {
-    throw new Error(`${label} package.json is malformed.`);
-  }
-  if (
-    parsed === null ||
-    typeof parsed !== 'object' ||
-    Array.isArray(parsed) ||
-    typeof (parsed as Partial<PackageRecord>).name !== 'string' ||
-    typeof (parsed as Partial<PackageRecord>).version !== 'string'
-  ) {
-    throw new Error(`${label} package.json is missing its name or version.`);
-  }
-  return parsed as PackageRecord;
 }
 
 function errorMessage(error: unknown): string {

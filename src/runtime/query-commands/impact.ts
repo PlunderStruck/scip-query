@@ -1,3 +1,4 @@
+import { changeSurfaceSymbolRow } from './change-surface-render.js';
 import * as queries from '../../queries/index.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
 import {
@@ -22,7 +23,7 @@ import {
   stringOptionValue,
 } from '../command-kit/command-execution.js';
 import { renderHeuristicNotice } from '../cli-support.js';
-import { displayRange, render } from '../render.js';
+import { render } from '../render.js';
 import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
 
 const handleAffected = dbCommand(({ db, args, opts }) => {
@@ -165,15 +166,7 @@ const handleChangeSurface = budgetedDbCommand('change-surface', ({ db, args, opt
     );
   }
   console.log('');
-  render.list(result.symbols, (s) => {
-    const risk = s.riskLevel === 'high' ? ' *** HIGH RISK ***' : s.riskLevel === 'medium' ? ' * medium risk *' : '';
-    const riskReasons = s.riskReasons ?? [];
-    const reasons =
-      riskReasons.length === 0
-        ? ''
-        : `  [why: ${riskReasons.map((reason) => `${reason.kind}: ${reason.detail}`).join('; ')}]`;
-    return `  ${displayRange(s.startLine, s.endLine)}  ${s.shortName}  [${s.externalConsumers} consumers]${risk}${reasons}`;
-  });
+  render.list(result.symbols, changeSurfaceSymbolRow);
 });
 
 const handleIncompleteMigration = budgetedDbCommand('incomplete-migration', ({ db, args, opts, budget }) => {

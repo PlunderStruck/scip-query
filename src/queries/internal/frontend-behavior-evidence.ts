@@ -217,3 +217,24 @@ function reasonsForBucket(
 ): string[] {
   return bucket === 'generic' ? genericReasons : sharedAbstractionReasons;
 }
+
+interface NamedFrontendPair {
+  actionTier: FrontendBehaviorActionTier;
+  similarity: number;
+  fileA: string;
+  componentA: string;
+  fileB: string;
+  componentB: string;
+}
+
+/** Prioritize actionable named pairs, then similarity, with stable source-identity ties. */
+export function compareNamedFrontendPairs(a: NamedFrontendPair, b: NamedFrontendPair): number {
+  return (
+    Number(a.actionTier !== 'signal') - Number(b.actionTier !== 'signal') ||
+    b.similarity - a.similarity ||
+    a.fileA.localeCompare(b.fileA) ||
+    a.componentA.localeCompare(b.componentA) ||
+    a.fileB.localeCompare(b.fileB) ||
+    a.componentB.localeCompare(b.componentB)
+  );
+}

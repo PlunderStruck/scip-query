@@ -10,6 +10,7 @@ import {
 import {
   behaviorSimilarity,
   classifyFrontendBehaviorEvidence,
+  compareNamedFrontendPairs,
   overlapGate,
   sortedTokens,
   tokenValues,
@@ -142,19 +143,9 @@ export function reactHookCandidateScan(db: ScipDatabase, opts: ReactHookCandidat
       }
       return result;
     },
-    sort: (a, b) =>
-      actionTierRank(a.actionTier) - actionTierRank(b.actionTier) ||
-      b.similarity - a.similarity ||
-      a.fileA.localeCompare(b.fileA) ||
-      a.componentA.localeCompare(b.componentA) ||
-      a.fileB.localeCompare(b.fileB) ||
-      a.componentB.localeCompare(b.componentB),
+    sort: compareNamedFrontendPairs,
   });
   return { results, exclusions: exclusions.list() };
-}
-
-function actionTierRank(tier: ReactHookActionTier): number {
-  return tier === 'signal' ? 0 : 1;
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.

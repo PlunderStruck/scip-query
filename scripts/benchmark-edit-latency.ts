@@ -1,3 +1,4 @@
+import { summarizeTimings as summarize } from './benchmark-statistics.js';
 import { performance } from 'node:perf_hooks';
 import { resolve } from 'node:path';
 
@@ -96,18 +97,4 @@ function measure(iterations: number, action: () => unknown): number[] {
     durations.push(performance.now() - startedAt);
   }
   return durations;
-}
-
-function summarize(values: readonly number[]): { iterations: number; min: number; median: number; max: number } {
-  const sorted = [...values].sort((left, right) => left - right);
-  return {
-    iterations: sorted.length,
-    min: rounded(sorted[0] ?? 0),
-    median: rounded(sorted[Math.floor(sorted.length / 2)] ?? 0),
-    max: rounded(sorted.at(-1) ?? 0),
-  };
-}
-
-function rounded(value: number): number {
-  return Number(value.toFixed(3));
 }

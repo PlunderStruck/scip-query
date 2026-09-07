@@ -4,6 +4,7 @@ import type { ReactComponentBehaviorProfile } from '../../source/react-profile.j
 import type { ScipDatabase } from '../../storage/db.js';
 import {
   classifyFrontendBehaviorEvidence,
+  compareNamedFrontendPairs,
   overlapGate,
   sortedTokens,
   tokenValues,
@@ -130,19 +131,9 @@ export function reactComponentDuplicateScan(
       }
       return result;
     },
-    sort: (a, b) =>
-      actionTierRank(a.actionTier) - actionTierRank(b.actionTier) ||
-      b.similarity - a.similarity ||
-      a.fileA.localeCompare(b.fileA) ||
-      a.componentA.localeCompare(b.componentA) ||
-      a.fileB.localeCompare(b.fileB) ||
-      a.componentB.localeCompare(b.componentB),
+    sort: compareNamedFrontendPairs,
   });
   return { results, exclusions: exclusions.list() };
-}
-
-function actionTierRank(tier: FrontendBehaviorActionTier): number {
-  return tier === 'signal' ? 0 : 1;
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; overlap gate, similarity, evidence class, and pair-context policy are one pair verdict.

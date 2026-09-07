@@ -23,9 +23,9 @@
           "name": "summarize"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Inspected both live consumers and consolidated their shared responsibility. Detectors retain separate acceptance rules; shared validation, mapping, ranking and rendering preserve existing contracts. Benchmark medians now average the two middle samples for even counts.",
+      "verification": "Full suite: 3,015 tests passed. After review corrections, 100 focused tests passed. Accounted final source review resolves all six duplication groups with no blocking findings."
     },
     {
       "id": "duplication:11e5034c7818eb4f4053ac57ab526806549970abcda62c16e683def51a0df15d",
@@ -43,9 +43,9 @@
           "name": "parsePackage"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Inspected both live consumers and consolidated their shared responsibility. Detectors retain separate acceptance rules; shared validation, mapping, ranking and rendering preserve existing contracts. Benchmark medians now average the two middle samples for even counts.",
+      "verification": "Full suite: 3,015 tests passed. After review corrections, 100 focused tests passed. Accounted final source review resolves all six duplication groups with no blocking findings."
     },
     {
       "id": "duplication:540903394537bed4e482e8444efd2826d6add2fd3f8291a87fb9314c4cb3de36",
@@ -63,9 +63,9 @@
           "name": "collectFrameworkCandidates.<callback:reactHookCandidates(db, { limit: UNBOUNDED_RESULT_LIMIT }).map:0>"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Inspected both live consumers and consolidated their shared responsibility. Detectors retain separate acceptance rules; shared validation, mapping, ranking and rendering preserve existing contracts. Benchmark medians now average the two middle samples for even counts.",
+      "verification": "Full suite: 3,015 tests passed. After review corrections, 100 focused tests passed. Accounted final source review resolves all six duplication groups with no blocking findings."
     },
     {
       "id": "duplication:856f9fc56bd501af1dbb24d4e8cfe72a05375c3c0859a620979fa01ebaa88fa0",
@@ -83,9 +83,9 @@
           "name": "reactHookCandidateScan.results.sort"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Inspected both live consumers and consolidated their shared responsibility. Detectors retain separate acceptance rules; shared validation, mapping, ranking and rendering preserve existing contracts. Benchmark medians now average the two middle samples for even counts.",
+      "verification": "Full suite: 3,015 tests passed. After review corrections, 100 focused tests passed. Accounted final source review resolves all six duplication groups with no blocking findings."
     },
     {
       "id": "duplication:a8443a9736b9fd7903c1941e5308743b806dae3ab09ada9efb35713bbacccda6",
@@ -103,9 +103,9 @@
           "name": "collectFrameworkCandidates.<callback:vueComposableCandidates(db, { limit: UNBOUNDED_RESULT_LIMIT }).map:0>"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Inspected both live consumers and consolidated their shared responsibility. Detectors retain separate acceptance rules; shared validation, mapping, ranking and rendering preserve existing contracts. Benchmark medians now average the two middle samples for even counts.",
+      "verification": "Full suite: 3,015 tests passed. After review corrections, 100 focused tests passed. Accounted final source review resolves all six duplication groups with no blocking findings."
     },
     {
       "id": "duplication:ece161945b4e5809f98f6aa2e204996b2934c9db5cd0503c36bbe851ffcf27d5",
@@ -123,9 +123,9 @@
           "name": "riskRows.<callback:result.changeSurface.symbols.map:0>"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Inspected both live consumers and consolidated their shared responsibility. Detectors retain separate acceptance rules; shared validation, mapping, ranking and rendering preserve existing contracts. Benchmark medians now average the two middle samples for even counts.",
+      "verification": "Full suite: 3,015 tests passed. After review corrections, 100 focused tests passed. Accounted final source review resolves all six duplication groups with no blocking findings."
     },
     {
       "id": "complexity:src/runtime/project-setup.ts:runProjectSetup",

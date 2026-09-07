@@ -1,3 +1,4 @@
+import { changeSurfaceSymbolRow } from './change-surface-render.js';
 import * as queries from '../../queries/index.js';
 import { REPOSITORY_OBSERVATION_OPERATION } from '../command-operation.js';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
@@ -474,18 +475,7 @@ function riskRows(result: queries.RepositoryContextResult, limit: number): strin
           .join('; ')}`,
       );
     }
-    rows.push(
-      ...result.changeSurface.symbols.map((symbol) => {
-        const risk =
-          symbol.riskLevel === 'high' ? ' *** HIGH RISK ***' : symbol.riskLevel === 'medium' ? ' * medium risk *' : '';
-        const riskReasons = symbol.riskReasons ?? [];
-        const reasons =
-          riskReasons.length === 0
-            ? ''
-            : `  [why: ${riskReasons.map((reason) => `${reason.kind}: ${reason.detail}`).join('; ')}]`;
-        return `  ${displayRange(symbol.startLine, symbol.endLine)}  ${symbol.shortName}  [${symbol.externalConsumers} consumers]${risk}${reasons}`;
-      }),
-    );
+    rows.push(...result.changeSurface.symbols.map(changeSurfaceSymbolRow));
   }
   if (result.complexity) {
     rows.push(

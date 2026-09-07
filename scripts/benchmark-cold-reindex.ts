@@ -1,3 +1,4 @@
+import { summarizeTimings } from './benchmark-statistics.js';
 import { createHash } from 'node:crypto';
 import { createReadStream, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -279,12 +280,8 @@ function summarizeProfile(path: string, cacheState: ReindexMeasurement['state'])
 }
 
 function summarizeNumbers(values: readonly number[]): { min: number; median: number; max: number } {
-  const sorted = [...values].sort((left, right) => left - right);
-  return {
-    min: rounded(sorted[0] ?? 0),
-    median: rounded(sorted[Math.floor(sorted.length / 2)] ?? 0),
-    max: rounded(sorted.at(-1) ?? 0),
-  };
+  const { min, median, max } = summarizeTimings(values);
+  return { min, median, max };
 }
 
 function parseOptions(args: readonly string[]): BenchmarkOptions {

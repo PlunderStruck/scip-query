@@ -1104,6 +1104,14 @@ function collectGraphRiskCandidates(db, detector, context) {
 }
 
 function collectFrameworkCandidates(db, detector, context) {
+  const reactPairDetectors = {
+    'react-component-duplicates': reactComponentDuplicates,
+    'react-hook-candidates': reactHookCandidates,
+  };
+  const vuePairDetectors = {
+    'vue-component-duplicates': vueComponentDuplicates,
+    'vue-composable-candidates': vueComposableCandidates,
+  };
   const framework = detector.startsWith('react-') ? 'react' : 'vue';
   const applicableFiles = frameworkSourceFiles(db, framework);
   const metadata = {
@@ -1124,22 +1132,8 @@ function collectFrameworkCandidates(db, detector, context) {
     });
 
   let rawRows;
-  if (detector === 'react-component-duplicates') {
-    rawRows = reactComponentDuplicates(db, { limit: UNBOUNDED_RESULT_LIMIT }).map((finding) =>
-      deferredSimilarityRow({
-        root: context.root,
-        endpoints: [
-          namedSourceEndpoint(context.root, finding.fileA, finding.componentA),
-          namedSourceEndpoint(context.root, finding.fileB, finding.componentB),
-        ],
-        symbol: `${finding.fileA}:${finding.componentA}|${finding.fileB}:${finding.componentB}`,
-        shortName: `${finding.componentA} ↔ ${finding.componentB}`,
-        findingKind: `${finding.evidenceClass}:${finding.actionTier}`,
-        details: finding,
-      }),
-    );
-  } else if (detector === 'react-hook-candidates') {
-    rawRows = reactHookCandidates(db, { limit: UNBOUNDED_RESULT_LIMIT }).map((finding) =>
+  if (Object.hasOwn(reactPairDetectors, detector)) {
+    rawRows = reactPairDetectors[detector](db, { limit: UNBOUNDED_RESULT_LIMIT }).map((finding) =>
       deferredSimilarityRow({
         root: context.root,
         endpoints: [
@@ -1163,19 +1157,8 @@ function collectFrameworkCandidates(db, detector, context) {
         details: finding,
       }),
     );
-  } else if (detector === 'vue-component-duplicates') {
-    rawRows = vueComponentDuplicates(db, { limit: UNBOUNDED_RESULT_LIMIT }).map((finding) =>
-      deferredSimilarityRow({
-        root: context.root,
-        endpoints: [fileReviewEndpoint(context.root, finding.fileA), fileReviewEndpoint(context.root, finding.fileB)],
-        symbol: `${finding.fileA}|${finding.fileB}`,
-        shortName: `${finding.fileA} ↔ ${finding.fileB}`,
-        findingKind: `${finding.evidenceClass}:${finding.actionTier}`,
-        details: finding,
-      }),
-    );
-  } else if (detector === 'vue-composable-candidates') {
-    rawRows = vueComposableCandidates(db, { limit: UNBOUNDED_RESULT_LIMIT }).map((finding) =>
+  } else if (Object.hasOwn(vuePairDetectors, detector)) {
+    rawRows = vuePairDetectors[detector](db, { limit: UNBOUNDED_RESULT_LIMIT }).map((finding) =>
       deferredSimilarityRow({
         root: context.root,
         endpoints: [fileReviewEndpoint(context.root, finding.fileA), fileReviewEndpoint(context.root, finding.fileB)],

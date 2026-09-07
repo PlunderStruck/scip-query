@@ -1,3 +1,4 @@
+import { summarizeTimings } from './benchmark-statistics.js';
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
@@ -197,11 +198,12 @@ function isQueryServiceProcess(command: string): boolean {
 
 function summarize(values: readonly number[]) {
   const sorted = [...values].sort((left, right) => left - right);
+  const { min, median, max } = summarizeTimings(values);
   return {
-    min: round(sorted[0] ?? 0),
-    median: round(sorted[Math.floor(sorted.length / 2)] ?? 0),
+    min,
+    median,
     p95: round(sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1)] ?? 0),
-    max: round(sorted.at(-1) ?? 0),
+    max,
   };
 }
 

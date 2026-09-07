@@ -52,3 +52,15 @@ Next active work: correct build identity for persistent evidence/health caches, 
 Persistent evidence and health caches now identify this package's runtime tree and package metadata, rather than `process.argv[1]`. Fixed-name implementation bundles and nested JavaScript chunks participate in the digest. Source execution hashes `src`; installed execution hashes `dist`. Relative paths make relocation irrelevant. The digest is memoized per process; a failed read uses a process-private identity rather than the shared `source` fallback. This does not promise a coherent snapshot during an in-place installation replacement or fingerprint external dependency installations.
 
 Validation: five new real-filesystem identity tests plus existing evidence-cache and health-cache tests passed (34 tests total). Typecheck, changed-file ESLint, build, and diff whitespace checks passed. Source review reports accounted coverage and no blocking findings. This is a bounded cache fix, not completion of the maintenance inventory.
+
+### Duplicate implementation consolidation — validation in progress
+
+All six original groups have been inspected and consolidated: timing summaries share one statistics owner; release package metadata shares one decoder; React and Vue calibration pairs share their respective endpoint mapping; named frontend pairs share their ranking policy; context and change-surface share symbol-risk row formatting. The timing owner also corrects even-sample medians in the cold-index and query-service reporters. No detector selection, similarity thresholds, ranking precedence, or risk messages are intentionally changed.
+
+The first source review caught three issues in this batch: a type import bypassing the query facade, the new benchmark statistics file missing from the explicit performance-tooling inventory, and extra branching in calibration dispatch. These must be corrected and rechecked before this batch is committed.
+
+### Additional setup finding from live owner inspection
+
+`runProjectSetup` can write a new collaboration-domain identity through `ensureProjectCollaborationDomain`, but its `changeScopes.repository` only includes language configuration, automatic-refresh configuration, and agent guidance. When collaboration identity is the only config edit, the report omits a real repository mutation. Add a distinguishing regression before correcting the change report. This is separate from the pending complexity refactor of setup sequencing.
+
+Duplicate batch verification completed: 3,015 tests passed across 346 files. After the final facade/ownership/dispatch corrections, 100 relevant tests passed across 10 files. The final source review has accounted coverage, resolves all six original duplication findings, and reports no blocking findings. The benchmark helper is explicitly owned by performance-tooling; no boundary allowance or numerical limit was relaxed. API and skill-link checks passed. Remaining complexity findings and the additional accuracy/setup issues remain open.

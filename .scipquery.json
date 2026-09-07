@@ -288,6 +288,7 @@
           "scripts/benchmark-query-service.ts",
           "scripts/benchmark-reindex-accounting.ts",
           "scripts/benchmark-source-search.ts",
+          "scripts/benchmark-statistics.ts",
           "scripts/cache-lifecycle-soak.ts",
           "scripts/profile-scoreboard.mjs"
         ]

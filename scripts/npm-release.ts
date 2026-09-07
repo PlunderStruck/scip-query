@@ -20,6 +20,8 @@ import {
   type DecodedNpmPackTarball,
   type RegistryDistIdentity,
   verifyRegistryNpmPackIdentity,
+  parsePackage,
+  type PackageRecord,
 } from './scip-windows-package-identity.js';
 import {
   DEFAULT_SCIP_REPOSITORY,
@@ -42,12 +44,6 @@ const PACK_TIMEOUT_MS = 120_000;
 const REGISTRY_VISIBILITY_DELAYS_MS = [0, 500, 1_000, 2_000] as const;
 const PUBLISH_TIMEOUT_MS = 180_000;
 const COMMAND_OUTPUT_LIMIT_BYTES = 4 * 1024 * 1024;
-
-interface PackageRecord {
-  name: string;
-  version: string;
-  optionalDependencies?: Record<string, string>;
-}
 
 export interface NpmReleaseLock {
   release(): boolean;
@@ -580,25 +576,6 @@ function logDryRunPlan(
     runtime.log(`[dry-run] would publish and verify ${main.name}@${main.version} last.`);
   }
   runtime.log(`[dry-run] no registry mutation performed. Durable local state: ${statePath}`);
-}
-
-function parsePackage(bytes: Buffer, label: string): PackageRecord {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(bytes.toString('utf8'));
-  } catch {
-    throw new Error(`${label} package.json is malformed.`);
-  }
-  if (
-    parsed === null ||
-    typeof parsed !== 'object' ||
-    Array.isArray(parsed) ||
-    typeof (parsed as Partial<PackageRecord>).name !== 'string' ||
-    typeof (parsed as Partial<PackageRecord>).version !== 'string'
-  ) {
-    throw new Error(`${label} package.json is missing its name or version.`);
-  }
-  return parsed as PackageRecord;
 }
 
 function requireExactSidecarPin(main: PackageRecord, sidecar: PackageRecord): void {
