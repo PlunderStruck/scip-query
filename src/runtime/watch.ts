@@ -957,12 +957,10 @@ export class Watcher {
     if (this.reindexInFlight || this.stopped) return;
     const previous = this.lastGitState;
     const next = this.readGitState();
-    if (!previous || !next || this.stopped) {
-      this.lastGitState = next;
-      return;
-    }
-
+    // A transient read failure cannot replace the last accepted comparison baseline.
+    if (!next || this.stopped) return;
     this.lastGitState = next;
+    if (!previous) return;
     const headChanged = previous.head !== next.head;
     const indexChanged =
       previous.indexPath !== next.indexPath ||
@@ -998,31 +996,12 @@ export class Watcher {
       kind: existsSync(join(this.projectRoot, path)) ? 'change' : 'delete',
     }));
 
-    if (headChanged && indexChanged) {
-      this.scheduleReindex(
-        {
-          kind: 'watch-git-state',
-          detail: gitChangeDetail('HEAD and index changed', relevantPaths),
-        },
-        changes,
-        changes !== undefined,
-      );
-    } else if (headChanged) {
-      this.scheduleReindex(
-        { kind: 'watch-git-head', detail: gitChangeDetail('HEAD changed', relevantPaths) },
-        changes,
-        changes !== undefined,
-      );
-    } else if (indexChanged) {
-      this.scheduleReindex(
-        {
-          kind: 'watch-git-index',
-          detail: gitChangeDetail(next.indexPath ?? 'index changed', relevantPaths),
-        },
-        changes,
-        changes !== undefined,
-      );
-    }
+    const trigger = gitTransitionTrigger(headChanged, indexChanged, next.indexPath);
+    this.scheduleReindex(
+      { ...trigger, detail: gitChangeDetail(trigger.detail, relevantPaths) },
+      changes,
+      changes !== undefined,
+    );
   }
 
   private readGitState(): GitStateSnapshot | null {
@@ -1698,6 +1677,16 @@ function parseRawGitEntries(output: string): ReadonlyMap<string, string> | null 
 function changedMapKeys(previous: ReadonlyMap<string, string>, next: ReadonlyMap<string, string>): string[] {
   const paths = new Set([...previous.keys(), ...next.keys()]);
   return [...paths].filter((path) => previous.get(path) !== next.get(path));
+}
+
+function gitTransitionTrigger(
+  headChanged: boolean,
+  indexChanged: boolean,
+  indexPath: string | null | undefined,
+): RefreshTrigger & { detail: string } {
+  if (headChanged && indexChanged) return { kind: 'watch-git-state', detail: 'HEAD and index changed' };
+  if (headChanged) return { kind: 'watch-git-head', detail: 'HEAD changed' };
+  return { kind: 'watch-git-index', detail: indexPath ?? 'index changed' };
 }
 
 function gitChangeDetail(fallback: string, changedPaths: readonly string[] | null): string {

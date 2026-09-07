@@ -3401,9 +3401,9 @@
           "name": "Watcher.pollGitState"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "assessed-retained",
+      "assessment": "Fixed failed-read baseline loss and consolidated three repeated refresh scheduling calls into one. Polling keeps the ordered snapshot comparison, staged-entry observation, compiler-input filtering, and refresh journal in one owner. Remaining cyclomatic 13/cognitive 13 warning stays visible; further splitting solely to cross a threshold is not justified.",
+      "verification": "Failed-read regression fails on original code; 54 watcher tests cover recovery, HEAD-only, index-only, combined transition, irrelevant docs, and unavailable path fallback. Source review accounted, no blocking finding."
     },
     {
       "id": "complexity:src/semantic/rust/durable-session-protocol.ts:isResponseForKind",

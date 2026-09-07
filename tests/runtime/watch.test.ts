@@ -1126,6 +1126,52 @@ describe('Watcher', () => {
     await watcher.stop();
   });
 
+  it('preserves the last accepted Git snapshot across a failed read and detects the recovered transition', async () => {
+    vi.useFakeTimers();
+    const projectRoot = createProject();
+    const indexPath = join(projectRoot, '.git-index');
+    writeFileSync(indexPath, 'index');
+    let head = 'a'.repeat(40);
+    let readFails = false;
+    const gitReader: GitReader = {
+      run: (_root, args) => {
+        if (readFails) return undefined;
+        if (args.includes('--git-path')) return indexPath;
+        if (args.includes('HEAD')) return head;
+        return undefined;
+      },
+      runResult: (_root, args) =>
+        args[0] === 'diff' ? { kind: 'success', output: 'src/a.ts\0' } : { kind: 'error', message: 'unexpected' },
+    };
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { debounceMs: 250, gitPollMs: 1_000 } },
+      languages: ['typescript'],
+      gitReader,
+      reindexRunner: { start: run },
+      subscriptionFactory: sourceSubscriptionHarness().factory,
+    });
+    watcher.start();
+    try {
+      readFails = true;
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(run).not.toHaveBeenCalled();
+      readFails = false;
+      head = 'b'.repeat(40);
+      await vi.advanceTimersByTimeAsync(1_250);
+      expect(run).toHaveBeenCalledOnce();
+      expect(run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          trigger: { kind: 'watch-git-head', detail: 'src/a.ts' },
+        }),
+      );
+    } finally {
+      await watcher.stop();
+    }
+  });
+
   it('skips proven docs-only Git transitions and reindexes compiler-input transitions', async () => {
     vi.useFakeTimers();
     const projectRoot = createProject();
@@ -1170,52 +1216,58 @@ describe('Watcher', () => {
     await watcher.stop();
   });
 
-  it('compares successive staged identities instead of repeatedly charging an unchanged staged source', async () => {
-    vi.useFakeTimers();
-    const projectRoot = createProject();
-    const indexPath = join(projectRoot, '.git-index');
-    writeFileSync(indexPath, 'initial');
-    const head = 'a'.repeat(40);
-    let stagedEntries = `${rawGitEntry('1', '2', 'M', 'src/a.ts')}`;
-    const gitReader: GitReader = {
-      run: (_root, args) => {
-        if (args.includes('--git-path')) return indexPath;
-        if (args.includes('HEAD')) return head;
-        return undefined;
-      },
-      runResult: (_root, args) =>
-        args.includes('--raw')
-          ? { kind: 'success', output: stagedEntries }
-          : { kind: 'error', message: 'unexpected Git command' },
-    };
-    const { Watcher } = await import('../../src/runtime/watch.js');
-    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
-    const watcher = new Watcher({
-      projectRoot,
-      config: { watch: { debounceMs: 250, gitPollMs: 1_000 } },
-      languages: ['typescript'],
-      gitReader,
-      reindexRunner: { start: run },
-      subscriptionFactory: sourceSubscriptionHarness().factory,
-    });
+  it.each([false, true])(
+    'compares successive staged identities without charging unchanged source (HEAD also changes: %s)',
+    async (headAlsoChanges) => {
+      vi.useFakeTimers();
+      const projectRoot = createProject();
+      const indexPath = join(projectRoot, '.git-index');
+      writeFileSync(indexPath, 'initial');
+      let head = 'a'.repeat(40);
+      let stagedEntries = `${rawGitEntry('1', '2', 'M', 'src/a.ts')}`;
+      const gitReader: GitReader = {
+        run: (_root, args) => {
+          if (args.includes('--git-path')) return indexPath;
+          if (args.includes('HEAD')) return head;
+          return undefined;
+        },
+        runResult: (_root, args) =>
+          args.includes('--raw')
+            ? { kind: 'success', output: stagedEntries }
+            : args.includes('--name-only')
+              ? { kind: 'success', output: 'src/a.ts\0' }
+              : { kind: 'error', message: 'unexpected Git command' },
+      };
+      const { Watcher } = await import('../../src/runtime/watch.js');
+      const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+      const watcher = new Watcher({
+        projectRoot,
+        config: { watch: { debounceMs: 250, gitPollMs: 1_000 } },
+        languages: ['typescript'],
+        gitReader,
+        reindexRunner: { start: run },
+        subscriptionFactory: sourceSubscriptionHarness().factory,
+      });
 
-    watcher.start();
-    stagedEntries += rawGitEntry('0', '3', 'A', 'README.md');
-    writeFileSync(indexPath, 'docs added to index');
-    await vi.advanceTimersByTimeAsync(1_250);
-    expect(run).not.toHaveBeenCalled();
+      watcher.start();
+      stagedEntries += rawGitEntry('0', '3', 'A', 'README.md');
+      writeFileSync(indexPath, 'docs added to index');
+      await vi.advanceTimersByTimeAsync(1_250);
+      expect(run).not.toHaveBeenCalled();
 
-    stagedEntries = `${rawGitEntry('1', '4', 'M', 'src/a.ts')}${rawGitEntry('0', '3', 'A', 'README.md')}`;
-    writeFileSync(indexPath, 'source restaged with changed blob identity');
-    await vi.advanceTimersByTimeAsync(1_250);
-    expect(run).toHaveBeenCalledOnce();
-    expect(run).toHaveBeenCalledWith(
-      expect.objectContaining({
-        trigger: { kind: 'watch-git-index', detail: 'src/a.ts' },
-      }),
-    );
-    await watcher.stop();
-  });
+      stagedEntries = `${rawGitEntry('1', '4', 'M', 'src/a.ts')}${rawGitEntry('0', '3', 'A', 'README.md')}`;
+      if (headAlsoChanges) head = 'b'.repeat(40);
+      writeFileSync(indexPath, 'source restaged with changed blob identity');
+      await vi.advanceTimersByTimeAsync(1_250);
+      expect(run).toHaveBeenCalledOnce();
+      expect(run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          trigger: { kind: headAlsoChanges ? 'watch-git-state' : 'watch-git-index', detail: 'src/a.ts' },
+        }),
+      );
+      await watcher.stop();
+    },
+  );
 
   it('reindexes conservatively when a changed Git path set cannot be established', async () => {
     vi.useFakeTimers();

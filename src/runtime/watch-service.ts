@@ -296,7 +296,7 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
   }
   if (action.kind === 'replace') {
     stopLiveWatchProcess(action.state, opts, runtime);
-    cleanupWatchServiceFiles(inspection.paths, action.state.pid, runtime);
+    cleanupWatchServiceFiles(inspection.paths, action.state, runtime);
   } else if (action.kind === 'start') {
     if (inspection.lockIsLive) {
       const concurrent = waitForWatchServiceState(
@@ -314,7 +314,7 @@ export function ensureWatchService(opts: WatchServiceControllerOptions): WatchSe
       );
     }
     if (inspection.classification.kind === 'stale') {
-      cleanupWatchServiceFiles(inspection.paths, inspection.classification.state.pid, runtime);
+      cleanupWatchServiceFiles(inspection.paths, inspection.classification.state, runtime);
     }
   } else {
     throw new Error(`Unexpected ensure action: ${action.kind}`);
@@ -363,17 +363,17 @@ export function stopWatchService(opts: WatchServiceControllerOptions): WatchServ
   const action = planWatchServiceAction('stop', classification);
   if (action.kind === 'signal-stop') {
     stopLiveWatchProcess(action.state, opts, runtime);
-    cleanupWatchServiceFiles(paths, action.state.pid, runtime);
+    cleanupWatchServiceFiles(paths, action.state, runtime);
     return { disposition: 'stopped', pid: action.state.pid };
   }
   if (action.kind === 'clean-stale') {
-    cleanupWatchServiceFiles(paths, action.state.pid, runtime);
+    cleanupWatchServiceFiles(paths, action.state, runtime);
     return { disposition: 'stopped', pid: action.state.pid };
   }
   const lock = readWatchProcessLock(paths.lockPath);
   if (action.kind === 'already-stopped' && lock) {
     if (ownedProcessIsLive(lock, runtime)) stopLiveWatchProcess(lock, opts, runtime);
-    cleanupWatchServiceFiles(paths, lock.pid, runtime);
+    cleanupWatchServiceFiles(paths, lock, runtime);
     return { disposition: 'stopped', pid: lock.pid };
   }
   return { disposition: 'already-stopped' };
@@ -462,14 +462,16 @@ export function acquireWatchProcessLock(
     isProcessAlive: isAlive,
     readProcessIdentity: readIdentity,
   };
-  const acquired = tryAcquireProcessFileLock(lockPath, {
-    kind: 'watch',
-    pid,
-    processIdentity: readIdentity(pid),
-    detail: { projectRoot: resolve(projectRoot) },
-    parseLegacy: parseLegacyWatchOwner,
-    runtime,
-  });
+  const acquired = withWatchOwnershipTransition(lockPath, () =>
+    tryAcquireProcessFileLock(lockPath, {
+      kind: 'watch',
+      pid,
+      processIdentity: readIdentity(pid),
+      detail: { projectRoot: resolve(projectRoot) },
+      parseLegacy: parseLegacyWatchOwner,
+      runtime,
+    }),
+  );
   if (acquired.kind === 'contended') {
     const existing = watchMetadataFromObservation(acquired.observation);
     return {
@@ -675,11 +677,49 @@ function stopLiveWatchProcess(
   throw new Error(`scip-query watch service pid ${pid} remained alive ${forceTimeoutMs}ms after forced termination.`);
 }
 
-function cleanupWatchServiceFiles(paths: WatchServicePaths, expectedPid: number, runtime: WatchServiceRuntime): void {
-  rmSync(paths.statePath, { force: true });
-  rmSync(paths.activityPath, { force: true });
-  const lock = readWatchProcessLock(paths.lockPath);
-  if (lock?.pid === expectedPid) {
+type WatchOwner = { pid: number; processIdentity?: ProcessIdentity; projectRoot: string };
+
+// Startup and cleanup serialize changes to ownership. The lifetime watch lock
+// still protects the daemon; this short-lived guard also protects its records.
+function withWatchOwnershipTransition<T>(lockPath: string, action: () => T): T {
+  const deadline = monotonicNowMs() + WATCH_SERVICE_STARTUP_TIMEOUT_MS;
+  while (true) {
+    const guard = tryAcquireProcessFileLock(`${lockPath}.transition`, { kind: 'watch-transition' });
+    if (guard.kind === 'acquired') {
+      try {
+        return action();
+      } finally {
+        guard.lock.release();
+      }
+    }
+    if (monotonicNowMs() >= deadline) throw new Error(`Timed out waiting for watch ownership transition: ${lockPath}`);
+    DEFAULT_WATCH_SERVICE_RUNTIME.sleep(WATCH_SERVICE_POLL_INTERVAL_MS);
+  }
+}
+
+function matchesWatchOwner(actual: WatchOwner, expected: WatchOwner, runtime: WatchServiceRuntime): boolean {
+  if (actual.pid !== expected.pid || resolve(actual.projectRoot) !== resolve(expected.projectRoot)) return false;
+  // Legacy records can be removed only after their PID has actually exited.
+  if (!actual.processIdentity || !expected.processIdentity) return !runtime.isProcessAlive(actual.pid);
+  return (
+    !!actual.processIdentity &&
+    !!expected.processIdentity &&
+    sameProcessIdentity(actual.processIdentity, expected.processIdentity)
+  );
+}
+
+function cleanupWatchServiceFiles(paths: WatchServicePaths, expected: WatchOwner, runtime: WatchServiceRuntime): void {
+  withWatchOwnershipTransition(paths.lockPath, () => {
+    const lock = readWatchProcessLock(paths.lockPath);
+    const state = readWatchServiceState(paths.statePath);
+    // Preserve replacement or unreadable ownership records. A reused PID alone
+    // cannot authorize deleting a new process's files.
+    if (existsSync(paths.lockPath) && (!lock || !matchesWatchOwner(lock, expected, runtime))) return;
+    if (existsSync(paths.statePath) && (!state || !matchesWatchOwner(state, expected, runtime))) return;
+    if (ownedProcessIsLive(expected, runtime)) return;
+    rmSync(paths.statePath, { force: true });
+    rmSync(paths.activityPath, { force: true });
+    if (!lock) return;
     const lockRuntime = {
       ...NODE_PROCESS_FILE_LOCK_RUNTIME,
       wallNow: runtime.now,
@@ -694,7 +734,7 @@ function cleanupWatchServiceFiles(paths: WatchServicePaths, expectedPid: number,
       parseLegacy: parseLegacyWatchOwner,
       runtime: lockRuntime,
     });
-  }
+  });
 }
 
 function ownedProcessIsLive(

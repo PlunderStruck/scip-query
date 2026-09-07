@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-09-07T04:50:59.051Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "b74137d6c422ca9c23c8d234556c8bc1b4682b20a310624e3d4dd528247173fa",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "Watcher changed from declare class Watcher { private projectRoot; private config; private watchConfig; private outputDb; private languages?; private pnpmWorkspaces; private typescriptProjectMode?; p... to declare class Watcher { private projectRoot; private config; private watchConfig; private outputDb; private languages?; private pnpmWorkspaces; private typescriptProjectMode?; p....",
+      "target": "./runtime:Watcher"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.25.0",
+  "previousDigest": "88ac6629033f84f665a2a023fb08fe4b24e6bff8a7452d085a7ee80236599b5e",
+  "reason": "Watcher declaration changes are private publication-cache state and helper methods. The constructor and all non-private members are unchanged, verified with the TypeScript AST; the public consumer fixture compiles. This records the retry and source invalidation correction without changing the consumer contract.",
+  "schemaVersion": 1
+}

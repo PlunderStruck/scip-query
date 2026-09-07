@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { WatcherStatus } from '../../src/domain/types.js';
 import type { GitWorktreeContext } from '../../src/platform/git-worktree.js';
 import type { ProcessIdentity } from '../../src/platform/process-identity.js';
+import { tryAcquireProcessFileLock } from '../../src/platform/process-file-lock.js';
 import {
   WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS,
   WATCH_SERVICE_PROTOCOL_VERSION,
@@ -566,6 +567,90 @@ describe('watch service contract', () => {
       expect(runtime.signaled).toEqual([]);
       expect(existsSync(paths.statePath)).toBe(false);
       expect(existsSync(paths.lockPath)).toBe(false);
+    });
+  });
+
+  it('holds the ownership transition guard through cleanup and releases it afterward', () => {
+    withTempCache((cacheDir) => {
+      const paths = watchServicePaths(cacheDir);
+      const runtime = fakeRuntime(paths.statePath);
+      writeWatchServiceState(paths.statePath, liveState());
+      let observations = 0;
+      runtime.isProcessAlive = () => {
+        observations += 1;
+        if (observations > 1) {
+          const contender = tryAcquireProcessFileLock(`${paths.lockPath}.transition`, { kind: 'test' });
+          if (contender.kind === 'acquired') contender.lock.release();
+          expect(contender.kind).toBe('contended');
+        }
+        return false;
+      };
+      stopWatchService(controllerOptions(cacheDir, runtime));
+      expect(observations).toBeGreaterThan(1);
+      const afterward = tryAcquireProcessFileLock(`${paths.lockPath}.transition`, { kind: 'test' });
+      if (afterward.kind === 'acquired') afterward.lock.release();
+      expect(afterward.kind).toBe('acquired');
+    });
+  });
+
+  it('holds the same transition guard during startup and releases it if identity lookup throws', () => {
+    withTempCache((cacheDir) => {
+      const paths = watchServicePaths(cacheDir);
+      expect(() =>
+        acquireWatchProcessLock(paths.lockPath, IDENTITY.projectRoot, {
+          readProcessIdentity: () => {
+            const contender = tryAcquireProcessFileLock(`${paths.lockPath}.transition`, { kind: 'test' });
+            if (contender.kind === 'acquired') contender.lock.release();
+            expect(contender.kind).toBe('contended');
+            throw new Error('identity read failed');
+          },
+        }),
+      ).toThrow('identity read failed');
+      const afterward = tryAcquireProcessFileLock(`${paths.lockPath}.transition`, { kind: 'test' });
+      if (afterward.kind === 'acquired') afterward.lock.release();
+      expect(afterward.kind).toBe('acquired');
+      expect(existsSync(paths.lockPath)).toBe(false);
+    });
+  });
+
+  it.each([123, 456])('preserves a replacement watcher published before stale cleanup (pid %i)', (replacementPid) => {
+    withTempCache((cacheDir) => {
+      const paths = watchServicePaths(cacheDir);
+      const runtime = fakeRuntime(paths.statePath);
+      writeWatchServiceState(paths.statePath, liveState());
+      const replacementIdentity = { ...WATCH_PROCESS_IDENTITY, pid: replacementPid, startToken: 'replacement' };
+      let replacement: ReturnType<typeof acquireWatchProcessLock> | undefined;
+      let observed = false;
+      runtime.isProcessAlive = (pid) => {
+        if (!observed) {
+          observed = true;
+          runtime.alive.add(replacementPid);
+          runtime.processIdentities.set(replacementPid, replacementIdentity);
+          replacement = acquireWatchProcessLock(paths.lockPath, IDENTITY.projectRoot, {
+            pid: replacementPid,
+            isProcessAlive: (candidate) => runtime.alive.has(candidate),
+            readProcessIdentity: runtime.readProcessIdentity,
+          });
+          writeWatchServiceState(paths.statePath, {
+            ...liveState(),
+            pid: replacementPid,
+            processIdentity: replacementIdentity,
+          });
+          recordWatchServiceActivity(paths.activityPath, NOW);
+          return false;
+        }
+        return runtime.alive.has(pid);
+      };
+      try {
+        expect(stopWatchService(controllerOptions(cacheDir, runtime))).toEqual({ disposition: 'stopped', pid: 123 });
+        expect(replacement?.acquired).toBe(true);
+        expect(existsSync(paths.statePath)).toBe(true);
+        expect(readWatchServiceActivityAt(paths.activityPath)).toBe(NOW);
+        expect(existsSync(paths.lockPath)).toBe(true);
+        expect(runtime.signaled).toEqual([]);
+      } finally {
+        replacement?.release();
+      }
     });
   });
 
