@@ -162,3 +162,23 @@ Batch-six queue from the complete 632-finding scan: semanticReferenceMap profile
 ### Batch five completion
 
 All checks passed: 146 focused tests, 3,112 full-suite tests across 350 files, build, source types, changed-file lint, format, API/consumer and skill links. Fresh index/diff-impact maps 36 changed symbols in five source files to eight affected files. Source scan accounted across 563 files and 12,367 functions; 632 complexity findings remain, with three extracted helper warnings explicitly queued. No configuration policy or suppression changes. Historical inventory now 44 fixed, six assessed-retained, 605 pending. Continue with batch six above; VM installation remains the verified build because these refactors preserve behavior.
+
+### Batch six implementation checkpoint
+
+Separated semantic provider grouping, Rust fast-path recording, combined reference/callee requests and result accounting. Preserved lazy provider lookup, default-before-SCIP precedence, prefetch before fast paths, absent-versus-empty map entries and profile counters. Separated the three ordered next-anchor candidate passes and shared graph-call selection and construction; preserved the different callsite-key reservation points, ambiguity counts and first-three alternative display. Split inspection normalization into ordered validation, bounds and evidence defaults. Split receipt validation into sources, proofs, identity facts, index and diagnostics without changing optionality or source/proof agreement. Split suppression validation by identity, file, expiry and decision, preserving diagnostic ordering and policy.
+
+| Target | Before cyclomatic/cognitive | After |
+| --- | --- | --- |
+| semanticReferenceMap profile callback | 26/52 | 4/4 |
+| collectNextAnchorCallsiteCandidates | 34/47 | 7/4 |
+| normalizeRequest | 34/22 | 7/3 |
+| isObservationReceiptV2 | 33/18 | 8/6 |
+| validateSuppressions | 33/48 | 7/7 |
+
+Focused verification: 335 distinct tests across 13 files pass (104 candidate/graph/inspection tests, 96 receipt/envelope tests, 100 configuration/suppression tests and 35 semantic-provider/cache tests). Source types and changed-file lint pass. Diff inspected for validation precedence, provider ordering and evidence attribution. One smaller helper remains queued: semanticReferenceMap.groupReferenceDefinitions 9/16. Build/full suite/API/index verification is pending. No thresholds, suppression policies or VM installation changes.
+
+Batch-seven queue from the prior full scan (remaining ranks unchanged by batch-six review): similarAll pair-scan callback 21/49 (src/queries/cleanup/similar.ts:389), groupTwins compare-clusters callback 20/48 (src/queries/cleanup/twin-drift.ts:180), decodeCliOutputPageEnvelope 32/20 (src/runtime/output-pagination.ts:198), assignmentTargets 26/48 (src/semantic/typescript/local-flow.ts:1101), factoryReturnedMemberImplementations 30/48 (src/symbols/graph/member-call-targets.ts:640). Bodies inspected. Preserve pair visitation/order, focus filtering, signature and similarity gates, profile accounting and stable result ranking; twin delegation/stub exclusions, participating members, closest nonidentical pair and classification; exact envelope validation messages/order, counts and continuation requirements; destructuring defaults/use ordering, partial element writes and unresolved-target invalidation; unique factory resolution, returned property forms, source ranges and stable deduplication. Share candidate collection with similarAllCount where it removes the same duplicate scan. No edits until batch-six full verification and commit.
+
+### Batch six completion
+
+All checks passed: 335 focused tests, 3,112 full-suite tests across 350 files, build, source types, changed-file lint, format, public API/consumer and skill links. Initial reindex correctly refused a whole-project compiler fallback because the incremental service was unavailable; explicit --allow-expensive-rebuild completed in 20.3 seconds with cached Rust/Python shards. Fresh indexed diff-impact maps 21 changed symbols in five source files to one affected file. Source scan accounted across 563 files and 12,390 functions, with 628 complexity findings; all files mapped and 47/47 dependency rows declared, no reported cycles or configured violations. Historical inventory: 49 fixed, six assessed-retained, 600 pending. One new helper warning remains queued, and no thresholds or suppression policies changed. Continue with batch seven above. VM installation remains the verified behavior-equivalent build.

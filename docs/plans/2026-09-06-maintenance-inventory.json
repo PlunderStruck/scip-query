@@ -716,9 +716,14 @@
           "name": "semanticReferenceMap.<callback:profileSpan:1>"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Ranked complexity batch six: 26/52 to 4/4. Separated provider grouping, fast-path result accounting and combined prefetch; ordering and cache semantics preserved.",
+      "verification": [
+        "335 focused tests across 13 files passed.",
+        "Full suite: 3112 tests across 350 files passed.",
+        "Build, typecheck, changed-file lint, format, public API/consumer and skill links passed.",
+        "Fresh index, diff-impact and accounted 563-file source health; one smaller helper warning remains queued."
+      ]
     },
     {
       "id": "complexity:src/queries/internal/next-anchor-candidates.ts:collectNextAnchorCallsiteCandidates",
@@ -731,9 +736,14 @@
           "name": "collectNextAnchorCallsiteCandidates"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Ranked complexity batch six: 34/47 to 7/4. Separated ordered graph/callee/identity passes and shared graph candidate construction with reservation points preserved.",
+      "verification": [
+        "335 focused tests across 13 files passed.",
+        "Full suite: 3112 tests across 350 files passed.",
+        "Build, typecheck, changed-file lint, format, public API/consumer and skill links passed.",
+        "Fresh index, diff-impact and accounted 563-file source health; one smaller helper warning remains queued."
+      ]
     },
     {
       "id": "complexity:src/queries/navigation/source-inspection.ts:normalizeRequest",
@@ -746,9 +756,14 @@
           "name": "normalizeRequest"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Ranked complexity batch six: 34/22 to 7/3. Separated ordered option validation, bounds and evidence defaults.",
+      "verification": [
+        "335 focused tests across 13 files passed.",
+        "Full suite: 3112 tests across 350 files passed.",
+        "Build, typecheck, changed-file lint, format, public API/consumer and skill links passed.",
+        "Fresh index, diff-impact and accounted 563-file source health; one smaller helper warning remains queued."
+      ]
     },
     {
       "id": "complexity:src/domain/observation-receipt.ts:isObservationReceiptV2",
@@ -761,9 +776,14 @@
           "name": "isObservationReceiptV2"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Ranked complexity batch six: 33/18 to 8/6. Separated sources, proofs, identity/index facts and diagnostics without weakening validation.",
+      "verification": [
+        "335 focused tests across 13 files passed.",
+        "Full suite: 3112 tests across 350 files passed.",
+        "Build, typecheck, changed-file lint, format, public API/consumer and skill links passed.",
+        "Fresh index, diff-impact and accounted 563-file source health; one smaller helper warning remains queued."
+      ]
     },
     {
       "id": "complexity:src/runtime/config.ts:validateSuppressions",
@@ -776,9 +796,14 @@
           "name": "validateSuppressions"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Ranked complexity batch six: 33/48 to 7/7. Separated identity, file, expiry and decision diagnostics with policy and ordering preserved.",
+      "verification": [
+        "335 focused tests across 13 files passed.",
+        "Full suite: 3112 tests across 350 files passed.",
+        "Build, typecheck, changed-file lint, format, public API/consumer and skill links passed.",
+        "Fresh index, diff-impact and accounted 563-file source health; one smaller helper warning remains queued."
+      ]
     },
     {
       "id": "complexity:src/queries/cleanup/similar.ts:similarAll.<callback:profileSpan:1>.<callback:profileSpan:1>",

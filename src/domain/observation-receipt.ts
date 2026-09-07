@@ -578,51 +578,67 @@ function isObservationReceiptV2(value: unknown): value is ObservationReceiptV2 {
   if (!isRecordObject(value)) return false;
   const facts = value['facts'];
   const sources = value['observedSources'];
-  const proofs = value['stabilityProofs'];
-  if (
-    !isTimestamp(value['observedAt']) ||
-    !isRecordObject(facts) ||
-    !Array.isArray(sources) ||
-    sources.length === 0 ||
-    !sources.every(isObservationSourceFact) ||
-    !uniqueBy(sources, (source) => source.kind) ||
-    !Array.isArray(proofs) ||
-    !proofs.every(isObservationStabilityProof) ||
-    !uniqueBy(proofs, (proof) => proof.source) ||
-    proofs.some((proof) => !sources.some((source) => source.kind === proof.source)) ||
-    !proofs.every((proof) => stabilityProofCanDescribeSource(proof, facts))
-  ) {
-    return false;
-  }
+  if (!isTimestamp(value['observedAt']) || !isRecordObject(facts) || !isV2ObservationSources(sources)) return false;
+  if (!isV2ObservationProofSet(value['stabilityProofs'], sources, facts)) return false;
+  if (!isV2ObservationFacts(facts)) return false;
+  return isV2ObservationDiagnostics(value['diagnostics']) && v2SourceFactsAgree(facts, sources);
+}
+
+function isV2ObservationSources(value: unknown): value is ObservationReceiptV2['observedSources'] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every(isObservationSourceFact) &&
+    uniqueBy(value, (source) => source.kind)
+  );
+}
+
+function isV2ObservationProofSet(
+  proofs: unknown,
+  sources: ObservationReceiptV2['observedSources'],
+  facts: Record<string, unknown>,
+): proofs is ObservationReceiptV2['stabilityProofs'] {
+  return (
+    Array.isArray(proofs) &&
+    proofs.every(isObservationStabilityProof) &&
+    uniqueBy(proofs, (proof) => proof.source) &&
+    !proofs.some((proof) => !sources.some((source) => source.kind === proof.source)) &&
+    proofs.every((proof) => stabilityProofCanDescribeSource(proof, facts))
+  );
+}
+
+function isV2ObservationFacts(facts: Record<string, unknown>): boolean {
   const identityFields = ['collaborationDomain', 'repositoryLineage', 'workspaceInstance', 'wholeContent'] as const;
   if (identityFields.some((field) => facts[field] !== undefined && !isObservationIdentity(facts[field]))) return false;
-  const relevantInputs = facts['relevantInputs'];
-  if (
-    relevantInputs !== undefined &&
-    (!Array.isArray(relevantInputs) ||
-      !relevantInputs.every(isRelevantInputIdentity) ||
-      !uniqueBy(relevantInputs, (entry) => `${entry.subject}\0${entry.identity.projection.name}`))
-  ) {
-    return false;
-  }
-  const index = facts['index'];
-  if (
-    index !== undefined &&
-    (!isRecordObject(index) ||
-      !isObservationIdentity(index['generation']) ||
-      (index['inputs'] !== undefined && !isObservationIdentity(index['inputs'])) ||
-      (index['source'] !== 'immutable' && index['source'] !== 'legacy'))
-  ) {
-    return false;
-  }
-  const diagnostics = value['diagnostics'];
+  return isV2RelevantInputSet(facts['relevantInputs']) && isV2ObservationIndex(facts['index']);
+}
+
+function isV2RelevantInputSet(value: unknown): boolean {
   return (
-    (diagnostics === undefined ||
-      (isRecordObject(diagnostics) &&
-        (diagnostics['clean'] === undefined || typeof diagnostics['clean'] === 'boolean') &&
-        (diagnostics['headCommit'] === undefined || isBoundedRecordString(diagnostics['headCommit'])) &&
-        (diagnostics['treeOid'] === undefined || isBoundedRecordString(diagnostics['treeOid'])))) &&
-    v2SourceFactsAgree(facts, sources)
+    value === undefined ||
+    (Array.isArray(value) &&
+      value.every(isRelevantInputIdentity) &&
+      uniqueBy(value, (entry) => `${entry.subject}\0${entry.identity.projection.name}`))
+  );
+}
+
+function isV2ObservationIndex(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (isRecordObject(value) &&
+      isObservationIdentity(value['generation']) &&
+      (value['inputs'] === undefined || isObservationIdentity(value['inputs'])) &&
+      (value['source'] === 'immutable' || value['source'] === 'legacy'))
+  );
+}
+
+function isV2ObservationDiagnostics(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (isRecordObject(value) &&
+      (value['clean'] === undefined || typeof value['clean'] === 'boolean') &&
+      (value['headCommit'] === undefined || isBoundedRecordString(value['headCommit'])) &&
+      (value['treeOid'] === undefined || isBoundedRecordString(value['treeOid'])))
   );
 }
 

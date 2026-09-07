@@ -465,11 +465,12 @@ function collectNextAnchorCallsiteCandidates(
   const callLines = step.behavior.lines.filter((line) => line.signals.includes('call'));
   if (callLines.length === 0) return empty;
 
+  const sourceFile = step.location.file;
   const candidates: NextAnchorCandidate[] = [];
   let identityCandidateCallsites = 0;
   let ambiguousCallsites = 0;
   let unresolvedCallsites = 0;
-  const callsites = (getSourceFacts(context.db, step.location.file)?.callSites ?? []).filter((callsite) =>
+  const callsites = (getSourceFacts(context.db, sourceFile)?.callSites ?? []).filter((callsite) =>
     callLines.some((line) => callsite.line >= line.line && callsite.line <= line.endLine),
   );
   const outgoing = context.topology.edges.filter(
@@ -479,41 +480,34 @@ function collectNextAnchorCallsiteCandidates(
       edge.disposition !== 'excluded' &&
       edge.disposition !== 'unsupported',
   );
-  const outgoingTargetCountByLeaf = new Map<string, number>();
-  for (const edge of outgoing) {
-    const target = context.nodeById.get(edge.toNodeId);
-    if (!target) continue;
-    const leaf = nodeLeaf(target);
-    outgoingTargetCountByLeaf.set(leaf, (outgoingTargetCountByLeaf.get(leaf) ?? 0) + 1);
-  }
-
+  const outgoingTargetCountByLeaf = countOutgoingTargetLeaves(outgoing, context.nodeById);
   const resolvedTargets = resolvedCalleeTargets(
     context.db,
     input.stepDefinition ? (input.calleeMap.get(input.stepDefinition.symbolId) ?? []) : [],
   );
   const targetCountByLeaf = countResolvedTargetsByLeaf(resolvedTargets);
-  for (const target of resolvedTargets) {
-    if (!context.sourceAllowed(target.alternative.file) || context.alternativeAlreadyReturned(target.alternative)) {
-      continue;
-    }
-    const leaf = normalizedCallableLeaf(target.alternative.label);
-    const callsite = bestCallsiteForResolvedTarget(
-      callsites,
-      callLines,
-      leaf,
-      target.row.callsiteLine,
-      targetCountByLeaf.get(leaf) === 1,
-    );
-    if (!callsite) continue;
+  const selectGraphCallsite = (leaf: string, preferredLine: number | undefined, uniqueTarget: boolean) => {
+    const callsite = bestCallsiteForResolvedTarget(callsites, callLines, leaf, preferredLine, uniqueTarget);
+    if (!callsite) return null;
     const materialLine = materialLineForCallsite(callLines, callsite.line, leaf);
-    if (!materialLine) continue;
-    const callsiteKey = sourceCallsiteKey(step.location.file, callsite.line, leaf);
-    if (input.evidencedCallsiteKeys.has(callsiteKey)) continue;
+    if (!materialLine) return null;
+    const callsiteKey = sourceCallsiteKey(sourceFile, callsite.line, leaf);
+    if (input.evidencedCallsiteKeys.has(callsiteKey)) return null;
     input.evidencedCallsiteKeys.add(callsiteKey);
-    const strength = calleeRowEvidenceStrength(target.row.source);
+    return { callsite, materialLine };
+  };
+  const appendGraphCandidate = (
+    leaf: string,
+    selection: NonNullable<ReturnType<typeof selectGraphCallsite>>,
+    targetKey: string,
+    strength: NextAnchorCandidate['anchor']['status'],
+    alternative: NextAnchorCandidate['anchor']['alternatives'][number],
+    evidence: NextAnchorCandidate['anchor']['evidence'],
+  ): void => {
+    const { callsite, materialLine } = selection;
     candidates.push({
       anchor: {
-        id: nextAnchorId(step.id, callsite.line, target.alternative.symbol ?? target.alternative.file),
+        id: nextAnchorId(step.id, callsite.line, targetKey),
         status: strength,
         source: 'graph-call',
         direction: 'downstream',
@@ -522,65 +516,7 @@ function collectNextAnchorCallsiteCandidates(
         fromStepId: step.id,
         fromLabel: step.label,
         callsite: {
-          file: step.location.file,
-          line: materialLine.line,
-          endLine: materialLine.endLine,
-          text: materialLine.text,
-          signals: materialLine.signals,
-          calleeLeaf: leaf,
-        },
-        alternatives: [target.alternative],
-        alternativeCount: 1,
-        evidence: [
-          {
-            method: target.row.source,
-            strength,
-            identity: target.row.symbol,
-            location: { file: step.location.file, line: callsite.line },
-          },
-        ],
-      },
-    });
-  }
-
-  for (const edge of outgoing) {
-    if (context.returnedNodeIds.has(edge.toNodeId)) continue;
-    const target = context.nodeById.get(edge.toNodeId);
-    if (!target?.location || !context.sourceAllowed(target.location.file)) continue;
-    const leaf = nodeLeaf(target);
-    const evidenceLine = edge.evidence.find((source) => {
-      const location = source.location;
-      return location !== null && location.file === step.location?.file && location.line >= 0;
-    })?.location?.line;
-    const callsite = bestCallsiteForResolvedTarget(
-      callsites,
-      callLines,
-      leaf,
-      evidenceLine,
-      outgoingTargetCountByLeaf.get(leaf) === 1,
-    );
-    if (!callsite) continue;
-    const materialLine = materialLineForCallsite(callLines, callsite.line, leaf);
-    if (!materialLine) continue;
-    const callsiteKey = sourceCallsiteKey(step.location.file, callsite.line, leaf);
-    if (input.evidencedCallsiteKeys.has(callsiteKey)) continue;
-    input.evidencedCallsiteKeys.add(callsiteKey);
-    const alternative = alternativeForNode(target);
-    if (!alternative) continue;
-    if (context.alternativeAlreadyReturned(alternative)) continue;
-    const strength = strongestEvidence(edge.evidence);
-    candidates.push({
-      anchor: {
-        id: nextAnchorId(step.id, callsite.line, target.id),
-        status: strength,
-        source: 'graph-call',
-        direction: 'downstream',
-        causalRole: 'callee',
-        relationKind: 'call',
-        fromStepId: step.id,
-        fromLabel: step.label,
-        callsite: {
-          file: step.location.file,
+          file: sourceFile,
           line: materialLine.line,
           endLine: materialLine.endLine,
           text: materialLine.text,
@@ -589,80 +525,129 @@ function collectNextAnchorCallsiteCandidates(
         },
         alternatives: [alternative],
         alternativeCount: 1,
-        evidence: edge.evidence,
+        evidence,
       },
     });
-  }
-
-  for (const callsite of callsites) {
-    const callsiteKey = sourceCallsiteKey(step.location.file, callsite.line, callsite.calleeLeaf);
-    if (input.evidencedCallsiteKeys.has(callsiteKey)) continue;
-    const materialLine = materialLineForCallsite(callLines, callsite.line, callsite.calleeLeaf);
-    if (!materialLine) continue;
-    const definitions = sameLanguageCandidates(
-      step.location.file,
-      getGlobalLeafIndex(context.db).get(callsite.calleeLeaf) ?? [],
-    )
-      .flatMap((candidate) =>
-        getDefinitionsForFile(context.db, candidate.file).filter(
-          (definition) => definition.symbol === candidate.symbol && definition.isFunctionLike,
-        ),
-      )
-      .filter(
-        (definition) =>
-          context.sourceAllowed(definition.relativePath) &&
-          !context.alternativeAlreadyReturned({
-            symbol: definition.symbol,
-            label: definition.leaf,
-            file: definition.relativePath,
-            line: definition.startLine,
-            endLine: definition.endLine,
-          }),
+  };
+  const addResolvedCalleeCandidates = (): void => {
+    for (const target of resolvedTargets) {
+      if (!context.sourceAllowed(target.alternative.file) || context.alternativeAlreadyReturned(target.alternative)) {
+        continue;
+      }
+      const leaf = normalizedCallableLeaf(target.alternative.label);
+      const selection = selectGraphCallsite(leaf, target.row.callsiteLine, targetCountByLeaf.get(leaf) === 1);
+      if (!selection) continue;
+      const { callsite } = selection;
+      const strength = calleeRowEvidenceStrength(target.row.source);
+      appendGraphCandidate(
+        leaf,
+        selection,
+        target.alternative.symbol ?? target.alternative.file,
+        strength,
+        target.alternative,
+        [
+          {
+            method: target.row.source,
+            strength,
+            identity: target.row.symbol,
+            location: { file: sourceFile, line: callsite.line },
+          },
+        ],
       );
-    const alternatives = uniqueAlternatives(
-      definitions.map((definition) => ({
-        symbol: definition.symbol,
-        label: definition.leaf ?? callsite.calleeLeaf,
-        file: definition.relativePath,
-        line: definition.startLine,
-        endLine: definition.endLine,
-      })),
-    );
-    if (alternatives.length === 0) {
-      unresolvedCallsites += 1;
-      continue;
     }
-    const candidateKey = `${step.id}\0${callsite.line}\0${callsite.calleeLeaf}`;
-    if (input.consideredCandidateKeys.has(candidateKey)) continue;
-    input.consideredCandidateKeys.add(candidateKey);
-    const ambiguous = alternatives.length > 1;
-    if (ambiguous) ambiguousCallsites += 1;
-    else identityCandidateCallsites += 1;
-    candidates.push({
-      anchor: {
-        id: nextAnchorId(step.id, callsite.line, callsite.calleeLeaf),
-        status: ambiguous ? 'ambiguous' : 'candidate',
-        source: 'leaf-identity-candidate',
-        direction: 'downstream',
-        causalRole: 'callee',
-        relationKind: 'call',
-        fromStepId: step.id,
-        fromLabel: step.label,
-        callsite: {
-          file: step.location.file,
-          line: materialLine.line,
-          endLine: materialLine.endLine,
-          text: materialLine.text,
-          signals: materialLine.signals,
-          calleeLeaf: callsite.calleeLeaf,
+  };
+  const addOutgoingEdgeCandidates = (): void => {
+    for (const edge of outgoing) {
+      if (context.returnedNodeIds.has(edge.toNodeId)) continue;
+      const target = context.nodeById.get(edge.toNodeId);
+      if (!target?.location || !context.sourceAllowed(target.location.file)) continue;
+      const leaf = nodeLeaf(target);
+      const evidenceLine = edge.evidence.find((source) => {
+        const location = source.location;
+        return location !== null && location.file === step.location?.file && location.line >= 0;
+      })?.location?.line;
+      const selection = selectGraphCallsite(leaf, evidenceLine, outgoingTargetCountByLeaf.get(leaf) === 1);
+      if (!selection) continue;
+      const alternative = alternativeForNode(target);
+      if (!alternative) continue;
+      if (context.alternativeAlreadyReturned(alternative)) continue;
+      const strength = strongestEvidence(edge.evidence);
+      appendGraphCandidate(leaf, selection, target.id, strength, alternative, edge.evidence);
+    }
+  };
+  const addLeafIdentityCandidates = (): void => {
+    for (const callsite of callsites) {
+      const callsiteKey = sourceCallsiteKey(sourceFile, callsite.line, callsite.calleeLeaf);
+      if (input.evidencedCallsiteKeys.has(callsiteKey)) continue;
+      const materialLine = materialLineForCallsite(callLines, callsite.line, callsite.calleeLeaf);
+      if (!materialLine) continue;
+      const definitions = sameLanguageCandidates(
+        sourceFile,
+        getGlobalLeafIndex(context.db).get(callsite.calleeLeaf) ?? [],
+      )
+        .flatMap((candidate) =>
+          getDefinitionsForFile(context.db, candidate.file).filter(
+            (definition) => definition.symbol === candidate.symbol && definition.isFunctionLike,
+          ),
+        )
+        .filter(
+          (definition) =>
+            context.sourceAllowed(definition.relativePath) &&
+            !context.alternativeAlreadyReturned({
+              symbol: definition.symbol,
+              label: definition.leaf,
+              file: definition.relativePath,
+              line: definition.startLine,
+              endLine: definition.endLine,
+            }),
+        );
+      const alternatives = uniqueAlternatives(
+        definitions.map((definition) => ({
+          symbol: definition.symbol,
+          label: definition.leaf ?? callsite.calleeLeaf,
+          file: definition.relativePath,
+          line: definition.startLine,
+          endLine: definition.endLine,
+        })),
+      );
+      if (alternatives.length === 0) {
+        unresolvedCallsites += 1;
+        continue;
+      }
+      const candidateKey = `${step.id}\0${callsite.line}\0${callsite.calleeLeaf}`;
+      if (input.consideredCandidateKeys.has(candidateKey)) continue;
+      input.consideredCandidateKeys.add(candidateKey);
+      const ambiguous = alternatives.length > 1;
+      if (ambiguous) ambiguousCallsites += 1;
+      else identityCandidateCallsites += 1;
+      candidates.push({
+        anchor: {
+          id: nextAnchorId(step.id, callsite.line, callsite.calleeLeaf),
+          status: ambiguous ? 'ambiguous' : 'candidate',
+          source: 'leaf-identity-candidate',
+          direction: 'downstream',
+          causalRole: 'callee',
+          relationKind: 'call',
+          fromStepId: step.id,
+          fromLabel: step.label,
+          callsite: {
+            file: sourceFile,
+            line: materialLine.line,
+            endLine: materialLine.endLine,
+            text: materialLine.text,
+            signals: materialLine.signals,
+            calleeLeaf: callsite.calleeLeaf,
+          },
+          alternatives: alternatives.slice(0, 3),
+          alternativeCount: alternatives.length,
+          evidence: [],
         },
-        alternatives: alternatives.slice(0, 3),
-        alternativeCount: alternatives.length,
-        evidence: [],
-      },
-    });
-  }
-
+      });
+    }
+  };
+  addResolvedCalleeCandidates();
+  addOutgoingEdgeCandidates();
+  addLeafIdentityCandidates();
   return {
     candidates,
     scannedBehaviorSteps: 1,
@@ -671,6 +656,21 @@ function collectNextAnchorCallsiteCandidates(
     ambiguousCallsites,
     unresolvedCallsites,
   };
+}
+
+function countOutgoingTargetLeaves(
+  outgoing: readonly NextAnchorStepContext['topology']['edges'][number][],
+  nodeById: NextAnchorStepContext['nodeById'],
+): Map<string, number> {
+  const outgoingTargetCountByLeaf = new Map<string, number>();
+  for (const edge of outgoing) {
+    const target = nodeById.get(edge.toNodeId);
+    if (!target) continue;
+    const leaf = nodeLeaf(target);
+    outgoingTargetCountByLeaf.set(leaf, (outgoingTargetCountByLeaf.get(leaf) ?? 0) + 1);
+  }
+
+  return outgoingTargetCountByLeaf;
 }
 
 /**

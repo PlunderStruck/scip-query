@@ -516,59 +516,96 @@ function validateSuppressions(
       diagnostics.push({ level: 'error', path, message: 'Suppression must be an object.' });
       continue;
     }
-    if (!suppression.reason || suppression.reason.trim() === '') {
-      diagnostics.push({ level: 'error', path: `${path}.reason`, message: 'Suppression reason is required.' });
-    }
-    if (suppression.id !== undefined && suppression.id.trim() === '') {
-      diagnostics.push({ level: 'error', path: `${path}.id`, message: 'Suppression id cannot be blank.' });
-    }
-    if (suppression.check !== undefined && suppression.check.trim() === '') {
-      diagnostics.push({ level: 'error', path: `${path}.check`, message: 'Suppression check cannot be blank.' });
-    }
-    if (!suppression.id && (!suppression.check || !suppression.file)) {
-      diagnostics.push({ level: 'error', path, message: 'Suppression must include id or both check and file.' });
-    } else if (!suppression.id && suppression.check && suppression.file) {
+    validateSuppressionIdentity(suppression, path, diagnostics);
+    validateSuppressionFile(suppression, path, diagnostics, opts.projectRoot);
+    validateSuppressionExpiry(suppression, path, diagnostics, now);
+    validateSuppressionDecision(suppression, path, diagnostics, opts.projectRoot);
+  }
+}
+
+type ConfiguredSuppression = NonNullable<ProjectConfig['suppressions']>[number];
+
+function validateSuppressionIdentity(
+  suppression: ConfiguredSuppression,
+  path: string,
+  diagnostics: ConfigDiagnostic[],
+): void {
+  if (!suppression.reason || suppression.reason.trim() === '') {
+    diagnostics.push({ level: 'error', path: `${path}.reason`, message: 'Suppression reason is required.' });
+  }
+  if (suppression.id !== undefined && suppression.id.trim() === '') {
+    diagnostics.push({ level: 'error', path: `${path}.id`, message: 'Suppression id cannot be blank.' });
+  }
+  if (suppression.check !== undefined && suppression.check.trim() === '') {
+    diagnostics.push({ level: 'error', path: `${path}.check`, message: 'Suppression check cannot be blank.' });
+  }
+  if (suppression.id) return;
+  if (!suppression.check || !suppression.file) {
+    diagnostics.push({ level: 'error', path, message: 'Suppression must include id or both check and file.' });
+  } else {
+    diagnostics.push({
+      level: 'warning',
+      path,
+      message: 'Check+file suppressions waive every matching finding in that file; prefer a stable id when available.',
+    });
+  }
+}
+
+function validateSuppressionFile(
+  suppression: ConfiguredSuppression,
+  path: string,
+  diagnostics: ConfigDiagnostic[],
+  projectRoot: string | undefined,
+): void {
+  if (suppression.file !== undefined) {
+    if (suppression.file.trim() === '') {
+      diagnostics.push({ level: 'error', path: `${path}.file`, message: 'Suppression file path cannot be blank.' });
+    } else if (projectRoot && !existsSync(join(projectRoot, suppression.file))) {
       diagnostics.push({
         level: 'warning',
-        path,
-        message:
-          'Check+file suppressions waive every matching finding in that file; prefer a stable id when available.',
+        path: `${path}.file`,
+        message: `Suppression file does not exist: ${suppression.file}`,
       });
     }
-    if (suppression.file !== undefined) {
-      if (suppression.file.trim() === '') {
-        diagnostics.push({ level: 'error', path: `${path}.file`, message: 'Suppression file path cannot be blank.' });
-      } else if (opts.projectRoot && !existsSync(join(opts.projectRoot, suppression.file))) {
+  }
+}
+
+function validateSuppressionExpiry(
+  suppression: ConfiguredSuppression,
+  path: string,
+  diagnostics: ConfigDiagnostic[],
+  now: Date,
+): void {
+  if (suppression.expiresAt) {
+    const expires = Date.parse(suppression.expiresAt);
+    if (Number.isNaN(expires)) {
+      diagnostics.push({ level: 'error', path: `${path}.expiresAt`, message: 'Must be an ISO date string.' });
+    } else if (expires <= now.getTime()) {
+      diagnostics.push({ level: 'warning', path: `${path}.expiresAt`, message: 'Suppression has expired.' });
+    }
+  }
+}
+
+function validateSuppressionDecision(
+  suppression: ConfiguredSuppression,
+  path: string,
+  diagnostics: ConfigDiagnostic[],
+  projectRoot: string | undefined,
+): void {
+  if (suppression.decision !== undefined && !isSuppressionDecision(suppression.decision)) {
+    diagnostics.push({
+      level: 'error',
+      path: `${path}.decision`,
+      message: 'Must be a valid automated-adjudication decision with reason code, evidence, and invalidation rules.',
+    });
+  } else if (suppression.decision && projectRoot) {
+    for (const [evidenceIndex, evidence] of suppression.decision.evidence.entries()) {
+      if (evidence.kind !== 'graph' && !existsSync(join(projectRoot, evidence.referent))) {
         diagnostics.push({
-          level: 'warning',
-          path: `${path}.file`,
-          message: `Suppression file does not exist: ${suppression.file}`,
+          level: 'error',
+          path: `${path}.decision.evidence[${evidenceIndex}].referent`,
+          message: `Suppression counterevidence does not exist: ${evidence.referent}`,
         });
-      }
-    }
-    if (suppression.expiresAt) {
-      const expires = Date.parse(suppression.expiresAt);
-      if (Number.isNaN(expires)) {
-        diagnostics.push({ level: 'error', path: `${path}.expiresAt`, message: 'Must be an ISO date string.' });
-      } else if (expires <= now.getTime()) {
-        diagnostics.push({ level: 'warning', path: `${path}.expiresAt`, message: 'Suppression has expired.' });
-      }
-    }
-    if (suppression.decision !== undefined && !isSuppressionDecision(suppression.decision)) {
-      diagnostics.push({
-        level: 'error',
-        path: `${path}.decision`,
-        message: 'Must be a valid automated-adjudication decision with reason code, evidence, and invalidation rules.',
-      });
-    } else if (suppression.decision && opts.projectRoot) {
-      for (const [evidenceIndex, evidence] of suppression.decision.evidence.entries()) {
-        if (evidence.kind !== 'graph' && !existsSync(join(opts.projectRoot, evidence.referent))) {
-          diagnostics.push({
-            level: 'error',
-            path: `${path}.decision.evidence[${evidenceIndex}].referent`,
-            message: `Suppression counterevidence does not exist: ${evidence.referent}`,
-          });
-        }
       }
     }
   }

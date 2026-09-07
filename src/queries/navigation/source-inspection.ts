@@ -503,11 +503,28 @@ function normalizeRequest(opts: SourceInspectionOptions): InspectionRequest {
     );
   }
   const evidenceOptions = opts.evidence ?? {};
-  if (opts.unitLines !== undefined) positive(opts.unitLines, 'unitLines');
-  if (opts.totalLines !== undefined) positive(opts.totalLines, 'totalLines');
-  if (opts.sliceLimit !== undefined) positive(opts.sliceLimit, 'sliceLimit');
-  if (opts.maxCharacters !== undefined) positive(opts.maxCharacters, 'maxCharacters');
-  if (opts.maxUnits !== undefined) positive(opts.maxUnits, 'maxUnits');
+  validateInspectionNumberOptions(opts);
+  validateInspectionViewAndBounds(opts);
+  const full = opts.full ?? false;
+  return {
+    searches,
+    symbols,
+    locations,
+    ...(opts.scope?.trim() ? { scope: opts.scope.trim() } : {}),
+    ...normalizeInspectionLimits(opts, full),
+    view: opts.view ?? 'source',
+    evidence: normalizeInspectionEvidence(evidenceOptions, symbols.length > 0),
+  };
+}
+
+function validateInspectionNumberOptions(opts: SourceInspectionOptions): void {
+  for (const name of ['unitLines', 'totalLines', 'sliceLimit', 'maxCharacters', 'maxUnits'] as const) {
+    const value = opts[name];
+    if (value !== undefined) positive(value, name);
+  }
+}
+
+function validateInspectionViewAndBounds(opts: SourceInspectionOptions): void {
   if (opts.view !== undefined && opts.view !== 'source' && opts.view !== 'behavior') {
     throw new Error(`Unknown inspect view: ${String(opts.view)}. Use source or behavior.`);
   }
@@ -520,12 +537,10 @@ function normalizeRequest(opts: SourceInspectionOptions): InspectionRequest {
   ) {
     throw new Error('full inspect cannot be combined with searchLimit, maxUnits, maxCharacters, or evidenceBudgets.');
   }
-  const full = opts.full ?? false;
+}
+
+function normalizeInspectionLimits(opts: SourceInspectionOptions, full: boolean) {
   return {
-    searches,
-    symbols,
-    locations,
-    ...(opts.scope?.trim() ? { scope: opts.scope.trim() } : {}),
     context: positiveOrZero(opts.context ?? DEFAULT_CONTEXT, 'context'),
     searchLimit: positive(opts.searchLimit ?? (full ? UNBOUNDED_LIMIT : DEFAULT_SEARCH_LIMIT), 'searchLimit'),
     maxUnits: positive(full ? UNBOUNDED_LIMIT : (opts.maxUnits ?? DEFAULT_MAX_UNITS), 'maxUnits'),
@@ -533,19 +548,24 @@ function normalizeRequest(opts: SourceInspectionOptions): InspectionRequest {
     evidenceBudgets: full
       ? unboundedEvidenceBudgets()
       : normalizeEvidenceBudgets(opts.evidenceBudgets ?? DEFAULT_EVIDENCE_UNIT_BUDGETS),
-    view: opts.view ?? 'source',
-    evidence: {
-      ...(evidenceOptions.parts
-        ? { parts: [...evidenceOptions.parts] }
-        : symbols.length > 0
-          ? { parts: [...DEFAULT_SYMBOL_EVIDENCE_PARTS] }
-          : {}),
-      ...(evidenceOptions.referenceContext !== undefined
-        ? { referenceContext: positiveOrZero(evidenceOptions.referenceContext, 'referenceContext') }
+  };
+}
+
+function normalizeInspectionEvidence(
+  evidenceOptions: NonNullable<SourceInspectionOptions['evidence']>,
+  hasSymbols: boolean,
+): InspectionRequest['evidence'] {
+  return {
+    ...(evidenceOptions.parts
+      ? { parts: [...evidenceOptions.parts] }
+      : hasSymbols
+        ? { parts: [...DEFAULT_SYMBOL_EVIDENCE_PARTS] }
         : {}),
-      relatedSourceLines: evidenceOptions.relatedSourceLines ?? 60,
-      ...(evidenceOptions.semantic !== undefined ? { semantic: evidenceOptions.semantic } : {}),
-    },
+    ...(evidenceOptions.referenceContext !== undefined
+      ? { referenceContext: positiveOrZero(evidenceOptions.referenceContext, 'referenceContext') }
+      : {}),
+    relatedSourceLines: evidenceOptions.relatedSourceLines ?? 60,
+    ...(evidenceOptions.semantic !== undefined ? { semantic: evidenceOptions.semantic } : {}),
   };
 }
 

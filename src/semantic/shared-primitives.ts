@@ -626,102 +626,114 @@ export function semanticReferenceMap(
   let definitionsWithReferences = 0;
   let referenceCount = 0;
   let prefetchCalleeDefinitions = 0;
+  const recordReferences = (symbolId: number, references: SemanticReference[]): void => {
+    recordSemanticReferences(result, symbolId, references, profiling, (count) => {
+      definitionsWithReferences += 1;
+      referenceCount += count;
+    });
+  };
+  const recordProviderReferences = (
+    referenceMap: ReadonlyMap<number, SemanticReference[]>,
+    groupedDefinitions: readonly IndexedDefinition[],
+  ): void => {
+    for (const definition of groupedDefinitions) {
+      if (!referenceMap.has(definition.symbolId)) continue;
+      recordReferences(definition.symbolId, referenceMap.get(definition.symbolId) ?? []);
+    }
+  };
+  const appendDefinition = (
+    groups: Map<SemanticProvider, IndexedDefinition[]>,
+    provider: SemanticProvider,
+    definition: IndexedDefinition,
+  ): void => {
+    const bucket = groups.get(provider);
+    if (bucket) bucket.push(definition);
+    else groups.set(provider, [definition]);
+  };
+  const prefetchDefinition = (
+    groups: Map<SemanticProvider, IndexedDefinition[]>,
+    provider: SemanticProvider | null,
+    definition: IndexedDefinition,
+  ): void => {
+    if (!provider?.referencesAndCalleesForDefinitions) return;
+    appendDefinition(groups, provider, definition);
+    prefetchCalleeDefinitions += 1;
+  };
+  const recordRustFastPath = (
+    definition: IndexedDefinition,
+    rustDefaultReferences: ReadonlyMap<number, SemanticReference[]>,
+    rustScipOccurrenceReferences: ReadonlyMap<number, SemanticReference[]>,
+  ): boolean => {
+    const defaultReferences = rustDefaultReferences.get(definition.symbolId);
+    if (defaultReferences) {
+      rustDefaultFastPathRows += 1;
+      rustDefaultFastPathReferences += defaultReferences.length;
+      recordReferences(definition.symbolId, defaultReferences);
+      return true;
+    }
+    const scipOccurrenceReferences = rustScipOccurrenceReferences.get(definition.symbolId);
+    if (scipOccurrenceReferences) {
+      rustScipOccurrenceFastPathRows += 1;
+      rustScipOccurrenceFastPathReferences += scipOccurrenceReferences.length;
+      recordReferences(definition.symbolId, scipOccurrenceReferences);
+      return true;
+    }
+    return false;
+  };
+  const groupReferenceDefinitions = (
+    rustDefaultReferences: ReadonlyMap<number, SemanticReference[]>,
+    rustScipOccurrenceReferences: ReadonlyMap<number, SemanticReference[]>,
+  ) => {
+    const bulkGroups = new Map<SemanticProvider, IndexedDefinition[]>();
+    const prefetchCalleeGroups = opts.prefetchCallees ? new Map<SemanticProvider, IndexedDefinition[]>() : null;
+    const scalarDefinitions: Array<{ provider: SemanticProvider; definition: IndexedDefinition }> = [];
+    for (const definition of definitions) {
+      let provider: SemanticProvider | null | undefined;
+      const getProvider = (): SemanticProvider | null => {
+        provider ??= availableSemanticProvider(db, definition.relativePath);
+        return provider;
+      };
+      if (prefetchCalleeGroups) prefetchDefinition(prefetchCalleeGroups, getProvider(), definition);
+      if (recordRustFastPath(definition, rustDefaultReferences, rustScipOccurrenceReferences)) continue;
+      const referenceProvider = getProvider();
+      if (!referenceProvider) {
+        if (profiling) providerMisses += 1;
+        continue;
+      }
+      if (profiling) providerHits += 1;
+      if (referenceProvider.referencesForDefinitions) appendDefinition(bulkGroups, referenceProvider, definition);
+      else scalarDefinitions.push({ provider: referenceProvider, definition });
+    }
+    return { bulkGroups, prefetchCalleeGroups, scalarDefinitions };
+  };
+  const materializeCombinedProviders = (
+    groups: ReturnType<typeof groupReferenceDefinitions>,
+  ): Set<SemanticProvider> => {
+    const combinedProviders = new Set<SemanticProvider>();
+    if (!groups.prefetchCalleeGroups) return combinedProviders;
+    for (const [provider, calleeDefinitions] of groups.prefetchCalleeGroups) {
+      if (!provider.referencesAndCalleesForDefinitions) continue;
+      const groupedDefinitions = groups.bulkGroups.get(provider) ?? [];
+      const maps = provider.referencesAndCalleesForDefinitions(groupedDefinitions, calleeDefinitions);
+      combinedProviders.add(provider);
+      recordPrefetchedSemanticCallees(db, maps.callees);
+      recordProviderReferences(maps.references, groupedDefinitions);
+    }
+    return combinedProviders;
+  };
   return profileSpan(
     'semantic.references.provider-loop',
     () => {
       const rustDefaultReferences = rustDefaultImplReferenceMap(db, definitions);
       const rustScipOccurrenceReferences = rustScipOccurrenceReferenceMap(db, definitions);
-      const bulkGroups = new Map<SemanticProvider, IndexedDefinition[]>();
-      const prefetchCalleeGroups = opts.prefetchCallees ? new Map<SemanticProvider, IndexedDefinition[]>() : null;
-      const scalarDefinitions: Array<{ provider: SemanticProvider; definition: IndexedDefinition }> = [];
-      for (const definition of definitions) {
-        let provider: SemanticProvider | null | undefined;
-        const getProvider = (): SemanticProvider | null => {
-          provider ??= availableSemanticProvider(db, definition.relativePath);
-          return provider;
-        };
-        if (prefetchCalleeGroups) {
-          const prefetchProvider = getProvider();
-          if (prefetchProvider?.referencesAndCalleesForDefinitions) {
-            const bucket = prefetchCalleeGroups.get(prefetchProvider);
-            if (bucket) bucket.push(definition);
-            else prefetchCalleeGroups.set(prefetchProvider, [definition]);
-            prefetchCalleeDefinitions += 1;
-          }
-        }
-        const defaultReferences = rustDefaultReferences.get(definition.symbolId);
-        if (defaultReferences) {
-          rustDefaultFastPathRows += 1;
-          rustDefaultFastPathReferences += defaultReferences.length;
-          recordSemanticReferences(result, definition.symbolId, defaultReferences, profiling, (count) => {
-            definitionsWithReferences += 1;
-            referenceCount += count;
-          });
-          continue;
-        }
-        const scipOccurrenceReferences = rustScipOccurrenceReferences.get(definition.symbolId);
-        if (scipOccurrenceReferences) {
-          rustScipOccurrenceFastPathRows += 1;
-          rustScipOccurrenceFastPathReferences += scipOccurrenceReferences.length;
-          recordSemanticReferences(result, definition.symbolId, scipOccurrenceReferences, profiling, (count) => {
-            definitionsWithReferences += 1;
-            referenceCount += count;
-          });
-          continue;
-        }
-        const referenceProvider = getProvider();
-        if (!referenceProvider) {
-          if (profiling) providerMisses += 1;
-          continue;
-        }
-        if (profiling) providerHits += 1;
-        if (referenceProvider.referencesForDefinitions) {
-          const bucket = bulkGroups.get(referenceProvider);
-          if (bucket) bucket.push(definition);
-          else bulkGroups.set(referenceProvider, [definition]);
-        } else {
-          scalarDefinitions.push({ provider: referenceProvider, definition });
-        }
-      }
-
-      const combinedProviders = new Set<SemanticProvider>();
-      if (prefetchCalleeGroups) {
-        for (const [provider, calleeDefinitions] of prefetchCalleeGroups) {
-          if (!provider.referencesAndCalleesForDefinitions) continue;
-          const groupedDefinitions = bulkGroups.get(provider) ?? [];
-          const maps = provider.referencesAndCalleesForDefinitions(groupedDefinitions, calleeDefinitions);
-          combinedProviders.add(provider);
-          recordPrefetchedSemanticCallees(db, maps.callees);
-          for (const definition of groupedDefinitions) {
-            if (!maps.references.has(definition.symbolId)) continue;
-            const references = maps.references.get(definition.symbolId) ?? [];
-            recordSemanticReferences(result, definition.symbolId, references, profiling, (count) => {
-              definitionsWithReferences += 1;
-              referenceCount += count;
-            });
-          }
-        }
-      }
-
-      for (const [provider, groupedDefinitions] of bulkGroups) {
+      const groups = groupReferenceDefinitions(rustDefaultReferences, rustScipOccurrenceReferences);
+      const combinedProviders = materializeCombinedProviders(groups);
+      for (const [provider, groupedDefinitions] of groups.bulkGroups) {
         if (combinedProviders.has(provider)) continue;
-        const referenceMap = provider.referencesForDefinitions!(groupedDefinitions);
-        for (const definition of groupedDefinitions) {
-          if (!referenceMap.has(definition.symbolId)) continue;
-          const references = referenceMap.get(definition.symbolId) ?? [];
-          recordSemanticReferences(result, definition.symbolId, references, profiling, (count) => {
-            definitionsWithReferences += 1;
-            referenceCount += count;
-          });
-        }
+        recordProviderReferences(provider.referencesForDefinitions!(groupedDefinitions), groupedDefinitions);
       }
-
-      for (const { provider, definition } of scalarDefinitions) {
-        const references = provider.referencesFor(definition);
-        recordSemanticReferences(result, definition.symbolId, references, profiling, (count) => {
-          definitionsWithReferences += 1;
-          referenceCount += count;
-        });
+      for (const { provider, definition } of groups.scalarDefinitions) {
+        recordReferences(definition.symbolId, provider.referencesFor(definition));
       }
       return result;
     },
