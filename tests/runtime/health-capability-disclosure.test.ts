@@ -24,14 +24,9 @@ describe('health capability disclosure', () => {
     const disclosed = discloseHealthCapabilities(report, capabilities);
 
     expect(disclosed.capabilities).toBe(capabilities);
-    expect(disclosed.scoreInterpretation).toMatchObject({
-      status: 'experimental-composite',
-      comparableAcrossLanguages: false,
-      scope: 'completed-analyses-only',
-    });
+    expect(disclosed).not.toHaveProperty('scoreInterpretation');
     expect(disclosed.warnings).toEqual([
       'phase warning',
-      expect.stringContaining('not suitable for a public leaderboard'),
       expect.stringContaining(
         'python capability limits: Semantic provider=unavailable, Cleanup verification=unavailable',
       ),

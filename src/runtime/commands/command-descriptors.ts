@@ -238,7 +238,7 @@ export const commandDescriptors: CommandDescriptor[] = [
       option('--max-files <n>', 'Maximum eligible source files (default 10000)', parsePositiveInteger),
       option(
         '--limit <n>',
-        'Maximum displayed source groups (default 5; --full shows every finding)',
+        'Maximum source findings per category (default 5; --full shows every finding and suppression decision)',
         parsePositiveInteger,
       ),
       option('--check', 'Exit 1 for derived source findings, 2 for incomplete source coverage'),

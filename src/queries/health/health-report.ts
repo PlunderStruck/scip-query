@@ -295,7 +295,7 @@ function scoreCountNote(
 ): string {
   const scoreCount = healthScoreCount(summary);
   if (Math.abs(scoreCount - summary.count) < 0.01) return '';
-  return ` (${formatScoreCount(scoreCount)} score-weighted after ${reason})`;
+  return ` (combined pair weight ${formatScoreCount(scoreCount)} after ${reason})`;
 }
 
 function buildHealthActions(analyses: HealthAnalyses): HealthAction[] {

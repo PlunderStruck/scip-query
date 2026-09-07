@@ -21,7 +21,8 @@ import { readSmallArtifactText } from '../platform/bounded-file.js';
 // Version 6 removes aggregate grades and deduction pressure from the report.
 // Version 7 removes retired heuristic and legacy reference products.
 // Version 12 rejects malformed suppression evidence and refreshes maintenance-analysis semantics.
-const HEALTH_REPORT_CACHE_VERSION = 13;
+// Version 14 removes obsolete score descriptions. Entry-bundle identity alone does not cover every output chunk.
+const HEALTH_REPORT_CACHE_VERSION = 14;
 const HEALTH_REPORT_CACHE_FILE = 'health-report-cache.json';
 
 export interface HealthReportCacheOptions {

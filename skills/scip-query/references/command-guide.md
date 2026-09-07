@@ -10,6 +10,8 @@ Current limitation: `files`, `search`, `code`, and `inspect` read current text b
 
 ## Orientation and change review
 
+Source `health` shows separate finding categories; `--limit` bounds each category so duplication cannot crowd out complexity. Unmatched suppression decisions are summarized after findings; `--full` retains their identities and reasons. Use `system --source <path-or-group>` for module files, dependencies and consumers. Indexed health has no overall grade. Its combined pair weight is the sum of existing detector weights; the raw pair count remains separate.
+
 Use these for first-use assessment, planning around existing code, and checking an actual diff. Load `$scip-plan` for implementation order and preserved behavior.
 
 | Command | Use when / why this control | Index | Interpretation and limits |

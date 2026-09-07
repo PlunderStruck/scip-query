@@ -67,6 +67,69 @@ describe('source maintenance CLI without an index', () => {
     expect(result.stderr).not.toMatch(/reindex|watcher|missing index/i);
   });
 
+  it('shows complexity and duplication independently when the display limit is one', () => {
+    const root = fixture();
+    for (const dir of ['runtime', 'reindex', 'tooling']) mkdirSync(join(root, dir));
+    for (const [file, branches] of [
+      ['runtime/heavy.ts', 25],
+      ['reindex/medium.ts', 20],
+    ] as const) {
+      writeFileSync(
+        join(root, file),
+        `export function choose(x) { ${Array.from({ length: branches }, (_, i) => `if(x === ${i}) return ${i};`).join(' ')} return -1; }`,
+      );
+    }
+    const duplicate = `export function summarize(input) { return { ${Array.from({ length: 15 }, (_, i) => `field${i}: input + ${i}`).join(', ')} }; }`;
+    for (const file of ['tooling/first.ts', 'tooling/second.ts']) writeFileSync(join(root, file), duplicate);
+
+    const result = run(root, ['health', '--limit', '1']);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('Complexity findings: 2 (1 shown');
+    expect(result.stdout).toContain('runtime/heavy.ts:1');
+    expect(result.stdout).not.toContain('reindex/medium.ts:1');
+    expect(result.stdout).toContain('Duplication candidates: 1 (1 shown');
+    expect(result.stdout).toContain('tooling/first.ts:1');
+    expect(result.stdout).toContain('tooling/second.ts:1');
+    expect(result.stdout).toContain('system --source');
+
+    const complete = run(root, ['health', '--full']);
+    expect(complete.status, complete.stderr).toBe(0);
+    expect(complete.stdout).toContain('runtime/heavy.ts:1');
+    expect(complete.stdout).toContain('reindex/medium.ts:1');
+    expect(complete.stdout).toContain('tooling/second.ts:1');
+  });
+
+  it('summarizes unmatched decisions after findings and retains their full detail', () => {
+    const root = fixture();
+    const source = `export function choose(x) { ${Array.from({ length: 11 }, (_, i) => `if(x === ${i}) return ${i};`).join(' ')} return -1; }`;
+    writeFileSync(join(root, 'old.ts'), source);
+    const saved = run(root, [
+      'suppress',
+      'complexity:old.ts:choose',
+      '--reason',
+      'Retained fixture branches',
+      '--reason-code',
+      'test-fixture',
+      '--evidence',
+      'source:old.ts',
+    ]);
+    expect(saved.status, saved.stderr).toBe(0);
+    rmSync(join(root, 'old.ts'));
+    writeFileSync(join(root, 'current.ts'), source);
+
+    const result = run(root, ['health']);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('Unmatched suppressions: 1');
+    expect(result.stdout).not.toContain('Suppression unmatched: complexity:old.ts:choose');
+    expect(result.stdout.indexOf('current.ts:1')).toBeLessThan(result.stdout.indexOf('Unmatched suppressions:'));
+    expect(result.stdout).toContain('--full');
+
+    const complete = run(root, ['health', '--full']);
+    expect(complete.status, complete.stderr).toBe(0);
+    expect(complete.stdout).toContain('Suppression unmatched: complexity:old.ts:choose');
+    expect(complete.stdout).toContain('No exact current finding in the requested scope.');
+  });
+
   it('fails the derived-finding gate on a newly complex function', () => {
     const root = fixture();
     writeFileSync(

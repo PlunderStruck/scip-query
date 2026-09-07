@@ -6,6 +6,7 @@ import type { HealthReport } from '../../src/queries/health/health-report.js';
 import {
   healthReportCacheKey,
   healthReportCacheKeyHash,
+  healthReportCachePath,
   readHealthReportCache,
   writeHealthReportCache,
 } from '../../src/runtime/health-report-cache.js';
@@ -42,16 +43,10 @@ function writeMeta(tempDir: string, fingerprint: unknown): void {
 
 function minimalReport(overrides: Partial<HealthReport> = {}): HealthReport {
   return {
-    score: 99,
-    riskScore: 100,
-    hygieneScore: 99,
-    scoreBreakdown: [],
     overview: { documents: 1, symbols: 2, indexSizeBytes: 3 },
     findings: {
       deadSymbols: 0,
       deadLoc: 0,
-      isolatedSymbols: 0,
-      isolatedLoc: 0,
       cycles: 0,
       similarPairs: 0,
       duplicateBodyGroups: 0,
@@ -66,29 +61,23 @@ function minimalReport(overrides: Partial<HealthReport> = {}): HealthReport {
       vueComposableCandidatePairs: 0,
       vueComposableCandidateScoreCount: 0,
       vueLargeViewPressureFiles: 0,
-      extractionCandidates: 0,
-      wrappers: 0,
-      wrapperScoreCount: 0,
       passthroughs: 0,
-      staleTypes: 0,
       driftedFiles: 0,
-      complexityHotspotCount: 0,
       hiddenCouplingPairs: null,
       hiddenCouplingScoreCount: null,
       coverageContractViolations: 0,
     },
     axes: {
       deletable: { symbols: 0, loc: 0 },
+      cycles: { count: 0 },
       changeAmplification: null,
       hiddenCoupling: null,
-      churnWeightedComplexity: [],
       evidenceQuality: { graphFindings: 0, heuristicFindings: 0, userSuppressed: 0 },
     },
     validation: null,
     suppressions: null,
     actions: [],
-    pressure: [],
-    topComplexity: [],
+    policyExclusions: [],
     detectorEvidence: [],
     ...overrides,
   };
@@ -110,15 +99,31 @@ describe('health report cache', () => {
 
     const key = healthReportCacheKey(db, { full: true }, '0.11.0', deps);
     expect(key).not.toBeNull();
-    writeHealthReportCache(db, key!, minimalReport({ score: 88 }));
+    writeHealthReportCache(db, key!, minimalReport({ overview: { documents: 88, symbols: 2, indexSizeBytes: 3 } }));
 
-    expect(readHealthReportCache(db, key!)?.score).toBe(88);
+    expect(readHealthReportCache(db, key!)?.overview.documents).toBe(88);
 
     writeMeta(tempDir, { files: [{ path: 'src/a.ts', hash: 'changed' }] });
     const changedKey = healthReportCacheKey(fakeDb(tempDir), { full: true }, '0.11.0', deps);
     expect(changedKey).not.toBeNull();
     expect(healthReportCacheKeyHash(changedKey!)).not.toBe(healthReportCacheKeyHash(key!));
     expect(readHealthReportCache(db, changedKey!)).toBeNull();
+  });
+
+  it('rejects version 13 reports that can retain obsolete score descriptions', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'scip-query-health-report-cache-'));
+    writeMeta(tempDir, { files: [{ path: 'src/a.ts', hash: 'a' }] });
+    const db = fakeDb(tempDir);
+    const key = healthReportCacheKey(db, {}, '0.25.0', { gitHead: () => 'head-a', buildIdentity: () => 'same-entry' })!;
+    writeHealthReportCache(db, key, minimalReport());
+    const path = healthReportCachePath(db);
+    const previous = JSON.parse(readFileSync(path, 'utf8'));
+    previous.version = 13;
+    previous.key.version = 13;
+    previous.keyHash = healthReportCacheKeyHash(previous.key);
+    writeFileSync(path, JSON.stringify(previous));
+
+    expect(readHealthReportCache(db, key)).toBeNull();
   });
 
   it('separates full, scoped, and phase-timeout health reports in the cache key', () => {

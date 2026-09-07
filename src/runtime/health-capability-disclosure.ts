@@ -1,23 +1,8 @@
 import type { HealthReport } from '../queries/health/health-report.js';
 import type { ProjectCapabilityReport } from './project-readiness.js';
 
-export interface HealthScoreInterpretation {
-  status: 'experimental-composite';
-  comparableAcrossLanguages: false;
-  scope: 'completed-analyses-only';
-  note: string;
-}
-
 export type HealthReportWithCapability = HealthReport & {
   capabilities: ProjectCapabilityReport;
-  scoreInterpretation: HealthScoreInterpretation;
-};
-
-const SCORE_INTERPRETATION: HealthScoreInterpretation = {
-  status: 'experimental-composite',
-  comparableAcrossLanguages: false,
-  scope: 'completed-analyses-only',
-  note: 'The score summarizes analyses that completed under the attached capability matrix. It is not normalized across languages or frameworks and is not suitable for a public leaderboard.',
 };
 
 export function discloseHealthCapabilities(
@@ -27,9 +12,8 @@ export function discloseHealthCapabilities(
   const capabilityWarnings = unavailableCapabilityWarnings(capabilities);
   return {
     ...report,
-    warnings: [...(report.warnings ?? []), SCORE_INTERPRETATION.note, ...capabilityWarnings],
+    warnings: [...(report.warnings ?? []), ...capabilityWarnings],
     capabilities,
-    scoreInterpretation: SCORE_INTERPRETATION,
   };
 }
 

@@ -1373,7 +1373,7 @@ export function renderHealthReport(report: HealthReport): void {
 
 function formatScoreAwareCount(rawCount: number, scoreCount: number): string {
   if (Math.abs(rawCount - scoreCount) < 0.01) return String(rawCount);
-  return `${rawCount} (${formatCompactNumber(scoreCount)} score-weighted)`;
+  return `${rawCount} (combined pair weight ${formatCompactNumber(scoreCount)})`;
 }
 
 function formatCompactNumber(value: number): string {

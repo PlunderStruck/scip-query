@@ -45,13 +45,19 @@ export function renderSourceMaintenance(
 ): void {
   renderMaintenanceCoverage(report);
   if (report.mode === 'review') renderChangedFunctions(report);
-  renderMaintenanceSuppressions(report);
   console.log(`Blocking findings: ${report.blockingFindingIds.length}; raw findings remain visible below.`);
-  if (report.mode === 'health' && limit !== Infinity) renderDependencyComponents(report, limit);
-  renderModuleSubjects(report, limit);
-  if (report.mode === 'review' || limit === Infinity) renderFindings(report, limit);
+  if (report.mode === 'health' && limit !== Infinity) {
+    renderHealthShortlists(report, limit);
+    console.log(
+      `\nModule evidence: ${report.modules.length} groups with findings. Use scip-query system --source <path-or-group> for files, dependencies and consumers.`,
+    );
+  } else {
+    renderModuleSubjects(report, limit);
+    renderFindings(report, limit);
+  }
+  renderMaintenanceSuppressions(report, limit === Infinity);
   console.log(
-    'Recovery: use --scope <file-or-directory> for a subject, or --full for all findings, sites and supporting details. Exhaustive machine reports use --json --json-output <path>.',
+    'Recovery: use --scope <file-or-directory> for a subject, or --full for all findings, sites, supporting details and suppression decisions. Exhaustive machine reports use --json --json-output <path>.',
   );
   if (report.affectedFiles.length)
     console.log(
@@ -100,12 +106,21 @@ function renderMaintenanceCoverage(report: SourceMaintenanceReport): void {
   for (const reason of testCoverage.reasons) console.log(`  ${reason}`);
 }
 
-function renderMaintenanceSuppressions(report: SourceMaintenanceReport): void {
+function renderMaintenanceSuppressions(report: SourceMaintenanceReport, full: boolean): void {
+  let unmatched = 0;
   for (const decision of report.suppressionDecisions) {
+    if (decision.outcome === 'unmatched' && !full) {
+      unmatched += 1;
+      continue;
+    }
     console.log(
       `Suppression ${decision.outcome}: ${decision.id ?? decision.check ?? 'unknown target'}${decision.reasons.length ? ` — ${decision.reasons.join('; ')}` : ''}`,
     );
   }
+  if (unmatched)
+    console.log(
+      `Unmatched suppressions: ${unmatched}; no current finding matched in this scope. Use --full for decisions and reasons.`,
+    );
 }
 
 function renderChangedFunctions(report: SourceMaintenanceReport): void {
@@ -148,6 +163,28 @@ function renderFinding(finding: SourceMaintenanceReport['findings'][number], lim
     );
 }
 
+/** Bound each finding category independently so duplication cannot hide complex functions. */
+function renderHealthShortlists(report: SourceMaintenanceReport, limit: number): void {
+  const categories = [
+    ['broken-dependency', 'Broken dependencies'],
+    ['architecture', 'Architecture findings'],
+    ['dependency-cycle', 'Dependency components'],
+    ['complexity', 'Complexity findings'],
+    ['crap', 'Complexity and coverage risk'],
+    ['duplication', 'Duplication candidates'],
+    ['responsibility', 'Responsibility candidates'],
+  ] as const;
+  console.log('\nFinding shortlists: --limit applies separately to each category; categories are not a design grade.');
+  for (const [rule, title] of categories) {
+    const findings = report.findings.filter((finding) => finding.rule === rule);
+    if (!findings.length) continue;
+    const order = rule === 'complexity' ? '; greatest threshold exceedance first' : '';
+    console.log(`\n${title}: ${findings.length} (${Math.min(limit, findings.length)} shown${order}).`);
+    for (const finding of findings.slice(0, limit)) renderFinding(finding, limit);
+  }
+  if (!report.findings.length) console.log('No findings from the covered source.');
+}
+
 function renderModuleSubjects(report: SourceMaintenanceReport, limit: number): void {
   console.log(
     `\nPlanning subjects: ${report.modules.length} groups with ${report.findings.length} underlying findings (${Math.min(limit, report.modules.length)} groups shown).`,
@@ -180,24 +217,6 @@ function renderPrimaryModuleFindings(
     );
     for (const site of finding.sites.slice(0, 2))
       console.log(`      ${site.file}:${site.line}${site.name ? ' ' + site.name : ''}`);
-  }
-}
-
-function renderDependencyComponents(report: SourceMaintenanceReport, limit: number): void {
-  const assigned = new Set(report.modules.flatMap((group) => group.findingIds));
-  const components = report.findings
-    .filter((finding) => !assigned.has(finding.id))
-    .sort((a, b) => Number(b.rule === 'dependency-cycle') - Number(a.rule === 'dependency-cycle'));
-  if (!components.length) return;
-  console.log(
-    `\nDependency components: ${components.length} (${Math.min(limit, components.length)} shown; shared relationships, not defects attributed to the first member).`,
-  );
-  for (const finding of components.slice(0, limit)) {
-    console.log(`  [${finding.evidence}] ${finding.summary}`);
-    for (const site of finding.sites.slice(0, 3)) console.log(`    ${site.file}:${site.line}`);
-    console.log(
-      `    ${finding.sites.length} source sites and ${finding.details.length} supporting details; --full retains every observed component edge.`,
-    );
   }
 }
 

@@ -102,7 +102,7 @@ describe('health report findings', () => {
       expect.arrayContaining([
         expect.objectContaining({
           category: 'Hidden coupling',
-          description: expect.stringContaining('15 score-weighted after broad/stale-history discount'),
+          description: expect.stringContaining('combined pair weight 15 after broad/stale-history discount'),
         }),
       ]),
     );
