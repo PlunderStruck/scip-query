@@ -43,3 +43,12 @@ function addImportSourcePath(map: Map<string, Set<string>>, name: string, source
   }
   bucket.add(sourcePath);
 }
+
+/** Distinct imported source paths in local-binding encounter order. */
+export function importedSourcePaths(imports: ReadonlyMap<string, ReadonlySet<string>>): Set<string> {
+  const paths = new Set<string>();
+  for (const sourcePaths of imports.values()) {
+    for (const path of sourcePaths) paths.add(path);
+  }
+  return paths;
+}

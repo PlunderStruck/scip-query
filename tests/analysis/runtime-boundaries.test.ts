@@ -47,7 +47,7 @@ describe('runtime-boundary evidence', () => {
     const db = createBoundaryDb();
     try {
       const graph = await collectRuntimeBoundaryGraph(db);
-      expect(graph.extractorVersion).toBe('runtime-boundaries-v19');
+      expect(graph.extractorVersion).toBe('runtime-boundaries-v20');
 
       expect(graph.observations).toEqual(
         expect.arrayContaining([

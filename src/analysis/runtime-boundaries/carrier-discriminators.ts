@@ -1,5 +1,6 @@
 import type { IndexedDefinition } from '../../domain/types.js';
 import {
+  addReferencedParameters,
   callableParameterNames as callableParameterNamesFromNode,
   smallestCoveringCallable,
   unwrapExpression,
@@ -642,11 +643,6 @@ function pairName(pair: SyntaxNode): string | null {
 function pairValue(pair: SyntaxNode): SyntaxNode | null {
   if (pair.type === 'shorthand_property_identifier') return pair;
   return pair.childForFieldName('value') ?? pair.namedChild(1);
-}
-
-function addReferencedParameters(node: SyntaxNode, parameters: readonly (string | null)[], output: Set<string>): void {
-  const identifiers = new Set(node.text.match(/[A-Za-z_$][\w$]*/gu) ?? []);
-  for (const parameter of parameters) if (parameter && identifiers.has(parameter)) output.add(parameter);
 }
 
 function uniqueSortedNumbers(values: readonly number[]): number[] {

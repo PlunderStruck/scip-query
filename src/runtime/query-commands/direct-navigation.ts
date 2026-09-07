@@ -1,3 +1,4 @@
+import { quoteShellArgument } from '../../domain/shell-arguments.js';
 import {
   codeBatch,
   type CodeBatchEntry,
@@ -69,7 +70,7 @@ const handleOutline = dbCommand(({ db, args, opts }) => {
     );
     console.log('\n═══ COVERAGE ═══\n  Compiler ownership is unavailable or empty for this exact file selector.');
     console.log(
-      `\n═══ RECOVERY ═══\n  Read current source exactly with: scip-query code ${shellArgument(filePattern)}`,
+      `\n═══ RECOVERY ═══\n  Read current source exactly with: scip-query code ${quoteShellArgument(filePattern)}`,
     );
     return;
   }
@@ -505,7 +506,7 @@ function appendCodeFileCoverage(lines: string[], entry: CodeBatchEntry): void {
     lines.push(
       `    Read omitted units together: scip-query code ${group
         .map((definition) =>
-          shellArgument(
+          quoteShellArgument(
             `${definition.relativePath}:${displayLine(definition.startLine)}-${displayLine(definition.endLine)}`,
           ),
         )
@@ -528,7 +529,7 @@ function appendCodeAmbiguity(lines: string[], entry: CodeBatchEntry): void {
     lines.push(
       `    Read shown candidates together: scip-query code ${entry.candidates
         .map((candidate) =>
-          shellArgument(
+          quoteShellArgument(
             `${candidate.relativePath}:${displayLine(candidate.startLine)}-${displayLine(candidate.endLine)}`,
           ),
         )
@@ -587,10 +588,6 @@ function appendCodeCoverage(lines: string[], result: CodeBatchResult): void {
     '═══ COVERAGE ═══',
     `  ${resolved}/${result.requested} selectors resolved; ${details.join('; ')}. Source lines use absolute file line numbers and are citation-ready.`,
   );
-}
-
-function shellArgument(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 /**

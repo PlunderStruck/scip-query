@@ -1,3 +1,5 @@
+import { chunked } from '../../domain/array-batches.js';
+import { quoteShellArgument } from '../../domain/shell-arguments.js';
 import { calleeEvidenceStrength as staticCallEvidenceStrength } from '../../symbols/graph/call-graph-evidence.js';
 import { normalizedCallableLeaf } from '../query-utils.js';
 import { behaviorSignalsByLine, type BehaviorSignal } from '../../source/facts/behavior-skeleton.js';
@@ -1347,17 +1349,7 @@ function uniqueAlternatives(alternatives: readonly SystemMapNextAnchorAlternativ
 }
 
 function inspectSelector(alternative: SystemMapNextAnchorAlternative): string {
-  return `--at ${shellArgument(`${alternative.file}:${alternative.line + 1}`)}`;
-}
-
-function chunked<T>(items: readonly T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
-  return chunks;
-}
-
-function shellArgument(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
+  return `--at ${quoteShellArgument(`${alternative.file}:${alternative.line + 1}`)}`;
 }
 
 function sourceCallsiteKey(file: string, line: number, leaf: string): string {

@@ -1,4 +1,5 @@
-import { closeSync, openSync, renameSync, rmSync, writeSync } from 'node:fs';
+import { writeAllBytes } from '../platform/write-bytes.js';
+import { closeSync, openSync, renameSync, rmSync } from 'node:fs';
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf';
 import { DocumentSchema, IndexSchema, SymbolRole } from '@c4312/scip';
 import type { Document, Index } from '@c4312/scip';
@@ -138,18 +139,18 @@ function rewriteSanitizedScip(
   try {
     let segmentStart = 0;
     for (const field of dirtyDocuments) {
-      writeAll(descriptor, buffer.subarray(segmentStart, field.fieldStart));
+      writeAllBytes(descriptor, buffer.subarray(segmentStart, field.fieldStart));
       const document = fromBinary(DocumentSchema, buffer.subarray(field.valueStart, field.valueEnd));
       document.occurrences = document.occurrences.filter(
         (occurrence) => (occurrence.symbolRoles & SymbolRole.Definition) === 0 || definedSymbols.has(occurrence.symbol),
       );
       const encoded = toBinary(DocumentSchema, document);
-      writeAll(descriptor, encodeLengthDelimitedTag(INDEX_DOCUMENTS_FIELD));
-      writeAll(descriptor, encodeVarint(encoded.byteLength));
-      writeAll(descriptor, encoded);
+      writeAllBytes(descriptor, encodeLengthDelimitedTag(INDEX_DOCUMENTS_FIELD));
+      writeAllBytes(descriptor, encodeVarint(encoded.byteLength));
+      writeAllBytes(descriptor, encoded);
       segmentStart = field.fieldEnd;
     }
-    writeAll(descriptor, buffer.subarray(segmentStart));
+    writeAllBytes(descriptor, buffer.subarray(segmentStart));
   } catch (error) {
     closeSync(descriptor);
     rmSync(temporaryPath, { force: true });
@@ -157,11 +158,6 @@ function rewriteSanitizedScip(
   }
   closeSync(descriptor);
   renameSync(temporaryPath, path);
-}
-
-function writeAll(descriptor: number, bytes: Uint8Array): void {
-  let offset = 0;
-  while (offset < bytes.byteLength) offset += writeSync(descriptor, bytes, offset, bytes.byteLength - offset);
 }
 
 export function sanitizeScipIndex(index: Index): SanitizeScipResult & { index: Index } {

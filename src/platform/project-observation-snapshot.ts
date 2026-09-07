@@ -1,6 +1,7 @@
+import { readableDirectoryEntries } from '../filesystem/directory-entries.js';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { lstatSync, readlinkSync, readdirSync, realpathSync, statSync, type Stats } from 'node:fs';
+import { lstatSync, readlinkSync, realpathSync, statSync, type Stats } from 'node:fs';
 import { dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { matchesPathGlob } from '../domain/path-glob.js';
 import { classifyProjectInputPath, type ProjectInputSnapshot } from '../domain/project-input.js';
@@ -147,6 +148,40 @@ export function canonicalProjectInputSnapshot(snapshot: ProjectInputSnapshot): s
   });
 }
 
+function captureSnapshotFiles(projectRoot: string, sourceFiles: readonly string[]) {
+  const files = new Map<string, ProjectSnapshotFile>();
+  const missing = new Set<string>();
+  const fingerprints = new Map<string, Pick<ProjectSnapshotFile, 'size' | 'sha256' | 'fingerprintSize'>>();
+  const contentEntries: RepositoryContentSnapshotEntry[] = [];
+  const sourceIdentities: SourceIdentity[] = [];
+  let totalBytes = 0;
+
+  for (const relativePath of sourceFiles) {
+    const sourcePath = join(projectRoot, relativePath);
+    let before: Stats;
+    try {
+      before = lstatSync(sourcePath);
+    } catch (error) {
+      if (isMissingProjectFileError(error)) {
+        missing.add(relativePath);
+        contentEntries.push({ path: relativePath, kind: 'deleted' });
+        continue;
+      }
+      throw error;
+    }
+    const identity = sourceIdentity(relativePath, before);
+    sourceIdentities.push(identity);
+    const captured = captureSourceFile(projectRoot, relativePath, before);
+    totalBytes = addSnapshotBytes(totalBytes, captured.file.content.byteLength);
+    files.set(relativePath, captured.file);
+    fingerprints.set(relativePath, captured.file);
+    contentEntries.push(captured.entry);
+    assertSourceIdentity(sourcePath, identity);
+  }
+
+  return { files, missing, fingerprints, contentEntries, sourceIdentities };
+}
+
 function captureGitOverlaySnapshot(
   projectRoot: string,
   headCommit: string,
@@ -169,35 +204,10 @@ function captureGitOverlaySnapshot(
     (path) => !isExcludedObservationArtifact(path) && !snapshotPaths.some((pattern) => matchesPathGlob(pattern, path)),
   );
   const changedPaths = [...new Set(firstChangedPaths)].sort();
-  const files = new Map<string, ProjectSnapshotFile>();
-  const missing = new Set<string>();
-  const fingerprints = new Map<string, Pick<ProjectSnapshotFile, 'size' | 'sha256' | 'fingerprintSize'>>();
-  const contentEntries: RepositoryContentSnapshotEntry[] = [];
-  const sourceIdentities: SourceIdentity[] = [];
-  let totalBytes = 0;
-
-  for (const relativePath of changedPaths) {
-    const sourcePath = join(projectRoot, relativePath);
-    let before: Stats;
-    try {
-      before = lstatSync(sourcePath);
-    } catch (error) {
-      if (isMissingProjectFileError(error)) {
-        missing.add(relativePath);
-        contentEntries.push({ path: relativePath, kind: 'deleted' });
-        continue;
-      }
-      throw error;
-    }
-    const identity = sourceIdentity(relativePath, before);
-    sourceIdentities.push(identity);
-    const captured = captureSourceFile(projectRoot, relativePath, before);
-    totalBytes = addSnapshotBytes(totalBytes, captured.file.content.byteLength);
-    files.set(relativePath, captured.file);
-    fingerprints.set(relativePath, captured.file);
-    contentEntries.push(captured.entry);
-    assertSourceIdentity(sourcePath, identity);
-  }
+  const { files, missing, fingerprints, contentEntries, sourceIdentities } = captureSnapshotFiles(
+    projectRoot,
+    changedPaths,
+  );
 
   hooks?.beforeValidation?.();
   const finalChangedPaths = [
@@ -252,34 +262,10 @@ function captureWholeFilesystemSnapshot(
     .filter((path) => !isExcludedObservationArtifact(path))
     .filter((path) => !snapshotPaths.some((pattern) => matchesPathGlob(pattern, path)))
     .sort();
-  const sourceIdentities: SourceIdentity[] = [];
-  const files = new Map<string, ProjectSnapshotFile>();
-  const missing = new Set<string>();
-  const fingerprints = new Map<string, Pick<ProjectSnapshotFile, 'size' | 'sha256' | 'fingerprintSize'>>();
-  const contentEntries: RepositoryContentSnapshotEntry[] = [];
-  let totalBytes = 0;
-  for (const relativePath of sourceFiles) {
-    const sourcePath = join(projectRoot, relativePath);
-    let before: Stats;
-    try {
-      before = lstatSync(sourcePath);
-    } catch (error) {
-      if (isMissingProjectFileError(error)) {
-        missing.add(relativePath);
-        contentEntries.push({ path: relativePath, kind: 'deleted' });
-        continue;
-      }
-      throw error;
-    }
-    const identity = sourceIdentity(relativePath, before);
-    sourceIdentities.push(identity);
-    const captured = captureSourceFile(projectRoot, relativePath, before);
-    totalBytes = addSnapshotBytes(totalBytes, captured.file.content.byteLength);
-    files.set(relativePath, captured.file);
-    fingerprints.set(relativePath, captured.file);
-    contentEntries.push(captured.entry);
-    assertSourceIdentity(sourcePath, identity);
-  }
+  const { files, missing, fingerprints, contentEntries, sourceIdentities } = captureSnapshotFiles(
+    projectRoot,
+    sourceFiles,
+  );
   hooks?.beforeValidation?.();
   const finalFiles = [...new Set([...listFilesystemRepositoryContentFiles(projectRoot), ...declaredInputPaths])]
     .filter((path) => !isExcludedObservationArtifact(path))
@@ -467,7 +453,7 @@ function listFilesystemRepositoryContentFiles(projectRoot: string): string[] {
   while (stack.length > 0) {
     const relativeDirectory = stack.pop()!;
     const absoluteDirectory = relativeDirectory ? join(projectRoot, relativeDirectory) : projectRoot;
-    const entries = readableObservationDirectoryEntries(absoluteDirectory);
+    const entries = readableDirectoryEntries(absoluteDirectory);
     for (const entry of entries) {
       const relativePath = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
       if (isExcludedObservationArtifact(relativePath)) continue;
@@ -591,14 +577,6 @@ function readFixedGitSymlink(
     fingerprintSize: Buffer.byteLength(target),
     sha256: createHash('sha256').update('symlink\0').update(target).digest('hex'),
   };
-}
-
-function readableObservationDirectoryEntries(directory: string): Array<{ name: string; isDirectory(): boolean }> {
-  try {
-    return readdirSync(directory, { withFileTypes: true });
-  } catch {
-    return [];
-  }
 }
 
 const OBSERVATION_ARTIFACT_ROOTS = new Set([

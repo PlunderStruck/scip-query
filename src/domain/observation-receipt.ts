@@ -1,5 +1,11 @@
 import { createHash } from 'node:crypto';
-import { isBoundedRecordString, isPositiveInteger, isRecordObject, isSha256Hex } from './record-validation.js';
+import {
+  isBoundedRecordString,
+  isPositiveInteger,
+  isRecordObject,
+  isSha256Hex,
+  isValidRecordTimestamp,
+} from './record-validation.js';
 
 export const LEGACY_OBSERVATION_RECEIPT_SCHEMA_VERSION = 1 as const;
 export const OBSERVATION_RECEIPT_SCHEMA_VERSION = 2 as const;
@@ -540,7 +546,7 @@ function isObservationReceiptV1(value: unknown): value is ObservationReceiptV1 {
   const index = value['index'];
   const worktree = value['worktree'];
   return (
-    isTimestamp(value['observedAt']) &&
+    isValidRecordTimestamp(value['observedAt']) &&
     isBoundedRecordString(value['projectIdentity']) &&
     isLegacyAuthorityKind(value['authorityKind']) &&
     isLegacyReceiptIndex(index) &&
@@ -574,7 +580,8 @@ function isObservationReceiptV2(value: unknown): value is ObservationReceiptV2 {
   if (!isRecordObject(value)) return false;
   const facts = value['facts'];
   const sources = value['observedSources'];
-  if (!isTimestamp(value['observedAt']) || !isRecordObject(facts) || !isV2ObservationSources(sources)) return false;
+  if (!isValidRecordTimestamp(value['observedAt']) || !isRecordObject(facts) || !isV2ObservationSources(sources))
+    return false;
   if (!isV2ObservationProofSet(value['stabilityProofs'], sources, facts)) return false;
   if (!isV2ObservationFacts(facts)) return false;
   return isV2ObservationDiagnostics(value['diagnostics']) && v2SourceFactsAgree(facts, sources);
@@ -725,10 +732,6 @@ function isObservationSourceKind(value: unknown): value is ObservationSourceKind
   return (
     value === 'index-generation' || value === 'repository-snapshot' || value === 'live-workspace' || value === 'process'
   );
-}
-
-function isTimestamp(value: unknown): value is string {
-  return typeof value === 'string' && !Number.isNaN(Date.parse(value));
 }
 
 function uniqueBy<T>(values: readonly T[], key: (value: T) => string): boolean {

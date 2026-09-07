@@ -1,5 +1,7 @@
+import { writeAllBytes } from '../platform/write-bytes.js';
 import { createHash, randomBytes } from 'node:crypto';
 import {
+  writeSync,
   chmodSync,
   closeSync,
   fstatSync,
@@ -11,7 +13,6 @@ import {
   renameSync,
   rmSync,
   statSync,
-  writeSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -35,7 +36,7 @@ import {
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { quoteShellArgument } from '../platform/shell-arguments.js';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
-import { isNonNegativeInteger, isRecordObject, isSha256Hex } from '../domain/record-validation.js';
+import { isNonNegativeInteger, isRecordObject, isSha256Hex, isScipQueryProducer } from '../domain/record-validation.js';
 import { finalizeSourceEmission, runWithSourceEmissionInvocation } from './source-emission-session.js';
 export {
   CLIENT_SAFE_OUTPUT_BYTES,
@@ -212,22 +213,13 @@ function hasOutputPageCommonFields(
   input: Record<string, unknown>,
 ): input is Record<string, unknown> & { content: string; page: Record<string, unknown> } {
   return (
-    isOutputPageProducer(input['producer']) &&
+    isScipQueryProducer(input['producer']) &&
     typeof input['command'] === 'string' &&
     input['command'].length > 0 &&
     (input['contentType'] === 'text/plain' || input['contentType'] === 'application/json') &&
     (input['agentInstruction'] === undefined || typeof input['agentInstruction'] === 'string') &&
     typeof input['content'] === 'string' &&
     isRecordObject(input['page'])
-  );
-}
-
-function isOutputPageProducer(value: unknown): boolean {
-  return (
-    isRecordObject(value) &&
-    value['name'] === 'scip-query' &&
-    typeof value['version'] === 'string' &&
-    value['version'].length > 0
   );
 }
 
@@ -682,7 +674,7 @@ async function runJsonToOutputFile(
     }
     addCharacters(decoder.write(bytes));
     if (descriptor === undefined) throw new Error('JSON export writer is closed.');
-    writeAll(descriptor, bytes);
+    writeAllBytes(descriptor, bytes, 'JSON export');
     hash.update(bytes);
     totalBytes = nextTotalBytes;
   });
@@ -717,15 +709,6 @@ async function runJsonToOutputFile(
   };
   runtime.writeStdout(`${JSON.stringify(receipt)}\n`);
   finalizeSourceEmission(true);
-}
-
-function writeAll(descriptor: number, bytes: Buffer): void {
-  let offset = 0;
-  while (offset < bytes.length) {
-    const written = writeSync(descriptor, bytes, offset, bytes.length - offset);
-    if (written <= 0) throw new Error('JSON export write made no forward progress.');
-    offset += written;
-  }
 }
 
 function outputSafetyLimitMessage(limit: number, agentOutput: boolean): string {

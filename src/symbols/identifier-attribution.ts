@@ -30,7 +30,7 @@ import { getSourceText } from '../source/primitives/source-text.js';
 import { getSourceFiles } from '../source/primitives/source-fileset.js';
 import { leafName } from './symbol-parser.js';
 import { pathsResolveSame } from '../domain/path-normalization.js';
-import { sourceImportPathsByLocalName } from '../language-parsers/import-index.js';
+import { importedSourcePaths, sourceImportPathsByLocalName } from '../language-parsers/import-index.js';
 import type { SymbolSemanticEvidencePort } from './semantic-evidence-port.js';
 
 // ── Public types ─────────────────────────────────────────────────
@@ -344,10 +344,4 @@ function directlyImportedIdentifierRefs(
   }
 
   return [];
-}
-
-function importedSourcePaths(imports: ReadonlyMap<string, ReadonlySet<string>>): Set<string> {
-  const allImportedSourcePaths = new Set<string>();
-  for (const set of imports.values()) for (const p of set) allImportedSourcePaths.add(p);
-  return allImportedSourcePaths;
 }

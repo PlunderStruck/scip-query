@@ -1,3 +1,4 @@
+import { quoteShellArgument } from '../../domain/shell-arguments.js';
 import { createHash } from 'node:crypto';
 import type { EvidencePart } from './evidence.js';
 import type { ScipDatabase } from '../../storage/db.js';
@@ -1032,7 +1033,7 @@ function omissionGroupCommand(request: InspectionRequest, candidates: readonly C
   if (sourceCandidates.length > 0 && sourceCandidates.length <= SOURCE_INSPECTION_MAX_SELECTORS) {
     const parts = ['scip-query inspect'];
     for (const candidate of sourceCandidates) {
-      parts.push(`--at ${shellArgument(`${candidate.relativePath}:${candidate.focusLine + 1}`)}`);
+      parts.push(`--at ${quoteShellArgument(`${candidate.relativePath}:${candidate.focusLine + 1}`)}`);
     }
     if (request.view === 'behavior') parts.push('--view behavior');
     return parts.join(' ');
@@ -1133,17 +1134,17 @@ function parentPath(relativePath: string): string {
 }
 
 function singleSearchExpansionCommand(pattern: string, scope: string | undefined): string {
-  return `scip-query inspect --search ${shellArgument(pattern)}${scope ? ` --scope ${shellArgument(scope)}` : ''} --full`;
+  return `scip-query inspect --search ${quoteShellArgument(pattern)}${scope ? ` --scope ${quoteShellArgument(scope)}` : ''} --full`;
 }
 
 function inspectionCommand(request: InspectionRequest, full: boolean): string {
   const parts = ['scip-query inspect'];
-  for (const search of request.searches) parts.push(`--search ${shellArgument(search)}`);
-  for (const symbol of request.symbols) parts.push(`--symbol ${shellArgument(symbol)}`);
-  for (const location of request.locations) parts.push(`--at ${shellArgument(location)}`);
-  if (request.scope) parts.push(`--scope ${shellArgument(request.scope)}`);
+  for (const search of request.searches) parts.push(`--search ${quoteShellArgument(search)}`);
+  for (const symbol of request.symbols) parts.push(`--symbol ${quoteShellArgument(symbol)}`);
+  for (const location of request.locations) parts.push(`--at ${quoteShellArgument(location)}`);
+  if (request.scope) parts.push(`--scope ${quoteShellArgument(request.scope)}`);
   if (request.context !== DEFAULT_CONTEXT) parts.push(`--context ${request.context}`);
-  if (request.evidence.parts) parts.push(`--include ${shellArgument(request.evidence.parts.join(','))}`);
+  if (request.evidence.parts) parts.push(`--include ${quoteShellArgument(request.evidence.parts.join(','))}`);
   if (full) parts.push('--full');
   if (request.view === 'behavior') parts.push('--view behavior');
   return parts.join(' ');
@@ -1216,7 +1217,7 @@ function addEdgeCandidate(
     );
     return;
   }
-  const exactFollowup = `scip-query inspect --search ${shellArgument(lastPathSegment(imported))} --scope ${shellArgument(importer)}`;
+  const exactFollowup = `scip-query inspect --search ${quoteShellArgument(lastPathSegment(imported))} --scope ${quoteShellArgument(importer)}`;
   const existing = candidates.find(
     (candidate): candidate is CandidatePathUnit =>
       candidate.kind === 'path' && candidate.relativePath === importer && candidate.relationship === relationship,
@@ -1385,10 +1386,6 @@ function lastPathSegment(relativePath: string): string {
   return relativePath.split('/').at(-1) ?? relativePath;
 }
 
-function shellArgument(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
 function positive(value: number, label: string): number {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new RangeError(`${label} must be a positive safe integer; received ${value}`);
@@ -1405,8 +1402,8 @@ function positiveOrZero(value: number, label: string): number {
 
 function omissionSearchCommand(request: InspectionRequest, searchPatterns: readonly string[], scope: string): string {
   const parts = ['scip-query inspect'];
-  for (const pattern of searchPatterns) parts.push(`--search ${shellArgument(pattern)}`);
-  parts.push(`--scope ${shellArgument(scope)}`, '--full');
+  for (const pattern of searchPatterns) parts.push(`--search ${quoteShellArgument(pattern)}`);
+  parts.push(`--scope ${quoteShellArgument(scope)}`, '--full');
   if (request.view === 'behavior') parts.push('--view behavior');
   return parts.join(' ');
 }

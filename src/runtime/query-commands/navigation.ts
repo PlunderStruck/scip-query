@@ -1,3 +1,5 @@
+import { chunked } from '../../domain/array-batches.js';
+import { quoteShellArgument } from '../../domain/shell-arguments.js';
 import * as queries from '../../queries/index.js';
 import { REPOSITORY_OBSERVATION_OPERATION } from '../command-operation.js';
 import type { CommandDescriptor, InvocationCoverage } from '../command-kit/command-descriptor-types.js';
@@ -399,11 +401,11 @@ function sourceSearchScopeRows(result: queries.SourceSearchResult): string[] {
       if (scope === '<root>') {
         return orderedFiles.map(
           (file) =>
-            `    ${file.relativePath}: ${file.matchingLines} match(es); scip-query search ${shellArgument(result.pattern)} --scope ${shellArgument(file.relativePath)}`,
+            `    ${file.relativePath}: ${file.matchingLines} match(es); scip-query search ${quoteShellArgument(result.pattern)} --scope ${quoteShellArgument(file.relativePath)}`,
         );
       }
       return [
-        `    ${scope}: ${matchingLines} matching line(s) across ${orderedFiles.length} file(s); scip-query search ${shellArgument(result.pattern)} --scope ${shellArgument(scope)}`,
+        `    ${scope}: ${matchingLines} matching line(s) across ${orderedFiles.length} file(s); scip-query search ${quoteShellArgument(result.pattern)} --scope ${quoteShellArgument(scope)}`,
       ];
     });
   return [
@@ -458,7 +460,7 @@ function sourceSearchIdentityRows(identities: readonly queries.SourceSearchIdent
     return [
       `  ${relativePath}  [${fileIdentities[0]!.fileKind}; ${fileIdentities.length} match(es)]`,
       ...[...byOwner.values()].flatMap((owner) =>
-        chunk(owner.lines, 24).map((lines, index) => `    ${index === 0 ? owner.label : '↳'} @ ${lines.join(',')}`),
+        chunked(owner.lines, 24).map((lines, index) => `    ${index === 0 ? owner.label : '↳'} @ ${lines.join(',')}`),
       ),
     ];
   });
@@ -476,8 +478,8 @@ function sourceSearchRecoveryCommands(
     const endLine = displayLine(identity.ownerEndLine ?? identity.focusLine);
     selectors.add(`${identity.relativePath}:${startLine}-${endLine}`);
   }
-  return chunk([...selectors], 24).map(
-    (batch) => `scip-query code ${batch.map((selector) => shellArgument(selector)).join(' ')}`,
+  return chunked([...selectors], 24).map(
+    (batch) => `scip-query code ${batch.map((selector) => quoteShellArgument(selector)).join(' ')}`,
   );
 }
 
@@ -485,23 +487,13 @@ function sourceSearchIdentityKey(identity: Pick<queries.SourceSearchIdentity, 'r
   return `${identity.relativePath}\0${identity.focusLine}`;
 }
 
-function chunk<T>(values: readonly T[], size: number): T[][] {
-  const result: T[][] = [];
-  for (let index = 0; index < values.length; index += size) result.push(values.slice(index, index + size));
-  return result;
-}
-
-function shellArgument(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
-}
-
 function inspectBehaviorFallbackCommand(opts: Readonly<Record<string, unknown>>): string {
   const parts = ['scip-query inspect'];
-  for (const search of stringArrayOptionValue(opts, 'search')) parts.push(`--search ${shellArgument(search)}`);
-  for (const symbol of stringArrayOptionValue(opts, 'symbol')) parts.push(`--symbol ${shellArgument(symbol)}`);
-  for (const location of stringArrayOptionValue(opts, 'at')) parts.push(`--at ${shellArgument(location)}`);
+  for (const search of stringArrayOptionValue(opts, 'search')) parts.push(`--search ${quoteShellArgument(search)}`);
+  for (const symbol of stringArrayOptionValue(opts, 'symbol')) parts.push(`--symbol ${quoteShellArgument(symbol)}`);
+  for (const location of stringArrayOptionValue(opts, 'at')) parts.push(`--at ${quoteShellArgument(location)}`);
   const scope = stringOptionValue(opts, 'scope');
-  if (scope) parts.push(`--scope ${shellArgument(scope)}`);
+  if (scope) parts.push(`--scope ${quoteShellArgument(scope)}`);
   parts.push('--view behavior');
   return parts.join(' ');
 }
@@ -704,7 +696,7 @@ function sourceInspectionCausalFrontierRows(result: queries.SourceInspectionResu
   if (locations.length > 0) {
     rows.push(
       `  If any listed target or withheld requested construct remains material, run this one final recovery batch before answering: scip-query inspect ${locations
-        .map((location) => `--at ${shellArgument(`${location.file}:${displayLine(location.line)}`)}`)
+        .map((location) => `--at ${quoteShellArgument(`${location.file}:${displayLine(location.line)}`)}`)
         .join(' ')} --view behavior`,
     );
   }
@@ -1556,10 +1548,10 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
               selectors: sourceSelectors.length,
               command: [
                 'scip-query inspect',
-                ...symbols.map((symbol) => `--symbol ${shellArgument(symbol)}`),
-                ...locations.map((location) => `--at ${shellArgument(location)}`),
+                ...symbols.map((symbol) => `--symbol ${quoteShellArgument(symbol)}`),
+                ...locations.map((location) => `--at ${quoteShellArgument(location)}`),
                 '--view source',
-                `--include ${shellArgument(sourceParts.join(','))}`,
+                `--include ${quoteShellArgument(sourceParts.join(','))}`,
               ].join(' '),
             };
       return {

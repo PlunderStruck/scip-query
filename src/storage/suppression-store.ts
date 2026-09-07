@@ -17,7 +17,7 @@ import { createHash } from 'node:crypto';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { type FindingSuppression, type SuppressionDecision } from '../domain/config-types.js';
 import { isSuppressionDecision } from '../domain/suppression-adjudication.js';
-import { isRecordObject } from '../domain/record-validation.js';
+import { isRecordObject, isValidRecordTimestamp } from '../domain/record-validation.js';
 import { readSmallArtifactText } from '../filesystem/bounded-file.js';
 import {
   summarizeRecordCompatibility,
@@ -218,8 +218,9 @@ function suppressionMetadataError(
     return 'suppressionIdentity does not match the suppression target or filename';
   }
   if (!isSuppressionWriter(candidate.writer)) return 'missing valid writer metadata';
-  if (!isTimestamp(candidate.createdAt)) return 'missing valid createdAt timestamp';
-  if (candidate.updatedAt !== undefined && !isTimestamp(candidate.updatedAt)) return 'invalid updatedAt timestamp';
+  if (!isValidRecordTimestamp(candidate.createdAt)) return 'missing valid createdAt timestamp';
+  if (candidate.updatedAt !== undefined && !isValidRecordTimestamp(candidate.updatedAt))
+    return 'invalid updatedAt timestamp';
   return null;
 }
 
@@ -230,10 +231,6 @@ function isSuppressionWriter(value: unknown): boolean {
     typeof value.version === 'string' &&
     value.version.trim() !== ''
   );
-}
-
-function isTimestamp(value: unknown): boolean {
-  return typeof value === 'string' && Number.isFinite(Date.parse(value));
 }
 
 export function readSuppressionDir(projectRoot: string): SuppressionDirReadResult {

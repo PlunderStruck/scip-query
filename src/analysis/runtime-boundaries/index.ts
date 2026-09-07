@@ -5,7 +5,6 @@ export {
   readRuntimeBoundaryRelationGroups,
   writeRuntimeBoundaryGraph,
 } from './storage.js';
-export { propagateCompilerResolvedWrappers } from './wrapper-propagation.js';
 export type {
   BoundaryEvidenceStrength,
   BoundaryDerivation,

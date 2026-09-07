@@ -1,3 +1,4 @@
+import { quoteShellArgument } from '../../domain/shell-arguments.js';
 import { calleeEvidenceStrength as staticCallEvidenceStrength } from '../../symbols/graph/call-graph-evidence.js';
 import {
   classifyFile,
@@ -910,7 +911,7 @@ function describeLiteralAnchor(
     narrowingCommands: broad ? literalNarrowingCommands(query, matches) : undefined,
     exhaustiveTraversalCommand:
       broad || activeTraversalSeeds.size < traversalEligible.length
-        ? `scip-query system-map --search ${shellArgument(query)} --full-literal-traversal`
+        ? `scip-query system-map --search ${quoteShellArgument(query)} --full-literal-traversal`
         : undefined,
     seedRegionIds: [],
     matchOnlyRegionIds: [],
@@ -3277,19 +3278,19 @@ function systemMapFrontierExpansionCommand(input: SystemMapTopologyInput, fronti
   const selectors = [
     ...input.anchors.flatMap((anchor) =>
       anchor.kind === 'literal'
-        ? [`--search ${shellArgument(anchor.query)}`]
-        : [`--symbol ${shellArgument(anchor.query)}`],
+        ? [`--search ${quoteShellArgument(anchor.query)}`]
+        : [`--symbol ${quoteShellArgument(anchor.query)}`],
     ),
     `--depth ${input.maxDepth}`,
-    ...input.requestedRelationKinds.map((relation) => `--relation ${shellArgument(relation)}`),
-    `--evidence-floor ${shellArgument(input.evidenceFloor)}`,
-    ...input.includedSourceScopes.map((scope) => `--source-scope ${shellArgument(scope)}`),
+    ...input.requestedRelationKinds.map((relation) => `--relation ${quoteShellArgument(relation)}`),
+    `--evidence-floor ${quoteShellArgument(input.evidenceFloor)}`,
+    ...input.includedSourceScopes.map((scope) => `--source-scope ${quoteShellArgument(scope)}`),
     ...(input.fullLiteralTraversal ? ['--full-literal-traversal'] : []),
     `--topology-characters ${input.maxTopologyCharacters}`,
-    ...input.expandedRegionIds.map((regionId) => `--expand ${shellArgument(regionId)}`),
-    ...input.topologyFrontiers.map((id) => `--frontier ${shellArgument(id)}`),
-    ...input.routeIds.map((id) => `--route ${shellArgument(id)}`),
-    `--frontier ${shellArgument(frontierId)}`,
+    ...input.expandedRegionIds.map((regionId) => `--expand ${quoteShellArgument(regionId)}`),
+    ...input.topologyFrontiers.map((id) => `--frontier ${quoteShellArgument(id)}`),
+    ...input.routeIds.map((id) => `--route ${quoteShellArgument(id)}`),
+    `--frontier ${quoteShellArgument(frontierId)}`,
   ];
   return `scip-query system-map ${selectors.join(' ')}`;
 }
@@ -3349,15 +3350,15 @@ function buildSystemMapExpansion(
   const regionIds = selected.map((region) => region.id);
   const omittedRegionIds = ranked.slice(DEFAULT_EXPANSION_REGION_LIMIT).map((region) => region.id);
   const selectors = [
-    ...searches.map((search) => `--search ${shellArgument(search)}`),
-    ...symbols.map((symbol) => `--symbol ${shellArgument(symbol)}`),
+    ...searches.map((search) => `--search ${quoteShellArgument(search)}`),
+    ...symbols.map((symbol) => `--symbol ${quoteShellArgument(symbol)}`),
     `--depth ${maxDepth}`,
-    ...relations.map((relation) => `--relation ${shellArgument(relation)}`),
-    `--evidence-floor ${shellArgument(evidenceFloor)}`,
-    ...sourceScopes.map((scope) => `--source-scope ${shellArgument(scope)}`),
+    ...relations.map((relation) => `--relation ${quoteShellArgument(relation)}`),
+    `--evidence-floor ${quoteShellArgument(evidenceFloor)}`,
+    ...sourceScopes.map((scope) => `--source-scope ${quoteShellArgument(scope)}`),
     ...(fullLiteralTraversal ? ['--full-literal-traversal'] : []),
     `--topology-characters ${maxTopologyCharacters}`,
-    ...regionIds.map((regionId) => `--expand ${shellArgument(regionId)}`),
+    ...regionIds.map((regionId) => `--expand ${quoteShellArgument(regionId)}`),
   ];
   return {
     command: regionIds.length === 0 ? null : `scip-query system-map ${selectors.join(' ')}`,
@@ -3418,12 +3419,12 @@ function buildSystemMapPresentation(
     rankedRegions.every((region) => selectedRegionIds.has(region.id)) &&
     relationKeys.length === eligibleRelations.length;
   const selectors = [
-    ...searches.map((search) => `--search ${shellArgument(search)}`),
-    ...symbols.map((symbol) => `--symbol ${shellArgument(symbol)}`),
+    ...searches.map((search) => `--search ${quoteShellArgument(search)}`),
+    ...symbols.map((symbol) => `--symbol ${quoteShellArgument(symbol)}`),
     `--depth ${maxDepth}`,
-    ...relations.map((relation) => `--relation ${shellArgument(relation)}`),
-    `--evidence-floor ${shellArgument(evidenceFloor)}`,
-    ...sourceScopes.map((scope) => `--source-scope ${shellArgument(scope)}`),
+    ...relations.map((relation) => `--relation ${quoteShellArgument(relation)}`),
+    `--evidence-floor ${quoteShellArgument(evidenceFloor)}`,
+    ...sourceScopes.map((scope) => `--source-scope ${quoteShellArgument(scope)}`),
     ...(fullLiteralTraversal ? ['--full-literal-traversal'] : []),
     `--topology-characters ${Math.max(maxCharacters, totalEstimatedCharacters)}`,
   ];
@@ -3511,7 +3512,7 @@ function buildSystemMapDrilldown(regions: readonly SystemMapRegion[]): SystemMap
       selected.length === 0
         ? null
         : `scip-query inspect ${selected
-            .map((anchor) => `--at ${shellArgument(`${anchor.file}:${anchor.line + 1}`)}`)
+            .map((anchor) => `--at ${quoteShellArgument(`${anchor.file}:${anchor.line + 1}`)}`)
             .join(' ')} --view behavior`,
     definitionCommand: null,
     candidateAnchors: candidates.length,
@@ -3559,10 +3560,6 @@ function compareDrilldownFiles(
     left.depth - right.depth ||
     left.file.localeCompare(right.file)
   );
-}
-
-function shellArgument(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 interface LiteralMatch {
@@ -3888,7 +3885,7 @@ function literalNarrowingCommands(query: string, matches: readonly LiteralMatch[
         rightCount - leftCount || leftScope.localeCompare(rightScope),
     )
     .slice(0, LITERAL_SCOPE_COMMAND_LIMIT)
-    .map(([scope]) => `scip-query search ${shellArgument(query)} --scope ${shellArgument(scope)}`);
+    .map(([scope]) => `scip-query search ${quoteShellArgument(query)} --scope ${quoteShellArgument(scope)}`);
 }
 
 function literalRecoveryScope(relativePath: string): string {

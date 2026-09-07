@@ -1,4 +1,4 @@
-import { isPositiveInteger, isRecordObject } from '../domain/record-validation.js';
+import { isPositiveInteger, isRecordObject, isScipQueryProducer } from '../domain/record-validation.js';
 import { isObservationReceipt, type ObservationReceipt } from '../domain/observation-receipt.js';
 import { isCommandOperationRole, type CommandOperationRole } from './command-operation.js';
 import { isClaimQualificationV1, type ClaimQualificationV1 } from './claim-qualification.js';
@@ -167,7 +167,7 @@ function decodeVersionedCliJsonEnvelope<Result>(input: Record<string, unknown>):
       kind: 'unsupported',
       schemaVersion: Number(schemaVersion),
       direction: Number(schemaVersion) < CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION ? 'older' : 'future',
-      ...(isProducer(input['producer']) ? { producer: input['producer'] } : {}),
+      ...(isScipQueryProducer(input['producer']) ? { producer: input['producer'] } : {}),
     };
   }
 
@@ -188,7 +188,7 @@ function decodeLegacyCliJsonEnvelope<Result>(input: Record<string, unknown>): De
 function decodeCliJsonEnvelopeV1<Result>(input: Record<string, unknown>): DecodedCliJsonEnvelope<Result> {
   const commonReason = validateCommonEnvelopeFields(input);
   if (commonReason) return { kind: 'malformed', reason: `CLI JSON envelope v1: ${commonReason}` };
-  if (!isProducer(input['producer'])) {
+  if (!isScipQueryProducer(input['producer'])) {
     return {
       kind: 'malformed',
       reason: 'CLI JSON envelope v1: producer must identify scip-query and its non-empty version.',
@@ -292,15 +292,6 @@ function validateCommonEnvelopeFields(input: Record<string, unknown>): string | 
   if (!isRecordObject(input['options'])) return 'options must be an object.';
   if (!Object.hasOwn(input, 'result')) return 'result is required.';
   return null;
-}
-
-function isProducer(value: unknown): value is { name: 'scip-query'; version: string } {
-  return (
-    isRecordObject(value) &&
-    value['name'] === 'scip-query' &&
-    typeof value['version'] === 'string' &&
-    value['version'].length > 0
-  );
 }
 
 function isCliEvidenceContextV1(value: unknown): value is CliEvidenceContextV1 {

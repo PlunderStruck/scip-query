@@ -1,4 +1,5 @@
-import { closeSync, openSync, readSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
+import { writeAllBytes } from '../platform/write-bytes.js';
+import { writeSync, closeSync, openSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf';
 import {
   deserializeSCIP,
@@ -184,16 +185,16 @@ export function rebaseScipFileProjectRoot(path: string, expectedProjectRoot: str
   try {
     let segmentStart = 0;
     for (const field of metadataFields) {
-      writeChunk(descriptor, buffer.subarray(segmentStart, field.fieldStart));
+      writeAllBytes(descriptor, buffer.subarray(segmentStart, field.fieldStart));
       const metadata = fromBinary(MetadataSchema, buffer.subarray(field.valueStart, field.valueEnd));
       metadata.projectRoot = targetProjectRoot;
       const encoded = toBinary(MetadataSchema, metadata);
-      writeChunk(descriptor, encodeLengthDelimitedTag(INDEX_METADATA_FIELD));
-      writeChunk(descriptor, encodeVarint(encoded.byteLength));
-      writeChunk(descriptor, encoded);
+      writeAllBytes(descriptor, encodeLengthDelimitedTag(INDEX_METADATA_FIELD));
+      writeAllBytes(descriptor, encodeVarint(encoded.byteLength));
+      writeAllBytes(descriptor, encoded);
       segmentStart = field.fieldEnd;
     }
-    writeChunk(descriptor, buffer.subarray(segmentStart));
+    writeAllBytes(descriptor, buffer.subarray(segmentStart));
   } catch (error) {
     closeSync(descriptor);
     rmSync(temporaryPath, { force: true });
@@ -201,11 +202,6 @@ export function rebaseScipFileProjectRoot(path: string, expectedProjectRoot: str
   }
   closeSync(descriptor);
   renameSync(temporaryPath, path);
-}
-
-function writeChunk(descriptor: number, bytes: Uint8Array): void {
-  let offset = 0;
-  while (offset < bytes.byteLength) offset += writeSync(descriptor, bytes, offset, bytes.byteLength - offset);
 }
 
 function mergeMetadata(indexes: readonly Index[]): Index['metadata'] {

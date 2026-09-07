@@ -1,3 +1,4 @@
+import { quoteShellArgument } from '../../domain/shell-arguments.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { cleanSignature, extractSignature, resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { referenceEvidenceForSymbol } from '../../symbols/references/reference-sites.js';
@@ -197,11 +198,7 @@ function claimSupportFor(references: readonly QualifiedReference[]): TraceClaimS
 function callsiteFollowup(references: readonly QualifiedReference[]): string | null {
   const locations = [...new Set(references.map((reference) => `${reference.relativePath}:${reference.line + 1}`))];
   if (locations.length === 0 || locations.length > SOURCE_INSPECTION_MAX_SELECTORS) return null;
-  return `scip-query inspect ${locations.map((location) => `--at ${shellArgument(location)}`).join(' ')} --view behavior`;
-}
-
-function shellArgument(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
+  return `scip-query inspect ${locations.map((location) => `--at ${quoteShellArgument(location)}`).join(' ')} --view behavior`;
 }
 
 function definitionSource(db: ScipDatabase, relativePath: string, startLine: number, endLine: number): string | null {

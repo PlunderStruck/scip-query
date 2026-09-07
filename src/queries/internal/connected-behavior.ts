@@ -1,3 +1,4 @@
+import { quoteShellArgument } from '../../domain/shell-arguments.js';
 import { analyzeSourceFunctions } from '../../source/ast/function-metrics.js';
 import { lexicalBindingReferences, type LexicalBindingReference } from '../../source/ast/maintenance-bindings.js';
 import type { BehaviorSignal } from '../../source/facts/behavior-skeleton.js';
@@ -1574,11 +1575,7 @@ function connectedTransitionId(edgeId: string): string {
 
 function inspectionCommand(locations: readonly string[], view: 'behavior' | 'source'): string | null {
   if (locations.length === 0) return null;
-  return `scip-query inspect ${locations.map((location) => `--at ${shellArgument(location)}`).join(' ')} --view ${view}`;
-}
-
-function shellArgument(value: string): string {
-  return `'${value.replace(/'/gu, `'"'"'`)}'`;
+  return `scip-query inspect ${locations.map((location) => `--at ${quoteShellArgument(location)}`).join(' ')} --view ${view}`;
 }
 
 function orderedUnique(values: readonly string[]): string[] {

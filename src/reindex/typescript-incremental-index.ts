@@ -1,3 +1,4 @@
+import { chunked } from '../domain/array-batches.js';
 import { createHash } from 'node:crypto';
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -838,12 +839,6 @@ function commitMaterializedTypeScriptBatch(context: {
     deletedFiles: [...batch.removedFiles].sort(),
   };
   return { assemblyMs, writeMs, fragmentStoreMs, nextOverlayGeneration, affectedBatch };
-}
-
-function chunked<T>(values: readonly T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let offset = 0; offset < values.length; offset += size) chunks.push(values.slice(offset, offset + size));
-  return chunks;
 }
 
 function hydrateLegacyTypeScriptPackageHashes(

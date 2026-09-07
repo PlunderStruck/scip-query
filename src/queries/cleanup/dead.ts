@@ -12,7 +12,7 @@ import { deadCandidateDecision, looksValueLikeDefinition } from '../internal/dea
 import { getSourceImports } from '../../language-parsers/index.js';
 import { applyScanLimit } from '../query-utils.js';
 import { pathsResolveSame } from '../../domain/path-normalization.js';
-import { sourceImportPathsByLocalName } from '../../language-parsers/import-index.js';
+import { importedSourcePaths, sourceImportPathsByLocalName } from '../../language-parsers/import-index.js';
 import { exactSemanticCallerMap } from '../../semantic/shared-primitives.js';
 import { symbolSemanticEvidence } from '../../semantic/symbol-evidence.js';
 import { indexedDocumentPaths as listIndexedDocumentPaths } from '../../storage/scip-documents.js';
@@ -687,12 +687,4 @@ function directlyImportedDeadTargets(
   }
 
   return [];
-}
-
-function importedSourcePaths(imports: ReadonlyMap<string, ReadonlySet<string>>): Set<string> {
-  const allImportedSourcePaths = new Set<string>();
-  for (const sourcePaths of imports.values()) {
-    for (const sourcePath of sourcePaths) allImportedSourcePaths.add(sourcePath);
-  }
-  return allImportedSourcePaths;
 }

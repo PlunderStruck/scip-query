@@ -102,3 +102,17 @@ export function callableParameterNames(callable: SyntaxNode): Array<string | nul
     callable.childForFieldName('parameters') ?? callable.namedChildren.find((child) => /parameters/u.test(child.type));
   return parameters?.namedChildren.map(parameterName) ?? [];
 }
+
+/** Collect parameter names occurring as syntax identifiers in an expression. */
+export function addReferencedParameters(
+  node: SyntaxNode | null | undefined,
+  parameters: readonly (string | null)[],
+  output: Set<string>,
+): void {
+  if (!node) return;
+  const names = new Set(parameters.filter((name): name is string => name !== null));
+  walkNamedSyntax(node, (candidate) => {
+    if (candidate.type !== 'identifier' && candidate.type !== 'shorthand_property_identifier') return;
+    if (names.has(candidate.text)) output.add(candidate.text);
+  });
+}

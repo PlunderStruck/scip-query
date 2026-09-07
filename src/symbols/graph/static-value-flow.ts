@@ -1,5 +1,7 @@
 import { getSourceImports } from '../../language-parsers/index.js';
 import { getAst } from '../../source/ast/ast-core.js';
+import { detectAstLanguage, isVueSfcPath } from '../../source/ast/ast-language.js';
+import { javaScriptStringValue } from './javascript-string-value.js';
 import { smallestCoveringCallable, unwrapExpression, walkNamedSyntax as walk } from '../../source/ast/ast-callables.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import type { ScipDatabase } from '../../storage/db.js';
@@ -37,10 +39,10 @@ function evaluateNode(
 ): EvaluatedStaticValue | null {
   if (depth > MAX_EVALUATION_DEPTH) return unknownValue(input, 'value-evaluation-depth');
   const node = unwrapExpression(input);
-  const literal = stringTerm(node);
+  const literal = stringTerm(context.file, node);
   if (literal) return directValue(context.file, node, literal.term, literal.value, literal.precision);
 
-  if (node.type === 'binary_expression' && /\+/u.test(node.text)) {
+  if (node.type === 'binary_expression' && node.childForFieldName('operator')?.text === '+') {
     const concatenated = evaluateStaticConcatenation(context, node, depth, seen);
     if (concatenated) return concatenated;
   }
@@ -256,8 +258,29 @@ function resolveObjectPropertyPath(
 }
 
 function stringTerm(
+  file: string,
   node: SyntaxNode,
 ): { term: StaticValueTerm; value: string; precision: StaticValuePrecision } | null {
+  const language = detectAstLanguage(file);
+  if (language === 'typescript' || language === 'tsx' || language === 'javascript' || isVueSfcPath(file))
+    return javaScriptStringTerm(node);
+  return otherLanguageStringTerm(node);
+}
+
+function javaScriptStringTerm(node: SyntaxNode): ReturnType<typeof stringTerm> {
+  const decoded = javaScriptStringValue(node);
+  if (!decoded) return null;
+  return decoded.interpolated
+    ? {
+        term: { kind: 'pattern', language: 'template', value: decoded.value },
+        value: decoded.value,
+        precision: 'constrained-pattern',
+      }
+    : { term: { kind: 'literal', value: decoded.value }, value: decoded.value, precision: 'literal' };
+}
+
+function otherLanguageStringTerm(node: SyntaxNode): ReturnType<typeof stringTerm> {
+  if (node.type !== 'string' && node.type !== 'string_literal') return null;
   const text = node.text.trim();
   const quote = text[0];
   if ((quote !== "'" && quote !== '"' && quote !== '`') || text.at(-1) !== quote) return null;

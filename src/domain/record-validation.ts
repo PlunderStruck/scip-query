@@ -50,3 +50,8 @@ export function isBoundedRecordString(value: unknown): value is string {
 export function isNonNegativeFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
+
+/** Identity shared by CLI responses, subprocess results, and output pages. */
+export function isScipQueryProducer(value: unknown): value is { name: 'scip-query'; version: string } {
+  return isRecordObject(value) && value['name'] === 'scip-query' && isNonEmptyString(value['version']);
+}

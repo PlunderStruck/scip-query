@@ -1,3 +1,4 @@
+import { validateOptionalBoolean } from './config-validation.js';
 import type { ProjectConfig } from './config-types.js';
 import { isRecordObject } from './record-validation.js';
 
@@ -176,12 +177,6 @@ function validateCompletePolicy(
       path: `architecture.allowedDependencies.${name}`,
       message: 'A dependency row is required by architecture.requireCompletePolicy.',
     });
-  }
-}
-
-function validateOptionalBoolean(value: unknown, path: string, diagnostics: ArchitectureConfigDiagnostic[]): void {
-  if (value !== undefined && typeof value !== 'boolean') {
-    diagnostics.push({ level: 'error', path, message: 'Must be a boolean.' });
   }
 }
 

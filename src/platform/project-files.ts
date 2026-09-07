@@ -1,3 +1,4 @@
+import { readableDirectoryEntries } from '../filesystem/directory-entries.js';
 import { execFileSync } from 'node:child_process';
 import { isUtf8 } from 'node:buffer';
 import { createHash } from 'node:crypto';
@@ -6,7 +7,6 @@ import {
   fstatSync,
   lstatSync,
   openSync,
-  readdirSync,
   readFileSync,
   readSync,
   readlinkSync,
@@ -926,7 +926,7 @@ function listFilesystemProjectFiles(projectRoot: string): string[] {
   while (stack.length > 0) {
     const relDir = stack.pop()!;
     const absDir = relDir ? join(projectRoot, relDir) : projectRoot;
-    const entries = readableProjectDirectoryEntries(absDir);
+    const entries = readableDirectoryEntries(absDir);
     for (const entry of entries) {
       const relativePath = relDir ? `${relDir}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
@@ -1026,14 +1026,6 @@ function priorJournalEntryValidationReason(
   if (entry.kind === 'change' && !prior) return 'changed-path-not-in-prior-project-input-snapshot';
   if (prior && (prior.hash === 'unreadable' || prior.size < 0)) return 'changed-path-was-unreadable';
   return null;
-}
-
-function readableProjectDirectoryEntries(directory: string): { name: string; isDirectory(): boolean }[] {
-  try {
-    return readdirSync(directory, { withFileTypes: true });
-  } catch {
-    return [];
-  }
 }
 
 const PROJECT_STATE_ARTIFACT_DIRS = new Set(['events', 'ledger', 'releases', 'suppressions']);

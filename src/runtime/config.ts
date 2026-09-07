@@ -1,3 +1,4 @@
+import { validateOptionalBoolean } from '../domain/config-validation.js';
 import { validateArchitectureConfig } from '../domain/architecture-config.js';
 import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -287,7 +288,7 @@ function validateWatchConfig(config: ProjectConfig, diagnostics: ConfigDiagnosti
   validatePositiveWatchInterval(config.watch?.gitPollMs, 'gitPollMs', diagnostics);
   validateWatchIdleTimeout(config, diagnostics);
   for (const key of ['autoStart', 'allowExpensiveRebuild', 'autoRefresh'] as const) {
-    validateWatchBoolean(config.watch?.[key], `watch.${key}`, diagnostics);
+    validateOptionalBoolean(config.watch?.[key], `watch.${key}`, diagnostics);
   }
   validateWatchResourceBudget(config, diagnostics);
 }
@@ -295,12 +296,6 @@ function validateWatchConfig(config: ProjectConfig, diagnostics: ConfigDiagnosti
 function validatePositiveWatchInterval(value: number | undefined, key: string, diagnostics: ConfigDiagnostic[]): void {
   if (value !== undefined && value <= 0) {
     diagnostics.push({ level: 'error', path: `watch.${key}`, message: 'Must be greater than 0.' });
-  }
-}
-
-function validateWatchBoolean(value: unknown, path: string, diagnostics: ConfigDiagnostic[]): void {
-  if (value !== undefined && typeof value !== 'boolean') {
-    diagnostics.push({ level: 'error', path, message: 'Must be a boolean.' });
   }
 }
 

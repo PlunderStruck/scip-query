@@ -1,0 +1,2771 @@
+{
+  "baseline": "33b10dfc",
+  "scope": "Five exact-body groups, sixty same-name groups including low-similarity homonyms, sixteen shared-callee pairs. Candidates are leads, not proof of interchangeable behavior.",
+  "groups": [
+    {
+      "id": "D01",
+      "detector": "exact",
+      "status": "implemented",
+      "decision": "Consolidate three identical producer guards in domain/record-validation; keep each decoder version/order/error contract.",
+      "evidence": {
+        "hash": "65e84df717253d3a",
+        "canonical": {
+          "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`isolated-analysis-runner.ts`/isScipQueryProducer().",
+          "shortName": "src:runtime:isolated-analysis-runner:isScipQueryProducer()",
+          "file": "src/runtime/isolated-analysis-runner.ts",
+          "startLine": 171,
+          "endLine": 178,
+          "loc": 8,
+          "ageCommits": 820
+        },
+        "functions": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`isolated-analysis-runner.ts`/isScipQueryProducer().",
+            "shortName": "src:runtime:isolated-analysis-runner:isScipQueryProducer()",
+            "file": "src/runtime/isolated-analysis-runner.ts",
+            "startLine": 171,
+            "endLine": 178,
+            "loc": 8,
+            "ageCommits": 820
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`cli-json-envelope.ts`/isProducer().",
+            "shortName": "src:runtime:cli-json-envelope:isProducer()",
+            "file": "src/runtime/cli-json-envelope.ts",
+            "startLine": 296,
+            "endLine": 303,
+            "loc": 8,
+            "ageCommits": 405
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`output-pagination.ts`/isOutputPageProducer().",
+            "shortName": "src:runtime:output-pagination:isOutputPageProducer()",
+            "file": "src/runtime/output-pagination.ts",
+            "startLine": 224,
+            "endLine": 231,
+            "loc": 8,
+            "ageCommits": 378
+          }
+        ]
+      }
+    },
+    {
+      "id": "D02",
+      "detector": "exact",
+      "status": "implemented",
+      "decision": "Consolidate tolerant directory entry reads, including the third tsconfig-discovery copy found through source search, under filesystem/directory-entries. Preserve catch-all empty fallback and native entry ordering.",
+      "evidence": {
+        "hash": "757037dc889be5f0",
+        "canonical": {
+          "symbol": "scip-typescript npm scip-query 0.25.0 src/platform/`project-files.ts`/readableProjectDirectoryEntries().",
+          "shortName": "src:platform:project-files:readableProjectDirectoryEntries()",
+          "file": "src/platform/project-files.ts",
+          "startLine": 1030,
+          "endLine": 1036,
+          "loc": 7,
+          "ageCommits": 902
+        },
+        "functions": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/platform/`project-files.ts`/readableProjectDirectoryEntries().",
+            "shortName": "src:platform:project-files:readableProjectDirectoryEntries()",
+            "file": "src/platform/project-files.ts",
+            "startLine": 1030,
+            "endLine": 1036,
+            "loc": 7,
+            "ageCommits": 902
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/platform/`project-observation-snapshot.ts`/readableObservationDirectoryEntries().",
+            "shortName": "src:platform:project-observation-snapshot:readableObservationDirectoryEntries()",
+            "file": "src/platform/project-observation-snapshot.ts",
+            "startLine": 595,
+            "endLine": 601,
+            "loc": 7,
+            "ageCommits": 313
+          }
+        ]
+      }
+    },
+    {
+      "id": "D03",
+      "detector": "exact",
+      "status": "retained",
+      "decision": "Both classify the three short-circuit tokens, but one receives the dynamically loaded compiler and the other uses its metrics compiler. Retain this small syntax predicate rather than introducing a runtime dependency across providers for a fixed token set.",
+      "evidence": {
+        "hash": "7e80d7971199f00a",
+        "canonical": {
+          "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/shortCircuitOperator().",
+          "shortName": "src:semantic:typescript:local-flow:shortCircuitOperator()",
+          "file": "src/semantic/typescript/local-flow.ts",
+          "startLine": 632,
+          "endLine": 638,
+          "loc": 7,
+          "ageCommits": 227
+        },
+        "functions": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/shortCircuitOperator().",
+            "shortName": "src:semantic:typescript:local-flow:shortCircuitOperator()",
+            "file": "src/semantic/typescript/local-flow.ts",
+            "startLine": 632,
+            "endLine": 638,
+            "loc": 7,
+            "ageCommits": 227
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`function-metrics.ts`/isShortCircuit().",
+            "shortName": "src:source:ast:function-metrics:isShortCircuit()",
+            "file": "src/source/ast/function-metrics.ts",
+            "startLine": 259,
+            "endLine": 265,
+            "loc": 7,
+            "ageCommits": 35
+          }
+        ]
+      }
+    },
+    {
+      "id": "D04",
+      "detector": "exact",
+      "status": "implemented",
+      "decision": "Move optional-boolean diagnostic policy to domain/config-validation and reuse for watch/architecture. Preserve diagnostics order, shape, and undefined acceptance.",
+      "evidence": {
+        "hash": "6da875af43ae3c4e",
+        "canonical": {
+          "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`config.ts`/validateWatchBoolean().",
+          "shortName": "src:runtime:config:validateWatchBoolean()",
+          "file": "src/runtime/config.ts",
+          "startLine": 300,
+          "endLine": 304,
+          "loc": 5,
+          "ageCommits": 977
+        },
+        "functions": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`config.ts`/validateWatchBoolean().",
+            "shortName": "src:runtime:config:validateWatchBoolean()",
+            "file": "src/runtime/config.ts",
+            "startLine": 300,
+            "endLine": 304,
+            "loc": 5,
+            "ageCommits": 977
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/domain/`architecture-config.ts`/validateOptionalBoolean().",
+            "shortName": "src:domain:architecture-config:validateOptionalBoolean()",
+            "file": "src/domain/architecture-config.ts",
+            "startLine": 181,
+            "endLine": 185,
+            "loc": 5,
+            "ageCommits": 35
+          }
+        ]
+      }
+    },
+    {
+      "id": "D05",
+      "detector": "exact",
+      "status": "retained",
+      "decision": "Archived command-audit record appenders; independently reproducible historical scripts, not competing production owners. Same three-line assertion formatting does not justify migrating archives.",
+      "evidence": {
+        "hash": "d2ede39c35946dd5",
+        "canonical": {
+          "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.command-contracts.2026-09-05.assert-cli-cases`/check().",
+          "shortName": "benchmarks.command-contracts.2026-09-05.assert-cli-cases:check()",
+          "file": "benchmarks/command-contracts/2026-09-05/assert-cli-cases.py",
+          "startLine": 15,
+          "endLine": 17,
+          "loc": 3,
+          "ageCommits": 35
+        },
+        "functions": [
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.command-contracts.2026-09-05.assert-cli-cases`/check().",
+            "shortName": "benchmarks.command-contracts.2026-09-05.assert-cli-cases:check()",
+            "file": "benchmarks/command-contracts/2026-09-05/assert-cli-cases.py",
+            "startLine": 15,
+            "endLine": 17,
+            "loc": 3,
+            "ageCommits": 35
+          },
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.assert-command-cases`/check().",
+            "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.assert-command-cases:check()",
+            "file": "benchmarks/full-tool-audit/2026-09-05/followup/assert-command-cases.py",
+            "startLine": 15,
+            "endLine": 17,
+            "loc": 3,
+            "ageCommits": 35
+          }
+        ]
+      }
+    },
+    {
+      "id": "T01",
+      "detector": "twins-all",
+      "status": "implemented",
+      "decision": "Consolidated all seven printed-command copies into domain/shell-arguments, preserving the existing platform import facade. The helper owns command-argument encoding without pulling query modules into platform services. POSIX round-trip tests preserve literal argument values; Windows uses the established helper policy.",
+      "evidence": {
+        "leaf": "shellArgument",
+        "relationship": "divergent",
+        "maxDivergence": 0.154,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`system-map.ts`/shellArgument().",
+            "shortName": "src:queries:graph:system-map:shellArgument()",
+            "file": "src/queries/graph/system-map.ts",
+            "startLine": 3563,
+            "endLine": 3565,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/internal/`connected-behavior.ts`/shellArgument().",
+            "shortName": "src:queries:internal:connected-behavior:shellArgument()",
+            "file": "src/queries/internal/connected-behavior.ts",
+            "startLine": 1579,
+            "endLine": 1581,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/internal/`next-anchor-candidates.ts`/shellArgument().",
+            "shortName": "src:queries:internal:next-anchor-candidates:shellArgument()",
+            "file": "src/queries/internal/next-anchor-candidates.ts",
+            "startLine": 1358,
+            "endLine": 1360,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`source-inspection.ts`/shellArgument().",
+            "shortName": "src:queries:navigation:source-inspection:shellArgument()",
+            "file": "src/queries/navigation/source-inspection.ts",
+            "startLine": 1387,
+            "endLine": 1389,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`trace.ts`/shellArgument().",
+            "shortName": "src:queries:navigation:trace:shellArgument()",
+            "file": "src/queries/navigation/trace.ts",
+            "startLine": 202,
+            "endLine": 204,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`direct-navigation.ts`/shellArgument().",
+            "shortName": "src:runtime:query-commands:direct-navigation:shellArgument()",
+            "file": "src/runtime/query-commands/direct-navigation.ts",
+            "startLine": 591,
+            "endLine": 593,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/query-commands/`navigation.ts`/shellArgument().",
+            "shortName": "src:runtime:query-commands:navigation:shellArgument()",
+            "file": "src/runtime/query-commands/navigation.ts",
+            "startLine": 493,
+            "endLine": 495,
+            "loc": 3
+          }
+        ],
+        "firstDivergentTokens": "A: \"'\\\\''\" ) } '`;  |  B: `'\"'\"'` ) } '`;"
+      }
+    },
+    {
+      "id": "T02",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Historical JSON result readers and a TypeScript document-emitter result assembler have unrelated schemas and side effects.",
+      "evidence": {
+        "leaf": "result",
+        "relationship": "divergent",
+        "maxDivergence": 0.5,
+        "members": [
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.command-contracts.2026-09-05.assert-cli-cases`/result().",
+            "shortName": "benchmarks.command-contracts.2026-09-05.assert-cli-cases:result()",
+            "file": "benchmarks/command-contracts/2026-09-05/assert-cli-cases.py",
+            "startLine": 12,
+            "endLine": 13,
+            "loc": 2
+          },
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.assess-results`/result().",
+            "shortName": "benchmarks.full-tool-audit.2026-09-05.assess-results:result()",
+            "file": "benchmarks/full-tool-audit/2026-09-05/assess-results.py",
+            "startLine": 21,
+            "endLine": 23,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.assert-command-cases`/result().",
+            "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.assert-command-cases:result()",
+            "file": "benchmarks/full-tool-audit/2026-09-05/followup/assert-command-cases.py",
+            "startLine": 12,
+            "endLine": 13,
+            "loc": 2
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/reindex/`typescript-document-emitter.ts`/TypeScriptDocumentEmitter#result().",
+            "shortName": "src:reindex:typescript-document-emitter:TypeScriptDocumentEmitter:result()",
+            "file": "src/reindex/typescript-document-emitter.ts",
+            "startLine": 449,
+            "endLine": 456,
+            "loc": 8
+          }
+        ],
+        "firstDivergentTokens": "A: command ) : return json .  |  B: group , name ) : data"
+      }
+    },
+    {
+      "id": "T03",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Independent historical probe scripts differ in command roots, expected exits, timeout handling, result schema and checkpoint writes. Preserve reproducible archives.",
+      "evidence": {
+        "leaf": "run",
+        "relationship": "divergent",
+        "maxDivergence": 0.303,
+        "members": [
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.command-contracts.2026-09-05.run-architecture-cases`/run().",
+            "shortName": "benchmarks.command-contracts.2026-09-05.run-architecture-cases:run()",
+            "file": "benchmarks/command-contracts/2026-09-05/run-architecture-cases.py",
+            "startLine": 27,
+            "endLine": 32,
+            "loc": 6
+          },
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.command-contracts.2026-09-05.run-control-cases`/run().",
+            "shortName": "benchmarks.command-contracts.2026-09-05.run-control-cases:run()",
+            "file": "benchmarks/command-contracts/2026-09-05/run-control-cases.py",
+            "startLine": 35,
+            "endLine": 51,
+            "loc": 17
+          },
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.lifecycle-probes`/run().",
+            "shortName": "benchmarks.full-tool-audit.2026-09-05.lifecycle-probes:run()",
+            "file": "benchmarks/full-tool-audit/2026-09-05/lifecycle-probes.py",
+            "startLine": 16,
+            "endLine": 25,
+            "loc": 10
+          },
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.run-cli-probes`/run().",
+            "shortName": "benchmarks.full-tool-audit.2026-09-05.run-cli-probes:run()",
+            "file": "benchmarks/full-tool-audit/2026-09-05/run-cli-probes.py",
+            "startLine": 23,
+            "endLine": 32,
+            "loc": 10
+          }
+        ],
+        "firstDivergentTokens": "A: ) : p = subprocess .  |  B: , expected = 0 , extra_env"
+      }
+    },
+    {
+      "id": "T04",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Rust asynchronous LSP execution, durable Rust session availability/fallback, and TypeScript cached per-file compiler resolution are separate implementations of provider contracts.",
+      "evidence": {
+        "leaf": "calleesForDefinition",
+        "relationship": "homonym",
+        "maxDivergence": 0.763,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/rust/`lsp-batch-worker.ts`/calleesForDefinition().",
+            "shortName": "src:semantic:rust:lsp-batch-worker:calleesForDefinition()",
+            "file": "src/semantic/rust/lsp-batch-worker.ts",
+            "startLine": 484,
+            "endLine": 501,
+            "loc": 18
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/rust/`lsp-session.ts`/RustAnalyzerSessionResolver#calleesForDefinitions().",
+            "shortName": "src:semantic:rust:lsp-session:RustAnalyzerSessionResolver:calleesForDefinitions()",
+            "file": "src/semantic/rust/lsp-session.ts",
+            "startLine": 132,
+            "endLine": 163,
+            "loc": 32
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`ts-morph-provider.ts`/TsMorphSemanticProvider#calleesForDefinitions().",
+            "shortName": "src:semantic:typescript:ts-morph-provider:TsMorphSemanticProvider:calleesForDefinitions()",
+            "file": "src/semantic/typescript/ts-morph-provider.ts",
+            "startLine": 768,
+            "endLine": 790,
+            "loc": 23
+          }
+        ]
+      }
+    },
+    {
+      "id": "T05",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Entry-map exact callee lookup with caller cache, system-map plural ambiguous selector resolution with omission counts, and impact exact database lookup have different inputs and coverage contracts.",
+      "evidence": {
+        "leaf": "resolveIndexedDefinition",
+        "relationship": "divergent",
+        "maxDivergence": 0.484,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`entry-map.ts`/resolveIndexedDefinition().",
+            "shortName": "src:queries:graph:entry-map:resolveIndexedDefinition()",
+            "file": "src/queries/graph/entry-map.ts",
+            "startLine": 380,
+            "endLine": 391,
+            "loc": 12
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`system-map.ts`/resolveIndexedDefinitions().",
+            "shortName": "src:queries:graph:system-map:resolveIndexedDefinitions()",
+            "file": "src/queries/graph/system-map.ts",
+            "startLine": 4015,
+            "endLine": 4038,
+            "loc": 24
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/impact/`context.ts`/resolveIndexedDefinition().",
+            "shortName": "src:queries:impact:context:resolveIndexedDefinition()",
+            "file": "src/queries/impact/context.ts",
+            "startLine": 601,
+            "endLine": 605,
+            "loc": 5
+          }
+        ],
+        "firstDivergentTokens": "A: cached = cache . get (  |  B: match = findExactSymbolMatch ( db ,"
+      }
+    },
+    {
+      "id": "T06",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Object-members searches a trimmed name through syntax, member-call-targets returns the first matching declarator (even absent initializer), while static-value-flow intentionally indexes const initializers only. Combining these would broaden constant evidence or change first-match semantics.",
+      "evidence": {
+        "leaf": "findVariableInitializer",
+        "relationship": "divergent",
+        "maxDivergence": 0.366,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/analysis/runtime-boundaries/`object-members.ts`/findVariableInitializer().",
+            "shortName": "src:analysis:runtime-boundaries:object-members:findVariableInitializer()",
+            "file": "src/analysis/runtime-boundaries/object-members.ts",
+            "startLine": 213,
+            "endLine": 222,
+            "loc": 10
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/symbols/graph/`member-call-targets.ts`/findVariableInitializer().",
+            "shortName": "src:symbols:graph:member-call-targets:findVariableInitializer()",
+            "file": "src/symbols/graph/member-call-targets.ts",
+            "startLine": 865,
+            "endLine": 871,
+            "loc": 7
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/symbols/graph/`static-value-flow.ts`/findVariableInitializer().",
+            "shortName": "src:symbols:graph:static-value-flow:findVariableInitializer()",
+            "file": "src/symbols/graph/static-value-flow.ts",
+            "startLine": 414,
+            "endLine": 416,
+            "loc": 3
+          }
+        ],
+        "firstDivergentTokens": "A: let result : SyntaxNode | null  |  B: for ( const node of nodesOfTypes"
+      }
+    },
+    {
+      "id": "T07",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Historical independent frontend, transport, and Vue probes invoke different commands with different timeout/output contracts.",
+      "evidence": {
+        "leaf": "invoke",
+        "relationship": "divergent",
+        "maxDivergence": 0.277,
+        "members": [
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.command-contracts.2026-09-05.run-frontend-cases`/invoke().",
+            "shortName": "benchmarks.command-contracts.2026-09-05.run-frontend-cases:invoke()",
+            "file": "benchmarks/command-contracts/2026-09-05/run-frontend-cases.py",
+            "startLine": 14,
+            "endLine": 19,
+            "loc": 6
+          },
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.command-contracts.2026-09-05.run-transport-cases`/invoke().",
+            "shortName": "benchmarks.command-contracts.2026-09-05.run-transport-cases:invoke()",
+            "file": "benchmarks/command-contracts/2026-09-05/run-transport-cases.py",
+            "startLine": 17,
+            "endLine": 22,
+            "loc": 6
+          },
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.command-contracts.2026-09-05.run-vue-cases`/invoke().",
+            "shortName": "benchmarks.command-contracts.2026-09-05.run-vue-cases:invoke()",
+            "file": "benchmarks/command-contracts/2026-09-05/run-vue-cases.py",
+            "startLine": 39,
+            "endLine": 44,
+            "loc": 6
+          }
+        ],
+        "firstDivergentTokens": "A: , args , json_result = True  |  B: ) : p = subprocess ."
+      }
+    },
+    {
+      "id": "T08",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Historical assertion record writers use different output schemas; retain archives (also D05).",
+      "evidence": {
+        "leaf": "check",
+        "relationship": "divergent",
+        "maxDivergence": 0.158,
+        "members": [
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.command-contracts.2026-09-05.assert-cli-cases`/check().",
+            "shortName": "benchmarks.command-contracts.2026-09-05.assert-cli-cases:check()",
+            "file": "benchmarks/command-contracts/2026-09-05/assert-cli-cases.py",
+            "startLine": 15,
+            "endLine": 17,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.assess-results`/check().",
+            "shortName": "benchmarks.full-tool-audit.2026-09-05.assess-results:check()",
+            "file": "benchmarks/full-tool-audit/2026-09-05/assess-results.py",
+            "startLine": 25,
+            "endLine": 26,
+            "loc": 2
+          },
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.full-tool-audit.2026-09-05.followup.assert-command-cases`/check().",
+            "shortName": "benchmarks.full-tool-audit.2026-09-05.followup.assert-command-cases:check()",
+            "file": "benchmarks/full-tool-audit/2026-09-05/followup/assert-command-cases.py",
+            "startLine": 15,
+            "endLine": 17,
+            "loc": 3
+          }
+        ],
+        "firstDivergentTokens": "A: command , claim , actual ,  |  B: name , expected , actual )"
+      }
+    },
+    {
+      "id": "T09",
+      "detector": "twins-all",
+      "status": "implemented",
+      "decision": "Move array batching into a neutral domain owner; migrate next-anchor, incremental-index, isolated-runner and navigation chunk copies. Preserve slice semantics/order and existing public runner export.",
+      "evidence": {
+        "leaf": "chunked",
+        "relationship": "divergent",
+        "maxDivergence": 0.143,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/internal/`next-anchor-candidates.ts`/chunked().",
+            "shortName": "src:queries:internal:next-anchor-candidates:chunked()",
+            "file": "src/queries/internal/next-anchor-candidates.ts",
+            "startLine": 1352,
+            "endLine": 1356,
+            "loc": 5
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/reindex/`typescript-incremental-index.ts`/chunked().",
+            "shortName": "src:reindex:typescript-incremental-index:chunked()",
+            "file": "src/reindex/typescript-incremental-index.ts",
+            "startLine": 842,
+            "endLine": 846,
+            "loc": 5
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`isolated-analysis-runner.ts`/chunked().",
+            "shortName": "src:runtime:isolated-analysis-runner:chunked()",
+            "file": "src/runtime/isolated-analysis-runner.ts",
+            "startLine": 103,
+            "endLine": 109,
+            "loc": 7
+          }
+        ],
+        "firstDivergentTokens": "A: index = 0 ; index <  |  B: offset = 0 ; offset <"
+      }
+    },
+    {
+      "id": "T10",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "ts-morph computes cached callable signatures; tsserver explicitly supplies no signature capability. These implement different provider support.",
+      "evidence": {
+        "leaf": "signatureFor",
+        "relationship": "homonym",
+        "maxDivergence": 0.948,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`ts-morph-provider.ts`/TsMorphSemanticProvider#signatureFor().",
+            "shortName": "src:semantic:typescript:ts-morph-provider:TsMorphSemanticProvider:signatureFor()",
+            "file": "src/semantic/typescript/ts-morph-provider.ts",
+            "startLine": 886,
+            "endLine": 911,
+            "loc": 26
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`tsserver-provider.ts`/TsServerSemanticProvider#signatureFor().",
+            "shortName": "src:semantic:typescript:tsserver-provider:TsServerSemanticProvider:signatureFor()",
+            "file": "src/semantic/typescript/tsserver-provider.ts",
+            "startLine": 163,
+            "endLine": 165,
+            "loc": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "T11",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "One tests TypeScript assignment token kinds; the other returns source text between AST assignment operands.",
+      "evidence": {
+        "leaf": "assignmentOperator",
+        "relationship": "homonym",
+        "maxDivergence": 0.886,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/assignmentOperator().",
+            "shortName": "src:semantic:typescript:local-flow:assignmentOperator()",
+            "file": "src/semantic/typescript/local-flow.ts",
+            "startLine": 1783,
+            "endLine": 1785,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/source/facts/`state-temporal-analysis.ts`/assignmentOperator().",
+            "shortName": "src:source:facts:state-temporal-analysis:assignmentOperator()",
+            "file": "src/source/facts/state-temporal-analysis.ts",
+            "startLine": 321,
+            "endLine": 326,
+            "loc": 6
+          }
+        ]
+      }
+    },
+    {
+      "id": "T12",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "One is a conservative text occurrence check used by residue review, the other walks syntax identifiers for state analysis. Do not substitute one evidence basis for the other; regex use remains a scoped heuristic, not compiler identity.",
+      "evidence": {
+        "leaf": "containsIdentifier",
+        "relationship": "homonym",
+        "maxDivergence": 0.886,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/impact/`newly-unreferenced-residue.ts`/containsIdentifier().",
+            "shortName": "src:queries:impact:newly-unreferenced-residue:containsIdentifier()",
+            "file": "src/queries/impact/newly-unreferenced-residue.ts",
+            "startLine": 430,
+            "endLine": 432,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/source/facts/`state-temporal-analysis.ts`/containsIdentifier().",
+            "shortName": "src:source:facts:state-temporal-analysis:containsIdentifier()",
+            "file": "src/source/facts/state-temporal-analysis.ts",
+            "startLine": 301,
+            "endLine": 307,
+            "loc": 7
+          }
+        ]
+      }
+    },
+    {
+      "id": "T13",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "One builds a location-only inspect command with explicit view and empty-result handling; the other replays all selectors/options of an inspection. Share shell escaping through T01, retain command-specific construction.",
+      "evidence": {
+        "leaf": "inspectionCommand",
+        "relationship": "homonym",
+        "maxDivergence": 0.863,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/internal/`connected-behavior.ts`/inspectionCommand().",
+            "shortName": "src:queries:internal:connected-behavior:inspectionCommand()",
+            "file": "src/queries/internal/connected-behavior.ts",
+            "startLine": 1574,
+            "endLine": 1577,
+            "loc": 4
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`source-inspection.ts`/inspectionCommand().",
+            "shortName": "src:queries:navigation:source-inspection:inspectionCommand()",
+            "file": "src/queries/navigation/source-inspection.ts",
+            "startLine": 1138,
+            "endLine": 1149,
+            "loc": 12
+          }
+        ]
+      }
+    },
+    {
+      "id": "T14",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Worker-lane response ownership/deadlines/termination and Rust worker request dispatch/shutdown are opposite sides of different protocols.",
+      "evidence": {
+        "leaf": "handleMessage",
+        "relationship": "homonym",
+        "maxDivergence": 0.854,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`worker-request-lane.ts`/WorkerRequestLane#handleMessage().",
+            "shortName": "src:runtime:worker-request-lane:WorkerRequestLane:handleMessage()",
+            "file": "src/runtime/worker-request-lane.ts",
+            "startLine": 140,
+            "endLine": 168,
+            "loc": 29
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/rust/`lsp-session-worker.ts`/handleMessage().",
+            "shortName": "src:semantic:rust:lsp-session-worker:handleMessage()",
+            "file": "src/semantic/rust/lsp-session-worker.ts",
+            "startLine": 124,
+            "endLine": 164,
+            "loc": 41
+          }
+        ]
+      }
+    },
+    {
+      "id": "T15",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "ts-morph computes cached local import usage; tsserver supplies no import-usage capability. Retain provider distinction.",
+      "evidence": {
+        "leaf": "importUsage",
+        "relationship": "homonym",
+        "maxDivergence": 0.852,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`ts-morph-provider.ts`/TsMorphSemanticProvider#importUsage().",
+            "shortName": "src:semantic:typescript:ts-morph-provider:TsMorphSemanticProvider:importUsage()",
+            "file": "src/semantic/typescript/ts-morph-provider.ts",
+            "startLine": 227,
+            "endLine": 238,
+            "loc": 12
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`tsserver-provider.ts`/TsServerSemanticProvider#importUsage().",
+            "shortName": "src:semantic:typescript:tsserver-provider:TsServerSemanticProvider:importUsage()",
+            "file": "src/semantic/typescript/tsserver-provider.ts",
+            "startLine": 139,
+            "endLine": 141,
+            "loc": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "T16",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "ts-morph computes cached callee evidence; tsserver supplies no callee capability. Retain provider distinction.",
+      "evidence": {
+        "leaf": "calleesFor",
+        "relationship": "homonym",
+        "maxDivergence": 0.833,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`ts-morph-provider.ts`/TsMorphSemanticProvider#calleesFor().",
+            "shortName": "src:semantic:typescript:ts-morph-provider:TsMorphSemanticProvider:calleesFor()",
+            "file": "src/semantic/typescript/ts-morph-provider.ts",
+            "startLine": 759,
+            "endLine": 766,
+            "loc": 8
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`tsserver-provider.ts`/TsServerSemanticProvider#calleesFor().",
+            "shortName": "src:semantic:typescript:tsserver-provider:TsServerSemanticProvider:calleesFor()",
+            "file": "src/semantic/typescript/tsserver-provider.ts",
+            "startLine": 159,
+            "endLine": 161,
+            "loc": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "T17",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Rust durable-session validates full transport definitions; TypeScript session accepts a smaller shape. Do not silently tighten an established decoder during a duplication refactor. Keep as an explicit protocol-contract difference requiring a dedicated acceptance audit before unification.",
+      "evidence": {
+        "leaf": "isIndexedDefinition",
+        "relationship": "homonym",
+        "maxDivergence": 0.833,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/rust/`durable-session-protocol.ts`/isIndexedDefinition().",
+            "shortName": "src:semantic:rust:durable-session-protocol:isIndexedDefinition()",
+            "file": "src/semantic/rust/durable-session-protocol.ts",
+            "startLine": 530,
+            "endLine": 537,
+            "loc": 8
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`session-protocol.ts`/isIndexedDefinition().",
+            "shortName": "src:semantic:typescript:session-protocol:isIndexedDefinition()",
+            "file": "src/semantic/typescript/session-protocol.ts",
+            "startLine": 183,
+            "endLine": 195,
+            "loc": 13
+          }
+        ]
+      }
+    },
+    {
+      "id": "T18",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "ProjectIndex returns a parameter count from cached source facts; behavior-skeleton returns source signature text. Different products.",
+      "evidence": {
+        "leaf": "callableSignature",
+        "relationship": "homonym",
+        "maxDivergence": 0.818,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/internal/`project-index.ts`/ProjectIndex#callableSignature().",
+            "shortName": "src:queries:internal:project-index:ProjectIndex:callableSignature()",
+            "file": "src/queries/internal/project-index.ts",
+            "startLine": 147,
+            "endLine": 156,
+            "loc": 10
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/source/facts/`behavior-skeleton.ts`/callableSignature().",
+            "shortName": "src:source:facts:behavior-skeleton:callableSignature()",
+            "file": "src/source/facts/behavior-skeleton.ts",
+            "startLine": 1204,
+            "endLine": 1213,
+            "loc": 10
+          }
+        ]
+      }
+    },
+    {
+      "id": "T19",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "provider-cache supplies a Rust source zero-call oracle; rust/provider invokes the optional oracle with fail-closed exception handling. Producer and adapter, not parallel implementations.",
+      "evidence": {
+        "leaf": "rustSourceProvesZeroCallees",
+        "relationship": "homonym",
+        "maxDivergence": 0.814,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/`provider-cache.ts`/rustSourceProvesZeroCallees().",
+            "shortName": "src:semantic:provider-cache:rustSourceProvesZeroCallees()",
+            "file": "src/semantic/provider-cache.ts",
+            "startLine": 53,
+            "endLine": 68,
+            "loc": 16
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/rust/`provider.ts`/rustSourceProvesZeroCallees().",
+            "shortName": "src:semantic:rust:provider:rustSourceProvesZeroCallees()",
+            "file": "src/semantic/rust/provider.ts",
+            "startLine": 313,
+            "endLine": 323,
+            "loc": 11
+          }
+        ]
+      }
+    },
+    {
+      "id": "T20",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Project-file lookup enforces safe source paths and propagates non-missing errors; tsconfig discovery consults snapshots or permissive filesystem existence. Different file admission contracts.",
+      "evidence": {
+        "leaf": "projectFileExists",
+        "relationship": "homonym",
+        "maxDivergence": 0.8,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/platform/`project-files.ts`/projectFileExists().",
+            "shortName": "src:platform:project-files:projectFileExists()",
+            "file": "src/platform/project-files.ts",
+            "startLine": 500,
+            "endLine": 508,
+            "loc": 9
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/platform/`typescript-projects.ts`/projectFileExists().",
+            "shortName": "src:platform:typescript-projects:projectFileExists()",
+            "file": "src/platform/typescript-projects.ts",
+            "startLine": 268,
+            "endLine": 272,
+            "loc": 5
+          }
+        ]
+      }
+    },
+    {
+      "id": "T21",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "SCIP merge writes bytes to a descriptor; SQLite converter writes occurrence chunks and mentions into database tables. No shared operation (byte writing considered with T45).",
+      "evidence": {
+        "leaf": "writeChunk",
+        "relationship": "homonym",
+        "maxDivergence": 0.8,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/reindex/`merge.ts`/writeChunk().",
+            "shortName": "src:reindex:merge:writeChunk()",
+            "file": "src/reindex/merge.ts",
+            "startLine": 205,
+            "endLine": 208,
+            "loc": 4
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/reindex/`scip-sqlite-converter.ts`/ConversionWriter#writeChunks().",
+            "shortName": "src:reindex:scip-sqlite-converter:ConversionWriter:writeChunks()",
+            "file": "src/reindex/scip-sqlite-converter.ts",
+            "startLine": 470,
+            "endLine": 485,
+            "loc": 16
+          }
+        ]
+      }
+    },
+    {
+      "id": "T22",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Package-surface recursively inventories package manifests; project-shards reads one package name and dependency set with failure status. Different scopes and results.",
+      "evidence": {
+        "leaf": "readPackageManifest",
+        "relationship": "homonym",
+        "maxDivergence": 0.797,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/analysis/`package-surface.ts`/readPackageManifests().",
+            "shortName": "src:analysis:package-surface:readPackageManifests()",
+            "file": "src/analysis/package-surface.ts",
+            "startLine": 129,
+            "endLine": 135,
+            "loc": 7
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/reindex/`project-shards.ts`/readPackageManifest().",
+            "shortName": "src:reindex:project-shards:readPackageManifest()",
+            "file": "src/reindex/project-shards.ts",
+            "startLine": 266,
+            "endLine": 283,
+            "loc": 18
+          }
+        ]
+      }
+    },
+    {
+      "id": "T23",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Raw string-offset newline counting versus compiler-node position lookup; different source representations.",
+      "evidence": {
+        "leaf": "lineOf",
+        "relationship": "homonym",
+        "maxDivergence": 0.793,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/language-parsers/languages/`javascript-reexports.ts`/lineOf().",
+            "shortName": "src:language-parsers:languages:javascript-reexports:lineOf()",
+            "file": "src/language-parsers/languages/javascript-reexports.ts",
+            "startLine": 98,
+            "endLine": 104,
+            "loc": 7
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`semantic-locations.ts`/lineOf().",
+            "shortName": "src:semantic:typescript:semantic-locations:lineOf()",
+            "file": "src/semantic/typescript/semantic-locations.ts",
+            "startLine": 112,
+            "endLine": 114,
+            "loc": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "T24",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Topology edges carry typed semantic/evidence metadata; local-flow edges join analysis points. Different graph products and identity formats.",
+      "evidence": {
+        "leaf": "addEdge",
+        "relationship": "homonym",
+        "maxDivergence": 0.791,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`program-state-temporal-edges.ts`/addEdge().",
+            "shortName": "src:queries:graph:program-state-temporal-edges:addEdge()",
+            "file": "src/queries/graph/program-state-temporal-edges.ts",
+            "startLine": 432,
+            "endLine": 461,
+            "loc": 30
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/addEdge().",
+            "shortName": "src:semantic:typescript:local-flow:addEdge()",
+            "file": "src/semantic/typescript/local-flow.ts",
+            "startLine": 1771,
+            "endLine": 1781,
+            "loc": 11
+          }
+        ]
+      }
+    },
+    {
+      "id": "T25",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Snapshot Git output is newline-delimited revision IDs; Stop hook reads NUL-delimited paths with its own process bounds and error context.",
+      "evidence": {
+        "leaf": "gitLines",
+        "relationship": "homonym",
+        "maxDivergence": 0.787,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/platform/`project-observation-snapshot.ts`/gitLines().",
+            "shortName": "src:platform:project-observation-snapshot:gitLines()",
+            "file": "src/platform/project-observation-snapshot.ts",
+            "startLine": 450,
+            "endLine": 452,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/commands/`architecture-stop-hook.ts`/gitLines().",
+            "shortName": "src:runtime:commands:architecture-stop-hook:gitLines()",
+            "file": "src/runtime/commands/architecture-stop-hook.ts",
+            "startLine": 84,
+            "endLine": 100,
+            "loc": 17
+          }
+        ]
+      }
+    },
+    {
+      "id": "T26",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Package-surface expands filesystem path candidates; source-inspection merges source intervals, roles, evidence and priorities. Unrelated responsibilities.",
+      "evidence": {
+        "leaf": "addSourceCandidate",
+        "relationship": "homonym",
+        "maxDivergence": 0.785,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/analysis/`package-surface.ts`/addSourceCandidate().",
+            "shortName": "src:analysis:package-surface:addSourceCandidate()",
+            "file": "src/analysis/package-surface.ts",
+            "startLine": 289,
+            "endLine": 308,
+            "loc": 20
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`source-inspection.ts`/addSourceCandidate().",
+            "shortName": "src:queries:navigation:source-inspection:addSourceCandidate()",
+            "file": "src/queries/navigation/source-inspection.ts",
+            "startLine": 1260,
+            "endLine": 1313,
+            "loc": 54
+          }
+        ]
+      }
+    },
+    {
+      "id": "T27",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "AST callable lookup uses byte span and cached nodes; behavior-skeleton chooses indexed facts by line span/tie order. Different representations and tie semantics.",
+      "evidence": {
+        "leaf": "smallestCoveringCallable",
+        "relationship": "homonym",
+        "maxDivergence": 0.784,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`ast-callables.ts`/smallestCoveringCallable().",
+            "shortName": "src:source:ast:ast-callables:smallestCoveringCallable()",
+            "file": "src/source/ast/ast-callables.ts",
+            "startLine": 62,
+            "endLine": 69,
+            "loc": 8
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/source/facts/`behavior-skeleton.ts`/smallestCoveringCallable().",
+            "shortName": "src:source:facts:behavior-skeleton:smallestCoveringCallable()",
+            "file": "src/source/facts/behavior-skeleton.ts",
+            "startLine": 1494,
+            "endLine": 1506,
+            "loc": 13
+          }
+        ]
+      }
+    },
+    {
+      "id": "T28",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Slice review records point ownership by unit/name; compiler flow constructs definitions from assigned targets and RHS uses. Different phases of the analysis.",
+      "evidence": {
+        "leaf": "recordFlowDefinition",
+        "relationship": "homonym",
+        "maxDivergence": 0.783,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/quality/`slice-cohesion.ts`/recordFlowDefinition().",
+            "shortName": "src:queries:quality:slice-cohesion:recordFlowDefinition()",
+            "file": "src/queries/quality/slice-cohesion.ts",
+            "startLine": 2712,
+            "endLine": 2721,
+            "loc": 10
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/recordFlowDefinitions().",
+            "shortName": "src:semantic:typescript:local-flow:recordFlowDefinitions()",
+            "file": "src/semantic/typescript/local-flow.ts",
+            "startLine": 903,
+            "endLine": 918,
+            "loc": 16
+          }
+        ]
+      }
+    },
+    {
+      "id": "T29",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Compiler slice syntax unwraps await/void/non-null too; generic tree syntax unwraps a narrower set. Unifying would silently erase behavior or broaden supported syntax.",
+      "evidence": {
+        "leaf": "unwrapExpression",
+        "relationship": "homonym",
+        "maxDivergence": 0.78,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/quality/`slice-cohesion.ts`/unwrapExpression().",
+            "shortName": "src:queries:quality:slice-cohesion:unwrapExpression()",
+            "file": "src/queries/quality/slice-cohesion.ts",
+            "startLine": 1870,
+            "endLine": 1886,
+            "loc": 17
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`ast-callables.ts`/unwrapExpression().",
+            "shortName": "src:source:ast:ast-callables:unwrapExpression()",
+            "file": "src/source/ast/ast-callables.ts",
+            "startLine": 81,
+            "endLine": 90,
+            "loc": 10
+          }
+        ]
+      }
+    },
+    {
+      "id": "T30",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Inspection sorts unique numeric focus lines; call-graph evidence batches unique IDs in encounter order for SQLite. Different ordering/results.",
+      "evidence": {
+        "leaf": "uniqueNumbers",
+        "relationship": "homonym",
+        "maxDivergence": 0.778,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`source-inspection.ts`/uniqueNumbers().",
+            "shortName": "src:queries:navigation:source-inspection:uniqueNumbers()",
+            "file": "src/queries/navigation/source-inspection.ts",
+            "startLine": 1353,
+            "endLine": 1355,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/symbols/graph/`call-graph-evidence.ts`/uniqueNumbers().",
+            "shortName": "src:symbols:graph:call-graph-evidence:uniqueNumbers()",
+            "file": "src/symbols/graph/call-graph-evidence.ts",
+            "startLine": 773,
+            "endLine": 780,
+            "loc": 8
+          }
+        ]
+      }
+    },
+    {
+      "id": "T31",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Navigation annotates one location with evidence basis; compiler adapter maps a referenced symbol to many semantic locations.",
+      "evidence": {
+        "leaf": "referenceLocation",
+        "relationship": "homonym",
+        "maxDivergence": 0.774,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`refs.ts`/referenceLocation().",
+            "shortName": "src:queries:navigation:refs:referenceLocation()",
+            "file": "src/queries/navigation/refs.ts",
+            "startLine": 40,
+            "endLine": 48,
+            "loc": 9
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`semantic-locations.ts`/referenceLocations().",
+            "shortName": "src:semantic:typescript:semantic-locations:referenceLocations()",
+            "file": "src/semantic/typescript/semantic-locations.ts",
+            "startLine": 7,
+            "endLine": 12,
+            "loc": 6
+          }
+        ]
+      }
+    },
+    {
+      "id": "T32",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Local flow resolves shorthand-value symbol identity; ts-morph enumerates declaration keys for an existing compiler symbol. Different identities and inputs.",
+      "evidence": {
+        "leaf": "compilerSymbolKey",
+        "relationship": "homonym",
+        "maxDivergence": 0.762,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/compilerSymbolKey().",
+            "shortName": "src:semantic:typescript:local-flow:compilerSymbolKey()",
+            "file": "src/semantic/typescript/local-flow.ts",
+            "startLine": 1317,
+            "endLine": 1325,
+            "loc": 9
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`ts-morph-provider.ts`/TsMorphSemanticProvider#compilerSymbolKeys().",
+            "shortName": "src:semantic:typescript:ts-morph-provider:TsMorphSemanticProvider:compilerSymbolKeys()",
+            "file": "src/semantic/typescript/ts-morph-provider.ts",
+            "startLine": 678,
+            "endLine": 683,
+            "loc": 6
+          }
+        ]
+      }
+    },
+    {
+      "id": "T33",
+      "detector": "twins-all",
+      "status": "implemented",
+      "decision": "Removed the obsolete wrapper-propagation module and internal barrel export: complete source search found no callers, and the packaged API manifest does not expose it. The live scanner uses propagateCompilerResolvedHttpSummaries, resolved-call-sites, and evaluateStaticValue. Retired its orphan constants cache/string parser too. Corrected JavaScript literal/template decoding and concatenation classification at the shared evaluator, and tested the live HTTP scanner path.",
+      "evidence": {
+        "leaf": "addressedArgument",
+        "relationship": "homonym",
+        "maxDivergence": 0.729,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/analysis/runtime-boundaries/`extractors.ts`/addressedArgument().",
+            "shortName": "src:analysis:runtime-boundaries:extractors:addressedArgument()",
+            "file": "src/analysis/runtime-boundaries/extractors.ts",
+            "startLine": 936,
+            "endLine": 949,
+            "loc": 14
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/analysis/runtime-boundaries/`wrapper-propagation.ts`/addressedArgument().",
+            "shortName": "src:analysis:runtime-boundaries:wrapper-propagation:addressedArgument()",
+            "file": "src/analysis/runtime-boundaries/wrapper-propagation.ts",
+            "startLine": 152,
+            "endLine": 165,
+            "loc": 14
+          }
+        ]
+      }
+    },
+    {
+      "id": "T34",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Mailbox completion detects operation-key conflicts; watcher completion detects request/outcome conflicts. They already share atomic storage primitives; retain protocol-specific conflict policy.",
+      "evidence": {
+        "leaf": "publishCompletion",
+        "relationship": "homonym",
+        "maxDivergence": 0.717,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`bounded-mailbox.ts`/publishCompletion().",
+            "shortName": "src:storage:bounded-mailbox:publishCompletion()",
+            "file": "src/storage/bounded-mailbox.ts",
+            "startLine": 915,
+            "endLine": 935,
+            "loc": 21
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`watch-refresh-requests.ts`/publishCompletion().",
+            "shortName": "src:storage:watch-refresh-requests:publishCompletion()",
+            "file": "src/storage/watch-refresh-requests.ts",
+            "startLine": 317,
+            "endLine": 324,
+            "loc": 8
+          }
+        ]
+      }
+    },
+    {
+      "id": "T35",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Call ownership resolves the declaration surrounding one callable; local-flow enumerates analyzable callables intersecting a range.",
+      "evidence": {
+        "leaf": "callableDeclaration",
+        "relationship": "homonym",
+        "maxDivergence": 0.714,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`call-ownership.ts`/callableDeclaration().",
+            "shortName": "src:semantic:typescript:call-ownership:callableDeclaration()",
+            "file": "src/semantic/typescript/call-ownership.ts",
+            "startLine": 39,
+            "endLine": 53,
+            "loc": 15
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/callableDeclarations().",
+            "shortName": "src:semantic:typescript:local-flow:callableDeclarations()",
+            "file": "src/semantic/typescript/local-flow.ts",
+            "startLine": 366,
+            "endLine": 382,
+            "loc": 17
+          }
+        ]
+      }
+    },
+    {
+      "id": "T36",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Inspection orders source relevance evidence; slice review orders extraction candidates. Independent ranking policies.",
+      "evidence": {
+        "leaf": "compareCandidates",
+        "relationship": "divergent",
+        "maxDivergence": 0.667,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`source-inspection.ts`/compareCandidates().",
+            "shortName": "src:queries:navigation:source-inspection:compareCandidates()",
+            "file": "src/queries/navigation/source-inspection.ts",
+            "startLine": 803,
+            "endLine": 811,
+            "loc": 9
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/quality/`slice-cohesion.ts`/compareCandidates().",
+            "shortName": "src:queries:quality:slice-cohesion:compareCandidates()",
+            "file": "src/queries/quality/slice-cohesion.ts",
+            "startLine": 505,
+            "endLine": 515,
+            "loc": 11
+          }
+        ],
+        "firstDivergentTokens": "A: left . priority - right .  |  B: tierRank ( left . actionTier )"
+      }
+    },
+    {
+      "id": "T37",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Reindex worker validates an unknown numeric heap setting; mailbox lanes parse an environment setting and supply a default (the detector normalizes different names).",
+      "evidence": {
+        "leaf": "typeScriptWorkerHeap",
+        "relationship": "divergent",
+        "maxDivergence": 0.656,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/reindex/`worker.ts`/typeScriptWorkerHeap().",
+            "shortName": "src:reindex:worker:typeScriptWorkerHeap()",
+            "file": "src/reindex/worker.ts",
+            "startLine": 112,
+            "endLine": 114,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`typescript-mailbox-lanes.ts`/typescriptWorkerHeapMb().",
+            "shortName": "src:runtime:typescript-mailbox-lanes:typescriptWorkerHeapMb()",
+            "file": "src/runtime/typescript-mailbox-lanes.ts",
+            "startLine": 369,
+            "endLine": 372,
+            "loc": 4
+          }
+        ],
+        "firstDivergentTokens": "A: return typeof value === 'number' &&  |  B: const configured = Number . parseInt"
+      }
+    },
+    {
+      "id": "T38",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Rust protocol validates an optional safe integer; Rust worker parses an optional numeric string and returns null when absent/invalid. Different range and result contracts.",
+      "evidence": {
+        "leaf": "optionalNonNegativeInteger",
+        "relationship": "divergent",
+        "maxDivergence": 0.652,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/rust/`durable-session-protocol.ts`/optionalNonNegativeInteger().",
+            "shortName": "src:semantic:rust:durable-session-protocol:optionalNonNegativeInteger()",
+            "file": "src/semantic/rust/durable-session-protocol.ts",
+            "startLine": 644,
+            "endLine": 646,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/rust/`lsp-session-worker.ts`/optionalNonNegativeInteger().",
+            "shortName": "src:semantic:rust:lsp-session-worker:optionalNonNegativeInteger()",
+            "file": "src/semantic/rust/lsp-session-worker.ts",
+            "startLine": 975,
+            "endLine": 979,
+            "loc": 5
+          }
+        ],
+        "firstDivergentTokens": "A: return value === undefined || isNonNegativeInteger  |  B: if ( value === undefined ||"
+      }
+    },
+    {
+      "id": "T39",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Topology span sorting tolerates absent locations and has no tie-break; syntax sorting uses concrete ranges and start-line ties.",
+      "evidence": {
+        "leaf": "compareNodeSpan",
+        "relationship": "divergent",
+        "maxDivergence": 0.636,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`program-state-temporal-edges.ts`/compareNodeSpan().",
+            "shortName": "src:queries:graph:program-state-temporal-edges:compareNodeSpan()",
+            "file": "src/queries/graph/program-state-temporal-edges.ts",
+            "startLine": 366,
+            "endLine": 370,
+            "loc": 5
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/source/facts/`behavior-skeleton.ts`/compareNodeSpan().",
+            "shortName": "src:source:facts:behavior-skeleton:compareNodeSpan()",
+            "file": "src/source/facts/behavior-skeleton.ts",
+            "startLine": 1188,
+            "endLine": 1193,
+            "loc": 6
+          }
+        ],
+        "firstDivergentTokens": "A: const leftSpan = ( left .  |  B: return ( left . endPosition ."
+      }
+    },
+    {
+      "id": "T40",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "TypeScript worker deliberately accepts positive integers beyond MAX_SAFE_INTEGER; Rust protocol requires safe integers. Preserve compatibility.",
+      "evidence": {
+        "leaf": "optionalPositiveInteger",
+        "relationship": "divergent",
+        "maxDivergence": 0.529,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`typescript-mailbox-worker.ts`/optionalPositiveInteger().",
+            "shortName": "src:runtime:typescript-mailbox-worker:optionalPositiveInteger()",
+            "file": "src/runtime/typescript-mailbox-worker.ts",
+            "startLine": 107,
+            "endLine": 109,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/rust/`durable-session-protocol.ts`/optionalPositiveInteger().",
+            "shortName": "src:semantic:rust:durable-session-protocol:optionalPositiveInteger()",
+            "file": "src/semantic/rust/durable-session-protocol.ts",
+            "startLine": 640,
+            "endLine": 642,
+            "loc": 3
+          }
+        ],
+        "firstDivergentTokens": "A: ( Number . isInteger ( value  |  B: isPositiveInteger ( value ) ;"
+      }
+    },
+    {
+      "id": "T41",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Carrier lookup selects the minimum byte-span node across the walk; generic lookup returns the first deepest named child covering a line range. These can differ on same-line siblings.",
+      "evidence": {
+        "leaf": "smallestNodeCoveringLine",
+        "relationship": "divergent",
+        "maxDivergence": 0.513,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/analysis/runtime-boundaries/`carrier-discriminators.ts`/smallestNodeCoveringLine().",
+            "shortName": "src:analysis:runtime-boundaries:carrier-discriminators:smallestNodeCoveringLine()",
+            "file": "src/analysis/runtime-boundaries/carrier-discriminators.ts",
+            "startLine": 587,
+            "endLine": 594,
+            "loc": 8
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`ast-callables.ts`/smallestNodeCoveringLines().",
+            "shortName": "src:source:ast:ast-callables:smallestNodeCoveringLines()",
+            "file": "src/source/ast/ast-callables.ts",
+            "startLine": 72,
+            "endLine": 79,
+            "loc": 8
+          }
+        ],
+        "firstDivergentTokens": "A: let match : SyntaxNode | null  |  B: if ( node . startPosition ."
+      }
+    },
+    {
+      "id": "T42",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Slice display compacts and truncates to forty characters; state evidence compacts without truncation.",
+      "evidence": {
+        "leaf": "compact",
+        "relationship": "divergent",
+        "maxDivergence": 0.483,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/quality/`slice-cohesion.ts`/compact().",
+            "shortName": "src:queries:quality:slice-cohesion:compact()",
+            "file": "src/queries/quality/slice-cohesion.ts",
+            "startLine": 2102,
+            "endLine": 2105,
+            "loc": 4
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/source/facts/`state-temporal-analysis.ts`/compact().",
+            "shortName": "src:source:facts:state-temporal-analysis:compact()",
+            "file": "src/source/facts/state-temporal-analysis.ts",
+            "startLine": 402,
+            "endLine": 404,
+            "loc": 3
+          }
+        ],
+        "firstDivergentTokens": "A: const collapsed = text . replace  |  B: return text . trim ( )"
+      }
+    },
+    {
+      "id": "T43",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Carrier deduplication preserves insertion order; graph deduplication imposes file/line/action ordering. Both use the native Map operation; an extra shared wrapper would not remove duplicated domain decisions.",
+      "evidence": {
+        "leaf": "deduplicateObservations",
+        "relationship": "divergent",
+        "maxDivergence": 0.464,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/analysis/runtime-boundaries/`carrier-discriminators.ts`/deduplicateObservations().",
+            "shortName": "src:analysis:runtime-boundaries:carrier-discriminators:deduplicateObservations()",
+            "file": "src/analysis/runtime-boundaries/carrier-discriminators.ts",
+            "startLine": 655,
+            "endLine": 657,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/analysis/runtime-boundaries/`graph.ts`/deduplicateObservations().",
+            "shortName": "src:analysis:runtime-boundaries:graph:deduplicateObservations()",
+            "file": "src/analysis/runtime-boundaries/graph.ts",
+            "startLine": 1256,
+            "endLine": 1263,
+            "loc": 8
+          }
+        ],
+        "firstDivergentTokens": "A: values . map ( ( value  |  B: observations . map ( ( observation"
+      }
+    },
+    {
+      "id": "T44",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Cleanup parses supplied JSON text tolerantly; watch refresh reads a bounded artifact and validates a typed record. Existing JSON.parse is the shared parser.",
+      "evidence": {
+        "leaf": "parseJson",
+        "relationship": "divergent",
+        "maxDivergence": 0.44,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`cleanup-verify.ts`/parseJson().",
+            "shortName": "src:runtime:cleanup-verify:parseJson()",
+            "file": "src/runtime/cleanup-verify.ts",
+            "startLine": 967,
+            "endLine": 973,
+            "loc": 7
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`watch-refresh-requests.ts`/parseJson().",
+            "shortName": "src:storage:watch-refresh-requests:parseJson()",
+            "file": "src/storage/watch-refresh-requests.ts",
+            "startLine": 402,
+            "endLine": 409,
+            "loc": 8
+          }
+        ],
+        "firstDivergentTokens": "A: return JSON . parse ( input  |  B: const value = JSON . parse"
+      }
+    },
+    {
+      "id": "T45",
+      "detector": "twins-all",
+      "status": "implemented",
+      "decision": "Consolidated merge, sanitize and JSON export descriptor writes in platform/write-bytes. Preserve partial-write handling and original I/O errors; fail on zero progress instead of spinning. JSON export keeps its operation-specific error text. Caller cleanup remains caller-owned.",
+      "evidence": {
+        "leaf": "writeAll",
+        "relationship": "divergent",
+        "maxDivergence": 0.429,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/reindex/`sanitize.ts`/writeAll().",
+            "shortName": "src:reindex:sanitize:writeAll()",
+            "file": "src/reindex/sanitize.ts",
+            "startLine": 161,
+            "endLine": 164,
+            "loc": 4
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`output-pagination.ts`/writeAll().",
+            "shortName": "src:runtime:output-pagination:writeAll()",
+            "file": "src/runtime/output-pagination.ts",
+            "startLine": 721,
+            "endLine": 728,
+            "loc": 8
+          }
+        ],
+        "firstDivergentTokens": "A: byteLength ) offset += writeSync (  |  B: length ) { const written ="
+      }
+    },
+    {
+      "id": "T46",
+      "detector": "twins-all",
+      "status": "implemented",
+      "decision": "Removed with the obsolete wrapper implementation (T33); live HTTP summary propagation already uses source/ast/callableParameterNames.",
+      "evidence": {
+        "leaf": "callableParameterNames",
+        "relationship": "divergent",
+        "maxDivergence": 0.303,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/analysis/runtime-boundaries/`wrapper-propagation.ts`/callableParameterNames().",
+            "shortName": "src:analysis:runtime-boundaries:wrapper-propagation:callableParameterNames()",
+            "file": "src/analysis/runtime-boundaries/wrapper-propagation.ts",
+            "startLine": 126,
+            "endLine": 133,
+            "loc": 8
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/source/ast/`ast-callables.ts`/callableParameterNames().",
+            "shortName": "src:source:ast:ast-callables:callableParameterNames()",
+            "file": "src/source/ast/ast-callables.ts",
+            "startLine": 99,
+            "endLine": 103,
+            "loc": 5
+          }
+        ],
+        "firstDivergentTokens": "A: callable = smallestCoveringCallable ( root ,  |  B: parameters = callable . childForFieldName ("
+      }
+    },
+    {
+      "id": "T47",
+      "detector": "twins-all",
+      "status": "implemented",
+      "decision": "Reuse domain/isNonNegativeInteger in query service and envelope; reuse existing record/nonempty-string guards exposed by the same review. Preserve safe-integer acceptance.",
+      "evidence": {
+        "leaf": "isNonNegativeSafeInteger",
+        "relationship": "divergent",
+        "maxDivergence": 0.294,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`query-service-envelope.ts`/isNonNegativeSafeInteger().",
+            "shortName": "src:runtime:query-service-envelope:isNonNegativeSafeInteger()",
+            "file": "src/runtime/query-service-envelope.ts",
+            "startLine": 15,
+            "endLine": 17,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`query-service.ts`/isNonNegativeSafeInteger().",
+            "shortName": "src:runtime:query-service:isNonNegativeSafeInteger()",
+            "file": "src/runtime/query-service.ts",
+            "startLine": 1357,
+            "endLine": 1359,
+            "loc": 3
+          }
+        ],
+        "firstDivergentTokens": "A: typeof value === 'number' && Number  |  B: Number . isSafeInteger ( value )"
+      }
+    },
+    {
+      "id": "T48",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Historical probes accumulate distinct record schemas; control probes persist after each assertion while transport probes do not.",
+      "evidence": {
+        "leaf": "claim",
+        "relationship": "divergent",
+        "maxDivergence": 0.263,
+        "members": [
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.command-contracts.2026-09-05.run-control-cases`/claim().",
+            "shortName": "benchmarks.command-contracts.2026-09-05.run-control-cases:claim()",
+            "file": "benchmarks/command-contracts/2026-09-05/run-control-cases.py",
+            "startLine": 54,
+            "endLine": 56,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-python python project 80c94fb737719962989fb97f492dc5e5bcec5ea1 `benchmarks.command-contracts.2026-09-05.run-transport-cases`/claim().",
+            "shortName": "benchmarks.command-contracts.2026-09-05.run-transport-cases:claim()",
+            "file": "benchmarks/command-contracts/2026-09-05/run-transport-cases.py",
+            "startLine": 24,
+            "endLine": 25,
+            "loc": 2
+          }
+        ],
+        "firstDivergentTokens": "A: condition ) : results . append  |  B: value ) : claims . append"
+      }
+    },
+    {
+      "id": "T49",
+      "detector": "twins-all",
+      "status": "implemented",
+      "decision": "Consolidated imported source-path union in language-parsers/import-index, the existing owner of the import index consumed by both dead-code queries and identifier attribution. Preserve insertion order.",
+      "evidence": {
+        "leaf": "importedSourcePaths",
+        "relationship": "divergent",
+        "maxDivergence": 0.25,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/cleanup/`dead.ts`/importedSourcePaths().",
+            "shortName": "src:queries:cleanup:dead:importedSourcePaths()",
+            "file": "src/queries/cleanup/dead.ts",
+            "startLine": 691,
+            "endLine": 697,
+            "loc": 7
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/symbols/`identifier-attribution.ts`/importedSourcePaths().",
+            "shortName": "src:symbols:identifier-attribution:importedSourcePaths()",
+            "file": "src/symbols/identifier-attribution.ts",
+            "startLine": 348,
+            "endLine": 352,
+            "loc": 5
+          }
+        ],
+        "firstDivergentTokens": "A: sourcePaths of imports . values (  |  B: set of imports . values ("
+      }
+    },
+    {
+      "id": "T50",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Local flow excludes a restricted declaration-name set; slice extraction excludes any named parent except shorthand properties. Different analysis positions, not interchangeable without changing use classification.",
+      "evidence": {
+        "leaf": "isIdentifierNamePosition",
+        "relationship": "divergent",
+        "maxDivergence": 0.231,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/quality/`slice-cohesion.ts`/isIdentifierNamePosition().",
+            "shortName": "src:queries:quality:slice-cohesion:isIdentifierNamePosition()",
+            "file": "src/queries/quality/slice-cohesion.ts",
+            "startLine": 2680,
+            "endLine": 2686,
+            "loc": 7
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/isIdentifierNamePosition().",
+            "shortName": "src:semantic:typescript:local-flow:isIdentifierNamePosition()",
+            "file": "src/semantic/typescript/local-flow.ts",
+            "startLine": 1055,
+            "endLine": 1062,
+            "loc": 8
+          }
+        ],
+        "firstDivergentTokens": "A: if ( ts . isPropertyAccessExpression (  |  B: const parent = node . parent"
+      }
+    },
+    {
+      "id": "T51",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Affected-set excludes dependencies outside the current project; incremental TypeScript closure intentionally retains edges from deleted/missing inputs so consumers are reindexed. Do not merge away that distinction.",
+      "evidence": {
+        "leaf": "reverseDependencyClosure",
+        "relationship": "divergent",
+        "maxDivergence": 0.231,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/reindex/`affected-set.ts`/reverseDependencyClosure().",
+            "shortName": "src:reindex:affected-set:reverseDependencyClosure()",
+            "file": "src/reindex/affected-set.ts",
+            "startLine": 89,
+            "endLine": 108,
+            "loc": 20
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/reindex/`typescript-incremental-index.ts`/reverseDependencyClosure().",
+            "shortName": "src:reindex:typescript-incremental-index:reverseDependencyClosure()",
+            "file": "src/reindex/typescript-incremental-index.ts",
+            "startLine": 465,
+            "endLine": 492,
+            "loc": 28
+          }
+        ],
+        "firstDivergentTokens": "A: consumers = projectDependencyConsumers ( graph ,  |  B: projectFileSet = new Set ( projectFiles"
+      }
+    },
+    {
+      "id": "T52",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Local-flow can fall back to the ts-morph compiler; tsserver requires the standalone TypeScript package. Separate optional-provider load contracts/caches.",
+      "evidence": {
+        "leaf": "loadTypeScript",
+        "relationship": "divergent",
+        "maxDivergence": 0.217,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`local-flow.ts`/loadTypeScript().",
+            "shortName": "src:semantic:typescript:local-flow:loadTypeScript()",
+            "file": "src/semantic/typescript/local-flow.ts",
+            "startLine": 197,
+            "endLine": 205,
+            "loc": 9
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/typescript/`tsserver-provider.ts`/loadTypeScript().",
+            "shortName": "src:semantic:typescript:tsserver-provider:loadTypeScript()",
+            "file": "src/semantic/typescript/tsserver-provider.ts",
+            "startLine": 196,
+            "endLine": 204,
+            "loc": 9
+          }
+        ],
+        "firstDivergentTokens": "A: ( loadTsMorph ( ) ?. ts  |  B: null ; } return typescriptModule ;"
+      }
+    },
+    {
+      "id": "T53",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Component duplicate review discounts framework route scaffolding; hook review keeps repeated route behavior actionable. Explicitly different domain policy.",
+      "evidence": {
+        "leaf": "pairContextVerdict",
+        "relationship": "divergent",
+        "maxDivergence": 0.19,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/frontend/`react-component-duplicates.ts`/pairContextVerdict().",
+            "shortName": "src:queries:frontend:react-component-duplicates:pairContextVerdict()",
+            "file": "src/queries/frontend/react-component-duplicates.ts",
+            "startLine": 195,
+            "endLine": 217,
+            "loc": 23
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/frontend/`react-hook-candidates.ts`/pairContextVerdict().",
+            "shortName": "src:queries:frontend:react-hook-candidates:pairContextVerdict()",
+            "file": "src/queries/frontend/react-hook-candidates.ts",
+            "startLine": 221,
+            "endLine": 242,
+            "loc": 22
+          }
+        ],
+        "firstDivergentTokens": "A: : 'support' , recommendation : 'Framework route entries share routing scaffolding by design; consolidate only a repeated non-routing body, and keep each route file as the framework entry.'  |  B: , recommendation } ; case 'intercepting-route-pair'"
+      }
+    },
+    {
+      "id": "T54",
+      "detector": "twins-all",
+      "status": "implemented",
+      "decision": "Reuse domain/isValidRecordTimestamp in receipt and suppression decoding; native Date.parse returns finite milliseconds or NaN, so acceptance is equivalent.",
+      "evidence": {
+        "leaf": "isTimestamp",
+        "relationship": "divergent",
+        "maxDivergence": 0.188,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/domain/`observation-receipt.ts`/isTimestamp().",
+            "shortName": "src:domain:observation-receipt:isTimestamp()",
+            "file": "src/domain/observation-receipt.ts",
+            "startLine": 729,
+            "endLine": 731,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/storage/`suppression-store.ts`/isTimestamp().",
+            "shortName": "src:storage:suppression-store:isTimestamp()",
+            "file": "src/storage/suppression-store.ts",
+            "startLine": 234,
+            "endLine": 236,
+            "loc": 3
+          }
+        ],
+        "firstDivergentTokens": "A: ! Number . isNaN ( Date  |  B: Number . isFinite ( Date ."
+      }
+    },
+    {
+      "id": "T55",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Control ownership has a control-specific edge ID/subtype and owner location; state/temporal ownership uses parameterized subtype and child location. Metadata identity is observable.",
+      "evidence": {
+        "leaf": "addOwnerEdge",
+        "relationship": "divergent",
+        "maxDivergence": 0.156,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`program-control-edges.ts`/addOwnerEdge().",
+            "shortName": "src:queries:graph:program-control-edges:addOwnerEdge()",
+            "file": "src/queries/graph/program-control-edges.ts",
+            "startLine": 155,
+            "endLine": 179,
+            "loc": 25
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/queries/graph/`program-state-temporal-edges.ts`/addOwnerEdge().",
+            "shortName": "src:queries:graph:program-state-temporal-edges:addOwnerEdge()",
+            "file": "src/queries/graph/program-state-temporal-edges.ts",
+            "startLine": 405,
+            "endLine": 430,
+            "loc": 26
+          }
+        ],
+        "firstDivergentTokens": "A: 'control-owner' , owner . id ,  |  B: 'program-owner' , owner . id ,"
+      }
+    },
+    {
+      "id": "T56",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Public git-worktree canonicalization uses realpathSync; private query-service identity uses realpathSync.native. Preserve filesystem implementation/compatibility difference.",
+      "evidence": {
+        "leaf": "canonicalPath",
+        "relationship": "divergent",
+        "maxDivergence": 0.154,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/platform/`git-worktree.ts`/canonicalPath().",
+            "shortName": "src:platform:git-worktree:canonicalPath()",
+            "file": "src/platform/git-worktree.ts",
+            "startLine": 438,
+            "endLine": 444,
+            "loc": 7
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`query-service.ts`/canonicalPath().",
+            "shortName": "src:runtime:query-service:canonicalPath()",
+            "file": "src/runtime/query-service.ts",
+            "startLine": 1446,
+            "endLine": 1452,
+            "loc": 7
+          }
+        ],
+        "firstDivergentTokens": "A: ( path ) ; } catch  |  B: . native ( path ) ;"
+      }
+    },
+    {
+      "id": "T57",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Watch state accepts unknown input and validates its type; reindex activity receives strings and both already share SUPPORTED_LANGUAGES. No independently duplicated language list.",
+      "evidence": {
+        "leaf": "isSupportedLanguage",
+        "relationship": "divergent",
+        "maxDivergence": 0.133,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/platform/`watch-service-state.ts`/isSupportedLanguage().",
+            "shortName": "src:platform:watch-service-state:isSupportedLanguage()",
+            "file": "src/platform/watch-service-state.ts",
+            "startLine": 230,
+            "endLine": 232,
+            "loc": 3
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/reindex/`reindex-activity.ts`/isSupportedLanguage().",
+            "shortName": "src:reindex:reindex-activity:isSupportedLanguage()",
+            "file": "src/reindex/reindex-activity.ts",
+            "startLine": 664,
+            "endLine": 666,
+            "loc": 3
+          }
+        ],
+        "firstDivergentTokens": "A: isString ( value ) && (  |  B: ( SUPPORTED_LANGUAGES as readonly string ["
+      }
+    },
+    {
+      "id": "T58",
+      "detector": "twins-all",
+      "status": "implemented",
+      "decision": "Replaced two regex parameter-name scans with addReferencedParameters in the existing source/ast/ast-callables module. Syntax identifiers retain expression references while strings/comments/noncomputed property names cannot create dependencies. This is syntactic mention evidence, not complete lexical binding through nested scopes.",
+      "evidence": {
+        "leaf": "addReferencedParameters",
+        "relationship": "divergent",
+        "maxDivergence": 0.108,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/analysis/runtime-boundaries/`carrier-discriminators.ts`/addReferencedParameters().",
+            "shortName": "src:analysis:runtime-boundaries:carrier-discriminators:addReferencedParameters()",
+            "file": "src/analysis/runtime-boundaries/carrier-discriminators.ts",
+            "startLine": 646,
+            "endLine": 649,
+            "loc": 4
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/analysis/runtime-boundaries/`http-summaries.ts`/addReferencedParameters().",
+            "shortName": "src:analysis:runtime-boundaries:http-summaries:addReferencedParameters()",
+            "file": "src/analysis/runtime-boundaries/http-summaries.ts",
+            "startLine": 523,
+            "endLine": 533,
+            "loc": 11
+          }
+        ],
+        "firstDivergentTokens": "A: const identifiers = new Set (  |  B: if ( ! node ) return"
+      }
+    },
+    {
+      "id": "T59",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Different service environment keys and idle defaults; existing local helpers make ownership explicit and share native number parsing.",
+      "evidence": {
+        "leaf": "configuredIdleTimeoutMs",
+        "relationship": "divergent",
+        "maxDivergence": 0.091,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`query-service-server.ts`/configuredIdleTimeoutMs().",
+            "shortName": "src:runtime:query-service-server:configuredIdleTimeoutMs()",
+            "file": "src/runtime/query-service-server.ts",
+            "startLine": 389,
+            "endLine": 392,
+            "loc": 4
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/semantic/rust/`durable-session-server.ts`/configuredIdleTimeoutMs().",
+            "shortName": "src:semantic:rust:durable-session-server:configuredIdleTimeoutMs()",
+            "file": "src/semantic/rust/durable-session-server.ts",
+            "startLine": 235,
+            "endLine": 238,
+            "loc": 4
+          }
+        ],
+        "firstDivergentTokens": "A: 'SCIP_QUERY_QUERY_SERVICE_IDLE_MS' ] ) ; return Number  |  B: 'SCIP_RUST_SEMANTIC_DURABLE_IDLE_MS' ] ) ; return Number"
+      }
+    },
+    {
+      "id": "T60",
+      "detector": "twins-all",
+      "status": "retained",
+      "decision": "Each bootstrap checks its own import.meta.url. Retain small local process-entry guards so startup does not load the other entrypoint merely to check identity.",
+      "evidence": {
+        "leaf": "isCliEntrypoint",
+        "relationship": "divergent",
+        "maxDivergence": 0,
+        "members": [
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`cli-main.ts`/isCliEntrypoint().",
+            "shortName": "src:runtime:cli-main:isCliEntrypoint()",
+            "file": "src/runtime/cli-main.ts",
+            "startLine": 215,
+            "endLine": 226,
+            "loc": 12
+          },
+          {
+            "symbol": "scip-typescript npm scip-query 0.25.0 src/runtime/`cli.ts`/isCliEntrypoint().",
+            "shortName": "src:runtime:cli:isCliEntrypoint()",
+            "file": "src/runtime/cli.ts",
+            "startLine": 45,
+            "endLine": 53,
+            "loc": 9
+          }
+        ],
+        "firstDivergentTokens": "A: { return false ; } const  |  B: return false ; const thisFile ="
+      }
+    },
+    {
+      "id": "S01",
+      "detector": "similar",
+      "status": "retained",
+      "decision": "Framework entry-path admission and recognized framework export names are different policies (including Vite export behavior); both reuse the same path predicates.",
+      "evidence": {
+        "symbolA": "scip-typescript npm scip-query 0.25.0 src/analysis/`file-classifier.ts`/isFrameworkEntrypointPath().",
+        "shortNameA": "src:analysis:file-classifier:isFrameworkEntrypointPath()",
+        "fileA": "src/analysis/file-classifier.ts",
+        "symbolB": "scip-typescript npm scip-query 0.25.0 src/analysis/`file-classifier.ts`/frameworkPathExportsName().",
+        "shortNameB": "src:analysis:file-classifier:frameworkPathExportsName()",
+        "fileB": "src/analysis/file-classifier.ts",
+        "similarity": 0.9293074928830399,
+        "similarityBasis": "callees",
+        "sharedCallees": [
+          "src:analysis:file-classifier:isNextAppRoutePath()",
+          "src:analysis:file-classifier:isNextAppPagePath()",
+          "src:analysis:file-classifier:isNextPagesPath()",
+          "src:analysis:file-classifier:isNextMiddlewarePath()",
+          "src:analysis:file-classifier:isNextInstrumentationPath()",
+          "src:analysis:file-classifier:isNextInstrumentationClientPath()",
+          "src:analysis:file-classifier:isRemixRoutePath()",
+          "src:analysis:file-classifier:isSvelteKitRoutePath()"
+        ],
+        "uniqueToA": [],
+        "uniqueToB": [
+          "src:analysis:file-classifier:isViteRoutePath()"
+        ],
+        "evidenceClass": "access-query-scaffolding",
+        "actionTier": "direct",
+        "evidenceClassReasons": [
+          "access/query scaffolding: query, route",
+          "same-file siblings share 8 callees at similarity 0.93"
+        ],
+        "recommendation": "Sibling functions have overlapping weighted callee sets; compare ordering, guards and effects before considering extraction."
+      }
+    },
+    {
+      "id": "S02",
+      "detector": "similar",
+      "status": "retained",
+      "decision": "Fingerprint metadata update propagates failures and conditionally recomputes language fingerprints; last-refresh update is best effort and cannot mask reindex success.",
+      "evidence": {
+        "symbolA": "scip-typescript npm scip-query 0.25.0 src/reindex/`index.ts`/updateReindexFingerprintMetadata().",
+        "shortNameA": "src:reindex:index:updateReindexFingerprintMetadata()",
+        "fileA": "src/reindex/index.ts",
+        "symbolB": "scip-typescript npm scip-query 0.25.0 src/reindex/`index.ts`/updateReindexLastRefresh().",
+        "shortNameB": "src:reindex:index:updateReindexLastRefresh()",
+        "fileB": "src/reindex/index.ts",
+        "similarity": 0.8757598660835088,
+        "similarityBasis": "callees",
+        "sharedCallees": [
+          "src:domain:reindex-metadata:acceptedReindexMetadata()",
+          "src:domain:reindex-metadata:decodeReindexMetadata()",
+          "src:filesystem:bounded-file:readSmallArtifactText()",
+          "src:reindex:index:writeReindexMeta()"
+        ],
+        "uniqueToA": [
+          "src:reindex:index:computeLanguageFingerprints()"
+        ],
+        "uniqueToB": [],
+        "evidenceClass": "mixed",
+        "actionTier": "direct",
+        "evidenceClassReasons": [
+          "access/query scaffolding: query",
+          "domain behavior verbs: write",
+          "domain-specific terms: accepted, reindex, metadata, decode, read",
+          "same-file siblings share 4 callees at similarity 0.88"
+        ],
+        "recommendation": "Sibling functions have overlapping weighted callee sets; compare ordering, guards and effects before considering extraction."
+      }
+    },
+    {
+      "id": "S03",
+      "detector": "similar",
+      "status": "retained",
+      "decision": "Primary lock reclamation holds a separate reclaim guard and rechecks liveness; reclaim-guard reclamation has its own attempt limit to avoid recursive guard acquisition.",
+      "evidence": {
+        "symbolA": "scip-typescript npm scip-query 0.25.0 src/platform/`process-file-lock.ts`/reclaimProcessFileLock().",
+        "shortNameA": "src:platform:process-file-lock:reclaimProcessFileLock()",
+        "fileA": "src/platform/process-file-lock.ts",
+        "symbolB": "scip-typescript npm scip-query 0.25.0 src/platform/`process-file-lock.ts`/reclaimObservedGuard().",
+        "shortNameB": "src:platform:process-file-lock:reclaimObservedGuard()",
+        "fileB": "src/platform/process-file-lock.ts",
+        "similarity": 0.8717585165579235,
+        "similarityBasis": "callees",
+        "sharedCallees": [
+          "src:platform:process-file-lock:isReclaimable()",
+          "src:platform:process-file-lock:readProcessFileLock()",
+          "src:platform:process-file-lock:sameObservation()",
+          "src:platform:process-file-lock:removeLockFile()"
+        ],
+        "uniqueToA": [
+          "src:platform:process-file-lock:acquireReclaimGuard()"
+        ],
+        "uniqueToB": [],
+        "evidenceClass": "access-query-scaffolding",
+        "actionTier": "direct",
+        "evidenceClassReasons": [
+          "access/query scaffolding: query",
+          "same-file siblings share 4 callees at similarity 0.87"
+        ],
+        "recommendation": "Sibling functions have overlapping weighted callee sets; compare ordering, guards and effects before considering extraction."
+      }
+    },
+    {
+      "id": "S04",
+      "detector": "similar",
+      "status": "retained",
+      "decision": "Unused import detection is local-binding usage; imports reporting combines compiler provenance with uncovered source bindings. Shared entry extraction/merge helpers already own common mechanics.",
+      "evidence": {
+        "symbolA": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`imports.ts`/unusedImports().",
+        "shortNameA": "src:queries:navigation:imports:unusedImports()",
+        "fileA": "src/queries/navigation/imports.ts",
+        "symbolB": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`imports.ts`/loadFileImportEntries().",
+        "shortNameB": "src:queries:navigation:imports:loadFileImportEntries()",
+        "fileB": "src/queries/navigation/imports.ts",
+        "similarity": 0.8717585165579235,
+        "similarityBasis": "callees",
+        "sharedCallees": [
+          "src:queries:internal:file-resolution:resolveIndexedFile()",
+          "src:queries:navigation:imports:sourceFileImportEntries()",
+          "src:queries:navigation:imports:semanticFileImportEntries()",
+          "src:queries:navigation:imports:mergeImportUsageEntries()"
+        ],
+        "uniqueToA": [],
+        "uniqueToB": [
+          "src:queries:navigation:imports:indexedFileImportEntries()"
+        ],
+        "evidenceClass": "domain-behavior",
+        "actionTier": "direct",
+        "evidenceClassReasons": [
+          "access/query scaffolding: query",
+          "domain behavior verbs: import",
+          "domain-specific terms: resolve, indexed, file, entries, semantic"
+        ],
+        "recommendation": "Shared names match the domain vocabulary heuristic; compare behavior before considering extraction or reuse."
+      }
+    },
+    {
+      "id": "S05",
+      "detector": "similar",
+      "status": "implemented",
+      "decision": "Factor shared baseline hydration plus overlay lease publication in shared-generation-store; retain missing/dirty admission, fingerprints and reason text.",
+      "evidence": {
+        "symbolA": "scip-typescript npm scip-query 0.25.0 src/reindex/`shared-generation-store.ts`/prepareMissingSharedGeneration().",
+        "shortNameA": "src:reindex:shared-generation-store:prepareMissingSharedGeneration()",
+        "fileA": "src/reindex/shared-generation-store.ts",
+        "symbolB": "scip-typescript npm scip-query 0.25.0 src/reindex/`shared-generation-store.ts`/prepareDirtySharedGeneration().",
+        "shortNameB": "src:reindex:shared-generation-store:prepareDirtySharedGeneration()",
+        "fileB": "src/reindex/shared-generation-store.ts",
+        "similarity": 0.8504133476085973,
+        "similarityBasis": "callees",
+        "sharedCallees": [
+          "src:reindex:shared-generation-store:findSharedBaselineGeneration()",
+          "src:reindex:shared-generation-store:configFingerprintOptions()",
+          "src:reindex:shared-generation-store:hydrateSharedGeneration()",
+          "src:reindex:shared-generation-store:writeWorktreeOverlayLease()",
+          "src:reindex:shared-generation-store:writeManagedWorktreeLease()"
+        ],
+        "uniqueToA": [],
+        "uniqueToB": [
+          "src:reindex:detect:detectLanguages()",
+          "src:platform:project-files:buildProjectInputFingerprint()"
+        ],
+        "evidenceClass": "domain-behavior",
+        "actionTier": "direct",
+        "evidenceClassReasons": [
+          "access/query scaffolding: query, find",
+          "domain behavior verbs: write",
+          "domain-specific terms: baseline, generation, config, fingerprint, options"
+        ],
+        "recommendation": "Shared names match the domain vocabulary heuristic; compare behavior before considering extraction or reuse."
+      }
+    },
+    {
+      "id": "S06",
+      "detector": "similar",
+      "status": "retained",
+      "decision": "Object-member resolution traverses property paths and reports property-specific failures; imported-constant evaluation resolves a whole initializer with import-specific provenance. Both share evaluateNode/derivedFrom.",
+      "evidence": {
+        "symbolA": "scip-typescript npm scip-query 0.25.0 src/symbols/graph/`static-value-flow.ts`/evaluateResolvedMember().",
+        "shortNameA": "src:symbols:graph:static-value-flow:evaluateResolvedMember()",
+        "fileA": "src/symbols/graph/static-value-flow.ts",
+        "symbolB": "scip-typescript npm scip-query 0.25.0 src/symbols/graph/`static-value-flow.ts`/evaluateImportedConstant().",
+        "shortNameB": "src:symbols:graph:static-value-flow:evaluateImportedConstant()",
+        "fileB": "src/symbols/graph/static-value-flow.ts",
+        "similarity": 0.8358513564670821,
+        "similarityBasis": "callees",
+        "sharedCallees": [
+          "src:source:ast:ast-core:getAst()",
+          "src:symbols:graph:static-value-flow:symbolicValue()",
+          "src:symbols:graph:static-value-flow:findVariableInitializer()",
+          "src:symbols:graph:static-value-flow:derivedFrom()"
+        ],
+        "uniqueToA": [
+          "src:symbols:graph:static-value-flow:resolveObjectPropertyPath()"
+        ],
+        "uniqueToB": [],
+        "evidenceClass": "access-query-scaffolding",
+        "actionTier": "direct",
+        "evidenceClassReasons": [
+          "access/query scaffolding: query, get, find",
+          "same-file siblings share 4 callees at similarity 0.84"
+        ],
+        "recommendation": "Sibling functions have overlapping weighted callee sets; compare ordering, guards and effects before considering extraction."
+      }
+    },
+    {
+      "id": "S07",
+      "detector": "similar",
+      "status": "retained",
+      "decision": "Read verifies generation identity; persist verifies immutable content identity or writes atomically. Parsing/bounded read already shared.",
+      "evidence": {
+        "symbolA": "scip-typescript npm scip-query 0.25.0 src/reindex/`typescript-overlay-store.ts`/readTypeScriptOverlay().",
+        "shortNameA": "src:reindex:typescript-overlay-store:readTypeScriptOverlay()",
+        "fileA": "src/reindex/typescript-overlay-store.ts",
+        "symbolB": "scip-typescript npm scip-query 0.25.0 src/reindex/`typescript-overlay-store.ts`/persistOverlayManifest().",
+        "shortNameB": "src:reindex:typescript-overlay-store:persistOverlayManifest()",
+        "fileB": "src/reindex/typescript-overlay-store.ts",
+        "similarity": 0.8033367267853794,
+        "similarityBasis": "callees",
+        "sharedCallees": [
+          "src:reindex:typescript-overlay-store:overlayRoot()",
+          "src:reindex:typescript-overlay-store:generationFile()",
+          "src:reindex:typescript-overlay-store:parseOverlayManifest()",
+          "src:filesystem:bounded-file:readTextFileWithinLimit()"
+        ],
+        "uniqueToA": [],
+        "uniqueToB": [
+          "src:reindex:typescript-overlay-store:manifestIdentity()",
+          "src:storage:atomic-json:writeJsonAtomic()"
+        ],
+        "evidenceClass": "access-query-scaffolding",
+        "actionTier": "direct",
+        "evidenceClassReasons": [
+          "access/query scaffolding: query",
+          "same-file siblings share 4 callees at similarity 0.80"
+        ],
+        "recommendation": "Sibling functions have overlapping weighted callee sets; compare ordering, guards and effects before considering extraction."
+      }
+    },
+    {
+      "id": "S08",
+      "detector": "similar",
+      "status": "retained",
+      "decision": "Duplicate scan compares pairs by JSX overlap; pressure scan evaluates one component size/behavior and applies distinct exclusions/thresholds. Both share profiles and role policy.",
+      "evidence": {
+        "symbolA": "scip-typescript npm scip-query 0.25.0 src/queries/frontend/`react-component-duplicates.ts`/reactComponentDuplicateScan().",
+        "shortNameA": "src:queries:frontend:react-component-duplicates:reactComponentDuplicateScan()",
+        "fileA": "src/queries/frontend/react-component-duplicates.ts",
+        "symbolB": "scip-typescript npm scip-query 0.25.0 src/queries/frontend/`react-large-component-pressure.ts`/reactLargeComponentPressureScan().",
+        "shortNameB": "src:queries:frontend:react-large-component-pressure:reactLargeComponentPressureScan()",
+        "fileB": "src/queries/frontend/react-large-component-pressure.ts",
+        "similarity": 0.7828505507325314,
+        "similarityBasis": "callees",
+        "sharedCallees": [
+          "src:queries:internal:frontend-profile-roles:frontendProfileRolePolicy()",
+          "src:queries:internal:frontend-profile-roles:FrontendPolicyExclusions",
+          "src:source:frontend-behavior-products:frontendBehaviorProduct()",
+          "src:queries:internal:frontend-profile-roles:FrontendPolicyExclusions:list()"
+        ],
+        "uniqueToA": [
+          "src:queries:internal:pairwise-profiles:pairwiseCandidateIndexFromKeys()",
+          "src:queries:internal:pairwise-profiles:rankedPairwiseProfileResults()"
+        ],
+        "uniqueToB": [],
+        "evidenceClass": "access-query-scaffolding",
+        "actionTier": "signal",
+        "evidenceClassReasons": [
+          "access/query scaffolding: query, role, list"
+        ],
+        "recommendation": "Shared evidence is mostly access/query scaffolding; compare product semantics before reusing code."
+      }
+    },
+    {
+      "id": "S09",
+      "detector": "similar",
+      "status": "retained",
+      "decision": "Causal edges can be upstream or downstream; callable references require supporting behavior lines and are downstream reference evidence. Common identity/location helpers already shared.",
+      "evidence": {
+        "symbolA": "scip-typescript npm scip-query 0.25.0 src/queries/internal/`next-anchor-candidates.ts`/nextAnchorForCausalEdge().",
+        "shortNameA": "src:queries:internal:next-anchor-candidates:nextAnchorForCausalEdge()",
+        "fileA": "src/queries/internal/next-anchor-candidates.ts",
+        "symbolB": "scip-typescript npm scip-query 0.25.0 src/queries/internal/`next-anchor-candidates.ts`/nextAnchorForCallableReference().",
+        "shortNameB": "src:queries:internal:next-anchor-candidates:nextAnchorForCallableReference()",
+        "fileB": "src/queries/internal/next-anchor-candidates.ts",
+        "similarity": 0.7273166157794294,
+        "similarityBasis": "callees",
+        "sharedCallees": [
+          "src:queries:internal:next-anchor-candidates:isNextAnchorSourceNode()",
+          "src:queries:internal:next-anchor-candidates:callableAlternativeForNode()",
+          "src:queries:internal:next-anchor-candidates:evidenceLocation()",
+          "src:queries:internal:next-anchor-candidates:strongestEvidence()",
+          "src:queries:internal:next-anchor-candidates:nodeLeaf()"
+        ],
+        "uniqueToA": [
+          "src:queries:internal:next-anchor-candidates:alternativeForNode()",
+          "src:queries:internal:next-anchor-candidates:causalEdgeRole()"
+        ],
+        "uniqueToB": [
+          "src:queries:internal:next-anchor-candidates:callableReferenceCausalRole()"
+        ],
+        "evidenceClass": "access-query-scaffolding",
+        "actionTier": "direct",
+        "evidenceClassReasons": [
+          "access/query scaffolding: query",
+          "same-file siblings share 5 callees at similarity 0.73"
+        ],
+        "recommendation": "Sibling functions have overlapping weighted callee sets; compare ordering, guards and effects before considering extraction."
+      }
+    },
+    {
+      "id": "S10",
+      "detector": "similar",
+      "status": "retained",
+      "decision": "Next-anchor construction returns a recoverable reference; callback enrichment mutates edge semantics after confirming result-callback behavior. Retain operations; same material-line lookup is a small possible local helper, not competing ownership.",
+      "evidence": {
+        "symbolA": "scip-typescript npm scip-query 0.25.0 src/queries/internal/`next-anchor-candidates.ts`/nextAnchorForCallableReference().",
+        "shortNameA": "src:queries:internal:next-anchor-candidates:nextAnchorForCallableReference()",
+        "fileA": "src/queries/internal/next-anchor-candidates.ts",
+        "symbolB": "scip-typescript npm scip-query 0.25.0 src/queries/internal/`next-anchor-candidates.ts`/enrichStepResultCallbacks().",
+        "shortNameB": "src:queries:internal:next-anchor-candidates:enrichStepResultCallbacks()",
+        "fileB": "src/queries/internal/next-anchor-candidates.ts",
+        "similarity": 0.6886673185599849,
+        "similarityBasis": "callees",
+        "sharedCallees": [
+          "src:queries:internal:next-anchor-candidates:callableAlternativeForNode()",
+          "src:queries:internal:next-anchor-candidates:nodeLeaf()",
+          "src:queries:internal:next-anchor-candidates:evidenceLocation()",
+          "src:queries:internal:next-anchor-candidates:callableReferenceCausalRole()"
+        ],
+        "uniqueToA": [
+          "src:queries:internal:next-anchor-candidates:isNextAnchorSourceNode()",
+          "src:queries:internal:next-anchor-candidates:strongestEvidence()"
+        ],
+        "uniqueToB": [
+          "src:queries:internal:next-anchor-candidates:isResultCallbackReference()"
+        ],
+        "evidenceClass": "access-query-scaffolding",
+        "actionTier": "direct",
+        "evidenceClassReasons": [
+          "access/query scaffolding: query, role",
+          "same-file siblings share 4 callees at similarity 0.69"
+        ],
+        "recommendation": "Sibling functions have overlapping weighted callee sets; compare ordering, guards and effects before considering extraction."
+      }
+    },
+    {
+      "id": "S11",
+      "detector": "similar",
+      "status": "implemented",
+      "decision": "Factor the identical source-capture loop shared by Git-overlay and whole-filesystem snapshots; preserve identity checks, deletion records, byte limits and beforeValidation ordering. Keep outer snapshot validation distinct.",
+      "evidence": {
+        "symbolA": "scip-typescript npm scip-query 0.25.0 src/platform/`project-observation-snapshot.ts`/captureGitOverlaySnapshot().",
+        "shortNameA": "src:platform:project-observation-snapshot:captureGitOverlaySnapshot()",
+        "fileA": "src/platform/project-observation-snapshot.ts",
+        "symbolB": "scip-typescript npm scip-query 0.25.0 src/platform/`project-observation-snapshot.ts`/captureWholeFilesystemSnapshot().",
+        "shortNameB": "src:platform:project-observation-snapshot:captureWholeFilesystemSnapshot()",
+        "fileB": "src/platform/project-observation-snapshot.ts",
+        "similarity": 0.6535548549156334,
+        "similarityBasis": "callees",
+        "sharedCallees": [
+          "src:platform:project-files:isMissingProjectFileError()",
+          "src:platform:project-observation-snapshot:sourceIdentity()",
+          "src:platform:project-observation-snapshot:captureSourceFile()",
+          "src:platform:project-observation-snapshot:addSnapshotBytes()",
+          "src:platform:project-observation-snapshot:assertSourceIdentity()",
+          "src:platform:project-observation-snapshot:samePaths()"
+        ],
+        "uniqueToA": [
+          "src:platform:project-observation-snapshot:gitTreeEntries()",
+          "src:platform:project-observation-snapshot:gitChangedAndUntrackedPaths()",
+          "src:platform:project-observation-snapshot:gitLines()",
+          "src:platform:project-observation-snapshot:fixedGitFileReader()"
+        ],
+        "uniqueToB": [
+          "src:platform:project-observation-snapshot:listFilesystemRepositoryContentFiles()"
+        ],
+        "evidenceClass": "access-query-scaffolding",
+        "actionTier": "direct",
+        "evidenceClassReasons": [
+          "access/query scaffolding: query",
+          "framework/generic scaffolding: bytes",
+          "same-file siblings share 6 callees at similarity 0.65"
+        ],
+        "recommendation": "Sibling functions have overlapping weighted callee sets; compare ordering, guards and effects before considering extraction."
+      }
+    },
+    {
+      "id": "S12",
+      "detector": "similar",
+      "status": "retained",
+      "decision": "Single-code API throws on ambiguity and returns a full file; batched code reports alternatives, missing/stale source and chosen file surfaces. Both already share source-resolution primitives.",
+      "evidence": {
+        "symbolA": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`code.ts`/code().",
+        "shortNameA": "src:queries:navigation:code:code()",
+        "fileA": "src/queries/navigation/code.ts",
+        "symbolB": "scip-typescript npm scip-query 0.25.0 src/queries/navigation/`code.ts`/codeBatchEntry().",
+        "shortNameB": "src:queries:navigation:code:codeBatchEntry()",
+        "fileB": "src/queries/navigation/code.ts",
+        "similarity": 0.6083974541726281,
+        "similarityBasis": "callees",
+        "sharedCallees": [
+          "src:queries:navigation:code:parseFileLineRange()",
+          "src:queries:navigation:code:readFileRange()",
+          "src:queries:navigation:code:exactRepositoryTextFile()",
+          "src:queries:navigation:code:explicitFileSelector()",
+          "src:symbols:symbol-lookup:resolveSymbol()",
+          "src:queries:navigation:code:readSymbolRange()"
+        ],
+        "uniqueToA": [
+          "src:queries:navigation:code:readWholeFile()"
+        ],
+        "uniqueToB": [
+          "src:queries:navigation:code:missingSourceEntry()",
+          "src:queries:navigation:code:rangeSourceEntry()",
+          "src:queries:navigation:code:matchedSourceEntry()",
+          "src:queries:navigation:code:fileSourceEntry()",
+          "src:queries:navigation:code:ambiguousSourceEntry()",
+          "src:source:primitives:repository-text:readRepositoryTextFile()"
+        ],
+        "evidenceClass": "access-query-scaffolding",
+        "actionTier": "direct",
+        "evidenceClassReasons": [
+          "access/query scaffolding: query",
+          "same-file siblings share 6 callees at similarity 0.61"
+        ],
+        "recommendation": "Sibling functions have overlapping weighted callee sets; compare ordering, guards and effects before considering extraction."
+      }
+    },
+    {
+      "id": "S13",
+      "detector": "similar",
+      "status": "retained",
+      "decision": "Full reads materialize bounded bytes; literal probes scan/hash/check encoding and materialize only matches. Both preserve descriptor identity and close in finally through common file primitives.",
+      "evidence": {
+        "symbolA": "scip-typescript npm scip-query 0.25.0 src/platform/`project-files.ts`/readProjectFile().",
+        "shortNameA": "src:platform:project-files:readProjectFile()",
+        "fileA": "src/platform/project-files.ts",
+        "symbolB": "scip-typescript npm scip-query 0.25.0 src/platform/`project-files.ts`/probeProjectFileBytesForLiterals().",
+        "shortNameB": "src:platform:project-files:probeProjectFileBytesForLiterals()",
+        "fileB": "src/platform/project-files.ts",
+        "similarity": 0.564614198539532,
+        "similarityBasis": "callees",
+        "sharedCallees": [
+          "src:domain:path-normalization:normalizeSafeProjectRelativePath()",
+          "src:platform:project-snapshot-context:projectSnapshotPathState()",
+          "src:platform:project-files:resolveProjectFile()",
+          "src:platform:project-files:assertResolvedProjectFileIdentity()"
+        ],
+        "uniqueToA": [
+          "src:platform:project-files:readSnapshotProjectFile()",
+          "src:platform:project-files:InputTooLargeError:<constructor>()"
+        ],
+        "uniqueToB": [
+          "src:platform:project-files:probeSnapshotFileForLiterals()",
+          "src:platform:project-files:scanDescriptorForLiterals()",
+          "src:platform:project-files:materializeProbedFile()"
+        ],
+        "evidenceClass": "access-query-scaffolding",
+        "actionTier": "direct",
+        "evidenceClassReasons": [
+          "access/query scaffolding: query, context",
+          "framework/generic scaffolding: state",
+          "same-file siblings share 4 callees at similarity 0.56"
+        ],
+        "recommendation": "Sibling functions have overlapping weighted callee sets; compare ordering, guards and effects before considering extraction."
+      }
+    },
+    {
+      "id": "S14",
+      "detector": "similar",
+      "status": "retained",
+      "decision": "Exact-occurrence recovery constructs call candidates around a step; range recovery merges exact/member evidence and accounts unresolved calls. Distinct coverage products sharing underlying resolvers.",
+      "evidence": {
+        "symbolA": "scip-typescript npm scip-query 0.25.0 src/queries/internal/`next-anchor-candidates.ts`/collectNextAnchorExactOccurrenceCandidates().",
+        "shortNameA": "src:queries:internal:next-anchor-candidates:collectNextAnchorExactOccurrenceCandidates()",
+        "fileA": "src/queries/internal/next-anchor-candidates.ts",
+        "symbolB": "scip-typescript npm scip-query 0.25.0 src/queries/internal/`next-anchor-candidates.ts`/collectSourceRangeSeedCandidates().",
+        "shortNameB": "src:queries:internal:next-anchor-candidates:collectSourceRangeSeedCandidates()",
+        "fileB": "src/queries/internal/next-anchor-candidates.ts",
+        "similarity": 0.5288481111245342,
+        "similarityBasis": "callees",
+        "sharedCallees": [
+          "src:symbols:graph:scip-occurrence-call-targets:scipOccurrenceCallTargetsForRange()",
+          "src:source:primitives:source-text:getSourceLines()",
+          "src:source:facts:behavior-skeleton:behaviorSignalsByLine()",
+          "src:queries:internal:next-anchor-candidates:sourceCallsiteKey()"
+        ],
+        "uniqueToA": [
+          "src:queries:internal:next-anchor-candidates:callsiteSignals()"
+        ],
+        "uniqueToB": [
+          "src:source:facts:source-facts:getSourceFacts()",
+          "src:queries:internal:next-anchor-candidates:appendExactRangeCandidates()",
+          "src:symbols:graph:member-call-targets:importedMemberCallTargets()",
+          "src:queries:internal:next-anchor-candidates:groupRangeMemberTargets()",
+          "src:queries:internal:next-anchor-candidates:appendMemberRangeCandidates()"
+        ],
+        "evidenceClass": "access-query-scaffolding",
+        "actionTier": "direct",
+        "evidenceClassReasons": [
+          "access/query scaffolding: query, get",
+          "same-file siblings share 4 callees at similarity 0.53"
+        ],
+        "recommendation": "Sibling functions have overlapping weighted callee sets; compare ordering, guards and effects before considering extraction."
+      }
+    },
+    {
+      "id": "S15",
+      "detector": "similar",
+      "status": "retained",
+      "decision": "Index mailbox executes synchronous mutations with before/after callbacks; query mailbox executes async reads with generation retirement and observation receipts. Existing bounded mailbox owns claim/completion mechanics.",
+      "evidence": {
+        "symbolA": "scip-typescript npm scip-query 0.25.0 src/reindex/`typescript-index-service.ts`/processTypeScriptIndexMailbox().",
+        "shortNameA": "src:reindex:typescript-index-service:processTypeScriptIndexMailbox()",
+        "fileA": "src/reindex/typescript-index-service.ts",
+        "symbolB": "scip-typescript npm scip-query 0.25.0 src/runtime/`query-service-server.ts`/processRequests().",
+        "shortNameB": "src:runtime:query-service-server:processRequests()",
+        "fileB": "src/runtime/query-service-server.ts",
+        "similarity": 0.5054768081752542,
+        "similarityBasis": "callees",
+        "sharedCallees": [
+          "src:storage:bounded-mailbox:pollBoundedMailboxRequests()",
+          "src:storage:bounded-mailbox:readBoundedMailboxClaim()",
+          "src:storage:bounded-mailbox:completeBoundedMailboxClaim()",
+          "src:storage:bounded-mailbox:rejectBoundedMailboxClaim()"
+        ],
+        "uniqueToA": [
+          "src:reindex:typescript-index-protocol:parseTypeScriptIndexEnvelope()",
+          "src:reindex:typescript-index-service:TypeScriptIndexServiceHost:handle()"
+        ],
+        "uniqueToB": [
+          "src:runtime:query-service-envelope:parseQueryServiceEnvelope()",
+          "src:runtime:query-service-server:assertQueryClaimIdentity()",
+          "src:runtime:query-service-server:executeRequest()",
+          "src:runtime:observation-receipt:buildObservationReceipt()"
+        ],
+        "evidenceClass": "access-query-scaffolding",
+        "actionTier": "signal",
+        "evidenceClassReasons": [
+          "access/query scaffolding: query"
+        ],
+        "recommendation": "Shared evidence is mostly access/query scaffolding; compare product semantics before reusing code."
+      }
+    },
+    {
+      "id": "S16",
+      "detector": "similar",
+      "status": "retained",
+      "decision": "Watcher stop drains work and terminates subscriptions; reconcile suppresses redundant refresh and returns a live watcher to idle. Shared timer-clear operations already centralized.",
+      "evidence": {
+        "symbolA": "scip-typescript npm scip-query 0.25.0 src/runtime/`watch.ts`/Watcher#stop().",
+        "shortNameA": "src:runtime:watch:Watcher:stop()",
+        "fileA": "src/runtime/watch.ts",
+        "symbolB": "scip-typescript npm scip-query 0.25.0 src/runtime/`watch.ts`/Watcher#reconcilePublishedIndex().",
+        "shortNameB": "src:runtime:watch:Watcher:reconcilePublishedIndex()",
+        "fileB": "src/runtime/watch.ts",
+        "similarity": 0.4280643145322016,
+        "similarityBasis": "callees",
+        "sharedCallees": [
+          "src:runtime:watch:Watcher:clearDebounceTimer()",
+          "src:runtime:watch:Watcher:clearCooldownTimer()",
+          "src:runtime:watch:Watcher:clearBudgetTimer()",
+          "src:runtime:watch:Watcher:setStatus()"
+        ],
+        "uniqueToA": [
+          "src:runtime:watch:Watcher:clearGitPollTimer()",
+          "src:runtime:watch:Watcher:clearReconcileTimer()",
+          "src:runtime:watch:watcherRetirementState()",
+          "src:runtime:watch:watcherStopTimeout()",
+          "src:runtime:watch:Watcher:finishStop()"
+        ],
+        "uniqueToB": [
+          "src:runtime:watch:Watcher:hasFreshPublishedIndex()",
+          "src:runtime:watch:Watcher:resetPendingChanges()",
+          "src:runtime:watch:refreshPublishedTypeScriptInputScope()"
+        ],
+        "evidenceClass": "mixed",
+        "actionTier": "signal",
+        "evidenceClassReasons": [
+          "access/query scaffolding: query",
+          "framework/generic scaffolding: watch",
+          "domain behavior verbs: set",
+          "domain-specific terms: clear, debounce, timer, cooldown, budget"
+        ],
+        "recommendation": "Shared evidence mixes domain behavior with scaffolding; review semantics before extracting anything."
+      }
+    }
+  ],
+  "validation": {
+    "api": {
+      "digest": "b74137d6c422ca9c",
+      "paths": 66,
+      "changed": false
+    },
+    "sourceHealth": {
+      "analyzedFiles": 568,
+      "eligibleFiles": 568,
+      "coverage": "accounted",
+      "findings": 0,
+      "missingDependencies": 0,
+      "ambiguousDependencies": 0,
+      "dynamicDependencies": 1
+    },
+    "indexedArchitecture": {
+      "mappedFiles": 564,
+      "observedFiles": 564,
+      "forbiddenEdges": 0,
+      "cycles": 0,
+      "boundaryLimitViolations": 0,
+      "staleAllowances": 0,
+      "testBoundaryViolations": 0,
+      "policyRows": 47,
+      "missingPolicyRows": 0
+    },
+    "detectors": {
+      "exact": {
+        "before": 5,
+        "after": 2
+      },
+      "sameNameIncludingHomonyms": {
+        "before": 60,
+        "after": 50
+      },
+      "sharedCallees": {
+        "before": 16,
+        "after": 15
+      },
+      "newUnassessedGroups": 0
+    },
+    "impact": {
+      "changedIndexedFiles": 41,
+      "changedSymbols": 78,
+      "affectedFiles": 13,
+      "unattributedHunks": 58,
+      "astWidenedHunks": 6,
+      "limitations": [
+        "Deleted wrapper, config, docs and excluded tests cannot be attributed through the current index.",
+        "The impact inventory includes the unrelated untracked LaunchPoint report, which is not part of this change.",
+        "Many import/deletion hunks have no current symbol; source review and the complete test suite supplement the impact result."
+      ]
+    },
+    "productionDiff": {
+      "files": 42,
+      "addedLines": 345,
+      "removedLines": 592,
+      "netRemovedLines": 247
+    },
+    "reindex": {
+      "completed": true,
+      "typescriptMode": "explicit full rebuild fallback",
+      "reusedLanguages": [
+        "rust",
+        "python"
+      ],
+      "remainingOperationalGap": "The incremental TypeScript service was unavailable in this checkout; default reindex preserved the accepted index and refused an implicit full rebuild. This review validates the explicit fallback, not current incremental-service availability."
+    },
+    "checks": {
+      "types": "passed",
+      "changedFileLint": "passed",
+      "format": "passed",
+      "build": "passed",
+      "publicApiConsumer": "passed",
+      "fullSuite": {
+        "tests": 3286,
+        "files": 370,
+        "seconds": 195.86,
+        "passed": true
+      },
+      "agentBenchmarks": "not run (user instruction)"
+    }
+  }
+}

@@ -18,7 +18,6 @@ export interface BoundaryFileContext {
   file: string;
   source: string;
   root: SyntaxNode;
-  constants: ReadonlyMap<string, string>;
   ownerAt(line: number): BoundaryOwner;
 }
 
@@ -181,7 +180,6 @@ export function boundaryFileContext(
   const source = knownSource ?? getSourceText(db, file);
   let definitions: ReturnType<typeof getDefinitionsForFile> | undefined;
   let callables: readonly CallableSite[] | null | undefined;
-  let constants: ReadonlyMap<string, string> | undefined;
   const callableSites = (): readonly CallableSite[] | null => {
     if (callables !== undefined) return callables;
     callables = profileBoundaryWork(profileSpan, 'runtime-boundaries.context.callable-sites', file, () => {
@@ -196,12 +194,6 @@ export function boundaryFileContext(
     file,
     source,
     root,
-    get constants() {
-      constants ??= profileBoundaryWork(profileSpan, 'runtime-boundaries.context.constants', file, () =>
-        literalConstants(root),
-      );
-      return constants;
-    },
     ownerAt: (line) => {
       const definitionsForFile = (definitions ??= profileBoundaryWork(
         profileSpan,
@@ -989,28 +981,6 @@ function resolvedStrength(
   if (base === 'candidate' || keyParts.some((part) => part.evidence === 'expression')) return 'candidate';
   if (base === 'derived' || keyParts.some((part) => part.evidence === 'constant')) return 'derived';
   return 'exact';
-}
-
-function stringLiteral(node: SyntaxNode): string | null {
-  const text = node.text.trim();
-  const quote = text[0];
-  if ((quote !== "'" && quote !== '"' && quote !== '`') || text.at(-1) !== quote) return null;
-  const value = text.slice(1, -1);
-  if (quote === '`' && value.includes('${')) return null;
-  return value;
-}
-
-function literalConstants(root: SyntaxNode): Map<string, string> {
-  const constants = new Map<string, string>();
-  walk(root, (node) => {
-    if (node.type !== 'variable_declarator') return;
-    const name = node.childForFieldName('name') ?? node.namedChild(0);
-    const value = node.childForFieldName('value') ?? node.namedChild(1);
-    if (!name || !value || !/^[A-Za-z_$][\w$]*$/u.test(name.text)) return;
-    const literal = stringLiteral(value);
-    if (literal !== null) constants.set(name.text, literal);
-  });
-  return constants;
 }
 
 function registryContainerName(node: SyntaxNode): string | null {

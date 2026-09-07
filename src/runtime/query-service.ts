@@ -1,3 +1,4 @@
+import { isNonNegativeInteger } from '../domain/record-validation.js';
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, realpathSync } from 'node:fs';
@@ -1106,11 +1107,11 @@ function isStatsResult(value: unknown): value is QueryServiceStatsTransportResul
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   return (
-    isNonNegativeSafeInteger(record['documents']) &&
-    isNonNegativeSafeInteger(record['symbols']) &&
-    isNonNegativeSafeInteger(record['definitions']) &&
-    isNonNegativeSafeInteger(record['references']) &&
-    isNonNegativeSafeInteger(record['indexSizeBytes']) &&
+    isNonNegativeInteger(record['documents']) &&
+    isNonNegativeInteger(record['symbols']) &&
+    isNonNegativeInteger(record['definitions']) &&
+    isNonNegativeInteger(record['references']) &&
+    isNonNegativeInteger(record['indexSizeBytes']) &&
     (record['lastBuilt'] === null || typeof record['lastBuilt'] === 'string')
   );
 }
@@ -1143,7 +1144,7 @@ function validMatchedSymbolResolution(record: Record<string, unknown>): boolean 
     isResolvedSymbol(record['resolved']) &&
     Array.isArray(record['otherMatches']) &&
     record['otherMatches'].every(isSymbolResolutionAlternative) &&
-    isNonNegativeSafeInteger(record['totalMatches']) &&
+    isNonNegativeInteger(record['totalMatches']) &&
     (record['totalMatches'] as number) >= 1 &&
     record['suggestions'] === undefined
   );
@@ -1216,7 +1217,7 @@ function isHierarchyNode(value: unknown): value is HierarchyNode {
   return (
     typeof record['symbol'] === 'string' &&
     typeof record['shortName'] === 'string' &&
-    isNonNegativeSafeInteger(record['depth'])
+    isNonNegativeInteger(record['depth'])
   );
 }
 
@@ -1230,7 +1231,7 @@ function isByKindRow(value: unknown): value is ByKindResult {
   return (
     typeof record['symbol'] === 'string' &&
     typeof record['shortName'] === 'string' &&
-    isNonNegativeSafeInteger(record['kind']) &&
+    isNonNegativeInteger(record['kind']) &&
     typeof record['kindName'] === 'string' &&
     typeof record['relativePath'] === 'string' &&
     isSourceRange(record)
@@ -1245,9 +1246,9 @@ function isKindCountRow(value: unknown): value is QueryServiceKindCountTransport
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   return (
-    isNonNegativeSafeInteger(record['kind']) &&
+    isNonNegativeInteger(record['kind']) &&
     typeof record['kindName'] === 'string' &&
-    isNonNegativeSafeInteger(record['count'])
+    isNonNegativeInteger(record['count'])
   );
 }
 
@@ -1269,7 +1270,7 @@ function isRefsResult(value: unknown): value is QueryServiceRefsTransportResult 
 function isRefResult(value: unknown): value is RefResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  return typeof record['relativePath'] === 'string' && isNonNegativeSafeInteger(record['line']);
+  return typeof record['relativePath'] === 'string' && isNonNegativeInteger(record['line']);
 }
 
 function isSurfaceResult(value: unknown): value is ConsumerSurfaceResult[] {
@@ -1331,7 +1332,7 @@ function isSymbolResolutionAlternative(value: unknown): boolean {
   return (
     typeof record['shortName'] === 'string' &&
     typeof record['relativePath'] === 'string' &&
-    isNonNegativeSafeInteger(record['startLine']) &&
+    isNonNegativeInteger(record['startLine']) &&
     record['symbol'] === undefined
   );
 }
@@ -1343,20 +1344,16 @@ function isMethodsCandidate(value: unknown): boolean {
     typeof record['symbol'] === 'string' &&
     typeof record['shortName'] === 'string' &&
     typeof record['relativePath'] === 'string' &&
-    isNonNegativeSafeInteger(record['startLine'])
+    isNonNegativeInteger(record['startLine'])
   );
 }
 
 function isSourceRange(record: Record<string, unknown>): boolean {
   return (
-    isNonNegativeSafeInteger(record['startLine']) &&
-    isNonNegativeSafeInteger(record['endLine']) &&
+    isNonNegativeInteger(record['startLine']) &&
+    isNonNegativeInteger(record['endLine']) &&
     (record['endLine'] as number) >= (record['startLine'] as number)
   );
-}
-
-function isNonNegativeSafeInteger(value: unknown): value is number {
-  return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
 function isSourceSearchResult(value: unknown): value is SourceSearchResult {
@@ -1458,7 +1455,7 @@ function sleepSync(durationMs: number): void {
 
 function isAmbiguousMethodsResult(record: Record<string, unknown>): boolean {
   return (
-    isNonNegativeSafeInteger(record['total']) &&
+    isNonNegativeInteger(record['total']) &&
     (record['total'] as number) > 1 &&
     Array.isArray(record['candidates']) &&
     record['candidates'].every(isMethodsCandidate)

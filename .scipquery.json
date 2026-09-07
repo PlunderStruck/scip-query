@@ -343,7 +343,7 @@
     ],
     "allowedDependencies": {
       "benchmark-fixture": [],
-      "analysis": ["domain", "source", "storage", "symbols-core", "symbols-graph", "symbols-references"],
+      "analysis": ["domain", "source", "storage", "symbols-core", "symbols-graph"],
       "domain": [],
       "filesystem": [],
       "instrumentation": [],

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { IndexedDefinition } from '../../domain/types.js';
 import {
+  addReferencedParameters,
   callableParameterNames,
   smallestCoveringCallable,
   walkNamedSyntax as walk,
@@ -519,18 +520,6 @@ function objectFieldValue(node: SyntaxNode | null | undefined, field: string): S
     return pair.childForFieldName('value') ?? pair.namedChild(1);
   }
   return null;
-}
-
-function addReferencedParameters(
-  node: SyntaxNode | null | undefined,
-  parameters: readonly (string | null)[],
-  output: Set<string>,
-): void {
-  if (!node) return;
-  const identifiers = new Set(node.text.match(/[A-Za-z_$][\w$]*/gu) ?? []);
-  for (const parameter of parameters) {
-    if (parameter && identifiers.has(parameter)) output.add(parameter);
-  }
 }
 
 function callArguments(node: SyntaxNode): SyntaxNode[] {

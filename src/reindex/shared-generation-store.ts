@@ -755,16 +755,7 @@ function prepareMissingSharedGeneration(
   if (!existsSync(paths.dbPath)) {
     const baseline = findSharedBaselineGeneration(context, languages, configFingerprintOptions(config), fingerprint);
     if (baseline) {
-      hydrateSharedGeneration({
-        snapshot: baseline.snapshot,
-        manifest: baseline.manifest,
-        targetCacheDir: paths.cacheDir,
-        targetProjectRoot: projectRoot,
-        persistLease: false,
-        lockWaitMs: 0,
-      });
-      writeWorktreeOverlayLease(baseline.snapshot, paths.cacheDir);
-      return { kind: 'overlay' };
+      return hydrateWorktreeOverlay(baseline, paths.cacheDir, projectRoot);
     }
   }
   writeManagedWorktreeLease(context, paths.cacheDir, 'missed', undefined, 'no exact shared or peer generation exists');
@@ -793,16 +784,7 @@ function prepareDirtySharedGeneration(
     writeManagedWorktreeLease(context, paths.cacheDir, 'missed', undefined, 'worktree has uncommitted changes');
     return { kind: 'missed', reason: 'worktree has uncommitted changes' };
   }
-  hydrateSharedGeneration({
-    snapshot: baseline.snapshot,
-    manifest: baseline.manifest,
-    targetCacheDir: paths.cacheDir,
-    targetProjectRoot: projectRoot,
-    persistLease: false,
-    lockWaitMs: 0,
-  });
-  writeWorktreeOverlayLease(baseline.snapshot, paths.cacheDir);
-  return { kind: 'overlay' };
+  return hydrateWorktreeOverlay(baseline, paths.cacheDir, projectRoot);
 }
 
 // scip-query: ignore-similar — reviewed M1 lifecycle variation; preparation reads/imports while publication creates and leases.
@@ -1666,4 +1648,21 @@ function worktreeLeaseGenerationActionMatches(left: WorktreeCacheLease, right: W
     left.lastAction === right.lastAction &&
     left.lastReason === right.lastReason
   );
+}
+
+function hydrateWorktreeOverlay(
+  baseline: NonNullable<ReturnType<typeof findSharedBaselineGeneration>>,
+  cacheDir: string,
+  projectRoot: string,
+): SharedCacheAction {
+  hydrateSharedGeneration({
+    snapshot: baseline.snapshot,
+    manifest: baseline.manifest,
+    targetCacheDir: cacheDir,
+    targetProjectRoot: projectRoot,
+    persistLease: false,
+    lockWaitMs: 0,
+  });
+  writeWorktreeOverlayLease(baseline.snapshot, cacheDir);
+  return { kind: 'overlay' };
 }

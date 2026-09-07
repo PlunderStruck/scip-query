@@ -1,5 +1,6 @@
+import { readableDirectoryEntries } from '../filesystem/directory-entries.js';
 import { createRequire } from 'node:module';
-import { existsSync, lstatSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type * as TsMorphCommon from '@ts-morph/common';
 import { isPathInsideProject as isInsideProject } from '../domain/path-normalization.js';
@@ -186,7 +187,7 @@ function discoverTsconfigProjectDirs(projectRoot: string): string[] {
 
   while (stack.length > 0) {
     const dir = stack.pop()!;
-    const entries = readableTsconfigDirectoryEntries(dir);
+    const entries = readableDirectoryEntries(dir);
 
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
@@ -436,14 +437,6 @@ function relativeProjectPath(projectRoot: string, projectDir: string): string {
 function isAncestor(candidate: string, other: string): boolean {
   const relative = path.relative(candidate, other);
   return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative);
-}
-
-function readableTsconfigDirectoryEntries(dir: string): { name: string; isDirectory(): boolean; isFile(): boolean }[] {
-  try {
-    return readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
 }
 
 function configuredSnapshotProjectDirectories(

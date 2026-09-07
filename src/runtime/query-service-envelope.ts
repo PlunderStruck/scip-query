@@ -1,21 +1,10 @@
+import { isNonNegativeInteger, isRecordObject, isNonEmptyString } from '../domain/record-validation.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../domain/source-inspection-limits.js';
 import {
   QUERY_SERVICE_PROTOCOL_VERSION,
   type QueryServiceEnvelope,
   type QueryServiceRequest,
 } from './query-service.js';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0;
-}
-
-function isNonNegativeSafeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
-}
 
 function readEnvelopeIdentity(record: Record<string, unknown>, sessionIdentity: string) {
   const { id, operationKey, clientId } = record;
@@ -32,11 +21,7 @@ function readEnvelopeIdentity(record: Record<string, unknown>, sessionIdentity: 
 
 function readEnvelopeTiming(record: Record<string, unknown>) {
   const { enqueuedAtMs, deadlineAtMs } = record;
-  if (
-    !isNonNegativeSafeInteger(enqueuedAtMs) ||
-    !isNonNegativeSafeInteger(deadlineAtMs) ||
-    deadlineAtMs < enqueuedAtMs
-  ) {
+  if (!isNonNegativeInteger(enqueuedAtMs) || !isNonNegativeInteger(deadlineAtMs) || deadlineAtMs < enqueuedAtMs) {
     throw new Error('Invalid query service request envelope.');
   }
   return { enqueuedAtMs, deadlineAtMs };
@@ -44,12 +29,12 @@ function readEnvelopeTiming(record: Record<string, unknown>) {
 
 export function parseQueryServiceEnvelope(raw: string, expectedSessionIdentity: string): QueryServiceEnvelope {
   const record: unknown = JSON.parse(raw);
-  if (!isRecord(record)) throw new Error('Invalid query service request.');
+  if (!isRecordObject(record)) throw new Error('Invalid query service request.');
   const request = record['request'];
   if (
     record['mailboxVersion'] !== 1 ||
     record['protocolVersion'] !== QUERY_SERVICE_PROTOCOL_VERSION ||
-    !isRecord(request)
+    !isRecordObject(request)
   ) {
     throw new Error('Invalid query service request envelope.');
   }
@@ -172,7 +157,7 @@ const requestDecoders = {
       requestRecord['selectors'].length < 1 ||
       requestRecord['selectors'].length > SOURCE_INSPECTION_MAX_SELECTORS ||
       requestRecord['selectors'].some((selector) => typeof selector !== 'string' || selector.length === 0) ||
-      !isRecord(requestRecord['options'])
+      !isRecordObject(requestRecord['options'])
     ) {
       throw new Error('Invalid query service code request.');
     }
@@ -192,7 +177,7 @@ const requestDecoders = {
     };
   },
   entrypoints: (requestRecord, expectedGeneration) => {
-    if (!isRecord(requestRecord['options'])) {
+    if (!isRecordObject(requestRecord['options'])) {
       throw new Error('Invalid query service entrypoints request.');
     }
     const optionsRecord = requestRecord['options'] as Record<string, unknown>;
@@ -209,7 +194,7 @@ const requestDecoders = {
     if (
       typeof requestRecord['pattern'] !== 'string' ||
       requestRecord['pattern'].length === 0 ||
-      !isRecord(requestRecord['options'])
+      !isRecordObject(requestRecord['options'])
     ) {
       throw new Error('Invalid query service source-search request.');
     }

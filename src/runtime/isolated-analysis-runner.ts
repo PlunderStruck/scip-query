@@ -1,7 +1,8 @@
+export { chunked } from '../domain/array-batches.js';
 import { spawnSync } from 'node:child_process';
 import { BoundedProcessError, PROCESS_TIMEOUT_MS, runBoundedProcess } from '../platform/bounded-process.js';
 import { cliVersion } from '../platform/cli-version.js';
-import { isRecordObject } from '../domain/record-validation.js';
+import { isRecordObject, isScipQueryProducer } from '../domain/record-validation.js';
 import { writeSerializedJson } from '../platform/terminal-output.js';
 import { isObservationReceipt, type ObservationReceiptV2 } from '../domain/observation-receipt.js';
 import { currentCliDatabase } from './cli-context.js';
@@ -99,16 +100,6 @@ export function runIsolatedJsonProcess<T>(opts: IsolatedJsonProcessOptions): T {
   return parseIsolatedAnalysisResult<T>(result.stdout, opts).result;
 }
 
-// scip-query: ignore-wrapper — batch helper owned by the isolated analysis
-// runner so callers do not duplicate subprocess batch slicing.
-export function chunked<T>(items: readonly T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let offset = 0; offset < items.length; offset += size) {
-    chunks.push(items.slice(offset, offset + size));
-  }
-  return chunks;
-}
-
 export function runIsolatedJsonProcessAsync<T>(opts: IsolatedJsonProcessOptions): Promise<T> {
   return runIsolatedJsonProcessWithEvidenceAsync<T>(opts).then((message) => message.result);
 }
@@ -167,15 +158,6 @@ function parseIsolatedAnalysisResult<T>(stdout: string, opts: IsolatedJsonProces
     result: parsed['result'] as T,
     ...(observationReceipt ? { observationReceipt } : {}),
   };
-}
-
-function isScipQueryProducer(value: unknown): boolean {
-  return (
-    isRecordObject(value) &&
-    value['name'] === 'scip-query' &&
-    typeof value['version'] === 'string' &&
-    value['version'].length > 0
-  );
 }
 
 function describeValue(value: unknown): string {
