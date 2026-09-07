@@ -225,3 +225,23 @@ Batch-nine queue from the complete 617-finding source scan: scanRepositoryText 2
 ### Batch eight completion
 
 All checks passed: 154 focused tests, full suite 3,133 tests across 350 files, build, source types, changed-file lint, format, public API/consumer and skill links. Fresh index/diff-impact maps 21 changed symbols in five source files to 14 affected files. Source health accounted across 563 files and 12,434 functions, with 617 complexity findings and no reported duplication, dependency cycles or configured violations; all files mapped and 47/47 dependency rows declared. Historical inventory: 60 fixed, six assessed-retained, 589 pending. No new helper warnings, threshold changes or suppression-policy changes. Continue batch nine above; the VM does not need reinstalling for these behavior-preserving changes.
+
+### Batch nine implementation checkpoint
+
+Separated streaming literal probes from file-read recovery and final text materialization. Kept byte/text/semantic accounting before user inclusion filters and preserved missing/binary/unreadable/oversized distinctions. Separated journal readiness, source-entry validation and fingerprint updates; all entry validation still precedes filesystem mutation and only a successful delta persists the fingerprint cache. Split slice statement traversal into conditional, loop, exception and ordinary statement classification while preserving predicate stacks, exit guards, try/handler ranges and unit order. Split health rendering by section and gave positive finding rows an ordered table with lazy formatting. Split passthrough detection into direct-call shape and parameter-name validation without weakening defaults/call-returned-handler refusal.
+
+| Target | Before cyclomatic/cognitive | After |
+| --- | --- | --- |
+| scanRepositoryText | 21/44 | 10/15 |
+| buildProjectInputFingerprintFromJournal | 29/37 | 7/6 |
+| modelBody.visitStatement | 29/32 | 9/9 |
+| renderHealthReport | 29/36 | 8/9 |
+| isPassthroughBody | 29/29 | 10/11 |
+
+153 focused tests across eight files pass, including three new health-rendering cases covering no-action warning/coverage wording and all 12 positive finding rows with weighted counts. Types, changed-file lint and diff review pass. Two smaller helper warnings remain in the ranked queue: directForwardedCall 15/11 and journalEntryValidationReason 13/17. Build/full suite/API/index checks are pending. No thresholds, suppression policy or VM installation changes.
+
+Batch-ten queue from the complete 614-finding scan: collectNextAnchorGraphRelationCandidates 27/43 (src/queries/internal/next-anchor-candidates.ts:245), buildTypeContainerMap 17/43 (src/source/facts/source-type-containers.ts:4), getJsTestExclusions 28/38 (src/analysis/framework-patterns.ts:114), decodeProjectInputChangeJournal 28/20 (src/domain/project-input-change-journal.ts:44), probeProjectFileBytesForLiterals 28/40 (src/platform/project-files.ts:271). Exact bodies read. Preserve causal-call/runtime/reference separation and counters, source line fallback, returned-alternative exclusion and behavior-line matching; Rust alias/field containers, Python superclass/type annotations and self-link refusal; source prefilter before AST/cache access, top-level test/hook eligibility and suppression order; bounded journal schema, entry/path uniqueness and completeness reasons; snapshot/live-read policies, literal/UTF-8 carry across chunks, optional hashes, identity revalidation, matched-only byte materialization and descriptor cleanup. Do not edit before batch-nine verification and commit.
+
+### Batch nine completion
+
+All checks passed: 153 focused tests, full suite 3,136 tests across 350 files, build, source types, changed-file lint, format, public API/consumer and skill links. Fresh index/diff-impact maps 17 changed symbols in five source files to seven affected files. Current-source health is accounted across 563 files and 12,463 functions, with 614 complexity findings and no reported duplication, dependency cycles or configured violations; all files mapped, 47/47 dependency rows declared. Historical inventory: 65 fixed, six assessed-retained, 584 pending. Two newly extracted helper warnings remain in the queue. Continue batch ten above. No thresholds/suppression policy changes or VM reinstall.

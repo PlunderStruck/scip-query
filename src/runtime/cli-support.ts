@@ -1305,32 +1305,58 @@ export function renderHealthReport(report: HealthReport): void {
     console.log('');
   }
 
-  console.log('  Findings:');
-  const f = report.findings;
-  if (f.deadSymbols > 0) console.log(`    Dead code:            ${f.deadSymbols} symbols (${f.deadLoc} LOC)`);
-  if (f.cycles > 0) console.log(`    Circular deps:        ${f.cycles}`);
-  if (f.similarPairs > 0) console.log(`    Similar pairs:        ${f.similarPairs}`);
-  if (f.twinDriftGroups > 0) console.log(`    Drifted twins:        ${f.twinDriftGroups} group(s)`);
-  if (f.reactComponentDuplicatePairs > 0)
-    console.log(`    React components:     ${f.reactComponentDuplicatePairs} duplicate pair(s)`);
-  if (f.reactHookCandidatePairs > 0) {
-    console.log(
-      `    React hook reuse:     ${formatScoreAwareCount(f.reactHookCandidatePairs, f.reactHookCandidateScoreCount)} candidate pair(s)`,
-    );
-  }
-  if (f.reactLargeComponentPressureFiles > 0)
-    console.log(`    React large comps:    ${f.reactLargeComponentPressureFiles} component(s)`);
-  if (f.vueComponentDuplicatePairs > 0)
-    console.log(`    Vue components:       ${f.vueComponentDuplicatePairs} duplicate pair(s)`);
-  if (f.vueComposableCandidatePairs > 0) {
-    console.log(
-      `    Vue composables:      ${formatScoreAwareCount(f.vueComposableCandidatePairs, f.vueComposableCandidateScoreCount)} candidate pair(s)`,
-    );
-  }
-  if (f.vueLargeViewPressureFiles > 0) console.log(`    Vue large views:      ${f.vueLargeViewPressureFiles} file(s)`);
-  if (f.passthroughs > 0) console.log(`    Passthroughs:         ${f.passthroughs}`);
-  if (f.driftedFiles > 0) console.log(`    Pattern drift:        ${f.driftedFiles} files`);
+  renderHealthFindingCounts(report.findings);
+  renderHealthPolicyExclusions(report);
+  renderHealthActions(report);
+  renderHealthDetectorEvidence(report);
 
+  renderHealthAxes(report);
+
+  if (report.actions.length === 0) {
+    console.log(
+      report.warnings && report.warnings.length > 0
+        ? '\n  No findings from completed analyses. Review warnings before interpreting this result as clean.'
+        : '\n  No findings from completed analyses. Review coverage before drawing conclusions.',
+    );
+  }
+}
+
+function renderHealthFindingCounts(f: HealthReport['findings']): void {
+  console.log('  Findings:');
+  const rows: Array<[number, () => string]> = [
+    [f.deadSymbols, () => `    Dead code:            ${f.deadSymbols} symbols (${f.deadLoc} LOC)`],
+    [f.cycles, () => `    Circular deps:        ${f.cycles}`],
+    [f.similarPairs, () => `    Similar pairs:        ${f.similarPairs}`],
+    [f.twinDriftGroups, () => `    Drifted twins:        ${f.twinDriftGroups} group(s)`],
+    [
+      f.reactComponentDuplicatePairs,
+      () => `    React components:     ${f.reactComponentDuplicatePairs} duplicate pair(s)`,
+    ],
+    [
+      f.reactHookCandidatePairs,
+      () =>
+        `    React hook reuse:     ${formatScoreAwareCount(f.reactHookCandidatePairs, f.reactHookCandidateScoreCount)} candidate pair(s)`,
+    ],
+    [
+      f.reactLargeComponentPressureFiles,
+      () => `    React large comps:    ${f.reactLargeComponentPressureFiles} component(s)`,
+    ],
+    [f.vueComponentDuplicatePairs, () => `    Vue components:       ${f.vueComponentDuplicatePairs} duplicate pair(s)`],
+    [
+      f.vueComposableCandidatePairs,
+      () =>
+        `    Vue composables:      ${formatScoreAwareCount(f.vueComposableCandidatePairs, f.vueComposableCandidateScoreCount)} candidate pair(s)`,
+    ],
+    [f.vueLargeViewPressureFiles, () => `    Vue large views:      ${f.vueLargeViewPressureFiles} file(s)`],
+    [f.passthroughs, () => `    Passthroughs:         ${f.passthroughs}`],
+    [f.driftedFiles, () => `    Pattern drift:        ${f.driftedFiles} files`],
+  ];
+  for (const [count, render] of rows) {
+    if (count > 0) console.log(render());
+  }
+}
+
+function renderHealthPolicyExclusions(report: HealthReport): void {
   const policyExclusions = report.policyExclusions ?? [];
   if (policyExclusions.length > 0) {
     console.log('\n  Policy exclusions (listed by the detector command, not counted above):');
@@ -1338,7 +1364,9 @@ export function renderHealthReport(report: HealthReport): void {
       console.log(`    ${exclusion.detector}: ${exclusion.count} ${exclusion.detail}`);
     }
   }
+}
 
+function renderHealthActions(report: HealthReport): void {
   if (report.actions.length > 0) {
     console.log('\n  Prioritized Actions (highest impact + lowest effort first):');
     for (let i = 0; i < report.actions.length; i++) {
@@ -1347,7 +1375,9 @@ export function renderHealthReport(report: HealthReport): void {
       console.log(`    ${i + 1}. [${a.effort} effort / ${a.impact} impact] ${a.description}${loc}`);
     }
   }
+}
 
+function renderHealthDetectorEvidence(report: HealthReport): void {
   if (report.detectorEvidence.length > 0) {
     console.log('\n  Detector Evidence Calibration:');
     for (const contract of report.detectorEvidence) {
@@ -1358,16 +1388,6 @@ export function renderHealthReport(report: HealthReport): void {
       console.log(`    ${contract.detector}: ${contract.status}/${contract.providerCoverage}${unavailable}`);
     }
     console.log('    Full claims, non-claims, providers, and recovery commands are available in health --json.');
-  }
-
-  renderHealthAxes(report);
-
-  if (report.actions.length === 0) {
-    console.log(
-      report.warnings && report.warnings.length > 0
-        ? '\n  No findings from completed analyses. Review warnings before interpreting this result as clean.'
-        : '\n  No findings from completed analyses. Review coverage before drawing conclusions.',
-    );
   }
 }
 

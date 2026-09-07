@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { renderHealthReport } from '../../../src/runtime/cli-support.js';
 import { buildHealthReport } from '../../../src/queries/health/health-report.js';
 import type { HealthAnalyses } from '../../../src/queries/health/health-types.js';
 
@@ -158,5 +159,67 @@ describe('health report policy calibration', () => {
       expect.objectContaining({ detector: 'react-component-duplicates', reason: 'ui-kit-pairs', count: 3 }),
       expect.objectContaining({ detector: 'co-change', reason: 'doc-sync-pairs', count: 5 }),
     ]);
+  });
+});
+
+describe('health report rendering', () => {
+  it.each([false, true])('preserves the no-action qualification with warnings=%s', (hasWarnings) => {
+    const report = buildHealthReport(emptyAnalyses({ warnings: hasWarnings ? ['Provider unavailable'] : [] }));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      renderHealthReport(report);
+      const output = log.mock.calls.map(([line]) => line).join('\n');
+      expect(output).toContain(
+        hasWarnings
+          ? 'No findings from completed analyses. Review warnings before interpreting this result as clean.'
+          : 'No findings from completed analyses. Review coverage before drawing conclusions.',
+      );
+      expect(output.includes('  Warnings:')).toBe(hasWarnings);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('keeps positive finding rows in order with units and weighted counts', () => {
+    const report = buildHealthReport(emptyAnalyses());
+    Object.assign(report.findings, {
+      deadSymbols: 2,
+      deadLoc: 7,
+      cycles: 3,
+      similarPairs: 4,
+      twinDriftGroups: 5,
+      reactComponentDuplicatePairs: 6,
+      reactHookCandidatePairs: 7,
+      reactHookCandidateScoreCount: 2.5,
+      reactLargeComponentPressureFiles: 8,
+      vueComponentDuplicatePairs: 9,
+      vueComposableCandidatePairs: 10,
+      vueComposableCandidateScoreCount: 10,
+      vueLargeViewPressureFiles: 11,
+      passthroughs: 12,
+      driftedFiles: 13,
+    });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      renderHealthReport(report);
+      const lines = log.mock.calls.map(([line]) => line);
+      const start = lines.indexOf('  Findings:');
+      expect(lines.slice(start + 1, start + 13)).toEqual([
+        '    Dead code:            2 symbols (7 LOC)',
+        '    Circular deps:        3',
+        '    Similar pairs:        4',
+        '    Drifted twins:        5 group(s)',
+        '    React components:     6 duplicate pair(s)',
+        '    React hook reuse:     7 (combined pair weight 2.5) candidate pair(s)',
+        '    React large comps:    8 component(s)',
+        '    Vue components:       9 duplicate pair(s)',
+        '    Vue composables:      10 candidate pair(s)',
+        '    Vue large views:      11 file(s)',
+        '    Passthroughs:         12',
+        '    Pattern drift:        13 files',
+      ]);
+    } finally {
+      log.mockRestore();
+    }
   });
 });

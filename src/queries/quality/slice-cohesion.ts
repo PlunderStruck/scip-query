@@ -795,6 +795,24 @@ function callableForDefinition(
   return found;
 }
 
+function ordinaryStatementUnitKind(
+  ts: TypeScriptModule,
+  statement: TypeScript.Statement,
+): SliceCohesionUnitKind | null {
+  if (ts.isReturnStatement(statement)) return 'return';
+  if (ts.isThrowStatement(statement)) return 'throw';
+  if (ts.isBreakOrContinueStatement(statement)) return 'jump';
+  if (
+    ts.isFunctionDeclaration(statement) ||
+    ts.isClassDeclaration(statement) ||
+    ts.isInterfaceDeclaration(statement) ||
+    ts.isTypeAliasDeclaration(statement) ||
+    ts.isEnumDeclaration(statement)
+  )
+    return 'declaration';
+  return ts.isEmptyStatement(statement) ? null : 'statement';
+}
+
 function modelBody(
   ts: TypeScriptModule,
   sourceFile: TypeScript.SourceFile,
@@ -828,24 +846,39 @@ function modelBody(
     visit();
     predicateStack.pop();
   };
-  const visitStatement = (statement: TypeScript.Statement): void => {
-    if (ts.isBlock(statement)) {
-      for (const inner of statement.statements) visitStatement(inner);
-    } else if (ts.isIfStatement(statement)) {
-      addUnit('predicate', statement.expression);
-      const exitOnly =
-        !statement.elseStatement && isExitOnly(ts, statement.thenStatement, loopDeclaredNames(ts, statement));
-      if (exitOnly) guardNodes.add(statement.expression);
-      const branchStart = units.length;
-      underPredicate(statement.expression, () => {
-        visitStatement(statement.thenStatement);
-        if (exitOnly) for (const unit of units.slice(branchStart)) guardBranchNodes.add(unit.node);
-        if (statement.elseStatement) visitStatement(statement.elseStatement);
-      });
-    } else if (ts.isWhileStatement(statement) || ts.isDoStatement(statement)) {
+  const visitIfStatement = (statement: TypeScript.IfStatement): void => {
+    addUnit('predicate', statement.expression);
+    const exitOnly =
+      !statement.elseStatement && isExitOnly(ts, statement.thenStatement, loopDeclaredNames(ts, statement));
+    if (exitOnly) guardNodes.add(statement.expression);
+    const branchStart = units.length;
+    underPredicate(statement.expression, () => {
+      visitStatement(statement.thenStatement);
+      if (exitOnly) for (const unit of units.slice(branchStart)) guardBranchNodes.add(unit.node);
+      if (statement.elseStatement) visitStatement(statement.elseStatement);
+    });
+  };
+  const visitTryStatement = (statement: TypeScript.TryStatement): void => {
+    const tryStart = units.length;
+    visitStatement(statement.tryBlock);
+    const handlerStart = units.length;
+    if (statement.catchClause) {
+      if (statement.catchClause.variableDeclaration) addUnit('statement', statement.catchClause.variableDeclaration);
+      visitStatement(statement.catchClause.block);
+    }
+    if (statement.finallyBlock) visitStatement(statement.finallyBlock);
+    tryRegions.push({
+      tryNodes: units.slice(tryStart, handlerStart).map((unit) => unit.node),
+      handlerNodes: units.slice(handlerStart).map((unit) => unit.node),
+    });
+  };
+  const visitLoopStatement = (statement: TypeScript.Statement): boolean => {
+    if (ts.isWhileStatement(statement) || ts.isDoStatement(statement)) {
       addUnit('predicate', statement.expression);
       underPredicate(statement.expression, () => visitStatement(statement.statement));
-    } else if (ts.isForStatement(statement)) {
+      return true;
+    }
+    if (ts.isForStatement(statement)) {
       if (statement.initializer) addUnit('statement', statement.initializer);
       if (statement.condition) addUnit('predicate', statement.condition);
       const predicate = statement.condition ?? statement;
@@ -853,49 +886,45 @@ function modelBody(
         if (statement.incrementor) addUnit('statement', statement.incrementor);
         visitStatement(statement.statement);
       });
-    } else if (ts.isForInStatement(statement) || ts.isForOfStatement(statement)) {
+      return true;
+    }
+    if (ts.isForInStatement(statement) || ts.isForOfStatement(statement)) {
       addUnit('predicate', statement.expression);
       underPredicate(statement.expression, () => {
         addUnit('statement', statement.initializer);
         visitStatement(statement.statement);
       });
-    } else if (ts.isSwitchStatement(statement)) {
+      return true;
+    }
+    return false;
+  };
+  const visitStatement = (statement: TypeScript.Statement): void => {
+    if (ts.isBlock(statement)) {
+      for (const inner of statement.statements) visitStatement(inner);
+      return;
+    }
+    if (ts.isIfStatement(statement)) {
+      visitIfStatement(statement);
+      return;
+    }
+    if (visitLoopStatement(statement)) return;
+    if (ts.isSwitchStatement(statement)) {
       addUnit('predicate', statement.expression);
       underPredicate(statement.expression, () => {
         for (const clause of statement.caseBlock.clauses) for (const inner of clause.statements) visitStatement(inner);
       });
-    } else if (ts.isTryStatement(statement)) {
-      const tryStart = units.length;
-      visitStatement(statement.tryBlock);
-      const handlerStart = units.length;
-      if (statement.catchClause) {
-        if (statement.catchClause.variableDeclaration) addUnit('statement', statement.catchClause.variableDeclaration);
-        visitStatement(statement.catchClause.block);
-      }
-      if (statement.finallyBlock) visitStatement(statement.finallyBlock);
-      tryRegions.push({
-        tryNodes: units.slice(tryStart, handlerStart).map((unit) => unit.node),
-        handlerNodes: units.slice(handlerStart).map((unit) => unit.node),
-      });
-    } else if (ts.isLabeledStatement(statement)) {
-      visitStatement(statement.statement);
-    } else if (ts.isReturnStatement(statement)) {
-      addUnit('return', statement);
-    } else if (ts.isThrowStatement(statement)) {
-      addUnit('throw', statement);
-    } else if (ts.isBreakOrContinueStatement(statement)) {
-      addUnit('jump', statement);
-    } else if (
-      ts.isFunctionDeclaration(statement) ||
-      ts.isClassDeclaration(statement) ||
-      ts.isInterfaceDeclaration(statement) ||
-      ts.isTypeAliasDeclaration(statement) ||
-      ts.isEnumDeclaration(statement)
-    ) {
-      addUnit('declaration', statement);
-    } else if (!ts.isEmptyStatement(statement)) {
-      addUnit('statement', statement);
+      return;
     }
+    if (ts.isTryStatement(statement)) {
+      visitTryStatement(statement);
+      return;
+    }
+    if (ts.isLabeledStatement(statement)) {
+      visitStatement(statement.statement);
+      return;
+    }
+    const kind = ordinaryStatementUnitKind(ts, statement);
+    if (kind) addUnit(kind, statement);
   };
   if (ts.isBlock(callableBody)) {
     for (const statement of callableBody.statements) visitStatement(statement);

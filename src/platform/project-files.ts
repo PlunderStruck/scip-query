@@ -706,25 +706,61 @@ export function buildProjectInputFingerprintFromJournal(
     fingerprint: buildProjectInputFingerprint(projectRoot, languages, opts),
     reason,
   });
-  if (!journal) return full('change-journal-unavailable');
-  if (!journal.complete) return full(`change-journal-incomplete:${journal.incompleteReason ?? 'unknown'}`);
-  if (!acceptedGeneration) return full('accepted-generation-unavailable');
-  if (journal.baseGeneration !== acceptedGeneration) return full('change-journal-base-mismatch');
-  if (!previous) return full('prior-project-input-snapshot-unavailable');
+  const readiness = journalFingerprintReadiness(previous, journal, acceptedGeneration);
+  if (!readiness.ready) return full(readiness.reason);
+  const { previous: priorSnapshot, journal: changeJournal } = readiness;
 
   const configuration = normalizeProjectInputFingerprintConfiguration(languages, opts);
-  if (!sameProjectInputConfiguration(previous, configuration)) return full('project-input-configuration-changed');
-  if (new Set(previous.files.map((file) => file.path)).size !== previous.files.length) {
+  if (!sameProjectInputConfiguration(priorSnapshot, configuration)) return full('project-input-configuration-changed');
+  if (new Set(priorSnapshot.files.map((file) => file.path)).size !== priorSnapshot.files.length) {
     return full('prior-project-input-snapshot-has-duplicate-paths');
   }
-  if (journal.entries.length === 0) {
+  if (changeJournal.entries.length === 0) {
     return {
       mode: 'delta',
-      fingerprint: { ...configuration, files: [...previous.files].sort((a, b) => a.path.localeCompare(b.path)) },
+      fingerprint: { ...configuration, files: [...priorSnapshot.files].sort((a, b) => a.path.localeCompare(b.path)) },
       changedPaths: [],
     };
   }
 
+  const previousFiles = new Map(priorSnapshot.files.map((file) => [file.path, file]));
+  const validationReason = journalEntryValidationReason(languages, configuration, previousFiles, changeJournal);
+  if (validationReason) return full(validationReason);
+
+  const canonicalProjectRoot = realpathSync(projectRoot);
+  const updateReason = applyJournalFingerprintUpdates(projectRoot, canonicalProjectRoot, previousFiles, changeJournal);
+  if (updateReason) return full(updateReason);
+  persistProjectFileFingerprintCache(canonicalProjectRoot);
+  return {
+    mode: 'delta',
+    fingerprint: { ...configuration, files: [...previousFiles.values()].sort((a, b) => a.path.localeCompare(b.path)) },
+    changedPaths: changeJournal.entries.map((entry) => entry.path).sort(),
+  };
+}
+
+function journalFingerprintReadiness(
+  previous: ProjectInputSnapshot | null,
+  journal: ProjectInputChangeJournal | undefined,
+  acceptedGeneration: string | null,
+):
+  | { ready: true; previous: ProjectInputSnapshot; journal: ProjectInputChangeJournal }
+  | { ready: false; reason: string } {
+  if (!journal) return { ready: false, reason: 'change-journal-unavailable' };
+  if (!journal.complete)
+    return { ready: false, reason: `change-journal-incomplete:${journal.incompleteReason ?? 'unknown'}` };
+  if (!acceptedGeneration) return { ready: false, reason: 'accepted-generation-unavailable' };
+  if (journal.baseGeneration !== acceptedGeneration) return { ready: false, reason: 'change-journal-base-mismatch' };
+  if (!previous) return { ready: false, reason: 'prior-project-input-snapshot-unavailable' };
+
+  return { ready: true, previous, journal };
+}
+
+function journalEntryValidationReason(
+  languages: readonly SupportedLanguage[],
+  configuration: ProjectInputFingerprintConfiguration,
+  previousFiles: ReadonlyMap<string, ProjectInputSnapshot['files'][number]>,
+  journal: ProjectInputChangeJournal,
+): string | null {
   const configuredMarkerFiles = [
     // Keep configured paths as classification markers even after deletion.
     // Directory-valued project entries cannot collide with a source file below them
@@ -732,37 +768,39 @@ export function buildProjectInputFingerprintFromJournal(
     ...configuration.typescriptProjects,
     ...(configuration.clojureConfigPath ? [configuration.clojureConfigPath] : []),
   ];
-  const previousFiles = new Map(previous.files.map((file) => [file.path, file]));
   for (const entry of journal.entries) {
     const prior = previousFiles.get(entry.path);
     if (classifyProjectInputPath(entry.path, languages, configuredMarkerFiles) !== 'source') {
-      return full('non-source-project-input-changed');
+      return 'non-source-project-input-changed';
     }
-    if (entry.kind === 'add' && prior) return full('added-path-already-in-prior-project-input-snapshot');
-    if (entry.kind === 'delete' && !prior) return full('deleted-path-not-in-prior-project-input-snapshot');
-    if (entry.kind === 'change' && !prior) return full('changed-path-not-in-prior-project-input-snapshot');
-    if (prior && (prior.hash === 'unreadable' || prior.size < 0)) return full('changed-path-was-unreadable');
+    if (entry.kind === 'add' && prior) return 'added-path-already-in-prior-project-input-snapshot';
+    if (entry.kind === 'delete' && !prior) return 'deleted-path-not-in-prior-project-input-snapshot';
+    if (entry.kind === 'change' && !prior) return 'changed-path-not-in-prior-project-input-snapshot';
+    if (prior && (prior.hash === 'unreadable' || prior.size < 0)) return 'changed-path-was-unreadable';
   }
 
-  const canonicalProjectRoot = realpathSync(projectRoot);
+  return null;
+}
+
+function applyJournalFingerprintUpdates(
+  projectRoot: string,
+  canonicalProjectRoot: string,
+  previousFiles: Map<string, ProjectInputSnapshot['files'][number]>,
+  journal: ProjectInputChangeJournal,
+): string | null {
   for (const entry of journal.entries) {
     const current = fingerprintProjectFile(projectRoot, canonicalProjectRoot, entry.path);
     if (entry.kind === 'delete') {
-      if (current.length !== 0) return full('deleted-source-is-still-readable');
+      if (current.length !== 0) return 'deleted-source-is-still-readable';
       previousFiles.delete(entry.path);
       continue;
     }
     if (current.length !== 1 || current[0]!.hash === 'unreadable' || current[0]!.size < 0) {
-      return full(entry.kind === 'add' ? 'added-source-is-not-readable' : 'changed-source-no-longer-readable');
+      return entry.kind === 'add' ? 'added-source-is-not-readable' : 'changed-source-no-longer-readable';
     }
     previousFiles.set(entry.path, current[0]!);
   }
-  persistProjectFileFingerprintCache(canonicalProjectRoot);
-  return {
-    mode: 'delta',
-    fingerprint: { ...configuration, files: [...previousFiles.values()].sort((a, b) => a.path.localeCompare(b.path)) },
-    changedPaths: journal.entries.map((entry) => entry.path).sort(),
-  };
+  return null;
 }
 
 function sameProjectInputConfiguration(

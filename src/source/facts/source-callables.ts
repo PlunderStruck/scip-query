@@ -212,6 +212,26 @@ function isPassthroughBody(fnNode: SyntaxNode, language: AstLanguage): boolean {
   if (statements.length !== 1) return false;
   const only = statements[0]!;
 
+  const callNode = directForwardedCall(only, language);
+  if (!callNode) return false;
+
+  const argsNode = callNode.namedChildren.find((child) => child.type === 'arguments' || child.type === 'argument_list');
+  if (!argsNode) return false;
+  const callArgs = argsNode.namedChildren.filter((child) => !isCommentNode(child));
+
+  const paramNames = passthroughParameterNames(fnNode);
+  if (!paramNames) return false;
+
+  if (callArgs.length !== paramNames.length) return false;
+  for (let index = 0; index < paramNames.length; index += 1) {
+    const arg = callArgs[index]!;
+    if (arg.type !== 'identifier') return false;
+    if (arg.text !== paramNames[index]) return false;
+  }
+  return true;
+}
+
+function directForwardedCall(only: SyntaxNode, language: AstLanguage): SyntaxNode | null {
   let callNode: SyntaxNode | null = null;
   if (only.type === 'return_statement') {
     callNode = only.namedChild(0) ?? null;
@@ -220,31 +240,31 @@ function isPassthroughBody(fnNode: SyntaxNode, language: AstLanguage): boolean {
   } else if (language === 'rust' && (only.type === 'call_expression' || only.type === 'macro_invocation')) {
     callNode = only;
   }
-  if (!callNode) return false;
+  if (!callNode) return null;
 
   const callType = language === 'python' ? 'call' : 'call_expression';
-  if (callNode.type !== callType) return false;
+  if (callNode.type !== callType) return null;
   // `return jsonHandler(async () => {...})(req, res, next)`: the outer call's
   // callee is itself a call, so the body runs a handler of its own. Matching
   // parameters on the outer call do not make that a literal forward.
   const callee = callNode.childForFieldName('function') ?? callNode.namedChild(0);
-  if (callee && (callee.type === callType || callee.type === 'call_expression')) return false;
+  if (callee && (callee.type === callType || callee.type === 'call_expression')) return null;
 
-  const argsNode = callNode.namedChildren.find((child) => child.type === 'arguments' || child.type === 'argument_list');
-  if (!argsNode) return false;
-  const callArgs = argsNode.namedChildren.filter((child) => !isCommentNode(child));
+  return callNode;
+}
 
+function passthroughParameterNames(fnNode: SyntaxNode): string[] | null {
   const paramsNode = fnNode.namedChildren.find(
     (child) => child.type === 'parameters' || child.type === 'formal_parameters',
   );
-  if (!paramsNode) return false;
+  if (!paramsNode) return null;
 
   const paramNames: string[] = [];
   for (const param of paramsNode.namedChildren) {
     // `reveal(progress, start, end = start + 0.06)`: a parameter default is
     // behavior the wrapper adds, so forwarding it is not a literal forward.
     if (param.childForFieldName('value') || param.type === 'assignment_pattern' || param.type === 'default_parameter') {
-      return false;
+      return null;
     }
     if (param.type === 'identifier') {
       paramNames.push(param.text);
@@ -254,13 +274,7 @@ function isPassthroughBody(fnNode: SyntaxNode, language: AstLanguage): boolean {
     if (id) paramNames.push(id.text);
   }
 
-  if (callArgs.length !== paramNames.length) return false;
-  for (let index = 0; index < paramNames.length; index += 1) {
-    const arg = callArgs[index]!;
-    if (arg.type !== 'identifier') return false;
-    if (arg.text !== paramNames[index]) return false;
-  }
-  return true;
+  return paramNames;
 }
 
 /** Smallest callable whose range covers `line`, or null when none does. */

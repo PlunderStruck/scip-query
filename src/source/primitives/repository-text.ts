@@ -115,57 +115,62 @@ export function scanRepositoryText(
   let scannedBytes = 0;
   let scannedTextFiles = 0;
   const semanticFiles: Record<SourceSemanticFreshnessState, number> = { aligned: 0, stale: 0, unavailable: 0 };
-  const literalBytes = opts.literalBytes
-    ? Buffer.isBuffer(opts.literalBytes)
-      ? [opts.literalBytes]
-      : [...opts.literalBytes]
-    : [];
+  const literalBytes = repositoryLiteralBuffers(opts.literalBytes);
   const literalScratchBuffer = literalBytes.length > 0 ? Buffer.allocUnsafe(1024 * 1024) : undefined;
 
-  for (const relativePath of paths) {
-    let bytes: Buffer;
-    let knownSha256: string | undefined;
-    let matchedLiteralIndexes: readonly number[] = [];
-    const indexed = indexedDocuments.has(relativePath);
+  const recordTextCoverage = (relativePath: string, byteLength: number, knownSha256: string | undefined): void => {
+    scannedBytes += byteLength;
+    scannedTextFiles += 1;
+    const semantic = semanticFreshness(relativePath, knownSha256, fingerprints, indexedDocuments);
+    semanticFiles[semantic.state] += 1;
+  };
+  const probeLiteralFile = (relativePath: string, indexed: boolean): ScannedRepositoryBytes | null => {
+    const probe =
+      literalBytes.length === 1
+        ? probeProjectFileBytes(db.config.projectRoot, relativePath, literalBytes[0]!, {
+            inputKind: 'repository text file',
+            computeSha256: indexed,
+            scratchBuffer: literalScratchBuffer,
+          })
+        : probeProjectFileBytesForLiterals(db.config.projectRoot, relativePath, literalBytes, {
+            inputKind: 'repository text file',
+            computeSha256: indexed,
+            scratchBuffer: literalScratchBuffer,
+          });
+    if (!probe.isUtf8Text) {
+      skippedBinaryPaths.push(relativePath);
+      return null;
+    }
+    const knownSha256 = probe.sha256;
+    recordTextCoverage(relativePath, probe.byteLength, knownSha256);
+    const matchedLiteralIndexes =
+      'matchedLiteralIndexes' in probe ? probe.matchedLiteralIndexes : probe.includesLiteral ? [0] : [];
+    if (matchedLiteralIndexes.length === 0 || !probe.bytes) return null;
+    return { bytes: probe.bytes, knownSha256, matchedLiteralIndexes };
+  };
+  const readRepositoryBytes = (relativePath: string): ScannedRepositoryBytes | null => {
     try {
-      if (literalBytes.length > 0) {
-        const probe =
-          literalBytes.length === 1
-            ? probeProjectFileBytes(db.config.projectRoot, relativePath, literalBytes[0]!, {
-                inputKind: 'repository text file',
-                computeSha256: indexed,
-                scratchBuffer: literalScratchBuffer,
-              })
-            : probeProjectFileBytesForLiterals(db.config.projectRoot, relativePath, literalBytes, {
-                inputKind: 'repository text file',
-                computeSha256: indexed,
-                scratchBuffer: literalScratchBuffer,
-              });
-        if (!probe.isUtf8Text) {
-          skippedBinaryPaths.push(relativePath);
-          continue;
-        }
-        scannedBytes += probe.byteLength;
-        scannedTextFiles += 1;
-        knownSha256 = probe.sha256;
-        const semantic = semanticFreshness(relativePath, knownSha256, fingerprints, indexedDocuments);
-        semanticFiles[semantic.state] += 1;
-        matchedLiteralIndexes =
-          'matchedLiteralIndexes' in probe ? probe.matchedLiteralIndexes : probe.includesLiteral ? [0] : [];
-        if (matchedLiteralIndexes.length === 0 || !probe.bytes) continue;
-        bytes = probe.bytes;
-      } else {
-        bytes = readProjectFile(db.config.projectRoot, relativePath, { inputKind: 'repository text file' });
-      }
+      if (literalBytes.length > 0) return probeLiteralFile(relativePath, indexedDocuments.has(relativePath));
+      return {
+        bytes: readProjectFile(db.config.projectRoot, relativePath, { inputKind: 'repository text file' }),
+        knownSha256: undefined,
+        matchedLiteralIndexes: [],
+      };
     } catch (error) {
       if (error instanceof InputTooLargeError) {
         skippedOversizedPaths.push(relativePath);
-        continue;
+        return null;
       }
-      if (isMissingProjectFileError(error)) continue;
+      if (isMissingProjectFileError(error)) return null;
       skippedUnreadablePaths.push(relativePath);
-      continue;
+      return null;
     }
+  };
+  for (const relativePath of paths) {
+    const scanned = readRepositoryBytes(relativePath);
+    if (!scanned) continue;
+    const { bytes, matchedLiteralIndexes } = scanned;
+    let knownSha256 = scanned.knownSha256;
     if (literalBytes.length === 0 && !isTextBytes(bytes)) {
       skippedBinaryPaths.push(relativePath);
       continue;
@@ -173,7 +178,7 @@ export function scanRepositoryText(
     if (literalBytes.length === 0) {
       scannedBytes += bytes.byteLength;
       scannedTextFiles += 1;
-      knownSha256 = indexed ? hashBytes(bytes) : undefined;
+      knownSha256 = indexedDocuments.has(relativePath) ? hashBytes(bytes) : undefined;
       const semantic = semanticFreshness(relativePath, knownSha256, fingerprints, indexedDocuments);
       semanticFiles[semantic.state] += 1;
     }
@@ -194,6 +199,16 @@ export function scanRepositoryText(
     skippedUnreadablePaths,
     skippedOversizedPaths,
   };
+}
+
+interface ScannedRepositoryBytes {
+  bytes: Buffer;
+  knownSha256: string | undefined;
+  matchedLiteralIndexes: readonly number[];
+}
+
+function repositoryLiteralBuffers(value: RepositoryTextScanOptions['literalBytes']): Buffer[] {
+  return value ? (Buffer.isBuffer(value) ? [value] : [...value]) : [];
 }
 
 function repositoryTextFile(
