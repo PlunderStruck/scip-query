@@ -244,15 +244,21 @@ type BenchmarkCommand =
   | 'surface';
 
 function defaultOperand(command: BenchmarkCommand): string {
-  if (command === 'outline') return 'src/runtime/cli.ts';
-  if (command === 'files') return 'src/runtime';
-  if (command === 'members' || command === 'methods') return 'ScipDatabase';
-  if (command === 'deps' || command === 'rdeps') return 'src/runtime/query-service.ts';
-  if (command === 'imports' || command === 'unused-imports') return 'src/runtime/query-service.ts';
-  if (command === 'system' || command === 'surface') return 'src/runtime';
-  if (command === 'by-kind') return 'function';
-  if (command === 'kind-counts') return '';
-  return 'queryServiceSessionIdentity';
+  const operands = new Map([
+    ['outline', 'src/runtime/cli.ts'],
+    ['files', 'src/runtime'],
+    ['members', 'ScipDatabase'],
+    ['methods', 'ScipDatabase'],
+    ['deps', 'src/runtime/query-service.ts'],
+    ['rdeps', 'src/runtime/query-service.ts'],
+    ['imports', 'src/runtime/query-service.ts'],
+    ['unused-imports', 'src/runtime/query-service.ts'],
+    ['system', 'src/runtime'],
+    ['surface', 'src/runtime'],
+    ['by-kind', 'function'],
+    ['kind-counts', ''],
+  ]);
+  return operands.get(command) ?? 'queryServiceSessionIdentity';
 }
 
 function parseBenchmarkCommand(configured: string | undefined): BenchmarkCommand {

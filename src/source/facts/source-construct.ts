@@ -69,9 +69,7 @@ export function focusedSourceConstructRange(
   enclosingEndLine: number,
 ): FocusedSourceConstructRange {
   const behaviorRange = behaviorConstructRange(db, relativePath, enclosingStartLine, enclosingEndLine, [focusLine]);
-  const behaviorStartsAnIncompleteContinuation =
-    behaviorRange.startLine === behaviorRange.endLine &&
-    /(?:=>|\(|\{|\[|,)\s*$/u.test(getSourceLines(db, relativePath)[behaviorRange.startLine] ?? '');
+  const behaviorStartsAnIncompleteContinuation = isIncompleteBehaviorContinuation(db, relativePath, behaviorRange);
   if (
     !behaviorStartsAnIncompleteContinuation &&
     (behaviorRange.startLine > enclosingStartLine || behaviorRange.endLine < enclosingEndLine)
@@ -112,4 +110,15 @@ function containsLine(node: SyntaxNode, line: number): boolean {
 
 function nodeSpan(node: SyntaxNode): number {
   return node.endIndex - node.startIndex;
+}
+
+function isIncompleteBehaviorContinuation(
+  db: ScipDatabase,
+  relativePath: string,
+  range: FocusedSourceConstructRange,
+): boolean {
+  return (
+    range.startLine === range.endLine &&
+    /(?:=>|\(|\{|\[|,)\s*$/u.test(getSourceLines(db, relativePath)[range.startLine] ?? '')
+  );
 }

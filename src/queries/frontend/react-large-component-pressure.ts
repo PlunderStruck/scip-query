@@ -214,10 +214,7 @@ function reactContextKind(profile: ReactComponentBehaviorProfile): ReactLargeCom
   const conventionalRouteFile = REACT_ROUTE_FILE_NAMES.has(baseName.toLowerCase());
   const explicitlyRouteNamed = /(?:Page|Route|Screen)$/.test(profile.name);
   const routeOwnedView = routeOwned && /View$/.test(profile.name);
-  const sameNamedRouteModule =
-    !localComponentDirectory &&
-    baseName.replace(/[^A-Za-z0-9]+/g, '').toLowerCase() === profile.name.replace(/[^A-Za-z0-9]+/g, '').toLowerCase() &&
-    /(?:Page|Route|Screen|View)$/.test(baseName);
+  const sameNamedRouteModule = isSameNamedRouteModule(localComponentDirectory, baseName, profile.name);
   if (conventionalRouteFile || explicitlyRouteNamed || routeOwnedView || sameNamedRouteModule) {
     return 'route-page';
   }
@@ -310,4 +307,12 @@ const REACT_ROUTE_FILE_NAMES = new Set(['page', 'route', 'screen']);
 
 function titleCaseToken(token: string): string {
   return token.charAt(0).toUpperCase() + token.slice(1);
+}
+
+function isSameNamedRouteModule(localComponentDirectory: boolean, baseName: string, name: string): boolean {
+  return (
+    !localComponentDirectory &&
+    baseName.replace(/[^A-Za-z0-9]+/g, '').toLowerCase() === name.replace(/[^A-Za-z0-9]+/g, '').toLowerCase() &&
+    /(?:Page|Route|Screen|View)$/.test(baseName)
+  );
 }

@@ -288,7 +288,7 @@ function deserializeReactComponentBehaviorProfile(raw: unknown): ReactComponentB
     handlerNames,
   } = raw;
   if (typeof file !== 'string' || typeof name !== 'string') return null;
-  if (kind !== 'component' && kind !== 'hook') return null;
+  if (!isReactBehaviorProfileKind(kind)) return null;
   if (!isFiniteNumber(startLine) || !isFiniteNumber(endLine) || !isFiniteNumber(loc) || !isFiniteNumber(fileLines)) {
     return null;
   }
@@ -715,4 +715,8 @@ function identifiersInText(text: string): string[] {
 
 function sorted(values: ReadonlySet<string>): string[] {
   return [...values].sort();
+}
+
+function isReactBehaviorProfileKind(kind: unknown): kind is 'component' | 'hook' {
+  return kind === 'component' || kind === 'hook';
 }

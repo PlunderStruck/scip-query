@@ -127,7 +127,7 @@ const handleRefs = budgetedDbCommand('refs', ({ db, args, opts, budget }) => {
           semantic: decodedCursor?.semanticEnrichment ?? booleanOptionValue(opts, 'full'),
           indexGeneration,
         });
-  const { rows, continuation, coverage } = page;
+  const { rows, coverage } = page;
 
   if (booleanOptionValue(opts, 'json')) {
     const result = {
@@ -140,21 +140,7 @@ const handleRefs = budgetedDbCommand('refs', ({ db, args, opts, budget }) => {
     });
     return;
   }
-  if (rows.length === 0) return render.empty(symbolResolutionEmptyMessage(db, target, 'No references found.'));
-  symbolResolutionBefore(db, target);
-  render.groupedByFile(
-    rows,
-    (reference) => `  line ${displayLine(reference.line)} [${reference.evidence ?? 'source-or-chunk-candidate'}]`,
-  );
-  if (page.pagination.producer === 'complete-only' && !unpaginated) {
-    console.error(
-      '\nThis evidence provider required complete analysis; --limit bounded the returned rows, not analysis work.',
-    );
-  }
-  if (continuation) {
-    const omitted = coverage.totalKnown ? `${coverage.omitted} omitted; ` : 'More references are available; ';
-    console.log(`\n${omitted}continue with --cursor ${continuation.cursor}`);
-  }
+  return renderReferencePage(db, target, page, unpaginated);
 });
 
 interface RenderedRefPage {
@@ -764,3 +750,27 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
     handler: handleCode,
   },
 ];
+
+function renderReferencePage(
+  db: Parameters<typeof refs>[0],
+  target: string,
+  page: RenderedRefPage,
+  unpaginated: boolean,
+): void {
+  const { rows, continuation, coverage } = page;
+  if (rows.length === 0) return render.empty(symbolResolutionEmptyMessage(db, target, 'No references found.'));
+  symbolResolutionBefore(db, target);
+  render.groupedByFile(
+    rows,
+    (reference) => `  line ${displayLine(reference.line)} [${reference.evidence ?? 'source-or-chunk-candidate'}]`,
+  );
+  if (page.pagination.producer === 'complete-only' && !unpaginated) {
+    console.error(
+      '\nThis evidence provider required complete analysis; --limit bounded the returned rows, not analysis work.',
+    );
+  }
+  if (continuation) {
+    const omitted = coverage.totalKnown ? `${coverage.omitted} omitted; ` : 'More references are available; ';
+    console.log(`\n${omitted}continue with --cursor ${continuation.cursor}`);
+  }
+}

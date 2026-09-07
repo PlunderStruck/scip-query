@@ -95,27 +95,7 @@ export class TypeScriptSemanticServiceHost {
       this.requests += 1;
       this.lastRequestAtMs = this.now();
       this.lastError = null;
-      switch (request.kind) {
-        case 'availability':
-          return provider.availability();
-        case 'import-usage':
-          return provider.importUsage(request.file);
-        case 'references':
-          return [...referenceMap(provider, request.definitions, { exact: request.exact === true })];
-        case 'reference-fragments':
-          if (!provider.referenceFragmentsForFiles) {
-            throw new Error('TypeScript provider does not support reference fragments.');
-          }
-          return [...provider.referenceFragmentsForFiles(request.files)];
-        case 'callees':
-          return [...resolveCalleeMap(provider, request.definitions)];
-        case 'callee-coverage':
-          return [...(provider.calleeCoverageForDefinitions?.(request.definitions) ?? new Map())];
-        case 'signature':
-          return provider.signatureFor(request.definition);
-        default:
-          return assertNever(request);
-      }
+      return handleTypeScriptSemanticRequest(provider, request);
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
       throw error;
@@ -233,22 +213,9 @@ export function processTypeScriptSemanticMailbox(
         { nowMs: completedAtMs, limits: opts.limits },
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      rejectBoundedMailboxClaim(
-        paths,
-        claim,
-        {
-          ok: false,
-          protocolVersion: TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
-          id,
-          error: message,
-        },
-        message,
-        { nowMs: now(), limits: opts.limits },
-      );
+      rejectTypeScriptSemanticRequest(paths, claim, id, error, now, opts);
     } finally {
-      if (previousProfileEnvironment) applyProfileEnvironment(previousProfileEnvironment);
-      opts.afterRequest?.();
+      restoreTypeScriptRequestProfile(previousProfileEnvironment, opts);
       processed += 1;
     }
   }
@@ -322,4 +289,62 @@ function semanticSessionCounters(stats: ReturnType<TypeScriptSemanticHost['snaps
     sessionsReplaced: stats?.sessionsReplaced ?? 0,
     projectsCreated: stats?.projectsCreated ?? 0,
   };
+}
+
+function handleTypeScriptSemanticRequest(
+  provider: ReturnType<TypeScriptSemanticHost['semanticProvider']>,
+  request: TypeScriptSemanticRequest,
+): unknown {
+  switch (request.kind) {
+    case 'availability':
+      return provider.availability();
+    case 'import-usage':
+      return provider.importUsage(request.file);
+    case 'references':
+      return [...referenceMap(provider, request.definitions, { exact: request.exact === true })];
+    case 'reference-fragments':
+      if (!provider.referenceFragmentsForFiles) {
+        throw new Error('TypeScript provider does not support reference fragments.');
+      }
+      return [...provider.referenceFragmentsForFiles(request.files)];
+    case 'callees':
+      return [...resolveCalleeMap(provider, request.definitions)];
+    case 'callee-coverage':
+      return [...(provider.calleeCoverageForDefinitions?.(request.definitions) ?? new Map())];
+    case 'signature':
+      return provider.signatureFor(request.definition);
+    default:
+      return assertNever(request);
+  }
+}
+
+function rejectTypeScriptSemanticRequest(
+  paths: TypeScriptSemanticMailboxPaths,
+  claim: ReturnType<typeof pollBoundedMailboxRequests>[number],
+  id: string,
+  error: unknown,
+  now: () => number,
+  opts: { limits?: Partial<BoundedMailboxLimits> },
+): void {
+  const message = error instanceof Error ? error.message : String(error);
+  rejectBoundedMailboxClaim(
+    paths,
+    claim,
+    {
+      ok: false,
+      protocolVersion: TYPESCRIPT_SEMANTIC_PROTOCOL_VERSION,
+      id,
+      error: message,
+    },
+    message,
+    { nowMs: now(), limits: opts.limits },
+  );
+}
+
+function restoreTypeScriptRequestProfile(
+  previousProfileEnvironment: ProfileEnvironment | null,
+  opts: { afterRequest?: () => void },
+): void {
+  if (previousProfileEnvironment) applyProfileEnvironment(previousProfileEnvironment);
+  opts.afterRequest?.();
 }

@@ -555,7 +555,7 @@ function parseLegacyWatchMetadata(value: unknown): WatchProcessLockMetadata | nu
       return null;
     }
     const processIdentity = parsed.processIdentity === undefined ? null : parseProcessIdentity(parsed.processIdentity);
-    if (parsed.processIdentity !== undefined && (!processIdentity || processIdentity.pid !== owner.pid)) return null;
+    if (legacyWatchIdentityMismatch(parsed.processIdentity, processIdentity, owner.pid)) return null;
     return {
       version: 1,
       pid: owner.pid,
@@ -604,37 +604,9 @@ export function planWatchServiceAction(
     case 'status':
       return { kind: 'report', classification };
     case 'ensure':
-      switch (classification.kind) {
-        case 'stopped':
-          return { kind: 'start' };
-        case 'stale':
-          return classification.reason === 'old-heartbeat'
-            ? { kind: 'refuse-replace', state: classification.state, reason: 'old-heartbeat' }
-            : { kind: 'start' };
-        case 'live':
-          // A live `draining` watcher still owns its subscriptions, child, and
-          // lock. Reusing every live state prevents a second service from
-          // overlapping shutdown before that ownership is released.
-          return { kind: 'reuse', state: classification.state };
-        case 'incompatible':
-          return { kind: 'replace', state: classification.state };
-        default:
-          return assertNever(classification);
-      }
+      return planWatchServiceEnsure(classification);
     case 'stop':
-      switch (classification.kind) {
-        case 'stopped':
-          return { kind: 'already-stopped' };
-        case 'stale':
-          return classification.reason === 'old-heartbeat'
-            ? { kind: 'signal-stop', state: classification.state }
-            : { kind: 'clean-stale', state: classification.state };
-        case 'live':
-        case 'incompatible':
-          return { kind: 'signal-stop', state: classification.state };
-        default:
-          return assertNever(classification);
-      }
+      return planWatchServiceStop(classification);
     default:
       return assertNever(request);
   }
@@ -690,13 +662,7 @@ function stopLiveWatchProcess(
   assertSameProcessInstance(owner, runtime);
   runtime.forceSignalProcess(pid);
   const forceTimeoutMs = opts.forceStopTimeoutMs ?? WATCH_SERVICE_FORCE_STOP_TIMEOUT_MS;
-  const forceDeadline = monotonicNow() + forceTimeoutMs;
-  while (monotonicNow() <= forceDeadline) {
-    if (!runtime.isProcessAlive(pid)) return;
-    const actual = runtime.readProcessIdentity(pid);
-    if (owner.processIdentity && actual && !sameProcessIdentity(owner.processIdentity, actual)) return;
-    runtime.sleep(WATCH_SERVICE_POLL_INTERVAL_MS);
-  }
+  if (waitForForcedWatchProcessExit(owner, runtime, monotonicNow, forceTimeoutMs)) return;
   throw new Error(`scip-query watch service pid ${pid} remained alive ${forceTimeoutMs}ms after forced termination.`);
 }
 
@@ -844,4 +810,61 @@ function assertSameProcessInstance(
 
 function assertNever(value: never): never {
   throw new Error(`Unhandled watch service value: ${JSON.stringify(value)}`);
+}
+
+function planWatchServiceEnsure(classification: WatchServiceClassification): WatchServiceAction {
+  switch (classification.kind) {
+    case 'stopped':
+      return { kind: 'start' };
+    case 'stale':
+      return classification.reason === 'old-heartbeat'
+        ? { kind: 'refuse-replace', state: classification.state, reason: 'old-heartbeat' }
+        : { kind: 'start' };
+    case 'live':
+      // A live `draining` watcher still owns its subscriptions, child, and
+      // lock. Reusing every live state prevents a second service from
+      // overlapping shutdown before that ownership is released.
+      return { kind: 'reuse', state: classification.state };
+    case 'incompatible':
+      return { kind: 'replace', state: classification.state };
+    default:
+      return assertNever(classification);
+  }
+}
+
+function planWatchServiceStop(classification: WatchServiceClassification): WatchServiceAction {
+  switch (classification.kind) {
+    case 'stopped':
+      return { kind: 'already-stopped' };
+    case 'stale':
+      return classification.reason === 'old-heartbeat'
+        ? { kind: 'signal-stop', state: classification.state }
+        : { kind: 'clean-stale', state: classification.state };
+    case 'live':
+    case 'incompatible':
+      return { kind: 'signal-stop', state: classification.state };
+    default:
+      return assertNever(classification);
+  }
+}
+
+function waitForForcedWatchProcessExit(
+  owner: { pid: number; processIdentity?: ProcessIdentity },
+  runtime: WatchServiceRuntime,
+  monotonicNow: () => number,
+  forceTimeoutMs: number,
+): boolean {
+  const { pid } = owner;
+  const forceDeadline = monotonicNow() + forceTimeoutMs;
+  while (monotonicNow() <= forceDeadline) {
+    if (!runtime.isProcessAlive(pid)) return true;
+    const actual = runtime.readProcessIdentity(pid);
+    if (owner.processIdentity && actual && !sameProcessIdentity(owner.processIdentity, actual)) return true;
+    runtime.sleep(WATCH_SERVICE_POLL_INTERVAL_MS);
+  }
+  return false;
+}
+
+function legacyWatchIdentityMismatch(recorded: unknown, parsed: ProcessIdentity | null, pid: number): boolean {
+  return recorded !== undefined && (!parsed || parsed.pid !== pid);
 }

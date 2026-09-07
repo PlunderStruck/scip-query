@@ -66,9 +66,7 @@ const SHARD_HARD_MAX_FACTOR = 1.25;
  * while per-shard inputs stay under the hard cap.
  */
 export function typescriptCompilerShardCount(inputCount: number, targetFiles: number, parallelism: number): number {
-  if (!Number.isSafeInteger(targetFiles) || targetFiles < 1) {
-    throw new Error(`TypeScript compiler shard targetFiles must be a positive safe integer; received ${targetFiles}.`);
-  }
+  assertTypeScriptCompilerShardTarget(targetFiles);
   const base = Math.max(1, Math.ceil(inputCount / targetFiles));
   if (base <= 1 || parallelism <= 1) return base;
   const hardMax = Math.floor(targetFiles * SHARD_HARD_MAX_FACTOR);
@@ -346,4 +344,10 @@ function shouldFinishCompilerShard(
     remainingFiles >= remainingShards &&
     (cumulative >= (totalWeight * (completedShards + 1)) / shardCount || remainingFiles === remainingShards)
   );
+}
+
+function assertTypeScriptCompilerShardTarget(targetFiles: number): void {
+  if (!Number.isSafeInteger(targetFiles) || targetFiles < 1) {
+    throw new Error(`TypeScript compiler shard targetFiles must be a positive safe integer; received ${targetFiles}.`);
+  }
 }

@@ -106,11 +106,7 @@ export function typeScriptProjectInputPaths(
     // TS18003 proves that the configured project currently selects no files;
     // it is an exact empty scope, not a failure to understand the config.
     if (parsed.errors.some((error) => error.code !== TYPESCRIPT_NO_INPUTS_DIAGNOSTIC_CODE)) return null;
-    for (const fileName of parsed.fileNames) {
-      const absolute = path.resolve(fileName);
-      if (!isInsideProject(root, absolute)) continue;
-      sourcePaths.add(path.relative(root, absolute).split(path.sep).join('/'));
-    }
+    appendProjectCompilerInputs(root, parsed.fileNames, sourcePaths);
   }
   return sourcePaths;
 }
@@ -190,20 +186,11 @@ function discoverTsconfigProjectDirs(projectRoot: string): string[] {
 
   while (stack.length > 0) {
     const dir = stack.pop()!;
-    let entries: { name: string; isDirectory(): boolean; isFile(): boolean }[];
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
+    const entries = readableTsconfigDirectoryEntries(dir);
 
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (!SKIP_DIR_NAMES.has(entry.name) && !entry.name.startsWith('.')) stack.push(fullPath);
-        continue;
-      }
-      if (entry.isFile() && isIndexableTsconfig(projectRoot, fullPath)) projects.push(path.dirname(fullPath));
+      appendDiscoveredTsconfigEntry(projectRoot, fullPath, entry, stack, projects);
     }
   }
 
@@ -218,12 +205,7 @@ function normalizeConfiguredProject(projectRoot: string, configured: string): st
 
   const snapshotPaths = projectSnapshotPaths(projectRoot);
   if (snapshotPaths) {
-    const relativePath = relativeProjectPath(projectRoot, absolute);
-    if (snapshotPaths.includes(relativePath) && isTsconfigName(path.basename(absolute))) {
-      return [path.dirname(absolute)];
-    }
-    const directoryPrefix = relativePath === '.' ? '' : `${relativePath}/`;
-    return snapshotPaths.some((candidate) => candidate.startsWith(directoryPrefix)) ? [absolute] : [];
+    return configuredSnapshotProjectDirectories(projectRoot, absolute, snapshotPaths);
   }
 
   try {
@@ -454,4 +436,47 @@ function relativeProjectPath(projectRoot: string, projectDir: string): string {
 function isAncestor(candidate: string, other: string): boolean {
   const relative = path.relative(candidate, other);
   return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+function readableTsconfigDirectoryEntries(dir: string): { name: string; isDirectory(): boolean; isFile(): boolean }[] {
+  try {
+    return readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+function configuredSnapshotProjectDirectories(
+  projectRoot: string,
+  absolute: string,
+  snapshotPaths: readonly string[],
+): string[] {
+  const relativePath = relativeProjectPath(projectRoot, absolute);
+  if (snapshotPaths.includes(relativePath) && isTsconfigName(path.basename(absolute))) {
+    return [path.dirname(absolute)];
+  }
+  const directoryPrefix = relativePath === '.' ? '' : `${relativePath}/`;
+  return snapshotPaths.some((candidate) => candidate.startsWith(directoryPrefix)) ? [absolute] : [];
+}
+
+function appendProjectCompilerInputs(root: string, fileNames: readonly string[], sourcePaths: Set<string>): void {
+  for (const fileName of fileNames) {
+    const absolute = path.resolve(fileName);
+    if (!isInsideProject(root, absolute)) continue;
+    sourcePaths.add(path.relative(root, absolute).split(path.sep).join('/'));
+  }
+}
+
+function appendDiscoveredTsconfigEntry(
+  projectRoot: string,
+  fullPath: string,
+  entry: { name: string; isDirectory(): boolean; isFile(): boolean },
+  stack: string[],
+  projects: string[],
+): void {
+  if (entry.isDirectory()) {
+    if (!SKIP_DIR_NAMES.has(entry.name) && !entry.name.startsWith('.')) stack.push(fullPath);
+    return;
+  }
+  if (entry.isFile() && isIndexableTsconfig(projectRoot, fullPath)) projects.push(path.dirname(fullPath));
 }

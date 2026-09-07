@@ -282,12 +282,7 @@ function collectLeftoversForHelper(opts: {
 }): IncompleteMigrationLeftover[] {
   const leftovers: IncompleteMigrationLeftover[] = [];
   const migrationScopeTokens = migrationScopeTokensForHelper(opts.helperSymbol, opts.helperFile, opts.migratedFiles);
-  const candidateSet = new Set<number>();
-  for (const callee of opts.helperCallees) {
-    for (const candidateIndex of opts.candidateIndex.candidateIndexesByCallee.get(callee) ?? []) {
-      candidateSet.add(candidateIndex);
-    }
-  }
+  const candidateSet = helperCalleeCandidateIndexes(opts.candidateIndex, opts.helperCallees);
   for (const candidateIndex of candidateSet) {
     const candidate = opts.candidateIndex.corpus[candidateIndex]!;
     if (candidate.symbol === opts.helperSymbol) continue;
@@ -492,4 +487,14 @@ function referencingFiles(db: ScipDatabase, symbolId: number): string[] {
     symbolId,
   );
   return rows.map((row) => row.relative_path);
+}
+
+function helperCalleeCandidateIndexes(index: CalleeFingerprintIndex, helperCallees: ReadonlySet<string>): Set<number> {
+  const candidateSet = new Set<number>();
+  for (const callee of helperCallees) {
+    for (const candidateIndex of index.candidateIndexesByCallee.get(callee) ?? []) {
+      candidateSet.add(candidateIndex);
+    }
+  }
+  return candidateSet;
 }

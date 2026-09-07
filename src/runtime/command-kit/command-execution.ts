@@ -522,15 +522,7 @@ function optionalEvidenceContext(
 ): { evidenceContext?: CliEvidenceContextV1 } {
   if (!operationRole || !operationObservesRepository(operationRole)) return {};
   const db = currentCliDatabase();
-  const receipt =
-    suppliedReceipt ??
-    (db
-      ? buildObservationReceipt({
-          projectRoot: db.config.projectRoot,
-          db,
-          ...(claimContract ? { observedSourceKinds: claimContract.observedSources } : {}),
-        })
-      : undefined);
+  const receipt = commandObservationReceipt(suppliedReceipt, db, claimContract);
   if (!receipt) return {};
   return {
     evidenceContext: {
@@ -664,9 +656,9 @@ function countReturnedUnits(contract: CommandAgentContract, result: unknown): nu
   if (policy.kind === 'field') {
     if (!result || typeof result !== 'object') return 0;
     const value = (result as Record<string, unknown>)[policy.field];
-    return Array.isArray(value) ? value.length : value === undefined || value === null ? 0 : 1;
+    return Array.isArray(value) ? value.length : countOptionalResultUnit(value);
   }
-  return result === undefined || result === null ? 0 : 1;
+  return countOptionalResultUnit(result);
 }
 
 function invocationResolutionCoverage(result: unknown): NonNullable<InvocationCoverage['resolution']> | undefined {
@@ -720,4 +712,25 @@ export function commandOptions(value: unknown): CommandOptions {
     return opts as CommandOptions;
   }
   return value as CommandOptions;
+}
+
+function countOptionalResultUnit(result: unknown): number {
+  return result === undefined || result === null ? 0 : 1;
+}
+
+function commandObservationReceipt(
+  suppliedReceipt: ObservationReceiptV2 | undefined,
+  db: ReturnType<typeof currentCliDatabase>,
+  claimContract: CommandClaimContract | undefined,
+): ObservationReceiptV2 | undefined {
+  return (
+    suppliedReceipt ??
+    (db
+      ? buildObservationReceipt({
+          projectRoot: db.config.projectRoot,
+          db,
+          ...(claimContract ? { observedSourceKinds: claimContract.observedSources } : {}),
+        })
+      : undefined)
+  );
 }

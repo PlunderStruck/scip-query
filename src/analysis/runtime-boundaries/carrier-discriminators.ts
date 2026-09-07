@@ -78,6 +78,30 @@ export function deriveCarrierDiscriminators(
   };
 }
 
+function propagateBodySummary(
+  db: ScipDatabase,
+  summary: BodyCallableSummary,
+  contextForFile: (file: string) => BoundaryFileContext | null,
+  summaries: Map<string, BodyCallableSummary>,
+  queue: BodyCallableSummary[],
+): void {
+  for (const site of resolvedCallSitesForDefinition(db, summary.definition).sites) {
+    const context = contextForFile(site.file);
+    if (!context) continue;
+    const caller = site.caller;
+    if (!caller) continue;
+    const forwarded = forwardedCallerParameterPositions(parameterValueFlowAtCall(db, site), summary.parameterIndexes);
+    if (forwarded.length === 0) continue;
+    const incoming: BodyCallableSummary = {
+      definition: caller,
+      parameterIndexes: uniqueSortedNumbers(forwarded),
+      depth: summary.depth + 1,
+      proofSpans: [...summary.proofSpans, { file: site.file, startLine: site.startLine, endLine: site.endLine }],
+    };
+    if (mergeBodySummary(summaries, incoming)) queue.push(summaries.get(caller.symbol)!);
+  }
+}
+
 function collectBodySummaryResult(
   db: ScipDatabase,
   seeds: readonly RuntimeBoundaryBodySummary[],
@@ -112,24 +136,7 @@ function collectBodySummaryResult(
     const summary = queue.shift()!;
     if (summary.depth >= MAX_BODY_SUMMARY_DEPTH) continue;
     try {
-      for (const site of resolvedCallSitesForDefinition(db, summary.definition).sites) {
-        const context = contextForFile(site.file);
-        if (!context) continue;
-        const caller = site.caller;
-        if (!caller) continue;
-        const forwarded = forwardedCallerParameterPositions(
-          parameterValueFlowAtCall(db, site),
-          summary.parameterIndexes,
-        );
-        if (forwarded.length === 0) continue;
-        const incoming: BodyCallableSummary = {
-          definition: caller,
-          parameterIndexes: uniqueSortedNumbers(forwarded),
-          depth: summary.depth + 1,
-          proofSpans: [...summary.proofSpans, { file: site.file, startLine: site.startLine, endLine: site.endLine }],
-        };
-        if (mergeBodySummary(summaries, incoming)) queue.push(summaries.get(caller.symbol)!);
-      }
+      propagateBodySummary(db, summary, contextForFile, summaries, queue);
     } catch (error) {
       errors.push(`builtin.carrier body summary failed for ${summary.definition.relativePath}: ${errorMessage(error)}`);
     }
@@ -184,6 +191,24 @@ function enqueueDiscriminatorSummary(state: ProducerDiscriminatorState, summary:
   state.queue.push(summary);
 }
 
+function producerBoundaryBodySummary(
+  db: ScipDatabase,
+  boundary: BoundaryObservation,
+  context: BoundaryFileContext,
+  bodySummaries: ReadonlyMap<string, BodyCallableSummary>,
+) {
+  const calls = callsCoveringLine(context.root, boundary.source.startLine);
+  const boundaryCall = calls.find((call) => call.startPosition.row === boundary.source.startLine) ?? calls[0];
+  if (!boundaryCall) return null;
+  const target = callTargetNode(boundaryCall);
+  if (!target) return null;
+  const callees = resolveCallableExpression(db, boundary.source.file, target.text);
+  if (callees.length !== 1) return null;
+  const bodySummary = bodySummaries.get(callees[0]!.symbol);
+  if (!bodySummary) return null;
+  return { boundaryCall, bodySummary };
+}
+
 function resolveProducerDiscriminatorSeed(
   db: ScipDatabase,
   boundary: BoundaryObservation,
@@ -195,15 +220,9 @@ function resolveProducerDiscriminatorSeed(
   if (!carrier) return null;
   const context = boundaryFileContext(db, boundary.source.file);
   if (!context) return null;
-  const calls = callsCoveringLine(context.root, boundary.source.startLine);
-  const boundaryCall = calls.find((call) => call.startPosition.row === boundary.source.startLine) ?? calls[0];
-  if (!boundaryCall) return null;
-  const target = callTargetNode(boundaryCall);
-  if (!target) return null;
-  const callees = resolveCallableExpression(db, boundary.source.file, target.text);
-  if (callees.length !== 1) return null;
-  const bodySummary = bodySummaries.get(callees[0]!.symbol);
-  if (!bodySummary) return null;
+  const resolvedBody = producerBoundaryBodySummary(db, boundary, context, bodySummaries);
+  if (!resolvedBody) return null;
+  const { boundaryCall, bodySummary } = resolvedBody;
   const owner = boundary.owner.symbol
     ? getDefinitionsForFile(db, boundary.owner.file).find((definition) => definition.symbol === boundary.owner.symbol)
     : null;
@@ -213,46 +232,56 @@ function resolveProducerDiscriminatorSeed(
   return { carrier, context, owner, ownerParameters, args, bodySummary };
 }
 
+function collectProducerBodyFields(
+  boundary: BoundaryObservation,
+  seed: ProducerDiscriminatorSeed,
+  state: ProducerDiscriminatorState,
+  body: SyntaxNode,
+): void {
+  const { carrier, context, owner, ownerParameters } = seed;
+  for (const pair of objectPairs(body)) {
+    const field = pairName(pair);
+    const valueNode = pairValue(pair);
+    if (!field || !valueNode) continue;
+    const parameterIndex = ownerParameters.indexOf(valueNode.text.trim());
+    if (parameterIndex >= 0) {
+      const summary: DiscriminatorCallableSummary = {
+        definition: owner,
+        carrier,
+        field,
+        parameterIndex,
+        depth: 0,
+        proofObservationIds: [boundary.id],
+        proofSpans: [
+          boundary.source,
+          {
+            file: boundary.source.file,
+            startLine: pair.startPosition.row,
+            endLine: pair.endPosition.row,
+          },
+        ],
+      };
+      enqueueDiscriminatorSummary(state, summary);
+      continue;
+    }
+    const value = evaluateBoundaryValue(context, valueNode);
+    if (!value || value.evidence === 'expression') continue;
+    state.produced.push(
+      createCarrierObservation(context, pair, 'carrier.publish', carrier, field, value.value, [boundary.id]),
+    );
+  }
+}
+
 function collectProducerDiscriminatorFields(
   boundary: BoundaryObservation,
   seed: ProducerDiscriminatorSeed,
   state: ProducerDiscriminatorState,
 ): void {
-  const { carrier, context, owner, ownerParameters, args, bodySummary } = seed;
+  const { context, args, bodySummary } = seed;
   for (const bodyIndex of bodySummary.parameterIndexes) {
     const body = resolveLocalInitializer(context, args[bodyIndex]);
     if (!body) continue;
-    for (const pair of objectPairs(body)) {
-      const field = pairName(pair);
-      const valueNode = pairValue(pair);
-      if (!field || !valueNode) continue;
-      const parameterIndex = ownerParameters.indexOf(valueNode.text.trim());
-      if (parameterIndex >= 0) {
-        const summary: DiscriminatorCallableSummary = {
-          definition: owner,
-          carrier,
-          field,
-          parameterIndex,
-          depth: 0,
-          proofObservationIds: [boundary.id],
-          proofSpans: [
-            boundary.source,
-            {
-              file: boundary.source.file,
-              startLine: pair.startPosition.row,
-              endLine: pair.endPosition.row,
-            },
-          ],
-        };
-        enqueueDiscriminatorSummary(state, summary);
-        continue;
-      }
-      const value = evaluateBoundaryValue(context, valueNode);
-      if (!value || value.evidence === 'expression') continue;
-      state.produced.push(
-        createCarrierObservation(context, pair, 'carrier.publish', carrier, field, value.value, [boundary.id]),
-      );
-    }
+    collectProducerBodyFields(boundary, seed, state, body);
   }
 }
 

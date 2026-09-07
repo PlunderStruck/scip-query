@@ -467,9 +467,7 @@ function graphFamilyFor(semantic: ProgramEdgeSemantic): GraphEvidenceFamily | nu
     case 'contract':
       return 'contract';
     case 'identity':
-      if (semantic.subtype.startsWith('contains') || semantic.subtype.startsWith('owns-')) return 'ownership';
-      if (semantic.subtype.startsWith('import')) return 'dependencies';
-      return 'identity';
+      return graphIdentityFamily(semantic.subtype);
   }
 }
 
@@ -813,4 +811,10 @@ function evidenceStrengthRank(strength: ExplorationEvidenceStrength): number {
     case 'unknown':
       return 4;
   }
+}
+
+function graphIdentityFamily(subtype: string): GraphEvidenceFamily {
+  if (subtype.startsWith('contains') || subtype.startsWith('owns-')) return 'ownership';
+  if (subtype.startsWith('import')) return 'dependencies';
+  return 'identity';
 }

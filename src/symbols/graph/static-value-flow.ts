@@ -41,19 +41,8 @@ function evaluateNode(
   if (literal) return directValue(context.file, node, literal.term, literal.value, literal.precision);
 
   if (node.type === 'binary_expression' && /\+/u.test(node.text)) {
-    const parts = node.namedChildren.map((child) => evaluateNode(context, child, depth + 1, new Set(seen)));
-    if (parts.length >= 2 && parts.every((part): part is EvaluatedStaticValue => part !== null)) {
-      const term: StaticValueTerm = { kind: 'concat', parts: parts.map((part) => part.term) };
-      const value = parts.map((part) => part.value).join('');
-      return derivedValue(
-        context.file,
-        node,
-        term,
-        value,
-        parts.some((part) => part.precision !== 'literal') ? 'constrained-pattern' : 'literal',
-        parts,
-      );
-    }
+    const concatenated = evaluateStaticConcatenation(context, node, depth, seen);
+    if (concatenated) return concatenated;
   }
 
   const text = node.text.trim();
@@ -184,20 +173,7 @@ function resolveIdentifier(
       name,
       targets.length === 0 ? 'import-definition-missing' : 'import-definition-ambiguous',
     );
-  const target = targets[0]!;
-  const targetRoot = getAst(context.db, target.relativePath)?.rootNode;
-  if (!targetRoot) return symbolicValue(site, target.symbol, 'import-definition-unparsed');
-  const initializer = findVariableInitializer(targetRoot, target.leaf);
-  if (!initializer) return symbolicValue(site, target.symbol, 'import-definition-non-value');
-  const value = evaluateNode(
-    { db: context.db, file: target.relativePath, root: targetRoot },
-    initializer,
-    depth + 1,
-    seen,
-  );
-  return value
-    ? derivedFrom(site, 'imported-constant', value, target.symbol)
-    : symbolicValue(site, target.symbol, 'import-value-unresolved');
+  return evaluateImportedConstant(context, targets[0]!, site, depth, seen);
 }
 
 function resolveMember(
@@ -289,21 +265,7 @@ function stringTerm(
   if (quote !== '`' || !raw.includes('${')) {
     return { term: { kind: 'literal', value: raw }, value: raw, precision: 'literal' };
   }
-  const parts: StaticValueTerm[] = [];
-  let cursor = 0;
-  const interpolation = /\$\{([^}]*)\}/gu;
-  for (const match of raw.matchAll(interpolation)) {
-    const index = match.index ?? 0;
-    if (index > cursor) parts.push({ kind: 'literal', value: raw.slice(cursor, index) });
-    parts.push({ kind: 'unknown', reason: `template-hole:${match[1]?.trim() || 'expression'}` });
-    cursor = index + match[0].length;
-  }
-  if (cursor < raw.length) parts.push({ kind: 'literal', value: raw.slice(cursor) });
-  return {
-    term: { kind: 'pattern', language: 'template', value: raw.replace(interpolation, '{}') },
-    value: raw.replace(interpolation, '{}'),
-    precision: 'constrained-pattern',
-  };
+  return templateStringTerm(raw);
 }
 
 function directValue(
@@ -462,4 +424,66 @@ function objectMemberValue(object: SyntaxNode, property: string): SyntaxNode | n
     return pair.childForFieldName('value') ?? pair.namedChild(1);
   }
   return null;
+}
+
+function evaluateStaticConcatenation(
+  context: BoundaryValueContext,
+  node: SyntaxNode,
+  depth: number,
+  seen: Set<string>,
+): EvaluatedStaticValue | null {
+  const parts = node.namedChildren.map((child) => evaluateNode(context, child, depth + 1, new Set(seen)));
+  if (parts.length >= 2 && parts.every((part): part is EvaluatedStaticValue => part !== null)) {
+    const term: StaticValueTerm = { kind: 'concat', parts: parts.map((part) => part.term) };
+    const value = parts.map((part) => part.value).join('');
+    return derivedValue(
+      context.file,
+      node,
+      term,
+      value,
+      parts.some((part) => part.precision !== 'literal') ? 'constrained-pattern' : 'literal',
+      parts,
+    );
+  }
+  return null;
+}
+
+function evaluateImportedConstant(
+  context: BoundaryValueContext,
+  target: ReturnType<typeof resolveImportedDefinitions>[number],
+  site: SyntaxNode,
+  depth: number,
+  seen: Set<string>,
+): EvaluatedStaticValue | null {
+  const targetRoot = getAst(context.db, target.relativePath)?.rootNode;
+  if (!targetRoot) return symbolicValue(site, target.symbol, 'import-definition-unparsed');
+  const initializer = findVariableInitializer(targetRoot, target.leaf);
+  if (!initializer) return symbolicValue(site, target.symbol, 'import-definition-non-value');
+  const value = evaluateNode(
+    { db: context.db, file: target.relativePath, root: targetRoot },
+    initializer,
+    depth + 1,
+    seen,
+  );
+  return value
+    ? derivedFrom(site, 'imported-constant', value, target.symbol)
+    : symbolicValue(site, target.symbol, 'import-value-unresolved');
+}
+
+function templateStringTerm(raw: string): NonNullable<ReturnType<typeof stringTerm>> {
+  const parts: StaticValueTerm[] = [];
+  let cursor = 0;
+  const interpolation = /\$\{([^}]*)\}/gu;
+  for (const match of raw.matchAll(interpolation)) {
+    const index = match.index ?? 0;
+    if (index > cursor) parts.push({ kind: 'literal', value: raw.slice(cursor, index) });
+    parts.push({ kind: 'unknown', reason: `template-hole:${match[1]?.trim() || 'expression'}` });
+    cursor = index + match[0].length;
+  }
+  if (cursor < raw.length) parts.push({ kind: 'literal', value: raw.slice(cursor) });
+  return {
+    term: { kind: 'pattern', language: 'template', value: raw.replace(interpolation, '{}') },
+    value: raw.replace(interpolation, '{}'),
+    precision: 'constrained-pattern',
+  };
 }

@@ -456,6 +456,10 @@ function recommendedTier(
   if (nearestCommonDirectory === '.' || nearestCommonDirectory === 'src') {
     return 'repository-level-review';
   }
+  return sharedDirectoryTier(nearestCommonDirectory, currentDirectory);
+}
+
+function sharedDirectoryTier(nearestCommonDirectory: string, currentDirectory: string): LocalityRecommendedTier {
   if (hasMarker(nearestCommonDirectory, 'package')) {
     return 'package-level-shared';
   }

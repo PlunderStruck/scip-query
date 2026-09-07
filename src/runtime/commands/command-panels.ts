@@ -27,9 +27,8 @@ export function commandPanelId(descriptor: CommandDescriptor): CommandPanelId {
   if (PRIMARY_IDS.has(descriptor.id)) return 'primary-exploration';
   if (['health', 'review', 'context'].includes(descriptor.id)) return 'maintenance';
   const category = descriptor.docs?.category;
-  if (category && SPECIALIZED_CATEGORIES.has(category)) return 'specialized-analysis';
-  if (category && QUALITY_CATEGORIES.has(category)) return 'quality-cleanup';
-  if (category && MAINTENANCE_CATEGORIES.has(category)) return 'maintenance';
+  const panel = categoryCommandPanel(category);
+  if (panel) return panel;
   throw new Error(`Visible command ${descriptor.id} has no cockpit panel (docs category: ${category ?? 'missing'}).`);
 }
 
@@ -105,4 +104,11 @@ export function renderRootCommandHelp(
   }
   lines.push("Run `scip-query <command> --help` for one control's options and examples.", '');
   return lines.join('\n');
+}
+
+function categoryCommandPanel(category: string | undefined): CommandPanelId | undefined {
+  if (category && SPECIALIZED_CATEGORIES.has(category)) return 'specialized-analysis';
+  if (category && QUALITY_CATEGORIES.has(category)) return 'quality-cleanup';
+  if (category && MAINTENANCE_CATEGORIES.has(category)) return 'maintenance';
+  return undefined;
 }

@@ -99,12 +99,7 @@ function findShadcnManifests(projectRoot: string): string[] {
     const manifest = relativeDir ? `${relativeDir}/${SHADCN_MANIFEST_NAME}` : SHADCN_MANIFEST_NAME;
     if (existsSync(join(projectRoot, manifest))) manifests.push(manifest);
     if (depth >= MAX_MANIFEST_SCAN_DEPTH) return;
-    let entries: Array<{ name: string; isDirectory(): boolean }>;
-    try {
-      entries = readdirSync(absolute, { withFileTypes: true });
-    } catch {
-      return;
-    }
+    const entries = readableUiManifestEntries(absolute);
     for (const entry of entries) {
       if (!entry.isDirectory() || MANIFEST_SCAN_EXCLUSIONS.has(entry.name) || entry.name.startsWith('.')) continue;
       visit(relativeDir ? `${relativeDir}/${entry.name}` : entry.name, depth + 1);
@@ -125,9 +120,7 @@ function shadcnUiDirectory(db: ScipDatabase, manifest: string): string | null {
   if (!isRecord(parsed)) return null;
   const aliases = parsed['aliases'];
   if (!isRecord(aliases)) return null;
-  const uiAlias = typeof aliases['ui'] === 'string' ? aliases['ui'] : null;
-  const componentsAlias = typeof aliases['components'] === 'string' ? aliases['components'] : null;
-  const specifier = uiAlias ?? (componentsAlias ? `${componentsAlias}/ui` : null);
+  const specifier = shadcnUiAlias(aliases);
   if (!specifier) return null;
   return resolveManifestDirectory(db, manifest, specifier);
 }
@@ -153,4 +146,18 @@ function resolveManifestDirectory(db: ScipDatabase, manifest: string, specifier:
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readableUiManifestEntries(absolute: string): Array<{ name: string; isDirectory(): boolean }> {
+  try {
+    return readdirSync(absolute, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+function shadcnUiAlias(aliases: Record<string, unknown>): string | null {
+  const uiAlias = typeof aliases['ui'] === 'string' ? aliases['ui'] : null;
+  const componentsAlias = typeof aliases['components'] === 'string' ? aliases['components'] : null;
+  return uiAlias ?? (componentsAlias ? `${componentsAlias}/ui` : null);
 }

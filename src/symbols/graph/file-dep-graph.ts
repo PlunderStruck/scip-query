@@ -295,10 +295,7 @@ export function materializeCarriedFileDependencyGraph(
         if (!replaced.has(fromFile)) graph.set(fromFile, dependencies);
       }
     } else {
-      for (const [fromFile, dependencies] of previous.graph) {
-        if (replaced.has(fromFile) || !indexedFiles.has(fromFile)) continue;
-        for (const toFile of dependencies) addFileDepEdge(db, graph, indexedFiles, fromFile, toFile);
-      }
+      carryRetainedDependencyEdges(db, graph, indexedFiles, previous.graph, replaced);
     }
   });
   const replacedScipEdges = profileSpan('file-dep-graph.carry.scip-edges', () =>
@@ -310,16 +307,7 @@ export function materializeCarriedFileDependencyGraph(
   profileSpan('file-dep-graph.carry.source-edges', () => {
     for (const fromFile of replaced) {
       if (!indexedFiles.has(fromFile)) continue;
-      if (sourceEdges !== 'none') {
-        for (const entry of readSourceImportsUncached(db, fromFile)) {
-          if (entry.sourcePath) addFileDepEdge(db, graph, indexedFiles, fromFile, entry.sourcePath);
-        }
-      }
-      if (sourceEdges === 'imports-and-reexports') {
-        for (const entry of getReExports(db, fromFile)) {
-          if (entry.sourcePath) addFileDepEdge(db, graph, indexedFiles, fromFile, entry.sourcePath);
-        }
-      }
+      addCarriedSourceEdgesForFile(db, graph, indexedFiles, fromFile, sourceEdges);
     }
   });
   return graph;
@@ -387,16 +375,7 @@ function collectSourceDependencyEdges(
   for (const relativePath of indexedFiles) {
     if (scope && !relativePath.includes(scope)) continue;
     files.push(relativePath);
-    for (const entry of readSourceImportsUncached(db, relativePath)) {
-      if (!entry.sourcePath) continue;
-      edges.push({ fromFile: relativePath, toFile: entry.sourcePath });
-    }
-    if (mode === 'imports-and-reexports') {
-      for (const entry of getReExports(db, relativePath)) {
-        if (!entry.sourcePath) continue;
-        edges.push({ fromFile: relativePath, toFile: entry.sourcePath });
-      }
-    }
+    appendSourceDependencyEdges(db, relativePath, mode, edges);
   }
 
   return {
@@ -575,4 +554,54 @@ function addFileDepEdge(
     graph.set(fromFile, bucket);
   }
   bucket.add(toFile);
+}
+
+function addCarriedSourceEdgesForFile(
+  db: ScipDatabase,
+  graph: Map<string, Set<string>>,
+  indexedFiles: ReadonlySet<string>,
+  fromFile: string,
+  sourceEdges: SourceDependencyEdgeMode,
+): void {
+  if (sourceEdges !== 'none') {
+    for (const entry of readSourceImportsUncached(db, fromFile)) {
+      if (entry.sourcePath) addFileDepEdge(db, graph, indexedFiles, fromFile, entry.sourcePath);
+    }
+  }
+  if (sourceEdges === 'imports-and-reexports') {
+    for (const entry of getReExports(db, fromFile)) {
+      if (entry.sourcePath) addFileDepEdge(db, graph, indexedFiles, fromFile, entry.sourcePath);
+    }
+  }
+}
+
+function carryRetainedDependencyEdges(
+  db: ScipDatabase,
+  graph: Map<string, Set<string>>,
+  indexedFiles: ReadonlySet<string>,
+  previousGraph: ReadonlyMap<string, ReadonlySet<string>>,
+  replaced: ReadonlySet<string>,
+): void {
+  for (const [fromFile, dependencies] of previousGraph) {
+    if (replaced.has(fromFile) || !indexedFiles.has(fromFile)) continue;
+    for (const toFile of dependencies) addFileDepEdge(db, graph, indexedFiles, fromFile, toFile);
+  }
+}
+
+function appendSourceDependencyEdges(
+  db: ScipDatabase,
+  fromFile: string,
+  mode: SourceDependencyEdgeMode,
+  edges: SourceDependencyEdge[],
+): void {
+  for (const entry of readSourceImportsUncached(db, fromFile)) {
+    if (!entry.sourcePath) continue;
+    edges.push({ fromFile: fromFile, toFile: entry.sourcePath });
+  }
+  if (mode === 'imports-and-reexports') {
+    for (const entry of getReExports(db, fromFile)) {
+      if (!entry.sourcePath) continue;
+      edges.push({ fromFile: fromFile, toFile: entry.sourcePath });
+    }
+  }
 }

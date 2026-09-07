@@ -59,6 +59,18 @@ const QUERY_SERVICE_FAST_RESPONSE_POLL_ATTEMPTS = 10;
 const QUERY_SERVICE_FAST_RESPONSE_POLL_INTERVAL_MS = 1;
 const QUERY_SERVICE_FAST_RESPONSE_HEALTH_CHECK_ATTEMPTS = 5;
 const QUERY_SERVICE_MAX_ITEM_BYTES = 64 * 1024 * 1024;
+const QUERY_SERVICE_REQUEST_POOL_CAPS: ReadonlyMap<QueryServiceRequest['kind'], number> = new Map([
+  ['dependence-slice', QUERY_SERVICE_DEPENDENCE_SLICE_POOL_SIZE],
+  ['call-graph', QUERY_SERVICE_CALL_GRAPH_POOL_SIZE],
+  ['system', QUERY_SERVICE_SYSTEM_POOL_SIZE],
+  ['refs', QUERY_SERVICE_SEMANTIC_NAVIGATION_POOL_SIZE],
+  ['imports', QUERY_SERVICE_SEMANTIC_NAVIGATION_POOL_SIZE],
+  ['unused-imports', QUERY_SERVICE_SEMANTIC_NAVIGATION_POOL_SIZE],
+  ['imported-by', QUERY_SERVICE_CATALOG_POOL_SIZE],
+  ['hierarchy', QUERY_SERVICE_CATALOG_POOL_SIZE],
+  ['by-kind', QUERY_SERVICE_CATALOG_POOL_SIZE],
+  ['kind-counts', QUERY_SERVICE_CATALOG_POOL_SIZE],
+]);
 const QUERY_SERVICE_MAILBOX_LIMITS: Partial<BoundedMailboxLimits> = {
   maxItems: 64,
   maxBytes: 128 * 1024 * 1024,
@@ -723,9 +735,7 @@ function tryQueryWithService<Result>(
       observationReceipt: response.observationReceipt,
     };
   } catch (error) {
-    if (queryServiceDebugEnabled()) {
-      console.error(`query-service fallback: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    reportQueryServiceFallback(error);
     return null;
   }
 }
@@ -930,8 +940,7 @@ function ensureQueryServiceServer(
   serverPath: string,
   requestDeadlineAtMs: number,
 ): void {
-  const current = readQueryServiceServerState(sessionDir);
-  if (current && isQueryServiceServerStateUsable(current)) return;
+  if (isQueryServiceReady(sessionDir)) return;
 
   const startupDeadlineAtMs = Math.min(requestDeadlineAtMs, monotonicNowMs() + QUERY_SERVICE_STARTUP_TIMEOUT_MS);
   const startupLock = tryAcquireProcessFileLock(join(sessionDir, 'startup.lock'), {
@@ -941,8 +950,7 @@ function ensureQueryServiceServer(
   });
   try {
     if (startupLock.kind === 'acquired') {
-      const stateAfterLock = readQueryServiceServerState(sessionDir);
-      if (!stateAfterLock || !isQueryServiceServerStateUsable(stateAfterLock)) {
+      if (!isQueryServiceReady(sessionDir)) {
         const debug = queryServiceDebugEnabled();
         // scip-query: process-lifetime-reviewed -- the detached service is owned by
         // its process identity, heartbeat, file lock, idle timeout, and request deadlines.
@@ -956,8 +964,7 @@ function ensureQueryServiceServer(
     }
 
     while (monotonicNowMs() <= startupDeadlineAtMs) {
-      const state = readQueryServiceServerState(sessionDir);
-      if (state && isQueryServiceServerStateUsable(state)) return;
+      if (isQueryServiceReady(sessionDir)) return;
       sleepSync(QUERY_SERVICE_POLL_INTERVAL_MS);
     }
   } finally {
@@ -1150,19 +1157,9 @@ function isMethodsResult(value: unknown): value is MethodsResolution {
     return Array.isArray(record['suggestions']) && record['suggestions'].every((item) => typeof item === 'string');
   }
   if (record['kind'] === 'ambiguous') {
-    return (
-      isNonNegativeSafeInteger(record['total']) &&
-      (record['total'] as number) > 1 &&
-      Array.isArray(record['candidates']) &&
-      record['candidates'].every(isMethodsCandidate)
-    );
+    return isAmbiguousMethodsResult(record);
   }
-  return (
-    record['kind'] === 'matched' &&
-    isMethodsOwner(record['owner']) &&
-    Array.isArray(record['methods']) &&
-    record['methods'].every(isMethodResult)
-  );
+  return isMatchedMethodsResult(record);
 }
 
 function isFileDependenciesResult(value: unknown): value is DepResult[] {
@@ -1393,12 +1390,7 @@ function isSerializedJsonResult(value: unknown): value is QueryServiceSerialized
   if (typeof record['serializedJson'] !== 'string' || typeof record['sha256'] !== 'string') return false;
   if (record['serializedJson'].length > QUERY_SERVICE_MAX_ITEM_BYTES) return false;
   if (createHash('sha256').update(record['serializedJson']).digest('hex') !== record['sha256']) return false;
-  try {
-    const parsed = JSON.parse(record['serializedJson']) as unknown;
-    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed);
-  } catch {
-    return false;
-  }
+  return isSerializedObjectJson(record['serializedJson']);
 }
 
 function queryServiceSessionDirectory(
@@ -1448,19 +1440,8 @@ function configuredPoolSize(): number {
 
 function requestPoolSize(request: QueryServiceRequest): number {
   const configured = configuredPoolSize();
-
-  if (request.kind === 'dependence-slice') return Math.min(configured, QUERY_SERVICE_DEPENDENCE_SLICE_POOL_SIZE);
-  if (request.kind === 'call-graph') return Math.min(configured, QUERY_SERVICE_CALL_GRAPH_POOL_SIZE);
-  if (request.kind === 'system') return Math.min(configured, QUERY_SERVICE_SYSTEM_POOL_SIZE);
-  if (request.kind === 'refs' || request.kind === 'imports' || request.kind === 'unused-imports') {
-    return Math.min(configured, QUERY_SERVICE_SEMANTIC_NAVIGATION_POOL_SIZE);
-  }
-  return request.kind === 'imported-by' ||
-    request.kind === 'hierarchy' ||
-    request.kind === 'by-kind' ||
-    request.kind === 'kind-counts'
-    ? Math.min(configured, QUERY_SERVICE_CATALOG_POOL_SIZE)
-    : configured;
+  const cap = QUERY_SERVICE_REQUEST_POOL_CAPS.get(request.kind);
+  return cap === undefined ? configured : Math.min(configured, cap);
 }
 
 function canonicalPath(path: string): string {
@@ -1473,4 +1454,42 @@ function canonicalPath(path: string): string {
 
 function sleepSync(durationMs: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, durationMs);
+}
+
+function isAmbiguousMethodsResult(record: Record<string, unknown>): boolean {
+  return (
+    isNonNegativeSafeInteger(record['total']) &&
+    (record['total'] as number) > 1 &&
+    Array.isArray(record['candidates']) &&
+    record['candidates'].every(isMethodsCandidate)
+  );
+}
+
+function isMatchedMethodsResult(record: Record<string, unknown>): boolean {
+  return (
+    record['kind'] === 'matched' &&
+    isMethodsOwner(record['owner']) &&
+    Array.isArray(record['methods']) &&
+    record['methods'].every(isMethodResult)
+  );
+}
+
+function isQueryServiceReady(sessionDir: string): boolean {
+  const state = readQueryServiceServerState(sessionDir);
+  return Boolean(state && isQueryServiceServerStateUsable(state));
+}
+
+function isSerializedObjectJson(serializedJson: string): boolean {
+  try {
+    const parsed = JSON.parse(serializedJson) as unknown;
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed);
+  } catch {
+    return false;
+  }
+}
+
+function reportQueryServiceFallback(error: unknown): void {
+  if (queryServiceDebugEnabled()) {
+    console.error(`query-service fallback: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }

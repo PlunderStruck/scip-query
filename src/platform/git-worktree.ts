@@ -307,14 +307,7 @@ function gitControlDirectoriesMatchHint(projectRoot: string, hint: GitWorktreeCo
     const requestedRoot = resolve(projectRoot) === worktreeRoot ? worktreeRoot : canonicalPath(projectRoot);
     if (hint.projectRoot !== worktreeRoot || !pathIsWithin(worktreeRoot, requestedRoot)) return false;
 
-    const dotGit = join(worktreeRoot, '.git');
-    const dotGitStat = lstatSync(dotGit);
-    if (dotGitStat.isSymbolicLink()) return false;
-    const gitDir = dotGitStat.isDirectory()
-      ? canonicalPath(dotGit)
-      : dotGitStat.isFile()
-        ? readGitDirectoryPointer(dotGit, worktreeRoot, dotGitStat)
-        : undefined;
+    const gitDir = resolveHintGitDirectory(worktreeRoot);
     if (!gitDir || gitDir !== hint.gitDir) return false;
 
     const commonDir = readGitCommonDirectory(gitDir);
@@ -495,4 +488,15 @@ function gitControlMetadataMayExist(projectRoot: string): boolean {
     if (parent === current) return false;
     current = parent;
   }
+}
+
+function resolveHintGitDirectory(worktreeRoot: string): string | undefined {
+  const dotGit = join(worktreeRoot, '.git');
+  const dotGitStat = lstatSync(dotGit);
+  if (dotGitStat.isSymbolicLink()) return undefined;
+  return dotGitStat.isDirectory()
+    ? canonicalPath(dotGit)
+    : dotGitStat.isFile()
+      ? readGitDirectoryPointer(dotGit, worktreeRoot, dotGitStat)
+      : undefined;
 }

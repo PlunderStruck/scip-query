@@ -183,6 +183,9 @@ function classifyStub(db: ScipDatabase, def: IndexedDefinition): StubCandidate |
   return null;
 }
 
+const TOP_LEVEL_OPEN_DELIMITERS = new Set(['(', '[', '{']);
+const TOP_LEVEL_CLOSE_DELIMITERS = new Set([')', ']', '}']);
+
 /**
  * Split `raw` into top-level (depth-0) `;`-terminated statements, using
  * `splitDecisionText` (same length/line shape as `raw`) to decide bracket
@@ -197,8 +200,8 @@ function splitTopLevelStatementsPreservingRaw(raw: string, splitDecisionText: st
   let current = '';
   for (let i = 0; i < splitDecisionText.length; i += 1) {
     const decisionChar = splitDecisionText[i]!;
-    if (decisionChar === '(' || decisionChar === '[' || decisionChar === '{') depth += 1;
-    else if (decisionChar === ')' || decisionChar === ']' || decisionChar === '}') depth = Math.max(0, depth - 1);
+    if (TOP_LEVEL_OPEN_DELIMITERS.has(decisionChar)) depth += 1;
+    else if (TOP_LEVEL_CLOSE_DELIMITERS.has(decisionChar)) depth = Math.max(0, depth - 1);
     if (decisionChar === ';' && depth === 0) {
       statements.push(current);
       current = '';

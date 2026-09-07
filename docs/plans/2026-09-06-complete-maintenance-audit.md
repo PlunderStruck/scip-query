@@ -664,3 +664,23 @@ Target measurements (cyclomatic/cognitive):
 - `checkStructure.visit` → 7/6 (`scripts/change-benchmark-core.mjs`).
 
 Next: wave seven contains the next 90 ranked targets plus all 87 other findings in the same exclusively assigned files (177 total); the remaining118 findings are in86 other files. Artifacts: `/tmp/complexity-wave6-{review,health,impact,metrics}.json`; verification logs use `/tmp/complexity-wave6-*.log`.
+
+## Final combined complexity cleanup completed
+
+The remaining 295 targets across 160 source/script files are complete in one combined integration against `623e4e63`. Root owned 44 targets in 21 files; the three workers owned 88/45, 88/51 and 75/43 targets/files. The session permits four active agents total, so work was kept in four exclusive file lanes. The original 177-target packet and 118-target continuation were validated together. No agent benchmarks ran.
+
+Every target has a verified before/current pairing and meets the existing cyclomatic 10/cognitive 15 limits. The frozen review reports 295 resolved findings and no introduced, worsened or existing findings. All 765 measured after-functions, including added helpers, meet the same limits. Six callback identities required exact diff pairing; the two carried-file-dependency callbacks share a finding ID but remain separate units. No thresholds, source exclusions, suppression records or architecture policy were changed.
+
+Four-way read-only cross-review covered all 160 source/script files and all five new regression files, with no open findings. Focused tests covered each lane. During implementation, corrections preserved callback receivers, the active request read after status publication, exact validation narrowing, lock/retry/error order and the existing public declarations.
+
+The frozen full suite passed **3,267 tests across 368 files**. Build, source and both contract type checks, 165-file ESLint, repository formatting, public consumer compilation and skill links passed. The public TypeScript API remains `b74137d6c422ca9c` across 66 paths. The source/test file hashes still match the frozen review.
+
+The initial full run passed all 3,267 assertions but exited 1 after Vitest reported an internal `onTaskUpdate` RPC timeout. It is preserved as `/tmp/complexity-final-full-tests-initial.log` and is not counted as a successful check. The final isolated rerun above exited 0 without unhandled errors; no code or test expectations were changed between runs.
+
+An explicit reindex completed in 21.4 seconds. Fresh health has accounted coverage of **563/563 eligible files and 13,591 functions, with zero findings**. All 563 files map to configured boundaries; all 47 dependency rows are declared. No covered duplication, production import cycles or configured architecture violations were reported. Indexed diff impact reports 575 changed symbols in 148 changed indexed files and 122 affected files; 22 absent/excluded paths are explicitly omitted from symbol analysis.
+
+The historical 655-entry inventory now records 655 fixed entries and no pending or retained entries. This closes its remaining 272 pending entries and supersedes four earlier retained assessments with the now-verified refactors. It is a different population from the 295 current targets.
+
+The current eligible-source complexity queue is empty. This does not claim a universal architecture grade or cover excluded tests, fixtures, generated files, reference copies or unsupported languages. No source-matched test coverage artifact was supplied, so CRAP is not claimed. The VM remains on the previously verified installation from `931fe6c1`; this behavior-preserving cleanup does not require another rollout. The unrelated untracked LaunchPoint benchmark document remains untouched and excluded from staging.
+
+Validation artifacts: `/tmp/complexity-final-{review,health,impact,metrics}.json`, `/tmp/complexity-final-frozen-hashes.json`, and `/tmp/complexity-final-*.log`. Worker checkpoints retain their per-file contracts and target measurements. No further complexity work remains in this scan's scope.

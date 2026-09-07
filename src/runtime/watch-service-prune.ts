@@ -66,34 +66,7 @@ export function pruneOrphanWatchServices(opts: WatchServicePruneOptions = {}): W
       continue;
     }
 
-    let projectRoot: string;
-    try {
-      projectRoot = readCacheOwnershipProof(cacheDir).record.canonicalProjectRoot;
-      report.ownedCacheDirs += 1;
-    } catch (error) {
-      report.skipped.push({ cacheDir, message: errorMessage(error) });
-      continue;
-    }
-    if (rootIsCurrent(projectRoot)) {
-      report.retainedRoots += 1;
-      continue;
-    }
-
-    try {
-      assertWatcherArtifactsBelongToRoot(cacheDir, projectRoot);
-      // A worktree can be recreated while the cache is being inspected. The
-      // second observation keeps a newly live pathname out of the stop path.
-      if (rootIsCurrent(projectRoot)) {
-        report.retainedRoots += 1;
-        continue;
-      }
-      report.orphanedRoots += 1;
-      const result = stopService({ projectRoot, cacheDir, cliVersion: 'orphan-prune' });
-      if (result.disposition === 'stopped') report.stoppedServices += 1;
-      else report.alreadyStoppedServices += 1;
-    } catch (error) {
-      report.failures.push({ cacheDir, projectRoot, message: errorMessage(error) });
-    }
+    pruneOwnedCacheDirectory(cacheDir, report, rootIsCurrent, stopService);
   }
   return report;
 }
@@ -136,4 +109,40 @@ function directoryExists(path: string): boolean {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function pruneOwnedCacheDirectory(
+  cacheDir: string,
+  report: WatchServicePruneReport,
+  rootIsCurrent: (projectRoot: string) => boolean,
+  stopService: (opts: WatchServiceControllerOptions) => WatchServiceStopResult,
+): void {
+  let projectRoot: string;
+  try {
+    projectRoot = readCacheOwnershipProof(cacheDir).record.canonicalProjectRoot;
+    report.ownedCacheDirs += 1;
+  } catch (error) {
+    report.skipped.push({ cacheDir, message: errorMessage(error) });
+    return;
+  }
+  if (rootIsCurrent(projectRoot)) {
+    report.retainedRoots += 1;
+    return;
+  }
+
+  try {
+    assertWatcherArtifactsBelongToRoot(cacheDir, projectRoot);
+    // A worktree can be recreated while the cache is being inspected. The
+    // second observation keeps a newly live pathname out of the stop path.
+    if (rootIsCurrent(projectRoot)) {
+      report.retainedRoots += 1;
+      return;
+    }
+    report.orphanedRoots += 1;
+    const result = stopService({ projectRoot, cacheDir, cliVersion: 'orphan-prune' });
+    if (result.disposition === 'stopped') report.stoppedServices += 1;
+    else report.alreadyStoppedServices += 1;
+  } catch (error) {
+    report.failures.push({ cacheDir, projectRoot, message: errorMessage(error) });
+  }
 }

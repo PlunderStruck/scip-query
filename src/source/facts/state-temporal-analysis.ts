@@ -241,11 +241,7 @@ function mutationOperation(node: SyntaxNode, target: SyntaxNode, deleting: boole
 
 function resourceIdentity(node: SyntaxNode): { name: string; recordIdentity: string | null } | null {
   if (SUBSCRIPT_NODE_TYPES.has(node.type)) {
-    const object = node.childForFieldName('object') ?? node.childForFieldName('array') ?? node.namedChildren[0] ?? null;
-    const index =
-      node.childForFieldName('index') ?? node.childForFieldName('subscript') ?? node.namedChildren[1] ?? null;
-    if (!object || !index) return null;
-    return { name: `${compact(object.text)}[]`, recordIdentity: compact(index.text) };
+    return subscriptResourceIdentity(node);
   }
   if (MEMBER_NODE_TYPES.has(node.type)) return { name: compact(node.text), recordIdentity: null };
   if (/^(?:identifier|property_identifier|field_identifier)$/u.test(node.type)) {
@@ -406,4 +402,11 @@ function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
 
 function compact(text: string): string {
   return text.trim().replace(/\s+/gu, ' ');
+}
+
+function subscriptResourceIdentity(node: SyntaxNode): { name: string; recordIdentity: string | null } | null {
+  const object = node.childForFieldName('object') ?? node.childForFieldName('array') ?? node.namedChildren[0] ?? null;
+  const index = node.childForFieldName('index') ?? node.childForFieldName('subscript') ?? node.namedChildren[1] ?? null;
+  if (!object || !index) return null;
+  return { name: `${compact(object.text)}[]`, recordIdentity: compact(index.text) };
 }

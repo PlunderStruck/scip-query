@@ -489,11 +489,7 @@ export function hasEnforceableArchitecturePolicy(config?: ArchitectureConfig): b
   return (
     !!config &&
     (Object.keys(config.allowedDependencies ?? {}).length > 0 ||
-      config.requireCompletePolicy === true ||
-      config.requireCompleteCoverage === true ||
-      config.requireAcyclic === true ||
-      config.requireResolvedBoundaries === true ||
-      config.requireMinimalPolicy === true ||
+      hasRequiredArchitectureChecks(config) ||
       config.maxBoundaryFanOut !== undefined ||
       config.maxBoundaryFiles !== undefined ||
       config.boundaries.some((boundary) => boundary.maxFiles !== undefined) ||
@@ -694,19 +690,9 @@ function boundaryLimits(
   for (const edge of edges) fanOut.set(edge.from, (fanOut.get(edge.from) ?? 0) + 1);
 
   for (const boundary of config.boundaries) {
-    if (config.maxBoundaryFanOut !== undefined) {
-      const observed = fanOut.get(boundary.name) ?? 0;
-      if (observed > config.maxBoundaryFanOut) {
-        limits.push({ boundary: boundary.name, kind: 'fan-out', observed, limit: config.maxBoundaryFanOut });
-      }
-    }
+    appendBoundaryLimit(limits, boundary.name, 'fan-out', fanOut.get(boundary.name) ?? 0, config.maxBoundaryFanOut);
     const fileLimit = boundary.maxFiles ?? config.maxBoundaryFiles;
-    if (fileLimit !== undefined) {
-      const observed = filesByBoundary.get(boundary.name)?.size ?? 0;
-      if (observed > fileLimit) {
-        limits.push({ boundary: boundary.name, kind: 'files', observed, limit: fileLimit });
-      }
-    }
+    appendBoundaryLimit(limits, boundary.name, 'files', filesByBoundary.get(boundary.name)?.size ?? 0, fileLimit);
   }
   return limits.sort((a, b) => a.boundary.localeCompare(b.boundary) || a.kind.localeCompare(b.kind));
 }
@@ -788,4 +774,24 @@ function aggregateArchitectureEdges(
   }
 
   return [...mutableEdges.values()].map((edge) => materializeBoundaryEdge(edge, config)).sort(compareBoundaryEdges);
+}
+
+function hasRequiredArchitectureChecks(config: ArchitectureConfig): boolean {
+  return (
+    config.requireCompletePolicy === true ||
+    config.requireCompleteCoverage === true ||
+    config.requireAcyclic === true ||
+    config.requireResolvedBoundaries === true ||
+    config.requireMinimalPolicy === true
+  );
+}
+
+function appendBoundaryLimit(
+  limits: ArchitectureBoundaryLimit[],
+  boundary: string,
+  kind: ArchitectureBoundaryLimit['kind'],
+  observed: number,
+  limit: number | undefined,
+): void {
+  if (limit !== undefined && observed > limit) limits.push({ boundary, kind, observed, limit });
 }

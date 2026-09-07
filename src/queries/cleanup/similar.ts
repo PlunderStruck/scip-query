@@ -295,18 +295,8 @@ function pairPassesSimilarity(
 ): boolean {
   const magnitudeA = opts.magnitudeA ?? weightedMagnitude(a.callees, idfWeights);
   const magnitudeB = opts.magnitudeB ?? weightedMagnitude(b.callees, idfWeights);
-  let dotProduct = 0;
-  let significantShared = 0;
-  let sharedCount = 0;
   const median = opts.medianIdf ?? getMedianIdf(idfWeights);
-
-  for (const callee of a.callees) {
-    if (!b.callees.has(callee)) continue;
-    const weight = idfWeights.get(callee) ?? 0;
-    dotProduct += weight * weight;
-    sharedCount += 1;
-    if (weight >= median) significantShared += 1;
-  }
+  const { dotProduct, significantShared, sharedCount } = sharedCalleeWeights(a, b, idfWeights, median);
   if (sharedCount === 0) return false;
 
   const magnitude = magnitudeA * magnitudeB;
@@ -941,12 +931,7 @@ export function buildCalleeFingerprintIndex(corpus: readonly SymbolFingerprint[]
             if (profiling) ubiquitousSkips += 1;
             continue;
           }
-          let bucket = buckets.get(callee);
-          if (!bucket) {
-            bucket = [];
-            buckets.set(callee, bucket);
-          }
-          bucket.push(index);
+          appendCalleeCandidateIndex(buckets, callee, index);
           if (profiling) candidateRefs += 1;
         }
       }
@@ -1912,4 +1897,33 @@ function splitIdentifier(value: string): Set<string> {
       .map((part) => part.toLowerCase())
       .filter((part) => part.length > 1),
   );
+}
+
+function sharedCalleeWeights(
+  a: SymbolFingerprint,
+  b: SymbolFingerprint,
+  idfWeights: ReadonlyMap<string, number>,
+  median: number,
+) {
+  let dotProduct = 0;
+  let significantShared = 0;
+  let sharedCount = 0;
+
+  for (const callee of a.callees) {
+    if (!b.callees.has(callee)) continue;
+    const weight = idfWeights.get(callee) ?? 0;
+    dotProduct += weight * weight;
+    sharedCount += 1;
+    if (weight >= median) significantShared += 1;
+  }
+  return { dotProduct, significantShared, sharedCount };
+}
+
+function appendCalleeCandidateIndex(buckets: Map<string, number[]>, callee: string, index: number): void {
+  let bucket = buckets.get(callee);
+  if (!bucket) {
+    bucket = [];
+    buckets.set(callee, bucket);
+  }
+  bucket.push(index);
 }

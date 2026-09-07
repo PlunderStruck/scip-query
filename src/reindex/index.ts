@@ -2103,22 +2103,7 @@ async function publishFreshReindexArtifacts(
             : incrementalTypeScript.affectedFiles;
         let carried = false;
         if (incrementalTypeScript.dependencyGraphUnchanged) {
-          const nextFingerprint = projectEvidenceFingerprint(acceptedDb);
-          const carriedProducts =
-            previousDependencyGraphEvidenceFingerprint && nextFingerprint
-              ? rekeyCachedProjectEvidenceKind(
-                  acceptedDb,
-                  'file-dependency-graph',
-                  previousDependencyGraphEvidenceFingerprint,
-                  nextFingerprint,
-                )
-              : 0;
-          carried = carriedProducts > 0;
-          opts.onStatus(
-            carried
-              ? `Carried ${carriedProducts} unchanged dependency graph product(s) forward without rebuilding them.`
-              : 'No persisted dependency graph product required rekeying; the next graph consumer can materialize it.',
-          );
+          carried = rekeyUnchangedDependencyGraph(acceptedDb, previousDependencyGraphEvidenceFingerprint, opts);
         } else if (incrementalTypeScript.dependencyGraphSnapshot) {
           carried = carryFileDependencyGraph(
             acceptedDb,
@@ -2549,20 +2534,8 @@ function cacheLanguageShards(
 async function ensureScipCliAvailable(skipAutoInstall: boolean, onStatus: (message: string) => void): Promise<void> {
   const resolved = resolveScipBinaryWithSource();
   if (resolved) {
-    if (resolved.source === 'path' && platform() !== 'win32') {
-      const version = getScipVersion();
-      if (!scipVersionMatchesPin(version)) {
-        if (skipAutoInstall) {
-          onStatus(
-            `scip on PATH reports ${version ?? 'an unknown version'}; the reviewed version is ${SCIP_VERSION} and ` +
-              'compatibility is unverified. Run scip-query setup --install-missing to install the reviewed release.',
-          );
-        } else {
-          onStatus(`scip on PATH reports ${version ?? 'an unknown version'}; installing the reviewed ${SCIP_VERSION}.`);
-          await installScipCliFromRelease(onStatus);
-        }
-      }
-    }
+    const installation = ensureResolvedScipVersion(resolved, skipAutoInstall, onStatus);
+    if (installation) await installation;
     return;
   }
 
@@ -3063,54 +3036,7 @@ async function materializeSqliteOutput(opts: {
   let fallbackReason: string | undefined;
   if (canPublishIncrementalSqlite(opts)) {
     try {
-      const batches =
-        opts.incrementalTypeScript.affectedBatches.length > 0
-          ? opts.incrementalTypeScript.affectedBatches
-          : [
-              {
-                scipPath: opts.incrementalTypeScript.affectedScipPath,
-                affectedFiles: opts.incrementalTypeScript.affectedFiles,
-                deletedFiles: opts.incrementalTypeScript.deletedFiles,
-              },
-            ];
-      const changedDocumentPaths = new Set<string>();
-      let converterDurationMs = 0;
-      let patchDurationMs = 0;
-      for (const [batchIndex, batch] of batches.entries()) {
-        const miniDbPath = join(opts.run.tempPaths.runDir, `typescript-affected-${batchIndex}.db`);
-        sanitizeScipForSqlite(batch.scipPath, opts.run.onStatus);
-        opts.run.onStatus(
-          `Converting bounded TypeScript batch ${batchIndex + 1}/${batches.length} (${batch.affectedFiles.length - batch.deletedFiles.length} emitted, ${batch.deletedFiles.length} removed) to SQLite...`,
-        );
-        const convertStartedAt = performance.now();
-        await convertScipToSqlite(batch.scipPath, miniDbPath, opts.env, opts.run.onStatus, true, opts.run.opts.signal);
-        converterDurationMs += performance.now() - convertStartedAt;
-        recordIncrementalWrite(opts.run.writeTelemetry, fileSizeOrNull(miniDbPath) ?? 0);
-        const patched = patchIncrementalSqliteGeneration({
-          previousDbPath: opts.run.paths.outputDb,
-          miniDbPath,
-          candidateDbPath: opts.run.tempPaths.tempOutputDb,
-          affectedFiles: batch.affectedFiles,
-          deletedFiles: batch.deletedFiles,
-          reuseCandidate: batchIndex > 0,
-          deferIntegrity: batchIndex < batches.length - 1,
-          trustedPriorGeneration: true,
-          writeTelemetry: opts.run.writeTelemetry,
-        });
-        patchDurationMs += patched.durationMs;
-        for (const path of patched.changedDocumentPaths) changedDocumentPaths.add(path);
-        rmSync(miniDbPath, { force: true });
-      }
-      opts.run.onStatus(
-        `Patched ${opts.incrementalTypeScript.affectedFiles.length} SQLite document path(s) across ${batches.length} bounded batch(es) in ${(patchDurationMs / 1000).toFixed(3)}s.`,
-      );
-      return {
-        mode: 'incremental',
-        changedDocumentPaths: [...changedDocumentPaths].sort(),
-        patchDurationMs,
-        converterDurationMs,
-        scipCompanion: opts.incrementalTypeScript.completeScipUpdated ? 'current' : 'deferred',
-      };
+      return await materializeIncrementalSqliteBatches(opts);
     } catch (error) {
       throwIfSignalAborted(opts.run.opts.signal, 'Reindex cancelled by its owner.');
       fallbackReason = error instanceof Error ? error.message : String(error);
@@ -3736,4 +3662,105 @@ function reportLocalGenerationDurability(
 
 function hasDeferredSqliteCompanion(materialization: Awaited<ReturnType<typeof materializeSqliteOutput>>): boolean {
   return materialization.mode === 'incremental' && materialization.scipCompanion === 'deferred';
+}
+
+async function materializeIncrementalSqliteBatches(
+  opts: Parameters<typeof materializeSqliteOutput>[0] & {
+    incrementalTypeScript: MaterializedTypeScriptIncrementalIndex;
+  },
+): Promise<Extract<SqliteMaterializationResult, { mode: 'incremental' }>> {
+  const batches =
+    opts.incrementalTypeScript.affectedBatches.length > 0
+      ? opts.incrementalTypeScript.affectedBatches
+      : [
+          {
+            scipPath: opts.incrementalTypeScript.affectedScipPath,
+            affectedFiles: opts.incrementalTypeScript.affectedFiles,
+            deletedFiles: opts.incrementalTypeScript.deletedFiles,
+          },
+        ];
+  const changedDocumentPaths = new Set<string>();
+  let converterDurationMs = 0;
+  let patchDurationMs = 0;
+  for (const [batchIndex, batch] of batches.entries()) {
+    const miniDbPath = join(opts.run.tempPaths.runDir, `typescript-affected-${batchIndex}.db`);
+    sanitizeScipForSqlite(batch.scipPath, opts.run.onStatus);
+    opts.run.onStatus(
+      `Converting bounded TypeScript batch ${batchIndex + 1}/${batches.length} (${batch.affectedFiles.length - batch.deletedFiles.length} emitted, ${batch.deletedFiles.length} removed) to SQLite...`,
+    );
+    const convertStartedAt = performance.now();
+    await convertScipToSqlite(batch.scipPath, miniDbPath, opts.env, opts.run.onStatus, true, opts.run.opts.signal);
+    converterDurationMs += performance.now() - convertStartedAt;
+    recordIncrementalWrite(opts.run.writeTelemetry, fileSizeOrNull(miniDbPath) ?? 0);
+    const patched = patchIncrementalSqliteGeneration({
+      previousDbPath: opts.run.paths.outputDb,
+      miniDbPath,
+      candidateDbPath: opts.run.tempPaths.tempOutputDb,
+      affectedFiles: batch.affectedFiles,
+      deletedFiles: batch.deletedFiles,
+      reuseCandidate: batchIndex > 0,
+      deferIntegrity: batchIndex < batches.length - 1,
+      trustedPriorGeneration: true,
+      writeTelemetry: opts.run.writeTelemetry,
+    });
+    patchDurationMs += patched.durationMs;
+    for (const path of patched.changedDocumentPaths) changedDocumentPaths.add(path);
+    rmSync(miniDbPath, { force: true });
+  }
+  opts.run.onStatus(
+    `Patched ${opts.incrementalTypeScript.affectedFiles.length} SQLite document path(s) across ${batches.length} bounded batch(es) in ${(patchDurationMs / 1000).toFixed(3)}s.`,
+  );
+  return {
+    mode: 'incremental',
+    changedDocumentPaths: [...changedDocumentPaths].sort(),
+    patchDurationMs,
+    converterDurationMs,
+    scipCompanion: opts.incrementalTypeScript.completeScipUpdated ? 'current' : 'deferred',
+  };
+}
+
+function ensureResolvedScipVersion(
+  resolved: NonNullable<ReturnType<typeof resolveScipBinaryWithSource>>,
+  skipAutoInstall: boolean,
+  onStatus: (message: string) => void,
+): ReturnType<typeof installScipCliFromRelease> | undefined {
+  if (resolved.source === 'path' && platform() !== 'win32') {
+    const version = getScipVersion();
+    if (!scipVersionMatchesPin(version)) {
+      if (skipAutoInstall) {
+        onStatus(
+          `scip on PATH reports ${version ?? 'an unknown version'}; the reviewed version is ${SCIP_VERSION} and ` +
+            'compatibility is unverified. Run scip-query setup --install-missing to install the reviewed release.',
+        );
+      } else {
+        onStatus(`scip on PATH reports ${version ?? 'an unknown version'}; installing the reviewed ${SCIP_VERSION}.`);
+        return installScipCliFromRelease(onStatus);
+      }
+    }
+  }
+  return undefined;
+}
+
+function rekeyUnchangedDependencyGraph(
+  acceptedDb: ScipDatabase,
+  previousDependencyGraphEvidenceFingerprint: string | null,
+  run: Pick<Parameters<typeof runFreshReindex>[0], 'onStatus'>,
+): boolean {
+  const nextFingerprint = projectEvidenceFingerprint(acceptedDb);
+  const carriedProducts =
+    previousDependencyGraphEvidenceFingerprint && nextFingerprint
+      ? rekeyCachedProjectEvidenceKind(
+          acceptedDb,
+          'file-dependency-graph',
+          previousDependencyGraphEvidenceFingerprint,
+          nextFingerprint,
+        )
+      : 0;
+  const carried = carriedProducts > 0;
+  run.onStatus(
+    carried
+      ? `Carried ${carriedProducts} unchanged dependency graph product(s) forward without rebuilding them.`
+      : 'No persisted dependency graph product required rekeying; the next graph consumer can materialize it.',
+  );
+  return carried;
 }

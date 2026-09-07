@@ -123,8 +123,7 @@ function classifyChecker(
   if (isFrameworkContractCallable(db, def)) return null;
 
   const snippet = definitionSourceSnippet(db, def);
-  if (!snippet) return null;
-  if (!CALLABLE_SHAPE_PATTERN.test(snippet)) return null;
+  if (!isCallableCheckerSnippet(snippet)) return null;
   const callable = getSourceFacts(db, def.relativePath)?.callables.find(
     (candidate) => candidate.startLine === def.startLine && candidate.endLine === def.endLine,
   );
@@ -139,18 +138,13 @@ function classifyChecker(
   if (isThinForwarderBody(snippet)) {
     const delegate = resolveOneHopDelegate(db, def);
     if (!delegate) return null;
-    if (bodyHasFailureExit(delegate.body, isConciseArrowBody(delegate.snippet))) return null;
-    if (bodyHasPotentiallyFailingCall(delegate.body)) return null;
+    if (checkerBodyCanFail(delegate.body, delegate.snippet)) return null;
     return { nameKind, resolvedVia: 'one-hop-delegate', delegateTarget: delegate.shortName };
   }
 
   const rawBody = extractImplementationBody(snippet);
-  if (bodyHasFailureExit(rawBody, isConciseArrowBody(snippet))) return null;
-  // A call can throw, reject, append diagnostics, or return an Effect-style
-  // failure without spelling that exit in this body. Unless the callable is a
-  // thin forwarder whose one target we resolved above, do not claim that all
-  // paths pass merely because local syntax lacks `throw`/`false`.
-  if (bodyHasPotentiallyFailingCall(rawBody)) return null;
+  // Calls may throw, reject, or append diagnostics without a syntactic failure exit.
+  if (checkerBodyCanFail(rawBody, snippet)) return null;
   return { nameKind, resolvedVia: 'direct' };
 }
 
@@ -211,6 +205,10 @@ function bodyHasFailureExit(rawBody: string, isConciseArrow: boolean): boolean {
   if (ERROR_RESULT_PATTERN.test(masked)) return true;
   if (DIAGNOSTIC_SINK_PATTERN.test(masked)) return true;
 
+  return returnValuesCanFail(masked, isConciseArrow);
+}
+
+function returnValuesCanFail(masked: string, isConciseArrow: boolean): boolean {
   const returns = returnExpressions(masked);
   // A concise-arrow body has no `return` keyword to find (see
   // `isConciseArrowBody`'s doc comment) — its one expression is an implicit
@@ -234,6 +232,30 @@ function bodyHasFailureExit(rawBody: string, isConciseArrow: boolean): boolean {
   return false;
 }
 
+const RETURN_OPEN_DELIMITERS = new Set(['(', '[', '{']);
+const RETURN_CLOSE_DELIMITERS = new Set([')', ']', '}']);
+
+function returnExpressionEnd(masked: string, start: number): number {
+  let depth = 0;
+  let end = masked.length;
+  for (let i = start; i < masked.length; i += 1) {
+    const char = masked[i];
+    if (RETURN_OPEN_DELIMITERS.has(char!)) {
+      depth += 1;
+    } else if (RETURN_CLOSE_DELIMITERS.has(char!)) {
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+      depth -= 1;
+    } else if (char === ';' && depth === 0) {
+      end = i;
+      break;
+    }
+  }
+  return end;
+}
+
 /**
  * Every `return <expr>;` in `masked`, depth-tracking `()`/`[]`/`{}` to find
  * each expression's true end instead of stopping at the first `;` or brace.
@@ -251,23 +273,7 @@ function returnExpressions(masked: string): string[] {
   let match: RegExpExecArray | null;
   while ((match = RETURN_KEYWORD_PATTERN.exec(masked))) {
     const start = match.index + match[0].length;
-    let depth = 0;
-    let end = masked.length;
-    for (let i = start; i < masked.length; i += 1) {
-      const char = masked[i];
-      if (char === '(' || char === '[' || char === '{') {
-        depth += 1;
-      } else if (char === ')' || char === ']' || char === '}') {
-        if (depth === 0) {
-          end = i;
-          break;
-        }
-        depth -= 1;
-      } else if (char === ';' && depth === 0) {
-        end = i;
-        break;
-      }
-    }
+    const end = returnExpressionEnd(masked, start);
     exprs.push(masked.slice(start, end).trim());
     RETURN_KEYWORD_PATTERN.lastIndex = end;
   }
@@ -302,4 +308,12 @@ function resolveOneHopDelegate(
     snippet: targetSnippet,
     shortName: shortenSymbol(targetDef.symbol),
   };
+}
+
+function checkerBodyCanFail(body: string, snippet: string): boolean {
+  return bodyHasFailureExit(body, isConciseArrowBody(snippet)) || bodyHasPotentiallyFailingCall(body);
+}
+
+function isCallableCheckerSnippet(snippet: string | null): snippet is string {
+  return !!snippet && CALLABLE_SHAPE_PATTERN.test(snippet);
 }

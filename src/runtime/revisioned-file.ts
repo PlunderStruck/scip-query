@@ -122,16 +122,7 @@ export function mutateTextFileRevisionAware(
         if (attempt < maxRetries) continue;
         throw new FileRevisionConflictError(path, snapshot.revision, latest.revision);
       }
-      try {
-        commitMutation(path, mutation, snapshot.revision);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-          const competing = readStableTextSnapshot(path);
-          if (attempt < maxRetries) continue;
-          throw new FileRevisionConflictError(path, snapshot.revision, competing.revision);
-        }
-        throw error;
-      }
+      if (!commitRevisionedMutationAttempt(path, mutation, snapshot.revision, attempt, maxRetries)) continue;
       return {
         changed: true,
         attempts: attempt + 1,
@@ -261,4 +252,24 @@ function sameIdentity(left: FileIdentity, right: FileIdentity): boolean {
 
 function formatRevision(revision: FileRevision): string {
   return revision.exists ? revision.hash.slice(0, 12) : '<absent>';
+}
+
+function commitRevisionedMutationAttempt(
+  path: string,
+  mutation: Exclude<RevisionedTextMutation, { kind: 'unchanged' }>,
+  revision: RevisionedTextSnapshot['revision'],
+  attempt: number,
+  maxRetries: number,
+): boolean {
+  try {
+    commitMutation(path, mutation, revision);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      const competing = readStableTextSnapshot(path);
+      if (attempt < maxRetries) return false;
+      throw new FileRevisionConflictError(path, revision, competing.revision);
+    }
+    throw error;
+  }
+  return true;
 }

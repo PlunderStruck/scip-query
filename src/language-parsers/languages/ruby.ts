@@ -5,7 +5,7 @@
  * resolve.
  */
 import { basename } from 'node:path';
-import type { Tree } from '../../source/ast.js';
+import type { SyntaxNode, Tree } from '../../source/ast.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { resolveRubyImportPath } from '../../source/primitives/import-path-resolver.js';
 import { pascalCaseSeparated } from '../../source/primitives/name-normalization.js';
@@ -60,11 +60,7 @@ function parseRubyImportsAst(db: ScipDatabase, importerPath: string, tree: Tree)
     if (!method || method.type !== 'identifier') continue;
     if (!REQUIRE_KINDS.has(method.text)) continue;
 
-    const args = call.namedChildren.find((c) => c.type === 'argument_list');
-    const firstArg = args?.namedChild(0);
-    if (!firstArg || firstArg.type !== 'string') continue;
-    const fragment = firstArg.namedChildren.find((c) => c.type === 'string_content');
-    const specifier = fragment?.text;
+    const specifier = rubyRequireSpecifier(call);
     if (!specifier) continue;
 
     const sourcePath = method.text === 'require_relative' ? resolveRubyImportPath(db, importerPath, specifier) : null;
@@ -77,6 +73,13 @@ function parseRubyImportsAst(db: ScipDatabase, importerPath: string, tree: Tree)
     }
   }
   return results;
+}
+
+function rubyRequireSpecifier(call: SyntaxNode): string | undefined {
+  const args = call.namedChildren.find((c) => c.type === 'argument_list');
+  const firstArg = args?.namedChild(0);
+  if (!firstArg || firstArg.type !== 'string') return undefined;
+  return firstArg.namedChildren.find((c) => c.type === 'string_content')?.text;
 }
 
 function rubyConstantName(specifier: string): string {

@@ -408,15 +408,7 @@ function decodeCurrentCorrelation(
 }
 
 function decodeDurableRustSessionRequest(value: unknown): DurableRustSessionRequest | null {
-  if (
-    !isRecordObject(value) ||
-    typeof value.identityKey !== 'string' ||
-    !value.identityKey ||
-    !isPositiveInteger(value.timeoutMs) ||
-    (value.workerEnvironment !== undefined && !isStringOrNullRecord(value.workerEnvironment))
-  ) {
-    return null;
-  }
+  if (!isDurableRustRequestHeader(value)) return null;
   if (value.kind === 'semantic' && isRustReferenceWorkerRequest(value.request)) {
     return {
       kind: 'semantic',
@@ -495,13 +487,7 @@ function isRustImportDefinitionWorkerRequest(value: unknown): value is RustImpor
   ) {
     return false;
   }
-  return (
-    optionalNonNegativeNumber(value.requestTimeoutMs) &&
-    optionalNonNegativeNumber(value.readinessDeadlineMs) &&
-    optionalNonNegativeNumber(value.diagnosticsTimeoutMs) &&
-    optionalNonNegativeNumber(value.settleDelayMs) &&
-    optionalPositiveInteger(value.concurrency)
-  );
+  return validRustImportTiming(value);
 }
 
 function isIndexedDefinitionArray(value: unknown): value is IndexedDefinition[] {
@@ -666,4 +652,29 @@ function optionalNonNegativeNumber(value: unknown): boolean {
 
 function optionalBoolean(value: unknown): boolean {
   return value === undefined || typeof value === 'boolean';
+}
+
+type DurableRustRequestHeader = Pick<DurableRustSessionRequest, 'identityKey' | 'timeoutMs' | 'workerEnvironment'> &
+  Record<string, unknown>;
+function isDurableRustRequestHeader(value: unknown): value is DurableRustRequestHeader {
+  if (
+    !isRecordObject(value) ||
+    typeof value.identityKey !== 'string' ||
+    !value.identityKey ||
+    !isPositiveInteger(value.timeoutMs) ||
+    (value.workerEnvironment !== undefined && !isStringOrNullRecord(value.workerEnvironment))
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function validRustImportTiming(value: Record<string, unknown>): boolean {
+  return (
+    optionalNonNegativeNumber(value.requestTimeoutMs) &&
+    optionalNonNegativeNumber(value.readinessDeadlineMs) &&
+    optionalNonNegativeNumber(value.diagnosticsTimeoutMs) &&
+    optionalNonNegativeNumber(value.settleDelayMs) &&
+    optionalPositiveInteger(value.concurrency)
+  );
 }

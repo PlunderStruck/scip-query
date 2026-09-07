@@ -27,26 +27,7 @@ export function typeScriptSemanticHash(relativePath: string, source: Buffer | st
       : ts.LanguageVariant.Standard;
     const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, languageVariant, text);
     const hash = createHash('sha256').update(`typescript-semantic-v1\0${languageVariant}\0`);
-    let emittedToken = false;
-    let pendingLineBreak = false;
-
-    for (;;) {
-      const token = scanner.scan();
-      if (token === ts.SyntaxKind.EndOfFileToken) break;
-      if (token === ts.SyntaxKind.WhitespaceTrivia) continue;
-      if (token === ts.SyntaxKind.NewLineTrivia) {
-        if (emittedToken) pendingLineBreak = true;
-        continue;
-      }
-      if (pendingLineBreak) hash.update('line-break\0');
-      const tokenText = scanner.getTokenText();
-      hash
-        .update(`${token}\0${Buffer.byteLength(tokenText)}\0`)
-        .update(tokenText)
-        .update('\0');
-      emittedToken = true;
-      pendingLineBreak = false;
-    }
+    hashTypeScriptScannerTokens(ts, scanner, hash);
     return hash.digest('hex');
   } catch {
     return undefined;
@@ -145,4 +126,31 @@ function stableJson(value: unknown): string {
       .join(',')}}`;
   }
   return JSON.stringify(value);
+}
+
+function hashTypeScriptScannerTokens(
+  ts: typeof TypeScript,
+  scanner: TypeScript.Scanner,
+  hash: ReturnType<typeof createHash>,
+): void {
+  let emittedToken = false;
+  let pendingLineBreak = false;
+
+  for (;;) {
+    const token = scanner.scan();
+    if (token === ts.SyntaxKind.EndOfFileToken) break;
+    if (token === ts.SyntaxKind.WhitespaceTrivia) continue;
+    if (token === ts.SyntaxKind.NewLineTrivia) {
+      if (emittedToken) pendingLineBreak = true;
+      continue;
+    }
+    if (pendingLineBreak) hash.update('line-break\0');
+    const tokenText = scanner.getTokenText();
+    hash
+      .update(`${token}\0${Buffer.byteLength(tokenText)}\0`)
+      .update(tokenText)
+      .update('\0');
+    emittedToken = true;
+    pendingLineBreak = false;
+  }
 }

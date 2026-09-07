@@ -64,34 +64,7 @@ export function programControlElementsForTopologyNodes(
       });
     }
 
-    for (const terminal of analysis.terminals) {
-      const terminalNode = topologyControlNode(owner, terminal);
-      nodes.set(terminalNode.id, terminalNode);
-      const terminalKind =
-        terminal.label.startsWith('throw') || terminal.label.startsWith('raise') ? 'throw' : 'return';
-      const edgeId = id('edge', 'control-terminal', owner.id, terminalNode.id, terminalKind);
-      edges.set(edgeId, {
-        id: edgeId,
-        kind: 'control-terminal',
-        fromNodeId: owner.id,
-        toNodeId: terminalNode.id,
-        directed: true,
-        disposition: 'folded',
-        semantics: [{ family: 'control', subtype: terminalKind === 'throw' ? 'throws' : 'returns' }],
-        evidence: [
-          {
-            method: 'parser-terminal-statement',
-            strength: 'exact',
-            identity: terminal.label,
-            location: {
-              file: owner.location.file,
-              line: terminal.startLine,
-              endLine: terminal.endLine,
-            },
-          },
-        ],
-      });
-    }
+    appendProgramControlTerminals(owner, analysis.terminals, nodes, edges);
 
     for (const unsupported of analysis.unsupported) {
       const unsupportedNodeId = id(
@@ -208,4 +181,39 @@ function addOwnerEdge(
 
 function id(...parts: readonly string[]): string {
   return parts.map((part) => encodeURIComponent(part)).join(':');
+}
+
+function appendProgramControlTerminals(
+  owner: ExplorationTopologyNode,
+  terminals: NonNullable<ReturnType<typeof behaviorControlAnalysis>>['terminals'],
+  nodes: Map<string, ExplorationTopologyNode>,
+  edges: Map<string, ExplorationTopologyEdge>,
+): void {
+  for (const terminal of terminals) {
+    const terminalNode = topologyControlNode(owner, terminal);
+    nodes.set(terminalNode.id, terminalNode);
+    const terminalKind = terminal.label.startsWith('throw') || terminal.label.startsWith('raise') ? 'throw' : 'return';
+    const edgeId = id('edge', 'control-terminal', owner.id, terminalNode.id, terminalKind);
+    edges.set(edgeId, {
+      id: edgeId,
+      kind: 'control-terminal',
+      fromNodeId: owner.id,
+      toNodeId: terminalNode.id,
+      directed: true,
+      disposition: 'folded',
+      semantics: [{ family: 'control', subtype: terminalKind === 'throw' ? 'throws' : 'returns' }],
+      evidence: [
+        {
+          method: 'parser-terminal-statement',
+          strength: 'exact',
+          identity: terminal.label,
+          location: {
+            file: owner.location!.file,
+            line: terminal.startLine,
+            endLine: terminal.endLine,
+          },
+        },
+      ],
+    });
+  }
 }

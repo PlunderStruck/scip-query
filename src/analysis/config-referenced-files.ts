@@ -48,11 +48,15 @@ function discoverConfigReferencedFiles(db: ScipDatabase): Set<string> {
       if (isMissingProjectFileError(error)) continue;
       continue;
     }
-    for (const match of text.matchAll(SOURCE_PATH_PATTERN)) {
-      const candidate = normalizePath(match[0]).replace(/^\.\//, '');
-      if (candidate.startsWith('..') || candidate.startsWith('/')) continue;
-      if (indexed.has(candidate)) referenced.add(candidate);
-    }
+    collectIndexedConfigurationPaths(text, indexed, referenced);
   }
   return referenced;
+}
+
+function collectIndexedConfigurationPaths(text: string, indexed: ReadonlySet<string>, referenced: Set<string>): void {
+  for (const match of text.matchAll(SOURCE_PATH_PATTERN)) {
+    const candidate = normalizePath(match[0]).replace(/^\.\//, '');
+    if (candidate.startsWith('..') || candidate.startsWith('/')) continue;
+    if (indexed.has(candidate)) referenced.add(candidate);
+  }
 }

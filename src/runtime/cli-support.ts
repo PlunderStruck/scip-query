@@ -324,12 +324,7 @@ export function commandAnalysisBudget(
   }
 
   if (!opts.quiet) {
-    const expansionGuidance =
-      commandName === 'inspect'
-        ? 'Use --full only when every omitted semantic candidate can change the decision; it does not override source or behavior materialization ceilings.'
-        : commandName === 'dead'
-          ? `Run "scip-query dead --full" for an unbounded candidate scan; semantic enrichment remains disabled on large indexes to keep memory bounded.`
-          : `Run "scip-query ${commandName} --full" for the unbounded semantic pass.`;
+    const expansionGuidance = largeCommandExpansionGuidance(commandName);
     console.error(
       `Large index detected; ${commandName} is using its bounded default analysis with semantic enrichment disabled. ` +
         `Candidate scans, when this command uses one, are capped at ${DEFAULT_COMMAND_CANDIDATE_SCAN_LIMIT}. ` +
@@ -645,50 +640,18 @@ async function runHealthSemanticPrewarm(
       collections: pressure.collections,
     }),
   );
-  const fragmentDisclosure = {
+  return finishHealthSemanticPrewarm({
+    db,
+    opts,
+    runtime,
+    cacheKey,
+    fingerprint,
+    definitionCount: definitions.length,
     warmedFiles: files.length,
-    ...(fragments
-      ? { referenceFragmentFiles: fragments.files, referenceFragmentComputedFiles: fragments.computedFiles }
-      : {}),
-  };
-  if (references.incomplete > 0) {
-    return {
-      status: 'partial',
-      reason: 'incomplete-references',
-      definitions: definitions.length,
-      referenceCacheHits: references.cacheHits,
-      referenceCacheWrites: references.cacheWrites,
-      referenceMisses: references.misses,
-      referenceIncomplete: references.incomplete,
-      ...fragmentDisclosure,
-      calleeRows,
-    };
-  }
-
-  if (!opts.shard) {
-    profileSpan('health.semantic-prewarm.marker-write', () =>
-      runtime.writeMarker(db, cacheKey, fingerprint, {
-        version: HEALTH_SEMANTIC_PREWARM_MARKER_VERSION,
-        definitions: definitions.length,
-        referenceCacheWrites: references.cacheWrites,
-        referenceIncomplete: references.incomplete,
-        calleeRows,
-        warmedAt: Date.now(),
-      }),
-    );
-  }
-
-  return {
-    status: 'warmed',
-    reason: 'cache-miss',
-    definitions: definitions.length,
-    referenceCacheHits: references.cacheHits,
-    referenceCacheWrites: references.cacheWrites,
-    referenceMisses: references.misses,
-    referenceIncomplete: references.incomplete,
-    ...fragmentDisclosure,
+    references,
+    fragments,
     calleeRows,
-  };
+  });
 }
 
 function healthSemanticPrewarmCacheKey(opts: HealthCliOptions, semanticEngineFingerprint: string): string {
@@ -1600,4 +1563,81 @@ export function renderDiffImpactReport(result: DiffImpactResult): void {
     console.log('\nAffected consumer files:');
     render.list(result.affectedConsumers, (c) => `  ${c.file}  (${c.consumedSymbols} symbol(s))`);
   }
+}
+
+function largeCommandExpansionGuidance(commandName: string): string {
+  return commandName === 'inspect'
+    ? 'Use --full only when every omitted semantic candidate can change the decision; it does not override source or behavior materialization ceilings.'
+    : commandName === 'dead'
+      ? `Run "scip-query dead --full" for an unbounded candidate scan; semantic enrichment remains disabled on large indexes to keep memory bounded.`
+      : `Run "scip-query ${commandName} --full" for the unbounded semantic pass.`;
+}
+
+function finishHealthSemanticPrewarm({
+  db,
+  opts,
+  runtime,
+  cacheKey,
+  fingerprint,
+  definitionCount,
+  warmedFiles,
+  references,
+  fragments,
+  calleeRows,
+}: {
+  db: ScipDatabase;
+  opts: HealthCliOptions;
+  runtime: HealthSemanticPrewarmRuntime;
+  cacheKey: string;
+  fingerprint: string;
+  definitionCount: number;
+  warmedFiles: number;
+  references: ReferenceMaterializationTotals;
+  fragments: TypeScriptReferenceFragmentWarmResult | null;
+  calleeRows: number;
+}): HealthSemanticPrewarmResult {
+  const fragmentDisclosure = {
+    warmedFiles,
+    ...(fragments
+      ? { referenceFragmentFiles: fragments.files, referenceFragmentComputedFiles: fragments.computedFiles }
+      : {}),
+  };
+  if (references.incomplete > 0) {
+    return {
+      status: 'partial',
+      reason: 'incomplete-references',
+      definitions: definitionCount,
+      referenceCacheHits: references.cacheHits,
+      referenceCacheWrites: references.cacheWrites,
+      referenceMisses: references.misses,
+      referenceIncomplete: references.incomplete,
+      ...fragmentDisclosure,
+      calleeRows,
+    };
+  }
+
+  if (!opts.shard) {
+    profileSpan('health.semantic-prewarm.marker-write', () =>
+      runtime.writeMarker(db, cacheKey, fingerprint, {
+        version: HEALTH_SEMANTIC_PREWARM_MARKER_VERSION,
+        definitions: definitionCount,
+        referenceCacheWrites: references.cacheWrites,
+        referenceIncomplete: references.incomplete,
+        calleeRows,
+        warmedAt: Date.now(),
+      }),
+    );
+  }
+
+  return {
+    status: 'warmed',
+    reason: 'cache-miss',
+    definitions: definitionCount,
+    referenceCacheHits: references.cacheHits,
+    referenceCacheWrites: references.cacheWrites,
+    referenceMisses: references.misses,
+    referenceIncomplete: references.incomplete,
+    ...fragmentDisclosure,
+    calleeRows,
+  };
 }

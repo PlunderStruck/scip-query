@@ -247,16 +247,7 @@ function buildSourceFacts(tree: Tree, language: AstLanguage): SourceFacts {
     if (callSite) callSites.push(callSite);
     collectCrossLanguageDispatchName(node, language, crossLanguageDispatchNames);
 
-    if (language === 'rust' && (node.type === 'attribute_item' || node.type === 'inner_attribute_item')) {
-      collectRustAttrHelperNames(node.text, rustAttrReferencedNames);
-    }
-
-    if (shouldRecordIdentifierNode(node, language)) {
-      recordIdentifier(node.text, node.startPosition.row);
-    }
-    if (shouldRecordInterpolatedIdentifiers(node, language)) {
-      recordInterpolatedIdentifiers(node, recordIdentifier);
-    }
+    recordNodeReferences(node, language, rustAttrReferencedNames, recordIdentifier);
 
     for (const child of node.children) walk(child);
     if (callable) openCallables.pop();
@@ -275,4 +266,22 @@ function buildSourceFacts(tree: Tree, language: AstLanguage): SourceFacts {
     rustAttrReferencedNames,
     crossLanguageDispatchNames,
   };
+}
+
+function recordNodeReferences(
+  node: SyntaxNode,
+  language: AstLanguage,
+  rustAttrReferencedNames: Set<string>,
+  recordIdentifier: (name: string, line: number) => void,
+): void {
+  if (language === 'rust' && (node.type === 'attribute_item' || node.type === 'inner_attribute_item')) {
+    collectRustAttrHelperNames(node.text, rustAttrReferencedNames);
+  }
+
+  if (shouldRecordIdentifierNode(node, language)) {
+    recordIdentifier(node.text, node.startPosition.row);
+  }
+  if (shouldRecordInterpolatedIdentifiers(node, language)) {
+    recordInterpolatedIdentifiers(node, recordIdentifier);
+  }
 }

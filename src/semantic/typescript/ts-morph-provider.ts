@@ -470,8 +470,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
         result.set(definition.symbolId, bucket);
         if (stats) stats.requestedHits += 1;
       };
-      const directDefinition =
-        target && requestedSymbolIds.has(target.symbolId) ? definitionBySymbolId.get(target.symbolId) : undefined;
+      const directDefinition = requestedReferenceDefinition(target, requestedSymbolIds, definitionBySymbolId);
       if (directDefinition) addDefinitionReference(directDefinition);
       for (const symbolKey of hierarchySymbolKeys) {
         for (const definition of hierarchyTargets.get(symbolKey)?.values() ?? []) {
@@ -1140,18 +1139,9 @@ class TsMorphSemanticProvider implements SemanticProvider {
         continue;
       }
 
-      for (const exported of namedExports) {
-        const sourceName = exported.getNameNode().getText();
-        const exportedName = exported.getAliasNode()?.getText() ?? sourceName;
-        const definition = this.indexedDefinitionByLeaf(sourcePath, sourceName);
-        if (!definition) continue;
-        let bucket = out.get(exportedName);
-        if (!bucket) {
-          bucket = new Set();
-          out.set(exportedName, bucket);
-        }
-        bucket.add(definition.symbolId);
-      }
+      collectNamedPackageExports(namedExports, out, (sourceName) =>
+        this.indexedDefinitionByLeaf(sourcePath, sourceName),
+      );
     }
   }
 
@@ -1268,11 +1258,9 @@ class TsMorphSemanticProvider implements SemanticProvider {
         if (profiling) sourceFileLookupMs = Math.round(performance.now() - sourceLookupStart);
         if (!sourceFile) return new Map();
 
-        const definitionsStart = profiling ? performance.now() : 0;
-        const definitions = getDefinitionsForFile(this.db, relativePath).sort(
-          (left, right) => left.startLine - right.startLine || right.endLine - left.endLine,
-        );
-        if (profiling) definitionsLoadMs = Math.round(performance.now() - definitionsStart);
+        const loaded = loadCalleeFileDefinitions(this.db, relativePath, profiling);
+        const definitions = loaded.definitions;
+        if (profiling) definitionsLoadMs = loaded.durationMs;
         definitionsCount = definitions.length;
         if (definitions.length === 0) return new Map();
 
@@ -1310,9 +1298,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
         visit(compilerSourceFile);
         if (profiling) traversalMs = Math.round(performance.now() - traversalStart);
 
-        for (const [symbolId, callees] of out) {
-          out.set(symbolId, dedupeCallees(callees));
-        }
+        dedupeSemanticCalleeMap(out);
         outputRows = out.size;
         return out;
       },
@@ -1463,18 +1449,7 @@ function importIdentifiers(declaration: ImportDeclaration): ImportIdentifierEntr
       isTypeOnly: declaration.getImportClause()?.isTypeOnly() ?? false,
     });
   }
-  for (const named of declaration.getNamedImports()) {
-    const name = named.getNameNode();
-    const alias = named.getAliasNode();
-    const identifier = alias ?? (name.getKindName() === 'Identifier' ? (name as Identifier) : null);
-    out.push({
-      identifier,
-      importedName: name.getText(),
-      localName: identifier?.getText() ?? name.getText(),
-      kind: 'named',
-      isTypeOnly: named.isTypeOnly() || (declaration.getImportClause()?.isTypeOnly() ?? false),
-    });
-  }
+  for (const named of declaration.getNamedImports()) out.push(namedImportIdentifierEntry(named, declaration));
   if (out.length === 0) {
     out.push({
       identifier: null,
@@ -1751,4 +1726,64 @@ function createImportUsageItem(
     references: [],
   };
   return item;
+}
+
+function collectNamedPackageExports(
+  namedExports: ReturnType<ReturnType<SourceFile['getExportDeclarations']>[number]['getNamedExports']>,
+  out: Map<string, Set<number>>,
+  resolveDefinition: (sourceName: string) => IndexedDefinition | null,
+): void {
+  for (const exported of namedExports) {
+    const sourceName = exported.getNameNode().getText();
+    const exportedName = exported.getAliasNode()?.getText() ?? sourceName;
+    const definition = resolveDefinition(sourceName);
+    if (!definition) continue;
+    let bucket = out.get(exportedName);
+    if (!bucket) {
+      bucket = new Set();
+      out.set(exportedName, bucket);
+    }
+    bucket.add(definition.symbolId);
+  }
+}
+
+function requestedReferenceDefinition(
+  target: ResolvedCalleeTarget | null,
+  requestedSymbolIds: ReadonlySet<number>,
+  definitionBySymbolId: ReadonlyMap<number, IndexedDefinition>,
+): IndexedDefinition | undefined {
+  const directDefinition =
+    target && requestedSymbolIds.has(target.symbolId) ? definitionBySymbolId.get(target.symbolId) : undefined;
+  return directDefinition;
+}
+
+function namedImportIdentifierEntry(
+  named: ReturnType<ImportDeclaration['getNamedImports']>[number],
+  declaration: ImportDeclaration,
+): ImportIdentifierEntry {
+  const name = named.getNameNode();
+  const alias = named.getAliasNode();
+  const identifier = alias ?? (name.getKindName() === 'Identifier' ? (name as Identifier) : null);
+  return {
+    identifier,
+    importedName: name.getText(),
+    localName: identifier?.getText() ?? name.getText(),
+    kind: 'named',
+    isTypeOnly: named.isTypeOnly() || (declaration.getImportClause()?.isTypeOnly() ?? false),
+  };
+}
+
+function loadCalleeFileDefinitions(db: ScipDatabase, relativePath: string, profiling: boolean) {
+  const definitionsStart = profiling ? performance.now() : 0;
+  const definitions = getDefinitionsForFile(db, relativePath).sort(
+    (left, right) => left.startLine - right.startLine || right.endLine - left.endLine,
+  );
+  const durationMs = profiling ? Math.round(performance.now() - definitionsStart) : 0;
+  return { definitions, durationMs };
+}
+
+function dedupeSemanticCalleeMap(out: Map<number, SemanticCallee[]>): void {
+  for (const [symbolId, callees] of out) {
+    out.set(symbolId, dedupeCallees(callees));
+  }
 }

@@ -120,7 +120,6 @@ export function weightedCosine<T>(
 ): WeightedCosineResult<T> {
   let dotProduct = 0;
   let magA = 0;
-  let magB = 0;
   const median = opts.medianIdf ?? getMedianIdf(idf);
   const significantShared: T[] = [];
   const trivialShared: T[] = [];
@@ -137,10 +136,7 @@ export function weightedCosine<T>(
   if (significantShared.length === 0 && trivialShared.length === 0) {
     return { similarity: 0, significantShared: [], trivialShared: [] };
   }
-  for (const feature of b) {
-    const weight = idf.get(feature) ?? 0;
-    magB += weight * weight;
-  }
+  const magB = squaredFeatureMagnitude(b, idf);
 
   const magnitude = Math.sqrt(magA) * Math.sqrt(magB);
   const similarity = magnitude > 0 ? dotProduct / magnitude : 0;
@@ -183,4 +179,13 @@ export function weightedCosineWithMagnitudes<T>(
   significantShared.sort((x, y) => (idf.get(y) ?? 0) - (idf.get(x) ?? 0));
 
   return { similarity, significantShared, trivialShared };
+}
+
+function squaredFeatureMagnitude<T>(features: Set<T>, idf: ReadonlyMap<T, number>): number {
+  let magnitude = 0;
+  for (const feature of features) {
+    const weight = idf.get(feature) ?? 0;
+    magnitude += weight * weight;
+  }
+  return magnitude;
 }

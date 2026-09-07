@@ -57,22 +57,7 @@ export function registerCommandDescriptors(
     }
 
     for (const option of descriptor.options ?? []) {
-      if (option.hidden) {
-        const compatibilityOption = new Option(option.flags, option.description).hideHelp();
-        if (option.parser) compatibilityOption.argParser(option.parser);
-        if (Object.hasOwn(option, 'defaultValue')) {
-          compatibilityOption.default(option.defaultValue as PlainCommanderDefault);
-        }
-        command.addOption(compatibilityOption);
-      } else if (option.parser && Object.hasOwn(option, 'defaultValue')) {
-        command.option(option.flags, option.description, option.parser, option.defaultValue);
-      } else if (option.parser) {
-        command.option(option.flags, option.description, option.parser);
-      } else if (Object.hasOwn(option, 'defaultValue')) {
-        command.option(option.flags, option.description, option.defaultValue as PlainCommanderDefault);
-      } else {
-        command.option(option.flags, option.description);
-      }
+      registerDescriptorOption(command, option);
     }
 
     command.action(async (...args: unknown[]) => {
@@ -167,4 +152,23 @@ function handleCommandError(err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
   console.error(`error: ${sanitizeTerminalLine(message)}`);
   process.exitCode = 1;
+}
+
+function registerDescriptorOption(command: Command, option: NonNullable<CommandDescriptor['options']>[number]): void {
+  if (option.hidden) {
+    const compatibilityOption = new Option(option.flags, option.description).hideHelp();
+    if (option.parser) compatibilityOption.argParser(option.parser);
+    if (Object.hasOwn(option, 'defaultValue')) {
+      compatibilityOption.default(option.defaultValue as PlainCommanderDefault);
+    }
+    command.addOption(compatibilityOption);
+  } else if (option.parser && Object.hasOwn(option, 'defaultValue')) {
+    command.option(option.flags, option.description, option.parser, option.defaultValue);
+  } else if (option.parser) {
+    command.option(option.flags, option.description, option.parser);
+  } else if (Object.hasOwn(option, 'defaultValue')) {
+    command.option(option.flags, option.description, option.defaultValue as PlainCommanderDefault);
+  } else {
+    command.option(option.flags, option.description);
+  }
 }

@@ -1062,11 +1062,7 @@ function worktreeLeaseEqualsExceptLastSeen(left: WorktreeCacheLease, right: Work
     left.projectRoot === right.projectRoot &&
     left.treeOid === right.treeOid &&
     left.localCacheDir === right.localCacheDir &&
-    left.baseGenerationId === right.baseGenerationId &&
-    left.activeGenerationId === right.activeGenerationId &&
-    left.ownershipChecksum === right.ownershipChecksum &&
-    left.lastAction === right.lastAction &&
-    left.lastReason === right.lastReason
+    worktreeLeaseGenerationActionMatches(left, right)
   );
 }
 
@@ -1659,5 +1655,15 @@ function sourceGenerationMetadataRejected(
     !sameProjectInputSnapshotContent(projectInputSnapshotOrNull(metadata.fingerprint), expectedFingerprint) ||
     JSON.stringify([...(metadata.indexedLanguages ?? [])].sort()) !==
       JSON.stringify([...expectedFingerprint.languages].sort())
+  );
+}
+
+function worktreeLeaseGenerationActionMatches(left: WorktreeCacheLease, right: WorktreeCacheLease): boolean {
+  return (
+    left.baseGenerationId === right.baseGenerationId &&
+    left.activeGenerationId === right.activeGenerationId &&
+    left.ownershipChecksum === right.ownershipChecksum &&
+    left.lastAction === right.lastAction &&
+    left.lastReason === right.lastReason
   );
 }

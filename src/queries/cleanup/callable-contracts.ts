@@ -1,4 +1,5 @@
 import type { IndexedDefinition } from '../../domain/types.js';
+import type { SyntaxNode } from '../../source/ast.js';
 import { getAst } from '../../source/ast.js';
 import type { ScipDatabase } from '../../storage/db.js';
 
@@ -28,6 +29,10 @@ export function isFrameworkContractCallable(db: ScipDatabase, definition: Indexe
   if (!method) return false;
   if (/\boverride\b/.test(method.text.slice(0, Math.max(0, method.text.indexOf('{'))))) return true;
 
+  return classHeaderHasContract(method, definition.leaf);
+}
+
+function classHeaderHasContract(method: SyntaxNode, leaf: string): boolean {
   let container = method.parent;
   while (container && container.type !== 'class_declaration' && container.type !== 'class')
     container = container.parent;
@@ -40,7 +45,6 @@ export function isFrameworkContractCallable(db: ScipDatabase, definition: Indexe
   // derived class are not safe "unreferenced" candidates.
   if (/\bextends\b/.test(header)) return true;
   return (
-    REACT_CLASS_LIFECYCLE_METHODS.has(definition.leaf) &&
-    /\bextends\s+(?:React\.)?(?:Component|PureComponent)\b/.test(header)
+    REACT_CLASS_LIFECYCLE_METHODS.has(leaf) && /\bextends\s+(?:React\.)?(?:Component|PureComponent)\b/.test(header)
   );
 }

@@ -228,7 +228,7 @@ function normalizeSuppression(suppression: FindingSuppression): FindingSuppressi
   if (!reason) throw new Error('suppression requires a non-empty reason');
   const id = suppression.id?.trim();
   const check = suppression.check?.trim();
-  if (!id && !check) throw new Error('suppression requires an id or a check');
+  assertSuppressionSelector(id, check);
   if (suppression.decision !== undefined && !isSuppressionDecision(suppression.decision)) {
     throw new Error('suppression decision is malformed');
   }
@@ -289,4 +289,8 @@ function parseSuppressionEvidence(projectRoot: string, spec: string, claim: stri
     claim,
     contentHash: createHash('sha256').update(content).digest('hex'),
   };
+}
+
+function assertSuppressionSelector(id: string | undefined, check: string | undefined): void {
+  if (!id && !check) throw new Error('suppression requires an id or a check');
 }

@@ -37,10 +37,7 @@ export async function maybePrintUpdateNotice(opts: UpdateNoticeOptions = {}): Pr
       ? cached.latestVersion
       : await refreshLatestVersion(cacheDir, opts.fetchLatestVersion ?? fetchLatestVersion, now);
 
-  if (!latestVersion || !isNewerVersion(latestVersion, currentVersion)) return;
-
-  const writeNotice = opts.writeNotice ?? ((message) => console.error(message));
-  writeNotice(renderUpdateNotice(currentVersion, latestVersion));
+  emitAvailableUpdateNotice(latestVersion, currentVersion, opts);
 }
 
 export function renderUpdateNotice(currentVersion: string, latestVersion: string): string {
@@ -122,4 +119,15 @@ function parseSemver(version: string): [number, number, number] | null {
   const match = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(version);
   if (!match) return null;
   return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+function emitAvailableUpdateNotice(
+  latestVersion: string | null,
+  currentVersion: string,
+  opts: UpdateNoticeOptions,
+): void {
+  if (!latestVersion || !isNewerVersion(latestVersion, currentVersion)) return;
+
+  const writeNotice = opts.writeNotice ?? ((message) => console.error(message));
+  writeNotice(renderUpdateNotice(currentVersion, latestVersion));
 }

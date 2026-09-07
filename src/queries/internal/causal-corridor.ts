@@ -351,9 +351,7 @@ function mechanicalOutcomeNodeIds(forward: ReadonlySet<string>, edges: readonly 
       explicit.add(edge.toNodeId);
     }
   }
-  for (const nodeId of forward) {
-    if ((incoming.get(nodeId) ?? 0) > 0 && (outgoing.get(nodeId) ?? 0) === 0) explicit.add(nodeId);
-  }
+  addTerminalOutcomeNodes(forward, incoming, outgoing, explicit);
   return sortedUnique([...explicit]);
 }
 
@@ -584,4 +582,15 @@ function uniqueObligations(obligations: readonly CausalCorridorObligation[]): Ca
 
 function sortedUnique(values: readonly string[]): string[] {
   return [...new Set(values)].sort();
+}
+
+function addTerminalOutcomeNodes(
+  forward: ReadonlySet<string>,
+  incoming: ReadonlyMap<string, number>,
+  outgoing: ReadonlyMap<string, number>,
+  explicit: Set<string>,
+): void {
+  for (const nodeId of forward) {
+    if ((incoming.get(nodeId) ?? 0) > 0 && (outgoing.get(nodeId) ?? 0) === 0) explicit.add(nodeId);
+  }
 }

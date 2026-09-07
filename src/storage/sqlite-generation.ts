@@ -204,14 +204,7 @@ export function inspectSqliteGenerationReaderLeases(
   for (const entry of readdirSync(readersDirectory, { withFileTypes: true })) {
     if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
     const path = join(readersDirectory, entry.name);
-    let lease: SqliteGenerationReaderLease | null;
-    try {
-      lease = parseSqliteGenerationReaderLease(
-        JSON.parse(readSmallArtifactText(path, 'SQLite generation reader lease')),
-      );
-    } catch {
-      lease = null;
-    }
+    const lease = readSqliteReaderLease(path);
     if (!lease) {
       malformedLeases += 1;
       for (const identity of allGenerationIdentities) protectedGenerations.add(identity);
@@ -356,8 +349,8 @@ function readImmutableGeneration(config: ScipQueryConfig, identity: string): Sql
     const metadataPath = manifest.metadata ? artifactPath(directory, manifest.metadata) : undefined;
     if (
       !artifactMatchesRecordedDigest(databasePath, manifest.database) ||
-      (manifest.index && (!indexPath || !artifactMatchesRecordedDigest(indexPath, manifest.index))) ||
-      (manifest.metadata && (!metadataPath || !artifactMatchesRecordedDigest(metadataPath, manifest.metadata)))
+      !optionalImmutableArtifactMatches(indexPath, manifest.index) ||
+      !optionalImmutableArtifactMatches(metadataPath, manifest.metadata)
     ) {
       return null;
     }
@@ -547,4 +540,21 @@ function validPublicationCompanion(publication: Partial<SqlitePublicationRecord>
         Boolean(publication.typescriptOverlayGeneration))) &&
     (publication.scipCompanion !== 'deferred' || Boolean(publication.typescriptOverlayGeneration))
   );
+}
+
+function optionalImmutableArtifactMatches(
+  path: string | undefined,
+  artifact: SqliteGenerationManifest['index'],
+): boolean {
+  return !artifact || Boolean(path && artifactMatchesRecordedDigest(path, artifact));
+}
+
+function readSqliteReaderLease(path: string): SqliteGenerationReaderLease | null {
+  let lease: SqliteGenerationReaderLease | null;
+  try {
+    lease = parseSqliteGenerationReaderLease(JSON.parse(readSmallArtifactText(path, 'SQLite generation reader lease')));
+  } catch {
+    lease = null;
+  }
+  return lease;
 }

@@ -102,7 +102,7 @@ function parseTypeScriptDetectorOptions(
     const arg = rawArgs[index];
     if (arg === '--sample-size') {
       const value = Number(rawArgs[index + 1]);
-      if (!Number.isInteger(value) || value < 1) throw new Error('--sample-size must be a positive integer');
+      validateDetectorSampleSize(value);
       sampleSize = value;
       index += 1;
     } else if (arg === '--seed') {
@@ -221,10 +221,7 @@ export function deterministicStratifiedSample(rows, count, seed, stratumForRow) 
 
   const grouped = new Map();
   for (const row of rows) {
-    const stratum = String(stratumForRow(row));
-    const group = grouped.get(stratum) ?? [];
-    group.push(row);
-    grouped.set(stratum, group);
+    addCalibrationStratum(grouped, row, stratumForRow);
   }
 
   const strata = [...grouped.entries()]
@@ -284,24 +281,16 @@ export function summarizeCalibration(
     rows.filter((row) => row.verdict === 'valid' || row.verdict === 'invalid').map((row) => row.repository),
   ).size;
 
-  let certification;
-  if (unsupported) {
-    certification = 'unsupported';
-  } else if (reviewed < minimumReviewed || repositoryCount < minimumRepositories) {
-    certification = 'insufficient-evidence';
-  } else if (
-    observedPrecision !== null &&
-    observedPrecision >= 0.95 &&
-    interval.lower !== null &&
-    interval.lower >= 0.9 &&
-    knownPositiveRecallCases > 0
-  ) {
-    certification = 'certified';
-  } else if (observedPrecision !== null && observedPrecision >= 0.9) {
-    certification = 'qualified';
-  } else {
-    certification = 'experimental';
-  }
+  const certification = calibrationCertification({
+    unsupported,
+    reviewed,
+    minimumReviewed,
+    repositoryCount,
+    minimumRepositories,
+    observedPrecision,
+    interval,
+    knownPositiveRecallCases,
+  });
 
   return {
     rows: rows.length,
@@ -502,4 +491,51 @@ export function summarizeUtilityByDetector(rows, { detectors: declaredDetectors 
 
 function sampleRank(seed, identity) {
   return createHash('sha256').update(`${seed}\0${identity}`).digest('hex');
+}
+
+function validateDetectorSampleSize(value) {
+  if (!Number.isInteger(value) || value < 1) throw new Error('--sample-size must be a positive integer');
+}
+
+function addCalibrationStratum(grouped, row, stratumForRow) {
+  const stratum = String(stratumForRow(row));
+  const group = grouped.get(stratum) ?? [];
+  group.push(row);
+  grouped.set(stratum, group);
+}
+
+function calibrationCertification({
+  unsupported,
+  reviewed,
+  minimumReviewed,
+  repositoryCount,
+  minimumRepositories,
+  observedPrecision,
+  interval,
+  knownPositiveRecallCases,
+}) {
+  let certification;
+  if (unsupported) {
+    certification = 'unsupported';
+  } else if (reviewed < minimumReviewed || repositoryCount < minimumRepositories) {
+    certification = 'insufficient-evidence';
+  } else if (calibrationMeetsCertifiedPrecision(observedPrecision, interval, knownPositiveRecallCases)) {
+    certification = 'certified';
+  } else if (observedPrecision !== null && observedPrecision >= 0.9) {
+    certification = 'qualified';
+  } else {
+    certification = 'experimental';
+  }
+
+  return certification;
+}
+
+function calibrationMeetsCertifiedPrecision(observedPrecision, interval, knownPositiveRecallCases) {
+  return (
+    observedPrecision !== null &&
+    observedPrecision >= 0.95 &&
+    interval.lower !== null &&
+    interval.lower >= 0.9 &&
+    knownPositiveRecallCases > 0
+  );
 }

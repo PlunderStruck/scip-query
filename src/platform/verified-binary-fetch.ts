@@ -129,11 +129,7 @@ export async function fetchVerifiedBinary(opts: VerifiedBinaryFetchOptions): Pro
       lock.release();
     }
   } catch (error) {
-    if (lifetime.controller.signal.aborted) throw abortReason(lifetime.controller.signal, url);
-    if (error instanceof VerifiedBinaryFetchError) throw error;
-    throw new VerifiedBinaryFetchError('stream', `failed to download ${url}: ${errorMessage(error)}`, {
-      cause: error,
-    });
+    return throwVerifiedBinaryFetchFailure(error, lifetime.controller.signal, url);
   } finally {
     clearTimeout(lifetime.timeout);
     lifetime.detachExternalAbort();
@@ -423,4 +419,12 @@ function abortReason(signal: AbortSignal, referent: string): Error {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function throwVerifiedBinaryFetchFailure(error: unknown, signal: AbortSignal, url: string): never {
+  if (signal.aborted) throw abortReason(signal, url);
+  if (error instanceof VerifiedBinaryFetchError) throw error;
+  throw new VerifiedBinaryFetchError('stream', `failed to download ${url}: ${errorMessage(error)}`, {
+    cause: error,
+  });
 }

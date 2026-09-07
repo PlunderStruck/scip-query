@@ -160,10 +160,10 @@ function isHealthReportCacheKey(value: unknown): value is HealthReportCacheKey {
     candidate.version === HEALTH_REPORT_CACHE_VERSION &&
     typeof candidate.projectFingerprint === 'string' &&
     typeof candidate.cliVersion === 'string' &&
-    (candidate.scope === null || typeof candidate.scope === 'string') &&
+    isNullableCacheString(candidate.scope) &&
     typeof candidate.full === 'boolean' &&
-    (candidate.phaseTimeoutMs === null || typeof candidate.phaseTimeoutMs === 'number') &&
-    (candidate.gitHead === null || typeof candidate.gitHead === 'string') &&
+    isNullableCacheNumber(candidate.phaseTimeoutMs) &&
+    isNullableCacheString(candidate.gitHead) &&
     typeof candidate.buildIdentity === 'string'
   );
 }
@@ -202,4 +202,12 @@ function defaultFileDeps(): HealthReportCacheFileDeps {
     writeFileSync,
     nowIso: () => new Date().toISOString(),
   };
+}
+
+function isNullableCacheString(value: unknown): boolean {
+  return value === null || typeof value === 'string';
+}
+
+function isNullableCacheNumber(value: unknown): boolean {
+  return value === null || typeof value === 'number';
 }

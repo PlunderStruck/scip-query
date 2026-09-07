@@ -29,15 +29,7 @@ export function inspectFileChangeRiskMetadata(db: ScipDatabase, file: string): F
   const reasons: ChangeRiskReason[] = [];
   let coverage: FileChangeRiskMetadata['coverage'] = 'complete';
 
-  const kind = classifyFile(normalized);
-  if (kind === 'entry') addReason(reasons, 'operational-root', 'structural entrypoint path');
-  if (kind === 'worker') addReason(reasons, 'operational-root', 'worker launch convention');
-  if (isFrameworkEntrypointPath(normalized)) {
-    addReason(reasons, 'operational-root', 'framework-discovered entrypoint');
-  }
-  if (matchesConfiguredEntryRoot(db, normalized)) {
-    addReason(reasons, 'operational-root', 'configured entry root');
-  }
+  addConventionalChangeRiskReasons(db, normalized, reasons);
 
   let publishedApi = false;
   try {
@@ -101,4 +93,16 @@ function addReason(reasons: ChangeRiskReason[], kind: ChangeRiskReasonKind, deta
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function addConventionalChangeRiskReasons(db: ScipDatabase, normalized: string, reasons: ChangeRiskReason[]): void {
+  const kind = classifyFile(normalized);
+  if (kind === 'entry') addReason(reasons, 'operational-root', 'structural entrypoint path');
+  if (kind === 'worker') addReason(reasons, 'operational-root', 'worker launch convention');
+  if (isFrameworkEntrypointPath(normalized)) {
+    addReason(reasons, 'operational-root', 'framework-discovered entrypoint');
+  }
+  if (matchesConfiguredEntryRoot(db, normalized)) {
+    addReason(reasons, 'operational-root', 'configured entry root');
+  }
 }

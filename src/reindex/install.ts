@@ -38,30 +38,7 @@ export function tryInstallIndexer(config: IndexerConfig, onStatus: (msg: string)
       `Installing immutable ${method.identity} via ${method.label} into ${destination}; ` +
         `expected executable: ${binaryLabel}.`,
     );
-    try {
-      execFileSync(method.binary, method.args, {
-        stdio: 'inherit',
-        timeout: 300_000,
-        env: process.env,
-        // Installer binaries (npm) are .cmd shims on Windows, which execFile
-        // refuses without a shell; args here are fixed literals, never input.
-        shell: platform() === 'win32',
-      });
-
-      const resolvedBinary = resolveIndexerBinary(config);
-      if (resolvedBinary) {
-        const resolutionNote = resolvedBinary === config.indexerBinary ? '' : ` (using ${resolvedBinary})`;
-        onStatus(
-          `Successfully installed ${method.identity} via ${method.label}${resolutionNote}; ` +
-            `resolved executable: ${resolvedBinary}.`,
-        );
-        return true;
-      }
-      onStatus(`${method.label} command completed but ${binaryLabel} was not found on PATH`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      onStatus(`${method.label} install failed: ${msg}`);
-    }
+    if (runIndexerInstallMethod(config, method, binaryLabel, onStatus)) return true;
   }
 
   onStatus(`Could not auto-install ${binaryLabel}.`);
@@ -103,4 +80,37 @@ function probeInstallerOutput(binary: string, args: string[]): string | null {
   } catch {
     return null;
   }
+}
+
+function runIndexerInstallMethod(
+  config: IndexerConfig,
+  method: NonNullable<IndexerConfig['installMethods']>[number],
+  binaryLabel: string,
+  onStatus: (msg: string) => void,
+): boolean {
+  try {
+    execFileSync(method.binary, method.args, {
+      stdio: 'inherit',
+      timeout: 300_000,
+      env: process.env,
+      // Installer binaries (npm) are .cmd shims on Windows, which execFile
+      // refuses without a shell; args here are fixed literals, never input.
+      shell: platform() === 'win32',
+    });
+
+    const resolvedBinary = resolveIndexerBinary(config);
+    if (resolvedBinary) {
+      const resolutionNote = resolvedBinary === config.indexerBinary ? '' : ` (using ${resolvedBinary})`;
+      onStatus(
+        `Successfully installed ${method.identity} via ${method.label}${resolutionNote}; ` +
+          `resolved executable: ${resolvedBinary}.`,
+      );
+      return true;
+    }
+    onStatus(`${method.label} command completed but ${binaryLabel} was not found on PATH`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    onStatus(`${method.label} install failed: ${msg}`);
+  }
+  return false;
 }

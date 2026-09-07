@@ -413,12 +413,7 @@ function sameFileDefinitionClosure(
 ): IndexedDefinition[] {
   if (seeds.length === 0) return [];
   const callees = buildCalleeMap(db, allDefinitions, { additive: true, semantic: false });
-  const definitionsBySymbol = new Map<string, IndexedDefinition[]>();
-  for (const definition of allDefinitions) {
-    const bucket = definitionsBySymbol.get(definition.symbol) ?? [];
-    bucket.push(definition);
-    definitionsBySymbol.set(definition.symbol, bucket);
-  }
+  const definitionsBySymbol = groupClosureDefinitions(allDefinitions);
   const selected = new Map<number, IndexedDefinition>();
   const pending = [...seeds];
   while (pending.length > 0) {
@@ -763,4 +758,14 @@ const SUPPORTED_LANGUAGE_BY_EXTENSION = new Map<string, string>([
 
 function supportedLanguageFromPath(relativePath: string): string | null {
   return SUPPORTED_LANGUAGE_BY_EXTENSION.get(extname(relativePath).toLowerCase()) ?? null;
+}
+
+function groupClosureDefinitions(allDefinitions: readonly IndexedDefinition[]): Map<string, IndexedDefinition[]> {
+  const definitionsBySymbol = new Map<string, IndexedDefinition[]>();
+  for (const definition of allDefinitions) {
+    const bucket = definitionsBySymbol.get(definition.symbol) ?? [];
+    bucket.push(definition);
+    definitionsBySymbol.set(definition.symbol, bucket);
+  }
+  return definitionsBySymbol;
 }

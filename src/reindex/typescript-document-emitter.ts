@@ -289,9 +289,7 @@ export class TypeScriptDocumentEmitter {
   advance(input: TypeScriptDocumentAdvanceInput): TypeScriptDocumentAdvanceResult {
     if (!this.program || !this.checker || !this.config) return this.initializeAndAdvance(input);
     const startedAt = performance.now();
-    const modifiedFiles = normalizedUniqueRelativePaths(input.modifiedFiles);
-    const removedFiles = normalizedUniqueRelativePaths(input.removedFiles ?? []);
-    const affectedFiles = normalizedUniqueRelativePaths(input.affectedFiles);
+    const { modifiedFiles, removedFiles, affectedFiles } = normalizedTypeScriptAdvancePaths(input);
     this.fragments.clear();
     if (modifiedFiles.length === 0 && removedFiles.length === 0) {
       this.validateAffectedPaths(affectedFiles);
@@ -571,4 +569,15 @@ function pruneSourceFileEntries<T>(map: Map<T, unknown>, sourceFile: TypeScript.
 
 function isTypeScriptNode(value: unknown): value is TypeScript.Node {
   return Boolean(value && typeof value === 'object' && 'kind' in value && 'getSourceFile' in value);
+}
+
+function normalizedTypeScriptAdvancePaths(input: TypeScriptDocumentAdvanceInput): {
+  modifiedFiles: string[];
+  removedFiles: string[];
+  affectedFiles: string[];
+} {
+  const modifiedFiles = normalizedUniqueRelativePaths(input.modifiedFiles);
+  const removedFiles = normalizedUniqueRelativePaths(input.removedFiles ?? []);
+  const affectedFiles = normalizedUniqueRelativePaths(input.affectedFiles);
+  return { modifiedFiles, removedFiles, affectedFiles };
 }

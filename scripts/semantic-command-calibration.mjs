@@ -437,13 +437,7 @@ function runOne({ repoName, repo, entry, iteration, timeoutMs, profileDir }) {
     maxBuffer: 120 * 1024 * 1024,
   });
   const durationMs = Math.round(Number(process.hrtime.bigint() - start) / 1e6);
-  let parsed = null;
-  let parseError = null;
-  try {
-    parsed = child.stdout.trim() ? JSON.parse(child.stdout) : null;
-  } catch (error) {
-    parseError = error instanceof Error ? error.message : String(error);
-  }
+  const { parsed, parseError } = parseCalibrationCommandOutput(child);
   return {
     schemaVersion: 1,
     timestamp: new Date().toISOString(),
@@ -532,3 +526,14 @@ function appendJsonLine(path, value) {
 }
 
 main();
+
+function parseCalibrationCommandOutput(child) {
+  let parsed = null;
+  let parseError = null;
+  try {
+    parsed = child.stdout.trim() ? JSON.parse(child.stdout) : null;
+  } catch (error) {
+    parseError = error instanceof Error ? error.message : String(error);
+  }
+  return { parsed, parseError };
+}

@@ -144,16 +144,7 @@ export function recordTypeScriptReferenceFragmentShadow(
           return result;
         }
 
-        const writes: Array<{ relativePath: string; contentHash: string; value: SemanticReferenceFragment[] }> = [];
-        for (const file of files) {
-          const identity = typeScriptSemanticIdentityForFile(db, file, TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA);
-          if (!identity?.key) continue;
-          writes.push({
-            relativePath: file,
-            contentHash: identity.key,
-            value: fragments.get(file) ?? [],
-          });
-        }
+        const writes = keyedTypeScriptReferenceFragmentWrites(db, files, fragments);
         REFERENCE_FRAGMENT_PRODUCT.writeBatch(db, writes);
         result = {
           state: 'passing',
@@ -520,4 +511,22 @@ function isReferenceFragment(value: unknown): value is SemanticReferenceFragment
     typeof location.line === 'number' &&
     typeof location.column === 'number'
   );
+}
+
+function keyedTypeScriptReferenceFragmentWrites(
+  db: ScipDatabase,
+  files: readonly string[],
+  fragments: ReadonlyMap<string, SemanticReferenceFragment[]>,
+) {
+  const writes: Array<{ relativePath: string; contentHash: string; value: SemanticReferenceFragment[] }> = [];
+  for (const file of files) {
+    const identity = typeScriptSemanticIdentityForFile(db, file, TYPESCRIPT_REFERENCE_FRAGMENT_SCHEMA);
+    if (!identity?.key) continue;
+    writes.push({
+      relativePath: file,
+      contentHash: identity.key,
+      value: fragments.get(file) ?? [],
+    });
+  }
+  return writes;
 }

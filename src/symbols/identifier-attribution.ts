@@ -83,13 +83,8 @@ export function attributeIdentifier(db: ScipDatabase, file: string, identifier: 
   // that matches a candidate's defining file. Credit ALL candidates in
   // that file (interface dispatch could land on any impl at runtime).
   const importsByName = sourceImportPathsByLocalName(db, file);
-  const directlyImportedFrom = importsByName.get(identifier);
-  if (directlyImportedFrom) {
-    for (const sourcePath of directlyImportedFrom) {
-      const matches = bucket.filter((e) => pathsResolveSame(sourcePath, e.file));
-      if (matches.length > 0) return matches.map(toSymbolRef);
-    }
-  }
+  const direct = directlyImportedIdentifierRefs(bucket, importsByName.get(identifier));
+  if (direct.length > 0) return direct;
 
   // 3. Indirect access (factory / method-on-instance). The leaf isn't
   // imported by name, but the consumer imports SOMETHING from a file
@@ -98,8 +93,7 @@ export function attributeIdentifier(db: ScipDatabase, file: string, identifier: 
   // type comes from that file. Example: tests import getPaymentProcessor
   // from provider.ts, then call processor.createIntent(...). Credit all
   // candidates in the imported file.
-  const allImportedSourcePaths = new Set<string>();
-  for (const set of importsByName.values()) for (const p of set) allImportedSourcePaths.add(p);
+  const allImportedSourcePaths = importedSourcePaths(importsByName);
   for (const sourcePath of allImportedSourcePaths) {
     const matches = bucket.filter((e) => pathsResolveSame(sourcePath, e.file));
     if (matches.length > 0 && matches.length === bucket.length) {
@@ -336,4 +330,24 @@ export function materializeReferenceSites(db: ScipDatabase, perFileLines: Map<st
     }
   }
   return sites;
+}
+
+function directlyImportedIdentifierRefs(
+  bucket: readonly Parameters<typeof toSymbolRef>[0][],
+  directlyImportedFrom: ReadonlySet<string> | undefined,
+): SymbolRef[] {
+  if (directlyImportedFrom) {
+    for (const sourcePath of directlyImportedFrom) {
+      const matches = bucket.filter((e) => pathsResolveSame(sourcePath, e.file));
+      if (matches.length > 0) return matches.map(toSymbolRef);
+    }
+  }
+
+  return [];
+}
+
+function importedSourcePaths(imports: ReadonlyMap<string, ReadonlySet<string>>): Set<string> {
+  const allImportedSourcePaths = new Set<string>();
+  for (const set of imports.values()) for (const p of set) allImportedSourcePaths.add(p);
+  return allImportedSourcePaths;
 }

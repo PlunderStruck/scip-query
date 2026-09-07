@@ -154,21 +154,7 @@ export function verifyCleanupPlan(
     const applyBatch = cleanupBatchApplier(snapshot.root);
     for (const batch of plan.batches) {
       applyBatch(batch);
-      let failure: BatchVerification | null = null;
-      for (const checker of checkers) {
-        const result = runChecker(checker, snapshot.root, timeoutMs);
-        const decision = decideBatchStatus(result, baselineErrorsByChecker.get(checker.label) ?? [], result.rawErrors);
-        if (decision.status === 'failed') {
-          const errors = decision.errors.length > 0 ? decision.errors : result.outputTail;
-          failure = {
-            depth: batch.depth,
-            status: 'failed',
-            reason: `${checker.label}: ${decision.reason}`,
-            errors: errors.slice(0, MAX_ERROR_LINES),
-          };
-          break;
-        }
-      }
+      const failure = checkCleanupBatch(checkers, snapshot.root, timeoutMs, baselineErrorsByChecker, batch.depth);
       if (!failure) {
         batches.push({ depth: batch.depth, status: 'verified' });
       } else {
@@ -478,10 +464,7 @@ function workingTreeInspectionFailureReason(error: unknown): string {
   if (failure.code === 'ETIMEDOUT' || failure.killed === true) {
     return `git status timed out after ${GIT_STATUS_TIMEOUT_MS}ms`;
   }
-  if (
-    failure.code === 'ENOBUFS' ||
-    (typeof failure.message === 'string' && /maxBuffer|stdout.*buffer/i.test(failure.message))
-  ) {
+  if (workingTreeOutputLimitExceeded(failure)) {
     return `git status exceeded its ${GIT_STATUS_MAX_BYTES}-byte output limit`;
   }
   if (typeof failure.signal === 'string' && failure.signal !== '') {
@@ -490,11 +473,7 @@ function workingTreeInspectionFailureReason(error: unknown): string {
   if (typeof failure.status === 'number') {
     return `git status exited with status ${failure.status}`;
   }
-  const message =
-    typeof failure.message === 'string'
-      ? failure.message.replaceAll(/\s+/g, ' ').trim().slice(0, 240)
-      : String(error).replaceAll(/\s+/g, ' ').trim().slice(0, 240);
-  return message === '' ? 'git status failed for an unknown reason' : `git status failed: ${message}`;
+  return workingTreeFailureMessage(failure, error);
 }
 
 /** Worktrees only contain tracked files — link the dependency dirs in. */
@@ -755,10 +734,7 @@ const MAX_BALANCE_EXTENSION = 200;
 function extendToBalanced(strippedLines: readonly string[], start: number, end: number): number {
   let depth = 0;
   for (let line = start; line < strippedLines.length; line++) {
-    for (const char of strippedLines[line] ?? '') {
-      if (char === '(' || char === '[' || char === '{') depth += 1;
-      else if (char === ')' || char === ']' || char === '}') depth -= 1;
-    }
+    depth += delimiterDepthChange(strippedLines[line] ?? '');
     if (line >= end && depth <= 0) return line;
     if (line - end > MAX_BALANCE_EXTENSION) break;
   }
@@ -958,18 +934,8 @@ function parseCljKondoJsonDiagnostics(output: string): CheckerDiagnostic[] {
   if (!Array.isArray(findings)) return [];
   const diagnostics: CheckerDiagnostic[] = [];
   for (const finding of findings) {
-    if (!finding || typeof finding !== 'object') continue;
-    const record = finding as Record<string, unknown>;
-    const level = record['level'];
-    if (level !== 'error') continue;
-    diagnostics.push({
-      file: typeof record['filename'] === 'string' ? record['filename'] : '',
-      line: typeof record['row'] === 'number' ? record['row'] : undefined,
-      column: typeof record['col'] === 'number' ? record['col'] : undefined,
-      code: typeof record['type'] === 'string' ? record['type'] : undefined,
-      message: typeof record['message'] === 'string' ? record['message'] : '',
-      parseBasis: 'clj-kondo-json',
-    });
+    const diagnostic = cljKondoErrorDiagnostic(finding);
+    if (diagnostic) diagnostics.push(diagnostic);
   }
   return diagnostics;
 }
@@ -1013,4 +979,68 @@ function outputTail(output: string, limit = 10): string[] {
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .slice(-limit);
+}
+
+function delimiterDepthChange(line: string): number {
+  let depth = 0;
+  for (const char of line) {
+    if (char === '(' || char === '[' || char === '{') depth += 1;
+    else if (char === ')' || char === ']' || char === '}') depth -= 1;
+  }
+  return depth;
+}
+
+function cljKondoErrorDiagnostic(finding: unknown): CheckerDiagnostic | null {
+  if (!finding || typeof finding !== 'object') return null;
+  const record = finding as Record<string, unknown>;
+  const level = record['level'];
+  if (level !== 'error') return null;
+  return {
+    file: typeof record['filename'] === 'string' ? record['filename'] : '',
+    line: typeof record['row'] === 'number' ? record['row'] : undefined,
+    column: typeof record['col'] === 'number' ? record['col'] : undefined,
+    code: typeof record['type'] === 'string' ? record['type'] : undefined,
+    message: typeof record['message'] === 'string' ? record['message'] : '',
+    parseBasis: 'clj-kondo-json',
+  };
+}
+
+function workingTreeFailureMessage(failure: { message?: unknown }, error: unknown): string {
+  const message =
+    typeof failure.message === 'string'
+      ? failure.message.replaceAll(/\s+/g, ' ').trim().slice(0, 240)
+      : String(error).replaceAll(/\s+/g, ' ').trim().slice(0, 240);
+  return message === '' ? 'git status failed for an unknown reason' : `git status failed: ${message}`;
+}
+
+function checkCleanupBatch(
+  checkers: readonly Checker[],
+  root: string,
+  timeoutMs: number,
+  baselineErrorsByChecker: ReadonlyMap<string, readonly string[]>,
+  depth: number,
+): BatchVerification | null {
+  let failure: BatchVerification | null = null;
+  for (const checker of checkers) {
+    const result = runChecker(checker, root, timeoutMs);
+    const decision = decideBatchStatus(result, baselineErrorsByChecker.get(checker.label) ?? [], result.rawErrors);
+    if (decision.status === 'failed') {
+      const errors = decision.errors.length > 0 ? decision.errors : result.outputTail;
+      failure = {
+        depth,
+        status: 'failed',
+        reason: `${checker.label}: ${decision.reason}`,
+        errors: errors.slice(0, MAX_ERROR_LINES),
+      };
+      break;
+    }
+  }
+  return failure;
+}
+
+function workingTreeOutputLimitExceeded(failure: { code?: unknown; message?: unknown }): boolean {
+  return (
+    failure.code === 'ENOBUFS' ||
+    (typeof failure.message === 'string' && /maxBuffer|stdout.*buffer/i.test(failure.message))
+  );
 }

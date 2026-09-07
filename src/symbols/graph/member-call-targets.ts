@@ -491,18 +491,7 @@ function callExpressionForSite(
   }
   let calls = byFile.get(sourceFile);
   if (!calls) {
-    calls = new Map();
-    for (const node of nodesOfTypes(root, 'call_expression')) {
-      const callee = node.childForFieldName('function') ?? node.namedChild(0);
-      const match = /^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/u.exec(callee?.text.replace(/\s+/gu, '') ?? '');
-      if (!match) continue;
-      for (let callLine = node.startPosition.row; callLine <= node.endPosition.row; callLine += 1) {
-        const key = `${callLine}\0${match[1]}\0${match[2]}`;
-        const existing = calls!.get(key);
-        if (!existing || node.endIndex - node.startIndex < existing.endIndex - existing.startIndex)
-          calls!.set(key, node);
-      }
-    }
+    calls = collectMemberCallExpressions(root);
     byFile.set(sourceFile, calls);
   }
   return calls.get(`${line}\0${receiver}\0${member}`) ?? null;
@@ -602,8 +591,7 @@ function serviceObjectMemberImplementations(
   walk(root, (node) => {
     if (!insideServiceFactoryObject(node, serviceAliases)) return;
     if (node.type === 'pair') {
-      const key = node.childForFieldName('key') ?? node.namedChild(0);
-      const value = node.childForFieldName('value') ?? node.namedChild(1);
+      const { key, value } = serviceMemberPairParts(node);
       if (unquotedPropertyName(key?.text) !== member || !value) return;
       if (value.type === 'identifier') implementationNames.add(value.text);
       else if (syntaxContainsCallableValue(value)) {
@@ -613,18 +601,14 @@ function serviceObjectMemberImplementations(
           endLine: node.endPosition.row,
         });
       } else {
-        const callbackImplementations = factoryReturnedMemberCallbackImplementations(
+        collectServiceFactoryMemberImplementations(
           db,
           implementationFile,
-          value.text,
+          value,
+          node,
+          factoryMemberImplementations,
+          providerContainers,
         );
-        const resolved = factoryReturnedMemberImplementations(db, implementationFile, value.text);
-        if (callbackImplementations.length > 0) factoryMemberImplementations.push(...callbackImplementations);
-        else if (resolved.length > 0) factoryMemberImplementations.push(...resolved);
-        else {
-          const provider = enclosingServiceProviderBinding(node);
-          if (provider) providerContainers.push(provider);
-        }
       }
       return;
     }
@@ -692,13 +676,7 @@ function serviceAliasesForImplementation(
   if (pathsResolveSame(implementationFile, serviceFile)) aliases.add('Service');
   for (const imported of getSourceImports(db, implementationFile)) {
     if (!imported.sourcePath || !pathsResolveSame(imported.sourcePath, serviceFile)) continue;
-    if (imported.kind === 'namespace' && imported.localName) {
-      aliases.add(`${imported.localName}.Service`);
-      continue;
-    }
-    const importedName = imported.importedName === 'default' ? imported.localName : imported.importedName;
-    if (importedName === 'Service') aliases.add(imported.localName ?? imported.importedName);
-    else if (imported.localName && imported.importedName !== 'default') aliases.add(`${imported.localName}.Service`);
+    appendServiceImportAliases(imported, aliases);
   }
   return aliases;
 }
@@ -850,13 +828,7 @@ function reachedFactoryOptionMembers(
     for (const site of factoryCallsites.filter(
       (candidate) => candidate.line >= current.startLine && candidate.line <= current.endLine,
     )) {
-      if (site.memberAccess && site.calleeQualifier && parameterNames.has(site.calleeQualifier)) {
-        reachedOptionMembers.add(site.calleeLeaf);
-        continue;
-      }
-      if (site.memberAccess) continue;
-      const localTargets = factoryCallables.filter((callable) => callable.name === site.calleeLeaf);
-      if (localTargets.length === 1) queue.push(localTargets[0]!);
+      followFactoryOptionCall(site, parameterNames, reachedOptionMembers, factoryCallables, queue);
     }
   }
   return reachedOptionMembers;
@@ -877,12 +849,7 @@ function factoryOptionCallbackTargets(
       targets.push(...callableTargetsFromArgumentValue(db, sourceFile, child.text, child, child));
       continue;
     }
-    if (child.type !== 'pair') continue;
-    const property = child.childForFieldName('key') ?? child.namedChild(0);
-    const value = child.childForFieldName('value') ?? child.namedChild(1);
-    const callbackName = unquotedPropertyName(property?.text);
-    if (!callbackName || !reachedOptionMembers.has(callbackName) || !value) continue;
-    targets.push(...callableTargetsFromArgumentValue(db, sourceFile, callbackName, value, child));
+    targets.push(...factoryOptionPairCallbackTargets(db, sourceFile, child, reachedOptionMembers));
   }
   return targets.filter(
     (target, index, all) =>
@@ -1016,12 +983,7 @@ function constructedMemberCallTarget(
   const constructorName = [...constructorNames][0]!;
   const imported = sourceImports.filter((entry) => entry.localName === constructorName);
   if (imported.length !== 1) return null;
-  const importedName = imported[0]!.importedName === 'default' ? constructorName : imported[0]!.importedName;
-  const resolvedOwnerTypes =
-    imported[0]!.importedName === 'default'
-      ? resolveImportedDefinitions(db, imported[0]!.sourcePath, constructorName)
-      : [];
-  const ownerTypeName = resolvedOwnerTypes.length === 1 ? resolvedOwnerTypes[0]!.leaf : importedName;
+  const ownerTypeName = constructedImportedOwnerName(db, imported[0]!, constructorName);
   const methods = getDefinitionsForFile(db, imported[0]!.sourcePath).filter(
     (definition) =>
       definition.isFunctionLike &&
@@ -1095,4 +1057,95 @@ function uniqueResolvedPaths(paths: readonly string[]): string[] {
     if (!unique.some((candidate) => pathsResolveSame(candidate, path))) unique.push(path);
   }
   return unique;
+}
+
+function collectServiceFactoryMemberImplementations(
+  db: ScipDatabase,
+  implementationFile: string,
+  value: SyntaxNode,
+  node: SyntaxNode,
+  factoryMemberImplementations: Array<{ name: string; startLine: number; endLine: number; file: string }>,
+  providerContainers: Array<{ name: string; startLine: number; endLine: number }>,
+): void {
+  const callbackImplementations = factoryReturnedMemberCallbackImplementations(db, implementationFile, value.text);
+  const resolved = factoryReturnedMemberImplementations(db, implementationFile, value.text);
+  if (callbackImplementations.length > 0) factoryMemberImplementations.push(...callbackImplementations);
+  else if (resolved.length > 0) factoryMemberImplementations.push(...resolved);
+  else {
+    const provider = enclosingServiceProviderBinding(node);
+    if (provider) providerContainers.push(provider);
+  }
+}
+
+function collectMemberCallExpressions(root: SyntaxNode): Map<string, SyntaxNode> {
+  const calls = new Map<string, SyntaxNode>();
+  for (const node of nodesOfTypes(root, 'call_expression')) {
+    const callee = node.childForFieldName('function') ?? node.namedChild(0);
+    const match = /^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/u.exec(callee?.text.replace(/\s+/gu, '') ?? '');
+    if (!match) continue;
+    for (let callLine = node.startPosition.row; callLine <= node.endPosition.row; callLine += 1) {
+      const key = `${callLine}\0${match[1]}\0${match[2]}`;
+      const existing = calls.get(key);
+      if (!existing || node.endIndex - node.startIndex < existing.endIndex - existing.startIndex) calls.set(key, node);
+    }
+  }
+  return calls;
+}
+
+function appendServiceImportAliases(imported: ReturnType<typeof getSourceImports>[number], aliases: Set<string>): void {
+  if (imported.kind === 'namespace' && imported.localName) {
+    aliases.add(`${imported.localName}.Service`);
+    return;
+  }
+  const importedName = imported.importedName === 'default' ? imported.localName : imported.importedName;
+  if (importedName === 'Service') aliases.add(imported.localName ?? imported.importedName);
+  else if (imported.localName && imported.importedName !== 'default') aliases.add(`${imported.localName}.Service`);
+}
+
+function followFactoryOptionCall(
+  site: NonNullable<ReturnType<typeof getCallSites>>[number],
+  parameterNames: ReadonlySet<string>,
+  reachedOptionMembers: Set<string>,
+  factoryCallables: NonNullable<ReturnType<typeof getCallableSites>>,
+  queue: Array<{ name: string; startLine: number; endLine: number }>,
+): void {
+  if (site.memberAccess && site.calleeQualifier && parameterNames.has(site.calleeQualifier)) {
+    reachedOptionMembers.add(site.calleeLeaf);
+    return;
+  }
+  if (site.memberAccess) return;
+  const localTargets = factoryCallables.filter((callable) => callable.name === site.calleeLeaf);
+  if (localTargets.length === 1) queue.push(localTargets[0]!);
+}
+
+function factoryOptionPairCallbackTargets(
+  db: ScipDatabase,
+  sourceFile: string,
+  child: SyntaxNode,
+  reachedOptionMembers: ReadonlySet<string>,
+): ReturnType<typeof callableTargetsFromArgumentValue> {
+  if (child.type !== 'pair') return [];
+  const property = child.childForFieldName('key') ?? child.namedChild(0);
+  const value = child.childForFieldName('value') ?? child.namedChild(1);
+  const callbackName = unquotedPropertyName(property?.text);
+  if (!callbackName || !reachedOptionMembers.has(callbackName) || !value) return [];
+  return callableTargetsFromArgumentValue(db, sourceFile, callbackName, value, child);
+}
+
+function constructedImportedOwnerName(
+  db: ScipDatabase,
+  imported: ParsedSourceImport & { sourcePath: string },
+  constructorName: string,
+): string {
+  const importedName = imported.importedName === 'default' ? constructorName : imported.importedName;
+  const resolvedOwnerTypes =
+    imported.importedName === 'default' ? resolveImportedDefinitions(db, imported.sourcePath, constructorName) : [];
+  const ownerTypeName = resolvedOwnerTypes.length === 1 ? resolvedOwnerTypes[0]!.leaf : importedName;
+  return ownerTypeName;
+}
+
+function serviceMemberPairParts(node: SyntaxNode) {
+  const key = node.childForFieldName('key') ?? node.namedChild(0);
+  const value = node.childForFieldName('value') ?? node.namedChild(1);
+  return { key, value };
 }

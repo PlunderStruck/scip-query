@@ -182,15 +182,13 @@ function parseOccurrence(buffer: Uint8Array, frameStart: number, start: number, 
   let roles = 0;
   for (const field of eachWireField(buffer, start, end)) {
     if (field.fieldNumber === OCC_RANGE) {
-      if (field.wireType === 2) readPackedInt32s(buffer, field.valueStart, field.valueEnd, range);
-      else if (field.wireType === 0) range.push(field.varint);
+      appendOccurrenceRangeField(buffer, field, range);
     } else if (field.fieldNumber === OCC_SYMBOL && field.wireType === 2) {
       symbol = textDecoder.decode(buffer.subarray(field.valueStart, field.valueEnd));
     } else if (field.fieldNumber === OCC_SYMBOL_ROLES && field.wireType === 0) {
       roles = field.varint;
     } else if (field.fieldNumber === OCC_ENCLOSING_RANGE) {
-      if (field.wireType === 2) readPackedInt32s(buffer, field.valueStart, field.valueEnd, enclosing);
-      else if (field.wireType === 0) enclosing.push(field.varint);
+      appendOccurrenceRangeField(buffer, field, enclosing);
     }
   }
   const normalized = normalizeRange(range);
@@ -608,3 +606,13 @@ function positionEncodingName(value: number): string | null {
 function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) throw new ScipSqliteConversionError('SCIP SQLite conversion aborted');
 }
+
+function appendOccurrenceRangeField(
+  buffer: Uint8Array,
+  field: IterableElement<ReturnType<typeof eachWireField>>,
+  range: number[],
+): void {
+  if (field.wireType === 2) readPackedInt32s(buffer, field.valueStart, field.valueEnd, range);
+  else if (field.wireType === 0) range.push(field.varint);
+}
+type IterableElement<T> = T extends Iterable<infer E> ? E : never;

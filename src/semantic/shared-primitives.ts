@@ -354,24 +354,7 @@ export function exactSemanticCallerMap(
     recordCallerFilesFromReferences(db, result, definition, buildSemanticReferences(db, definition));
   }
   if (typescriptDefinitions.length > 0) {
-    const fragments = materializeTypeScriptReferenceFragments(db, typescriptDefinitions, (p) =>
-      getSemanticProvider(db, p),
-    );
-    let references = fragments?.references;
-    if (!references) {
-      const provider = availableSemanticProvider(db, typescriptDefinitions[0]!.relativePath);
-      references = provider
-        ? provider.referencesForDefinitions
-          ? provider.referencesForDefinitions(typescriptDefinitions, { exact: true })
-          : new Map(
-              typescriptDefinitions.map((definition) => [definition.symbolId, provider.referencesFor(definition)]),
-            )
-        : new Map();
-      if (provider && profileEnabled())
-        recordTypeScriptReferenceFragmentShadow(db, typescriptDefinitions, references, (p) =>
-          getSemanticProvider(db, p),
-        );
-    }
+    const references = exactTypeScriptCallerReferences(db, typescriptDefinitions);
     for (const definition of typescriptDefinitions) {
       recordCallerFilesFromReferences(db, result, definition, references.get(definition.symbolId) ?? []);
     }
@@ -736,8 +719,7 @@ export function semanticReferenceMap(
         continue;
       }
       if (profiling) providerHits += 1;
-      if (referenceProvider.referencesForDefinitions) appendDefinition(bulkGroups, referenceProvider, definition);
-      else scalarDefinitions.push({ provider: referenceProvider, definition });
+      groupProviderReferenceDefinition(referenceProvider, definition, bulkGroups, scalarDefinitions);
     }
     return { bulkGroups, prefetchCalleeGroups, scalarDefinitions };
   };
@@ -1197,4 +1179,38 @@ function appendBulkCalleeDefinition(
   const bucket = bulkGroups.get(provider);
   if (bucket) bucket.push(indexedDefinition);
   else bulkGroups.set(provider, [indexedDefinition]);
+}
+
+function exactTypeScriptCallerReferences(
+  db: ScipDatabase,
+  typescriptDefinitions: IndexedDefinition[],
+): Map<number, SemanticReference[]> {
+  const fragments = materializeTypeScriptReferenceFragments(db, typescriptDefinitions, (p) =>
+    getSemanticProvider(db, p),
+  );
+  let references = fragments?.references;
+  if (!references) {
+    const provider = availableSemanticProvider(db, typescriptDefinitions[0]!.relativePath);
+    references = provider
+      ? provider.referencesForDefinitions
+        ? provider.referencesForDefinitions(typescriptDefinitions, { exact: true })
+        : new Map(typescriptDefinitions.map((definition) => [definition.symbolId, provider.referencesFor(definition)]))
+      : new Map();
+    if (provider && profileEnabled())
+      recordTypeScriptReferenceFragmentShadow(db, typescriptDefinitions, references, (p) => getSemanticProvider(db, p));
+  }
+  return references;
+}
+
+function groupProviderReferenceDefinition(
+  referenceProvider: SemanticProvider,
+  definition: IndexedDefinition,
+  bulkGroups: Map<SemanticProvider, IndexedDefinition[]>,
+  scalarDefinitions: Array<{ provider: SemanticProvider; definition: IndexedDefinition }>,
+): void {
+  if (referenceProvider.referencesForDefinitions) {
+    const group = bulkGroups.get(referenceProvider);
+    if (group) group.push(definition);
+    else bulkGroups.set(referenceProvider, [definition]);
+  } else scalarDefinitions.push({ provider: referenceProvider, definition });
 }

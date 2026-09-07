@@ -383,22 +383,13 @@ export class RustAnalyzerSessionResolver
           }
         : this.opts.fallbackCalleeResolver?.calleesForDefinitions(calleeDefinitions);
     if (referenceResolution && calleeResolution) {
-      const payload = {
-        resolvedBinary:
-          referenceResolution.resolvedBinary ?? calleeResolution.resolvedBinary ?? baseStatus.resolvedBinary,
-        references: completeRustReferenceMap(referenceDefinitions, referenceResolution.references),
-        callees: completeCalleeMap(calleeDefinitions, calleeResolution.callees),
-      };
-      return referenceResolution.available && calleeResolution.available
-        ? { available: true, ...payload }
-        : {
-            available: false,
-            reason:
-              (!referenceResolution.available ? referenceResolution.reason : undefined) ??
-              (!calleeResolution.available ? calleeResolution.reason : undefined) ??
-              'Rust semantic fallback was unavailable.',
-            ...payload,
-          };
+      return combineRustFallbackResolutions(
+        baseStatus,
+        referenceDefinitions,
+        calleeDefinitions,
+        referenceResolution,
+        calleeResolution,
+      );
     }
     return {
       available: false,
@@ -512,10 +503,8 @@ export type RustSemanticSessionStatus = RustSemanticSessionSelection &
 
 export function rustSemanticSessionSelection(configuredValue: string | undefined): RustSemanticSessionSelection {
   const normalized = configuredValue?.trim().toLowerCase();
-  const explicitWorker =
-    normalized === '0' || normalized === 'false' || normalized === 'off' || normalized === 'worker';
-  const explicitDurable =
-    normalized === '1' || normalized === 'true' || normalized === 'on' || normalized === 'durable';
+  const explicitWorker = ['0', 'false', 'off', 'worker'].includes(normalized ?? '');
+  const explicitDurable = ['1', 'true', 'on', 'durable'].includes(normalized ?? '');
   const usesDefault = normalized === undefined || normalized === '';
   return {
     transport: explicitWorker || (!usesDefault && !explicitDurable) ? 'worker' : 'durable',
@@ -943,4 +932,28 @@ function parseNonNegativeInteger(value: string | undefined): number | null {
   if (!value) return null;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function combineRustFallbackResolutions(
+  baseStatus: RustSemanticStatus,
+  referenceDefinitions: readonly IndexedDefinition[],
+  calleeDefinitions: readonly IndexedDefinition[],
+  referenceResolution: RustReferenceResolution,
+  calleeResolution: RustCalleeResolution,
+): RustCombinedSemanticResolution {
+  const payload = {
+    resolvedBinary: referenceResolution.resolvedBinary ?? calleeResolution.resolvedBinary ?? baseStatus.resolvedBinary,
+    references: completeRustReferenceMap(referenceDefinitions, referenceResolution.references),
+    callees: completeCalleeMap(calleeDefinitions, calleeResolution.callees),
+  };
+  return referenceResolution.available && calleeResolution.available
+    ? { available: true, ...payload }
+    : {
+        available: false,
+        reason:
+          (!referenceResolution.available ? referenceResolution.reason : undefined) ??
+          (!calleeResolution.available ? calleeResolution.reason : undefined) ??
+          'Rust semantic fallback was unavailable.',
+        ...payload,
+      };
 }

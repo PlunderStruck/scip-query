@@ -254,18 +254,7 @@ export function readTypeScriptFragmentGeneration(
     throw new Error('TypeScript fragment project identity changed');
   }
 
-  const fragments = new Map<string, Uint8Array>();
-  for (const record of manifest.documents) {
-    const blobPath = join(paths.blobDir, `${record.blobHash}.scipdoc`);
-    const bytes = readFileWithinLimit(blobPath, {
-      maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
-      inputKind: 'TypeScript fragment blob',
-    });
-    if (bytes.byteLength !== record.byteLength || sha256(bytes) !== record.blobHash) {
-      throw new Error(`TypeScript fragment blob is corrupt: ${record.relativePath}`);
-    }
-    fragments.set(record.relativePath, bytes);
-  }
+  const fragments = readManifestFragmentBlobs(paths, manifest);
   return { manifest, fragments };
 }
 
@@ -298,13 +287,7 @@ function prepareTypeScriptIndexAssembly(input: AssembleTypeScriptIndexInput): {
   const index = deserializeSCIP(input.baseIndexBytes);
   assertProducerMetadata(index.metadata, inputPackageVersion(input));
   assertNoExternalSymbols(index.externalSymbols);
-  const replacements = new Map<string, TypeScriptDocumentFragment>();
-  for (const fragment of input.fragments) {
-    const relativePath = validateRelativePath(fragment.relativePath);
-    if (replacements.has(relativePath)) throw new Error(`duplicate TypeScript fragment replacement: ${relativePath}`);
-    replacements.set(relativePath, fragment);
-  }
-  if (replacements.size === 0) throw new Error('TypeScript index assembly requires at least one replacement');
+  const replacements = typeScriptAssemblyReplacements(input);
 
   const seen = new Set<string>();
   const completeDocuments: Document[] = [];
@@ -565,4 +548,35 @@ function validateRelativePath(value: string): string {
     throw new Error(`invalid TypeScript SCIP document path: ${value}`);
   }
   return value;
+}
+
+function readManifestFragmentBlobs(
+  paths: ReturnType<typeof typeScriptFragmentStorePaths>,
+  manifest: TypeScriptFragmentGenerationManifest,
+): Map<string, Uint8Array> {
+  const fragments = new Map<string, Uint8Array>();
+  for (const record of manifest.documents) {
+    const blobPath = join(paths.blobDir, `${record.blobHash}.scipdoc`);
+    const bytes = readFileWithinLimit(blobPath, {
+      maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+      inputKind: 'TypeScript fragment blob',
+    });
+    if (bytes.byteLength !== record.byteLength || sha256(bytes) !== record.blobHash) {
+      throw new Error(`TypeScript fragment blob is corrupt: ${record.relativePath}`);
+    }
+    fragments.set(record.relativePath, bytes);
+  }
+  return fragments;
+}
+
+function typeScriptAssemblyReplacements(input: AssembleTypeScriptIndexInput): Map<string, TypeScriptDocumentFragment> {
+  const replacements = new Map<string, TypeScriptDocumentFragment>();
+  for (const fragment of input.fragments) {
+    const relativePath = validateRelativePath(fragment.relativePath);
+    if (replacements.has(relativePath)) throw new Error(`duplicate TypeScript fragment replacement: ${relativePath}`);
+    replacements.set(relativePath, fragment);
+  }
+  if (replacements.size === 0) throw new Error('TypeScript index assembly requires at least one replacement');
+
+  return replacements;
 }

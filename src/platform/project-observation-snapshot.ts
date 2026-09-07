@@ -385,14 +385,7 @@ function verifyKnownIndexInputs(
     if (classifyProjectInputPath(path, languages, configuredMarkerFiles) === 'other') continue;
     const expected = expectedByPath.get(path);
     const observed = captured.fingerprints.get(path) ?? captured.files.get(path);
-    if (
-      captured.missing.has(path)
-        ? expected !== undefined
-        : !expected ||
-          !observed ||
-          expected.size !== (observed.fingerprintSize ?? observed.size) ||
-          expected.hash !== observed.sha256
-    ) {
+    if (captured.missing.has(path) ? expected !== undefined : !matchesCapturedInputFingerprint(expected, observed)) {
       throw new Error(`Index-input fingerprint changed before fixed snapshot capture at ${JSON.stringify(path)}.`);
     }
   }
@@ -416,18 +409,7 @@ function fixedGitFileReader(
     if (!entry || entry.type !== 'blob') return undefined;
     const blob = gitBuffer(projectRoot, ['cat-file', 'blob', entry.oid]);
     if (entry.mode === '120000') {
-      const target = blob.toString('utf8');
-      const targetPath = posix.normalize(posix.join(posix.dirname(relativePath), target));
-      if (targetPath === '..' || targetPath.startsWith('../') || isAbsolute(targetPath)) return undefined;
-      const targetFile = read(targetPath, seen);
-      if (!targetFile) return undefined;
-      return {
-        relativePath,
-        content: Buffer.from(targetFile.content),
-        size: targetFile.content.byteLength,
-        fingerprintSize: Buffer.byteLength(target),
-        sha256: createHash('sha256').update('symlink\0').update(target).digest('hex'),
-      };
+      return readFixedGitSymlink(relativePath, blob, (targetPath) => read(targetPath, seen));
     }
     if (blob.byteLength > SOURCE_ARTIFACT_MAX_BYTES) return undefined;
     return {
@@ -485,12 +467,7 @@ function listFilesystemRepositoryContentFiles(projectRoot: string): string[] {
   while (stack.length > 0) {
     const relativeDirectory = stack.pop()!;
     const absoluteDirectory = relativeDirectory ? join(projectRoot, relativeDirectory) : projectRoot;
-    let entries: Array<{ name: string; isDirectory(): boolean }>;
-    try {
-      entries = readdirSync(absoluteDirectory, { withFileTypes: true });
-    } catch {
-      continue;
-    }
+    const entries = readableObservationDirectoryEntries(absoluteDirectory);
     for (const entry of entries) {
       const relativePath = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
       if (isExcludedObservationArtifact(relativePath)) continue;
@@ -503,18 +480,7 @@ function listFilesystemRepositoryContentFiles(projectRoot: string): string[] {
 
 function isExcludedObservationArtifact(relativePath: string): boolean {
   const parts = relativePath.split('/');
-  if (
-    parts[0] === '.git' ||
-    parts[0] === 'node_modules' ||
-    parts[0] === '.scipquery-cache' ||
-    parts[0] === '.scipquery-generations' ||
-    parts[0] === 'dist' ||
-    parts[0] === 'build' ||
-    parts[0] === 'coverage' ||
-    parts[0] === 'target'
-  ) {
-    return true;
-  }
+  if (OBSERVATION_ARTIFACT_ROOTS.has(parts[0]!)) return true;
   return (
     relativePath === 'meta.json' ||
     relativePath.endsWith('.db') ||
@@ -606,4 +572,54 @@ function normalizeConfiguredInputPath(path: string): string {
   }
   const parts = normalized.split('/');
   return parts.some((part) => part === '' || part === '.' || part === '..') ? '' : normalized;
+}
+
+function readFixedGitSymlink(
+  relativePath: string,
+  blob: Buffer,
+  readTarget: (targetPath: string) => ProjectSnapshotFile | undefined,
+): ProjectSnapshotFile | undefined {
+  const target = blob.toString('utf8');
+  const targetPath = posix.normalize(posix.join(posix.dirname(relativePath), target));
+  if (targetPath === '..' || targetPath.startsWith('../') || isAbsolute(targetPath)) return undefined;
+  const targetFile = readTarget(targetPath);
+  if (!targetFile) return undefined;
+  return {
+    relativePath,
+    content: Buffer.from(targetFile.content),
+    size: targetFile.content.byteLength,
+    fingerprintSize: Buffer.byteLength(target),
+    sha256: createHash('sha256').update('symlink\0').update(target).digest('hex'),
+  };
+}
+
+function readableObservationDirectoryEntries(directory: string): Array<{ name: string; isDirectory(): boolean }> {
+  try {
+    return readdirSync(directory, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+const OBSERVATION_ARTIFACT_ROOTS = new Set([
+  '.git',
+  'node_modules',
+  '.scipquery-cache',
+  '.scipquery-generations',
+  'dist',
+  'build',
+  'coverage',
+  'target',
+]);
+
+function matchesCapturedInputFingerprint(
+  expected: ProjectInputSnapshot['files'][number] | undefined,
+  observed: { fingerprintSize?: number; size: number; sha256: string } | undefined,
+): boolean {
+  return (
+    !!expected &&
+    !!observed &&
+    expected.size === (observed.fingerprintSize ?? observed.size) &&
+    expected.hash === observed.sha256
+  );
 }

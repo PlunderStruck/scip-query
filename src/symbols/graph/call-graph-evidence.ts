@@ -149,26 +149,7 @@ export function buildCallerRowsMap(
     for (const callerDef of allDefs) {
       const callees = calleeMap.get(callerDef.symbolId);
       if (!callees || callees.length === 0) continue;
-      for (const callee of callees) {
-        const calleeId = symbolToId.get(callee.symbol);
-        if (calleeId === undefined) continue;
-        if (calleeId === callerDef.symbolId) continue; // skip self-recursion
-        let bucket = result.get(calleeId);
-        if (!bucket) {
-          bucket = [];
-          result.set(calleeId, bucket);
-          seen.set(calleeId, new Set());
-        }
-        const dedupeKey = `${callerDef.symbol}|${callerDef.relativePath}`;
-        if (seen.get(calleeId)!.has(dedupeKey)) continue;
-        seen.get(calleeId)!.add(dedupeKey);
-        bucket.push({
-          symbol: callerDef.symbol,
-          file: callerDef.relativePath,
-          source: 'caller-map-inversion',
-          callEvidence: callee.source,
-        });
-      }
+      appendInvertedCallerRows(callerDef, callees, symbolToId, result, seen);
     }
 
     return result;
@@ -345,15 +326,7 @@ export function buildCalleeMap(
   if (definitions.length === 0) return new Map();
   const additive = opts.additive ?? false;
 
-  const astDefs: SymbolMatch[] = [];
-  const chunkOnlyDefs: SymbolMatch[] = [];
-  for (const def of definitions) {
-    if (detectAstLanguage(def.relativePath) && getCallSites(db, def.relativePath) !== null) {
-      astDefs.push(def);
-    } else {
-      chunkOnlyDefs.push(def);
-    }
-  }
+  const { astDefs, chunkOnlyDefs } = partitionCalleeDefinitions(db, definitions);
 
   const merged = new Map<number, CalleeRow[]>();
   const seenBySymbolId = new Map<number, Map<string, CalleeRow>>();
@@ -852,4 +825,50 @@ function toCalleeRows(
     out.set(symbolId, rows);
   }
   return out;
+}
+
+function appendInvertedCallerRows(
+  callerDef: IndexedDefinition,
+  callees: CalleeRow[],
+  symbolToId: Map<string, number>,
+  result: Map<number, CallerRow[]>,
+  seen: Map<number, Set<string>>,
+): void {
+  for (const callee of callees) {
+    const calleeId = symbolToId.get(callee.symbol);
+    if (calleeId === undefined) continue;
+    if (calleeId === callerDef.symbolId) continue; // skip self-recursion
+    let bucket = result.get(calleeId);
+    if (!bucket) {
+      bucket = [];
+      result.set(calleeId, bucket);
+      seen.set(calleeId, new Set());
+    }
+    const dedupeKey = `${callerDef.symbol}|${callerDef.relativePath}`;
+    if (seen.get(calleeId)!.has(dedupeKey)) continue;
+    seen.get(calleeId)!.add(dedupeKey);
+    bucket.push({
+      symbol: callerDef.symbol,
+      file: callerDef.relativePath,
+      source: 'caller-map-inversion',
+      callEvidence: callee.source,
+    });
+  }
+}
+
+function partitionCalleeDefinitions(
+  db: ScipDatabase,
+  definitions: ReadonlyArray<SymbolMatch>,
+): { astDefs: SymbolMatch[]; chunkOnlyDefs: SymbolMatch[] } {
+  const astDefs: SymbolMatch[] = [];
+  const chunkOnlyDefs: SymbolMatch[] = [];
+  for (const def of definitions) {
+    if (detectAstLanguage(def.relativePath) && getCallSites(db, def.relativePath) !== null) {
+      astDefs.push(def);
+    } else {
+      chunkOnlyDefs.push(def);
+    }
+  }
+
+  return { astDefs, chunkOnlyDefs };
 }

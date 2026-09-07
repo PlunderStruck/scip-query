@@ -74,13 +74,7 @@ function hasCleanupIgnoreComment(db: ScipDatabase, relativePath: string, startLi
     const line = (lines[i] ?? '').trim();
     if (line === '') continue;
     if (suppressionCommentCategory(line) === category) return true;
-    if (
-      !line.startsWith('//') &&
-      !line.startsWith('*') &&
-      !line.startsWith('/*') &&
-      !line.startsWith('@') &&
-      !line.startsWith('#')
-    ) {
+    if (!isCleanupCommentContinuation(line)) {
       return false;
     }
   }
@@ -245,3 +239,7 @@ const TYPE_GUARD_BOUNDARY_TOKENS = new Set([
   'routes',
   'scope',
 ]);
+
+function isCleanupCommentContinuation(line: string): boolean {
+  return ['//', '*', '/*', '@', '#'].some((prefix) => line.startsWith(prefix));
+}

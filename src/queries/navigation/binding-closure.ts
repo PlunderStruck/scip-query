@@ -71,16 +71,7 @@ export function bindingClosureForRange(
     recordDefinition(definition.leaf, definition.relativePath, definition.startLine, definition.endLine);
   }
 
-  for (const imported of getSourceImports(db, relativePath)) {
-    const localName = imported.localName;
-    if (!localName || !referenced.has(localName) || !imported.sourcePath || imported.kind === 'namespace') continue;
-    const importedName = imported.importedName === 'default' ? localName : imported.importedName;
-    for (const definition of resolveImportedDefinitions(db, imported.sourcePath, importedName, {
-      maxReexportDepth: 3,
-    })) {
-      recordDefinition(localName, definition.relativePath, definition.startLine, definition.endLine);
-    }
-  }
+  collectImportedBindingDefinitions(db, relativePath, referenced, recordDefinition);
 
   definitions.sort(compareBindingEvidence);
   const inline = definitions
@@ -136,21 +127,7 @@ function inlineBindingSource(db: ScipDatabase, definition: LiteralDefinitionCand
     .slice(equals + 1)
     .replace(/(?:\/\/|#).*$/u, '')
     .trim();
-  if (
-    !initializer ||
-    initializer.includes('${') ||
-    /\b(?:function|class|struct|interface|trait|enum|lambda)\b/u.test(initializer)
-  ) {
-    return null;
-  }
-  const withoutStrings = initializer.replace(/(['"`])(?:\\.|(?!\1).)*\1/gu, '');
-  const withoutNumbers = withoutStrings.replace(
-    /\b(?:0[xX][\dA-Fa-f_]+|0[bB][01_]+|0[oO][0-7_]+|\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?)n?\b/gu,
-    '',
-  );
-  const allowedLiteralWords = new Set(['true', 'false', 'null', 'undefined', 'None', 'True', 'False']);
-  const remainingWords = withoutNumbers.match(/[A-Za-z_][A-Za-z0-9_]*/gu) ?? [];
-  if (remainingWords.some((word) => !allowedLiteralWords.has(word))) return null;
+  if (!initializerHasOnlyLiteralWords(initializer)) return null;
   return source;
 }
 
@@ -190,4 +167,41 @@ function closureResult(inline: BindingDefinitionEvidence[]): BindingClosure {
 
 function emptyBindingClosure(): BindingClosure {
   return closureResult([]);
+}
+
+function collectImportedBindingDefinitions(
+  db: ScipDatabase,
+  relativePath: string,
+  referenced: ReadonlySet<string>,
+  recordDefinition: (name: string, targetPath: string, targetStartLine: number, targetEndLine: number) => void,
+): void {
+  for (const imported of getSourceImports(db, relativePath)) {
+    const localName = imported.localName;
+    if (!localName || !referenced.has(localName) || !imported.sourcePath || imported.kind === 'namespace') continue;
+    const importedName = imported.importedName === 'default' ? localName : imported.importedName;
+    for (const definition of resolveImportedDefinitions(db, imported.sourcePath, importedName, {
+      maxReexportDepth: 3,
+    })) {
+      recordDefinition(localName, definition.relativePath, definition.startLine, definition.endLine);
+    }
+  }
+}
+
+function initializerHasOnlyLiteralWords(initializer: string): boolean {
+  if (
+    !initializer ||
+    initializer.includes('${') ||
+    /\b(?:function|class|struct|interface|trait|enum|lambda)\b/u.test(initializer)
+  ) {
+    return false;
+  }
+  const withoutStrings = initializer.replace(/(['"`])(?:\\.|(?!\1).)*\1/gu, '');
+  const withoutNumbers = withoutStrings.replace(
+    /\b(?:0[xX][\dA-Fa-f_]+|0[bB][01_]+|0[oO][0-7_]+|\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?)n?\b/gu,
+    '',
+  );
+  const allowedLiteralWords = new Set(['true', 'false', 'null', 'undefined', 'None', 'True', 'False']);
+  const remainingWords = withoutNumbers.match(/[A-Za-z_][A-Za-z0-9_]*/gu) ?? [];
+  if (remainingWords.some((word) => !allowedLiteralWords.has(word))) return false;
+  return true;
 }

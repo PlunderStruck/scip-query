@@ -92,16 +92,7 @@ function reverseDependencyClosure(
   graph: FileDependencyGraph,
   projectFiles: ReadonlySet<string>,
 ): string[] {
-  const consumers = new Map<string, Set<string>>();
-  for (const [consumer, dependencies] of graph) {
-    if (!projectFiles.has(consumer)) continue;
-    for (const dependency of dependencies) {
-      if (!projectFiles.has(dependency)) continue;
-      const entries = consumers.get(dependency) ?? new Set<string>();
-      entries.add(consumer);
-      consumers.set(dependency, entries);
-    }
-  }
+  const consumers = projectDependencyConsumers(graph, projectFiles);
 
   const affected = new Set(changedFiles);
   const pending = [...changedFiles];
@@ -115,4 +106,22 @@ function reverseDependencyClosure(
     }
   }
   return [...affected].sort();
+}
+
+function projectDependencyConsumers(
+  graph: FileDependencyGraph,
+  projectFiles: ReadonlySet<string>,
+): Map<string, Set<string>> {
+  const consumers = new Map<string, Set<string>>();
+  for (const [consumer, dependencies] of graph) {
+    if (!projectFiles.has(consumer)) continue;
+    for (const dependency of dependencies) {
+      if (!projectFiles.has(dependency)) continue;
+      const entries = consumers.get(dependency) ?? new Set<string>();
+      entries.add(consumer);
+      consumers.set(dependency, entries);
+    }
+  }
+
+  return consumers;
 }

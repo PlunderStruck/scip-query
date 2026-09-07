@@ -40,14 +40,7 @@ export function searchSourceBatch(
   opts: SourceSearchOptions = {},
 ): SourceSearchResult[] {
   if (patterns.length === 0) return [];
-  const context = opts.context ?? 6;
-  if (!Number.isSafeInteger(context) || context < 0) {
-    throw new RangeError(`context must be a non-negative safe integer; received ${context}`);
-  }
-  const limit = opts.limit ?? 12;
-  if (!Number.isSafeInteger(limit) || limit <= 0) {
-    throw new RangeError(`limit must be a positive safe integer; received ${limit}`);
-  }
+  const { context, limit } = sourceSearchBounds(opts);
   const searches = patterns.map((pattern): PreparedSourceSearch => {
     if (pattern.length === 0) throw new Error('The source search pattern must not be empty.');
     return {
@@ -185,12 +178,7 @@ function finalizeSourceSearch(
     search.identities.length > SOURCE_SEARCH_IDENTITY_RENDER_LIMIT
       ? selectRepresentativeIdentities(search.identities, SOURCE_SEARCH_IDENTITY_RENDER_LIMIT)
       : search.identities;
-  const materializedIdentities =
-    limit === Number.MAX_SAFE_INTEGER
-      ? search.identities
-      : opts.ranking
-        ? selectRepresentativeIdentities(search.identities, limit)
-        : search.identities.slice(0, limit);
+  const materializedIdentities = sourceSearchMaterializationIdentities(search, limit, opts);
   const matches = materializedIdentities.flatMap((identity) => {
     const source = search.textByPath.get(identity.relativePath);
     const snippet =
@@ -325,4 +313,30 @@ function compareSearchIdentities(left: SourceSearchIdentity, right: SourceSearch
     left.relativePath.localeCompare(right.relativePath) ||
     left.focusLine - right.focusLine
   );
+}
+
+function sourceSearchBounds(opts: SourceSearchOptions): { context: number; limit: number } {
+  const context = opts.context ?? 6;
+  if (!Number.isSafeInteger(context) || context < 0) {
+    throw new RangeError(`context must be a non-negative safe integer; received ${context}`);
+  }
+  const limit = opts.limit ?? 12;
+  if (!Number.isSafeInteger(limit) || limit <= 0) {
+    throw new RangeError(`limit must be a positive safe integer; received ${limit}`);
+  }
+  return { context, limit };
+}
+
+function sourceSearchMaterializationIdentities(
+  search: PreparedSourceSearch,
+  limit: number,
+  opts: SourceSearchOptions,
+): PreparedSourceSearch['identities'] {
+  const materializedIdentities =
+    limit === Number.MAX_SAFE_INTEGER
+      ? search.identities
+      : opts.ranking
+        ? selectRepresentativeIdentities(search.identities, limit)
+        : search.identities.slice(0, limit);
+  return materializedIdentities;
 }

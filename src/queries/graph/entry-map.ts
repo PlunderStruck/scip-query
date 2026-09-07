@@ -356,16 +356,16 @@ function reachableCallGraph(db: ScipDatabase, index: ProjectIndex, entry: Indexe
           externalByKey.set(externalCallKey(external), external);
           continue;
         }
-        const nextDepth = currentDepth + 1;
-        const knownDepth = depthBySymbol.get(calleeDefinition.symbol);
-        if (knownDepth === undefined || nextDepth < knownDepth) depthBySymbol.set(calleeDefinition.symbol, nextDepth);
-        symbolByName.set(
-          calleeDefinition.symbol,
-          entryMapSymbol(calleeDefinition, Math.min(nextDepth, knownDepth ?? nextDepth)),
+        recordReachableCallee(
+          current,
+          calleeDefinition,
+          callee,
+          currentDepth,
+          depthBySymbol,
+          symbolByName,
+          edgesByKey,
+          nextFrontier,
         );
-        const edge = symbolEdge(current, calleeDefinition, callee);
-        edgesByKey.set(symbolEdgeKey(edge), edge);
-        if (knownDepth === undefined) nextFrontier.push(calleeDefinition);
       }
     }
     frontier = nextFrontier;
@@ -527,4 +527,26 @@ function compareExternalCalls(left: EntryMapExternalCall, right: EntryMapExterna
     left.fromSymbol.localeCompare(right.fromSymbol) ||
     left.toSymbol.localeCompare(right.toSymbol)
   );
+}
+
+function recordReachableCallee(
+  current: IndexedDefinition,
+  calleeDefinition: IndexedDefinition,
+  callee: CalleeRow,
+  currentDepth: number,
+  depthBySymbol: Map<string, number>,
+  symbolByName: Map<string, EntryMapSymbol>,
+  edgesByKey: Map<string, EntryMapSymbolEdge>,
+  nextFrontier: IndexedDefinition[],
+): void {
+  const nextDepth = currentDepth + 1;
+  const knownDepth = depthBySymbol.get(calleeDefinition.symbol);
+  if (knownDepth === undefined || nextDepth < knownDepth) depthBySymbol.set(calleeDefinition.symbol, nextDepth);
+  symbolByName.set(
+    calleeDefinition.symbol,
+    entryMapSymbol(calleeDefinition, Math.min(nextDepth, knownDepth ?? nextDepth)),
+  );
+  const edge = symbolEdge(current, calleeDefinition, callee);
+  edgesByKey.set(symbolEdgeKey(edge), edge);
+  if (knownDepth === undefined) nextFrontier.push(calleeDefinition);
 }

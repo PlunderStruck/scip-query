@@ -406,6 +406,19 @@ function serializeFileAddRecords(records: ReadonlyMap<string, FileAddRecord>): s
   return JSON.stringify([...records.entries()]);
 }
 
+function fileAddRecord(value: unknown): FileAddRecord | null {
+  const record = value as Partial<FileAddRecord> | undefined;
+  if (
+    !record ||
+    typeof record.commitsAgo !== 'number' ||
+    !Number.isFinite(record.commitsAgo) ||
+    typeof record.addedAt !== 'number' ||
+    !Number.isFinite(record.addedAt)
+  )
+    return null;
+  return { commitsAgo: record.commitsAgo, addedAt: record.addedAt };
+}
+
 function parseFileAddRecordsPayload(payload: string | null): Map<string, FileAddRecord> | null {
   if (!payload) return null;
   try {
@@ -414,16 +427,8 @@ function parseFileAddRecordsPayload(payload: string | null): Map<string, FileAdd
     const records = new Map<string, FileAddRecord>();
     for (const entry of parsed) {
       if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string') return null;
-      const record = entry[1] as Partial<FileAddRecord> | undefined;
-      if (
-        !record ||
-        typeof record.commitsAgo !== 'number' ||
-        !Number.isFinite(record.commitsAgo) ||
-        typeof record.addedAt !== 'number' ||
-        !Number.isFinite(record.addedAt)
-      ) {
-        return null;
-      }
+      const record = fileAddRecord(entry[1]);
+      if (!record) return null;
       records.set(entry[0], { commitsAgo: record.commitsAgo, addedAt: record.addedAt });
     }
     return records;
@@ -940,20 +945,26 @@ function coChangeSubjectContext(subjects: readonly string[]): CoChangeSubjectCon
   };
 }
 
+const SUBJECT_LABEL_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\b(?:feat|feature)\b/i, 'feature'],
+  [/\b(?:fix(?:es|ed)?|bug|regression|hotfix)\b/i, 'fix'],
+  [/\b(?:docs?|documentation|guide|readme)\b/i, 'docs'],
+  [/\brefactor(?:ing|ed)?\b/i, 'refactor'],
+  [/\btests?\b/i, 'test'],
+  [/\b(?:release|version|v\d+\.\d+)\b/i, 'release'],
+  [/\bchore\b/i, 'chore'],
+  [/\bbuild\b/i, 'build'],
+  [/\bci\b/i, 'ci'],
+  [/\bperf(?:ormance)?\b/i, 'perf'],
+];
+
 function subjectLabelsFor(subject: string): string[] {
   const labels = new Set<string>();
   const conventional = CONVENTIONAL_SUBJECT_PATTERN.exec(subject)?.[1]?.toLowerCase();
   if (conventional) labels.add(normalizeSubjectLabel(conventional));
-  if (/\b(?:feat|feature)\b/i.test(subject)) labels.add('feature');
-  if (/\b(?:fix(?:es|ed)?|bug|regression|hotfix)\b/i.test(subject)) labels.add('fix');
-  if (/\b(?:docs?|documentation|guide|readme)\b/i.test(subject)) labels.add('docs');
-  if (/\brefactor(?:ing|ed)?\b/i.test(subject)) labels.add('refactor');
-  if (/\btests?\b/i.test(subject)) labels.add('test');
-  if (/\b(?:release|version|v\d+\.\d+)\b/i.test(subject)) labels.add('release');
-  if (/\bchore\b/i.test(subject)) labels.add('chore');
-  if (/\bbuild\b/i.test(subject)) labels.add('build');
-  if (/\bci\b/i.test(subject)) labels.add('ci');
-  if (/\bperf(?:ormance)?\b/i.test(subject)) labels.add('perf');
+  for (const [pattern, label] of SUBJECT_LABEL_PATTERNS) {
+    if (pattern.test(subject)) labels.add(label);
+  }
   return [...labels];
 }
 

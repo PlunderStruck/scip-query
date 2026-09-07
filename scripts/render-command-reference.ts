@@ -173,13 +173,7 @@ export function validateSkillCommand(entry: SkillCommandEntry, sourceLabel: stri
   if (!descriptor) {
     throw new Error(`${sourceLabel}: unknown command "${commandId ?? entry.template}" in commands frontmatter`);
   }
-  const knownFlags = new Set<string>();
-  for (const opt of descriptor.options ?? []) {
-    for (const part of opt.flags.split(',')) {
-      const flag = part.trim().split(/\s+/)[0];
-      if (flag) knownFlags.add(flag);
-    }
-  }
+  const knownFlags = skillDescriptorFlags(descriptor);
   for (const token of tokens.slice(1)) {
     if (!token.startsWith('-')) continue;
     if (!knownFlags.has(token)) {
@@ -281,4 +275,15 @@ if (!isTestImport && process.argv.includes('--write')) {
   writeSkillCommandBlocks(join(process.cwd(), 'skills'));
 } else if (!isTestImport) {
   console.log(generated);
+}
+
+function skillDescriptorFlags(descriptor: CommandDescriptor): Set<string> {
+  const knownFlags = new Set<string>();
+  for (const opt of descriptor.options ?? []) {
+    for (const part of opt.flags.split(',')) {
+      const flag = part.trim().split(/\s+/)[0];
+      if (flag) knownFlags.add(flag);
+    }
+  }
+  return knownFlags;
 }

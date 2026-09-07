@@ -466,15 +466,12 @@ function prepareSetupRefreshConfig(
     id: 'automatic-indexing-config',
     label: 'Automatic indexing config',
     status: automaticRefreshError !== null ? 'failed' : configHasErrors || !automaticRefresh ? 'skipped' : 'ok',
-    message:
-      automaticRefreshError ??
-      (configHasErrors
-        ? 'Skipped because the existing project config has validation errors.'
-        : automaticRefresh
-          ? automaticRefreshConfig?.changed
-            ? 'Enabled demand-started automatic incremental indexing for this project.'
-            : 'Demand-started automatic incremental indexing is already enabled.'
-          : 'Automatic incremental indexing remains explicitly disabled for this project.'),
+    message: setupRefreshConfigMessage(
+      automaticRefreshError,
+      configHasErrors,
+      automaticRefresh,
+      automaticRefreshConfig,
+    ),
     ...(automaticRefreshConfig ? { details: [automaticRefreshConfig.configPath] } : {}),
   };
   return { change: automaticRefreshConfig, step };
@@ -563,19 +560,7 @@ function prepareSetupAstParsers(
   let astParsers: AstParserSetupResult;
   if (install) {
     astParsers = setupAstParsers(languages);
-    addStep(steps, {
-      id: 'ast-parsers',
-      label: 'AST parser packages',
-      status: astParsers.unavailable.length > 0 ? 'warn' : 'ok',
-      message:
-        astParsers.supportedLanguages.length === 0
-          ? 'No selected language uses a bundled Tree-sitter parser.'
-          : `${astParsers.availableAfter.length}/${astParsers.supportedLanguages.length} selected language parser(s) available${astParsers.installed.length > 0 ? `; installed ${astParsers.installed.join(', ')}` : ''}.`,
-      details: [
-        ...(astParsers.unavailable.length > 0 ? [`Unavailable: ${astParsers.unavailable.join(', ')}`] : []),
-        ...(astParsers.error ? [astParsers.error] : []),
-      ],
-    });
+    recordInstalledSetupAstParsers(steps, astParsers);
     return astParsers;
   }
   // Without consent nothing is installed, but the parsers that ship
@@ -822,7 +807,7 @@ async function refreshSetupIndex(
       totalDurationMs += reindexResult.durationMs;
       rebuilt ||= !reindexResult.reused;
       freshness = getIndexFreshness(input.projectRoot, input.config, input.paths);
-      if (attempt === 0 && reindexResult.skipped.length === 0 && freshness.state === 'stale') {
+      if (shouldSettleSetupIndex(attempt, reindexResult, freshness)) {
         messages.push(
           `Index inputs changed during the first build (${freshness.reason}); running one settling refresh.`,
         );
@@ -867,21 +852,7 @@ function startSetupWatchService(input: SetupWatchServiceInput): WatchServiceEnsu
   // A deliberate configuration (watch disabled, or automatic startup off) is a
   // valid configured state, not incomplete setup; only the incidental skips
   // keep the verdict at partial.
-  const skipped: { reason: string; optional: boolean } | null =
-    input.readiness.languages.length === 0
-      ? { reason: 'Skipped because no supported languages were detected.', optional: false }
-      : input.configHasErrors
-        ? { reason: 'Skipped because config validation has errors.', optional: false }
-        : !input.watchConfig.enabled
-          ? { reason: 'Disabled by watch.enabled=false; setup left the explicit opt-out unchanged.', optional: true }
-          : input.reindexResult === null ||
-              input.reindexResult.skipped.length > 0 ||
-              input.postReindexFreshness?.state !== 'fresh'
-            ? {
-                reason: 'Skipped because the initial refresh did not produce a complete fresh generation.',
-                optional: false,
-              }
-            : null;
+  const skipped = setupWatchServiceSkipReason(input);
   if (skipped === null && !input.watchConfig.autoStart) {
     // Demand start is the default: the service starts with the first query
     // that needs it. That is the configured state, not something setup left
@@ -974,16 +945,7 @@ export function renderProjectSetupReport(report: ProjectSetupReport): void {
     console.log(`  ${test.status.toUpperCase()} [${test.basis}] ${test.command} - ${test.evidence}`);
   }
 
-  if (report.indexerRemediation.length > 0) {
-    console.log('');
-    console.log('Indexer remediation:');
-    for (const remediation of report.indexerRemediation) {
-      const state = remediation.after.runnable ? 'ready' : 'blocked';
-      const attempted = remediation.attempted ? 'attempted install' : 'manual action required';
-      console.log(`  - ${remediation.language}: ${state} (${attempted})`);
-      if (remediation.recovery) console.log(`    ${remediation.recovery}`);
-    }
-  }
+  renderSetupIndexerRemediation(report);
 }
 
 function renderSetupHealthFindings(health: ProjectSetupHealthSummary): void {
@@ -1437,4 +1399,72 @@ function remediateIndexer(projectRoot: string, status: LanguageReadiness): Proje
       ? undefined
       : (after.note ?? after.installUrl ?? `Install ${status.binaryLabel} and put it on PATH.`),
   };
+}
+
+function setupWatchServiceSkipReason(input: SetupWatchServiceInput): { reason: string; optional: boolean } | null {
+  return input.readiness.languages.length === 0
+    ? { reason: 'Skipped because no supported languages were detected.', optional: false }
+    : input.configHasErrors
+      ? { reason: 'Skipped because config validation has errors.', optional: false }
+      : !input.watchConfig.enabled
+        ? { reason: 'Disabled by watch.enabled=false; setup left the explicit opt-out unchanged.', optional: true }
+        : input.reindexResult === null ||
+            input.reindexResult.skipped.length > 0 ||
+            input.postReindexFreshness?.state !== 'fresh'
+          ? {
+              reason: 'Skipped because the initial refresh did not produce a complete fresh generation.',
+              optional: false,
+            }
+          : null;
+}
+
+function setupRefreshConfigMessage(
+  automaticRefreshError: string | null,
+  configHasErrors: boolean,
+  automaticRefresh: boolean,
+  automaticRefreshConfig: ProjectAutomaticRefreshConfigResult | null,
+): string {
+  return (
+    automaticRefreshError ??
+    (configHasErrors
+      ? 'Skipped because the existing project config has validation errors.'
+      : automaticRefresh
+        ? automaticRefreshConfig?.changed
+          ? 'Enabled demand-started automatic incremental indexing for this project.'
+          : 'Demand-started automatic incremental indexing is already enabled.'
+        : 'Automatic incremental indexing remains explicitly disabled for this project.')
+  );
+}
+
+function recordInstalledSetupAstParsers(steps: ProjectSetupStep[], astParsers: AstParserSetupResult): void {
+  addStep(steps, {
+    id: 'ast-parsers',
+    label: 'AST parser packages',
+    status: astParsers.unavailable.length > 0 ? 'warn' : 'ok',
+    message:
+      astParsers.supportedLanguages.length === 0
+        ? 'No selected language uses a bundled Tree-sitter parser.'
+        : `${astParsers.availableAfter.length}/${astParsers.supportedLanguages.length} selected language parser(s) available${astParsers.installed.length > 0 ? `; installed ${astParsers.installed.join(', ')}` : ''}.`,
+    details: [
+      ...(astParsers.unavailable.length > 0 ? [`Unavailable: ${astParsers.unavailable.join(', ')}`] : []),
+      ...(astParsers.error ? [astParsers.error] : []),
+    ],
+  });
+}
+
+function shouldSettleSetupIndex(attempt: number, reindexResult: ReindexResult, freshness: IndexFreshness): boolean {
+  return attempt === 0 && reindexResult.skipped.length === 0 && freshness.state === 'stale';
+}
+
+function renderSetupIndexerRemediation(report: Pick<ProjectSetupReport, 'indexerRemediation'>): void {
+  if (report.indexerRemediation.length > 0) {
+    console.log('');
+    console.log('Indexer remediation:');
+    for (const remediation of report.indexerRemediation) {
+      const state = remediation.after.runnable ? 'ready' : 'blocked';
+      const attempted = remediation.attempted ? 'attempted install' : 'manual action required';
+      console.log(`  - ${remediation.language}: ${state} (${attempted})`);
+      if (remediation.recovery) console.log(`    ${remediation.recovery}`);
+    }
+  }
 }

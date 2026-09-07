@@ -221,8 +221,7 @@ function usableServiceState(
     state.projectRoot === projectRoot &&
     state.typescriptIndex?.protocolVersion === TYPESCRIPT_INDEX_PROTOCOL_VERSION &&
     runtime.isProcessAlive(state.pid) &&
-    Number.isFinite(heartbeatAtMs) &&
-    runtime.now() - heartbeatAtMs <= WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS &&
+    usableServiceHeartbeat(heartbeatAtMs, runtime) &&
     (!state.processIdentity || (actualIdentity != null && sameProcessIdentity(state.processIdentity, actualIdentity)))
   );
 }
@@ -378,4 +377,8 @@ const DEFAULT_RUNTIME: TypeScriptIndexRequesterRuntime = {
 
 function isDocumentFragmentBytes(value: unknown): boolean {
   return value === null || typeof value === 'string';
+}
+
+function usableServiceHeartbeat(heartbeatAtMs: number, runtime: TypeScriptIndexRequesterRuntime): boolean {
+  return Number.isFinite(heartbeatAtMs) && runtime.now() - heartbeatAtMs <= WATCH_SERVICE_MAX_HEARTBEAT_AGE_MS;
 }

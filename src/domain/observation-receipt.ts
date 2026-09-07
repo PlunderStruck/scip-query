@@ -448,23 +448,7 @@ function compareObservationStability(
     );
   }
   if (leftState !== 'fixed' || rightState !== 'fixed') {
-    return judgment(
-      'unknown',
-      [
-        ...(leftState === 'no-repository-source'
-          ? (['left-observation-has-no-repository-source'] as const)
-          : leftState !== 'fixed'
-            ? (['left-observation-not-fixed'] as const)
-            : []),
-        ...(rightState === 'no-repository-source'
-          ? (['right-observation-has-no-repository-source'] as const)
-          : rightState !== 'fixed'
-            ? (['right-observation-not-fixed'] as const)
-            : []),
-      ],
-      leftFacts,
-      rightFacts,
-    );
+    return judgment('unknown', nonFixedObservationReasons(leftState, rightState), leftFacts, rightFacts);
   }
   return judgment('established', ['all-observed-sources-fixed'], leftFacts, rightFacts);
 }
@@ -693,12 +677,7 @@ function isObservationStabilityProof(value: unknown): value is ObservationStabil
 function v2SourceFactsAgree(facts: Record<string, unknown>, sources: readonly ObservationSourceFact[]): boolean {
   const index = facts['index'];
   const indexSource = sources.find((source) => source.kind === 'index-generation');
-  if (indexSource) {
-    if (!isRecordObject(index) || !isObservationIdentity(index['generation'])) return false;
-    if (indexSource.identity && !sameObservationIdentity(indexSource.identity, index['generation'])) return false;
-  } else if (index !== undefined) {
-    return false;
-  }
+  if (!v2IndexSourceFactsAgree(index, indexSource)) return false;
   const workspace = facts['workspaceInstance'];
   const workspaceSource = sources.find((source) => source.kind === 'live-workspace');
   if (workspaceSource?.identity) {
@@ -754,4 +733,32 @@ function isTimestamp(value: unknown): value is string {
 
 function uniqueBy<T>(values: readonly T[], key: (value: T) => string): boolean {
   return new Set(values.map(key)).size === values.length;
+}
+
+function nonFixedObservationReasons(
+  leftState: ReturnType<typeof fixedObservationState>,
+  rightState: ReturnType<typeof fixedObservationState>,
+) {
+  return [
+    ...(leftState === 'no-repository-source'
+      ? (['left-observation-has-no-repository-source'] as const)
+      : leftState !== 'fixed'
+        ? (['left-observation-not-fixed'] as const)
+        : []),
+    ...(rightState === 'no-repository-source'
+      ? (['right-observation-has-no-repository-source'] as const)
+      : rightState !== 'fixed'
+        ? (['right-observation-not-fixed'] as const)
+        : []),
+  ];
+}
+
+function v2IndexSourceFactsAgree(index: unknown, indexSource: ObservationSourceFact | undefined): boolean {
+  if (indexSource) {
+    if (!isRecordObject(index) || !isObservationIdentity(index['generation'])) return false;
+    if (indexSource.identity && !sameObservationIdentity(indexSource.identity, index['generation'])) return false;
+  } else if (index !== undefined) {
+    return false;
+  }
+  return true;
 }

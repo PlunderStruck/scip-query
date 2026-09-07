@@ -138,20 +138,7 @@ export function renderCommandReferenceMarkdown(descriptors: readonly CommandDesc
   lines.push('### Typed relationship providers', '');
   lines.push('| Provider | Family / subtype | Directions | Support ceiling | Establishes | Does not establish |');
   lines.push('|---|---|---|---|---|---|');
-  for (const provider of GRAPH_RELATION_PROVIDER_CONTRACTS) {
-    for (const relation of provider.relations) {
-      const subtype = relation.match === 'prefix' ? `${relation.subtype}*` : relation.subtype;
-      const cells = [
-        `\`${provider.id}\``,
-        `\`${relation.family}/${escapeCode(subtype)}\``,
-        relation.directions.map((direction) => `\`${direction}\``).join(', '),
-        `\`${relation.supportCeiling}\``,
-        escapeTableCell(relation.establishes),
-        escapeTableCell(relation.nonClaims.join(' ') || '-'),
-      ];
-      lines.push(`| ${cells.join(' | ')} |`);
-    }
-  }
+  appendRelationshipProviderRows(lines);
   lines.push('');
   lines.push('### Explicitly unavailable relationship analyses', '');
   lines.push(
@@ -202,4 +189,21 @@ function escapeMarkdown(value: string): string {
 
 function escapeTableCell(value: string): string {
   return escapeMarkdown(value).replaceAll('|', '\\|');
+}
+
+function appendRelationshipProviderRows(lines: string[]): void {
+  for (const provider of GRAPH_RELATION_PROVIDER_CONTRACTS) {
+    for (const relation of provider.relations) {
+      const subtype = relation.match === 'prefix' ? `${relation.subtype}*` : relation.subtype;
+      const cells = [
+        `\`${provider.id}\``,
+        `\`${relation.family}/${escapeCode(subtype)}\``,
+        relation.directions.map((direction) => `\`${direction}\``).join(', '),
+        `\`${relation.supportCeiling}\``,
+        escapeTableCell(relation.establishes),
+        escapeTableCell(relation.nonClaims.join(' ') || '-'),
+      ];
+      lines.push(`| ${cells.join(' | ')} |`);
+    }
+  }
 }

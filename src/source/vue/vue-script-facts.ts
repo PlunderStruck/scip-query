@@ -181,17 +181,7 @@ function collectAstScriptFacts(block: VueSfcScriptBlock, root: SyntaxNode, facts
 }
 
 function collectFallbackScriptFacts(block: VueSfcScriptBlock, facts: VueScriptFacts): void {
-  for (const match of block.body.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g)) {
-    const name = match[1];
-    if (!name || CALL_FALLBACK_STOP_WORDS.has(name)) continue;
-    facts.calls.push({
-      name,
-      sourcePath: block.sourcePath,
-      line: block.startLine + lineAtOffset(block.body, match.index ?? 0),
-      categories: categoriesForCall(name),
-      setup: block.setup,
-    });
-  }
+  collectFallbackScriptCalls(block, facts);
 
   for (const match of block.body.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\b/g)) {
     const name = match[1];
@@ -281,4 +271,18 @@ function lineAtOffset(source: string, offset: number): number {
 
 function uniqueSorted(values: readonly string[]): string[] {
   return [...new Set(values)].sort();
+}
+
+function collectFallbackScriptCalls(block: VueSfcScriptBlock, facts: VueScriptFacts): void {
+  for (const match of block.body.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g)) {
+    const name = match[1];
+    if (!name || CALL_FALLBACK_STOP_WORDS.has(name)) continue;
+    facts.calls.push({
+      name,
+      sourcePath: block.sourcePath,
+      line: block.startLine + lineAtOffset(block.body, match.index ?? 0),
+      categories: categoriesForCall(name),
+      setup: block.setup,
+    });
+  }
 }

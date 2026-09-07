@@ -207,21 +207,7 @@ export function readProjectFile(projectRoot: string, candidatePath: string, opts
   const relativePath = normalizeSafeProjectRelativePath(candidatePath);
   const snapshotState = projectSnapshotPathState(projectRoot, relativePath);
   if (snapshotState) {
-    if (snapshotState === 'missing') {
-      throw Object.assign(new Error(`Snapshot project file ${JSON.stringify(relativePath)} does not exist.`), {
-        code: 'ENOENT',
-      });
-    }
-    const snapshotFile = projectSnapshotFile(projectRoot, relativePath);
-    if (!snapshotFile) {
-      throw new UnsafeProjectPathError(relativePath, 'changed-during-read');
-    }
-    const maxBytes = opts.maxBytes ?? DEFAULT_PROJECT_SOURCE_LIMIT_BYTES;
-    assertNonNegativeByteLimit(maxBytes);
-    if (snapshotFile.size > maxBytes) {
-      throw new InputTooLargeError(opts.inputKind ?? 'project file', relativePath, snapshotFile.size, maxBytes);
-    }
-    return Buffer.from(snapshotFile.content);
+    return readSnapshotProjectFile(projectRoot, relativePath, snapshotState, opts);
   }
   const resolvedFile = resolveProjectFile(projectRoot, candidatePath, opts);
   const maxBytes = opts.maxBytes ?? DEFAULT_PROJECT_SOURCE_LIMIT_BYTES;
@@ -444,8 +430,7 @@ function completeUtf8PrefixLength(bytes: Buffer): number {
   }
   if (leadIndex < 0) return bytes.byteLength;
   const lead = bytes[leadIndex]!;
-  const expectedBytes =
-    (lead & 0x80) === 0 ? 1 : (lead & 0xe0) === 0xc0 ? 2 : (lead & 0xf0) === 0xe0 ? 3 : (lead & 0xf8) === 0xf0 ? 4 : 0;
+  const expectedBytes = utf8LeadByteWidth(lead);
   return expectedBytes > bytes.byteLength - leadIndex ? leadIndex : bytes.byteLength;
 }
 
@@ -830,14 +815,8 @@ function journalEntryValidationReason(
     ...(configuration.clojureConfigPath ? [configuration.clojureConfigPath] : []),
   ];
   for (const entry of journal.entries) {
-    const prior = previousFiles.get(entry.path);
-    if (classifyProjectInputPath(entry.path, languages, configuredMarkerFiles) !== 'source') {
-      return 'non-source-project-input-changed';
-    }
-    if (entry.kind === 'add' && prior) return 'added-path-already-in-prior-project-input-snapshot';
-    if (entry.kind === 'delete' && !prior) return 'deleted-path-not-in-prior-project-input-snapshot';
-    if (entry.kind === 'change' && !prior) return 'changed-path-not-in-prior-project-input-snapshot';
-    if (prior && (prior.hash === 'unreadable' || prior.size < 0)) return 'changed-path-was-unreadable';
+    const reason = sourceJournalEntryValidationReason(entry, previousFiles, languages, configuredMarkerFiles);
+    if (reason !== null) return reason;
   }
 
   return null;
@@ -947,12 +926,7 @@ function listFilesystemProjectFiles(projectRoot: string): string[] {
   while (stack.length > 0) {
     const relDir = stack.pop()!;
     const absDir = relDir ? join(projectRoot, relDir) : projectRoot;
-    let entries: { name: string; isDirectory(): boolean }[];
-    try {
-      entries = readdirSync(absDir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
+    const entries = readableProjectDirectoryEntries(absDir);
     for (const entry of entries) {
       const relativePath = relDir ? `${relDir}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
@@ -972,8 +946,7 @@ function isProjectArtifactPath(relativePath: string): boolean {
   return (
     relativePath === 'meta.json' ||
     isTypeScriptCompilerShardConfigPath(relativePath) ||
-    (parts[0] === '.scipquery' &&
-      (parts[1] === 'events' || parts[1] === 'ledger' || parts[1] === 'releases' || parts[1] === 'suppressions')) ||
+    (parts[0] === '.scipquery' && PROJECT_STATE_ARTIFACT_DIRS.has(parts[1]!)) ||
     parts.some((part) => PROJECT_ARTIFACT_DIRS.has(part)) ||
     relativePath.endsWith('.db') ||
     relativePath.endsWith('.db-wal') ||
@@ -995,3 +968,72 @@ const PROJECT_ARTIFACT_DIRS = new Set([
   '.nuxt',
   'target',
 ]);
+
+function readSnapshotProjectFile(
+  projectRoot: string,
+  relativePath: string,
+  snapshotState: NonNullable<ReturnType<typeof projectSnapshotPathState>>,
+  opts: ProjectFileReadOptions,
+): Buffer {
+  if (snapshotState === 'missing') {
+    throw Object.assign(new Error(`Snapshot project file ${JSON.stringify(relativePath)} does not exist.`), {
+      code: 'ENOENT',
+    });
+  }
+  const snapshotFile = projectSnapshotFile(projectRoot, relativePath);
+  if (!snapshotFile) {
+    throw new UnsafeProjectPathError(relativePath, 'changed-during-read');
+  }
+  const maxBytes = opts.maxBytes ?? DEFAULT_PROJECT_SOURCE_LIMIT_BYTES;
+  assertNonNegativeByteLimit(maxBytes);
+  if (snapshotFile.size > maxBytes) {
+    throw new InputTooLargeError(opts.inputKind ?? 'project file', relativePath, snapshotFile.size, maxBytes);
+  }
+  return Buffer.from(snapshotFile.content);
+}
+
+function utf8LeadByteWidth(lead: number): number {
+  return (lead & 0x80) === 0
+    ? 1
+    : (lead & 0xe0) === 0xc0
+      ? 2
+      : (lead & 0xf0) === 0xe0
+        ? 3
+        : (lead & 0xf8) === 0xf0
+          ? 4
+          : 0;
+}
+
+function sourceJournalEntryValidationReason(
+  entry: ProjectInputChangeJournal['entries'][number],
+  previousFiles: ReadonlyMap<string, ProjectInputSnapshot['files'][number]>,
+  languages: readonly SupportedLanguage[],
+  configuredMarkerFiles: string[],
+): string | null {
+  const prior = previousFiles.get(entry.path);
+  if (classifyProjectInputPath(entry.path, languages, configuredMarkerFiles) !== 'source') {
+    return 'non-source-project-input-changed';
+  }
+  return priorJournalEntryValidationReason(entry, prior);
+}
+
+function priorJournalEntryValidationReason(
+  entry: ProjectInputChangeJournal['entries'][number],
+  prior: ProjectInputSnapshot['files'][number] | undefined,
+): string | null {
+  if (entry.kind === 'add' && prior) return 'added-path-already-in-prior-project-input-snapshot';
+  if (entry.kind === 'delete' && !prior) return 'deleted-path-not-in-prior-project-input-snapshot';
+  if (entry.kind === 'change' && !prior) return 'changed-path-not-in-prior-project-input-snapshot';
+  if (prior && (prior.hash === 'unreadable' || prior.size < 0)) return 'changed-path-was-unreadable';
+  return null;
+}
+
+function readableProjectDirectoryEntries(directory: string): { name: string; isDirectory(): boolean }[] {
+  try {
+    return readdirSync(directory, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+const PROJECT_STATE_ARTIFACT_DIRS = new Set(['events', 'ledger', 'releases', 'suppressions']);

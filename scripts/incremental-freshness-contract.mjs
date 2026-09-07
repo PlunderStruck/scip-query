@@ -154,28 +154,7 @@ async function runDaemonEditScenario() {
       const outputContract = runCli(['kind-counts', '--json']);
       const stopped = runCli(['watch', '--stop', '--json']);
       const failure = firstFailure(started, status, outputContract, stopped);
-      record({
-        scenario: args.scenario,
-        iteration,
-        command: `watch edit ${args.editFile}`,
-        durationMs: refreshed.eventToFreshMs,
-        exitCode: failure?.exitCode ?? 0,
-        signal: failure?.signal ?? null,
-        error: failure?.error,
-        debounceMs: args.debounce,
-        cooldownMs: args.cooldown,
-        writes: args.scenario === 'daemon-burst' ? args.burstWrites : 1,
-        burstIntervalMs: args.scenario === 'daemon-burst' ? args.burstInterval : undefined,
-        eventToObservedMs: refreshed.eventToObservedMs,
-        eventToIndexingMs: refreshed.eventToIndexingMs,
-        eventToFreshMs: refreshed.eventToFreshMs,
-        refreshDurationMs: refreshed.durationMs,
-        refreshTrigger: refreshed.trigger,
-        indexingTransitions: refreshed.indexingTransitions,
-        restoreToFreshMs: restoredRefresh.eventToFreshMs,
-        restoredFreshness: parseJson(status.stdout)?.result?.freshness?.state,
-        outputSha256: sha256(outputContract.stdout),
-      });
+      recordDaemonEditOutcome({ iteration, refreshed, restoredRefresh, failure, status, outputContract });
     } finally {
       if (!restored || readFileSync(editPath, 'utf8') !== original) writeFileSync(editPath, original);
       runCli(['watch', '--stop', '--json']);
@@ -201,13 +180,7 @@ async function waitForRefresh(statePath, previousCompletedAt, eventStartedAtMs) 
     }
     previousWatcherState = watcherState;
     if (state?.lastRefresh?.completedAt && state.lastRefresh.completedAt !== previousCompletedAt) {
-      return {
-        ...state.lastRefresh,
-        eventToObservedMs: observedAtMs === undefined ? null : observedAtMs - eventStartedAtMs,
-        eventToIndexingMs: indexingAtMs === undefined ? null : indexingAtMs - eventStartedAtMs,
-        eventToFreshMs: Date.now() - eventStartedAtMs,
-        indexingTransitions,
-      };
+      return refreshTimingResult(state.lastRefresh, observedAtMs, indexingAtMs, eventStartedAtMs, indexingTransitions);
     }
     await sleep(25);
   }
@@ -373,4 +346,39 @@ function nonNegativeInteger(value, flag) {
 function requiredValue(value, flag) {
   if (!value) throw new Error(`${flag} requires a value`);
   return value;
+}
+
+function recordDaemonEditOutcome({ iteration, refreshed, restoredRefresh, failure, status, outputContract }) {
+  record({
+    scenario: args.scenario,
+    iteration,
+    command: `watch edit ${args.editFile}`,
+    durationMs: refreshed.eventToFreshMs,
+    exitCode: failure?.exitCode ?? 0,
+    signal: failure?.signal ?? null,
+    error: failure?.error,
+    debounceMs: args.debounce,
+    cooldownMs: args.cooldown,
+    writes: args.scenario === 'daemon-burst' ? args.burstWrites : 1,
+    burstIntervalMs: args.scenario === 'daemon-burst' ? args.burstInterval : undefined,
+    eventToObservedMs: refreshed.eventToObservedMs,
+    eventToIndexingMs: refreshed.eventToIndexingMs,
+    eventToFreshMs: refreshed.eventToFreshMs,
+    refreshDurationMs: refreshed.durationMs,
+    refreshTrigger: refreshed.trigger,
+    indexingTransitions: refreshed.indexingTransitions,
+    restoreToFreshMs: restoredRefresh.eventToFreshMs,
+    restoredFreshness: parseJson(status.stdout)?.result?.freshness?.state,
+    outputSha256: sha256(outputContract.stdout),
+  });
+}
+
+function refreshTimingResult(lastRefresh, observedAtMs, indexingAtMs, eventStartedAtMs, indexingTransitions) {
+  return {
+    ...lastRefresh,
+    eventToObservedMs: observedAtMs === undefined ? null : observedAtMs - eventStartedAtMs,
+    eventToIndexingMs: indexingAtMs === undefined ? null : indexingAtMs - eventStartedAtMs,
+    eventToFreshMs: Date.now() - eventStartedAtMs,
+    indexingTransitions,
+  };
 }

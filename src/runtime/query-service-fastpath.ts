@@ -468,9 +468,7 @@ function parseSurfaceInvocation(argv: readonly string[]): SurfaceFastPathInvocat
 
 function parseExactCompactOperand(argv: readonly string[]): string | null {
   let query: string | undefined;
-  let json = false;
-  let resultOnly = false;
-  let compact = false;
+  const output = { json: false, resultOnly: false, compact: false };
 
   for (let index = 1; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -480,23 +478,12 @@ function parseExactCompactOperand(argv: readonly string[]): string | null {
       query = remaining[0];
       break;
     }
-    if (arg === '--json') {
-      json = true;
-      continue;
-    }
-    if (arg === '--result-only') {
-      resultOnly = true;
-      continue;
-    }
-    if (arg === '--compact') {
-      compact = true;
-      continue;
-    }
+    if (applyQueryServiceOutputFlag(output, arg)) continue;
     if (arg.startsWith('-') || query !== undefined) return null;
     query = arg;
   }
 
-  if (!json || !resultOnly || !compact || query === undefined) return null;
+  if (!hasCompactQueryOutput(output) || query === undefined) return null;
   return query;
 }
 
@@ -538,37 +525,8 @@ export function serializedJsonFitsClientBudget(serialized: string): boolean {
 }
 
 function parseFilesInvocation(argv: readonly string[]): FilesFastPathInvocation | null {
-  let pattern: string | undefined;
-  let json = false;
-  let resultOnly = false;
-  let compact = false;
-
-  for (let index = 1; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg === '--') {
-      const remaining = argv.slice(index + 1);
-      if (remaining.length !== 1 || pattern !== undefined) return null;
-      pattern = remaining[0];
-      break;
-    }
-    if (arg === '--json') {
-      json = true;
-      continue;
-    }
-    if (arg === '--result-only') {
-      resultOnly = true;
-      continue;
-    }
-    if (arg === '--compact') {
-      compact = true;
-      continue;
-    }
-    if (arg.startsWith('-') || pattern !== undefined) return null;
-    pattern = arg;
-  }
-
-  if (!json || !resultOnly || !compact || pattern === undefined) return null;
-  return { kind: 'files', pattern };
+  const pattern = parseExactCompactOperand(argv);
+  return pattern === null ? null : { kind: 'files', pattern };
 }
 
 function parseNoOperandInvocation(
@@ -901,4 +859,8 @@ function parseInteger(value: string, minimum: number): number | null {
   if (!/^\d+$/.test(value)) return null;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= minimum ? parsed : null;
+}
+
+function hasCompactQueryOutput(output: { json: boolean; resultOnly: boolean; compact: boolean }): boolean {
+  return output.json && output.resultOnly && output.compact;
 }

@@ -324,23 +324,7 @@ function createOwnedLock(
     ...(options.detail ? { detail: options.detail } : {}),
   };
   const candidatePath = `${path}.${token}.candidate`;
-  const fd = runtime.openFile(candidatePath, 'wx', 0o600);
-  let publicationError: unknown;
-  try {
-    writeFileCompletely(fd, Buffer.from(`${JSON.stringify(record)}\n`), runtime, 'process lock');
-    runtime.syncFile(fd);
-  } catch (error) {
-    publicationError = error;
-  }
-  try {
-    runtime.closeFile(fd);
-  } catch (error) {
-    publicationError ??= error;
-  }
-  if (publicationError !== undefined) {
-    removeCandidateFile(candidatePath, runtime);
-    throw publicationError;
-  }
+  writeProcessLockCandidate(candidatePath, record, runtime);
   try {
     // Hard-link publication is exclusive on every supported platform: it
     // cannot replace an existing owner, and the public name never exposes the
@@ -403,11 +387,7 @@ function acquireReclaimGuard(path: string, runtime: ProcessFileLockRuntime): Pro
       return createOwnedLock(path, { kind: 'reclaim-guard', runtime }, runtime);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') return null;
-      const observed = readProcessFileLock(path, { runtime });
-      if (attempt > 0 || !isReclaimable(observed, runtime)) return null;
-      const current = readProcessFileLock(path, { runtime });
-      if (!sameObservation(observed, current)) return null;
-      if (!removeLockFile(path, runtime)) return null;
+      if (!reclaimObservedGuard(path, runtime, attempt)) return null;
     }
   }
   return null;
@@ -482,4 +462,36 @@ function removeCandidateFile(path: string, runtime: ProcessFileLockRuntime): voi
     // A candidate name is unique and never consulted for ownership. Leaving a
     // private orphan is safer than deleting or weakening a published owner.
   }
+}
+
+function writeProcessLockCandidate(
+  candidatePath: string,
+  record: ProcessFileLockRecord,
+  runtime: ProcessFileLockRuntime,
+): void {
+  const fd = runtime.openFile(candidatePath, 'wx', 0o600);
+  let publicationError: unknown;
+  try {
+    writeFileCompletely(fd, Buffer.from(`${JSON.stringify(record)}\n`), runtime, 'process lock');
+    runtime.syncFile(fd);
+  } catch (error) {
+    publicationError = error;
+  }
+  try {
+    runtime.closeFile(fd);
+  } catch (error) {
+    publicationError ??= error;
+  }
+  if (publicationError !== undefined) {
+    removeCandidateFile(candidatePath, runtime);
+    throw publicationError;
+  }
+}
+
+function reclaimObservedGuard(path: string, runtime: ProcessFileLockRuntime, attempt: number): boolean {
+  const observed = readProcessFileLock(path, { runtime });
+  if (attempt > 0 || !isReclaimable(observed, runtime)) return false;
+  const current = readProcessFileLock(path, { runtime });
+  if (!sameObservation(observed, current)) return false;
+  return removeLockFile(path, runtime);
 }

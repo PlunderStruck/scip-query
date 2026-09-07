@@ -372,21 +372,7 @@ export async function tryInstallScipCli(
         timeout: 300_000,
         env: process.env,
       });
-      if (isBinaryAvailable('scip')) {
-        const resolvedBinary = resolveScipBinary();
-        const installedVersion = getScipVersion();
-        if (resolvedBinary && installedVersion && installedVersion.includes(SCIP_VERSION)) {
-          onStatus(
-            `Successfully installed ${SCIP_GO_PACKAGE}; resolved executable: ${resolvedBinary}; ` +
-              `reported version: ${installedVersion}.`,
-          );
-          return true;
-        }
-        onStatus(
-          `go install completed, but the resolved scip executable did not report ${SCIP_VERSION} ` +
-            `(executable: ${resolvedBinary ?? 'unresolved'}; version: ${installedVersion ?? 'unavailable'}).`,
-        );
-      }
+      if (verifyGoInstalledScip(onStatus)) return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       onStatus(`go install failed: ${msg}`);
@@ -395,5 +381,24 @@ export async function tryInstallScipCli(
 
   onStatus('Could not auto-install scip CLI.');
   onStatus(`Install manually from: ${SCIP_RELEASE_URL}/releases/tag/${SCIP_VERSION}`);
+  return false;
+}
+
+function verifyGoInstalledScip(onStatus: (msg: string) => void): boolean {
+  if (isBinaryAvailable('scip')) {
+    const resolvedBinary = resolveScipBinary();
+    const installedVersion = getScipVersion();
+    if (resolvedBinary && installedVersion && installedVersion.includes(SCIP_VERSION)) {
+      onStatus(
+        `Successfully installed ${SCIP_GO_PACKAGE}; resolved executable: ${resolvedBinary}; ` +
+          `reported version: ${installedVersion}.`,
+      );
+      return true;
+    }
+    onStatus(
+      `go install completed, but the resolved scip executable did not report ${SCIP_VERSION} ` +
+        `(executable: ${resolvedBinary ?? 'unresolved'}; version: ${installedVersion ?? 'unavailable'}).`,
+    );
+  }
   return false;
 }

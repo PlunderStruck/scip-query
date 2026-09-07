@@ -62,25 +62,7 @@ export function nextRouteIdentity(file: string): NextRouteIdentity | null {
   const route: string[] = [];
   let intercepting = false;
   for (const segment of segments.slice(appIndex + 1, -1)) {
-    if (segment.startsWith('@')) continue;
-    const doubleIntercept = DOUBLE_INTERCEPT_MARKER.exec(segment);
-    if (doubleIntercept) {
-      intercepting = true;
-      route.splice(Math.max(0, route.length - 2));
-      route.push(doubleIntercept[1]!);
-      continue;
-    }
-    const intercept = INTERCEPT_MARKER.exec(segment);
-    if (intercept) {
-      intercepting = true;
-      const marker = intercept[1]!;
-      if (marker === '..') route.splice(Math.max(0, route.length - 1));
-      else if (marker === '...') route.splice(0);
-      route.push(intercept[2]!);
-      continue;
-    }
-    if (segment.startsWith('(') && segment.endsWith(')')) continue;
-    route.push(segment);
+    intercepting = appendNextRouteSegment(route, segment) || intercepting;
   }
   return { route, entry: basename, intercepting };
 }
@@ -98,4 +80,25 @@ export function isInterceptingRoutePair(fileA: string, fileB: string): boolean {
   if (!left.intercepting && !right.intercepting) return false;
   if (left.entry !== right.entry) return false;
   return left.route.join('/') === right.route.join('/');
+}
+
+function appendNextRouteSegment(route: string[], segment: string): boolean {
+  if (segment.startsWith('@')) return false;
+  const doubleIntercept = DOUBLE_INTERCEPT_MARKER.exec(segment);
+  if (doubleIntercept) {
+    route.splice(Math.max(0, route.length - 2));
+    route.push(doubleIntercept[1]!);
+    return true;
+  }
+  const intercept = INTERCEPT_MARKER.exec(segment);
+  if (intercept) {
+    const marker = intercept[1]!;
+    if (marker === '..') route.splice(Math.max(0, route.length - 1));
+    else if (marker === '...') route.splice(0);
+    route.push(intercept[2]!);
+    return true;
+  }
+  if (segment.startsWith('(') && segment.endsWith(')')) return false;
+  route.push(segment);
+  return false;
 }

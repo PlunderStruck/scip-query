@@ -100,17 +100,7 @@ export function detectLanguages(projectRoot: string): SupportedLanguage[] {
     removeLanguage(detected, 'javascript');
   }
 
-  // CMake and Make are shared markers. Let source extensions distinguish a
-  // C-only project from C++, while retaining both for genuinely mixed trees.
-  if (detected.includes('cpp') && detected.includes('c')) {
-    const hasCSource = extensionSet.has('.c');
-    const hasCppSource = ['.cc', '.cpp', '.cxx'].some((extension) => extensionSet.has(extension));
-    if (hasCSource && !hasCppSource) {
-      removeLanguage(detected, 'cpp');
-    } else if (!hasCSource) {
-      removeLanguage(detected, 'c');
-    }
-  }
+  distinguishCSourceLanguages(detected, extensionSet);
 
   return detected;
 }
@@ -241,5 +231,19 @@ function removeLanguage(detected: SupportedLanguage[], language: SupportedLangua
   const index = detected.indexOf(language);
   if (index !== -1) {
     detected.splice(index, 1);
+  }
+}
+
+function distinguishCSourceLanguages(detected: SupportedLanguage[], extensionSet: Set<string>): void {
+  // CMake and Make are shared markers. Let source extensions distinguish a
+  // C-only project from C++, while retaining both for genuinely mixed trees.
+  if (detected.includes('cpp') && detected.includes('c')) {
+    const hasCSource = extensionSet.has('.c');
+    const hasCppSource = ['.cc', '.cpp', '.cxx'].some((extension) => extensionSet.has(extension));
+    if (hasCSource && !hasCppSource) {
+      removeLanguage(detected, 'cpp');
+    } else if (!hasCSource) {
+      removeLanguage(detected, 'c');
+    }
   }
 }

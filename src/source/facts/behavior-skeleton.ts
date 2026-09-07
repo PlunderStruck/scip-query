@@ -440,6 +440,46 @@ export function behaviorConstructRange(
   return result;
 }
 
+function focusedBehaviorSyntaxNode(
+  root: SyntaxNode,
+  startLine: number,
+  endLine: number,
+  selectedFocusLines: readonly number[],
+  astCallables: SyntaxNode[],
+): SyntaxNode | undefined {
+  const focusedNodes: SyntaxNode[] = [];
+  let firstFocusLine = selectedFocusLines[0]!;
+  let lastFocusLine = firstFocusLine;
+  for (const line of selectedFocusLines) {
+    firstFocusLine = Math.min(firstFocusLine, line);
+    lastFocusLine = Math.max(lastFocusLine, line);
+  }
+  walkNodesCoveringLineRange(root, firstFocusLine, lastFocusLine, (node) => {
+    if (
+      isBehaviorFocusNode(node) &&
+      node.startPosition.row >= startLine &&
+      node.endPosition.row <= endLine &&
+      selectedFocusLines.every((line) => node.startPosition.row <= line && node.endPosition.row >= line)
+    ) {
+      focusedNodes.push(node);
+    }
+    if (
+      CALLABLE_NODE_TYPES.has(node.type) &&
+      node.startPosition.row >= startLine &&
+      node.endPosition.row <= endLine &&
+      selectedFocusLines.every((line) => node.startPosition.row <= line && node.endPosition.row >= line)
+    ) {
+      astCallables.push(node);
+    }
+  });
+  const focusedNode = focusedNodes.sort(
+    (left, right) =>
+      left.endPosition.row - left.startPosition.row - (right.endPosition.row - right.startPosition.row) ||
+      left.startPosition.row - right.startPosition.row,
+  )[0];
+  return focusedNode;
+}
+
 function computeBehaviorConstructRange(
   db: ScipDatabase,
   relativePath: string,
@@ -450,36 +490,7 @@ function computeBehaviorConstructRange(
   const tree = getAst(db, relativePath);
   const astCallables: SyntaxNode[] = [];
   if (selectedFocusLines.length > 0 && tree) {
-    const focusedNodes: SyntaxNode[] = [];
-    let firstFocusLine = selectedFocusLines[0]!;
-    let lastFocusLine = firstFocusLine;
-    for (const line of selectedFocusLines) {
-      firstFocusLine = Math.min(firstFocusLine, line);
-      lastFocusLine = Math.max(lastFocusLine, line);
-    }
-    walkNodesCoveringLineRange(tree.rootNode, firstFocusLine, lastFocusLine, (node) => {
-      if (
-        isBehaviorFocusNode(node) &&
-        node.startPosition.row >= startLine &&
-        node.endPosition.row <= endLine &&
-        selectedFocusLines.every((line) => node.startPosition.row <= line && node.endPosition.row >= line)
-      ) {
-        focusedNodes.push(node);
-      }
-      if (
-        CALLABLE_NODE_TYPES.has(node.type) &&
-        node.startPosition.row >= startLine &&
-        node.endPosition.row <= endLine &&
-        selectedFocusLines.every((line) => node.startPosition.row <= line && node.endPosition.row >= line)
-      ) {
-        astCallables.push(node);
-      }
-    });
-    const focusedNode = focusedNodes.sort(
-      (left, right) =>
-        left.endPosition.row - left.startPosition.row - (right.endPosition.row - right.startPosition.row) ||
-        left.startPosition.row - right.startPosition.row,
-    )[0];
+    const focusedNode = focusedBehaviorSyntaxNode(tree.rootNode, startLine, endLine, selectedFocusLines, astCallables);
     if (focusedNode) {
       return { startLine: focusedNode.startPosition.row, endLine: focusedNode.endPosition.row };
     }
@@ -499,7 +510,7 @@ function computeBehaviorConstructRange(
         left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
     )[0];
   if (!tree) {
-    return focused ? { startLine: focused.startLine, endLine: focused.endLine } : { startLine, endLine };
+    return focusedCallableRange(focused, startLine, endLine);
   }
   const astFocused = astCallables.sort(
     (left, right) =>
@@ -509,7 +520,7 @@ function computeBehaviorConstructRange(
   if (astFocused) {
     return { startLine: astFocused.startPosition.row, endLine: astFocused.endPosition.row };
   }
-  return focused ? { startLine: focused.startLine, endLine: focused.endLine } : { startLine, endLine };
+  return focusedCallableRange(focused, startLine, endLine);
 }
 
 /**
@@ -1202,6 +1213,8 @@ function callableSignature(
   return (sourceLines[rangeStart] ?? node.text).trim();
 }
 
+const FUNCTION_VALUE_NODE_TYPES = new Set(['arrow_function', 'function_expression', 'lambda']);
+
 function behaviorConstructKind(node: SyntaxNode): string {
   if (node.type.includes('constructor')) return 'constructor';
   if (node.type.includes('method') || node.type === 'method') {
@@ -1209,7 +1222,7 @@ function behaviorConstructKind(node: SyntaxNode): string {
       ? 'class method'
       : 'object method';
   }
-  if (node.type === 'arrow_function' || node.type === 'function_expression' || node.type === 'lambda') {
+  if (FUNCTION_VALUE_NODE_TYPES.has(node.type)) {
     return hasAncestorType(node, new Set(['object', 'pair'])) ? 'object member' : 'function value';
   }
   if (node.type.includes('function')) {
@@ -1341,24 +1354,7 @@ function collectBehaviorCandidates(
     const signal = NODE_SIGNALS[node.type];
     if (signal) record(node.startPosition.row, signal);
     if (signal === 'shape') recordShape(shapesByContainer, node, root, rangeStart, rangeEnd);
-    if (node.type === 'call_expression') {
-      const callee = node.childForFieldName('function') ?? node.namedChild(0);
-      const leaf = callee?.text.split('.').at(-1);
-      if (hasStructuredCallPayload(node)) {
-        record(node.startPosition.row, 'shape');
-        const completeCall = normalizeSourceLine(node.text);
-        if (completeCall.length <= MAX_RECEIPT_LINE_CHARACTERS) {
-          textOverrides.set(node.startPosition.row, completeCall);
-        }
-      }
-      if (leaf && LIFECYCLE_CALLS.has(leaf)) {
-        record(node.startPosition.row, 'lifecycle');
-        const completeCall = normalizeSourceLine(node.text);
-        if (completeCall.length <= MAX_RECEIPT_LINE_CHARACTERS) {
-          textOverrides.set(node.startPosition.row, completeCall);
-        }
-      }
-    }
+    if (node.type === 'call_expression') recordBehaviorCallNode(node, record, textOverrides);
     if (BINDING_NODE_TYPES.has(node.type)) record(node.startPosition.row, 'binding');
   });
 
@@ -1461,6 +1457,17 @@ function recordShape(
   const nameNode = node.childForFieldName('key') ?? node.childForFieldName('name') ?? node.namedChild(0);
   const name = normalizeSourceLine(nameNode?.text ?? '');
   if (!name || name.includes('\n') || name.length > 60) return;
+  recordContainerShape(shapes, node, root, rangeStart, rangeEnd, name);
+}
+
+function recordContainerShape(
+  shapes: Map<string, BehaviorReceiptShape>,
+  node: SyntaxNode,
+  root: SyntaxNode,
+  rangeStart: number,
+  rangeEnd: number,
+  name: string,
+): void {
   const container = nearestShapeContainer(node, root);
   if (container.startPosition.row < rangeStart || container.endPosition.row > rangeEnd) return;
   const key = `${container.startPosition.row}:${container.endPosition.row}`;
@@ -1585,4 +1592,35 @@ function testCaseNames(sourceLines: readonly string[], startLine: number, endLin
     if (names.length >= MAX_TEST_CASES) break;
   }
   return names;
+}
+
+function recordBehaviorCallNode(
+  node: SyntaxNode,
+  record: (line: number, signal: BehaviorSignal | 'lifecycle') => void,
+  textOverrides: Map<number, string>,
+): void {
+  const callee = node.childForFieldName('function') ?? node.namedChild(0);
+  const leaf = callee?.text.split('.').at(-1);
+  if (hasStructuredCallPayload(node)) {
+    record(node.startPosition.row, 'shape');
+    const completeCall = normalizeSourceLine(node.text);
+    if (completeCall.length <= MAX_RECEIPT_LINE_CHARACTERS) {
+      textOverrides.set(node.startPosition.row, completeCall);
+    }
+  }
+  if (leaf && LIFECYCLE_CALLS.has(leaf)) {
+    record(node.startPosition.row, 'lifecycle');
+    const completeCall = normalizeSourceLine(node.text);
+    if (completeCall.length <= MAX_RECEIPT_LINE_CHARACTERS) {
+      textOverrides.set(node.startPosition.row, completeCall);
+    }
+  }
+}
+
+function focusedCallableRange(
+  focused: { startLine: number; endLine: number } | undefined,
+  startLine: number,
+  endLine: number,
+): BehaviorConstructRange {
+  return focused ? { startLine: focused.startLine, endLine: focused.endLine } : { startLine, endLine };
 }

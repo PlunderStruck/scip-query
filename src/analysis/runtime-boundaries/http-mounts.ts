@@ -39,57 +39,7 @@ export function composeHttpMountsWithCoverage(
   for (const mount of collected.mounts) {
     for (const targetFile of mount.targetFiles) {
       for (const handler of handlersByFile.get(targetFile) ?? []) {
-        const path = handler.keyParts.find((part) => part.name === 'path');
-        if (!path || path.evidence === 'expression') continue;
-        const composed = composePath(mount.prefix.value, path.value);
-        const keyParts = handler.keyParts.map(
-          (part): BoundaryKeyPart =>
-            part.name === 'path'
-              ? {
-                  name: 'path',
-                  value: composed,
-                  evidence: 'constant',
-                  term: {
-                    kind: 'concat',
-                    parts: [
-                      mount.prefix.term ?? { kind: 'literal', value: mount.prefix.value },
-                      path.term ?? { kind: 'literal', value: path.value },
-                    ],
-                  },
-                  derivation: {
-                    kind: 'mechanically-derived',
-                    rule: 'http.mount-prefix',
-                    ruleVersion: '1',
-                    inputFactIds: [handler.id],
-                    sourceSpans: [
-                      handler.source,
-                      { file: mount.file, startLine: mount.line, endLine: mount.line },
-                      ...(mount.prefix.derivation?.sourceSpans ?? []),
-                      ...(path.derivation?.sourceSpans ?? []),
-                    ],
-                  },
-                }
-              : part,
-        );
-        const identity = `${handler.id}\0${mount.file}\0${mount.line}\0${composed}`;
-        derived.push({
-          ...handler,
-          id: `boundary:${createHash('sha256').update(identity).digest('hex').slice(0, 16)}`,
-          keyParts,
-          strength: 'derived',
-          evidence: 'framework-mount-composition',
-          derivation: {
-            kind: 'mechanically-derived',
-            rule: 'http.mount-prefix',
-            ruleVersion: '1',
-            inputFactIds: [handler.id],
-            sourceSpans: [handler.source, { file: mount.file, startLine: mount.line, endLine: mount.line }],
-          },
-          resolution: 'unresolved',
-        });
-        // A relative route registration is not independently a deployed address once a proved mount owns it.
-        handler.strength = 'candidate';
-        handler.resolution = 'unresolved';
+        appendMountedHttpHandler(mount, handler, derived);
       }
     }
   }
@@ -164,4 +114,62 @@ function callArguments(node: SyntaxNode): SyntaxNode[] {
 function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
   visit(node);
   for (const child of node.namedChildren) walk(child, visit);
+}
+
+function appendMountedHttpHandler(
+  mount: HttpMount,
+  handler: BoundaryObservation,
+  derived: BoundaryObservation[],
+): void {
+  const path = handler.keyParts.find((part) => part.name === 'path');
+  if (!path || path.evidence === 'expression') return;
+  const composed = composePath(mount.prefix.value, path.value);
+  const keyParts = handler.keyParts.map(
+    (part): BoundaryKeyPart =>
+      part.name === 'path'
+        ? {
+            name: 'path',
+            value: composed,
+            evidence: 'constant',
+            term: {
+              kind: 'concat',
+              parts: [
+                mount.prefix.term ?? { kind: 'literal', value: mount.prefix.value },
+                path.term ?? { kind: 'literal', value: path.value },
+              ],
+            },
+            derivation: {
+              kind: 'mechanically-derived',
+              rule: 'http.mount-prefix',
+              ruleVersion: '1',
+              inputFactIds: [handler.id],
+              sourceSpans: [
+                handler.source,
+                { file: mount.file, startLine: mount.line, endLine: mount.line },
+                ...(mount.prefix.derivation?.sourceSpans ?? []),
+                ...(path.derivation?.sourceSpans ?? []),
+              ],
+            },
+          }
+        : part,
+  );
+  const identity = `${handler.id}\0${mount.file}\0${mount.line}\0${composed}`;
+  derived.push({
+    ...handler,
+    id: `boundary:${createHash('sha256').update(identity).digest('hex').slice(0, 16)}`,
+    keyParts,
+    strength: 'derived',
+    evidence: 'framework-mount-composition',
+    derivation: {
+      kind: 'mechanically-derived',
+      rule: 'http.mount-prefix',
+      ruleVersion: '1',
+      inputFactIds: [handler.id],
+      sourceSpans: [handler.source, { file: mount.file, startLine: mount.line, endLine: mount.line }],
+    },
+    resolution: 'unresolved',
+  });
+  // A relative route registration is not independently a deployed address once a proved mount owns it.
+  handler.strength = 'candidate';
+  handler.resolution = 'unresolved';
 }

@@ -482,27 +482,15 @@ function runTypeScriptDetectorMode(options, config) {
         indexPath: join(cacheDir, 'index.scip'),
       });
 
-      const candidateCounts = {};
-      const sampledCounts = {};
-      const detectorMetadata = {};
-      for (const detector of options.detectors) {
-        const startedAt = Date.now();
-        const collection = config.collectCandidates(db, detector, {
-          root: isolated.root,
-          repository,
-          commit: isolated.commit,
-          capabilityStatus: capability ?? null,
-          sampleSize: options.sampleSize,
-          seed: `${options.seed}:${repository}:${detector}`,
-        });
-        candidateCounts[detector] = collection.total;
-        sampledCounts[detector] = collection.rows.length;
-        detectorMetadata[detector] = {
-          durationMs: Date.now() - startedAt,
-          ...(collection.metadata ?? {}),
-        };
-        rows.push(...collection.rows);
-      }
+      const { candidateCounts, sampledCounts, detectorMetadata } = collectRepositoryDetectorRows(
+        db,
+        options,
+        config,
+        isolated,
+        repository,
+        capability,
+        rows,
+      );
 
       repositories.push({
         repository,
@@ -1054,17 +1042,7 @@ function collectGraphRiskCandidates(db, detector, context) {
   } else if (detector === 'fan-in') {
     const productionRows = topFanIn(db, { limit: UNBOUNDED_RESULT_LIMIT });
     const detailedRows = topFanInDetailedRows(db, UNBOUNDED_RESULT_LIMIT);
-    const nameCounts = new Map();
-    for (const finding of productionRows) {
-      nameCounts.set(finding.name, (nameCounts.get(finding.name) ?? 0) + 1);
-    }
-    metadata = {
-      ...metadata,
-      productionRows: productionRows.length,
-      detailedRows: detailedRows.length,
-      outputMultisetMatches: fanIdentityMultiset(productionRows) === fanIdentityMultiset(detailedRows),
-      duplicateDisplayNameRows: productionRows.filter((finding) => (nameCounts.get(finding.name) ?? 0) > 1).length,
-    };
+    metadata = graphRiskFanInMetadata(metadata, productionRows, detailedRows);
     rawRows = productionRows.map((finding) => {
       return deferredSimilarityRow({
         root: context.root,
@@ -1494,24 +1472,7 @@ function renderFactualPacket(packet) {
   }
   lines.push('## Current Summary', '', '```json', JSON.stringify(packet.summary, null, 2), '```', '');
   for (const [index, row] of packet.rows.entries()) {
-    lines.push(
-      `## ${index + 1}. ${row.detector}: ${row.repository}: ${row.shortName}`,
-      '',
-      `- Calibration ID: \`${row.calibrationId}\``,
-      `- Commit: \`${row.commit}\``,
-      `- Location: \`${row.relativePath}:${row.startLine + 1}-${row.endLine + 1}\``,
-      `- Evidence: ${row.evidence}`,
-      `- Kind: ${row.findingKind}`,
-      `- Verdict: **${row.verdict?.toUpperCase() ?? 'PENDING'}**`,
-      `- Noise archetype: ${row.noiseArchetype ?? '-'}`,
-      `- Evidence note: ${row.evidenceNote ?? '-'}`,
-      `- Details: \`${JSON.stringify(row.details)}\``,
-      '',
-      '````text',
-      row.sourceExcerpt ?? '(source unavailable)',
-      '````',
-      '',
-    );
+    appendFactualPacketRow(lines, row, index);
   }
   return `${lines.join('\n')}\n`;
 }
@@ -1649,11 +1610,7 @@ function runNavigationMode(rawRoots) {
     const cacheDir = mkdtempSync(join(tmpdir(), 'scip-query-calibrate-'));
     try {
       const checks = runNavigationCase(testCase, projectRoot, cacheDir);
-      for (const check of checks) {
-        if (!check.pass) failures += 1;
-        sections.push(`- ${check.pass ? 'PASS' : 'FAIL'} ${check.name}`);
-        if (check.evidence) sections.push('', '```text', check.evidence.trimEnd(), '```');
-      }
+      failures += appendNavigationChecks(sections, checks);
       sections.push('');
     } finally {
       rmSync(cacheDir, { recursive: true, force: true });
@@ -1723,23 +1680,14 @@ function runHealthDeadMode(rawArgs) {
       const capability = statusEnvelope.result.capabilities?.matrix?.find(
         (entry) => entry.language === options.language,
       );
-      const candidates = (deadEnvelope.result.symbols ?? []).filter((candidate) => candidate.kind === 'dead-code');
-      const normalized = candidates.map((candidate) =>
-        normalizeDeadCandidate(candidate, {
-          language: options.language,
-          repository,
-          commit: isolated.commit,
-          evidence: deadEnvelope.evidence,
-          capabilityStatus: capability ?? null,
-          sourceExcerpt: (entry) => sourceExcerpt(isolated.root, entry.relativePath, entry.startLine, entry.endLine),
-        }),
+      const { candidates, sampled } = collectHealthDeadSample(
+        deadEnvelope,
+        options,
+        repository,
+        isolated,
+        capability,
+        rows,
       );
-      const sampled = deterministicSample(
-        normalized,
-        Math.min(options.sampleSize, normalized.length),
-        `${options.seed}:${repository}`,
-      );
-      rows.push(...sampled);
       repositories.push({
         repository,
         sourceRoot,
@@ -1998,4 +1946,96 @@ function assertIncludes(name, text, expectedValues) {
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function appendFactualPacketRow(lines, row, index) {
+  lines.push(
+    `## ${index + 1}. ${row.detector}: ${row.repository}: ${row.shortName}`,
+    '',
+    `- Calibration ID: \`${row.calibrationId}\``,
+    `- Commit: \`${row.commit}\``,
+    `- Location: \`${row.relativePath}:${row.startLine + 1}-${row.endLine + 1}\``,
+    `- Evidence: ${row.evidence}`,
+    `- Kind: ${row.findingKind}`,
+    `- Verdict: **${row.verdict?.toUpperCase() ?? 'PENDING'}**`,
+    `- Noise archetype: ${row.noiseArchetype ?? '-'}`,
+    `- Evidence note: ${row.evidenceNote ?? '-'}`,
+    `- Details: \`${JSON.stringify(row.details)}\``,
+    '',
+    '````text',
+    row.sourceExcerpt ?? '(source unavailable)',
+    '````',
+    '',
+  );
+}
+
+function appendNavigationChecks(sections, checks) {
+  let failures = 0;
+  for (const check of checks) {
+    if (!check.pass) failures += 1;
+    sections.push(`- ${check.pass ? 'PASS' : 'FAIL'} ${check.name}`);
+    if (check.evidence) sections.push('', '```text', check.evidence.trimEnd(), '```');
+  }
+  return failures;
+}
+
+function graphRiskFanInMetadata(metadata, productionRows, detailedRows) {
+  const nameCounts = new Map();
+  for (const finding of productionRows) {
+    nameCounts.set(finding.name, (nameCounts.get(finding.name) ?? 0) + 1);
+  }
+  return {
+    ...metadata,
+    productionRows: productionRows.length,
+    detailedRows: detailedRows.length,
+    outputMultisetMatches: fanIdentityMultiset(productionRows) === fanIdentityMultiset(detailedRows),
+    duplicateDisplayNameRows: productionRows.filter((finding) => (nameCounts.get(finding.name) ?? 0) > 1).length,
+  };
+}
+
+function collectRepositoryDetectorRows(db, options, config, isolated, repository, capability, rows) {
+  const candidateCounts = {};
+  const sampledCounts = {};
+  const detectorMetadata = {};
+  for (const detector of options.detectors) {
+    const startedAt = Date.now();
+    const collection = config.collectCandidates(db, detector, {
+      root: isolated.root,
+      repository,
+      commit: isolated.commit,
+      capabilityStatus: capability ?? null,
+      sampleSize: options.sampleSize,
+      seed: `${options.seed}:${repository}:${detector}`,
+    });
+    candidateCounts[detector] = collection.total;
+    sampledCounts[detector] = collection.rows.length;
+    detectorMetadata[detector] = {
+      durationMs: Date.now() - startedAt,
+      ...(collection.metadata ?? {}),
+    };
+    rows.push(...collection.rows);
+  }
+
+  return { candidateCounts, sampledCounts, detectorMetadata };
+}
+
+function collectHealthDeadSample(deadEnvelope, options, repository, isolated, capability, rows) {
+  const candidates = (deadEnvelope.result.symbols ?? []).filter((candidate) => candidate.kind === 'dead-code');
+  const normalized = candidates.map((candidate) =>
+    normalizeDeadCandidate(candidate, {
+      language: options.language,
+      repository,
+      commit: isolated.commit,
+      evidence: deadEnvelope.evidence,
+      capabilityStatus: capability ?? null,
+      sourceExcerpt: (entry) => sourceExcerpt(isolated.root, entry.relativePath, entry.startLine, entry.endLine),
+    }),
+  );
+  const sampled = deterministicSample(
+    normalized,
+    Math.min(options.sampleSize, normalized.length),
+    `${options.seed}:${repository}`,
+  );
+  rows.push(...sampled);
+  return { candidates, sampled };
 }

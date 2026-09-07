@@ -165,14 +165,14 @@ function parseArgs(argv) {
       parsed.warmIterations = positiveInteger(argv[++index], '--warm-iterations');
     } else if (arg === '--command') {
       const value = argv[++index];
-      if (!value) throw new Error('--command requires a value');
+      requireEvidenceArgumentValue(value, '--command');
       parsed.commands.push(splitCommand(value));
     } else if (arg === '--out') {
       parsed.out = argv[++index];
-      if (!parsed.out) throw new Error('--out requires a value');
+      requireEvidenceArgumentValue(parsed.out, '--out');
     } else if (arg === '--profile-out') {
       parsed.profileOut = argv[++index];
-      if (!parsed.profileOut) throw new Error('--profile-out requires a value');
+      requireEvidenceArgumentValue(parsed.profileOut, '--profile-out');
     } else if (arg === '--no-clear') {
       parsed.noClear = true;
     } else {
@@ -194,4 +194,8 @@ function splitCommand(value) {
     .split(/\s+/)
     .filter(Boolean)
     .filter((part, index) => !(index === 0 && part === 'scip-query'));
+}
+
+function requireEvidenceArgumentValue(value, flag) {
+  if (!value) throw new Error(`${flag} requires a value`);
 }

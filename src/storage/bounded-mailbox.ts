@@ -287,16 +287,7 @@ export function enqueueBoundedMailboxRequest(
       }
       const serialized = `${JSON.stringify(request)}\n`;
       const requestBytes = Buffer.byteLength(serialized);
-      const status = inspectBoundedMailbox(paths);
-      if (requestBytes > limits.maxItemBytes) {
-        throw new MailboxBackpressureError('item-too-large', status, limits, requestBytes);
-      }
-      if (status.totalItems + 1 > limits.maxItems) {
-        throw new MailboxBackpressureError('item-capacity', status, limits, requestBytes);
-      }
-      if (status.totalBytes + requestBytes > limits.maxBytes) {
-        throw new MailboxBackpressureError('byte-capacity', status, limits, requestBytes);
-      }
+      assertMailboxAdmissionCapacity(paths, requestBytes, limits);
       options.onBeforePublish?.();
       try {
         const durability = options.durability ?? 'durable';
@@ -350,14 +341,7 @@ export function claimBoundedMailboxRequests(
   },
 ): BoundedMailboxClaim[] {
   if (!options.ownerId.trim()) throw new Error('Mailbox claim owner identity is required.');
-  if (
-    options.owner &&
-    (!Number.isSafeInteger(options.owner.pid) ||
-      options.owner.pid <= 0 ||
-      (options.owner.processIdentity !== undefined && options.owner.processIdentity.pid !== options.owner.pid))
-  ) {
-    throw new Error('Mailbox claim process identity is invalid.');
-  }
+  assertMailboxClaimProcessOwner(options.owner);
   const nowMs = options.nowMs ?? Date.now();
   const limits = resolveBoundedMailboxLimits(options.limits);
   const mailboxDirectorySync = initializeBoundedMailbox(paths);
@@ -1084,8 +1068,7 @@ function ensureMailboxOwnerRecord(
     current &&
     current.ownerId === ownerId &&
     current.pid === owner.pid &&
-    ((!current.processIdentity && !processIdentity) ||
-      (current.processIdentity && processIdentity && sameProcessIdentity(current.processIdentity, processIdentity)))
+    sameMailboxOwnerProcessIdentity(current.processIdentity, processIdentity)
   ) {
     return;
   }
@@ -1119,16 +1102,7 @@ function mailboxOwnerState(
 function readMailboxOwnerRecord(path: string): MailboxOwnerRecord | null {
   try {
     const parsed = JSON.parse(readSmallArtifactText(path, 'mailbox owner record')) as Partial<MailboxOwnerRecord>;
-    if (
-      parsed.version !== 1 ||
-      typeof parsed.ownerId !== 'string' ||
-      !parsed.ownerId ||
-      typeof parsed.pid !== 'number' ||
-      !Number.isSafeInteger(parsed.pid) ||
-      parsed.pid <= 0
-    ) {
-      return null;
-    }
+    if (!isMailboxOwnerHeader(parsed)) return null;
     const processIdentity = parsed.processIdentity === undefined ? null : parseProcessIdentity(parsed.processIdentity);
     if (parsed.processIdentity !== undefined && (!processIdentity || processIdentity.pid !== parsed.pid)) return null;
     return {
@@ -1371,4 +1345,55 @@ function safeRequestId(value: string): string {
   return /^[a-z0-9][a-z0-9-]{0,127}$/i.test(value)
     ? value
     : `invalid-${createHash('sha256').update(value).digest('hex')}`;
+}
+
+function assertMailboxClaimProcessOwner(owner: MailboxClaimOwner | undefined): void {
+  if (
+    owner &&
+    (!Number.isSafeInteger(owner.pid) ||
+      owner.pid <= 0 ||
+      (owner.processIdentity !== undefined && owner.processIdentity.pid !== owner.pid))
+  ) {
+    throw new Error('Mailbox claim process identity is invalid.');
+  }
+}
+
+function isMailboxOwnerHeader(
+  parsed: Partial<MailboxOwnerRecord>,
+): parsed is Partial<MailboxOwnerRecord> & Pick<MailboxOwnerRecord, 'version' | 'ownerId' | 'pid'> {
+  if (
+    parsed.version !== 1 ||
+    typeof parsed.ownerId !== 'string' ||
+    !parsed.ownerId ||
+    typeof parsed.pid !== 'number' ||
+    !Number.isSafeInteger(parsed.pid) ||
+    parsed.pid <= 0
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function assertMailboxAdmissionCapacity(
+  paths: BoundedMailboxPaths,
+  requestBytes: number,
+  limits: BoundedMailboxLimits,
+): void {
+  const status = inspectBoundedMailbox(paths);
+  if (requestBytes > limits.maxItemBytes) {
+    throw new MailboxBackpressureError('item-too-large', status, limits, requestBytes);
+  }
+  if (status.totalItems + 1 > limits.maxItems) {
+    throw new MailboxBackpressureError('item-capacity', status, limits, requestBytes);
+  }
+  if (status.totalBytes + requestBytes > limits.maxBytes) {
+    throw new MailboxBackpressureError('byte-capacity', status, limits, requestBytes);
+  }
+}
+
+function sameMailboxOwnerProcessIdentity(
+  current: MailboxClaimOwner['processIdentity'],
+  expected: MailboxClaimOwner['processIdentity'],
+): boolean {
+  return Boolean((!current && !expected) || (current && expected && sameProcessIdentity(current, expected)));
 }

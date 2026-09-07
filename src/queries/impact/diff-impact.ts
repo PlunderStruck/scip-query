@@ -632,11 +632,7 @@ function parseCatFileBatchOutput(output: Buffer, relativePaths: readonly string[
       out.set(path, null);
       continue;
     }
-    const match = /^[0-9a-f]+ ([^ ]+) (\d+)$/.exec(header);
-    if (!match) throw new Error(`unexpected git cat-file batch header: ${header}`);
-    const [, objectType, rawSize] = match;
-    const size = Number(rawSize);
-    if (!Number.isFinite(size) || size < 0) throw new Error(`unexpected git cat-file batch size: ${header}`);
+    const { objectType, size } = catFileObjectHeader(header);
     if (offset + size > output.length) {
       throw new Error('git cat-file batch output ended before blob payload');
     }
@@ -658,11 +654,7 @@ function detectRenamedFiles(
 
   const renamed = new Map<string, RenamedFile>();
   const claimedSources = new Set<string>();
-  for (const rename of snapshot.renamedFiles) {
-    if (!changedFiles.includes(rename.to)) continue;
-    renamed.set(rename.to, rename);
-    claimedSources.add(rename.from);
-  }
+  collectSnapshotRenames(snapshot, changedFiles, renamed, claimedSources);
 
   const deletedFiles = snapshot.deletedFiles;
   if (deletedFiles.length === 0) {
@@ -1179,4 +1171,26 @@ function shouldReportChangedDefinition(definition: IndexedDefinition, fanIn: num
   if (isCallableSymbol(definition.symbol)) return true;
   if (definition.isTypeLike) return true;
   return definition.parentTypeName === null && fanIn > 0;
+}
+
+function catFileObjectHeader(header: string): { objectType: string; size: number } {
+  const match = /^[0-9a-f]+ ([^ ]+) (\d+)$/.exec(header);
+  if (!match) throw new Error(`unexpected git cat-file batch header: ${header}`);
+  const [, objectType, rawSize] = match;
+  const size = Number(rawSize);
+  if (!Number.isFinite(size) || size < 0) throw new Error(`unexpected git cat-file batch size: ${header}`);
+  return { objectType: objectType!, size };
+}
+
+function collectSnapshotRenames(
+  snapshot: GitDiffSnapshot,
+  changedFiles: readonly string[],
+  renamed: Map<string, RenamedFile>,
+  claimedSources: Set<string>,
+): void {
+  for (const rename of snapshot.renamedFiles) {
+    if (!changedFiles.includes(rename.to)) continue;
+    renamed.set(rename.to, rename);
+    claimedSources.add(rename.from);
+  }
 }

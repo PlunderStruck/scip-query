@@ -136,18 +136,13 @@ export function createRustSemanticProvider(
     if (calleeCapableDefinitions.length === 0) return emptyCalleeMap(rustDefinitions);
     const resolvedCallees = new Map<number, SemanticCallee[]>();
     const scipOccurrenceCallees = rustScipOccurrenceCallees(calleeCapableDefinitions, scipOccurrenceCalleeOracle);
-    const pendingDefinitions: IndexedDefinition[] = [];
-    for (const definition of calleeCapableDefinitions) {
-      if (prefetchedCallees.has(definition.symbolId)) {
-        resolvedCallees.set(definition.symbolId, prefetchedCallees.get(definition.symbolId) ?? []);
-      } else if (scipOccurrenceCallees.has(definition.symbolId)) {
-        resolvedCallees.set(definition.symbolId, scipOccurrenceCallees.get(definition.symbolId) ?? []);
-      } else if (rustSourceProvesZeroCallees(definition, sourceZeroCalleeOracle)) {
-        resolvedCallees.set(definition.symbolId, []);
-      } else {
-        pendingDefinitions.push(definition);
-      }
-    }
+    const pendingDefinitions = resolveKnownRustCallees(
+      calleeCapableDefinitions,
+      prefetchedCallees,
+      scipOccurrenceCallees,
+      sourceZeroCalleeOracle,
+      resolvedCallees,
+    );
     if (pendingDefinitions.length === 0) return completeCalleeMap(rustDefinitions, resolvedCallees, undefined);
     try {
       const resolution = calleeResolver.calleesForDefinitions(pendingDefinitions);
@@ -172,16 +167,12 @@ export function createRustSemanticProvider(
     const calleeCapableDefinitions = rustCalleeDefinitions.filter(isRustCalleeCapableDefinition);
     const resolvedCallees = new Map<number, SemanticCallee[]>();
     const scipOccurrenceCallees = rustScipOccurrenceCallees(calleeCapableDefinitions, scipOccurrenceCalleeOracle);
-    const pendingCalleeDefinitions: IndexedDefinition[] = [];
-    for (const definition of calleeCapableDefinitions) {
-      if (scipOccurrenceCallees.has(definition.symbolId)) {
-        resolvedCallees.set(definition.symbolId, scipOccurrenceCallees.get(definition.symbolId) ?? []);
-      } else if (rustSourceProvesZeroCallees(definition, sourceZeroCalleeOracle)) {
-        resolvedCallees.set(definition.symbolId, []);
-      } else {
-        pendingCalleeDefinitions.push(definition);
-      }
-    }
+    const pendingCalleeDefinitions = resolveKnownCombinedRustCallees(
+      calleeCapableDefinitions,
+      scipOccurrenceCallees,
+      sourceZeroCalleeOracle,
+      resolvedCallees,
+    );
     if (rustReferenceDefinitions.length === 0 && pendingCalleeDefinitions.length === 0) {
       return {
         references: emptyReferenceMap(rustReferenceDefinitions),
@@ -742,20 +733,8 @@ function parseWorkerResponse(stdout: string): RustReferenceWorkerResponse | null
     if (!parsed || typeof parsed !== 'object') return null;
     const record = parsed as Record<string, unknown>;
     if (typeof record['available'] !== 'boolean' || !Array.isArray(record['references'])) return null;
-    if (
-      (record['available'] === false && typeof record['reason'] !== 'string') ||
-      (record['available'] === true && record['reason'] !== undefined)
-    ) {
-      return null;
-    }
-    const payload = {
-      references: record.references,
-      incompleteReferenceSymbolIds: Array.isArray(record['incompleteReferenceSymbolIds'])
-        ? record['incompleteReferenceSymbolIds'].filter((value): value is number => typeof value === 'number')
-        : undefined,
-      callees: Array.isArray(record['callees']) ? record['callees'] : undefined,
-      signatures: Array.isArray(record['signatures']) ? record['signatures'] : undefined,
-    };
+    if (!validRustWorkerAvailabilityReason(record)) return null;
+    const payload = rustWorkerResponsePayload(record, record.references);
     return record['available'] === true
       ? { available: true, ...payload }
       : { available: false, reason: String(record['reason']), ...payload };
@@ -804,4 +783,70 @@ function selectRustImportUsageResolver(
       opts.importDefinitionResolver ?? sessionResolver,
     );
   return importUsageResolver;
+}
+
+function rustWorkerResponsePayload(
+  record: Record<string, unknown>,
+  references: RustReferenceWorkerResponse['references'],
+) {
+  const payload = {
+    references,
+    incompleteReferenceSymbolIds: Array.isArray(record['incompleteReferenceSymbolIds'])
+      ? record['incompleteReferenceSymbolIds'].filter((value): value is number => typeof value === 'number')
+      : undefined,
+    callees: Array.isArray(record['callees']) ? record['callees'] : undefined,
+    signatures: Array.isArray(record['signatures']) ? record['signatures'] : undefined,
+  };
+  return payload;
+}
+
+function resolveKnownRustCallees(
+  calleeCapableDefinitions: readonly IndexedDefinition[],
+  prefetchedCallees: ReadonlyMap<number, SemanticCallee[]>,
+  scipOccurrenceCallees: ReadonlyMap<number, SemanticCallee[]>,
+  sourceZeroCalleeOracle: RustSemanticProviderOptions['sourceZeroCalleeOracle'],
+  resolvedCallees: Map<number, SemanticCallee[]>,
+): IndexedDefinition[] {
+  const pendingDefinitions: IndexedDefinition[] = [];
+  for (const definition of calleeCapableDefinitions) {
+    if (prefetchedCallees.has(definition.symbolId)) {
+      resolvedCallees.set(definition.symbolId, prefetchedCallees.get(definition.symbolId) ?? []);
+    } else if (scipOccurrenceCallees.has(definition.symbolId)) {
+      resolvedCallees.set(definition.symbolId, scipOccurrenceCallees.get(definition.symbolId) ?? []);
+    } else if (rustSourceProvesZeroCallees(definition, sourceZeroCalleeOracle)) {
+      resolvedCallees.set(definition.symbolId, []);
+    } else {
+      pendingDefinitions.push(definition);
+    }
+  }
+  return pendingDefinitions;
+}
+
+function resolveKnownCombinedRustCallees(
+  calleeCapableDefinitions: readonly IndexedDefinition[],
+  scipOccurrenceCallees: ReadonlyMap<number, SemanticCallee[]>,
+  sourceZeroCalleeOracle: RustSemanticProviderOptions['sourceZeroCalleeOracle'],
+  resolvedCallees: Map<number, SemanticCallee[]>,
+): IndexedDefinition[] {
+  const pendingCalleeDefinitions: IndexedDefinition[] = [];
+  for (const definition of calleeCapableDefinitions) {
+    if (scipOccurrenceCallees.has(definition.symbolId)) {
+      resolvedCallees.set(definition.symbolId, scipOccurrenceCallees.get(definition.symbolId) ?? []);
+    } else if (rustSourceProvesZeroCallees(definition, sourceZeroCalleeOracle)) {
+      resolvedCallees.set(definition.symbolId, []);
+    } else {
+      pendingCalleeDefinitions.push(definition);
+    }
+  }
+  return pendingCalleeDefinitions;
+}
+
+function validRustWorkerAvailabilityReason(record: Record<string, unknown>): boolean {
+  if (
+    (record['available'] === false && typeof record['reason'] !== 'string') ||
+    (record['available'] === true && record['reason'] !== undefined)
+  ) {
+    return false;
+  }
+  return true;
 }

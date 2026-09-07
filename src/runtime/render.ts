@@ -113,12 +113,7 @@ export const render = {
       if (section.skipIfEmpty && section.rows.length === 0) continue;
       if (!first) console.log('');
       first = false;
-      if (section.title !== undefined) console.log(`═══ ${sanitizeTerminalLine(section.title)} ═══`);
-      if (section.explanation !== undefined) console.log(sanitizeTerminalLine(section.explanation));
-      for (const row of section.rows) {
-        const lines = section.preserveRowNewlines ? row.split('\n') : [row];
-        for (const line of lines) console.log(sanitizeTerminalLine(line));
-      }
+      renderReportSection(section);
     }
   },
 
@@ -138,3 +133,12 @@ export const render = {
     for (const row of rows) console.log(sanitizeTerminalLine(row));
   },
 };
+
+function renderReportSection(section: ReportSection): void {
+  if (section.title !== undefined) console.log(`═══ ${sanitizeTerminalLine(section.title)} ═══`);
+  if (section.explanation !== undefined) console.log(sanitizeTerminalLine(section.explanation));
+  for (const row of section.rows) {
+    const lines = section.preserveRowNewlines ? row.split('\n') : [row];
+    for (const line of lines) console.log(sanitizeTerminalLine(line));
+  }
+}

@@ -149,7 +149,7 @@ function validCurrentSemanticMailboxIdentity(
 }
 
 function isTypeScriptSemanticRequest(value: unknown): value is TypeScriptSemanticRequest {
-  if (!value || typeof value !== 'object' || !('kind' in value)) return false;
+  if (!hasTypeScriptSemanticRequestKind(value)) return false;
   const request = value as {
     kind?: unknown;
     file?: unknown;
@@ -166,9 +166,7 @@ function isTypeScriptSemanticRequest(value: unknown): value is TypeScriptSemanti
     case 'reference-fragments':
       return stringArray(request.files) !== null;
     case 'references':
-      return (
-        definitionArray(request.definitions) && (request.exact === undefined || typeof request.exact === 'boolean')
-      );
+      return validTypeScriptReferenceRequest(request);
     case 'callees':
     case 'callee-coverage':
       return definitionArray(request.definitions);
@@ -195,4 +193,11 @@ function isIndexedDefinition(value: unknown): value is IndexedDefinition {
     typeof definition.startLine === 'number' &&
     typeof definition.endLine === 'number'
   );
+}
+
+function hasTypeScriptSemanticRequestKind(value: unknown): value is object & { kind: unknown } {
+  return Boolean(value) && typeof value === 'object' && value !== null && 'kind' in value;
+}
+function validTypeScriptReferenceRequest(request: { definitions?: unknown; exact?: unknown }): boolean {
+  return definitionArray(request.definitions) && (request.exact === undefined || typeof request.exact === 'boolean');
 }

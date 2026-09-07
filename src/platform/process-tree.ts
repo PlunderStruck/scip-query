@@ -221,19 +221,7 @@ function signalKnownTree(
     }
   }
 
-  let firstFailure: string | null = null;
-  for (const identity of tree.knownMembers.values()) {
-    const current = runtime.readIdentity(identity.pid);
-    if (!current || !sameProcessIdentity(identity, current)) continue;
-    try {
-      runtime.signal(identity.pid, signal);
-    } catch (error) {
-      if (!isMissingProcessError(error) && firstFailure === null) {
-        firstFailure = errorMessage(error);
-      }
-    }
-  }
-  return firstFailure === null ? null : { reason: 'signal-failed', detail: firstFailure };
+  return signalKnownMembers(tree, signal, runtime);
 }
 
 async function waitForTreeExit(
@@ -359,3 +347,23 @@ const DEFAULT_PROCESS_TREE_RUNTIME: ProcessTreeRuntime = {
     await new Promise<void>((resolve) => setTimeout(resolve, ms));
   },
 };
+
+function signalKnownMembers(
+  tree: OwnedProcessTree,
+  signal: NodeJS.Signals,
+  runtime: ProcessTreeRuntime,
+): { reason: 'signal-failed'; detail: string } | null {
+  let firstFailure: string | null = null;
+  for (const identity of tree.knownMembers.values()) {
+    const current = runtime.readIdentity(identity.pid);
+    if (!current || !sameProcessIdentity(identity, current)) continue;
+    try {
+      runtime.signal(identity.pid, signal);
+    } catch (error) {
+      if (!isMissingProcessError(error) && firstFailure === null) {
+        firstFailure = errorMessage(error);
+      }
+    }
+  }
+  return firstFailure === null ? null : { reason: 'signal-failed', detail: firstFailure };
+}

@@ -28,9 +28,7 @@ export function parseProcessIdentity(value: unknown): ProcessIdentity | null {
   const identity = value as Partial<ProcessIdentity>;
   if (
     identity.version !== 1 ||
-    typeof identity.pid !== 'number' ||
-    !Number.isSafeInteger(identity.pid) ||
-    identity.pid <= 0 ||
+    !hasProcessIdentityPid(identity) ||
     typeof identity.platform !== 'string' ||
     !NODE_PLATFORMS.has(identity.platform as NodeJS.Platform) ||
     typeof identity.startToken !== 'string' ||
@@ -53,4 +51,10 @@ export function sameProcessIdentity(expected: ProcessIdentity, actual: ProcessId
     expected.platform === actual.platform &&
     expected.startToken === actual.startToken
   );
+}
+
+function hasProcessIdentityPid(
+  identity: Partial<ProcessIdentity>,
+): identity is Partial<ProcessIdentity> & Pick<ProcessIdentity, 'pid'> {
+  return typeof identity.pid === 'number' && Number.isSafeInteger(identity.pid) && identity.pid > 0;
 }

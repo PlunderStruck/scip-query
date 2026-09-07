@@ -523,21 +523,7 @@ function sourceFactCapability(
       reason: 'No Go source-fallback adapter is registered; Go relies on SCIP graph facts.',
     };
   }
-  if (language === 'clojure') {
-    const probe = runtimeProbe?.(language) ?? defaultRuntimeProbe(language);
-    if (probe === 'unavailable') {
-      return {
-        status: 'unavailable',
-        reason:
-          'Clojure built-in reader is not available in this environment; no source-fallback evidence can be produced.',
-      };
-    }
-    return {
-      status: 'available',
-      reason:
-        'Clojure source fallback uses the built-in reader for namespace imports plus callable, callsite, and protocol/record member evidence for .clj, .cljs, and .cljc files.',
-    };
-  }
+  if (language === 'clojure') return clojureSourceFactCapability(runtimeProbe);
 
   const mode = primaryParserFallbackMode(language);
   if (mode === 'regex-only') {
@@ -677,4 +663,22 @@ function gitAvailable(projectRoot: string): boolean {
   } catch {
     return false;
   }
+}
+
+function clojureSourceFactCapability(
+  runtimeProbe: ((language: SupportedLanguage) => LanguageRuntimeProbe) | undefined,
+): { status: CapabilityStatus; reason: string } {
+  const probe = runtimeProbe?.('clojure') ?? defaultRuntimeProbe('clojure');
+  if (probe === 'unavailable') {
+    return {
+      status: 'unavailable',
+      reason:
+        'Clojure built-in reader is not available in this environment; no source-fallback evidence can be produced.',
+    };
+  }
+  return {
+    status: 'available',
+    reason:
+      'Clojure source fallback uses the built-in reader for namespace imports plus callable, callsite, and protocol/record member evidence for .clj, .cljs, and .cljc files.',
+  };
 }

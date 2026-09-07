@@ -156,13 +156,7 @@ export class WorkerRequestLane<Payload, Result, Status> {
     const active = this.active;
     let retireWorker: boolean;
     try {
-      this.options.onStatus(response.status);
-      if (response.ok) {
-        this.options.onComplete(active.request, response.result, response.status);
-      } else {
-        this.options.onReject(active.request, response.error, response.status);
-      }
-      retireWorker = this.options.retireAfterResponse?.(response.status) ?? false;
+      retireWorker = publishWorkerLaneResponse(this.options, active, response);
     } catch (error) {
       this.closed = true;
       this.clearTimer(active.timer);
@@ -210,10 +204,7 @@ export class WorkerRequestLane<Payload, Result, Status> {
           if (!retryTerminated) return;
         }
       }
-      const terminalReason =
-        active.workerFailureReasons.length === 0
-          ? reason
-          : [...new Set([...active.workerFailureReasons, reason])].join(' Cold Worker retry: ');
+      const terminalReason = workerFailureTerminalReason(active.workerFailureReasons, reason);
       try {
         this.options.onReject(active.request, terminalReason);
       } catch (error) {
@@ -294,13 +285,7 @@ export function decodeWorkerLaneResponse<Result, Status>(value: unknown): Worker
   if (response['kind'] !== 'response' || typeof response['requestId'] !== 'string' || !('status' in response)) {
     return null;
   }
-  if (response['ok'] === true) {
-    if (!('result' in response) || 'error' in response) return null;
-  } else if (response['ok'] === false) {
-    if ('result' in response || typeof response['error'] !== 'string') return null;
-  } else {
-    return null;
-  }
+  if (!validWorkerResponsePayload(response)) return null;
   return response as unknown as WorkerLaneResponse<Result, Status>;
 }
 
@@ -310,4 +295,33 @@ function asError(error: unknown): Error {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function validWorkerResponsePayload(response: Record<string, unknown>): boolean {
+  if (response['ok'] === true) {
+    if (!('result' in response) || 'error' in response) return false;
+  } else if (response['ok'] === false) {
+    if ('result' in response || typeof response['error'] !== 'string') return false;
+  } else {
+    return false;
+  }
+  return true;
+}
+
+function publishWorkerLaneResponse<Payload, Result, Status>(
+  options: WorkerRequestLaneOptions<Payload, Result, Status>,
+  active: ActiveWorkerRequest<Payload>,
+  response: WorkerLaneResponse<Result, Status>,
+): boolean {
+  options.onStatus(response.status);
+  if (response.ok) {
+    options.onComplete(active.request, response.result, response.status);
+  } else {
+    options.onReject(active.request, response.error, response.status);
+  }
+  return options.retireAfterResponse?.(response.status) ?? false;
+}
+
+function workerFailureTerminalReason(reasons: readonly string[], reason: string): string {
+  return reasons.length === 0 ? reason : [...new Set([...reasons, reason])].join(' Cold Worker retry: ');
 }

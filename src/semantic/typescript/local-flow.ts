@@ -452,11 +452,8 @@ function buildStatement(
   const ts = state.ts;
   if (ts.isBlock(statement)) return buildStatements(state, cfg, [...statement.statements], next, context);
   if (ts.isIfStatement(statement)) return buildIfStatement(state, cfg, statement, next, context);
-  if (ts.isWhileStatement(statement) || ts.isDoStatement(statement))
-    return buildPredicateLoop(state, cfg, statement, next, context);
-  if (ts.isForStatement(statement)) return buildForStatement(state, cfg, statement, next, context);
-  if (ts.isForInStatement(statement) || ts.isForOfStatement(statement))
-    return buildIterationStatement(state, cfg, statement, next, context);
+  const loop = buildLoopStatement(state, cfg, statement, next, context);
+  if (loop !== null) return loop;
   if (ts.isSwitchStatement(statement)) return buildSwitchStatement(state, cfg, statement, next, context);
   if (ts.isTryStatement(statement)) return buildTryStatement(state, cfg, statement, next, context);
   if (ts.isExpressionStatement(statement)) return buildExpressionFlow(state, cfg, statement.expression, next);
@@ -774,20 +771,7 @@ function connect(cfg: Map<string, CfgNode>, from: string, to: string): void {
 
 function extractAccesses(state: AnalysisState, analysis: CallableAnalysis): void {
   const entry = analysis.cfg.get(analysis.entryId)!;
-  for (const parameter of analysis.node.parameters) {
-    const targets = bindingTargets(state, parameter.name);
-    if (targets.length === 0 && state.ts.isIdentifier(parameter.name)) {
-      state.unsupported.add('A parameter binding could not be resolved to a compiler symbol.');
-      continue;
-    }
-    for (const target of targets) {
-      entry.definitions.push({
-        point: point(state, target.node, 'parameter-definition', target.symbolKey, target.name, analysis.id),
-        rhsUseIds: [],
-        partial: false,
-      });
-    }
-  }
+  extractParameterDefinitions(state, analysis, entry);
   for (const cfgNodeValue of analysis.cfg.values()) {
     if (!cfgNodeValue.ast || cfgNodeValue.kind === 'entry' || cfgNodeValue.kind === 'exit') continue;
     if (cfgNodeValue.kind === 'predicate') {
@@ -1089,9 +1073,7 @@ function isDeclarationNameOwner(ts: TypeScriptModule, node: TypeScript.Node): bo
     ts.isPropertyDeclaration(node) ||
     ts.isInterfaceDeclaration(node) ||
     ts.isTypeAliasDeclaration(node) ||
-    ts.isImportSpecifier(node) ||
-    ts.isImportClause(node) ||
-    ts.isNamespaceImport(node)
+    isImportBindingNameOwner(ts, node)
   );
 }
 
@@ -1289,10 +1271,7 @@ function accessTarget(state: AnalysisState, node: TypeScript.Node): AccessTarget
       : null;
   }
   if (node.kind === ts.SyntaxKind.ThisKeyword) return { node, symbolKey: thisSymbolKey(state, node), name: 'this' };
-  if (ts.isParenthesizedExpression(node)) return accessTarget(state, node.expression);
-  if (ts.isAsExpression(node) || ts.isTypeAssertionExpression(node) || ts.isNonNullExpression(node)) {
-    return accessTarget(state, node.expression);
-  }
+  if (isTransparentAccessExpression(ts, node)) return accessTarget(state, node.expression);
   if (ts.isArrayLiteralExpression(node) || ts.isObjectLiteralExpression(node)) {
     state.unsupported.add(
       'Heap aggregate identity and destructured assignment are not included in local points-to flow.',
@@ -1833,4 +1812,57 @@ function unsupportedResult(reason: string): TypeScriptLocalFlowResult {
       unsupported: [reason],
     },
   };
+}
+
+function extractParameterDefinitions(state: AnalysisState, analysis: CallableAnalysis, entry: CfgNode): void {
+  for (const parameter of analysis.node.parameters) {
+    const targets = bindingTargets(state, parameter.name);
+    if (targets.length === 0 && state.ts.isIdentifier(parameter.name)) {
+      state.unsupported.add('A parameter binding could not be resolved to a compiler symbol.');
+      continue;
+    }
+    for (const target of targets) {
+      entry.definitions.push({
+        point: point(state, target.node, 'parameter-definition', target.symbolKey, target.name, analysis.id),
+        rhsUseIds: [],
+        partial: false,
+      });
+    }
+  }
+}
+
+function isImportBindingNameOwner(ts: TypeScriptModule, node: TypeScript.Node): boolean {
+  return ts.isImportSpecifier(node) || ts.isImportClause(node) || ts.isNamespaceImport(node);
+}
+
+function isTransparentAccessExpression(
+  ts: TypeScriptModule,
+  node: TypeScript.Node,
+): node is
+  | TypeScript.ParenthesizedExpression
+  | TypeScript.AsExpression
+  | TypeScript.TypeAssertion
+  | TypeScript.NonNullExpression {
+  return (
+    ts.isParenthesizedExpression(node) ||
+    ts.isAsExpression(node) ||
+    ts.isTypeAssertionExpression(node) ||
+    ts.isNonNullExpression(node)
+  );
+}
+
+function buildLoopStatement(
+  state: AnalysisState,
+  cfg: Map<string, CfgNode>,
+  statement: TypeScript.Statement,
+  next: string,
+  context: BuildContext,
+): string | null {
+  const ts = state.ts;
+  if (ts.isWhileStatement(statement) || ts.isDoStatement(statement))
+    return buildPredicateLoop(state, cfg, statement, next, context);
+  if (ts.isForStatement(statement)) return buildForStatement(state, cfg, statement, next, context);
+  if (ts.isForInStatement(statement) || ts.isForOfStatement(statement))
+    return buildIterationStatement(state, cfg, statement, next, context);
+  return null;
 }

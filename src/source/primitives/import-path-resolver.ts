@@ -288,14 +288,7 @@ function matchTsconfigPathAlias(config: TsconfigAliasConfig, specifier: string):
       continue;
     }
 
-    const prefix = pattern.slice(0, starIndex);
-    const suffix = pattern.slice(starIndex + 1);
-    if (!specifier.startsWith(prefix) || !specifier.endsWith(suffix)) continue;
-    if (specifier.length < prefix.length + suffix.length) continue;
-    const wildcard = specifier.slice(prefix.length, specifier.length - suffix.length);
-    for (const patternTarget of patternTargets) {
-      targets.push(patternTarget.includes('*') ? patternTarget.replace('*', wildcard) : patternTarget);
-    }
+    appendWildcardAliasTargets(pattern, starIndex, specifier, patternTargets, targets);
   }
   return targets;
 }
@@ -670,4 +663,21 @@ function getIndexedPaths(db: ScipDatabase): Set<string> {
 
 export function importResolutionFingerprint(db: ScipDatabase): string {
   return INDEXED_PATH_DIGEST_CACHE.get(db, () => sha256Hex([...getIndexedPaths(db)].sort().join('\n')));
+}
+
+function appendWildcardAliasTargets(
+  pattern: string,
+  starIndex: number,
+  specifier: string,
+  patternTargets: readonly string[],
+  targets: string[],
+): void {
+  const prefix = pattern.slice(0, starIndex);
+  const suffix = pattern.slice(starIndex + 1);
+  if (!specifier.startsWith(prefix) || !specifier.endsWith(suffix)) return;
+  if (specifier.length < prefix.length + suffix.length) return;
+  const wildcard = specifier.slice(prefix.length, specifier.length - suffix.length);
+  for (const patternTarget of patternTargets) {
+    targets.push(patternTarget.includes('*') ? patternTarget.replace('*', wildcard) : patternTarget);
+  }
 }

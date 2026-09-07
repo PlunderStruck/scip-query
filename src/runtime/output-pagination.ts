@@ -596,27 +596,7 @@ function emitCapturedOutputPage(
     return;
   }
 
-  const pageCounts = {
-    offset: completed.offset,
-    returnedCharacters: completed.content.length,
-    totalCharacters: completed.totalCharacters,
-    omittedCharacters: completed.totalCharacters - completed.content.length,
-    remainingCharacters: completed.totalCharacters - nextOffset,
-  };
-  const envelope: CliOutputPageEnvelopeV1 = {
-    kind: CLI_OUTPUT_PAGE_KIND,
-    schemaVersion: CLI_OUTPUT_PAGE_SCHEMA_VERSION,
-    producer: { name: 'scip-query', version: options.producerVersion },
-    command: options.command,
-    contentType: options.json ? 'application/json' : 'text/plain',
-    agentInstruction: continuation
-      ? 'INCOMPLETE EVIDENCE: do not draw conclusions or report completion from this partial page. Run page.continuation.command exactly, then repeat until page.complete is true.'
-      : "OUTPUT COMPLETE: all rendered characters have been retrieved. Evaluate the command result's own coverage separately.",
-    page: continuation
-      ? { ...pageCounts, complete: false, outputHash: completed.outputHash, continuation }
-      : { ...pageCounts, complete: true, outputHash: completed.outputHash },
-    content: completed.content,
-  };
+  const envelope = capturedOutputPageEnvelope(options, completed, continuation, nextOffset);
 
   if (options.json) {
     runtime.writeStdout(`${JSON.stringify(envelope)}\n`);
@@ -1717,7 +1697,7 @@ function parseOutputCursor(cursor: string): OutputCursorPayload | null {
   if (short) {
     const encodedPageIndex = short[2] ?? '1';
     const pageIndex = Number.parseInt(encodedPageIndex, 36);
-    if (Number.isSafeInteger(pageIndex) && pageIndex >= 1 && pageIndex.toString(36) === encodedPageIndex) {
+    if (isCanonicalOutputPageIndex(pageIndex, encodedPageIndex)) {
       return { version: 4, pageIndex, snapshotId: short[1]! };
     }
     return null;
@@ -1726,7 +1706,7 @@ function parseOutputCursor(cursor: string): OutputCursorPayload | null {
   if (uuid) {
     const snapshotId = cursorTokenToSnapshotId(uuid[1]!);
     const pageIndex = Number.parseInt(uuid[2]!, 36);
-    if (snapshotId && Number.isSafeInteger(pageIndex) && pageIndex >= 1 && pageIndex.toString(36) === uuid[2]) {
+    if (snapshotId && isCanonicalOutputPageIndex(pageIndex, uuid[2]!)) {
       return { version: 4, pageIndex, snapshotId };
     }
     return null;
@@ -1915,4 +1895,37 @@ function renderHumanOutputPage(envelope: CliOutputPageEnvelopeV1): string {
     ? `\n[Incomplete: ${envelope.page.remainingCharacters} characters remain.]\nContinue exactly:\n${continuation.command}\n`
     : '\n[scip-query transport complete; evaluate command coverage separately]\n';
   return `${header}${envelope.content}${footer}`;
+}
+
+function capturedOutputPageEnvelope(
+  options: CliOutputPaginationOptions,
+  completed: CapturedOutputPage['completed'],
+  continuation: ReturnType<typeof createContinuation> | undefined,
+  nextOffset: number,
+): CliOutputPageEnvelopeV1 {
+  const pageCounts = {
+    offset: completed.offset,
+    returnedCharacters: completed.content.length,
+    totalCharacters: completed.totalCharacters,
+    omittedCharacters: completed.totalCharacters - completed.content.length,
+    remainingCharacters: completed.totalCharacters - nextOffset,
+  };
+  return {
+    kind: CLI_OUTPUT_PAGE_KIND,
+    schemaVersion: CLI_OUTPUT_PAGE_SCHEMA_VERSION,
+    producer: { name: 'scip-query', version: options.producerVersion },
+    command: options.command,
+    contentType: options.json ? 'application/json' : 'text/plain',
+    agentInstruction: continuation
+      ? 'INCOMPLETE EVIDENCE: do not draw conclusions or report completion from this partial page. Run page.continuation.command exactly, then repeat until page.complete is true.'
+      : "OUTPUT COMPLETE: all rendered characters have been retrieved. Evaluate the command result's own coverage separately.",
+    page: continuation
+      ? { ...pageCounts, complete: false, outputHash: completed.outputHash, continuation }
+      : { ...pageCounts, complete: true, outputHash: completed.outputHash },
+    content: completed.content,
+  };
+}
+
+function isCanonicalOutputPageIndex(pageIndex: number, encodedPageIndex: string): boolean {
+  return Number.isSafeInteger(pageIndex) && pageIndex >= 1 && pageIndex.toString(36) === encodedPageIndex;
 }

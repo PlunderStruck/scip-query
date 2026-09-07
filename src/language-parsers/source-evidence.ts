@@ -58,15 +58,24 @@ function sourceEvidenceForFile(db: ScipDatabase, file: string, request: SourceEv
   if (request.imports) evidence.imports = getSourceImports(db, file);
   if (request.reexports) evidence.reexports = getReExports(db, file);
   if (needsFacts) {
-    const result = getSourceFactsResult(db, file);
-    const facts = result.facts;
-    if (request.facts) evidence.facts = facts;
-    if (result.unavailable) evidence.sourceFactsUnavailable = result.unavailable;
-    if (request.identifiers && facts) {
-      evidence.identifiers = facts.fileIdentifiers;
-      evidence.identifierLineMap = facts.identifierLineMap;
-    }
+    attachRequestedSourceFacts(db, file, request, evidence);
   }
 
   return evidence;
+}
+
+function attachRequestedSourceFacts(
+  db: ScipDatabase,
+  file: string,
+  request: SourceEvidenceRequest,
+  evidence: SourceFileEvidence,
+): void {
+  const result = getSourceFactsResult(db, file);
+  const facts = result.facts;
+  if (request.facts) evidence.facts = facts;
+  if (result.unavailable) evidence.sourceFactsUnavailable = result.unavailable;
+  if (request.identifiers && facts) {
+    evidence.identifiers = facts.fileIdentifiers;
+    evidence.identifierLineMap = facts.identifierLineMap;
+  }
 }

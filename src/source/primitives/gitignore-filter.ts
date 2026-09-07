@@ -117,11 +117,7 @@ function prefixGitignorePattern(line: string, prefix: string): string {
   const pattern = negated ? trimmedLeft.slice(1) : trimmedLeft;
   if (!pattern || pattern.startsWith('#')) return line;
 
-  const anchored = pattern.startsWith('/');
-  const body = anchored ? pattern.slice(1) : pattern;
-  const directoryOnly = body.endsWith('/');
-  const significantBody = directoryOnly ? body.slice(0, -1) : body;
-  const prefixed = significantBody.includes('/') || anchored ? `${prefix}/${body}` : `${prefix}/**/${body}`;
+  const prefixed = prefixGitignoreBody(pattern, prefix);
   return `${indent}${negated ? '!' : ''}${prefixed}`;
 }
 
@@ -219,4 +215,13 @@ function normalizeForIgnore(projectRoot: string, inputPath: string): string | nu
   }
 
   return relativePath;
+}
+
+function prefixGitignoreBody(pattern: string, prefix: string): string {
+  const anchored = pattern.startsWith('/');
+  const body = anchored ? pattern.slice(1) : pattern;
+  const directoryOnly = body.endsWith('/');
+  const significantBody = directoryOnly ? body.slice(0, -1) : body;
+  const prefixed = significantBody.includes('/') || anchored ? `${prefix}/${body}` : `${prefix}/**/${body}`;
+  return prefixed;
 }

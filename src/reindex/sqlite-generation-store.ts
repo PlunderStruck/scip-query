@@ -550,11 +550,7 @@ function readLocalGenerationRetentionResult(outputDb: string): LocalSqliteGenera
     ) as LocalSqliteGenerationRetentionResult;
     if (
       !value ||
-      (value.state !== 'within-bounds' &&
-        value.state !== 'collected' &&
-        value.state !== 'protected' &&
-        value.state !== 'deferred' &&
-        value.state !== 'error') ||
+      !isLocalRetentionState(value.state) ||
       !Number.isSafeInteger(value.generationCount) ||
       value.generationCount < 0 ||
       !Number.isFinite(value.logicalBytes) ||
@@ -591,11 +587,7 @@ export function inspectSqliteGeneration(
         currentMatches,
         recoveryExists,
         generation,
-        reason: !currentExists
-          ? 'published immutable generation is missing'
-          : !currentMatches
-            ? 'stable database or metadata no longer matches the published generation'
-            : 'retained recovery database is missing',
+        reason: generationDriftReason(currentExists, currentMatches),
       };
     }
     return { state: 'current', statePath, currentMatches, recoveryExists, generation };
@@ -617,14 +609,7 @@ function stableMirrorsMatch(
   manifest: SqliteGenerationManifest,
   state: SqliteGenerationState,
 ): boolean {
-  if (
-    state.stableMirrors &&
-    (state.stableMirrors.databaseFileIdentity !== fileIdentity(outputDb) ||
-      (state.stableMirrors.indexFileIdentity !== undefined &&
-        state.stableMirrors.indexFileIdentity !== fileIdentity(join(dirname(outputDb), 'index.scip'))))
-  ) {
-    return false;
-  }
+  if (!stableMirrorFileIdentitiesMatch(outputDb, state)) return false;
   if (!artifactSizeMatches(outputDb, manifest.database)) return false;
   const stableIndex = join(dirname(outputDb), 'index.scip');
   if (manifest.index && !artifactSizeMatches(stableIndex, manifest.index)) return false;
@@ -933,4 +918,32 @@ function hasImmutableSqliteManifest(outputDb: string, previous: SqliteGeneration
     previous?.artifactSet === 'immutable-v1' &&
     Boolean(readSqliteGenerationManifest(outputDb, previous.currentGeneration))
   );
+}
+
+function isLocalRetentionState(value: unknown): boolean {
+  return (
+    value === 'within-bounds' ||
+    value === 'collected' ||
+    value === 'protected' ||
+    value === 'deferred' ||
+    value === 'error'
+  );
+}
+
+function generationDriftReason(currentExists: boolean, currentMatches: boolean): string {
+  if (!currentExists) return 'published immutable generation is missing';
+  if (!currentMatches) return 'stable database or metadata no longer matches the published generation';
+  return 'retained recovery database is missing';
+}
+
+function stableMirrorFileIdentitiesMatch(outputDb: string, state: SqliteGenerationState): boolean {
+  if (
+    state.stableMirrors &&
+    (state.stableMirrors.databaseFileIdentity !== fileIdentity(outputDb) ||
+      (state.stableMirrors.indexFileIdentity !== undefined &&
+        state.stableMirrors.indexFileIdentity !== fileIdentity(join(dirname(outputDb), 'index.scip'))))
+  ) {
+    return false;
+  }
+  return true;
 }

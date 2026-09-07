@@ -425,11 +425,12 @@ async function runSessionRequest(request: RustReferenceWorkerRequest): Promise<R
   let references: ReferenceTaskResult[];
   let callees: CalleeTaskResult[];
   if (
-    includeReferences &&
-    includeCallees &&
-    referenceDefinitions.length > 0 &&
-    calleeDefinitions.length > 0 &&
-    parallelRustSemanticOperationsEnabled()
+    shouldRunRustSemanticOperationsTogether(
+      includeReferences,
+      includeCallees,
+      referenceDefinitions.length,
+      calleeDefinitions.length,
+    )
   ) {
     [references, callees] = await joinConcurrentOperations([computeReferences(), computeCallees()]);
   } else {
@@ -988,4 +989,19 @@ function writeWorkerResponse(responsePath: string, payload: unknown, sharedBuffe
   const signal = new Int32Array(sharedBuffer);
   Atomics.store(signal, 0, 1);
   Atomics.notify(signal, 0);
+}
+
+function shouldRunRustSemanticOperationsTogether(
+  includeReferences: boolean,
+  includeCallees: boolean,
+  referenceCount: number,
+  calleeCount: number,
+): boolean {
+  return (
+    includeReferences &&
+    includeCallees &&
+    referenceCount > 0 &&
+    calleeCount > 0 &&
+    parallelRustSemanticOperationsEnabled()
+  );
 }

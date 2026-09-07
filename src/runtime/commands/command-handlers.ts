@@ -154,17 +154,7 @@ export async function handleReindex(rawOpts: unknown): Promise<void> {
       printJsonEnvelope('reindex', [], opts, result);
       return;
     }
-    if (result.skipped.length > 0) {
-      const ready = result.languages.length > 0 ? result.languages.join(', ') : 'none';
-      console.log(
-        `Reindex partial: available language output ${ready}; ${result.skipped.length} skipped in ${(result.durationMs / 1000).toFixed(1)}s.`,
-      );
-      for (const skipped of result.skipped) console.log(`  skip: ${skipped.language} — ${skipped.reason}`);
-    } else {
-      console.log(
-        `${result.reused ? 'Reused' : 'Indexed'} ${result.languages.join(', ')} in ${(result.durationMs / 1000).toFixed(1)}s`,
-      );
-    }
+    renderReindexResult(result);
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
@@ -686,16 +676,8 @@ export async function handleSetup(rawOpts: unknown): Promise<void> {
       stdinIsTty: process.stdin.isTTY === true,
       stdoutIsTty: process.stdout.isTTY === true,
     });
-    const installMissing = booleanOptionValue(opts, 'installMissing');
-    let setupOptions: ProjectSetupOptions = {
-      dossierDir: stringOptionValue(opts, 'dossierDir'),
-      runHealth: opts['health'] === true,
-      installSkills: opts['skills'] !== false,
-      installIndexers: installMissing,
-      installAstParsers: installMissing && opts['parsers'] !== false,
-      ...(yes ? { automaticRefresh: true } : {}),
-    };
-    const interactive = !json && !yes && process.stdin.isTTY && process.stdout.isTTY;
+    let setupOptions = commandProjectSetupOptions(opts, yes);
+    const interactive = isInteractiveProjectSetup(json, yes);
     if (guided || interactive) {
       setupOptions = await guidedProjectSetupOptions(setupOptions, { json });
     }
@@ -780,21 +762,7 @@ async function guidedProjectSetupOptions(
         ...(base.runHealth === true ? ['run-health-analysis'] : []),
       ]);
   if (interactive) renderGuidedSelection(plan.actions, selected);
-  const agentActionSelected = selected.has('create-agent-guidance') || selected.has('update-agent-guidance');
-  const automaticRefreshAction = plan.actions.some((action) => action.id === 'enable-automatic-refresh');
-  const indexerAction = plan.actions.some((action) => action.id === 'install-indexers');
-  return {
-    ...base,
-    ...(automaticRefreshAction ? { automaticRefresh: selected.has('enable-automatic-refresh') } : {}),
-    noAgentGuidance: !agentActionSelected,
-    ...(indexerAction
-      ? { installIndexers: interactive ? selected.has('install-indexers') : base.installIndexers === true }
-      : {}),
-    languages: readiness.languages.filter((language) => selected.has(`language:${language}`)),
-    installSkills: selected.has('install-agent-skills'),
-    installAstParsers: interactive ? selected.has('install-ast-parsers') : base.installAstParsers === true,
-    runHealth: selected.has('run-health-analysis'),
-  };
+  return selectedProjectSetupOptions(base, selected, plan, readiness, interactive);
 }
 
 function guidedProjectSetupFiles(projectRoot: string): ProjectSetupGuidedFiles {
@@ -1119,10 +1087,7 @@ function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>)
 }
 
 function renderWatchServiceIdentity(report: ReturnType<typeof watchServiceReport>): void {
-  if ('projectRoot' in report && report.projectRoot) {
-    const worktree = 'worktreeId' in report && report.worktreeId ? ` [${report.worktreeId.slice(0, 12)}]` : '';
-    console.log(`Worktree: ${report.projectRoot}${worktree}`);
-  }
+  renderWatchWorktree(report);
   if ('watcher' in report && report.watcher) console.log(`Watcher: ${formatStatus(report.watcher)}`);
   if ('indexGeneration' in report && report.indexGeneration) {
     console.log(`Index generation: ${report.indexGeneration.slice(0, 12)}`);
@@ -1203,14 +1168,7 @@ function renderWatchTypeScriptStatus(report: ReturnType<typeof watchServiceRepor
       `TypeScript index: ${index.state} (${index.initializations} warmups, ${index.programUpdates} updates, ${index.requests} requests${sessionBudget}` +
         `${index.sessionsEvicted ? `, ${index.sessionsEvicted} evicted` : ''})`,
     );
-    if (index.heapUsedBytes !== undefined) {
-      console.log(
-        `TypeScript index memory: ${formatBytes(index.heapUsedBytes)}` +
-          `${index.heapLimitBytes === undefined ? '' : ` / ${formatBytes(index.heapLimitBytes)} heap`}` +
-          `${index.softMemoryLimitBytes === undefined ? '' : `; ${formatBytes(index.softMemoryLimitBytes)} retirement mark`}` +
-          `${index.retireRequested ? '; retirement requested' : ''}`,
-      );
-    }
+    renderWatchTypeScriptIndexMemory(index);
   }
 }
 
@@ -1304,12 +1262,7 @@ function renderStatusReport(
   if (report.dbPath !== report.configuredDbPath) {
     console.log(`Config:   ${report.configuredDbPath} (fallback to project root index.db)`);
   }
-  for (const semantic of semanticReadinessEntries(report.readiness)) {
-    const semanticState = semantic.available ? 'available' : semantic.dependencyAvailable ? 'fallback' : 'unavailable';
-    const label = semantic.language === 'typescript' ? 'TS sem:' : `${semantic.language} sem:`;
-    console.log(`${label.padEnd(9)}${semanticState}${semanticDetailSuffix(semantic)}`);
-    if (semantic.reason) console.log(`${semantic.language} note: ${semantic.reason}`);
-  }
+  renderStatusSemanticReadiness(report.readiness);
   console.log(`Exists:   ${report.exists ? 'yes' : 'no'}`);
   console.log(`Fresh:    ${report.freshness.state}${report.freshness.remedy ? ` (${report.freshness.remedy})` : ''}`);
   if (report.freshness.lastRefresh) {
@@ -1373,11 +1326,7 @@ function renderSharedCacheStatus(status: SharedCacheStatus): void {
   console.log(
     `Share GC:  ${status.protectedGenerations} protected, ${status.unreferencedGenerations} unreferenced (${formatBytes(status.unreferencedBytes)}), ${status.temporaryGenerations} temporary`,
   );
-  if (status.cleanup?.kind === 'swept') {
-    console.log(
-      `Cache GC: ${status.cleanup.deletedWorktrees ?? 0} worktree(s), ${status.cleanup.deletedGenerations ?? 0} generation(s), ${formatBytes(status.cleanup.deletedBytes ?? 0)} removed`,
-    );
-  }
+  renderSharedCacheCleanup(status);
 }
 
 function renderSqliteGeneration(inspection: SqliteGenerationInspection): void {
@@ -1609,3 +1558,97 @@ function renderCapabilityMatrix(report: ReturnType<typeof getProjectCapabilities
 }
 
 export { collect };
+
+function renderWatchWorktree(report: ReturnType<typeof watchServiceReport>): void {
+  if ('projectRoot' in report && report.projectRoot) {
+    const worktree = 'worktreeId' in report && report.worktreeId ? ` [${report.worktreeId.slice(0, 12)}]` : '';
+    console.log(`Worktree: ${report.projectRoot}${worktree}`);
+  }
+}
+
+function renderWatchTypeScriptIndexMemory(index: {
+  heapUsedBytes?: number;
+  heapLimitBytes?: number;
+  softMemoryLimitBytes?: number;
+  retireRequested?: boolean;
+}): void {
+  if (index.heapUsedBytes !== undefined) {
+    console.log(
+      `TypeScript index memory: ${formatBytes(index.heapUsedBytes)}` +
+        `${index.heapLimitBytes === undefined ? '' : ` / ${formatBytes(index.heapLimitBytes)} heap`}` +
+        `${index.softMemoryLimitBytes === undefined ? '' : `; ${formatBytes(index.softMemoryLimitBytes)} retirement mark`}` +
+        `${index.retireRequested ? '; retirement requested' : ''}`,
+    );
+  }
+}
+
+function commandProjectSetupOptions(opts: ReturnType<typeof commandOptions>, yes: boolean): ProjectSetupOptions {
+  const installMissing = booleanOptionValue(opts, 'installMissing');
+  return {
+    dossierDir: stringOptionValue(opts, 'dossierDir'),
+    runHealth: opts['health'] === true,
+    installSkills: opts['skills'] !== false,
+    installIndexers: installMissing,
+    installAstParsers: installMissing && opts['parsers'] !== false,
+    ...(yes ? { automaticRefresh: true } : {}),
+  };
+}
+
+function isInteractiveProjectSetup(json: boolean, yes: boolean): boolean | undefined {
+  return !json && !yes && process.stdin.isTTY && process.stdout.isTTY;
+}
+
+function renderReindexResult(result: Awaited<ReturnType<typeof reindexConfiguredProject>>): void {
+  if (result.skipped.length > 0) {
+    const ready = result.languages.length > 0 ? result.languages.join(', ') : 'none';
+    console.log(
+      `Reindex partial: available language output ${ready}; ${result.skipped.length} skipped in ${(result.durationMs / 1000).toFixed(1)}s.`,
+    );
+    for (const skipped of result.skipped) console.log(`  skip: ${skipped.language} — ${skipped.reason}`);
+  } else {
+    console.log(
+      `${result.reused ? 'Reused' : 'Indexed'} ${result.languages.join(', ')} in ${(result.durationMs / 1000).toFixed(1)}s`,
+    );
+  }
+}
+
+function selectedProjectSetupOptions(
+  base: ProjectSetupOptions,
+  selected: ReadonlySet<string>,
+  plan: ReturnType<typeof planGuidedProjectSetup>,
+  readiness: ReturnType<typeof getProjectReadiness>,
+  interactive: boolean | undefined,
+): ProjectSetupOptions {
+  const agentActionSelected = selected.has('create-agent-guidance') || selected.has('update-agent-guidance');
+  const automaticRefreshAction = plan.actions.some((action) => action.id === 'enable-automatic-refresh');
+  const indexerAction = plan.actions.some((action) => action.id === 'install-indexers');
+  return {
+    ...base,
+    ...(automaticRefreshAction ? { automaticRefresh: selected.has('enable-automatic-refresh') } : {}),
+    noAgentGuidance: !agentActionSelected,
+    ...(indexerAction
+      ? { installIndexers: interactive ? selected.has('install-indexers') : base.installIndexers === true }
+      : {}),
+    languages: readiness.languages.filter((language) => selected.has(`language:${language}`)),
+    installSkills: selected.has('install-agent-skills'),
+    installAstParsers: interactive ? selected.has('install-ast-parsers') : base.installAstParsers === true,
+    runHealth: selected.has('run-health-analysis'),
+  };
+}
+
+function renderStatusSemanticReadiness(readiness: ReturnType<typeof getProjectReadiness>): void {
+  for (const semantic of semanticReadinessEntries(readiness)) {
+    const semanticState = semantic.available ? 'available' : semantic.dependencyAvailable ? 'fallback' : 'unavailable';
+    const label = semantic.language === 'typescript' ? 'TS sem:' : `${semantic.language} sem:`;
+    console.log(`${label.padEnd(9)}${semanticState}${semanticDetailSuffix(semantic)}`);
+    if (semantic.reason) console.log(`${semantic.language} note: ${semantic.reason}`);
+  }
+}
+
+function renderSharedCacheCleanup(status: SharedCacheStatus): void {
+  if (status.cleanup?.kind === 'swept') {
+    console.log(
+      `Cache GC: ${status.cleanup.deletedWorktrees ?? 0} worktree(s), ${status.cleanup.deletedGenerations ?? 0} generation(s), ${formatBytes(status.cleanup.deletedBytes ?? 0)} removed`,
+    );
+  }
+}

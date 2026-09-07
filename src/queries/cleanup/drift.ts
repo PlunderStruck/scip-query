@@ -123,19 +123,7 @@ function unusedImportDrift(
   const candidates: Array<{ file: string; dep: string }> = [];
   const candidateFiles = new Set<string>();
 
-  for (const [file, deps] of depGraph) {
-    if (shouldSkipDriftFile(file)) continue;
-
-    const referencedFiles = symbolRefs.get(file) ?? new Set<string>();
-
-    for (const dep of deps) {
-      if (shouldSkipDriftFile(dep)) continue;
-      if (referencedFiles.has(dep)) continue;
-      if (hasConservativeImportUse(db, file, dep, opts)) continue;
-      candidates.push({ file, dep });
-      candidateFiles.add(file);
-    }
-  }
+  collectUnusedImportCandidates(db, depGraph, opts, symbolRefs, candidates, candidateFiles);
 
   if (candidateFiles.size > 0) {
     addSourceScannedSymbolRefEdges(db, symbolRefs, {
@@ -448,4 +436,27 @@ function isStructuralRole(basename: string): boolean {
   if (basename.includes('worker.') || basename.includes('postinstall.')) return true;
   if (basename === 'health.ts' || basename === 'health.js') return true;
   return false;
+}
+
+function collectUnusedImportCandidates(
+  db: ScipDatabase,
+  depGraph: Map<string, Set<string>>,
+  opts: { semantic: boolean },
+  symbolRefs: ReturnType<typeof buildScipSymbolRefGraph>,
+  candidates: Array<{ file: string; dep: string }>,
+  candidateFiles: Set<string>,
+): void {
+  for (const [file, deps] of depGraph) {
+    if (shouldSkipDriftFile(file)) continue;
+
+    const referencedFiles = symbolRefs.get(file) ?? new Set<string>();
+
+    for (const dep of deps) {
+      if (shouldSkipDriftFile(dep)) continue;
+      if (referencedFiles.has(dep)) continue;
+      if (hasConservativeImportUse(db, file, dep, opts)) continue;
+      candidates.push({ file, dep });
+      candidateFiles.add(file);
+    }
+  }
 }

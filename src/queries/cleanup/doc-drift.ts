@@ -771,20 +771,7 @@ function extractDocPathEvidence(content: string): DocPathEvidence {
   const lineReferences = new Map<string, number[]>();
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     const line = lines[lineIndex] ?? '';
-    for (const match of line.matchAll(PATH_REFERENCE_PATTERN)) {
-      const candidate = (match[1] ?? '').replace(/^\.?\//, '');
-      if (candidate.length === 0) continue;
-      candidateSet.add(candidate);
-      const citedLine = match[2] ? Number(match[2]) : null;
-      if (citedLine !== null && Number.isSafeInteger(citedLine)) {
-        lineReferences.set(candidate, uniqueLineReferences([...(lineReferences.get(candidate) ?? []), citedLine]));
-      }
-      const context = markdownCitationContext(lines, lineIndex);
-      if (context.length === 0) continue;
-      const bucket = contexts.get(candidate) ?? [];
-      bucket.push(context);
-      contexts.set(candidate, uniqueCitationContexts(bucket).slice(0, 3));
-    }
+    collectDocLinePathEvidence(lines, lineIndex, line, candidateSet, contexts, lineReferences);
   }
   return { candidates: [...candidateSet], contextsByCandidate: contexts, lineReferencesByCandidate: lineReferences };
 }
@@ -824,11 +811,8 @@ function numberTuples(value: unknown): Array<[string, number[]]> | null {
     if (!Array.isArray(item) || item.length !== 2 || typeof item[0] !== 'string' || !Array.isArray(item[1])) {
       return null;
     }
-    const numbers: number[] = [];
-    for (const raw of item[1]) {
-      if (typeof raw !== 'number' || !Number.isSafeInteger(raw)) return null;
-      numbers.push(raw);
-    }
+    const numbers = safeIntegerArray(item[1]);
+    if (!numbers) return null;
     tuples.push([item[0], uniqueLineReferences(numbers)]);
   }
   return tuples;
@@ -875,4 +859,37 @@ function citationContextsOverlap(left: string, right: string): boolean {
   const rightSet = new Set(rightLines);
   const shared = leftLines.filter((line) => rightSet.has(line)).length;
   return shared >= 3 && shared / smaller >= 0.6;
+}
+
+function collectDocLinePathEvidence(
+  lines: string[],
+  lineIndex: number,
+  line: string,
+  candidateSet: Set<string>,
+  contexts: Map<string, string[]>,
+  lineReferences: Map<string, number[]>,
+): void {
+  for (const match of line.matchAll(PATH_REFERENCE_PATTERN)) {
+    const candidate = (match[1] ?? '').replace(/^\.?\//, '');
+    if (candidate.length === 0) continue;
+    candidateSet.add(candidate);
+    const citedLine = match[2] ? Number(match[2]) : null;
+    if (citedLine !== null && Number.isSafeInteger(citedLine)) {
+      lineReferences.set(candidate, uniqueLineReferences([...(lineReferences.get(candidate) ?? []), citedLine]));
+    }
+    const context = markdownCitationContext(lines, lineIndex);
+    if (context.length === 0) continue;
+    const bucket = contexts.get(candidate) ?? [];
+    bucket.push(context);
+    contexts.set(candidate, uniqueCitationContexts(bucket).slice(0, 3));
+  }
+}
+
+function safeIntegerArray(values: unknown[]): number[] | null {
+  const numbers: number[] = [];
+  for (const raw of values) {
+    if (typeof raw !== 'number' || !Number.isSafeInteger(raw)) return null;
+    numbers.push(raw);
+  }
+  return numbers;
 }

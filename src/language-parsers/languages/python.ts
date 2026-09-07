@@ -58,34 +58,43 @@ function parsePythonImportsAst(db: ScipDatabase, importerPath: string, tree: Tre
     if (moduleSpec === null) continue;
     const sourcePath = resolvePythonImportPath(db, importerPath, moduleSpec);
 
-    // First named child is the module; remaining children are the imported names.
-    for (let i = 1; i < node.namedChildCount; i += 1) {
-      const child = node.namedChild(i)!;
-      if (child.type === 'wildcard_import') {
-        results.push({
-          importedName: '*',
-          localName: null,
-          sourcePath,
-          kind: 'side-effect',
-          used: true,
-          usedMembers: [],
-        });
-        continue;
-      }
-      const item = parsePythonImportItem(child);
-      if (!item) continue;
-      results.push({
-        importedName: item.qualifiedName,
-        localName: item.localName,
-        sourcePath,
-        kind: 'named',
-        used: usedNames.has(item.localName),
-        usedMembers: [],
-      });
-    }
+    appendPythonFromImports(node, sourcePath, usedNames, results);
   }
 
   return results;
+}
+
+function appendPythonFromImports(
+  node: SyntaxNode,
+  sourcePath: string | null,
+  usedNames: Set<string>,
+  results: ParsedSourceImport[],
+): void {
+  // First named child is the module; remaining children are the imported names.
+  for (let i = 1; i < node.namedChildCount; i += 1) {
+    const child = node.namedChild(i)!;
+    if (child.type === 'wildcard_import') {
+      results.push({
+        importedName: '*',
+        localName: null,
+        sourcePath,
+        kind: 'side-effect',
+        used: true,
+        usedMembers: [],
+      });
+      continue;
+    }
+    const item = parsePythonImportItem(child);
+    if (!item) continue;
+    results.push({
+      importedName: item.qualifiedName,
+      localName: item.localName,
+      sourcePath,
+      kind: 'named',
+      used: usedNames.has(item.localName),
+      usedMembers: [],
+    });
+  }
 }
 
 function parsePythonImportItem(node: SyntaxNode): { qualifiedName: string; localName: string } | null {

@@ -996,17 +996,11 @@ export function buildDeclarationCandidatesMap(lines: string[]): DeclarationCandi
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i] ?? '';
 
-    for (const match of line.matchAll(namedFunction)) {
-      if (match[1]) record(match[1], i);
-    }
-    for (const match of line.matchAll(assignedFunction)) {
-      if (match[1]) record(match[1], i);
-    }
+    recordDeclarationPatternMatches(line, namedFunction, i, record);
+    recordDeclarationPatternMatches(line, assignedFunction, i, record);
     const methodMatch = line.match(methodDeclaration);
     if (methodMatch?.[1]) record(methodMatch[1], i);
-    for (const match of line.matchAll(callShape)) {
-      if (match[1]) record(match[1], i);
-    }
+    recordDeclarationPatternMatches(line, callShape, i, record);
   }
 
   return map;
@@ -1021,30 +1015,17 @@ export function resolveCallableDefinitionEndLine(
   const boundedEndLine = Math.max(startLine, Math.min(lines.length - 1, maxEndLine));
   const fallbackEndLine = Math.max(startLine, Math.min(boundedEndLine, definition.endLine));
 
-  let braceDepth = 0;
-  let parenDepth = 0;
-  let sawOpeningBrace = false;
+  const depths = { braceDepth: 0, parenDepth: 0, sawOpeningBrace: false };
 
   for (let lineIndex = startLine; lineIndex <= boundedEndLine; lineIndex += 1) {
     const masked = maskStructuralLine(lines[lineIndex] ?? '');
-    for (const char of masked) {
-      if (char === '{') {
-        braceDepth += 1;
-        sawOpeningBrace = true;
-      } else if (char === '}') {
-        braceDepth = Math.max(0, braceDepth - 1);
-      } else if (char === '(') {
-        parenDepth += 1;
-      } else if (char === ')') {
-        parenDepth = Math.max(0, parenDepth - 1);
-      }
-    }
+    updateCallableStructuralDepths(masked, depths);
 
-    if (sawOpeningBrace && braceDepth === 0) {
+    if (depths.sawOpeningBrace && depths.braceDepth === 0) {
       return lineIndex;
     }
 
-    if (!sawOpeningBrace && parenDepth === 0 && lineIndex >= fallbackEndLine) {
+    if (!depths.sawOpeningBrace && depths.parenDepth === 0 && lineIndex >= fallbackEndLine) {
       return lineIndex;
     }
   }
@@ -1054,41 +1035,25 @@ export function resolveCallableDefinitionEndLine(
 
 export function maskStructuralLine(line: string): string {
   let masked = '';
-  let quote: '"' | "'" | '`' | null = null;
-  let escaping = false;
+  const state: StructuralQuoteState = { quote: null, escaping: false };
 
   for (let index = 0; index < line.length; index += 1) {
     const char = line[index]!;
     const next = line[index + 1];
 
-    if (!quote && char === '/' && next === '/') {
+    if (!state.quote && char === '/' && next === '/') {
       masked += ' '.repeat(line.length - index);
       break;
     }
 
-    if (quote) {
-      if (escaping) {
-        escaping = false;
-        masked += ' ';
-        continue;
-      }
-
-      if (char === '\\') {
-        escaping = true;
-        masked += ' ';
-        continue;
-      }
-
-      if (char === quote) {
-        quote = null;
-      }
-
+    if (state.quote) {
+      consumeStructuralQuotedCharacter(state, char);
       masked += ' ';
       continue;
     }
 
     if (char === '"' || char === "'" || char === '`') {
-      quote = char;
+      state.quote = char;
       masked += ' ';
       continue;
     }
@@ -1119,4 +1084,49 @@ export function enclosingTypeNames(rawSymbol: string): string[] {
     if (d?.suffix === 'type' && d.name) out.push(d.name);
   }
   return out;
+}
+
+function recordDeclarationPatternMatches(
+  line: string,
+  pattern: RegExp,
+  index: number,
+  record: (name: string, line: number) => void,
+): void {
+  for (const match of line.matchAll(pattern)) {
+    if (match[1]) record(match[1], index);
+  }
+}
+
+function updateCallableStructuralDepths(
+  masked: string,
+  depths: { braceDepth: number; parenDepth: number; sawOpeningBrace: boolean },
+): void {
+  for (const char of masked) {
+    if (char === '{') {
+      depths.braceDepth += 1;
+      depths.sawOpeningBrace = true;
+    } else if (char === '}') {
+      depths.braceDepth = Math.max(0, depths.braceDepth - 1);
+    } else if (char === '(') {
+      depths.parenDepth += 1;
+    } else if (char === ')') {
+      depths.parenDepth = Math.max(0, depths.parenDepth - 1);
+    }
+  }
+}
+
+interface StructuralQuoteState {
+  quote: '"' | "'" | '`' | null;
+  escaping: boolean;
+}
+function consumeStructuralQuotedCharacter(state: StructuralQuoteState, char: string): void {
+  if (state.escaping) {
+    state.escaping = false;
+    return;
+  }
+  if (char === '\\') {
+    state.escaping = true;
+    return;
+  }
+  if (char === state.quote) state.quote = null;
 }

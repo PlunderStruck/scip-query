@@ -435,24 +435,7 @@ export const handleSimilar = budgetedReportCommand('similar', {
     if (result.mode === 'plan') {
       const plan = result.result;
       if (!plan) return;
-      const evidenceLabel =
-        plan.similarityBasis === 'source-tokens' ? 'source-token overlap' : 'weighted callee overlap';
-      console.log(`\n${Math.round(plan.similarity * 100)}% ${evidenceLabel}\n`);
-      console.log(`  A: ${plan.symbolA.shortName}  (${plan.symbolA.file}, ${plan.symbolA.loc} LOC)`);
-      console.log(`  B: ${plan.symbolB.shortName}  (${plan.symbolB.file}, ${plan.symbolB.loc} LOC)`);
-      console.log(`  Evidence class: ${plan.evidenceClass}  (tier: ${plan.actionTier})`);
-      console.log(`  Recommendation: ${plan.recommendation}\n`);
-      console.log(`  Shared evidence (${plan.sharedEvidence.length}):`);
-      for (const item of plan.sharedEvidence) console.log(`    ${item}`);
-      if (plan.uniqueToA.length > 0) {
-        console.log(`\n  Unique to A (${plan.uniqueToA.length}):`);
-        for (const item of plan.uniqueToA) console.log(`    ${item}`);
-      }
-      if (plan.uniqueToB.length > 0) {
-        console.log(`\n  Unique to B (${plan.uniqueToB.length}):`);
-        for (const item of plan.uniqueToB) console.log(`    ${item}`);
-      }
-      console.log(`\n  Strategy: ${plan.consolidationStrategy}`);
+      renderSimilarityPlan(plan);
       return;
     }
     if (result.mode === 'target') {
@@ -555,26 +538,7 @@ export const handleDrift = budgetedReportCommand('drift', {
       (r) => r.file,
     );
     if (summary.architecture) {
-      const architecture = summary.architecture;
-      const undeclaredEdges = architecture.edges.filter((edge) => edge.policyStatus === 'undeclared').length;
-      console.log(
-        `\nArchitecture context: ${architecture.coverage.mappedFiles}/${architecture.coverage.totalFiles} file(s) mapped; ` +
-          `${architecture.policyCoverage.declaredRows}/${architecture.policyCoverage.totalBoundaries} dependency row(s) declared; ` +
-          `${undeclaredEdges} undeclared boundary edge(s).`,
-      );
-      if (architecture.reciprocalPairs.length > 0) {
-        console.log(`  Reciprocal pairs (${architecture.reciprocalPairs.length}):`);
-        for (const pair of architecture.reciprocalPairs) {
-          console.log(`    ${pair.boundaries[0]} <-> ${pair.boundaries[1]}`);
-        }
-      }
-      if (architecture.cycles.length > 0) {
-        console.log(`  Connected boundary groups (${architecture.cycles.length}):`);
-        for (const cycle of architecture.cycles) {
-          const policy = cycle.violatesPolicy ? ' [violates requireAcyclic]' : ' [signal]';
-          console.log(`    { ${cycle.boundaries.join(', ')} }${policy}`);
-        }
-      }
+      renderDriftArchitecture(summary.architecture);
     }
     console.log(
       `\n${summary.unusedImports} unused import(s), ${summary.architectureViolations} declared architecture violation(s), ${summary.patternDeviations} pattern deviation(s)${summary.totalResults ? ` — showing ${summary.results.length} of ${summary.totalResults} (use -n to change)` : ''}`,
@@ -930,23 +894,7 @@ export const handleRecentDuplicates = budgetedDbCommand('recent-duplicates', ({ 
   }
   renderHeuristicNotice('recent re-implementation candidates');
   console.log(`Recent re-implementations (window: last ${result.windowCommits} commits):\n`);
-  const multiFindingGroups = result.rootCauseGroups?.filter((group) => group.count > 1) ?? [];
-  if (multiFindingGroups.length > 0) {
-    console.log(`Root-cause groups (${multiFindingGroups.length}):`);
-    for (const group of multiFindingGroups) {
-      console.log(
-        `  ${group.count} pair(s)  ${group.kind.toUpperCase()}  ${group.domain}  ${Math.round(
-          group.maxSimilarity * 100,
-        )}% max`,
-      );
-      if (group.establishedFile && group.establishedSymbol) {
-        console.log(`        established: ${group.establishedFile}  ${group.establishedSymbol}`);
-      }
-      console.log(`        files: ${group.relatedFiles.slice(0, 6).join(', ')}`);
-      console.log(`        -> ${group.recommendation}`);
-    }
-    console.log('');
-  }
+  renderRecentDuplicateGroups(result.rootCauseGroups);
   for (const finding of result.findings) {
     const evidence = finding.sharedEvidence.slice(0, 16).join(', ');
     if (finding.kind === 'echo') {
@@ -1043,3 +991,65 @@ export const handleUnusedParams = budgetedListCommand('unused-params', {
   heuristicLabel: 'unused trailing parameter candidates',
   after: (rows) => console.log(`\n${rows.length} function(s) with trailing unused parameters.`),
 });
+
+function renderRecentDuplicateGroups(groups: ReturnType<typeof queries.recentDuplicates>['rootCauseGroups']): void {
+  const multiFindingGroups = groups?.filter((group) => group.count > 1) ?? [];
+  if (multiFindingGroups.length > 0) {
+    console.log(`Root-cause groups (${multiFindingGroups.length}):`);
+    for (const group of multiFindingGroups) {
+      console.log(
+        `  ${group.count} pair(s)  ${group.kind.toUpperCase()}  ${group.domain}  ${Math.round(
+          group.maxSimilarity * 100,
+        )}% max`,
+      );
+      if (group.establishedFile && group.establishedSymbol) {
+        console.log(`        established: ${group.establishedFile}  ${group.establishedSymbol}`);
+      }
+      console.log(`        files: ${group.relatedFiles.slice(0, 6).join(', ')}`);
+      console.log(`        -> ${group.recommendation}`);
+    }
+    console.log('');
+  }
+}
+
+function renderSimilarityPlan(plan: NonNullable<ReturnType<typeof queries.similarConsolidationPlan>>): void {
+  const evidenceLabel = plan.similarityBasis === 'source-tokens' ? 'source-token overlap' : 'weighted callee overlap';
+  console.log(`\n${Math.round(plan.similarity * 100)}% ${evidenceLabel}\n`);
+  console.log(`  A: ${plan.symbolA.shortName}  (${plan.symbolA.file}, ${plan.symbolA.loc} LOC)`);
+  console.log(`  B: ${plan.symbolB.shortName}  (${plan.symbolB.file}, ${plan.symbolB.loc} LOC)`);
+  console.log(`  Evidence class: ${plan.evidenceClass}  (tier: ${plan.actionTier})`);
+  console.log(`  Recommendation: ${plan.recommendation}\n`);
+  console.log(`  Shared evidence (${plan.sharedEvidence.length}):`);
+  for (const item of plan.sharedEvidence) console.log(`    ${item}`);
+  if (plan.uniqueToA.length > 0) {
+    console.log(`\n  Unique to A (${plan.uniqueToA.length}):`);
+    for (const item of plan.uniqueToA) console.log(`    ${item}`);
+  }
+  if (plan.uniqueToB.length > 0) {
+    console.log(`\n  Unique to B (${plan.uniqueToB.length}):`);
+    for (const item of plan.uniqueToB) console.log(`    ${item}`);
+  }
+  console.log(`\n  Strategy: ${plan.consolidationStrategy}`);
+}
+
+function renderDriftArchitecture(architecture: NonNullable<ReturnType<typeof queries.drift>['architecture']>): void {
+  const undeclaredEdges = architecture.edges.filter((edge) => edge.policyStatus === 'undeclared').length;
+  console.log(
+    `\nArchitecture context: ${architecture.coverage.mappedFiles}/${architecture.coverage.totalFiles} file(s) mapped; ` +
+      `${architecture.policyCoverage.declaredRows}/${architecture.policyCoverage.totalBoundaries} dependency row(s) declared; ` +
+      `${undeclaredEdges} undeclared boundary edge(s).`,
+  );
+  if (architecture.reciprocalPairs.length > 0) {
+    console.log(`  Reciprocal pairs (${architecture.reciprocalPairs.length}):`);
+    for (const pair of architecture.reciprocalPairs) {
+      console.log(`    ${pair.boundaries[0]} <-> ${pair.boundaries[1]}`);
+    }
+  }
+  if (architecture.cycles.length > 0) {
+    console.log(`  Connected boundary groups (${architecture.cycles.length}):`);
+    for (const cycle of architecture.cycles) {
+      const policy = cycle.violatesPolicy ? ' [violates requireAcyclic]' : ' [signal]';
+      console.log(`    { ${cycle.boundaries.join(', ')} }${policy}`);
+    }
+  }
+}

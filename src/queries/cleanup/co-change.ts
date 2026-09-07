@@ -301,6 +301,17 @@ export function classifyCoChangePartner(fileA: string, fileB: string): CoChangeP
     return { partnerClass: 'config-code', reasons };
   }
 
+  return classifyFeatureCoChange(fileA, fileB, left, right, reasons, addReason);
+}
+
+function classifyFeatureCoChange(
+  fileA: string,
+  fileB: string,
+  left: CoChangePathFacts,
+  right: CoChangePathFacts,
+  reasons: string[],
+  addReason: (reason: string) => void,
+): CoChangePartnerClassification {
   const sharedFeatureTokens = sharedTokens(left.tokens, right.tokens).filter(
     (token) => !GENERIC_PATH_TOKENS.has(token),
   );
@@ -490,12 +501,7 @@ function coChangePathFacts(file: string): CoChangePathFacts {
   const normalized = file.replace(/\\/g, '/');
   const tags = new Set<CoChangePathTag>();
   if (isGeneratedArtifactPath(normalized)) tags.add('generated');
-  if (DOC_TAG_PATH_PATTERN.test(normalized)) tags.add('doc');
-  if (CONFIG_FILE_PATTERN.test(normalized)) tags.add('config');
-  if (SCHEMA_FILE_PATTERN.test(normalized)) tags.add('schema');
-  if (SCRIPT_FILE_PATTERN.test(normalized)) tags.add('script');
-  if (MODEL_FILE_PATTERN.test(normalized)) tags.add('model');
-  if (VIEW_FILE_PATTERN.test(normalized)) tags.add('view');
+  addCoChangePathTags(normalized, tags);
   if (classifyFile(normalized) === 'test') tags.add('test');
   if (!tags.has('doc') && !tags.has('config')) tags.add('code');
   return { tags, tokens: pathTokens(normalized) };
@@ -532,4 +538,13 @@ function suggestionName(files: readonly string[]): string {
           ?.replace(/\.[^.]+$/, '') || file,
     )
     .join(' + ');
+}
+
+function addCoChangePathTags(normalized: string, tags: Set<CoChangePathTag>): void {
+  if (DOC_TAG_PATH_PATTERN.test(normalized)) tags.add('doc');
+  if (CONFIG_FILE_PATTERN.test(normalized)) tags.add('config');
+  if (SCHEMA_FILE_PATTERN.test(normalized)) tags.add('schema');
+  if (SCRIPT_FILE_PATTERN.test(normalized)) tags.add('script');
+  if (MODEL_FILE_PATTERN.test(normalized)) tags.add('model');
+  if (VIEW_FILE_PATTERN.test(normalized)) tags.add('view');
 }

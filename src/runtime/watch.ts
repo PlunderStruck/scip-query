@@ -949,10 +949,7 @@ export class Watcher {
     this.lastGitState = next;
     if (!previous) return;
     const headChanged = previous.head !== next.head;
-    const indexChanged =
-      previous.indexPath !== next.indexPath ||
-      previous.indexMtimeMs !== next.indexMtimeMs ||
-      previous.indexSize !== next.indexSize;
+    const indexChanged = watchGitIndexChanged(previous, next);
     if (!headChanged && !indexChanged) return;
 
     const inputState = watcherInputState(this);
@@ -971,11 +968,7 @@ export class Watcher {
     );
     let relevantPaths: string[] | null = null;
     if (changedPaths !== null) {
-      if (changedPaths.includes('.scipquery.json')) refreshWatchInputLanguages(this, this.projectRoot);
-      // Git transitions do not retain per-path add/change/delete status here.
-      // Treat each candidate as a possible addition so newly selected compiler
-      // inputs refresh membership before the transition is discarded.
-      relevantPaths = changedPaths.filter((path) => scopedProjectInputChangeKind(this, 'add', path) !== null);
+      relevantPaths = relevantWatchGitPaths(this, this.projectRoot, changedPaths);
       if (relevantPaths.length === 0) return;
     }
     const changes = relevantPaths?.map<ProjectInputChangeEntry>((path) => ({
@@ -1578,19 +1571,7 @@ function scopedProjectInputChangeKind(
   }
   if (!isTypeScriptFamilyWatchSource(path, state.languages)) return changeKind;
 
-  const scopedPaths = state.typeScriptInputPaths;
-  if (!scopedPaths) return changeKind;
-  const previouslyInScope = scopedPaths.has(path);
-  if (changeKind !== 'add') return previouslyInScope ? changeKind : null;
-  if (previouslyInScope) {
-    // Native recursive watching reports an atomic replacement as a rename.
-    // Preserve it as a modification when the accepted input already exists.
-    return 'change';
-  }
-
-  const refreshedPaths = refreshLiveTypeScriptInputScope(watcher);
-  if (!refreshedPaths) return changeKind;
-  return refreshedPaths.has(path) ? 'add' : null;
+  return scopedTypeScriptWatchChange(watcher, state.typeScriptInputPaths, path, changeKind);
 }
 
 function refreshPublishedTypeScriptInputScope(watcher: Watcher): void {
@@ -1762,4 +1743,40 @@ function isWatchOutputPath(rel: string): boolean {
     rel.endsWith('index.db.tmp') ||
     basename(rel).startsWith(REINDEX_ACTIVITY_FILE)
   );
+}
+
+function watchGitIndexChanged(previous: GitStateSnapshot, next: GitStateSnapshot): boolean {
+  return (
+    previous.indexPath !== next.indexPath ||
+    previous.indexMtimeMs !== next.indexMtimeMs ||
+    previous.indexSize !== next.indexSize
+  );
+}
+
+function relevantWatchGitPaths(watcher: Watcher, projectRoot: string, changedPaths: string[]): string[] {
+  if (changedPaths.includes('.scipquery.json')) refreshWatchInputLanguages(watcher, projectRoot);
+  // Git transitions do not retain per-path add/change/delete status here.
+  // Treat each candidate as a possible addition so newly selected compiler
+  // inputs refresh membership before the transition is discarded.
+  return changedPaths.filter((path) => scopedProjectInputChangeKind(watcher, 'add', path) !== null);
+}
+
+function scopedTypeScriptWatchChange(
+  watcher: Watcher,
+  scopedPaths: ReadonlySet<string> | null,
+  path: string,
+  changeKind: ProjectInputChangeKind | undefined,
+): ProjectInputChangeKind | null | undefined {
+  if (!scopedPaths) return changeKind;
+  const previouslyInScope = scopedPaths.has(path);
+  if (changeKind !== 'add') return previouslyInScope ? changeKind : null;
+  if (previouslyInScope) {
+    // Native recursive watching reports an atomic replacement as a rename.
+    // Preserve it as a modification when the accepted input already exists.
+    return 'change';
+  }
+
+  const refreshedPaths = refreshLiveTypeScriptInputScope(watcher);
+  if (!refreshedPaths) return changeKind;
+  return refreshedPaths.has(path) ? 'add' : null;
 }

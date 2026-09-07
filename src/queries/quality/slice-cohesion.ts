@@ -1160,7 +1160,14 @@ function tupleStateSetter(
   if (!ts.isCallExpression(initializer)) return null;
   const leaf = calleeLeafName(ts, unwrapExpression(ts, initializer.expression));
   if (!leaf || !HOOK_NAME.test(leaf)) return null;
-  const [first, second] = node.name.elements;
+  return tupleBindingNames(ts, node.name);
+}
+
+function tupleBindingNames(
+  ts: TypeScriptModule,
+  name: TypeScript.ArrayBindingPattern,
+): { state: string; setter: string } | null {
+  const [first, second] = name.elements;
   if (!first || !second || ts.isOmittedExpression(first) || ts.isOmittedExpression(second)) return null;
   if (!ts.isIdentifier(first.name) || !ts.isIdentifier(second.name)) return null;
   return { state: first.name.text, setter: second.name.text };
@@ -1223,6 +1230,10 @@ function aliasRoots(ts: TypeScriptModule, expression: TypeScript.Expression): st
     return [];
   }
   if (ts.isConditionalExpression(value)) return [...aliasRoots(ts, value.whenTrue), ...aliasRoots(ts, value.whenFalse)];
+  return accessAliasRoots(ts, value);
+}
+
+function accessAliasRoots(ts: TypeScriptModule, value: TypeScript.Expression): string[] {
   if (ts.isPropertyAccessExpression(value)) {
     return NON_ALIASING_MEMBERS.has(value.name.text) ? [] : aliasRoots(ts, value.expression);
   }
@@ -1283,14 +1294,7 @@ function isExitOnly(
   const last = statements[statements.length - 1]!;
   if (!ts.isReturnStatement(last) && !ts.isThrowStatement(last)) return false;
   const declared = new Set(outerDeclared);
-  for (const inner of statements.slice(0, -1)) {
-    if (ts.isVariableStatement(inner)) {
-      for (const declaration of inner.declarationList.declarations)
-        for (const name of bindingNames(declaration.name)) declared.add(name);
-    } else if (!ts.isExpressionStatement(inner)) {
-      return false;
-    }
-  }
+  if (!collectExitPreludeDeclarations(ts, statements.slice(0, -1), declared)) return false;
   if (!ts.isReturnStatement(last) || !last.expression) return true;
   let computedHere = false;
   const visit = (node: TypeScript.Node): void => {
@@ -1439,10 +1443,7 @@ function mergeClosureEffectNames(from: ReadonlySet<string>, to: Set<string>): bo
 function isReadIdentifier(ts: TypeScriptModule, node: TypeScript.Identifier): boolean {
   const parent = node.parent;
   if (!parent) return false;
-  if (ts.isPropertyAccessExpression(parent) && parent.name === node) return false;
-  if (ts.isPropertyAssignment(parent) && parent.name === node) return false;
-  if (ts.isBindingElement(parent) && parent.propertyName === node) return false;
-  if ('name' in parent && parent.name === node && !ts.isShorthandPropertyAssignment(parent)) return false;
+  if (isIdentifierNamePosition(ts, node, parent)) return false;
   if (ts.isLabeledStatement(parent) || ts.isBreakOrContinueStatement(parent)) return false;
   return true;
 }
@@ -1575,9 +1576,7 @@ function classifyFlowBindings(
     const unit = unitOfPoint.get(point.id);
     if (unit === undefined || unit === -1) continue;
     if (point.kind === 'definition') {
-      definedNames[unit]!.add(rootName(point.name));
-      const key = `${unit}\0${point.name}`;
-      if (!definitionsByUnitName.has(key)) definitionsByUnitName.set(key, point);
+      recordFlowDefinition(point, unit, definedNames, definitionsByUnitName);
       continue;
     }
     if (point.kind !== 'use' || reachedUses.has(point.id)) continue;
@@ -1623,11 +1622,7 @@ function addContainerOrdering(
       dataDeps[use.unit]!.add(write.unit);
       addFlowPointDependency(pointDeps, use.id, write.unit);
     }
-    for (const read of reads) {
-      if (read.unit === write.unit || read.base !== write.base) continue;
-      if (units[read.unit]!.start <= writeStart) continue;
-      dataDeps[read.unit]!.add(write.unit);
-    }
+    addContainerReadOrdering(units, write, reads, writeStart, dataDeps);
   }
 }
 
@@ -1904,12 +1899,7 @@ function writtenBase(body: BodyModel, expression: TypeScript.Node): string | nul
   }
   if (ts.isDeleteExpression(expression)) return baseName(ts, expression.expression);
   if (ts.isCallExpression(expression)) {
-    const callee = unwrapExpression(ts, expression.expression);
-    if (ts.isPropertyAccessExpression(callee)) {
-      return READ_ONLY_METHODS.has(callee.name.text) ? null : baseName(ts, callee);
-    }
-    if (ts.isElementAccessExpression(callee)) return baseName(ts, callee);
-    return null;
+    return callWrittenBase(ts, expression);
   }
   return null;
 }
@@ -2030,6 +2020,16 @@ function statementOutputSeed(body: BodyModel, flow: FlowModel, unit: Unit): Outp
   if (ts.isCallExpression(expression) || ts.isNewExpression(expression) || ts.isTaggedTemplateExpression(expression)) {
     return callOutputSeed(body, unit, expression, written, unitWrites);
   }
+  return assignmentOutputSeed(body, unit, expression, written, flow);
+}
+
+function assignmentOutputSeed(
+  body: BodyModel,
+  unit: Unit,
+  expression: TypeScript.Expression,
+  written: string | null,
+  flow: FlowModel,
+): OutputSeed | null {
   if (written === null) return null;
   if (written !== 'this' && !body.paramNames.has(written) && isLocalIdentifierWrite(body, expression, flow, unit))
     return null;
@@ -2048,12 +2048,7 @@ function callOutputSeed(
     ? expression.tag
     : unwrapExpression(ts, expression.expression);
   if (written === null) {
-    if (ts.isIdentifier(callee)) {
-      const summary = body.closures.get(callee.text);
-      if (summary && ![...summary.writes].some((base) => !isLocalBase(body, base))) return null;
-    }
-    // Filling a local aggregate or updating local state is not an external effect.
-    if (unitWrites && unitWrites.local.size > 0 && unitWrites.external.size === 0) return null;
+    if (callHasOnlyLocalEffects(body, callee, unitWrites)) return null;
   }
   const calleeText = compact(callee.getText(sourceFile));
   const leaf = ts.isTaggedTemplateExpression(expression) ? null : calleeLeafName(ts, callee);
@@ -2665,4 +2660,77 @@ function clusterKindLabel(cluster: SliceCohesionCluster): string {
 function callableLabel(body: BodyModel): string {
   const name = body.callable.name;
   return name && 'text' in name ? String(name.text) : 'this function';
+}
+
+function collectExitPreludeDeclarations(
+  ts: TypeScriptModule,
+  statements: readonly TypeScript.Statement[],
+  declared: Set<string>,
+): boolean {
+  for (const inner of statements) {
+    if (ts.isVariableStatement(inner)) {
+      for (const declaration of inner.declarationList.declarations)
+        for (const name of bindingNames(declaration.name)) declared.add(name);
+    } else if (!ts.isExpressionStatement(inner)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isIdentifierNamePosition(ts: TypeScriptModule, node: TypeScript.Identifier, parent: TypeScript.Node): boolean {
+  if (ts.isPropertyAccessExpression(parent) && parent.name === node) return true;
+  if (ts.isPropertyAssignment(parent) && parent.name === node) return true;
+  if (ts.isBindingElement(parent) && parent.propertyName === node) return true;
+  if ('name' in parent && parent.name === node && !ts.isShorthandPropertyAssignment(parent)) return true;
+  return false;
+}
+
+function callWrittenBase(ts: TypeScriptModule, expression: TypeScript.CallExpression): string | null {
+  const callee = unwrapExpression(ts, expression.expression);
+  if (ts.isPropertyAccessExpression(callee)) {
+    return READ_ONLY_METHODS.has(callee.name.text) ? null : baseName(ts, callee);
+  }
+  if (ts.isElementAccessExpression(callee)) return baseName(ts, callee);
+  return null;
+}
+
+function callHasOnlyLocalEffects(
+  body: BodyModel,
+  callee: TypeScript.Expression,
+  unitWrites: UnitWrites | undefined,
+): boolean {
+  const { ts } = body;
+  if (ts.isIdentifier(callee)) {
+    const summary = body.closures.get(callee.text);
+    if (summary && ![...summary.writes].some((base) => !isLocalBase(body, base))) return true;
+  }
+  // Filling a local aggregate or updating local state is not an external effect.
+  if (unitWrites && unitWrites.local.size > 0 && unitWrites.external.size === 0) return true;
+  return false;
+}
+
+function recordFlowDefinition(
+  point: TypeScriptLocalFlowPoint,
+  unit: number,
+  definedNames: Set<string>[],
+  definitionsByUnitName: Map<string, TypeScriptLocalFlowPoint>,
+): void {
+  definedNames[unit]!.add(rootName(point.name));
+  const key = `${unit}\0${point.name}`;
+  if (!definitionsByUnitName.has(key)) definitionsByUnitName.set(key, point);
+}
+
+function addContainerReadOrdering(
+  units: readonly Unit[],
+  write: ReturnType<typeof containerAccesses>['writes'][number],
+  reads: ReturnType<typeof containerAccesses>['reads'],
+  writeStart: number,
+  dataDeps: FlowDependencies['dataDeps'],
+): void {
+  for (const read of reads) {
+    if (read.unit === write.unit || read.base !== write.base) continue;
+    if (units[read.unit]!.start <= writeStart) continue;
+    dataDeps[read.unit]!.add(write.unit);
+  }
 }

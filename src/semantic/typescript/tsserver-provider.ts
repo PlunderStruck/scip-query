@@ -179,11 +179,7 @@ class TsServerSemanticProvider implements SemanticProvider {
       for (const entry of referencedSymbol.references) {
         const location = referenceEntryLocation(this.ts, bundle.service, this.projectRoot, entry);
         if (!location) continue;
-        if (
-          location.file === definition.relativePath &&
-          location.line >= definition.startLine &&
-          location.line <= definition.endLine
-        ) {
+        if (referenceIsWithinDefinition(location, definition)) {
           continue;
         }
         references.push(location);
@@ -315,4 +311,12 @@ function normalizePath(filePath: string): string {
 
 function flattenDiagnostic(ts: TypeScriptModule, diagnostic: TypeScript.Diagnostic): string {
   return ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
+}
+
+function referenceIsWithinDefinition(location: SemanticReference, definition: IndexedDefinition): boolean {
+  return (
+    location.file === definition.relativePath &&
+    location.line >= definition.startLine &&
+    location.line <= definition.endLine
+  );
 }

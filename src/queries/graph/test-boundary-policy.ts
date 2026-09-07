@@ -62,25 +62,36 @@ export function testBoundaryViolations(
     // would report every import it makes, which is noise rather than a finding.
     if (!ownerBoundary) continue;
 
-    for (const parsed of getSourceImports(db, testFile)) {
-      const target = parsed.sourcePath;
-      if (!target) continue;
-      const importedBoundary = boundaryOf(target);
-      if (!importedBoundary) continue;
-
-      if (importedBoundary === ownerBoundary) continue;
-      if (reachable.get(ownerBoundary)?.has(importedBoundary)) continue;
-      violations.push({
-        testFile,
-        ownerBoundary,
-        importedFile: target,
-        importedBoundary,
-        reason: 'outside-owner-policy',
-      });
-    }
+    appendTestImportViolations(db, testFile, ownerBoundary, boundaryOf, reachable, violations);
   }
 
   return dedupe(violations);
+}
+
+function appendTestImportViolations(
+  db: ScipDatabase,
+  testFile: string,
+  ownerBoundary: string,
+  boundaryOf: (file: string) => string | null,
+  reachable: ReturnType<typeof testReachableBoundaries>,
+  violations: TestBoundaryViolation[],
+): void {
+  for (const parsed of getSourceImports(db, testFile)) {
+    const target = parsed.sourcePath;
+    if (!target) continue;
+    const importedBoundary = boundaryOf(target);
+    if (!importedBoundary) continue;
+
+    if (importedBoundary === ownerBoundary) continue;
+    if (reachable.get(ownerBoundary)?.has(importedBoundary)) continue;
+    violations.push({
+      testFile,
+      ownerBoundary,
+      importedFile: target,
+      importedBoundary,
+      reason: 'outside-owner-policy',
+    });
+  }
 }
 
 /**

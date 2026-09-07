@@ -155,27 +155,7 @@ function parseIsolatedAnalysisResult<T>(stdout: string, opts: IsolatedJsonProces
   if (!isRecordObject(parsed)) {
     throw new Error(`${opts.label} returned a non-object isolated-analysis message.`);
   }
-  if (parsed['protocol'] !== ISOLATED_ANALYSIS_PROTOCOL) {
-    throw new Error(
-      `${opts.label} returned protocol ${describeValue(parsed['protocol'])}; expected ${ISOLATED_ANALYSIS_PROTOCOL}.`,
-    );
-  }
-  if (parsed['schemaVersion'] !== ISOLATED_ANALYSIS_SCHEMA_VERSION) {
-    throw new Error(
-      `${opts.label} returned unsupported isolated-analysis schemaVersion ${describeValue(parsed['schemaVersion'])}; expected ${ISOLATED_ANALYSIS_SCHEMA_VERSION}.`,
-    );
-  }
-  if (!isScipQueryProducer(parsed['producer'])) {
-    throw new Error(`${opts.label} did not identify a scip-query producer version.`);
-  }
-  if (parsed['command'] !== opts.command) {
-    throw new Error(
-      `${opts.label} returned result for command ${describeValue(parsed['command'])}; expected ${opts.command}.`,
-    );
-  }
-  if (!Object.hasOwn(parsed, 'result')) {
-    throw new Error(`${opts.label} omitted the isolated-analysis result.`);
-  }
+  validateIsolatedResultHeader(parsed, opts);
   const observationReceipt = parsed['observationReceipt'];
   if (
     observationReceipt !== undefined &&
@@ -240,4 +220,28 @@ export function groupAnalysisTasks<T>(items: readonly T[], groupedSets: readonly
   }
 
   return tasks;
+}
+
+function validateIsolatedResultHeader(parsed: Record<string, unknown>, opts: IsolatedJsonProcessOptions): void {
+  if (parsed['protocol'] !== ISOLATED_ANALYSIS_PROTOCOL) {
+    throw new Error(
+      `${opts.label} returned protocol ${describeValue(parsed['protocol'])}; expected ${ISOLATED_ANALYSIS_PROTOCOL}.`,
+    );
+  }
+  if (parsed['schemaVersion'] !== ISOLATED_ANALYSIS_SCHEMA_VERSION) {
+    throw new Error(
+      `${opts.label} returned unsupported isolated-analysis schemaVersion ${describeValue(parsed['schemaVersion'])}; expected ${ISOLATED_ANALYSIS_SCHEMA_VERSION}.`,
+    );
+  }
+  if (!isScipQueryProducer(parsed['producer'])) {
+    throw new Error(`${opts.label} did not identify a scip-query producer version.`);
+  }
+  if (parsed['command'] !== opts.command) {
+    throw new Error(
+      `${opts.label} returned result for command ${describeValue(parsed['command'])}; expected ${opts.command}.`,
+    );
+  }
+  if (!Object.hasOwn(parsed, 'result')) {
+    throw new Error(`${opts.label} omitted the isolated-analysis result.`);
+  }
 }

@@ -330,17 +330,15 @@ function maybeSweepInactiveRepositoryCaches(
   if (!globalLock) return;
   try {
     for (const repositoryId of safeReadDirectory(repositoriesRoot)) {
-      if (repositoryId === activeRepositoryId || !/^[a-f0-9]{24}$/.test(repositoryId)) continue;
-      const repositoryDir = join(repositoriesRoot, repositoryId);
-      let stat;
-      try {
-        stat = lstatSync(repositoryDir);
-      } catch {
-        continue;
-      }
-      if (!stat.isDirectory() || stat.isSymbolicLink()) continue;
-      const projectRoot = repositoryProjectRootHint(repositoryDir) ?? fallbackProjectRoot;
-      sweepRepositoryCacheDirectory(projectRoot, repositoryDir, repositoryId, cliVersion, nowMs, opts);
+      sweepInactiveRepositoryEntry(
+        repositoriesRoot,
+        repositoryId,
+        activeRepositoryId,
+        fallbackProjectRoot,
+        cliVersion,
+        nowMs,
+        opts,
+      );
     }
     writeJsonAtomic(
       statePath,
@@ -698,4 +696,26 @@ function directorySize(root: string): number {
     }
   }
   return total;
+}
+
+function sweepInactiveRepositoryEntry(
+  repositoriesRoot: string,
+  repositoryId: string,
+  activeRepositoryId: string,
+  fallbackProjectRoot: string,
+  cliVersion: string,
+  nowMs: number,
+  opts: { force?: boolean; policy?: Partial<RepositoryCacheSweepPolicy> },
+): void {
+  if (repositoryId === activeRepositoryId || !/^[a-f0-9]{24}$/.test(repositoryId)) return;
+  const repositoryDir = join(repositoriesRoot, repositoryId);
+  let stat;
+  try {
+    stat = lstatSync(repositoryDir);
+  } catch {
+    return;
+  }
+  if (!stat.isDirectory() || stat.isSymbolicLink()) return;
+  const projectRoot = repositoryProjectRootHint(repositoryDir) ?? fallbackProjectRoot;
+  sweepRepositoryCacheDirectory(projectRoot, repositoryDir, repositoryId, cliVersion, nowMs, opts);
 }

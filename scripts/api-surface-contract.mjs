@@ -350,18 +350,7 @@ export function updateApiContract({
     changes: diff.changes,
   };
 
-  mkdirSync(dirname(manifestPath), { recursive: true });
-  mkdirSync(changeDirectory, { recursive: true });
-  writeFileSync(manifestPath, `${stableJson(current, 2)}\n`, 'utf8');
-  const recordPath = join(changeDirectory, `${current.digest.slice(0, 16)}.json`);
-  if (existsSync(recordPath)) {
-    const existing = readJson(recordPath, 'API acceptance record');
-    if (stableJson(existing) !== stableJson(record)) {
-      throw new Error(`Refusing to replace existing API acceptance record ${recordPath}.`);
-    }
-  } else {
-    writeFileSync(recordPath, `${stableJson(record, 2)}\n`, 'utf8');
-  }
+  const recordPath = writeApiAcceptanceArtifacts(manifestPath, changeDirectory, current, record);
   return { manifest: current, record, recordPath, diff };
 }
 
@@ -369,14 +358,8 @@ export function classifySignatureChange(previousSignature, currentSignature) {
   const previous = parseSingleDeclaration(previousSignature);
   const current = parseSingleDeclaration(currentSignature);
   if (previous && current && ts.isInterfaceDeclaration(previous) && ts.isInterfaceDeclaration(current)) {
-    const oldMembers = interfaceMembers(previous);
-    const newMembers = interfaceMembers(current);
-    for (const [name, member] of oldMembers) {
-      const next = newMembers.get(name);
-      if (!next || next !== member) return 'breaking';
-    }
-    const additions = [...newMembers].filter(([name]) => !oldMembers.has(name));
-    if (additions.length > 0 && additions.every(([, member]) => member.startsWith('?'))) return 'additive';
+    const classification = classifyInterfaceMemberChange(previous, current);
+    if (classification) return classification;
   }
   if (previousSignature === currentSignature) return 'none';
   return 'breaking';
@@ -914,4 +897,32 @@ if (invokedPath === import.meta.url) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
   }
+}
+
+function writeApiAcceptanceArtifacts(manifestPath, changeDirectory, current, record) {
+  mkdirSync(dirname(manifestPath), { recursive: true });
+  mkdirSync(changeDirectory, { recursive: true });
+  writeFileSync(manifestPath, `${stableJson(current, 2)}\n`, 'utf8');
+  const recordPath = join(changeDirectory, `${current.digest.slice(0, 16)}.json`);
+  if (existsSync(recordPath)) {
+    const existing = readJson(recordPath, 'API acceptance record');
+    if (stableJson(existing) !== stableJson(record)) {
+      throw new Error(`Refusing to replace existing API acceptance record ${recordPath}.`);
+    }
+  } else {
+    writeFileSync(recordPath, `${stableJson(record, 2)}\n`, 'utf8');
+  }
+  return recordPath;
+}
+
+function classifyInterfaceMemberChange(previous, current) {
+  const oldMembers = interfaceMembers(previous);
+  const newMembers = interfaceMembers(current);
+  for (const [name, member] of oldMembers) {
+    const next = newMembers.get(name);
+    if (!next || next !== member) return 'breaking';
+  }
+  const additions = [...newMembers].filter(([name]) => !oldMembers.has(name));
+  if (additions.length > 0 && additions.every(([, member]) => member.startsWith('?'))) return 'additive';
+  return null;
 }

@@ -1194,16 +1194,7 @@ function foldedComponentFrontiers(
       )
       .map((node) => node.id),
   );
-  const adjacency = new Map<string, Set<string>>();
-  for (const edge of topology.edges) {
-    if (!foldedNodeIds.has(edge.fromNodeId) || !foldedNodeIds.has(edge.toNodeId)) continue;
-    const from = adjacency.get(edge.fromNodeId) ?? new Set<string>();
-    const to = adjacency.get(edge.toNodeId) ?? new Set<string>();
-    from.add(edge.toNodeId);
-    to.add(edge.fromNodeId);
-    adjacency.set(edge.fromNodeId, from);
-    adjacency.set(edge.toNodeId, to);
-  }
+  const adjacency = foldedNodeAdjacency(topology, foldedNodeIds);
   const components: string[][] = [];
   const visited = new Set<string>();
   for (const start of [...foldedNodeIds].sort()) {
@@ -1291,4 +1282,21 @@ function dispositionCounts(records: readonly { disposition: ExplorationDispositi
 
 function uniqueSorted<T extends string>(values: readonly T[]): T[] {
   return [...new Set(values)].sort();
+}
+
+function foldedNodeAdjacency(
+  topology: ExplorationTopology,
+  foldedNodeIds: ReadonlySet<string>,
+): Map<string, Set<string>> {
+  const adjacency = new Map<string, Set<string>>();
+  for (const edge of topology.edges) {
+    if (!foldedNodeIds.has(edge.fromNodeId) || !foldedNodeIds.has(edge.toNodeId)) continue;
+    const from = adjacency.get(edge.fromNodeId) ?? new Set<string>();
+    const to = adjacency.get(edge.toNodeId) ?? new Set<string>();
+    from.add(edge.toNodeId);
+    to.add(edge.fromNodeId);
+    adjacency.set(edge.fromNodeId, from);
+    adjacency.set(edge.toNodeId, to);
+  }
+  return adjacency;
 }

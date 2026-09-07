@@ -121,15 +121,7 @@ function countDanglingDefinitionOccurrences(
   let removed = 0;
   for (const field of eachWireField(buffer, documentField.valueStart, documentField.valueEnd)) {
     if (field.wireType !== 2 || field.fieldNumber !== DOCUMENT_OCCURRENCES_FIELD) continue;
-    let symbol = '';
-    let symbolRoles = 0;
-    for (const occurrenceField of eachWireField(buffer, field.valueStart, field.valueEnd)) {
-      if (occurrenceField.fieldNumber === OCCURRENCE_SYMBOL_FIELD && occurrenceField.wireType === 2) {
-        symbol = text.decode(buffer.subarray(occurrenceField.valueStart, occurrenceField.valueEnd));
-      } else if (occurrenceField.fieldNumber === OCCURRENCE_SYMBOL_ROLES_FIELD && occurrenceField.wireType === 0) {
-        symbolRoles = occurrenceField.varint;
-      }
-    }
+    const { symbol, symbolRoles } = occurrenceDefinitionIdentity(buffer, field, text);
     if ((symbolRoles & SymbolRole.Definition) !== 0 && !definedSymbols.has(symbol)) removed += 1;
   }
   return removed;
@@ -226,4 +218,21 @@ export function sanitizeScipIndex(index: Index): SanitizeScipResult & { index: I
     removedDefinitionOccurrences,
     touchedDocuments,
   };
+}
+
+function occurrenceDefinitionIdentity(
+  buffer: Uint8Array,
+  field: WireField,
+  text: TextDecoder,
+): { symbol: string; symbolRoles: number } {
+  let symbol = '';
+  let symbolRoles = 0;
+  for (const occurrenceField of eachWireField(buffer, field.valueStart, field.valueEnd)) {
+    if (occurrenceField.fieldNumber === OCCURRENCE_SYMBOL_FIELD && occurrenceField.wireType === 2) {
+      symbol = text.decode(buffer.subarray(occurrenceField.valueStart, occurrenceField.valueEnd));
+    } else if (occurrenceField.fieldNumber === OCCURRENCE_SYMBOL_ROLES_FIELD && occurrenceField.wireType === 0) {
+      symbolRoles = occurrenceField.varint;
+    }
+  }
+  return { symbol, symbolRoles };
 }

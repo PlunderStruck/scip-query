@@ -548,18 +548,10 @@ function deadSourceTargets(
   if (!opts.permissive && candidates.length === 1) return [...candidates];
 
   const imports = importsByName();
-  const directlyImportedFrom = imports.get(name);
-  if (directlyImportedFrom) {
-    for (const sourcePath of directlyImportedFrom) {
-      const matches = candidates.filter((candidate) => pathsResolveSame(sourcePath, candidate.relativePath));
-      if (matches.length > 0) return matches;
-    }
-  }
+  const direct = directlyImportedDeadTargets(candidates, imports.get(name));
+  if (direct.length > 0) return direct;
 
-  const allImportedSourcePaths = new Set<string>();
-  for (const sourcePaths of imports.values()) {
-    for (const sourcePath of sourcePaths) allImportedSourcePaths.add(sourcePath);
-  }
+  const allImportedSourcePaths = importedSourcePaths(imports);
   for (const sourcePath of allImportedSourcePaths) {
     const matches = candidates.filter((candidate) => pathsResolveSame(sourcePath, candidate.relativePath));
     if (matches.length > 0 && matches.length === candidates.length) return matches;
@@ -681,4 +673,26 @@ function supplementReferencesFromCallerMap(
     if (!callerFiles) continue;
     for (const callerFile of callerFiles) recordCallerFile(definition, callerFile);
   }
+}
+
+function directlyImportedDeadTargets(
+  candidates: readonly IndexedDefinition[],
+  directlyImportedFrom: ReadonlySet<string> | undefined,
+): IndexedDefinition[] {
+  if (directlyImportedFrom) {
+    for (const sourcePath of directlyImportedFrom) {
+      const matches = candidates.filter((candidate) => pathsResolveSame(sourcePath, candidate.relativePath));
+      if (matches.length > 0) return matches;
+    }
+  }
+
+  return [];
+}
+
+function importedSourcePaths(imports: ReadonlyMap<string, ReadonlySet<string>>): Set<string> {
+  const allImportedSourcePaths = new Set<string>();
+  for (const sourcePaths of imports.values()) {
+    for (const sourcePath of sourcePaths) allImportedSourcePaths.add(sourcePath);
+  }
+  return allImportedSourcePaths;
 }

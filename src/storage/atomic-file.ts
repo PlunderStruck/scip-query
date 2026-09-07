@@ -95,22 +95,7 @@ export function replaceFileAtomic(
         : 'not-requested';
     return atomicFileWriteResult(durability, directorySync);
   } finally {
-    if (fd !== undefined) {
-      try {
-        runtime.closeFile(fd);
-      } catch {
-        // Preserve the primary write/sync error; owned staging cleanup below
-        // still attempts to remove the incomplete file.
-      }
-    }
-    if (temporaryOwned) {
-      try {
-        runtime.removeFile(temporaryPath);
-      } catch {
-        // Only the random-token owner removes this path. A failed create or
-        // injected filesystem fault may mean no owned path remains.
-      }
-    }
+    cleanupOwnedAtomicFile(runtime, fd, temporaryPath, temporaryOwned);
   }
 }
 
@@ -158,20 +143,7 @@ export function createFileAtomicExclusive(
         : 'not-requested';
     return atomicFileWriteResult(durability, directorySync);
   } finally {
-    if (fd !== undefined) {
-      try {
-        runtime.closeFile(fd);
-      } catch {
-        // Preserve the primary write/sync error.
-      }
-    }
-    if (temporaryOwned) {
-      try {
-        runtime.removeFile(temporaryPath);
-      } catch {
-        // Only the random-token owner removes this path.
-      }
-    }
+    cleanupOwnedAtomicFile(runtime, fd, temporaryPath, temporaryOwned);
   }
 }
 
@@ -198,3 +170,27 @@ export {
   type DurableFileCloneOptions,
   type DurableFileCloneRuntime,
 } from '../filesystem/durable-file.js';
+
+function cleanupOwnedAtomicFile(
+  runtime: AtomicFileRuntime,
+  fd: number | undefined,
+  temporaryPath: string,
+  temporaryOwned: boolean,
+): void {
+  if (fd !== undefined) {
+    try {
+      runtime.closeFile(fd);
+    } catch {
+      // Preserve the primary write/sync error; owned staging cleanup below
+      // still attempts to remove the incomplete file.
+    }
+  }
+  if (temporaryOwned) {
+    try {
+      runtime.removeFile(temporaryPath);
+    } catch {
+      // Only the random-token owner removes this path. A failed create or
+      // injected filesystem fault may mean no owned path remains.
+    }
+  }
+}

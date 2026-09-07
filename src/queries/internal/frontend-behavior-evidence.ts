@@ -86,16 +86,7 @@ export function classifyFrontendBehaviorEvidence(opts: {
     );
   }
 
-  const hasDomain = domainReasons.length > 0;
-  const hasGeneric = genericReasons.length > 0;
-  const hasSharedAbstraction = sharedAbstractionReasons.length > 0;
-  const evidenceClass: FrontendBehaviorEvidenceClass = hasDomain
-    ? hasGeneric || hasSharedAbstraction
-      ? 'mixed'
-      : 'domain-behavior'
-    : hasSharedAbstraction
-      ? 'shared-abstraction'
-      : 'generic-workflow-scaffolding';
+  const evidenceClass = frontendReasonClass(domainReasons, genericReasons, sharedAbstractionReasons);
   const actionTier: FrontendBehaviorActionTier =
     evidenceClass === 'domain-behavior' || evidenceClass === 'mixed' ? 'signal' : 'support';
 
@@ -237,4 +228,22 @@ export function compareNamedFrontendPairs(a: NamedFrontendPair, b: NamedFrontend
     a.fileB.localeCompare(b.fileB) ||
     a.componentB.localeCompare(b.componentB)
   );
+}
+
+function frontendReasonClass(
+  domainReasons: readonly string[],
+  genericReasons: readonly string[],
+  sharedAbstractionReasons: readonly string[],
+): FrontendBehaviorEvidenceClass {
+  const hasDomain = domainReasons.length > 0;
+  const hasGeneric = genericReasons.length > 0;
+  const hasSharedAbstraction = sharedAbstractionReasons.length > 0;
+  const evidenceClass: FrontendBehaviorEvidenceClass = hasDomain
+    ? hasGeneric || hasSharedAbstraction
+      ? 'mixed'
+      : 'domain-behavior'
+    : hasSharedAbstraction
+      ? 'shared-abstraction'
+      : 'generic-workflow-scaffolding';
+  return evidenceClass;
 }

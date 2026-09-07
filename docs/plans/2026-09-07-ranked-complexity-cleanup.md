@@ -1379,3 +1379,222 @@ Target measurements (cyclomatic/cognitive):
 - `checkStructure.visit` → 7/6 (`scripts/change-benchmark-core.mjs`).
 
 Next: wave seven contains the next 90 ranked targets plus all 87 other findings in the same exclusively assigned files (177 total); the remaining118 findings are in86 other files. Artifacts: `/tmp/complexity-wave6-{review,health,impact,metrics}.json`; verification logs use `/tmp/complexity-wave6-*.log`.
+
+
+### Seventh wave root lane checkpoint
+
+Root completed all28 targets across nine exclusively owned files. One current-source review places all28 and all introduced helpers at or below cyclomatic10/cognitive15. The callback named registerCommandDescriptors.<callback:descriptors.map:0> is paired by the exact line48 diff; two separate callbacks with that name at27 and29 remain1/0. The automated pairing remains uncomparable and does not itself prove resolution.
+
+The changes consolidate the duplicate files compact-argument parser, preserve pool-size caps in an explicit map, separate command option registration and output sections, preserve setup consent/precedence and settling limits, and retain watcher ownership validation, stop deadlines and query-service startup locks. Every source diff in this root lane has been reviewed. Focused validation passed260 tests in six existing files plus eight new parser regressions in tests/runtime/complexity-wave7-root.test.ts. Source/test ESLint and Prettier pass. Root source types are clean in the concurrent typecheck; Rust-provider errors belonged to an in-progress worker edit and were reported to its owner. Full frozen types remain required.
+
+Root is frozen pending second review and combined validation. Artifacts: /tmp/complexity-wave7-root-{review,metrics}.json and /tmp/complexity-wave7-root-*.log. No build, final health, final impact or full-suite result is claimed for wave7 yet.
+
+- `renderWatchServiceIdentity` → 10/9 (`src/runtime/commands/command-handlers.ts`).
+- `registerCommandDescriptors.<callback:descriptors.map:0>` → 7/4 (`src/runtime/commands/command-registry.ts`).
+- `startSetupWatchService` → 8/7 (`src/runtime/project-setup.ts`).
+- `handleRefs.<callback:budgetedDbCommand:1>` → 9/6 (`src/runtime/query-commands/direct-navigation.ts`).
+- `evidenceCommandSections` → 10/5 (`src/runtime/query-commands/navigation.ts`).
+- `parseExactCompactOperand` → 10/14 (`src/runtime/query-service-fastpath.ts`).
+- `parseFilesInvocation` → 2/1 (`src/runtime/query-service-fastpath.ts`).
+- `isMethodsResult` → 8/6 (`src/runtime/query-service.ts`).
+- `parseWorkerData` → 5/4 (`src/runtime/typescript-mailbox-worker.ts`).
+- `planWatchServiceAction` → 4/1 (`src/runtime/watch-service.ts`).
+- `renderWatchTypeScriptStatus` → 8/9 (`src/runtime/commands/command-handlers.ts`).
+- `handleSetup` → 8/9 (`src/runtime/commands/command-handlers.ts`).
+- `sourceInspectionUnitRow` → 9/7 (`src/runtime/query-commands/navigation.ts`).
+- `sourceSearchSections` → 8/6 (`src/runtime/query-commands/navigation.ts`).
+- `stopLiveWatchProcess` → 9/6 (`src/runtime/watch-service.ts`).
+- `guidedProjectSetupOptions` → 7/6 (`src/runtime/commands/command-handlers.ts`).
+- `renderStatusReport` → 7/6 (`src/runtime/commands/command-handlers.ts`).
+- `prepareSetupRefreshConfig` → 8/9 (`src/runtime/project-setup.ts`).
+- `refreshSetupIndex` → 10/11 (`src/runtime/project-setup.ts`).
+- `parseLegacyWatchMetadata` → 10/6 (`src/runtime/watch-service.ts`).
+- `prepareSetupAstParsers` → 6/6 (`src/runtime/project-setup.ts`).
+- `renderProjectSetupReport` → 5/5 (`src/runtime/project-setup.ts`).
+- `handleReindex` → 7/6 (`src/runtime/commands/command-handlers.ts`).
+- `renderSharedCacheStatus` → 7/4 (`src/runtime/commands/command-handlers.ts`).
+- `ensureQueryServiceServer` → 8/11 (`src/runtime/query-service.ts`).
+- `isSerializedJsonResult` → 8/6 (`src/runtime/query-service.ts`).
+- `requestPoolSize` → 2/1 (`src/runtime/query-service.ts`).
+- `tryQueryWithService` → 9/8 (`src/runtime/query-service.ts`).
+
+
+### Final cleanup queue: continue into unowned files without an integration pause
+
+The four-agent concurrency cap remains unchanged. To avoid idle lanes, the 118 previously planned next-wave targets will be implemented as disjoint continuation packets during this same final cleanup. Combined target set:295 current findings in160 files, assigned root44/21files, worker1 88/45files, worker2 88/51files, worker3 75/43files. Existing wave7 manifests retain their177 entries; continuation packets use /tmp/complexity-wave8-{lane}-targets.json and combined manifests use /tmp/complexity-final-{lane}-targets.json. Complete current packets, then continue into the additional owned files; no source file is shared between lanes. Run final combined validation only after every lane freezes. This supersedes the prior separate-commit boundary for the118 continuation targets. All continuation assignments below are recorded before edits. Two file-dependency callbacks share a finding ID; use exact baseline file/name/line to keep both targets distinct.
+
+root continuation targets:
+
+- `src/runtime/command-kit/command-docs.ts:96` — `renderCommandReferenceMarkdown`. renderCommandReferenceMarkdown: cyclomatic 12, cognitive 18.
+- `src/runtime/command-kit/command-execution.ts:661` — `countReturnedUnits`. countReturnedUnits: cyclomatic 12, cognitive 15.
+- `src/runtime/command-kit/command-execution.ts:515` — `optionalEvidenceContext`. optionalEvidenceContext: cyclomatic 12, cognitive 12.
+- `src/runtime/commands/command-panels.ts:25` — `commandPanelId`. commandPanelId: cyclomatic 12, cognitive 10.
+- `src/runtime/git-worktree-context-cache.ts:118` — `isGitWorktreeContextReceipt`. isGitWorktreeContextReceipt: cyclomatic 12, cognitive 2.
+- `src/runtime/project-readiness.ts:516` — `sourceFactCapability`. sourceFactCapability: cyclomatic 12, cognitive 10.
+- `src/runtime/render.ts:110` — `render.sectionedReport`. render.sectionedReport: cyclomatic 10, cognitive 18.
+- `src/runtime/suppression-writer.ts:226` — `normalizeSuppression`. normalizeSuppression: cyclomatic 12, cognitive 11.
+- `src/runtime/watch-server.ts:277` — `runWatchServiceLifecycle`. runWatchServiceLifecycle: cyclomatic 12, cognitive 12.
+- `src/runtime/worker-request-lane.ts:291` — `decodeWorkerLaneResponse`. decodeWorkerLaneResponse: cyclomatic 12, cognitive 13.
+- `src/runtime/revisioned-file.ts:100` — `mutateTextFileRevisionAware`. mutateTextFileRevisionAware: cyclomatic 11, cognitive 17.
+- `src/runtime/query-commands/planning.ts:32` — `handleContext.<callback:budgetedDbCommand:1>`. handleContext.<callback:budgetedDbCommand:1>: cyclomatic 11, cognitive 10.
+- `src/runtime/query-service-server.ts:119` — `processRequests`. processRequests: cyclomatic 11, cognitive 15.
+- `src/runtime/watch-server.ts:235` — `createWatchServiceMaintenance.<anonymous@235:10>`. createWatchServiceMaintenance.<anonymous@235:10>: cyclomatic 11, cognitive 12.
+- `src/runtime/worker-request-lane.ts:189` — `WorkerRequestLane.failActiveAfterTermination.failure.<anonymous@189:22>`. WorkerRequestLane.failActiveAfterTermination.failure.<anonymous@189:22>: cyclomatic 11, cognitive 10.
+- `src/runtime/worker-request-lane.ts:141` — `WorkerRequestLane.handleMessage`. WorkerRequestLane.handleMessage: cyclomatic 11, cognitive 10.
+
+worker-1 continuation targets:
+
+- `src/queries/cleanup/co-change.ts:265` — `classifyCoChangePartner`. classifyCoChangePartner: cyclomatic 12, cognitive 12.
+- `src/queries/cleanup/doc-drift.ts:767` — `extractDocPathEvidence`. extractDocPathEvidence: cyclomatic 12, cognitive 16.
+- `src/queries/cleanup/drift.ts:117` — `unusedImportDrift`. unusedImportDrift: cyclomatic 12, cognitive 18.
+- `src/queries/cleanup/not-implemented.ts:194` — `splitTopLevelStatementsPreservingRaw`. splitTopLevelStatementsPreservingRaw: cyclomatic 12, cognitive 10.
+- `src/queries/cleanup/similar-files.ts:126` — `compareFileProfiles`. compareFileProfiles: cyclomatic 12, cognitive 15.
+- `src/queries/cleanup/similar-signatures.ts:98` — `groupDefinitionsBySignature`. groupDefinitionsBySignature: cyclomatic 12, cognitive 12.
+- `src/queries/cleanup/similar.ts:290` — `pairPassesSimilarity`. pairPassesSimilarity: cyclomatic 12, cognitive 9.
+- `src/queries/graph/graph-evidence.ts:455` — `graphFamilyFor`. graphFamilyFor: cyclomatic 12, cognitive 9.
+- `src/queries/impact/incomplete-migration.ts:273` — `collectLeftoversForHelper`. collectLeftoversForHelper: cyclomatic 12, cognitive 18.
+- `src/queries/internal/connected-behavior.ts:1489` — `mostSpecificCallers.<callback:anchorNodeIds.flatMap:0>.callers.<callback:edges         .filter((edge) => edge.kind === 'call' && edge.toNodeId === anchorNodeId)         .map((edge) => ({ edge, node: nodeById.get(edge.fromNodeId) }))         .filter(           (candidate): candidate is { edge: ExplorationTopologyEdge; node: ExplorationTopologyNode } =>             candidate.node !== undefined &&             ['symbol', 'source-construct', 'runtime-boundary-participant'].includes(candidate.node.kind) &&             candidate.node.location !== null,         )         .sort:0>`. mostSpecificCallers.<callback:anchorNodeIds.flatMap:0>.callers.<callback:edges         .filter((edge) => edge.kind === 'call' && edge.toNodeId === anchorNodeId)         .map((edge) => ({ edge, node: nodeById.get(edge.fromNodeId) }))         .filter(           (candidate): candidate is { edge: ExplorationTopologyEdge; node: ExplorationTopologyNode } =>             candidate.node !== undefined &&             ['symbol', 'source-construct', 'runtime-boundary-participant'].includes(candidate.node.kind) &&             candidate.node.location !== null,         )         .sort:0>: cyclomatic 12, cognitive 4.
+- `src/queries/internal/connected-behavior.ts:839` — `nestedSupportingDeclarations`. nestedSupportingDeclarations: cyclomatic 10, cognitive 18.
+- `src/queries/internal/exploration-topology.ts:1185` — `foldedComponentFrontiers`. foldedComponentFrontiers: cyclomatic 12, cognitive 16.
+- `src/queries/navigation/binding-closure.ts:129` — `inlineBindingSource`. inlineBindingSource: cyclomatic 12, cognitive 8.
+- `src/queries/cleanup/similar.ts:935` — `buildCalleeFingerprintIndex.candidateIndexesByCallee.<callback:profileSpan:1>`. buildCalleeFingerprintIndex.candidateIndexesByCallee.<callback:profileSpan:1>: cyclomatic 9, cognitive 17.
+- `src/queries/cleanup/co-change.ts:489` — `coChangePathFacts`. coChangePathFacts: cyclomatic 11, cognitive 10.
+- `src/queries/cleanup/doc-drift.ts:819` — `numberTuples`. numberTuples: cyclomatic 11, cognitive 12.
+- `src/queries/cleanup/locality-candidates.ts:444` — `recommendedTier`. recommendedTier: cyclomatic 11, cognitive 11.
+- `src/queries/cleanup/similar-signatures.ts:378` — `declarationStartLines`. declarationStartLines: cyclomatic 11, cognitive 10.
+- `src/queries/cleanup/twin-drift.ts:580` — `areNearNames`. areNearNames: cyclomatic 11, cognitive 9.
+- `src/queries/cleanup/twin-drift.ts:846` — `splitTopLevelStatements`. splitTopLevelStatements: cyclomatic 11, cognitive 10.
+- `src/queries/frontend/react-large-component-pressure.ts:204` — `reactContextKind`. reactContextKind: cyclomatic 11, cognitive 6.
+- `src/queries/frontend/vue-composable-candidates.ts:213` — `hasMeaningfulVueBehaviorOverlap`. hasMeaningfulVueBehaviorOverlap: cyclomatic 11, cognitive 10.
+- `src/queries/graph/system-map-edge-semantics.ts:43` — `systemMapRelationProgramSemantics`. systemMapRelationProgramSemantics: cyclomatic 11, cognitive 10.
+- `src/queries/impact/diff-impact.ts:651` — `detectRenamedFiles`. detectRenamedFiles: cyclomatic 11, cognitive 14.
+- `src/queries/internal/connected-behavior.ts:316` — `expansiveBehaviorNodeIds`. expansiveBehaviorNodeIds: cyclomatic 11, cognitive 11.
+- `src/queries/internal/frontend-behavior-evidence.ts:60` — `classifyFrontendBehaviorEvidence`. classifyFrontendBehaviorEvidence: cyclomatic 11, cognitive 12.
+- `src/queries/internal/next-anchor-candidates.ts:109` — `systemMapNextAnchorPacket`. systemMapNextAnchorPacket: cyclomatic 11, cognitive 9.
+- `src/queries/navigation/binding-closure.ts:45` — `bindingClosureForRange`. bindingClosureForRange: cyclomatic 11, cognitive 12.
+- `src/queries/navigation/code.ts:409` — `sameFileDefinitionClosure`. sameFileDefinitionClosure: cyclomatic 11, cognitive 14.
+- `src/queries/navigation/source-inspection.ts:1013` — `omissionGroupCommand`. omissionGroupCommand: cyclomatic 11, cognitive 14.
+- `src/queries/navigation/source-search-batch.ts:176` — `finalizeSourceSearch`. finalizeSourceSearch: cyclomatic 11, cognitive 9.
+- `src/queries/navigation/source-search-batch.ts:37` — `searchSourceBatch`. searchSourceBatch: cyclomatic 11, cognitive 9.
+- `src/queries/cleanup/similar-signatures.ts:201` — `extractDeclarationHead`. extractDeclarationHead: cyclomatic 9, cognitive 16.
+- `src/queries/impact/diff-impact.ts:623` — `parseCatFileBatchOutput`. parseCatFileBatchOutput: cyclomatic 10, cognitive 16.
+
+worker-2 continuation targets:
+
+- `src/language-parsers/languages/python.ts:32` — `parsePythonImportsAst`. parsePythonImportsAst: cyclomatic 10, cognitive 19.
+- `src/queries/graph/entry-map.ts:338` — `reachableCallGraph`. reachableCallGraph: cyclomatic 11, cognitive 19.
+- `src/queries/graph/program-control-edges.ts:17` — `programControlElementsForTopologyNodes`. programControlElementsForTopologyNodes: cyclomatic 12, cognitive 19.
+- `src/semantic/shared-primitives.ts:343` — `exactSemanticCallerMap`. exactSemanticCallerMap: cyclomatic 11, cognitive 19.
+- `src/symbols/graph/call-graph-evidence.ts:140` — `buildCallerRowsMap.<callback:CALLER_ROWS_CACHE.get:1>`. buildCallerRowsMap.<callback:CALLER_ROWS_CACHE.get:1>: cyclomatic 10, cognitive 19.
+- `src/domain/process-identity.ts:26` — `parseProcessIdentity`. parseProcessIdentity: cyclomatic 12, cognitive 4.
+- `src/domain/project-input.ts:96` — `projectInputSnapshotOrNull`. projectInputSnapshotOrNull: cyclomatic 12, cognitive 11.
+- `src/language-parsers/source-evidence.ts:51` — `sourceEvidenceForFile`. sourceEvidenceForFile: cyclomatic 12, cognitive 14.
+- `src/source/facts/state-temporal-analysis.ts:242` — `resourceIdentity`. resourceIdentity: cyclomatic 12, cognitive 6.
+- `src/symbols/graph/static-value-flow.ts:32` — `evaluateNode`. evaluateNode: cyclomatic 12, cognitive 14.
+- `src/symbols/graph/static-value-flow.ts:155` — `resolveIdentifier`. resolveIdentifier: cyclomatic 12, cognitive 13.
+- `src/symbols/graph/static-value-flow.ts:282` — `stringTerm`. stringTerm: cyclomatic 12, cognitive 10.
+- `src/symbols/symbol-lookup.ts:461` — `findDirectSymbolCandidates.directMatches.<callback:candidates.filter:0>`. findDirectSymbolCandidates.directMatches.<callback:candidates.filter:0>: cyclomatic 12, cognitive 1.
+- `src/reindex/affected-set.ts:90` — `reverseDependencyClosure`. reverseDependencyClosure: cyclomatic 11, cognitive 16.
+- `src/reindex/detect.ts:77` — `detectLanguages`. detectLanguages: cyclomatic 11, cognitive 14.
+- `src/reindex/sanitize.ts:115` — `countDanglingDefinitionOccurrences`. countDanglingDefinitionOccurrences: cyclomatic 11, cognitive 15.
+- `src/reindex/shared-generation-store.ts:1057` — `worktreeLeaseEqualsExceptLastSeen`. worktreeLeaseEqualsExceptLastSeen: cyclomatic 11, cognitive 1.
+- `src/reindex/typescript-compiler-shards.ts:68` — `typescriptCompilerShardCount`. typescriptCompilerShardCount: cyclomatic 11, cognitive 12.
+- `src/reindex/typescript-document-emitter.ts:289` — `TypeScriptDocumentEmitter.advance`. TypeScriptDocumentEmitter.advance: cyclomatic 11, cognitive 11.
+- `src/reindex/typescript-fragment-store.ts:292` — `prepareTypeScriptIndexAssembly`. prepareTypeScriptIndexAssembly: cyclomatic 11, cognitive 16.
+- `src/reindex/typescript-fragment-store.ts:228` — `readTypeScriptFragmentGeneration`. readTypeScriptFragmentGeneration: cyclomatic 11, cognitive 12.
+- `src/reindex/typescript-index-requester.ts:212` — `usableServiceState`. usableServiceState: cyclomatic 11, cognitive 5.
+- `src/reindex/vue/augment-vue-runtime.ts:606` — `volarLanguageIdForPath`. volarLanguageIdForPath: cyclomatic 11, cognitive 1.
+- `src/semantic/typescript/tsserver-provider.ts:168` — `TsServerSemanticProvider.computeReferences`. TsServerSemanticProvider.computeReferences: cyclomatic 11, cognitive 13.
+- `src/source/facts/source-callables.ts:103` — `parameterFacts`. parameterFacts: cyclomatic 11, cognitive 12.
+- `src/source/facts/source-construct.ts:64` — `focusedSourceConstructRange`. focusedSourceConstructRange: cyclomatic 11, cognitive 8.
+- `src/source/primitives/gitignore-filter.ts:112` — `prefixGitignorePattern`. prefixGitignorePattern: cyclomatic 11, cognitive 10.
+- `src/source/react-profile.ts:268` — `deserializeReactComponentBehaviorProfile`. deserializeReactComponentBehaviorProfile: cyclomatic 11, cognitive 8.
+- `src/source/vue/vue-script-facts.ts:183` — `collectFallbackScriptFacts`. collectFallbackScriptFacts: cyclomatic 11, cognitive 10.
+- `src/symbols/graph/call-graph-evidence.ts:340` — `buildCalleeMap`. buildCalleeMap: cyclomatic 11, cognitive 11.
+- `src/language-parsers/languages/ruby.ts:53` — `parseRubyImportsAst`. parseRubyImportsAst: cyclomatic 10, cognitive 16.
+- `src/semantic/shared-primitives.ts:718` — `semanticReferenceMap.groupReferenceDefinitions`. semanticReferenceMap.groupReferenceDefinitions: cyclomatic 9, cognitive 16.
+- `src/source/primitives/import-path-resolver.ts:281` — `matchTsconfigPathAlias`. matchTsconfigPathAlias: cyclomatic 9, cognitive 16.
+- `src/source/primitives/source-fileset.ts:149` — `getSourceFiles.<callback:SOURCE_FILES_CACHE.get:2>`. getSourceFiles.<callback:SOURCE_FILES_CACHE.get:2>: cyclomatic 9, cognitive 16.
+
+worker-3 continuation targets:
+
+- `scripts/accuracy-calibration.mjs:1471` — `renderFactualPacket`. renderFactualPacket: cyclomatic 12, cognitive 3.
+- `scripts/api-surface-contract.mjs:310` — `updateApiContract`. updateApiContract: cyclomatic 12, cognitive 12.
+- `scripts/benchmark-cold-reindex.ts:287` — `parseOptions`. parseOptions: cyclomatic 12, cognitive 13.
+- `scripts/evidence-product-contract.mjs:151` — `parseArgs`. parseArgs: cyclomatic 11, cognitive 18.
+- `scripts/incremental-freshness-contract.mjs:113` — `runDaemonEditScenario`. runDaemonEditScenario: cyclomatic 12, cognitive 17.
+- `scripts/semantic-command-calibration.mjs:419` — `runOne`. runOne: cyclomatic 12, cognitive 7.
+- `src/analysis/file-classifier.ts:232` — `computePackageSurfaceReachability`. computePackageSurfaceReachability: cyclomatic 10, cognitive 18.
+- `src/analysis/frontend-route-conventions.ts:53` — `nextRouteIdentity`. nextRouteIdentity: cyclomatic 12, cognitive 17.
+- `src/platform/process-file-lock.ts:306` — `createOwnedLock`. createOwnedLock: cyclomatic 12, cognitive 10.
+- `src/platform/scip-cli.ts:355` — `tryInstallScipCli`. tryInstallScipCli: cyclomatic 12, cognitive 14.
+- `src/platform/terminal-output.ts:125` — `consumeEscapeSequence`. consumeEscapeSequence: cyclomatic 12, cognitive 8.
+- `src/platform/typescript-projects.ts:178` — `discoverTsconfigProjectDirs`. discoverTsconfigProjectDirs: cyclomatic 10, cognitive 18.
+- `src/platform/typescript-projects.ts:213` — `normalizeConfiguredProject`. normalizeConfiguredProject: cyclomatic 12, cognitive 14.
+- `src/platform/typescript-semantic-hash.ts:18` — `typeScriptSemanticHash`. typeScriptSemanticHash: cyclomatic 12, cognitive 17.
+- `scripts/accuracy-calibration.mjs:1622` — `runNavigationMode`. runNavigationMode: cyclomatic 10, cognitive 17.
+- `src/analysis/config-referenced-files.ts:31` — `discoverConfigReferencedFiles`. discoverConfigReferencedFiles: cyclomatic 10, cognitive 17.
+- `src/analysis/framework-patterns.ts:641` — `isGeneratedFileHeader`. isGeneratedFileHeader: cyclomatic 11, cognitive 17.
+- `scripts/accuracy-calibration.mjs:973` — `collectGraphRiskCandidates`. collectGraphRiskCandidates: cyclomatic 11, cognitive 11.
+- `scripts/accuracy-calibration.mjs:1672` — `runHealthDeadMode`. runHealthDeadMode: cyclomatic 11, cognitive 14.
+- `scripts/accuracy-calibration.mjs:431` — `runTypeScriptDetectorMode`. runTypeScriptDetectorMode: cyclomatic 11, cognitive 12.
+- `scripts/api-surface-contract.mjs:368` — `classifySignatureChange`. classifySignatureChange: cyclomatic 11, cognitive 12.
+- `scripts/incremental-freshness-contract.mjs:188` — `waitForRefresh`. waitForRefresh: cyclomatic 11, cognitive 16.
+- `scripts/render-command-reference.ts:169` — `validateSkillCommand`. validateSkillCommand: cyclomatic 11, cognitive 13.
+- `src/analysis/change-risk-metadata.ts:27` — `inspectFileChangeRiskMetadata`. inspectFileChangeRiskMetadata: cyclomatic 11, cognitive 11.
+- `src/analysis/file-classifier.ts:326` — `isFrameworkDiscoveredEntrypointSymbol`. isFrameworkDiscoveredEntrypointSymbol: cyclomatic 11, cognitive 10.
+- `src/analysis/framework-patterns.ts:483` — `rustAttributeTexts`. rustAttributeTexts: cyclomatic 11, cognitive 13.
+- `src/analysis/runtime-boundaries/http-mounts.ts:25` — `composeHttpMountsWithCoverage`. composeHttpMountsWithCoverage: cyclomatic 11, cognitive 15.
+- `src/analysis/similarity.ts:115` — `weightedCosine`. weightedCosine: cyclomatic 11, cognitive 11.
+- `src/analysis/ui-kit-surface.ts:97` — `findShadcnManifests.visit`. findShadcnManifests.visit: cyclomatic 11, cognitive 11.
+- `src/analysis/ui-kit-surface.ts:117` — `shadcnUiDirectory`. shadcnUiDirectory: cyclomatic 11, cognitive 10.
+- `src/platform/verified-binary-fetch.ts:100` — `fetchVerifiedBinary`. fetchVerifiedBinary: cyclomatic 11, cognitive 9.
+- `src/queries/health/health-baseline.ts:35` — `collectBaselineFindings`. collectBaselineFindings: cyclomatic 11, cognitive 14.
+- `src/platform/process-file-lock.ts:400` — `acquireReclaimGuard`. acquireReclaimGuard: cyclomatic 8, cognitive 16.
+- `src/platform/typescript-projects.ts:83` — `typeScriptProjectInputPaths`. typeScriptProjectInputPaths: cyclomatic 10, cognitive 16.
+
+
+### Final cleanup root lane frozen
+
+Root completed44 targets in21 exclusive files (original28 plus16 continuation targets). All selected targets and added/modified helpers in the captured source review meet cyclomatic10/cognitive15. Every root source diff has been reviewed. Three anonymous identities are paired using exact diffs: descriptor-registration callback line48 (other same-named callbacks27/29 unchanged), watcher maintenance callback235→247, and worker termination/retry callback189→183. Captures during peer edits can be uncomparable; final frozen review and fresh health remain authoritative.
+
+333 distinct focused tests in16 files passed, including11 new regression tests in tests/runtime/complexity-wave7-root.test.ts. An affected34-test rerun covers the worker/revision correction and all new regressions. Root source/test ESLint and formatting passed. A revision-commit helper was narrowed to write/delete mutations already admitted by the caller. Worker response publication preserves the options receiver and reads the active request after the status callback, with direct regressions for success, rejection and status failure.
+
+All44 root source types are clean in the latest concurrent check; its only failure was a peer verified-binary-fetch in-progress missing return, reported to worker3. Final frozen type checks, second review, build/API, full suite, reindex/health/impact and commit remain required. Root has no running processes and is frozen. Current artifacts: /tmp/complexity-final-root-{review,metrics}.json; /tmp/complexity-final-root-*.log.
+
+- `renderCommandReferenceMarkdown` → 8/11 (`src/runtime/command-kit/command-docs.ts`).
+- `countReturnedUnits` → 8/9 (`src/runtime/command-kit/command-execution.ts`).
+- `optionalEvidenceContext` → 9/9 (`src/runtime/command-kit/command-execution.ts`).
+- `commandPanelId` → 7/5 (`src/runtime/commands/command-panels.ts`).
+- `isGitWorktreeContextReceipt` → 10/2 (`src/runtime/git-worktree-context-cache.ts`).
+- `sourceFactCapability` → 10/8 (`src/runtime/project-readiness.ts`).
+- `render.sectionedReport` → 5/6 (`src/runtime/render.ts`).
+- `normalizeSuppression` → 10/9 (`src/runtime/suppression-writer.ts`).
+- `runWatchServiceLifecycle` → 6/6 (`src/runtime/watch-server.ts`).
+- `decodeWorkerLaneResponse` → 7/5 (`src/runtime/worker-request-lane.ts`).
+- `mutateTextFileRevisionAware` → 9/10 (`src/runtime/revisioned-file.ts`).
+- `handleContext.<callback:budgetedDbCommand:1>` → 9/8 (`src/runtime/query-commands/planning.ts`).
+- `processRequests` → 7/12 (`src/runtime/query-service-server.ts`).
+- `createWatchServiceMaintenance.<anonymous@235:10>` → 7/7 (`src/runtime/watch-server.ts`).
+- `WorkerRequestLane.failActiveAfterTermination.failure.<anonymous@189:22>` → 10/9 (`src/runtime/worker-request-lane.ts`).
+- `WorkerRequestLane.handleMessage` → 9/8 (`src/runtime/worker-request-lane.ts`).
+
+## Final combined complexity cleanup completed
+
+The remaining 295 targets across 160 source/script files are complete in one combined integration against `623e4e63`. Root owned 44 targets in 21 files; the three workers owned 88/45, 88/51 and 75/43 targets/files. The session permits four active agents total, so work was kept in four exclusive file lanes. The original 177-target packet and 118-target continuation were validated together. No agent benchmarks ran.
+
+Every target has a verified before/current pairing and meets the existing cyclomatic 10/cognitive 15 limits. The frozen review reports 295 resolved findings and no introduced, worsened or existing findings. All 765 measured after-functions, including added helpers, meet the same limits. Six callback identities required exact diff pairing; the two carried-file-dependency callbacks share a finding ID but remain separate units. No thresholds, source exclusions, suppression records or architecture policy were changed.
+
+Four-way read-only cross-review covered all 160 source/script files and all five new regression files, with no open findings. Focused tests covered each lane. During implementation, corrections preserved callback receivers, the active request read after status publication, exact validation narrowing, lock/retry/error order and the existing public declarations.
+
+The frozen full suite passed **3,267 tests across 368 files**. Build, source and both contract type checks, 165-file ESLint, repository formatting, public consumer compilation and skill links passed. The public TypeScript API remains `b74137d6c422ca9c` across 66 paths. The source/test file hashes still match the frozen review.
+
+The initial full run passed all 3,267 assertions but exited 1 after Vitest reported an internal `onTaskUpdate` RPC timeout. It is preserved as `/tmp/complexity-final-full-tests-initial.log` and is not counted as a successful check. The final isolated rerun above exited 0 without unhandled errors; no code or test expectations were changed between runs.
+
+An explicit reindex completed in 21.4 seconds. Fresh health has accounted coverage of **563/563 eligible files and 13,591 functions, with zero findings**. All 563 files map to configured boundaries; all 47 dependency rows are declared. No covered duplication, production import cycles or configured architecture violations were reported. Indexed diff impact reports 575 changed symbols in 148 changed indexed files and 122 affected files; 22 absent/excluded paths are explicitly omitted from symbol analysis.
+
+The historical 655-entry inventory now records 655 fixed entries and no pending or retained entries. This closes its remaining 272 pending entries and supersedes four earlier retained assessments with the now-verified refactors. It is a different population from the 295 current targets.
+
+The current eligible-source complexity queue is empty. This does not claim a universal architecture grade or cover excluded tests, fixtures, generated files, reference copies or unsupported languages. No source-matched test coverage artifact was supplied, so CRAP is not claimed. The VM remains on the previously verified installation from `931fe6c1`; this behavior-preserving cleanup does not require another rollout. The unrelated untracked LaunchPoint benchmark document remains untouched and excluded from staging.
+
+Validation artifacts: `/tmp/complexity-final-{review,health,impact,metrics}.json`, `/tmp/complexity-final-frozen-hashes.json`, and `/tmp/complexity-final-*.log`. Worker checkpoints retain their per-file contracts and target measurements. No further complexity work remains in this scan's scope.

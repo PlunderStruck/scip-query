@@ -50,20 +50,31 @@ export function parseClojureImports(db: ScipDatabase, _importerPath: string, sou
     const clauseHead = atomText(clause.children[0]);
     if (!clauseHead) continue;
 
-    if (REQUIRE_CLAUSES.has(clauseHead)) {
-      for (const spec of parseRequireClause(clause.children.slice(1))) {
-        imports.push(...clojureNamespaceImports(db, spec, body));
-      }
-      continue;
-    }
-
-    if (clauseHead === ':import') {
-      for (const imported of clojureParseImportClause(clause.children.slice(1))) {
-        imports.push(imported);
-      }
-    }
+    for (const imported of namespaceClauseImports(db, clause, clauseHead, body)) imports.push(imported);
   }
 
+  return imports;
+}
+
+function namespaceClauseImports(
+  db: ScipDatabase,
+  clause: CollectionForm,
+  clauseHead: string,
+  body: string,
+): ParsedSourceImport[] {
+  const imports: ParsedSourceImport[] = [];
+  if (REQUIRE_CLAUSES.has(clauseHead)) {
+    for (const spec of parseRequireClause(clause.children.slice(1))) {
+      imports.push(...clojureNamespaceImports(db, spec, body));
+    }
+    return imports;
+  }
+
+  if (clauseHead === ':import') {
+    for (const imported of clojureParseImportClause(clause.children.slice(1))) {
+      imports.push(imported);
+    }
+  }
   return imports;
 }
 
@@ -132,14 +143,25 @@ function parseRequireEntry(entry: ClojureForm, prefix: string | null): Namespace
     return parseRequireVector(entry, prefix);
   }
 
-  if (entry.type === 'list' && entry.children.length > 0) {
-    const head = atomText(entry.children[0]);
-    if (!head) return entry.children.flatMap((child) => parseRequireEntry(child, prefix));
-    if (!head || head.startsWith(':')) return [];
-    return entry.children.slice(1).flatMap((child) => parseRequireEntry(child, qualifyNamespace(prefix, head)));
-  }
+  if (entry.type === 'list') return parseRequireList(entry, prefix);
 
   return [];
+}
+
+function parseRequireList(entry: CollectionForm, prefix: string | null): NamespaceImportSpec[] {
+  if (entry.children.length === 0) return [];
+  const head = atomText(entry.children[0]);
+  if (!head) return entry.children.flatMap((child) => parseRequireEntry(child, prefix));
+  if (head.startsWith(':')) return [];
+  return entry.children.slice(1).flatMap((child) => parseRequireEntry(child, qualifyNamespace(prefix, head)));
+}
+
+function applyRequireRefers(spec: NamespaceImportSpec, value: ClojureForm): void {
+  if (atomText(value) === ':all') {
+    spec.referAll = true;
+  } else if (value.type === 'vector' || value.type === 'list') {
+    spec.refers.push(...value.children.map(atomText).filter(isImportName));
+  }
 }
 
 function parseRequireVector(vector: CollectionForm, prefix: string | null): NamespaceImportSpec[] {
@@ -165,11 +187,7 @@ function parseRequireVector(vector: CollectionForm, prefix: string | null): Name
     }
 
     if (key === ':refer' && value) {
-      if (atomText(value) === ':all') {
-        spec.referAll = true;
-      } else if (value.type === 'vector' || value.type === 'list') {
-        spec.refers.push(...value.children.map(atomText).filter(isImportName));
-      }
+      applyRequireRefers(spec, value);
       index += 1;
     }
   }
@@ -291,6 +309,10 @@ function parseForm(source: string, start: number): { form: ClojureForm; index: n
 
   while (isReaderMacroPrefix(source[index]!)) index += 1;
 
+  return parseUnprefixedForm(source, index);
+}
+
+function parseUnprefixedForm(source: string, index: number): { form: ClojureForm; index: number } | null {
   const char = source[index];
   if (!char) return null;
   if (char === '(') return parseCollection(source, index, 'list', ')');

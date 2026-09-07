@@ -110,19 +110,7 @@ function parameterFacts(fnNode: SyntaxNode): CallableParamFact[] {
       facts.push({ name: param.text, simple: true });
       continue;
     }
-    // TS parameter properties (constructor(private readonly bucket: ...))
-    // declare class fields — their use sites live outside the constructor.
-    const isParameterProperty =
-      param.namedChildren.some((child) => child.type.endsWith('_modifier')) ||
-      /^\s*(?:public|private|protected|readonly|override)\b/.test(param.text);
-    // required_parameter / optional_parameter wrap the identifier in TS.
-    const pattern = param.childForFieldName('pattern');
-    if (!isParameterProperty && pattern && pattern.type === 'identifier') {
-      facts.push({ name: pattern.text, simple: true });
-      continue;
-    }
-    const id = param.namedChildren.find((child) => child.type === 'identifier');
-    facts.push({ name: pattern?.type === 'identifier' ? pattern.text : (id?.text ?? ''), simple: false });
+    facts.push(wrappedCallableParameterFact(param));
   }
   return facts;
 }
@@ -291,4 +279,19 @@ export function smallestSourceCallableAtLine<T extends { startLine: number; endL
           left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
       )[0] ?? null
   );
+}
+
+function wrappedCallableParameterFact(param: SyntaxNode): CallableParamFact {
+  // TS parameter properties (constructor(private readonly bucket: ...))
+  // declare class fields — their use sites live outside the constructor.
+  const isParameterProperty =
+    param.namedChildren.some((child) => child.type.endsWith('_modifier')) ||
+    /^\s*(?:public|private|protected|readonly|override)\b/.test(param.text);
+  // required_parameter / optional_parameter wrap the identifier in TS.
+  const pattern = param.childForFieldName('pattern');
+  if (!isParameterProperty && pattern && pattern.type === 'identifier') {
+    return { name: pattern.text, simple: true };
+  }
+  const id = param.namedChildren.find((child) => child.type === 'identifier');
+  return { name: pattern?.type === 'identifier' ? pattern.text : (id?.text ?? ''), simple: false };
 }

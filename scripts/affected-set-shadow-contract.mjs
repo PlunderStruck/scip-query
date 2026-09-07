@@ -494,6 +494,10 @@ function verifyShadow(shadow, options) {
   if (shadow.recall !== 1 || shadow.missingFiles.length !== 0) {
     throw new Error(`shadow recall gate failed: ${JSON.stringify(shadow)}`);
   }
+  verifyShadowExpectations(shadow, options);
+}
+
+function verifyShadowExpectations(shadow, options) {
   if (options.expectedMode && shadow.mode !== options.expectedMode) {
     throw new Error(`expected ${options.expectedMode} plan, received ${shadow.mode}`);
   }
@@ -769,15 +773,7 @@ function parseArgs(argv) {
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === '--mode') parsed.mode = argv[++index];
-    else if (arg === '--project-root') parsed.projectRoot = argv[++index];
-    else if (arg === '--edit-file') parsed.editFile = argv[++index];
-    else if (arg === '--label') parsed.label = argv[++index];
-    else if (arg === '--cli') parsed.cli = argv[++index];
-    else if (arg === '--out') parsed.out = argv[++index];
-    else if (arg === '--iterations') parsed.iterations = positiveInteger(argv[++index], '--iterations');
-    else if (arg === '--timeout-ms') parsed.timeoutMs = positiveInteger(argv[++index], '--timeout-ms');
-    else throw new Error(`unknown argument: ${arg}`);
+    assignShadowArgument(parsed, arg, () => argv[++index]);
   }
   if (!parsed.mode) throw new Error('--mode fixture|leaf|noop|capability is required');
   parsed.label ??= parsed.mode === 'fixture' ? 'generated-typescript-fixture' : 'unnamed-corpus';
@@ -788,4 +784,16 @@ function positiveInteger(value, flag) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(`${flag} must be a positive integer`);
   return parsed;
+}
+
+function assignShadowArgument(parsed, arg, readValue) {
+  if (arg === '--mode') parsed.mode = readValue();
+  else if (arg === '--project-root') parsed.projectRoot = readValue();
+  else if (arg === '--edit-file') parsed.editFile = readValue();
+  else if (arg === '--label') parsed.label = readValue();
+  else if (arg === '--cli') parsed.cli = readValue();
+  else if (arg === '--out') parsed.out = readValue();
+  else if (arg === '--iterations') parsed.iterations = positiveInteger(readValue(), '--iterations');
+  else if (arg === '--timeout-ms') parsed.timeoutMs = positiveInteger(readValue(), '--timeout-ms');
+  else throw new Error(`unknown argument: ${arg}`);
 }

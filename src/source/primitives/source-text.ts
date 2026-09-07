@@ -103,15 +103,13 @@ function suppressionCommentsBeforeDefinition(db: ScipDatabase, relativePath: str
       continue;
     }
     // Stop scanning once we hit a non-comment, non-decorator line.
-    if (
-      !line.startsWith('//') &&
-      !line.startsWith('*') &&
-      !line.startsWith('/*') &&
-      !line.startsWith('@') &&
-      !line.startsWith('#')
-    ) {
+    if (!isCleanupCommentContinuation(line)) {
       return categories;
     }
   }
   return categories;
+}
+
+function isCleanupCommentContinuation(line: string): boolean {
+  return ['//', '*', '/*', '@', '#'].some((prefix) => line.startsWith(prefix));
 }

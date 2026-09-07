@@ -873,8 +873,7 @@ function materializeLiteralAnchorMatch(
     );
   }
   if (traversalSeed && match.ownerSymbol) {
-    const owner = resolveIndexedDefinitions(input.db, input.index, match.ownerSymbol).matches[0];
-    if (owner && !isModuleLikeSymbol(owner.symbol)) input.addSymbol(owner, 0, 'literal-owner', query, 'all', true);
+    materializeLiteralIndexedOwner(input, query, match.ownerSymbol);
   }
   input.literalHits.push({
     query,
@@ -2587,6 +2586,13 @@ function publicEntryForSourceConstruct(
   return { evidence: [], priority: 0 };
 }
 
+const SYNTAX_DECLARATION_OWNER_TYPES = new Set([
+  'variable_declarator',
+  'function_declaration',
+  'generator_function_declaration',
+  'class_declaration',
+]);
+
 /**
  * Declaration owners are named source declarations whose syntax encloses a
  * location. They connect an anonymous nested callback to the exported binding
@@ -2603,12 +2609,7 @@ function syntaxDeclarationOwnersAtLine(
   const owners: Array<{ name: string; startLine: number }> = [];
   let current: SyntaxNode | null = deepestSyntaxNodeAtLine(root, line);
   while (current) {
-    if (
-      current.type === 'variable_declarator' ||
-      current.type === 'function_declaration' ||
-      current.type === 'generator_function_declaration' ||
-      current.type === 'class_declaration'
-    ) {
+    if (SYNTAX_DECLARATION_OWNER_TYPES.has(current.type)) {
       const name = current.childForFieldName('name') ?? current.namedChild(0);
       if (name?.type === 'identifier' || name?.type === 'type_identifier') {
         owners.push({ name: name.text, startLine: current.startPosition.row });
@@ -2936,57 +2937,14 @@ function systemMapTopologyRelationEdges(
       preferParticipant,
     );
   const edges: ExplorationTopologyEdge[] = [];
-  for (const state of input.symbolStates.values()) {
-    const regionId = input.regionForFile.get(state.definition.relativePath)?.id;
-    if (!regionId) continue;
-    const symbolNodeId = symbolTopologyNodeId(state.definition.symbol);
-    edges.push({
-      id: topologyId('edge', 'structural-membership', regionId, symbolNodeId),
-      kind: 'structural-membership',
-      fromNodeId: regionId,
-      toNodeId: symbolNodeId,
-      directed: true,
-      disposition: 'folded',
-      semantics: systemMapSyntheticEdgeProgramSemantics('structural-membership'),
-      evidence: [
-        {
-          method: 'indexed-definition-file',
-          strength: 'exact',
-          identity: state.definition.symbol,
-          location: {
-            file: state.definition.relativePath,
-            line: state.definition.startLine,
-            endLine: state.definition.endLine,
-          },
-        },
-      ],
-    });
-  }
+  appendSymbolMembershipEdges(input, edges);
   const groupedRelations = groupBy(
     input.relations,
     (relation) =>
       `${relationEndpoint(relation.fromSymbol, relation.fromBoundaryParticipant, relation.fromSourceConstruct, relation.fromRegionId, relation.fromFile, relation.line, relation.kind === 'runtime-boundary')}\u0000${relationEndpoint(relation.toSymbol, relation.toBoundaryParticipant, relation.toSourceConstruct, relation.toRegionId, relation.toFile, null)}\u0000${relation.kind}`,
   );
   const attachedBoundaryObservations = new Set<string>();
-  for (const bucket of groupedRelations.values()) {
-    const first = bucket[0]!;
-    const fromNodeId = relationEndpoint(
-      first.fromSymbol,
-      first.fromBoundaryParticipant,
-      first.fromSourceConstruct,
-      first.fromRegionId,
-      first.fromFile,
-      first.line,
-      first.kind === 'runtime-boundary',
-    );
-    const toNodeId = relationEndpoint(
-      first.toSymbol,
-      first.toBoundaryParticipant,
-      first.toSourceConstruct,
-      first.toRegionId,
-      first.toFile,
-      null,
-    );
+  const attachBoundaryObservation = (first: SystemMapRelation): void => {
     if (first.kind === 'runtime-boundary' && first.fromBoundaryParticipant) {
       const participantNodeId = runtimeBoundaryParticipantTopologyNodeId(first.fromBoundaryParticipant.observationId);
       const concreteFromNodeId = relationEndpoint(
@@ -3022,6 +2980,27 @@ function systemMapTopologyRelationEdges(
         });
       }
     }
+  };
+  for (const bucket of groupedRelations.values()) {
+    const first = bucket[0]!;
+    const fromNodeId = relationEndpoint(
+      first.fromSymbol,
+      first.fromBoundaryParticipant,
+      first.fromSourceConstruct,
+      first.fromRegionId,
+      first.fromFile,
+      first.line,
+      first.kind === 'runtime-boundary',
+    );
+    const toNodeId = relationEndpoint(
+      first.toSymbol,
+      first.toBoundaryParticipant,
+      first.toSourceConstruct,
+      first.toRegionId,
+      first.toFile,
+      null,
+    );
+    attachBoundaryObservation(first);
     const selfNode = fromNodeId === toNodeId ? nodes.find((node) => node.id === fromNodeId) : null;
     if (selfNode?.kind === 'structural-region') continue;
     edges.push({
@@ -3240,13 +3219,20 @@ function relationTouchesSelectedOwner(relation: SystemMapRelation, node: Explora
   if (relation.fromSymbol && node.id === symbolTopologyNodeId(relation.fromSymbol)) return true;
   if (relation.toSymbol && node.id === symbolTopologyNodeId(relation.toSymbol)) return true;
   if (!node.location) return false;
-  const endLine = node.location.endLine ?? node.location.line;
+  return relationTouchesOwnerLocation(relation, node.location);
+}
+
+function relationTouchesOwnerLocation(
+  relation: SystemMapRelation,
+  location: NonNullable<ExplorationTopologyNode['location']>,
+): boolean {
+  const endLine = location.endLine ?? location.line;
   return (
-    (node.location.file === relation.fromFile &&
+    (location.file === relation.fromFile &&
       relation.line !== null &&
-      relation.line >= node.location.line &&
+      relation.line >= location.line &&
       relation.line <= endLine) ||
-    node.location.file === relation.toFile
+    location.file === relation.toFile
   );
 }
 
@@ -3402,15 +3388,9 @@ function buildSystemMapPresentation(
     .filter((region) => !preferredRegionIds || preferredRegionIds.has(region.id) || expandedIds.has(region.id));
   const relationReserve = regionRelations.length > 0 ? Math.floor(maxCharacters * 0.4) : 0;
   const regionBudget = maxCharacters - relationReserve;
-  const selectedRegionIds = new Set<string>();
-  let estimatedCharacters = 0;
-  for (const region of rankedRegions) {
-    const estimate = estimateRegionCharacters(region);
-    const required = expandedIds.has(region.id);
-    if (!required && selectedRegionIds.size > 0 && estimatedCharacters + estimate > regionBudget) continue;
-    selectedRegionIds.add(region.id);
-    estimatedCharacters += estimate;
-  }
+  const selection = selectPresentationRegions(rankedRegions, expandedIds, regionBudget);
+  const { selectedRegionIds } = selection;
+  let estimatedCharacters = selection.estimatedCharacters;
 
   const eligibleRelations = regionRelations
     .filter((relation) => selectedRegionIds.has(relation.fromRegionId) && selectedRegionIds.has(relation.toRegionId))
@@ -3523,39 +3503,7 @@ function buildSystemMapDrilldown(regions: readonly SystemMapRegion[]): SystemMap
   const candidates: SystemMapDrilldownAnchor[] = [];
   const explicitSymbolAnchorFiles = new Set<string>();
   for (const region of regions.filter((candidate) => candidate.expanded)) {
-    for (const symbol of region.symbols) {
-      if (symbol.origins.includes('symbol-anchor')) explicitSymbolAnchorFiles.add(symbol.file);
-    }
-    const symbolsByFile = groupBy(region.symbols, (symbol) => symbol.file);
-    const hitsByFile = groupBy(region.literalHits, (hit) => hit.file);
-    const rankedFiles = [...region.files].sort((left, right) =>
-      compareDrilldownFiles(left, right, symbolsByFile, hitsByFile),
-    );
-    for (const file of rankedFiles) {
-      const symbol = (symbolsByFile.get(file.file) ?? []).sort(compareSystemMapDrilldownSymbols)[0];
-      if (symbol) {
-        candidates.push({
-          kind: 'symbol',
-          regionId: region.id,
-          file: symbol.file,
-          line: symbol.startLine,
-          endLine: symbol.endLine,
-          label: symbol.shortName,
-        });
-        continue;
-      }
-      const hit = (hitsByFile.get(file.file) ?? []).sort(compareLiteralHits)[0];
-      if (hit) {
-        candidates.push({
-          kind: 'literal',
-          regionId: region.id,
-          file: hit.file,
-          line: hit.line,
-          endLine: null,
-          label: hit.ownerShortName ?? hit.query,
-        });
-      }
-    }
+    collectRegionDrilldownAnchors(region, candidates, explicitSymbolAnchorFiles);
   }
   const selected = selectCoverageDiverseDrilldownAnchors(candidates, explicitSymbolAnchorFiles);
   return {
@@ -3587,19 +3535,7 @@ function selectCoverageDiverseDrilldownAnchors(
     selectedFiles.add(candidate.file);
     if (selected.length === limit) return selected;
   }
-  for (let offset = 0; selected.length < limit; offset += 1) {
-    let foundCandidate = false;
-    for (const regionCandidates of byRegion) {
-      const candidate = regionCandidates[offset];
-      if (!candidate) continue;
-      foundCandidate = true;
-      if (selectedFiles.has(candidate.file)) continue;
-      selected.push(candidate);
-      selectedFiles.add(candidate.file);
-      if (selected.length === limit) break;
-    }
-    if (!foundCandidate) break;
-  }
+  fillRegionDrilldownAnchors(byRegion, selected, selectedFiles, limit);
   return selected;
 }
 
@@ -4535,4 +4471,117 @@ function compareSymbols(left: SystemMapSymbol, right: SystemMapSymbol): number {
 
 function compareLiteralHits(left: SystemMapLiteralHit, right: SystemMapLiteralHit): number {
   return left.file.localeCompare(right.file) || left.line - right.line || left.query.localeCompare(right.query);
+}
+
+function materializeLiteralIndexedOwner(input: SystemMapAnchorInput, query: string, ownerSymbol: string): void {
+  const owner = resolveIndexedDefinitions(input.db, input.index, ownerSymbol).matches[0];
+  if (owner && !isModuleLikeSymbol(owner.symbol)) input.addSymbol(owner, 0, 'literal-owner', query, 'all', true);
+}
+
+function appendSymbolMembershipEdges(input: SystemMapTopologyInput, edges: ExplorationTopologyEdge[]): void {
+  for (const state of input.symbolStates.values()) {
+    const regionId = input.regionForFile.get(state.definition.relativePath)?.id;
+    if (!regionId) continue;
+    const symbolNodeId = symbolTopologyNodeId(state.definition.symbol);
+    edges.push({
+      id: topologyId('edge', 'structural-membership', regionId, symbolNodeId),
+      kind: 'structural-membership',
+      fromNodeId: regionId,
+      toNodeId: symbolNodeId,
+      directed: true,
+      disposition: 'folded',
+      semantics: systemMapSyntheticEdgeProgramSemantics('structural-membership'),
+      evidence: [
+        {
+          method: 'indexed-definition-file',
+          strength: 'exact',
+          identity: state.definition.symbol,
+          location: {
+            file: state.definition.relativePath,
+            line: state.definition.startLine,
+            endLine: state.definition.endLine,
+          },
+        },
+      ],
+    });
+  }
+}
+
+function selectPresentationRegions(
+  rankedRegions: readonly SystemMapRegion[],
+  expandedIds: ReadonlySet<string>,
+  regionBudget: number,
+) {
+  const selectedRegionIds = new Set<string>();
+  let estimatedCharacters = 0;
+  for (const region of rankedRegions) {
+    const estimate = estimateRegionCharacters(region);
+    const required = expandedIds.has(region.id);
+    if (!required && selectedRegionIds.size > 0 && estimatedCharacters + estimate > regionBudget) continue;
+    selectedRegionIds.add(region.id);
+    estimatedCharacters += estimate;
+  }
+
+  return { selectedRegionIds, estimatedCharacters };
+}
+
+function collectRegionDrilldownAnchors(
+  region: SystemMapRegion,
+  candidates: SystemMapDrilldownAnchor[],
+  explicitSymbolAnchorFiles: Set<string>,
+): void {
+  for (const symbol of region.symbols) {
+    if (symbol.origins.includes('symbol-anchor')) explicitSymbolAnchorFiles.add(symbol.file);
+  }
+  const symbolsByFile = groupBy(region.symbols, (symbol) => symbol.file);
+  const hitsByFile = groupBy(region.literalHits, (hit) => hit.file);
+  const rankedFiles = [...region.files].sort((left, right) =>
+    compareDrilldownFiles(left, right, symbolsByFile, hitsByFile),
+  );
+  for (const file of rankedFiles) {
+    const symbol = (symbolsByFile.get(file.file) ?? []).sort(compareSystemMapDrilldownSymbols)[0];
+    if (symbol) {
+      candidates.push({
+        kind: 'symbol',
+        regionId: region.id,
+        file: symbol.file,
+        line: symbol.startLine,
+        endLine: symbol.endLine,
+        label: symbol.shortName,
+      });
+      continue;
+    }
+    const hit = (hitsByFile.get(file.file) ?? []).sort(compareLiteralHits)[0];
+    if (hit) {
+      candidates.push({
+        kind: 'literal',
+        regionId: region.id,
+        file: hit.file,
+        line: hit.line,
+        endLine: null,
+        label: hit.ownerShortName ?? hit.query,
+      });
+    }
+  }
+}
+
+function fillRegionDrilldownAnchors(
+  byRegion: SystemMapDrilldownAnchor[][],
+  selected: SystemMapDrilldownAnchor[],
+  selectedFiles: Set<string>,
+  limit: number,
+): void {
+  for (let offset = 0; selected.length < limit; offset += 1) {
+    let foundCandidate = false;
+    for (const regionCandidates of byRegion) {
+      const candidate = regionCandidates[offset];
+      if (!candidate) continue;
+      foundCandidate = true;
+      if (selectedFiles.has(candidate.file)) continue;
+      selected.push(candidate);
+      selectedFiles.add(candidate.file);
+      if (selected.length === limit) break;
+    }
+    if (!foundCandidate) break;
+  }
 }

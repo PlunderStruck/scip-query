@@ -231,11 +231,7 @@ function hasMeaningfulVueBehaviorOverlap(shared: ReadonlySet<string>): boolean {
       functionBehavior += 1;
     } else if (token.startsWith('reactivity:')) {
       reactivityBehavior += 1;
-    } else if (
-      token.startsWith('function-verb:') ||
-      token.startsWith('template-binding:') ||
-      token.startsWith('template-event:')
-    ) {
+    } else if (isSupportingVueBehaviorToken(token)) {
       supportingBehavior += 1;
     }
   }
@@ -328,3 +324,9 @@ const GENERIC_VUE_BEHAVIOR_WORDS = new Set([
   'value',
   'watch',
 ]);
+
+function isSupportingVueBehaviorToken(token: string): boolean {
+  return (
+    token.startsWith('function-verb:') || token.startsWith('template-binding:') || token.startsWith('template-event:')
+  );
+}

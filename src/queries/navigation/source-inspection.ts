@@ -1023,11 +1023,7 @@ function omissionGroupCommand(request: InspectionRequest, candidates: readonly C
     searchPatterns.length > 0 &&
     candidates.every((candidate) => candidate.kind === 'source' && candidate.roles.includes('search'))
   ) {
-    const parts = ['scip-query inspect'];
-    for (const pattern of searchPatterns) parts.push(`--search ${shellArgument(pattern)}`);
-    parts.push(`--scope ${shellArgument(scope)}`, '--full');
-    if (request.view === 'behavior') parts.push('--view behavior');
-    return parts.join(' ');
+    return omissionSearchCommand(request, searchPatterns, scope);
   }
 
   const sourceCandidates = candidates.filter(
@@ -1405,4 +1401,12 @@ function positiveOrZero(value: number, label: string): number {
     throw new RangeError(`${label} must be a non-negative safe integer; received ${value}`);
   }
   return value;
+}
+
+function omissionSearchCommand(request: InspectionRequest, searchPatterns: readonly string[], scope: string): string {
+  const parts = ['scip-query inspect'];
+  for (const pattern of searchPatterns) parts.push(`--search ${shellArgument(pattern)}`);
+  parts.push(`--scope ${shellArgument(scope)}`, '--full');
+  if (request.view === 'behavior') parts.push('--view behavior');
+  return parts.join(' ');
 }

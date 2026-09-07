@@ -27,8 +27,10 @@ const CROSS_LANG_DISPATCH_NAMES = new Set([
   'callRust',
 ]);
 
+const DISPATCH_LANGUAGES = new Set(['typescript', 'tsx', 'javascript']);
+
 export function collectCrossLanguageDispatchName(node: SyntaxNode, language: AstLanguage, out: Set<string>): void {
-  if (language !== 'typescript' && language !== 'tsx' && language !== 'javascript') return;
+  if (!DISPATCH_LANGUAGES.has(language)) return;
   if (node.type !== 'call_expression') return;
 
   const target = node.childForFieldName('function') ?? node.namedChild(0);
@@ -36,6 +38,10 @@ export function collectCrossLanguageDispatchName(node: SyntaxNode, language: Ast
   const leaf = extractCallLeaf(target);
   if (!leaf || !CROSS_LANG_DISPATCH_NAMES.has(leaf)) return;
 
+  collectFirstStringArgument(node, out);
+}
+
+function collectFirstStringArgument(node: SyntaxNode, out: Set<string>): void {
   const args = node.namedChildren.find((child) => child.type === 'arguments');
   if (!args) return;
   const firstArg = args.namedChild(0);
@@ -56,9 +62,13 @@ export function collectRustAttrHelperNames(attrText: string, out: Set<string>): 
     while ((match = re.exec(attrText)) !== null) {
       const value = match[1]!;
       const leaf = value.split('::').pop() ?? value;
-      if (leaf === 'is_none' && /\bOption\b/.test(value)) continue;
-      if (leaf === 'is_empty' && /\b(String|Vec|HashMap|BTreeMap|HashSet|BTreeSet)\b/.test(value)) continue;
+      if (isBuiltinRustAttributeHelper(leaf, value)) continue;
       if (leaf) out.add(leaf);
     }
   }
+}
+
+function isBuiltinRustAttributeHelper(leaf: string, value: string): boolean {
+  if (leaf === 'is_none') return /\bOption\b/.test(value);
+  return leaf === 'is_empty' && /\b(String|Vec|HashMap|BTreeMap|HashSet|BTreeSet)\b/.test(value);
 }

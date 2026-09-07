@@ -325,14 +325,7 @@ function expansiveBehaviorNodeIds(
   // its own direct effects and control decisions.
   const expansiveNodeIds = new Set<string>(matchedAnchorNodeIds);
   for (const nodeId of causalSpineNodeIds) expansiveNodeIds.add(nodeId);
-  for (const path of topology.paths) {
-    const firstNodeId = path.nodeIds[0];
-    const firstEdge = edgeById.get(path.edgeIds[0] ?? '');
-    const secondNodeId = path.nodeIds[1];
-    if (firstNodeId && secondNodeId && firstEdge?.fromNodeId === firstNodeId && firstEdge.toNodeId === secondNodeId) {
-      expansiveNodeIds.add(firstNodeId);
-    }
-  }
+  addForwardPathBehaviorRoots(topology, edgeById, expansiveNodeIds);
   if (topology.paths.every((path) => path.nodeIds.length === 0)) {
     for (const anchor of topology.anchors) {
       for (const nodeId of anchor.nodeIds) expansiveNodeIds.add(nodeId);
@@ -846,15 +839,13 @@ function nestedSupportingDeclarations(
     .map(({ definition }) => ({ owner: definition, depth: 1 }));
   const expandedOwnerSymbols = new Set<string>();
   const discoveredDeclarationSymbols = new Set(directDeclarations.map(({ definition }) => definition.symbol));
-  while (nestedQueue.length > 0) {
-    const next = nestedQueue.shift();
-    if (!next || expandedOwnerSymbols.has(next.owner.symbol)) continue;
-    expandedOwnerSymbols.add(next.owner.symbol);
-    const { owner, depth } = next;
-    const nested = scipOccurrenceDefinitionTargetsForRange(db, owner.relativePath, owner.startLine, owner.endLine);
-    if (!nested.available) continue;
-    const nestedSignals = behaviorSignalsByLine(db, owner.relativePath, owner.startLine, owner.endLine);
-    for (const target of nested.targets) {
+  const collectNestedSupportingTargets = (
+    owner: SupportingDeclarationCandidate['definition'],
+    depth: number,
+    targets: ReturnType<typeof scipOccurrenceDefinitionTargetsForRange>['targets'],
+    nestedSignals: ReturnType<typeof behaviorSignalsByLine>,
+  ): void => {
+    for (const target of targets) {
       const declaration = nestedSupportingDeclaration(db, owner, target, nestedSignals);
       if (!declaration) continue;
       const { definition } = declaration;
@@ -867,6 +858,16 @@ function nestedSupportingDeclarations(
       if (declaration.kind === 'focused-causal-target' && depth < 2)
         nestedQueue.push({ owner: definition, depth: depth + 1 });
     }
+  };
+  while (nestedQueue.length > 0) {
+    const next = nestedQueue.shift();
+    if (!next || expandedOwnerSymbols.has(next.owner.symbol)) continue;
+    expandedOwnerSymbols.add(next.owner.symbol);
+    const { owner, depth } = next;
+    const nested = scipOccurrenceDefinitionTargetsForRange(db, owner.relativePath, owner.startLine, owner.endLine);
+    if (!nested.available) continue;
+    const nestedSignals = behaviorSignalsByLine(db, owner.relativePath, owner.startLine, owner.endLine);
+    collectNestedSupportingTargets(owner, depth, nested.targets, nestedSignals);
   }
   return nestedDeclarations;
 }
@@ -1491,10 +1492,8 @@ function mostSpecificCallers(
           if (evidenceDifference !== 0) return evidenceDifference;
           const leftLocal = sameRepositoryArea(left.node, anchorNode) ? 0 : 1;
           const rightLocal = sameRepositoryArea(right.node, anchorNode) ? 0 : 1;
-          const leftSpan =
-            (left.node.location?.endLine ?? left.node.location?.line ?? 0) - (left.node.location?.line ?? 0);
-          const rightSpan =
-            (right.node.location?.endLine ?? right.node.location?.line ?? 0) - (right.node.location?.line ?? 0);
+          const leftSpan = topologyNodeLineSpan(left.node);
+          const rightSpan = topologyNodeLineSpan(right.node);
           return leftLocal - rightLocal || leftSpan - rightSpan || left.node.label.localeCompare(right.node.label);
         });
       return callers[0] ? [callers[0].node.id] : [];
@@ -1584,4 +1583,23 @@ function shellArgument(value: string): string {
 
 function orderedUnique(values: readonly string[]): string[] {
   return [...new Set(values)];
+}
+
+function addForwardPathBehaviorRoots(
+  topology: ExplorationTopology,
+  edgeById: ReadonlyMap<string, ExplorationTopologyEdge>,
+  expansiveNodeIds: Set<string>,
+): void {
+  for (const path of topology.paths) {
+    const firstNodeId = path.nodeIds[0];
+    const firstEdge = edgeById.get(path.edgeIds[0] ?? '');
+    const secondNodeId = path.nodeIds[1];
+    if (firstNodeId && secondNodeId && firstEdge?.fromNodeId === firstNodeId && firstEdge.toNodeId === secondNodeId) {
+      expansiveNodeIds.add(firstNodeId);
+    }
+  }
+}
+
+function topologyNodeLineSpan(node: ExplorationTopologyNode): number {
+  return (node.location?.endLine ?? node.location?.line ?? 0) - (node.location?.line ?? 0);
 }

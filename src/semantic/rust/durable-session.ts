@@ -181,13 +181,12 @@ export class DurableRustSessionHost {
 
     if (request.kind === 'semantic') {
       const requestKey = durableSemanticResponseCacheKey(request.request);
-      const cached =
-        session === 'reused' &&
-        requestKey !== null &&
-        this.semanticResponseCache?.identityKey === request.identityKey &&
-        this.semanticResponseCache.requestKey === requestKey
-          ? this.semanticResponseCache.response
-          : null;
+      const cached = reusableDurableSemanticResponse(
+        this.semanticResponseCache,
+        session,
+        requestKey,
+        request.identityKey,
+      );
       if (cached) {
         writeDurableSemanticResponseCacheProfile(true, request.request.definitions.length);
         return { session, response: cached };
@@ -443,16 +442,7 @@ function dispatchDurableRustSessionRequest<Response>(
         },
       );
       if (!payload.ok) throw new Error(payload.error);
-      if (profileEnabled()) {
-        writeProfileEvent({
-          type: 'span',
-          name: 'rust.semantic.durable-session.request',
-          durationMs: (runtime.monotonicNow ?? monotonicNowMs)() - monotonicStartedAtMs,
-          ok: true,
-          session: payload.session,
-          kind: request.kind,
-        });
-      }
+      profileDurableRustResponse(runtime, monotonicStartedAtMs, payload.session, request.kind);
       return payload.response as Response;
     }
     const state = readDurableRustSessionServerState(sessionDir);
@@ -580,12 +570,7 @@ function isBoundedMailboxStatus(value: unknown): value is BoundedMailboxStatus {
   if (!value || typeof value !== 'object') return false;
   const status = value as Partial<BoundedMailboxStatus>;
   return (
-    isNonNegativeInteger(status.pending) &&
-    isNonNegativeInteger(status.inflight) &&
-    isNonNegativeInteger(status.responses) &&
-    isNonNegativeInteger(status.deadLetters) &&
-    isNonNegativeInteger(status.invalid) &&
-    isNonNegativeInteger(status.totalItems) &&
+    validMailboxStatusCounts(status) &&
     typeof status.totalBytes === 'number' &&
     Number.isFinite(status.totalBytes) &&
     status.totalBytes >= 0 &&
@@ -672,4 +657,46 @@ const DEFAULT_REQUESTER_RUNTIME: DurableRustSessionRequesterRuntime = {
 
 function sha256(value: string | NodeJS.ArrayBufferView): string {
   return createHash('sha256').update(value).digest('hex');
+}
+
+function validMailboxStatusCounts(status: Partial<BoundedMailboxStatus>): boolean {
+  return (
+    isNonNegativeInteger(status.pending) &&
+    isNonNegativeInteger(status.inflight) &&
+    isNonNegativeInteger(status.responses) &&
+    isNonNegativeInteger(status.deadLetters) &&
+    isNonNegativeInteger(status.invalid) &&
+    isNonNegativeInteger(status.totalItems)
+  );
+}
+
+function reusableDurableSemanticResponse(
+  cache: { identityKey: string; requestKey: string; response: RustReferenceWorkerResponse } | null,
+  session: DurableRustSessionResponse['session'],
+  requestKey: string | null,
+  identityKey: string,
+): RustReferenceWorkerResponse | null {
+  const cached =
+    session === 'reused' && requestKey !== null && cache?.identityKey === identityKey && cache.requestKey === requestKey
+      ? cache.response
+      : null;
+  return cached;
+}
+
+function profileDurableRustResponse(
+  runtime: DurableRustSessionRequesterRuntime,
+  monotonicStartedAtMs: number,
+  session: DurableRustSessionResponse['session'],
+  kind: DurableRustSessionRequest['kind'],
+): void {
+  if (profileEnabled()) {
+    writeProfileEvent({
+      type: 'span',
+      name: 'rust.semantic.durable-session.request',
+      durationMs: (runtime.monotonicNow ?? monotonicNowMs)() - monotonicStartedAtMs,
+      ok: true,
+      session: session,
+      kind: kind,
+    });
+  }
 }

@@ -609,10 +609,6 @@ function volarLanguageIdForPath(fileName: string): string {
       return 'vue';
     case '.tsx':
       return 'typescriptreact';
-    case '.ts':
-    case '.mts':
-    case '.cts':
-      return 'typescript';
     case '.jsx':
       return 'javascriptreact';
     case '.js':

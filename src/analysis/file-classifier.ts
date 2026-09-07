@@ -247,12 +247,7 @@ function computePackageSurfaceReachability(
     const currentVisibility = visibility.get(current);
     if (currentVisibility === undefined) continue;
 
-    for (const reexport of getReExports(db, current)) {
-      if (!reexport.sourcePath || db.isIgnored(reexport.sourcePath)) continue;
-      const propagated = propagatedReexportVisibility(currentVisibility, reexport);
-      if (propagated === undefined) continue;
-      if (mergePackageVisibility(visibility, reexport.sourcePath, propagated)) queue.push(reexport.sourcePath);
-    }
+    propagatePackageReexports(db, current, currentVisibility, visibility, queue);
   }
 
   return visibility;
@@ -326,16 +321,7 @@ const VITE_ROUTE_EXPORTS = new Set(['default']);
 function isFrameworkDiscoveredEntrypointSymbol(symbol: string, normalized: string): boolean {
   const name = leafName(symbol);
   if (name === '') return false;
-  if (isNextAppRoutePath(normalized)) return HTTP_METHOD_EXPORTS.has(name);
-  if (isNextAppPagePath(normalized)) return NEXT_APP_PAGE_EXPORTS.has(name);
-  if (isNextPagesPath(normalized)) return NEXT_PAGES_EXPORTS.has(name);
-  if (isNextMiddlewarePath(normalized)) return NEXT_MIDDLEWARE_EXPORTS.has(name);
-  if (isNextInstrumentationPath(normalized)) return NEXT_INSTRUMENTATION_EXPORTS.has(name);
-  if (isNextInstrumentationClientPath(normalized)) return NEXT_INSTRUMENTATION_CLIENT_EXPORTS.has(name);
-  if (isRemixRoutePath(normalized)) return REMIX_ROUTE_EXPORTS.has(name);
-  if (isSvelteKitRoutePath(normalized)) return SVELTEKIT_ROUTE_EXPORTS.has(name);
-  if (isViteRoutePath(normalized)) return VITE_ROUTE_EXPORTS.has(name);
-  return false;
+  return frameworkPathExportsName(normalized, name);
 }
 
 /**
@@ -415,4 +401,32 @@ function symbolMatchesQualifiedVar(symbol: string, qualified: string): boolean {
 
 function formatScipName(value: string): string {
   return /^[A-Za-z0-9_$+-]+$/.test(value) ? value : '`' + value.replace(/`/g, '``') + '`';
+}
+
+function propagatePackageReexports(
+  db: ScipDatabase,
+  current: string,
+  currentVisibility: PackageSurfaceVisibility,
+  visibility: Map<string, PackageSurfaceVisibility>,
+  queue: string[],
+): void {
+  for (const reexport of getReExports(db, current)) {
+    if (!reexport.sourcePath || db.isIgnored(reexport.sourcePath)) continue;
+    const propagated = propagatedReexportVisibility(currentVisibility, reexport);
+    if (propagated === undefined) continue;
+    if (mergePackageVisibility(visibility, reexport.sourcePath, propagated)) queue.push(reexport.sourcePath);
+  }
+}
+
+function frameworkPathExportsName(normalized: string, name: string): boolean {
+  if (isNextAppRoutePath(normalized)) return HTTP_METHOD_EXPORTS.has(name);
+  if (isNextAppPagePath(normalized)) return NEXT_APP_PAGE_EXPORTS.has(name);
+  if (isNextPagesPath(normalized)) return NEXT_PAGES_EXPORTS.has(name);
+  if (isNextMiddlewarePath(normalized)) return NEXT_MIDDLEWARE_EXPORTS.has(name);
+  if (isNextInstrumentationPath(normalized)) return NEXT_INSTRUMENTATION_EXPORTS.has(name);
+  if (isNextInstrumentationClientPath(normalized)) return NEXT_INSTRUMENTATION_CLIENT_EXPORTS.has(name);
+  if (isRemixRoutePath(normalized)) return REMIX_ROUTE_EXPORTS.has(name);
+  if (isSvelteKitRoutePath(normalized)) return SVELTEKIT_ROUTE_EXPORTS.has(name);
+  if (isViteRoutePath(normalized)) return VITE_ROUTE_EXPORTS.has(name);
+  return false;
 }

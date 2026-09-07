@@ -712,40 +712,7 @@ function validateCoverageContracts(
     return;
   }
   for (const [index, contract] of config.coverageContracts.entries()) {
-    const path = `coverageContracts[${index}]`;
-    if (!isRecordObject(contract)) {
-      diagnostics.push({ level: 'error', path, message: 'Coverage contract must be an object.' });
-      continue;
-    }
-    if (typeof contract.name !== 'string' || contract.name.trim() === '') {
-      diagnostics.push({ level: 'error', path: `${path}.name`, message: 'Coverage contract name is required.' });
-    }
-    if (typeof contract.file !== 'string' || contract.file.trim() === '') {
-      diagnostics.push({ level: 'error', path: `${path}.file`, message: 'Coverage contract file is required.' });
-    } else if (opts.projectRoot && !existsSync(join(opts.projectRoot, contract.file))) {
-      diagnostics.push({
-        level: 'warning',
-        path: `${path}.file`,
-        message: `Coverage contract file does not exist: ${contract.file}`,
-      });
-    }
-    validateCoverageContractSpec(
-      diagnostics,
-      contract.keys,
-      `${path}.keys`,
-      COVERAGE_CONTRACT_KEY_SPEC_TYPES,
-      'Unknown coverage-contract key extractor type.',
-    );
-    validateCoverageContractSpec(
-      diagnostics,
-      contract.mustEqual,
-      `${path}.mustEqual`,
-      COVERAGE_CONTRACT_SOURCE_SPEC_TYPES,
-      'Unknown coverage-contract ground-truth source type.',
-    );
-    if (contract.allowExtra !== undefined && typeof contract.allowExtra !== 'boolean') {
-      diagnostics.push({ level: 'error', path: `${path}.allowExtra`, message: 'Must be a boolean.' });
-    }
+    validateCoverageContract(contract, index, diagnostics, opts);
   }
 }
 
@@ -1107,5 +1074,47 @@ function reportUnknownObjectKeys(
       path: path ? `${path}.${key}` : key,
       message: 'Unknown config key.',
     });
+  }
+}
+
+function validateCoverageContract(
+  contract: unknown,
+  index: number,
+  diagnostics: ConfigDiagnostic[],
+  opts: { projectRoot?: string },
+): void {
+  const path = `coverageContracts[${index}]`;
+  if (!isRecordObject(contract)) {
+    diagnostics.push({ level: 'error', path, message: 'Coverage contract must be an object.' });
+    return;
+  }
+  if (typeof contract.name !== 'string' || contract.name.trim() === '') {
+    diagnostics.push({ level: 'error', path: `${path}.name`, message: 'Coverage contract name is required.' });
+  }
+  if (typeof contract.file !== 'string' || contract.file.trim() === '') {
+    diagnostics.push({ level: 'error', path: `${path}.file`, message: 'Coverage contract file is required.' });
+  } else if (opts.projectRoot && !existsSync(join(opts.projectRoot, contract.file))) {
+    diagnostics.push({
+      level: 'warning',
+      path: `${path}.file`,
+      message: `Coverage contract file does not exist: ${contract.file}`,
+    });
+  }
+  validateCoverageContractSpec(
+    diagnostics,
+    contract.keys,
+    `${path}.keys`,
+    COVERAGE_CONTRACT_KEY_SPEC_TYPES,
+    'Unknown coverage-contract key extractor type.',
+  );
+  validateCoverageContractSpec(
+    diagnostics,
+    contract.mustEqual,
+    `${path}.mustEqual`,
+    COVERAGE_CONTRACT_SOURCE_SPEC_TYPES,
+    'Unknown coverage-contract ground-truth source type.',
+  );
+  if (contract.allowExtra !== undefined && typeof contract.allowExtra !== 'boolean') {
+    diagnostics.push({ level: 'error', path: `${path}.allowExtra`, message: 'Must be a boolean.' });
   }
 }

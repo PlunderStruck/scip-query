@@ -100,12 +100,7 @@ function groupDefinitionsBySignature(
   definitions: readonly IndexedDefinition[],
   opts: { semantic: boolean; maxShapeFrequency: number },
 ): SimilarSignatureGroup[] {
-  const candidates: Array<{ signature: string; definition: IndexedDefinition; fn: SimilarSignatureFunction }> = [];
-  for (const definition of definitions) {
-    const normalized = resolveNormalizedSignature(db, definition, opts);
-    if (!normalized) continue;
-    candidates.push({ signature: normalized, definition, fn: similarSignatureEntry(definition) });
-  }
+  const candidates = signatureCandidates(db, definitions, opts);
 
   const shapeFrequency = new Map<string, number>();
   for (const candidate of candidates) {
@@ -212,19 +207,8 @@ function extractDeclarationHead(
   const candidates = declarationStartLines(lines, startLine, endLine, leaf);
 
   for (const candidate of candidates) {
-    const maxLine = Math.min(lines.length - 1, Math.max(candidate, candidate + 4));
-    let collected = '';
-    for (let lineIndex = candidate; lineIndex <= maxLine; lineIndex += 1) {
-      const line = lines[lineIndex]?.trim();
-      if (!line) continue;
-      collected = collected ? `${collected} ${line}` : line;
-      if (looksCompleteDeclaration(collected)) {
-        return collected;
-      }
-    }
-    if (collected && collected.includes('(')) {
-      return collected;
-    }
+    const head = declarationHeadAtLine(lines, candidate);
+    if (head !== null) return head;
   }
 
   return null;
@@ -384,21 +368,8 @@ function declarationStartLines(lines: string[], startLine: number, endLine: numb
   const preferredStart = Math.max(0, Math.min(startLine, lines.length - 1));
   const preferredEnd = Math.max(preferredStart, Math.min(lines.length - 1, Math.max(endLine, startLine + 4)));
 
-  for (let lineIndex = preferredStart; lineIndex <= preferredEnd; lineIndex += 1) {
-    const line = lines[lineIndex] ?? '';
-    if ((callablePattern.test(line) || rubyPattern.test(line)) && !seen.has(lineIndex)) {
-      seen.add(lineIndex);
-      candidates.push(lineIndex);
-    }
-  }
-
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex] ?? '';
-    if ((callablePattern.test(line) || rubyPattern.test(line)) && !seen.has(lineIndex)) {
-      seen.add(lineIndex);
-      candidates.push(lineIndex);
-    }
-  }
+  appendDeclarationStartLines(lines, preferredStart, preferredEnd, callablePattern, rubyPattern, seen, candidates);
+  appendDeclarationStartLines(lines, 0, lines.length - 1, callablePattern, rubyPattern, seen, candidates);
 
   return candidates;
 }
@@ -408,4 +379,54 @@ function compactSignatureText(text: string): string {
   return text.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\s+/g, (token) =>
     /^\s/.test(token) ? '' : token,
   );
+}
+
+function signatureCandidates(
+  db: ScipDatabase,
+  definitions: readonly IndexedDefinition[],
+  opts: { semantic: boolean; maxShapeFrequency: number },
+) {
+  const candidates: Array<{ signature: string; definition: IndexedDefinition; fn: SimilarSignatureFunction }> = [];
+  for (const definition of definitions) {
+    const normalized = resolveNormalizedSignature(db, definition, opts);
+    if (!normalized) continue;
+    candidates.push({ signature: normalized, definition, fn: similarSignatureEntry(definition) });
+  }
+
+  return candidates;
+}
+
+function declarationHeadAtLine(lines: string[], candidate: number): string | null {
+  const maxLine = Math.min(lines.length - 1, Math.max(candidate, candidate + 4));
+  let collected = '';
+  for (let lineIndex = candidate; lineIndex <= maxLine; lineIndex += 1) {
+    const line = lines[lineIndex]?.trim();
+    if (!line) continue;
+    collected = collected ? `${collected} ${line}` : line;
+    if (looksCompleteDeclaration(collected)) {
+      return collected;
+    }
+  }
+  if (collected && collected.includes('(')) {
+    return collected;
+  }
+  return null;
+}
+
+function appendDeclarationStartLines(
+  lines: string[],
+  preferredStart: number,
+  preferredEnd: number,
+  callablePattern: RegExp,
+  rubyPattern: RegExp,
+  seen: Set<number>,
+  candidates: number[],
+): void {
+  for (let lineIndex = preferredStart; lineIndex <= preferredEnd; lineIndex += 1) {
+    const line = lines[lineIndex] ?? '';
+    if ((callablePattern.test(line) || rubyPattern.test(line)) && !seen.has(lineIndex)) {
+      seen.add(lineIndex);
+      candidates.push(lineIndex);
+    }
+  }
 }

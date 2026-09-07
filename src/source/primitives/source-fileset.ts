@@ -155,11 +155,7 @@ export function getSourceFiles(db: ScipDatabase, opts: SourceFilesetOptions = {}
       }
     }
     if (includeAuxiliary) {
-      for (const file of listProjectSources(db.config.projectRoot, extensions)) {
-        if (db.isIgnored(file)) continue;
-        if (includeIndexed && out.has(file)) continue;
-        out.add(file);
-      }
+      appendAuxiliarySourceFiles(db, extensions, includeIndexed, out);
     }
     return [...out].sort();
   });
@@ -234,4 +230,17 @@ function listOnDiskSources(absRoot: string, extensions: ReadonlySet<string>): Se
   };
   visit('');
   return out;
+}
+
+function appendAuxiliarySourceFiles(
+  db: ScipDatabase,
+  extensions: ReadonlySet<string>,
+  includeIndexed: boolean,
+  out: Set<string>,
+): void {
+  for (const file of listProjectSources(db.config.projectRoot, extensions)) {
+    if (db.isIgnored(file)) continue;
+    if (includeIndexed && out.has(file)) continue;
+    out.add(file);
+  }
 }

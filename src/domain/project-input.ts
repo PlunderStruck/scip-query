@@ -96,11 +96,7 @@ export function isLanguageRelevantProjectInputPath(
 export function projectInputSnapshotOrNull(value: unknown): ProjectInputSnapshot | null {
   if (typeof value !== 'object' || value === null) return null;
   const snapshot = value as Record<string, unknown>;
-  if (typeof snapshot['version'] !== 'number') return null;
-  if (!isStringArray(snapshot['languages'])) return null;
-  if (typeof snapshot['pnpmWorkspaces'] !== 'boolean') return null;
-  if (typeof snapshot['typescriptProjectMode'] !== 'string') return null;
-  if (!isStringArray(snapshot['typescriptProjects'])) return null;
+  if (!validProjectInputSnapshotConfiguration(snapshot)) return null;
   if (snapshot['clojureConfigPath'] !== undefined && typeof snapshot['clojureConfigPath'] !== 'string') return null;
   if (!Array.isArray(snapshot['files']) || !snapshot['files'].every(isProjectFileFingerprint)) return null;
 
@@ -381,3 +377,12 @@ const LANGUAGE_SOURCE_EXTENSIONS: Record<SupportedLanguage, readonly string[]> =
   php: ['.php'],
   clojure: ['.clj', '.cljs', '.cljc'],
 };
+
+function validProjectInputSnapshotConfiguration(snapshot: Record<string, unknown>): boolean {
+  if (typeof snapshot['version'] !== 'number') return false;
+  if (!isStringArray(snapshot['languages'])) return false;
+  if (typeof snapshot['pnpmWorkspaces'] !== 'boolean') return false;
+  if (typeof snapshot['typescriptProjectMode'] !== 'string') return false;
+  if (!isStringArray(snapshot['typescriptProjects'])) return false;
+  return true;
+}

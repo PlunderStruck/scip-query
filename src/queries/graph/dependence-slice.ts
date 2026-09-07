@@ -57,14 +57,7 @@ export function dependenceSlice(
     unsupported: ['Function-local slicing currently requires TypeScript or JavaScript source.'],
   };
   const candidates = selectSliceCriteria(flow?.points ?? [], line, options);
-  const resolution =
-    model.status === 'unsupported'
-      ? 'unsupported'
-      : candidates.length === 1
-        ? 'matched'
-        : candidates.length > 1
-          ? 'ambiguous'
-          : 'missing';
+  const resolution = sliceCriterionResolution(model, candidates.length);
   const result: DependenceSliceResult = {
     kind: 'dependence-slice',
     direction,
@@ -108,6 +101,19 @@ export function dependenceSlice(
     ).length,
   };
   return result;
+}
+
+function sliceCriterionResolution(
+  model: TypeScriptLocalFlowCoverage,
+  candidateCount: number,
+): DependenceSliceResult['resolution'] {
+  return model.status === 'unsupported'
+    ? 'unsupported'
+    : candidateCount === 1
+      ? 'matched'
+      : candidateCount > 1
+        ? 'ambiguous'
+        : 'missing';
 }
 
 type SliceOptions = NonNullable<Parameters<typeof dependenceSlice>[2]>;

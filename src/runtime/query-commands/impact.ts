@@ -99,29 +99,9 @@ const handleCoChange = budgetedDbCommand('co-change', ({ db, args, opts, budget 
       ? `Co-change partners (${result.commitsAnalyzed} commits analyzed):\n`
       : `Hidden coupling — pairs that co-change with no dependency edge (${result.commitsAnalyzed} commits analyzed):\n`,
   );
-  if (file && result.findings.some((finding) => finding.structurallyLinked || finding.declaredCouplingSuggestion)) {
-    console.log(
-      'note: file mode lists all historical partners; [dep edge]/[declared] pairs are excluded from hidden-coupling findings.\n',
-    );
-  }
+  renderCoChangeModeNote(file, result.findings);
   for (const finding of result.findings) {
-    const linked = finding.structurallyLinked ? '  [dep edge]' : '';
-    const partnerClass = `  [${finding.partnerClass}]`;
-    const historyContext = `  [${finding.commitScope}/${finding.recency}]`;
-    console.log(
-      `  ${finding.together}x (${Math.round(finding.confidence * 100)}%)  ${finding.fileA}  <->  ${finding.fileB}${partnerClass}${historyContext}${linked}`,
-    );
-    console.log(
-      `    history: ${finding.focusedTogether} focused, ${finding.broadTogether} broad-sweep (${Math.round(
-        finding.broadCommitRatio * 100,
-      )}% broad), ${finding.recentTogether} recent; last ${formatUnixDate(finding.lastTogetherAt)}`,
-    );
-    console.log(`    subjects: ${formatCoChangeSubjectContext(finding.subjectContext)}`);
-    if (finding.declaredCouplingSuggestion) {
-      console.log(
-        `    declare coupling: ${finding.declaredCouplingSuggestion.name} (${finding.declaredCouplingSuggestion.reason})`,
-      );
-    }
+    renderCoChangeFinding(finding);
   }
   console.log(`\n${result.findings.length} pair(s). Co-editing one side without the other is how drift starts.`);
 });
@@ -201,24 +181,7 @@ const handleIncompleteMigration = budgetedDbCommand('incomplete-migration', ({ d
     return;
   }
   renderHeuristicNotice('incomplete migration candidates');
-  for (const finding of result.findings) {
-    console.log(`\n  ${finding.helperShortName}  (${finding.helperFile})`);
-    console.log(
-      `    helper shape: ${finding.helperShape} (${finding.specificHelperCalleeCount}/${finding.helperCalleeCount} specific callees)`,
-    );
-    console.log(`    wired into: ${finding.migratedFiles.join(', ')}`);
-    for (const leftover of finding.leftovers) {
-      console.log(
-        `    un-migrated: ${Math.round(leftover.containment * 100)}% helper / ${Math.round(
-          leftover.siteCoverage * 100,
-        )}% site  [${leftover.migrationScope}]  ${leftover.shortName}  (${leftover.file})`,
-      );
-      console.log(`      scope: ${leftover.migrationScopeReasons.join('; ')}`);
-      if (leftover.uniqueSiteCalleeCount > 0)
-        console.log(`      extra site callees: ${leftover.uniqueSiteCalleeCount}`);
-      console.log(`      shared: ${leftover.sharedCallees.join(', ')}`);
-    }
-  }
+  renderIncompleteMigrationFindings(result.findings);
   console.log(
     `\n${result.findings.length} helper(s) with un-migrated sites. Finish the extraction or confirm the sites differ on purpose.`,
   );
@@ -314,3 +277,55 @@ export const impactQueryCommandDescriptors: CommandDescriptor[] = [
     handler: handleCoChange,
   },
 ];
+
+function renderCoChangeFinding(finding: ReturnType<typeof queries.coChange>['findings'][number]): void {
+  const linked = finding.structurallyLinked ? '  [dep edge]' : '';
+  const partnerClass = `  [${finding.partnerClass}]`;
+  const historyContext = `  [${finding.commitScope}/${finding.recency}]`;
+  console.log(
+    `  ${finding.together}x (${Math.round(finding.confidence * 100)}%)  ${finding.fileA}  <->  ${finding.fileB}${partnerClass}${historyContext}${linked}`,
+  );
+  console.log(
+    `    history: ${finding.focusedTogether} focused, ${finding.broadTogether} broad-sweep (${Math.round(
+      finding.broadCommitRatio * 100,
+    )}% broad), ${finding.recentTogether} recent; last ${formatUnixDate(finding.lastTogetherAt)}`,
+  );
+  console.log(`    subjects: ${formatCoChangeSubjectContext(finding.subjectContext)}`);
+  if (finding.declaredCouplingSuggestion) {
+    console.log(
+      `    declare coupling: ${finding.declaredCouplingSuggestion.name} (${finding.declaredCouplingSuggestion.reason})`,
+    );
+  }
+}
+
+function renderIncompleteMigrationFindings(findings: ReturnType<typeof queries.incompleteMigration>['findings']): void {
+  for (const finding of findings) {
+    console.log(`\n  ${finding.helperShortName}  (${finding.helperFile})`);
+    console.log(
+      `    helper shape: ${finding.helperShape} (${finding.specificHelperCalleeCount}/${finding.helperCalleeCount} specific callees)`,
+    );
+    console.log(`    wired into: ${finding.migratedFiles.join(', ')}`);
+    for (const leftover of finding.leftovers) {
+      console.log(
+        `    un-migrated: ${Math.round(leftover.containment * 100)}% helper / ${Math.round(
+          leftover.siteCoverage * 100,
+        )}% site  [${leftover.migrationScope}]  ${leftover.shortName}  (${leftover.file})`,
+      );
+      console.log(`      scope: ${leftover.migrationScopeReasons.join('; ')}`);
+      if (leftover.uniqueSiteCalleeCount > 0)
+        console.log(`      extra site callees: ${leftover.uniqueSiteCalleeCount}`);
+      console.log(`      shared: ${leftover.sharedCallees.join(', ')}`);
+    }
+  }
+}
+
+function renderCoChangeModeNote(
+  file: string | undefined,
+  findings: ReturnType<typeof queries.coChange>['findings'],
+): void {
+  if (file && findings.some((finding) => finding.structurallyLinked || finding.declaredCouplingSuggestion)) {
+    console.log(
+      'note: file mode lists all historical partners; [dep edge]/[declared] pairs are excluded from hidden-coupling findings.\n',
+    );
+  }
+}

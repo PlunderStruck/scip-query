@@ -130,12 +130,7 @@ export function systemMapNextAnchorPacket(
     }),
   );
   const returnedDefinitionLocations = new Set<string>();
-  for (const step of behavior.steps) {
-    for (const declaration of step.behavior?.supportingDeclarations ?? []) {
-      returnedSymbols.add(declaration.symbol);
-      returnedDefinitionLocations.add(definitionLocationKey(declaration.file, declaration.line, declaration.endLine));
-    }
-  }
+  recordReturnedSupportingDeclarations(behavior, returnedSymbols, returnedDefinitionLocations);
   const alternativeAlreadyReturned = (alternative: SystemMapNextAnchorAlternative): boolean =>
     (alternative.symbol !== null && returnedSymbols.has(alternative.symbol)) ||
     returnedDefinitionLocations.has(definitionLocationKey(alternative.file, alternative.line, alternative.endLine));
@@ -1371,4 +1366,17 @@ function sourceCallsiteKey(file: string, line: number, leaf: string): string {
 
 function nextAnchorId(fromStepId: string, line: number, target: string): string {
   return ['next-anchor', fromStepId, String(line), target].map(encodeURIComponent).join(':');
+}
+
+function recordReturnedSupportingDeclarations(
+  behavior: ConnectedBehaviorPacket,
+  returnedSymbols: Set<string>,
+  returnedDefinitionLocations: Set<string>,
+): void {
+  for (const step of behavior.steps) {
+    for (const declaration of step.behavior?.supportingDeclarations ?? []) {
+      returnedSymbols.add(declaration.symbol);
+      returnedDefinitionLocations.add(definitionLocationKey(declaration.file, declaration.line, declaration.endLine));
+    }
+  }
 }

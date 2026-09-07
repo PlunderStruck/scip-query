@@ -249,15 +249,7 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
   const recoveryCommands = identityCoverage.mode === 'complete' ? sourceSearchRecoveryCommands(result, identities) : [];
   const textCoverage = result.textCoverage;
   const exactTextComplete = sourceSearchTextCoverageComplete(result);
-  const recoveryRows =
-    identityCoverage.mode === 'bounded'
-      ? sourceSearchScopeRows(result)
-      : recoveryCommands.length > 0
-        ? [
-            `  Recover every unmaterialized owning unit in ${recoveryCommands.length} bounded batch command(s):`,
-            ...recoveryCommands.map((command) => `  ${command}`),
-          ]
-        : ['  Every matching source window was materialized; no drilldown remains.'];
+  const recoveryRows = sourceSearchRecoveryRows(result, identityCoverage.mode, recoveryCommands);
   return [
     {
       title: 'REQUEST',
@@ -274,19 +266,7 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
     },
     {
       title: 'EVIDENCE CALIBRATION',
-      rows: [
-        `  ${exactTextComplete ? 'Exact' : 'Observed'} cardinality is current project text; compiler ownership is an aligned semantic overlay. Neither ownership nor co-occurrence proves task relevance or a graph relationship.`,
-        ...(shortenedSourceLines > 0
-          ? [
-              `  ${shortenedSourceLines} overlong matched line(s) were shortened; every exact path:line identity remains recoverable with scip-query code.`,
-            ]
-          : []),
-        ...(omittedPreviewContextLines > 0
-          ? [
-              `  ${omittedPreviewContextLines} nonfocus context line(s) were omitted from expensive previews; the matched lines remain visible and JSON retains complete windows.`,
-            ]
-          : []),
-      ],
+      rows: sourceSearchCalibrationRows(exactTextComplete, shortenedSourceLines, omittedPreviewContextLines),
     },
     {
       title: 'COVERAGE',
@@ -769,26 +749,7 @@ function sourceInspectionUnitRow(unit: queries.SourceInspectionUnit): string {
     case 'source': {
       const owner = unit.ownerShort ? `  in ${unit.ownerShort}` : '';
       if (unit.behavior) {
-        const coverage = unit.behavior.coverage;
-        const representation =
-          coverage.omittedStatements > 0
-            ? 'partial behavioral outline'
-            : coverage.copiedStatements === coverage.sourceStatements
-              ? 'verbatim source unit (not compressed)'
-              : 'statement-complete behavioral outline';
-        const evidenceRows = [
-          `    representation: ${representation}`,
-          `    ${unit.behavior.constructKind}: ${unit.behavior.signature}`,
-          ...unit.behavior.lines.map(
-            (line) =>
-              `    L${displayLine(line.line)}${line.endLine > line.line ? `-${displayLine(line.endLine)}` : ''} ${'  '.repeat(line.depth)}${line.text}${line.copied ? '  [verbatim]' : ''}`,
-          ),
-          ...(unit.behavior.testCases.length > 0
-            ? [`    related test cases: ${unit.behavior.testCases.join('; ')}`]
-            : []),
-          ...sourceInspectionRuntimeFactRows(unit.runtimeFacts ?? []),
-          `    coverage: ${coverage.representedStatements}/${coverage.sourceStatements} source statement(s) represented; ${coverage.copiedStatements} verbatim; ${coverage.omittedStatements} omitted; ${unit.behavior.outlineCharacters}/${unit.behavior.rawCharacters} estimated characters`,
-        ];
+        const evidenceRows = sourceInspectionBehaviorEvidenceRows(unit, unit.behavior);
         return [
           `  ${displayPathRange(unit.relativePath, unit.startLine, unit.endLine)}${owner}`,
           `    roles: ${unit.roles.join(', ')}; selected by ${unit.reasons.join(', ')}`,
@@ -931,21 +892,14 @@ function evidenceSections(result: queries.QualifiedEvidenceResult): ReportSectio
 
 function evidenceCommandSections(result: EvidenceCommandResult): ReportSection[] {
   if (result.kind !== 'graph-packet') return evidenceSections(result);
-  const selection = result.graph.selection ?? {
+  const selection: NonNullable<MaterializedGraphEvidence['graph']['selection']> = result.graph.selection ?? {
     direction: 'both',
     subtypes: [],
     connecting: false,
     inventoryOnly: false,
     foldIds: [],
   };
-  const requestRows = [
-    `  direction=${selection.direction}; subtypes=${selection.subtypes.length > 0 ? selection.subtypes.join(',') : 'all'}; ` +
-      `operation=${selection.connecting ? 'connecting' : 'reachability'}; materialization=${selection.inventoryOnly ? 'inventory-only' : selection.foldIds.length > 0 ? `folds(${selection.foldIds.join(',')})` : 'edges'}`,
-    ...result.graph.targets.map((target) => {
-      const omitted = target.omittedCandidates > 0 ? `; ${target.omittedCandidates} candidate(s) omitted` : '';
-      return `  selector [${target.status}] ${target.kind} ${target.query}${omitted}`;
-    }),
-  ];
+  const requestRows = graphEvidenceRequestRows(result.graph, selection);
   const relationshipRows = queries.GRAPH_EVIDENCE_FAMILIES.flatMap((family) => {
     const edges = result.graph.edges.filter((edge) => edge.family === family);
     if (edges.length === 0) return [];
@@ -1904,3 +1858,78 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     handler: handleDependenceSlice,
   },
 ];
+
+function sourceSearchRecoveryRows(
+  result: queries.SourceSearchResult,
+  mode: ReturnType<typeof sourceSearchIdentityCoverage>['mode'],
+  recoveryCommands: string[],
+): string[] {
+  return mode === 'bounded'
+    ? sourceSearchScopeRows(result)
+    : recoveryCommands.length > 0
+      ? [
+          `  Recover every unmaterialized owning unit in ${recoveryCommands.length} bounded batch command(s):`,
+          ...recoveryCommands.map((command) => `  ${command}`),
+        ]
+      : ['  Every matching source window was materialized; no drilldown remains.'];
+}
+
+function sourceSearchCalibrationRows(
+  exactTextComplete: boolean,
+  shortenedSourceLines: number,
+  omittedPreviewContextLines: number,
+): string[] {
+  return [
+    `  ${exactTextComplete ? 'Exact' : 'Observed'} cardinality is current project text; compiler ownership is an aligned semantic overlay. Neither ownership nor co-occurrence proves task relevance or a graph relationship.`,
+    ...(shortenedSourceLines > 0
+      ? [
+          `  ${shortenedSourceLines} overlong matched line(s) were shortened; every exact path:line identity remains recoverable with scip-query code.`,
+        ]
+      : []),
+    ...(omittedPreviewContextLines > 0
+      ? [
+          `  ${omittedPreviewContextLines} nonfocus context line(s) were omitted from expensive previews; the matched lines remain visible and JSON retains complete windows.`,
+        ]
+      : []),
+  ];
+}
+
+function sourceInspectionBehaviorEvidenceRows(
+  unit: Extract<queries.SourceInspectionUnit, { kind: 'source' }>,
+  behavior: NonNullable<typeof unit.behavior>,
+): string[] {
+  const coverage = behavior.coverage;
+  const representation =
+    coverage.omittedStatements > 0
+      ? 'partial behavioral outline'
+      : coverage.copiedStatements === coverage.sourceStatements
+        ? 'verbatim source unit (not compressed)'
+        : 'statement-complete behavioral outline';
+  return [
+    `    representation: ${representation}`,
+    `    ${behavior.constructKind}: ${behavior.signature}`,
+    ...behavior.lines.map(
+      (line) =>
+        `    L${displayLine(line.line)}${line.endLine > line.line ? `-${displayLine(line.endLine)}` : ''} ${'  '.repeat(line.depth)}${line.text}${line.copied ? '  [verbatim]' : ''}`,
+    ),
+    ...(behavior.testCases.length > 0 ? [`    related test cases: ${behavior.testCases.join('; ')}`] : []),
+    ...sourceInspectionRuntimeFactRows(unit.runtimeFacts ?? []),
+    `    coverage: ${coverage.representedStatements}/${coverage.sourceStatements} source statement(s) represented; ${coverage.copiedStatements} verbatim; ${coverage.omittedStatements} omitted; ${behavior.outlineCharacters}/${behavior.rawCharacters} estimated characters`,
+  ];
+}
+
+type MaterializedGraphEvidence = Extract<EvidenceCommandResult, { kind: 'graph-packet' }>;
+
+function graphEvidenceRequestRows(
+  graph: MaterializedGraphEvidence['graph'],
+  selection: NonNullable<MaterializedGraphEvidence['graph']['selection']>,
+): string[] {
+  return [
+    `  direction=${selection.direction}; subtypes=${selection.subtypes.length > 0 ? selection.subtypes.join(',') : 'all'}; ` +
+      `operation=${selection.connecting ? 'connecting' : 'reachability'}; materialization=${selection.inventoryOnly ? 'inventory-only' : selection.foldIds.length > 0 ? `folds(${selection.foldIds.join(',')})` : 'edges'}`,
+    ...graph.targets.map((target) => {
+      const omitted = target.omittedCandidates > 0 ? `; ${target.omittedCandidates} candidate(s) omitted` : '';
+      return `  selector [${target.status}] ${target.kind} ${target.query}${omitted}`;
+    }),
+  ];
+}

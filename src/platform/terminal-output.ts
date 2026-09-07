@@ -126,7 +126,7 @@ function consumeEscapeSequence(value: string, escapeIndex: number): number {
   const introducer = value.charCodeAt(escapeIndex + 1);
   if (Number.isNaN(introducer)) return value.length;
   if (introducer === 0x5b) return consumeControlSequence(value, escapeIndex + 2);
-  if (introducer === 0x50 || introducer === 0x58 || introducer === 0x5d || introducer === 0x5e || introducer === 0x5f) {
+  if (CONTROL_STRING_INTRODUCERS.has(introducer)) {
     return consumeControlString(value, escapeIndex + 2);
   }
 
@@ -177,3 +177,5 @@ function isBidirectionalFormattingControl(code: number): boolean {
     (code >= 0x2066 && code <= 0x2069)
   );
 }
+
+const CONTROL_STRING_INTRODUCERS = new Set([0x50, 0x58, 0x5d, 0x5e, 0x5f]);

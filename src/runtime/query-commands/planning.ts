@@ -58,18 +58,11 @@ const handleContext = budgetedDbCommand('context', ({ db, args, opts, budget }) 
   }
 
   if (booleanOptionValue(opts, 'json')) {
-    const resolutionTarget = result.primaryCallable?.symbol ?? stringArg(args, 0);
-    printJsonEnvelope(
-      'context',
-      args,
-      opts,
-      result.matched.symbol ? { ...symbolResolutionJson(db, resolutionTarget), ...result } : result,
-      {
-        analysisBudget: budget.analysisBudget,
-        coverage: repositoryContextCoverage(result),
-        agentResult: repositoryContextAgentResult(result),
-      },
-    );
+    printJsonEnvelope('context', args, opts, repositoryContextJsonResult(db, args, result), {
+      analysisBudget: budget.analysisBudget,
+      coverage: repositoryContextCoverage(result),
+      agentResult: repositoryContextAgentResult(result),
+    });
     return;
   }
   if (result.matched.symbol) symbolResolutionBefore(db, result.primaryCallable?.symbol ?? stringArg(args, 0));
@@ -577,4 +570,13 @@ function withOmitted(result: LimitedRows): string[] {
 
 function yesNo(value: boolean): string {
   return value ? 'yes' : 'no';
+}
+
+function repositoryContextJsonResult(
+  db: Parameters<typeof queries.repositoryContext>[0],
+  args: readonly unknown[],
+  result: ReturnType<typeof queries.repositoryContext>,
+) {
+  const resolutionTarget = result.primaryCallable?.symbol ?? stringArg(args, 0);
+  return result.matched.symbol ? { ...symbolResolutionJson(db, resolutionTarget), ...result } : result;
 }

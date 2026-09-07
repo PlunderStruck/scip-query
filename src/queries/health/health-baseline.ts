@@ -36,13 +36,7 @@ export function collectBaselineFindings(db: ScipDatabase, opts: { scope?: string
   const { scope } = opts;
   const findings: string[] = [];
 
-  const deadResult = dead(db, { scope, ...HEALTH_DETECTOR_PROFILES.dead });
-  for (const symbol of deadResult.symbols) {
-    if (isEntrySurface(db, symbol.relativePath)) continue;
-    if (isRootedSymbol(db, symbol.symbol, symbol.relativePath)) continue;
-    if (symbol.kind !== 'dead-code') continue;
-    findings.push(`dead:${symbol.relativePath}:${symbol.shortName}`);
-  }
+  appendDeadBaselineFindings(db, scope, findings);
 
   for (const cycle of dependencyCycles(db, { scope, edgeBasis: 'imports' })) {
     findings.push(`cycle:${canonicalCycleKey(cycle.path)}`);
@@ -117,4 +111,14 @@ export function checkHealthBaseline(
   opts: { path?: string; scope?: string } = {},
 ): BaselineComparison {
   return compareAgainstBaseline(db, collectBaselineFindings(db, { scope: opts.scope }), { path: opts.path });
+}
+
+function appendDeadBaselineFindings(db: ScipDatabase, scope: string | undefined, findings: string[]): void {
+  const deadResult = dead(db, { scope, ...HEALTH_DETECTOR_PROFILES.dead });
+  for (const symbol of deadResult.symbols) {
+    if (isEntrySurface(db, symbol.relativePath)) continue;
+    if (isRootedSymbol(db, symbol.symbol, symbol.relativePath)) continue;
+    if (symbol.kind !== 'dead-code') continue;
+    findings.push(`dead:${symbol.relativePath}:${symbol.shortName}`);
+  }
 }

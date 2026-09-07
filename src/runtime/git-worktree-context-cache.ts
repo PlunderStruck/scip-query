@@ -126,9 +126,7 @@ function isGitWorktreeContextReceipt(value: unknown): value is GitWorktreeContex
     isAbsoluteString(value['commonDir']) &&
     matches(PATH_ID, value['repositoryId']) &&
     matches(PATH_ID, value['worktreeId']) &&
-    matches(GIT_OBJECT_ID, value['headCommit']) &&
-    matches(GIT_OBJECT_ID, value['treeOid']) &&
-    matches(SHA256, value['checksum'])
+    validGitWorktreeReceiptRevision(value)
   );
 }
 
@@ -163,4 +161,12 @@ function gitWorktreeContextReceiptChecksum(
 
 function matches(expression: RegExp, value: unknown): value is string {
   return typeof value === 'string' && expression.test(value);
+}
+
+function validGitWorktreeReceiptRevision(value: Record<string, unknown>): boolean {
+  return (
+    matches(GIT_OBJECT_ID, value['headCommit']) &&
+    matches(GIT_OBJECT_ID, value['treeOid']) &&
+    matches(SHA256, value['checksum'])
+  );
 }

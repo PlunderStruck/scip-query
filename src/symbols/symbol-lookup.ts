@@ -466,12 +466,8 @@ function findDirectSymbolCandidates(
       row.symbol === trimmed ||
       short === trimmed ||
       short === cleanedPattern ||
-      leaf === trimmed ||
-      leaf === cleanedPattern ||
-      `${leaf}()` === trimmed ||
-      display === trimmed ||
-      display === cleanedPattern ||
-      `${display}()` === trimmed ||
+      directCallableNameMatches(leaf, trimmed, cleanedPattern) ||
+      directCallableNameMatches(display, trimmed, cleanedPattern) ||
       pathQualifiedDirectScore(row, cleanedPattern) > 1 ||
       row.relative_path === trimmed
     );
@@ -578,3 +574,7 @@ function levenshtein(left: string, right: string): number {
 // — projecting raw rows through the AST-corrected per-file range table).
 // Re-exported above via the scip-rows barrel, but the function itself is
 // imported directly from definition-catalog.
+
+function directCallableNameMatches(name: string, trimmed: string, cleanedPattern: string): boolean {
+  return name === trimmed || name === cleanedPattern || `${name}()` === trimmed;
+}

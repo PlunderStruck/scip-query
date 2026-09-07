@@ -386,11 +386,7 @@ function effectHttpApiImportedBindings(source: string, importedName: string): Se
   for (const match of source.matchAll(namedImport)) {
     const moduleName = match[2] ?? '';
     if (!effectHttpApiModule(moduleName)) continue;
-    for (const rawSpecifier of (match[1] ?? '').split(',')) {
-      const specifier = rawSpecifier.trim().replace(/^type\s+/u, '');
-      const imported = /^([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?$/u.exec(specifier);
-      if (imported?.[1] === importedName) bindings.add(imported[2] ?? imported[1]);
-    }
+    collectEffectNamedBindings(match[1] ?? '', importedName, bindings);
   }
   const namespaceImport = /\bimport\s*\*\s*as\s*([A-Za-z_$][\w$]*)\s*from\s*['"]([^'"]+)['"]/gu;
   for (const match of source.matchAll(namespaceImport)) {
@@ -696,27 +692,7 @@ function registryExtractor(): BoundaryExtractor {
       const observations: BoundaryObservation[] = [];
       visitDescendantsOfType(context.root, ['pair', 'call_expression'], (node) => {
         if (node.type === 'pair') {
-          const container = registryContainerName(node);
-          if (!container) return;
-          const keyNode = node.childForFieldName('key') ?? node.namedChild(0);
-          const valueNode = node.childForFieldName('value') ?? node.namedChild(1);
-          const key = registryKey(keyNode, context);
-          if (!key || !valueNode || !registryValueLike(valueNode)) return;
-          const valueStrength = directlyCallable(valueNode) ? 'exact' : 'candidate';
-          observations.push(
-            observation(
-              context,
-              node,
-              'builtin.registry',
-              'registry.handle',
-              [
-                { name: 'registry', value: container, evidence: 'identifier' },
-                { name: 'key', ...key },
-              ],
-              resolvedStrength([{ name: 'key', ...key }], valueStrength),
-              'object-member',
-            ),
-          );
+          collectRegistryMemberObservation(context, node, observations);
           return;
         }
         if (node.type !== 'call_expression') return;
@@ -768,12 +744,7 @@ function persistenceExtractor(): BoundaryExtractor {
         const argumentResource = persistenceArgument(args[0], context) ?? sqlPersistenceResource(sql);
         const resource = persistenceResource(adapter, parts, leaf, argumentResource);
         if (!resource) return;
-        const evidence =
-          leaf === 'insert'
-            ? 'persistence-insert'
-            : action === 'database.read' && /\bFOR\s+UPDATE\s+SKIP\s+LOCKED\b/iu.test(sql)
-              ? 'persistence-skip-locked-claim'
-              : 'persistence-adapter';
+        const evidence = persistenceObservationEvidence(leaf, action, sql);
         observations.push(
           observation(
             context,
@@ -820,12 +791,7 @@ function queueExtractor(): BoundaryExtractor {
         if (!callee) return;
         const leaf = callee.split('.').at(-1) ?? '';
         const args = callArguments(node);
-        const action =
-          leaf === 'sendToQueue' || leaf === 'send'
-            ? 'queue.send'
-            : leaf === 'consume' || leaf === 'subscribe'
-              ? 'queue.consume'
-              : null;
+        const action = queueCallAction(leaf);
         if (!action) return;
 
         const address =
@@ -1188,4 +1154,56 @@ function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
 
 function visitDescendantsOfType(root: SyntaxNode, type: string | string[], visit: (node: SyntaxNode) => void): void {
   for (const node of nodesOfTypes(root, type)) visit(node);
+}
+
+function collectRegistryMemberObservation(
+  context: BoundaryFileContext,
+  node: SyntaxNode,
+  observations: BoundaryObservation[],
+): void {
+  const container = registryContainerName(node);
+  if (!container) return;
+  const keyNode = node.childForFieldName('key') ?? node.namedChild(0);
+  const valueNode = node.childForFieldName('value') ?? node.namedChild(1);
+  const key = registryKey(keyNode, context);
+  if (!key || !valueNode || !registryValueLike(valueNode)) return;
+  const valueStrength = directlyCallable(valueNode) ? 'exact' : 'candidate';
+  observations.push(
+    observation(
+      context,
+      node,
+      'builtin.registry',
+      'registry.handle',
+      [
+        { name: 'registry', value: container, evidence: 'identifier' },
+        { name: 'key', ...key },
+      ],
+      resolvedStrength([{ name: 'key', ...key }], valueStrength),
+      'object-member',
+    ),
+  );
+}
+
+function persistenceObservationEvidence(leaf: string, action: string, sql: string): string {
+  return leaf === 'insert'
+    ? 'persistence-insert'
+    : action === 'database.read' && /\bFOR\s+UPDATE\s+SKIP\s+LOCKED\b/iu.test(sql)
+      ? 'persistence-skip-locked-claim'
+      : 'persistence-adapter';
+}
+
+function queueCallAction(leaf: string): 'queue.send' | 'queue.consume' | null {
+  return leaf === 'sendToQueue' || leaf === 'send'
+    ? 'queue.send'
+    : leaf === 'consume' || leaf === 'subscribe'
+      ? 'queue.consume'
+      : null;
+}
+
+function collectEffectNamedBindings(specifiers: string, importedName: string, bindings: Set<string>): void {
+  for (const rawSpecifier of specifiers.split(',')) {
+    const specifier = rawSpecifier.trim().replace(/^type\s+/u, '');
+    const imported = /^([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?$/u.exec(specifier);
+    if (imported?.[1] === importedName) bindings.add(imported[2] ?? imported[1]);
+  }
 }

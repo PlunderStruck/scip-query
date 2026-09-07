@@ -523,13 +523,7 @@ const NATIVE_CONSUMER_CLASSIFY_TIMEOUT_MS = 5_000;
 const NATIVE_CONSUMER_CLASSIFY_MAX_BUFFER = 64 * 1024 * 1024;
 let cachedNativeKernelBinary: string | null | undefined;
 
-// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
-function classifyDefinitionConsumersNative(
-  db: ScipDatabase,
-  definitions: readonly IndexedDefinition[],
-  sources: ReadonlyMap<number, ReadonlyMap<string, ReadonlySet<DefinitionConsumerSource>>>,
-  stats: ConsumerClassificationStats,
-): Map<number, { partition: DefinitionConsumerPartition; files: DefinitionConsumerFileEvidence[] }> | null {
+function nativeConsumerClassificationBinary(stats: ConsumerClassificationStats): string | null {
   const setting = process.env[NATIVE_CONSUMER_CLASSIFY_ENV]?.toLowerCase();
   if (setting !== '1' && setting !== 'true') {
     stats.nativeReason = setting === '0' || setting === 'false' ? 'disabled' : 'opt-in-required';
@@ -544,6 +538,18 @@ function classifyDefinitionConsumersNative(
     stats.nativeReason = 'binary-missing';
     return null;
   }
+  return binary;
+}
+
+// scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
+function classifyDefinitionConsumersNative(
+  db: ScipDatabase,
+  definitions: readonly IndexedDefinition[],
+  sources: ReadonlyMap<number, ReadonlyMap<string, ReadonlySet<DefinitionConsumerSource>>>,
+  stats: ConsumerClassificationStats,
+): Map<number, { partition: DefinitionConsumerPartition; files: DefinitionConsumerFileEvidence[] }> | null {
+  const binary = nativeConsumerClassificationBinary(stats);
+  if (!binary) return null;
   stats.nativeAttempted = true;
   const payload = nativeConsumerClassifyPayload(db, definitions, sources);
   const result = spawnSync(binary, ['consumer-classify'], {

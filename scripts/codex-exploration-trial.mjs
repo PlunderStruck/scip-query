@@ -79,21 +79,8 @@ async function main() {
       trial,
       evaluation,
       ...(completed.externalEvidence ? { externalEvidence: completed.externalEvidence } : {}),
-      isolation: {
-        kind: sandbox.kind,
-        sourceRepository: sandbox.sourceRepository,
-        observedCommit: sandbox.commit,
-        indexPrepared: indexSetup !== null,
-        indexDurationMs: indexSetup?.durationMs ?? null,
-        agentGuidancePrepared: indexSetup?.agentGuidancePrepared ?? false,
-        cleaned: sandbox.kind === 'live-repository',
-      },
-      tool: {
-        available: cli !== null,
-        cliPath: cli?.path ?? null,
-        cliSha256: cli?.sha256 ?? null,
-        pathIsolation: cli === null ? 'scip-query-executable-directories-removed' : 'treatment-shim-prepended',
-      },
+      isolation: trialIsolationArtifact(sandbox, indexSetup),
+      tool: trialToolArtifact(cli),
     };
   } finally {
     try {
@@ -218,17 +205,7 @@ function summarizeExternalEvidence(evidenceDir, ledger) {
 function parseArgs(args) {
   const [definition, mode, ...rest] = args;
   if (!definition || !MODES.has(mode)) usage();
-  const values = new Map();
-  for (let index = 0; index < rest.length; index += 2) {
-    const flag = rest[index];
-    const value = rest[index + 1];
-    if (
-      !['--repo', '--output', '--model', '--reasoning', '--isolation', '--ref', '--cli'].includes(flag) ||
-      value === undefined
-    )
-      usage();
-    values.set(flag, value);
-  }
+  const values = parseTrialOptionPairs(rest);
   const repo = values.get('--repo');
   const output = values.get('--output');
   if (!repo || !output) usage();
@@ -405,4 +382,40 @@ function runProcess(command, args, options) {
     });
     child.stdin.end(options.input ?? '');
   });
+}
+
+function trialIsolationArtifact(sandbox, indexSetup) {
+  return {
+    kind: sandbox.kind,
+    sourceRepository: sandbox.sourceRepository,
+    observedCommit: sandbox.commit,
+    indexPrepared: indexSetup !== null,
+    indexDurationMs: indexSetup?.durationMs ?? null,
+    agentGuidancePrepared: indexSetup?.agentGuidancePrepared ?? false,
+    cleaned: sandbox.kind === 'live-repository',
+  };
+}
+
+function trialToolArtifact(cli) {
+  return {
+    available: cli !== null,
+    cliPath: cli?.path ?? null,
+    cliSha256: cli?.sha256 ?? null,
+    pathIsolation: cli === null ? 'scip-query-executable-directories-removed' : 'treatment-shim-prepended',
+  };
+}
+
+function parseTrialOptionPairs(rest) {
+  const values = new Map();
+  for (let index = 0; index < rest.length; index += 2) {
+    const flag = rest[index];
+    const value = rest[index + 1];
+    if (
+      !['--repo', '--output', '--model', '--reasoning', '--isolation', '--ref', '--cli'].includes(flag) ||
+      value === undefined
+    )
+      usage();
+    values.set(flag, value);
+  }
+  return values;
 }

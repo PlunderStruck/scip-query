@@ -585,10 +585,7 @@ function areNearNames(a: string, b: string): boolean {
   // `requireUser` and `requireUserId`: the longer name appends a whole
   // capitalized word, which names a different thing (an id, a list, a count)
   // rather than misspelling the same one (`escapeRegex` / `escapeRegExp`).
-  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
-  if (longer.length > shorter.length && longer.startsWith(shorter) && /^[A-Z]/.test(longer.slice(shorter.length))) {
-    return false;
-  }
+  if (appendsCapitalizedNameWord(a, b)) return false;
   if (commonCharacterPrefixLength(a.toLowerCase(), b.toLowerCase()) / Math.max(a.length, b.length) < 0.8) {
     return false;
   }
@@ -836,6 +833,9 @@ function withoutCallTypeArguments(call: string): string {
   return call;
 }
 
+const TOP_LEVEL_OPEN_DELIMITERS = new Set(['(', '[', '{']);
+const TOP_LEVEL_CLOSE_DELIMITERS = new Set([')', ']', '}']);
+
 /**
  * Split a statement block on top-level `;` (ignoring `;` nested inside
  * `()`/`[]`/`{}`). Exported so other detectors that need a body's top-level
@@ -848,8 +848,8 @@ export function splitTopLevelStatements(body: string): string[] {
   let depth = 0;
   let current = '';
   for (const char of body) {
-    if (char === '(' || char === '[' || char === '{') depth += 1;
-    else if (char === ')' || char === ']' || char === '}') depth = Math.max(0, depth - 1);
+    if (TOP_LEVEL_OPEN_DELIMITERS.has(char)) depth += 1;
+    else if (TOP_LEVEL_CLOSE_DELIMITERS.has(char)) depth = Math.max(0, depth - 1);
     if (char === ';' && depth === 0) {
       statements.push(current);
       current = '';
@@ -992,4 +992,12 @@ function isSyntheticLeaf(leaf: string): boolean {
 
 function representativeLeaf(cluster: Set<string>): string {
   return [...cluster].sort()[0]!;
+}
+
+function appendsCapitalizedNameWord(a: string, b: string): boolean {
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  if (longer.length > shorter.length && longer.startsWith(shorter) && /^[A-Z]/.test(longer.slice(shorter.length))) {
+    return true;
+  }
+  return false;
 }

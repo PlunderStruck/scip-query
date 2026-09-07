@@ -307,7 +307,15 @@ function isCliEvidenceContextV1(value: unknown): value is CliEvidenceContextV1 {
   if (!isRecordObject(value) || value['schemaVersion'] !== CLI_EVIDENCE_CONTEXT_SCHEMA_VERSION) return false;
   if (value['operationRole'] !== undefined && !isCommandOperationRole(value['operationRole'])) return false;
   if (!isObservationReceipt(value['receipt'])) return false;
-  const manifest = value['analysisManifest'];
+  return hasCliAnalysisManifestHeader(value['analysisManifest']);
+}
+
+function describeValue(value: unknown): string {
+  return typeof value === 'string' ? JSON.stringify(value) : String(value);
+}
+
+// Checks only the manifest fields required by the evidence envelope.
+function hasCliAnalysisManifestHeader(manifest: unknown): boolean {
   return (
     isRecordObject(manifest) &&
     manifest['schemaVersion'] === CLI_ANALYSIS_MANIFEST_SCHEMA_VERSION &&
@@ -317,8 +325,4 @@ function isCliEvidenceContextV1(value: unknown): value is CliEvidenceContextV1 {
       manifest['evidence'] === 'mixed') &&
     (manifest['claimQualification'] === undefined || isClaimQualificationV1(manifest['claimQualification']))
   );
-}
-
-function describeValue(value: unknown): string {
-  return typeof value === 'string' ? JSON.stringify(value) : String(value);
 }

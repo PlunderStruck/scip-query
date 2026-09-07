@@ -32,10 +32,14 @@ function fencedCodeRange(lines: readonly string[], lineIndex: number): LineRange
     }
   }
   if (openMarker === null || openStart < 0) return null;
+  return { start: openStart, end: closingFenceEnd(lines, lineIndex, openMarker) };
+}
+
+function closingFenceEnd(lines: readonly string[], lineIndex: number, openMarker: '`' | '~'): number {
   for (let index = lineIndex + 1; index < lines.length; index += 1) {
-    if (fenceMarker(lines[index] ?? '') === openMarker) return { start: openStart, end: index + 1 };
+    if (fenceMarker(lines[index] ?? '') === openMarker) return index + 1;
   }
-  return { start: openStart, end: lines.length };
+  return lines.length;
 }
 
 function fenceMarker(line: string): '`' | '~' | null {
@@ -70,6 +74,10 @@ function listItemRange(lines: readonly string[], lineIndex: number): LineRange |
   const baseIndent = listMarkerIndent(lines[start] ?? '');
   if (baseIndent === null) return null;
 
+  return { start, end: listItemEnd(lines, start, baseIndent) };
+}
+
+function listItemEnd(lines: readonly string[], start: number, baseIndent: number): number {
   let end = start + 1;
   while (end < lines.length) {
     const line = lines[end] ?? '';
@@ -82,7 +90,7 @@ function listItemRange(lines: readonly string[], lineIndex: number): LineRange |
     if (markdownInterrupt(line) !== null) break;
     end += 1;
   }
-  return { start, end };
+  return end;
 }
 
 function listMarkerIndent(line: string): number | null {

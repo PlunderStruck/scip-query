@@ -191,13 +191,7 @@ export function classifyExplorationCommand(command) {
   // arguments. Natural-language anchor questions can contain words such as
   // "find" without executing the native find command.
   if (scipQuery) {
-    if (MIXED_NATIVE_SEARCH.test(command)) return { surface: 'native-search', kind: 'query' };
-    if (MIXED_NATIVE_READ.test(command)) return { surface: 'native-read', kind: 'query' };
-    if (/\bscip-query\s+status\b/iu.test(command)) return { surface: 'scip-query', kind: 'status' };
-    if (/\bscip-query\s+continue\b/iu.test(command) || /--output-cursor\b/u.test(command)) {
-      return { surface: 'scip-query', kind: 'continuation' };
-    }
-    return { surface: 'scip-query', kind: 'query' };
+    return classifyScipQueryCommand(command);
   }
   if (NATIVE_SEARCH.test(command)) return { surface: 'native-search', kind: 'query' };
   if (NATIVE_READ.test(command) || SCRIPTED_READ.test(command)) return { surface: 'native-read', kind: 'query' };
@@ -253,4 +247,14 @@ function parseUsage(value) {
 function tokenCount(value, label) {
   if (!Number.isSafeInteger(value) || value < 0) throw new Error(`invalid Codex usage ${label}`);
   return value;
+}
+
+function classifyScipQueryCommand(command) {
+  if (MIXED_NATIVE_SEARCH.test(command)) return { surface: 'native-search', kind: 'query' };
+  if (MIXED_NATIVE_READ.test(command)) return { surface: 'native-read', kind: 'query' };
+  if (/\bscip-query\s+status\b/iu.test(command)) return { surface: 'scip-query', kind: 'status' };
+  if (/\bscip-query\s+continue\b/iu.test(command) || /--output-cursor\b/u.test(command)) {
+    return { surface: 'scip-query', kind: 'continuation' };
+  }
+  return { surface: 'scip-query', kind: 'query' };
 }

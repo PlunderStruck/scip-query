@@ -136,14 +136,7 @@ async function processRequests(
     try {
       const envelope = parseQueryServiceEnvelope(readBoundedMailboxClaim(claim, MAILBOX_LIMITS), sessionIdentity);
       id = envelope.id;
-      if (
-        envelope.id !== claim.requestId ||
-        envelope.operationKey !== claim.operationKey ||
-        envelope.clientId !== claim.clientId ||
-        envelope.deadlineAtMs !== claim.deadlineAtMs
-      ) {
-        throw new Error('Query service request identity does not match its mailbox claim.');
-      }
+      assertQueryClaimIdentity(envelope, claim);
       if (envelope.deadlineAtMs < Date.now()) throw new Error('Query service request expired before processing.');
       if (envelope.request.expectedGeneration !== db.generation.identity) {
         completeBoundedMailboxClaim(
@@ -427,5 +420,19 @@ if (invokedPath === import.meta.url) {
     process.exitCode = 1;
   } else {
     await runQueryServiceServer(sessionDir, projectRoot);
+  }
+}
+
+function assertQueryClaimIdentity(
+  envelope: ReturnType<typeof parseQueryServiceEnvelope>,
+  claim: ReturnType<typeof pollBoundedMailboxRequests>[number],
+): void {
+  if (
+    envelope.id !== claim.requestId ||
+    envelope.operationKey !== claim.operationKey ||
+    envelope.clientId !== claim.clientId ||
+    envelope.deadlineAtMs !== claim.deadlineAtMs
+  ) {
+    throw new Error('Query service request identity does not match its mailbox claim.');
   }
 }

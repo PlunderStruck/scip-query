@@ -55,14 +55,7 @@ function scanSuppressions(db: ScipDatabase): SuppressionInventory {
   for (const file of getSourceFiles(db)) {
     const source = getSourceText(db, file);
     if (!source || !source.includes('scip-query')) continue;
-    for (const line of source.split(/\r?\n/)) {
-      const rawCategory = suppressionCommentCategory(line);
-      if (rawCategory === null) continue;
-      total += 1;
-      byFile.set(file, (byFile.get(file) ?? 0) + 1);
-      const category = normalizeCategory(rawCategory);
-      byCategory[category] += 1;
-    }
+    total += countSourceSuppressions(source, file, byCategory, byFile);
   }
 
   for (const suppression of db.config.suppressions ?? []) {
@@ -75,16 +68,32 @@ function scanSuppressions(db: ScipDatabase): SuppressionInventory {
   return { total, byCategory, byFile };
 }
 
+function countSourceSuppressions(
+  source: string,
+  file: string,
+  byCategory: SuppressionInventory['byCategory'],
+  byFile: Map<string, number>,
+): number {
+  let total = 0;
+  for (const line of source.split(/\r?\n/)) {
+    const rawCategory = suppressionCommentCategory(line);
+    if (rawCategory === null) continue;
+    total += 1;
+    byFile.set(file, (byFile.get(file) ?? 0) + 1);
+    const category = normalizeCategory(rawCategory);
+    byCategory[category] += 1;
+  }
+  return total;
+}
+
 function normalizeCategory(raw: string | undefined | null): SuppressionCategory {
   if (!raw) return 'uncategorized';
   const lower = raw.toLowerCase();
   if (lower === 'dead-code' || lower === 'new-dead') return 'dead';
   if (lower.includes('twin')) return 'twin';
   if (lower.includes('similar') || lower.includes('duplicate')) return 'similar';
-  if (lower.includes('wrapper')) return 'wrapper';
-  if (lower.includes('passthrough')) return 'passthrough';
-  if (lower.includes('drift')) return 'drift';
-  if (lower.includes('extract')) return 'extract';
-  if (lower.includes('stale')) return 'stale';
+  for (const category of ['wrapper', 'passthrough', 'drift', 'extract', 'stale'] as const) {
+    if (lower.includes(category)) return category;
+  }
   return 'uncategorized';
 }

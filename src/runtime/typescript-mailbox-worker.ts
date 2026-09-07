@@ -98,32 +98,10 @@ function runAndRespond<Result, Status>(
 function parseWorkerData(value: unknown): TypeScriptMailboxWorkerData {
   if (!value || typeof value !== 'object') throw new Error('TypeScript mailbox worker data is missing.');
   const data = value as Partial<TypeScriptMailboxWorkerData>;
-  if (
-    data.kind === 'index' &&
-    typeof data.projectRoot === 'string' &&
-    typeof data.dbPath === 'string' &&
-    optionalPositiveInteger(data.maxActiveSessions) &&
-    optionalPositiveInteger(data.softMemoryLimitMb)
-  ) {
-    return {
-      kind: 'index',
-      projectRoot: data.projectRoot,
-      dbPath: data.dbPath,
-      ...(data.maxActiveSessions === undefined ? {} : { maxActiveSessions: data.maxActiveSessions }),
-      ...(data.softMemoryLimitMb === undefined ? {} : { softMemoryLimitMb: data.softMemoryLimitMb }),
-    };
-  }
-  if (
-    data.kind === 'semantic' &&
-    typeof data.projectRoot === 'string' &&
-    optionalPositiveInteger(data.softMemoryLimitMb)
-  ) {
-    return {
-      kind: 'semantic',
-      projectRoot: data.projectRoot,
-      ...(data.softMemoryLimitMb === undefined ? {} : { softMemoryLimitMb: data.softMemoryLimitMb }),
-    };
-  }
+  const index = parseIndexMailboxWorkerData(data);
+  if (index) return index;
+  const semantic = parseSemanticMailboxWorkerData(data);
+  if (semantic) return semantic;
   throw new Error('TypeScript mailbox worker data is invalid.');
 }
 
@@ -154,4 +132,42 @@ function parseWorkerRequest<Payload>(value: unknown): {
     deadlineAtMs: number;
     payload: Payload;
   };
+}
+
+function parseIndexMailboxWorkerData(
+  data: Partial<TypeScriptMailboxWorkerData>,
+): Extract<TypeScriptMailboxWorkerData, { kind: 'index' }> | null {
+  if (
+    data.kind === 'index' &&
+    typeof data.projectRoot === 'string' &&
+    typeof data.dbPath === 'string' &&
+    optionalPositiveInteger(data.maxActiveSessions) &&
+    optionalPositiveInteger(data.softMemoryLimitMb)
+  ) {
+    return {
+      kind: 'index',
+      projectRoot: data.projectRoot,
+      dbPath: data.dbPath,
+      ...(data.maxActiveSessions === undefined ? {} : { maxActiveSessions: data.maxActiveSessions }),
+      ...(data.softMemoryLimitMb === undefined ? {} : { softMemoryLimitMb: data.softMemoryLimitMb }),
+    };
+  }
+  return null;
+}
+
+function parseSemanticMailboxWorkerData(
+  data: Partial<TypeScriptMailboxWorkerData>,
+): Extract<TypeScriptMailboxWorkerData, { kind: 'semantic' }> | null {
+  if (
+    data.kind === 'semantic' &&
+    typeof data.projectRoot === 'string' &&
+    optionalPositiveInteger(data.softMemoryLimitMb)
+  ) {
+    return {
+      kind: 'semantic',
+      projectRoot: data.projectRoot,
+      ...(data.softMemoryLimitMb === undefined ? {} : { softMemoryLimitMb: data.softMemoryLimitMb }),
+    };
+  }
+  return null;
 }

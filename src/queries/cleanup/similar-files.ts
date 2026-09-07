@@ -148,14 +148,8 @@ function compareFileProfiles(
 
   if (similarity < minSimilarity) return null;
 
-  const uniqueA: string[] = [];
-  for (const dep of a.deps) {
-    if (!b.deps.has(dep)) uniqueA.push(dep);
-  }
-  const uniqueB: string[] = [];
-  for (const dep of b.deps) {
-    if (!a.deps.has(dep)) uniqueB.push(dep);
-  }
+  const uniqueA = distinctProfileDependencies(a.deps, b.deps);
+  const uniqueB = distinctProfileDependencies(b.deps, a.deps);
 
   return {
     fileA: a.file,
@@ -166,4 +160,12 @@ function compareFileProfiles(
     uniqueToA: uniqueA,
     uniqueToB: uniqueB,
   };
+}
+
+function distinctProfileDependencies(left: ReadonlySet<string>, right: ReadonlySet<string>): string[] {
+  const unique: string[] = [];
+  for (const dep of left) {
+    if (!right.has(dep)) unique.push(dep);
+  }
+  return unique;
 }

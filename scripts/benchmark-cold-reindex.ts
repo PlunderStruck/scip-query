@@ -310,9 +310,7 @@ function parseOptions(args: readonly string[]): BenchmarkOptions {
     else throw new Error(`Unknown benchmark argument: ${argument}`);
   }
 
-  if (profile && !keepArtifacts) {
-    throw new Error('--profile requires --keep-artifacts so the reported JSONL paths remain readable.');
-  }
+  validateProfileArtifactRetention(profile, keepArtifacts);
   return {
     projectRoot: resolve(projectRoot),
     iterations,
@@ -344,4 +342,10 @@ function restoreEnvironment(key: string, value: string | undefined): void {
 
 function rounded(value: number): number {
   return Number(value.toFixed(3));
+}
+
+function validateProfileArtifactRetention(profile: boolean, keepArtifacts: boolean): void {
+  if (profile && !keepArtifacts) {
+    throw new Error('--profile requires --keep-artifacts so the reported JSONL paths remain readable.');
+  }
 }

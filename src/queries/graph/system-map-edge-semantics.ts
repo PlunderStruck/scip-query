@@ -43,12 +43,7 @@ const SYNTHETIC_EDGE_SEMANTICS = {
 export function systemMapRelationProgramSemantics(relation: SystemMapSemanticRelation): ProgramEdgeSemantic[] {
   if (relation.kind !== 'runtime-boundary') return cloneSemantics(STATIC_RELATION_SEMANTICS[relation.kind]);
 
-  const protocol = relation.fromBoundaryParticipant?.protocol ?? relation.toBoundaryParticipant?.protocol;
-  const context = {
-    crossesRuntimeBoundary: true as const,
-    ...(protocol ? { protocol } : {}),
-    ...(relation.runtimeBoundaryKey ? { runtimeKey: relation.runtimeBoundaryKey } : {}),
-  };
+  const context = runtimeRelationContext(relation);
   const semantics: ProgramEdgeSemantic[] = [
     {
       family: 'control',
@@ -106,4 +101,14 @@ function cloneSemantics(semantics: readonly ProgramEdgeSemantic[]): ProgramEdgeS
     ...(semantic.context ? { context: { ...semantic.context } } : {}),
     ...(semantic.attributes ? { attributes: { ...semantic.attributes } } : {}),
   }));
+}
+
+function runtimeRelationContext(relation: SystemMapSemanticRelation) {
+  const protocol = relation.fromBoundaryParticipant?.protocol ?? relation.toBoundaryParticipant?.protocol;
+  const context = {
+    crossesRuntimeBoundary: true as const,
+    ...(protocol ? { protocol } : {}),
+    ...(relation.runtimeBoundaryKey ? { runtimeKey: relation.runtimeBoundaryKey } : {}),
+  };
+  return context;
 }

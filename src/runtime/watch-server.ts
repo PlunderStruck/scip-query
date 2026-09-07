@@ -232,6 +232,18 @@ function createWatchServiceMaintenance(input: {
   let lastCacheSweepAtMonotonicMs = Number.NEGATIVE_INFINITY;
   let lastMailboxMaintenanceAtMonotonicMs = Number.NEGATIVE_INFINITY;
 
+  function observeWatchActivity(nowMonotonicMs: number): void {
+    const activity = readWatchServiceActivity(input.activityPath);
+    if (activity) input.updateObservedActivity(activity.atMs, nowMonotonicMs);
+    if (activity?.refreshRequestedAtMs !== undefined && activity.refreshRequestedAtMs > lastRefreshRequestAtMs) {
+      lastRefreshRequestAtMs = activity.refreshRequestedAtMs;
+      input.refreshCoordinator.observeLegacyRequest(
+        activity.refreshRequestedAtMs,
+        activity.refreshDetail ?? 'stale index observed by a legacy command',
+      );
+    }
+  }
+
   return ({ processedRequests }): void => {
     const nowMonotonicMs = monotonicNowMs();
     if (nowMonotonicMs - lastWorktreeLivenessPollAtMonotonicMs >= WORKTREE_LIVENESS_POLL_INTERVAL_MS) {
@@ -252,15 +264,7 @@ function createWatchServiceMaintenance(input: {
     }
     if (nowMonotonicMs - lastActivityPollAtMonotonicMs >= ACTIVITY_POLL_INTERVAL_MS) {
       lastActivityPollAtMonotonicMs = nowMonotonicMs;
-      const activity = readWatchServiceActivity(input.activityPath);
-      if (activity) input.updateObservedActivity(activity.atMs, nowMonotonicMs);
-      if (activity?.refreshRequestedAtMs !== undefined && activity.refreshRequestedAtMs > lastRefreshRequestAtMs) {
-        lastRefreshRequestAtMs = activity.refreshRequestedAtMs;
-        input.refreshCoordinator.observeLegacyRequest(
-          activity.refreshRequestedAtMs,
-          activity.refreshDetail ?? 'stale index observed by a legacy command',
-        );
-      }
+      observeWatchActivity(nowMonotonicMs);
     }
     input.refreshCoordinator.poll(input.watcherStatus(), (detail) => {
       input.recordActivity();
@@ -334,16 +338,7 @@ export async function runWatchServiceLifecycle(input: {
     const stopResult = await watcherStop;
     shutdownError = finalizeWatchServiceShutdown(input, stopResult);
   }
-  const mailboxFatalError = input.mailboxFatalError();
-  if (!executionFailed && mailboxFatalError) {
-    executionFailed = true;
-    executionError = mailboxFatalError;
-  }
-  if (executionFailed && shutdownError) {
-    throw new AggregateError([executionError, shutdownError], 'Watch service execution and shutdown both failed.');
-  }
-  if (executionFailed) throw executionError;
-  if (shutdownError) throw shutdownError;
+  assertSuccessfulWatchServiceExit(input, executionFailed, executionError, shutdownError);
 }
 
 function finalizeWatchServiceShutdown(
@@ -710,4 +705,22 @@ function parseWatchOverrides(raw: string | undefined): WatchServiceWatchOverride
   } catch {
     return {};
   }
+}
+
+function assertSuccessfulWatchServiceExit(
+  input: Pick<Parameters<typeof runWatchServiceLifecycle>[0], 'mailboxFatalError'>,
+  executionFailed: boolean,
+  executionError: unknown,
+  shutdownError: Error | undefined,
+): void {
+  const mailboxFatalError = input.mailboxFatalError();
+  if (!executionFailed && mailboxFatalError) {
+    executionFailed = true;
+    executionError = mailboxFatalError;
+  }
+  if (executionFailed && shutdownError) {
+    throw new AggregateError([executionError, shutdownError], 'Watch service execution and shutdown both failed.');
+  }
+  if (executionFailed) throw executionError;
+  if (shutdownError) throw shutdownError;
 }
