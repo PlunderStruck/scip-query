@@ -842,24 +842,7 @@ export function renderProjectSetupReport(report: ProjectSetupReport): void {
   console.log(`Health report: ${formatHealthAvailabilitySummary(report.health)}`);
   console.log('');
 
-  if (report.health.issuesNeedAttention.length === 0) {
-    console.log('Items that need attention: none reported by the health pass.');
-  } else {
-    console.log('Items that need attention:');
-    for (const issue of report.health.issuesNeedAttention) {
-      console.log(
-        `  - ${issue.category}: ${issue.description} (${issue.count}; impact ${issue.impact}, effort ${issue.effort})`,
-      );
-    }
-  }
-
-  if (report.health.unavailableReason) {
-    console.log(`Health pass: ${report.health.unavailableReason}`);
-  }
-  if (report.health.warnings.length > 0) {
-    console.log('Health warnings:');
-    for (const warning of report.health.warnings) console.log(`  - ${warning}`);
-  }
+  renderSetupHealthFindings(report.health);
   if (report.healthDossier) {
     console.log(`Health dossier: ${report.healthDossier.markdownPath}`);
   }
@@ -891,6 +874,29 @@ export function renderProjectSetupReport(report: ProjectSetupReport): void {
       console.log(`  - ${remediation.language}: ${state} (${attempted})`);
       if (remediation.recovery) console.log(`    ${remediation.recovery}`);
     }
+  }
+}
+
+function renderSetupHealthFindings(health: ProjectSetupHealthSummary): void {
+  if (!health.available) {
+    console.log('Items that need attention: not evaluated; health report unavailable.');
+  } else if (health.issuesNeedAttention.length === 0) {
+    console.log('Items that need attention: none reported by the health pass.');
+  } else {
+    console.log('Items that need attention:');
+    for (const issue of health.issuesNeedAttention) {
+      console.log(
+        `  - ${issue.category}: ${issue.description} (${issue.count}; impact ${issue.impact}, effort ${issue.effort})`,
+      );
+    }
+  }
+
+  if (health.unavailableReason) {
+    console.log(`Health pass: ${health.unavailableReason}`);
+  }
+  if (health.warnings.length > 0) {
+    console.log('Health warnings:');
+    for (const warning of health.warnings) console.log(`  - ${warning}`);
   }
 }
 

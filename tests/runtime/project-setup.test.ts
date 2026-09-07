@@ -1,3 +1,4 @@
+import type { HealthReport } from '../../src/queries/health/health-report.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type * as NodeFs from 'node:fs';
 import type * as ReindexInstall from '../../src/reindex/install.js';
@@ -31,21 +32,20 @@ async function loadProjectSetup(
     skipped: [],
   }));
   const tryInstallIndexer = vi.fn(() => true);
-  const runIsolatedHealthReport = vi.fn(() => {
+  const runIsolatedHealthReport = vi.fn((): HealthReport => {
     if (overrides.healthThrows) throw new Error('health failed');
     return {
-      score: 91,
-      riskScore: 94,
-      hygieneScore: 91,
-      scoreBreakdown: [],
       overview: { documents: 3, symbols: 12, indexSizeBytes: 2048 },
       findings: {
         deadSymbols: 0,
         deadLoc: 0,
-        isolatedSymbols: 0,
-        isolatedLoc: 0,
         cycles: 0,
         similarPairs: 1,
+        duplicateBodyGroups: 0,
+        duplicateBodyLoc: 0,
+        twinDriftGroups: 0,
+        twinDriftLoc: 0,
+        coverageContractViolations: 0,
         reactComponentDuplicatePairs: 0,
         reactHookCandidatePairs: 0,
         reactHookCandidateScoreCount: 0,
@@ -54,17 +54,20 @@ async function loadProjectSetup(
         vueComposableCandidatePairs: 0,
         vueComposableCandidateScoreCount: 0,
         vueLargeViewPressureFiles: 0,
-        extractionCandidates: 0,
-        wrappers: 0,
-        wrapperScoreCount: 0,
         passthroughs: 0,
-        staleTypes: 0,
         driftedFiles: 0,
-        complexityHotspotCount: 0,
         hiddenCouplingPairs: null,
         hiddenCouplingScoreCount: null,
       },
-      axes: {},
+      axes: {
+        deletable: { loc: 0, symbols: 0 },
+        cycles: { count: 0 },
+        changeAmplification: null,
+        hiddenCoupling: null,
+        evidenceQuality: { graphFindings: 0, heuristicFindings: 1, userSuppressed: 0 },
+      },
+      policyExclusions: [],
+      detectorEvidence: [],
       validation: null,
       suppressions: null,
       actions: [
@@ -78,8 +81,6 @@ async function loadProjectSetup(
           evidence: 'heuristic',
         },
       ],
-      pressure: [],
-      topComplexity: [],
       warnings: ['review heuristic matches before editing'],
     };
   });
@@ -531,13 +532,29 @@ describe('runProjectSetup', () => {
     module.renderProjectSetupReport(report);
     const lines = log.mock.calls.map((call) => String(call[0]));
 
-    expect(lines.findIndex((line) => line.startsWith('Health score: 91'))).toBeLessThan(
-      lines.findIndex((line) => line === 'Setup steps:'),
-    );
-    expect(lines.findIndex((line) => line === 'Items that need attention:')).toBeLessThan(
-      lines.findIndex((line) => line === 'Setup steps:'),
-    );
+    const healthLine = lines.findIndex((line) => line.startsWith('Health report:'));
+    const findingsLine = lines.indexOf('Items that need attention:');
+    const stepsLine = lines.indexOf('Setup steps:');
+    expect(healthLine).toBeGreaterThanOrEqual(0);
+    expect(findingsLine).toBeGreaterThanOrEqual(0);
+    expect(stepsLine).toBeGreaterThanOrEqual(0);
+    expect(healthLine).toBeLessThan(stepsLine);
+    expect(findingsLine).toBeLessThan(stepsLine);
+    expect(lines.some((line) => line.startsWith('Health score:'))).toBe(false);
   });
+
+  it.each([false, true])(
+    'does not report zero findings when health is unavailable (requested=%s)',
+    async (runHealth) => {
+      const { module } = await loadProjectSetup({ healthThrows: true });
+      const report = await module.runProjectSetup({ runHealth });
+      const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      module.renderProjectSetupReport(report);
+      const lines = log.mock.calls.map((call) => String(call[0]));
+      expect(lines).toContain('Items that need attention: not evaluated; health report unavailable.');
+      expect(lines).not.toContain('Items that need attention: none reported by the health pass.');
+    },
+  );
 
   it('skips health and dossier work by default while reporting the explicit recovery command', async () => {
     const { module, runIsolatedHealthReport } = await loadProjectSetup();
@@ -916,15 +933,20 @@ describe('runProjectSetup', () => {
         score: 100,
         riskScore: 100,
         hygieneScore: 100,
-        scoreBreakdown: [],
         overview: { documents: 1, symbols: 1, indexSizeBytes: 1 },
         findings: {},
-        axes: {},
+        axes: {
+          deletable: { loc: 0, symbols: 0 },
+          cycles: { count: 0 },
+          changeAmplification: null,
+          hiddenCoupling: null,
+          evidenceQuality: { graphFindings: 0, heuristicFindings: 1, userSuppressed: 0 },
+        },
+        policyExclusions: [],
+        detectorEvidence: [],
         validation: null,
         suppressions: null,
         actions: [],
-        pressure: [],
-        topComplexity: [],
       })),
     }));
     vi.doMock('../../src/runtime/config.js', () => ({

@@ -1196,9 +1196,9 @@
           "name": "buildSetupSmokeTests"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "assessed-retained",
+      "assessment": "Reviewed the complete check ledger and human rendering. The conditions select pass/fail/unavailable for distinct setup results and readiness facts. The report explicitly prints each check basis; no CLI execution is claimed for readiness checks. Splitting each row into a separate helper would fragment this small ordered ledger without changing ownership. Retain the signal and the current owner; no suppression or threshold change.",
+      "verification": "Current source inspection plus 24 setup tests including fresh/missing language/index state, opt-out, failures, and explicit operation-result/readiness assertions. Repaired the independent missing-line ordering assertion; that former assertion is not used as evidence."
     },
     {
       "id": "complexity:src/queries/internal/exploration-topology.ts:catalogExplorationRoutes",
