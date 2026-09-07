@@ -307,6 +307,66 @@ afterEach(() => {
 });
 
 describe('runProjectSetup', () => {
+  it('publishes health only after indexing, service startup, analysis and agent guidance', async () => {
+    const { module, reindex, ensureWatchService, runIsolatedHealthReport, setupAgent } = await loadProjectSetup({
+      config: { watch: { enabled: true, autoStart: true } },
+    });
+    const dossier = await import('../../src/runtime/health-dossier.js');
+    const report = await module.runProjectSetup({ runHealth: true });
+    const calls = [
+      reindex,
+      ensureWatchService,
+      dossier.beginHealthDossierAttempt,
+      runIsolatedHealthReport,
+      setupAgent,
+      dossier.writeProjectHealthDossier,
+      dossier.finishHealthDossierAttempt,
+    ].map((operation) => {
+      expect(operation).toHaveBeenCalledOnce();
+      return vi.mocked(operation).mock.invocationCallOrder[0]!;
+    });
+    expect(calls).toEqual([...calls].sort((a, b) => a - b));
+    expect(report.steps.map((step) => step.id)).toEqual([
+      'collaboration-domain-config',
+      'automatic-indexing-config',
+      'scip-cli',
+      'skills',
+      'config',
+      'readiness',
+      'ast-parsers',
+      'indexer-remediation',
+      'reindex',
+      'watch-refresh',
+      'capabilities',
+      'health',
+      'rust-semantic-session',
+      'agent-guidance',
+      'smoke-tests',
+      'health-dossier',
+    ]);
+    expect(report.attempt).toMatchObject({ runId: 'run-test', indexGeneration: 'generation-test' });
+    expect(report.attempt?.completedAt).toEqual(expect.any(String));
+  });
+
+  it('retains an unfinished audit and reports a blocked verdict when dossier publication fails', async () => {
+    const { module } = await loadProjectSetup();
+    const dossier = await import('../../src/runtime/health-dossier.js');
+    vi.mocked(dossier.writeProjectHealthDossier).mockReturnValue({
+      markdownPath: '/repo/docs/scip-query/health-dossier.md',
+      jsonPath: '/repo/docs/scip-query/health-dossier.json',
+      status: 'failed',
+      written: [],
+      unchanged: [],
+      error: 'disk full',
+    });
+    const report = await module.runProjectSetup({ runHealth: true });
+    expect(dossier.finishHealthDossierAttempt).not.toHaveBeenCalled();
+    expect(report.verdict).toBe('blocked');
+    expect(report.steps.at(-1)).toMatchObject({ id: 'health-dossier', status: 'failed', message: 'disk full' });
+    expect(report.filesWritten).toEqual(['AGENTS.md']);
+    expect(report.changeScopes.repository).toEqual(['/repo/.scipquery.json', 'AGENTS.md']);
+  });
+
   it('requires explicit guided setup to remain interactive and unambiguous', async () => {
     const { module } = await loadProjectSetup();
     const valid = {

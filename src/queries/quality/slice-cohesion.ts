@@ -1335,7 +1335,25 @@ function isReadIdentifier(ts: TypeScriptModule, node: TypeScript.Identifier): bo
 
 // ── Flow projection ─────────────────────────────────────────────────
 
+type FlowPointIndex = Pick<FlowModel, 'pointById' | 'unitOfPoint'>;
+type FlowDependencies = Pick<FlowModel, 'dataDeps' | 'controlDeps' | 'pointDeps' | 'paramReads' | 'candidateEdges'>;
+
 function projectFlow(body: BodyModel, flow: TypeScriptLocalFlowResult, relativePath: string): FlowModel {
+  const points = indexCallableFlowPoints(body, flow);
+  const { reachedUses, ...dependencies } = projectFlowDependencies(body, flow, points);
+  const names = classifyFlowBindings(body, points, reachedUses, dependencies.paramReads, relativePath);
+  const containers = containerAccesses(body);
+  addContainerOrdering(body.units, points, containers, dependencies);
+  return {
+    ...points,
+    ...dependencies,
+    ...names,
+    writesByUnit: containers.byUnit,
+    stateWritesByUnit: containers.stateWritesByUnit,
+  };
+}
+
+function indexCallableFlowPoints(body: BodyModel, flow: TypeScriptLocalFlowResult): FlowPointIndex {
   const { units } = body;
   const callableStart = body.callable.getStart(body.sourceFile);
   const callableEnd = body.callable.getEnd();
@@ -1352,25 +1370,31 @@ function projectFlow(body: BodyModel, flow: TypeScriptLocalFlowResult, relativeP
     const unit = unitAt(units, point.start);
     if (unit !== null) unitOfPoint.set(point.id, unit);
   }
+  return { pointById, unitOfPoint };
+}
 
+function addFlowPointDependency(pointDeps: Map<string, Set<number>>, pointId: string, unit: number): void {
+  let deps = pointDeps.get(pointId);
+  if (!deps) {
+    deps = new Set();
+    pointDeps.set(pointId, deps);
+  }
+  deps.add(unit);
+}
+
+function projectFlowDependencies(
+  body: BodyModel,
+  flow: TypeScriptLocalFlowResult,
+  points: FlowPointIndex,
+): FlowDependencies & { reachedUses: Set<string> } {
+  const { units } = body;
+  const { pointById, unitOfPoint } = points;
   const dataDeps = units.map(() => new Set<number>());
   const controlDeps = units.map(() => new Set<number>());
   const pointDeps = new Map<string, Set<number>>();
   const paramReads = units.map(() => new Set<string>());
-  const outerReads = units.map(() => new Set<string>());
-  const definedNames = units.map(() => new Set<string>());
   const reachedUses = new Set<string>();
   let candidateEdges = 0;
-
-  const addPointDep = (pointId: string, unit: number): void => {
-    let deps = pointDeps.get(pointId);
-    if (!deps) {
-      deps = new Set();
-      pointDeps.set(pointId, deps);
-    }
-    deps.add(unit);
-  };
-
   for (const edge of flow.edges) {
     const from = pointById.get(edge.fromPointId);
     const to = pointById.get(edge.toPointId);
@@ -1389,14 +1413,27 @@ function projectFlow(body: BodyModel, flow: TypeScriptLocalFlowResult, relativeP
       controlDeps[toUnit]!.add(fromUnit);
     } else {
       dataDeps[toUnit]!.add(fromUnit);
-      addPointDep(to.id, fromUnit);
+      addFlowPointDependency(pointDeps, to.id, fromUnit);
     }
   }
 
   body.enclosingPredicates.forEach((predicates, unit) => {
     for (const predicate of predicates) if (predicate !== unit) controlDeps[unit]!.add(predicate);
   });
+  return { dataDeps, controlDeps, pointDeps, paramReads, candidateEdges, reachedUses };
+}
 
+function classifyFlowBindings(
+  body: BodyModel,
+  points: FlowPointIndex,
+  reachedUses: ReadonlySet<string>,
+  paramReads: Set<string>[],
+  relativePath: string,
+): Pick<FlowModel, 'definitionsByUnitName' | 'outerReads' | 'definedNames'> {
+  const { units } = body;
+  const { pointById, unitOfPoint } = points;
+  const outerReads = units.map(() => new Set<string>());
+  const definedNames = units.map(() => new Set<string>());
   const definitionsByUnitName = new Map<string, TypeScriptLocalFlowPoint>();
   for (const point of pointById.values()) {
     const unit = unitOfPoint.get(point.id);
@@ -1408,28 +1445,58 @@ function projectFlow(body: BodyModel, flow: TypeScriptLocalFlowResult, relativeP
       continue;
     }
     if (point.kind !== 'use' || reachedUses.has(point.id)) continue;
-    if (body.calleeSpans.has(`${point.start}:${point.end}`)) continue;
-    if (point.name.includes('(')) continue;
-    const root = rootName(point.name);
-    if (body.paramNames.has(root)) {
-      paramReads[unit]!.add(root);
-      continue;
-    }
-    if (body.localNames.has(root)) continue;
-    if (root === 'this') {
-      outerReads[unit]!.add('this');
-      continue;
-    }
-    // Only a local of an enclosing function would become a parameter. An
-    // import, a module-level name, a global, or a JSX tag stays what it is.
-    if (!declaredInEnclosingCallable(point.symbolKey, relativePath, body.enclosingRanges)) continue;
-    outerReads[unit]!.add(root);
+    const read = classifyUnreachedFlowRead(body, point, relativePath);
+    if (!read) continue;
+    const reads = read.kind === 'parameter' ? paramReads : outerReads;
+    reads[unit]!.add(read.name);
   }
+  return { definitionsByUnitName, outerReads, definedNames };
+}
 
-  // Writes to containers the function owns, directly or through a local
-  // closure, are ordered dependencies: a later read of the container
-  // depends on the write. Reads through a closure depend on earlier writes.
-  const { writes, reads, byUnit, stateWritesByUnit } = containerAccesses(body);
+/** Classify a use with no reaching data edge without treating module/global names as closure inputs. */
+function classifyUnreachedFlowRead(
+  body: BodyModel,
+  point: TypeScriptLocalFlowPoint,
+  relativePath: string,
+): { kind: 'parameter' | 'outer'; name: string } | null {
+  if (body.calleeSpans.has(`${point.start}:${point.end}`)) return null;
+  if (point.name.includes('(')) return null;
+  const name = rootName(point.name);
+  if (body.paramNames.has(name)) return { kind: 'parameter', name };
+  if (body.localNames.has(name)) return null;
+  if (name === 'this' || declaredInEnclosingCallable(point.symbolKey, relativePath, body.enclosingRanges)) {
+    return { kind: 'outer', name };
+  }
+  return null;
+}
+
+// Writes and closure-mediated reads retain their source order, including use-point dependencies.
+function addContainerOrdering(
+  units: readonly Unit[],
+  points: FlowPointIndex,
+  containers: ReturnType<typeof containerAccesses>,
+  dependencies: Pick<FlowDependencies, 'dataDeps' | 'pointDeps'>,
+): void {
+  const { writes, reads } = containers;
+  const { dataDeps, pointDeps } = dependencies;
+  const usesByRoot = flowUsesByRoot(points);
+  for (const write of writes) {
+    const writeStart = units[write.unit]!.start;
+    for (const use of usesByRoot.get(write.base) ?? []) {
+      if (use.unit === write.unit || use.start <= writeStart) continue;
+      dataDeps[use.unit]!.add(write.unit);
+      addFlowPointDependency(pointDeps, use.id, write.unit);
+    }
+    for (const read of reads) {
+      if (read.unit === write.unit || read.base !== write.base) continue;
+      if (units[read.unit]!.start <= writeStart) continue;
+      dataDeps[read.unit]!.add(write.unit);
+    }
+  }
+}
+
+function flowUsesByRoot(points: FlowPointIndex): Map<string, { id: string; start: number; unit: number }[]> {
+  const { pointById, unitOfPoint } = points;
   const usesByRoot = new Map<string, { id: string; start: number; unit: number }[]>();
   for (const point of pointById.values()) {
     if (point.kind !== 'use') continue;
@@ -1440,34 +1507,7 @@ function projectFlow(body: BodyModel, flow: TypeScriptLocalFlowResult, relativeP
     rows.push({ id: point.id, start: point.start, unit });
     usesByRoot.set(root, rows);
   }
-  for (const write of writes) {
-    const writeStart = units[write.unit]!.start;
-    for (const use of usesByRoot.get(write.base) ?? []) {
-      if (use.unit === write.unit || use.start <= writeStart) continue;
-      dataDeps[use.unit]!.add(write.unit);
-      addPointDep(use.id, write.unit);
-    }
-    for (const read of reads) {
-      if (read.unit === write.unit || read.base !== write.base) continue;
-      if (units[read.unit]!.start <= writeStart) continue;
-      dataDeps[read.unit]!.add(write.unit);
-    }
-  }
-
-  return {
-    pointById,
-    unitOfPoint,
-    definitionsByUnitName,
-    dataDeps,
-    controlDeps,
-    pointDeps,
-    paramReads,
-    outerReads,
-    definedNames,
-    candidateEdges,
-    writesByUnit: byUnit,
-    stateWritesByUnit,
-  };
+  return usesByRoot;
 }
 
 function unitAt(units: readonly Unit[], offset: number): number | null {

@@ -256,203 +256,23 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
   const steps: ProjectSetupStep[] = [];
   const context = resolveCliProjectContext();
   const { projectRoot, paths, dbPath } = context;
-  const automaticRefresh = opts.automaticRefresh ?? context.config.watch?.enabled ?? true;
-  const initialConfigDiagnostics = validateProjectConfig(context.config, { projectRoot });
-  const initialConfigErrors = initialConfigDiagnostics.filter((diagnostic) => diagnostic.level === 'error');
-  let collaborationConfig: ProjectAutomaticRefreshConfigResult | null = null;
-  let collaborationConfigError: string | null = null;
-  if (initialConfigErrors.length === 0 && !context.config.collaborationDomainId) {
-    try {
-      collaborationConfig = ensureProjectCollaborationDomain(projectRoot, context.config);
-    } catch (error) {
-      collaborationConfigError = errorMessage(error);
-    }
-  }
-  const collaborationReadyConfig = collaborationConfig?.config ?? context.config;
-  const languageConfig = opts.languages
-    ? configureProjectLanguages(projectRoot, collaborationReadyConfig, opts.languages)
-    : null;
-  const startingConfig = languageConfig?.config ?? collaborationReadyConfig;
-  const existingConfigDiagnostics = validateProjectConfig(startingConfig, { projectRoot });
-  const existingConfigErrors = existingConfigDiagnostics.filter((diagnostic) => diagnostic.level === 'error');
-  let automaticRefreshConfig: ProjectAutomaticRefreshConfigResult | null = null;
-  let automaticRefreshError: string | null = null;
-  if (existingConfigErrors.length === 0 && startingConfig.watch?.enabled !== automaticRefresh) {
-    try {
-      automaticRefreshConfig = configureProjectAutomaticRefresh(projectRoot, startingConfig, automaticRefresh);
-    } catch (error) {
-      automaticRefreshError = errorMessage(error);
-    }
-  }
-  const config = automaticRefreshConfig?.config ?? startingConfig;
-  const scipCliInstalled = isScipInstalled();
-
-  addStep(steps, {
-    id: 'collaboration-domain-config',
-    label: 'Collaboration domain',
-    status: collaborationConfigError !== null ? 'failed' : initialConfigErrors.length > 0 ? 'skipped' : 'ok',
-    message:
-      collaborationConfigError ??
-      (initialConfigErrors.length > 0
-        ? 'Skipped because the existing project config has validation errors.'
-        : collaborationConfig?.changed
-          ? 'Generated the committed identity shared by merge-intended branches, clones, and forks.'
-          : 'The committed collaboration-domain identity is already present.'),
-    ...(collaborationConfig ? { details: [collaborationConfig.configPath] } : {}),
-  });
-
-  addStep(steps, {
-    id: 'automatic-indexing-config',
-    label: 'Automatic indexing config',
-    status:
-      automaticRefreshError !== null
-        ? 'failed'
-        : existingConfigErrors.length > 0 || !automaticRefresh
-          ? 'skipped'
-          : 'ok',
-    message:
-      automaticRefreshError ??
-      (existingConfigErrors.length > 0
-        ? 'Skipped because the existing project config has validation errors.'
-        : automaticRefresh
-          ? automaticRefreshConfig?.changed
-            ? 'Enabled demand-started automatic incremental indexing for this project.'
-            : 'Demand-started automatic incremental indexing is already enabled.'
-          : 'Automatic incremental indexing remains explicitly disabled for this project.'),
-    ...(automaticRefreshConfig ? { details: [automaticRefreshConfig.configPath] } : {}),
-  });
-
-  const scipCliRequired = externalScipConverterSelected();
-  addStep(steps, {
-    id: 'scip-cli',
-    label: 'scip CLI',
-    status: scipCliInstalled || !scipCliRequired ? 'ok' : 'warn',
-    message: scipCliInstalled
-      ? 'scip CLI is available.'
-      : !scipCliRequired
-        ? 'scip CLI is not installed and not required: SCIP is converted to SQLite in-process (SCIP_QUERY_SQLITE_CONVERTER=scip-cli selects the external converter).'
-        : opts.installIndexers === true
-          ? 'scip CLI is not installed; the reviewed release will be installed during the index refresh.'
-          : 'scip CLI is required by SCIP_QUERY_SQLITE_CONVERTER=scip-cli but not installed; pass --install-missing to install the reviewed release.',
-  });
-
-  const skills =
-    opts.installSkills === false
-      ? { installed: [], skipped: [], alreadyLinked: [], pruned: [] }
-      : installSkills({ quiet: true });
-  addStep(steps, {
-    id: 'skills',
-    label: 'Agent skills',
-    status: opts.installSkills === false ? 'skipped' : skills.skipped.length > 0 ? 'warn' : 'ok',
-    message:
-      opts.installSkills === false
-        ? 'Skipped by setup choice.'
-        : `${skills.installed.length} installed, ${skills.alreadyLinked.length} already linked, ${skills.pruned.length} pruned, ${skills.skipped.length} skipped.`,
-    details: [...skills.pruned.map((entry) => `Pruned ${entry}`), ...skills.skipped.map((entry) => `Skipped ${entry}`)],
-  });
-
+  const {
+    config,
+    existingConfigDiagnostics,
+    collaborationConfig,
+    languageConfig,
+    automaticRefreshConfig,
+    scipCliInstalled,
+  } = prepareSetupConfiguration(context, opts, steps);
+  reportSetupConverter(scipCliInstalled, opts.installIndexers === true, steps);
+  const skills = installSetupSkills(opts.installSkills !== false, steps);
   const configDiagnostics = automaticRefreshConfig
     ? validateProjectConfig(config, { projectRoot })
     : existingConfigDiagnostics;
-  const configErrors = configDiagnostics.filter((diagnostic) => diagnostic.level === 'error');
-  addStep(steps, {
-    id: 'config',
-    label: 'Project config',
-    status: configErrors.length > 0 ? 'failed' : configDiagnostics.length > 0 ? 'warn' : 'ok',
-    message:
-      configDiagnostics.length === 0
-        ? 'Config OK.'
-        : `${configDiagnostics.length} diagnostic(s), ${configErrors.length} error(s).`,
-    details: configDiagnostics.map(
-      (diagnostic) => `${diagnostic.level.toUpperCase()} ${diagnostic.path}: ${diagnostic.message}`,
-    ),
-  });
-
-  const initialReadiness = getProjectReadiness(projectRoot, config);
-  addStep(steps, {
-    id: 'readiness',
-    label: 'Indexer readiness',
-    status:
-      initialReadiness.languages.length === 0
-        ? 'failed'
-        : initialReadiness.indexers.some((indexer) => !indexer.runnable)
-          ? 'warn'
-          : 'ok',
-    message:
-      initialReadiness.languages.length === 0
-        ? 'No supported project languages detected.'
-        : `Detected languages: ${initialReadiness.languages.join(', ')}`,
-    details: initialReadiness.indexers.map((indexer) => {
-      const state = indexer.runnable ? 'OK' : indexer.installed ? 'WARN' : 'MISSING';
-      return `${state} ${indexer.language}: ${indexer.binaryLabel}${indexer.note ? ` - ${indexer.note}` : ''}`;
-    }),
-  });
-
-  let astParsers: AstParserSetupResult;
-  if (opts.installAstParsers === true) {
-    astParsers = setupAstParsers(initialReadiness.languages);
-    addStep(steps, {
-      id: 'ast-parsers',
-      label: 'AST parser packages',
-      status: astParsers.unavailable.length > 0 ? 'warn' : 'ok',
-      message:
-        astParsers.supportedLanguages.length === 0
-          ? 'No selected language uses a bundled Tree-sitter parser.'
-          : `${astParsers.availableAfter.length}/${astParsers.supportedLanguages.length} selected language parser(s) available${astParsers.installed.length > 0 ? `; installed ${astParsers.installed.join(', ')}` : ''}.`,
-      details: [
-        ...(astParsers.unavailable.length > 0 ? [`Unavailable: ${astParsers.unavailable.join(', ')}`] : []),
-        ...(astParsers.error ? [astParsers.error] : []),
-      ],
-    });
-  } else {
-    // Without consent nothing is installed, but the parsers that ship
-    // prebuilt usually load already; report what loads instead of a skip
-    // that reads as missing.
-    const probe = probeAstParsers(initialReadiness.languages);
-    astParsers = {
-      supportedLanguages: probe.supportedLanguages,
-      availableBefore: probe.available,
-      installed: [],
-      availableAfter: probe.available,
-      unavailable: probe.missing,
-      attempted: false,
-    };
-    addStep(steps, {
-      id: 'ast-parsers',
-      label: 'AST parser packages',
-      status: probe.missing.length === 0 ? 'ok' : 'skipped',
-      message:
-        probe.supportedLanguages.length === 0
-          ? 'No selected language uses a bundled Tree-sitter parser.'
-          : probe.missing.length === 0
-            ? `${probe.available.length}/${probe.supportedLanguages.length} selected language parser(s) available; nothing to install.`
-            : 'Skipped because installing missing parser packages requires explicit consent.',
-      details: probe.missing.length > 0 ? [`Missing: ${probe.missing.join(', ')}`] : [],
-    });
-  }
-
-  const installIndexers = opts.installIndexers === true;
-  const indexerRemediation = installIndexers ? remediateIndexers(projectRoot, initialReadiness, steps) : [];
-  if (!installIndexers) {
-    const missingIndexers = initialReadiness.indexers.filter((indexer) => !indexer.runnable);
-    addStep(
-      steps,
-      missingIndexers.length === 0
-        ? {
-            id: 'indexer-remediation',
-            label: 'Indexer remediation',
-            status: 'ok',
-            message: 'Nothing to install: every detected language has a runnable indexer.',
-          }
-        : {
-            id: 'indexer-remediation',
-            label: 'Indexer remediation',
-            status: 'skipped',
-            message: 'Skipped because installing missing indexers requires explicit consent.',
-            details: missingIndexers.map((indexer) => `Missing ${indexer.language}: ${indexer.binaryLabel}`),
-          },
-    );
-  }
+  const configHasErrors = reportSetupConfig(configDiagnostics, steps);
+  const initialReadiness = readSetupReadiness(projectRoot, config, steps);
+  const astParsers = prepareSetupAstParsers(initialReadiness.languages, opts.installAstParsers === true, steps);
+  const indexerRemediation = prepareSetupIndexers(projectRoot, initialReadiness, opts.installIndexers === true, steps);
   const readyForIndexing = getProjectReadiness(projectRoot, config);
 
   const refreshed = await refreshSetupIndex({
@@ -460,7 +280,7 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     paths,
     config,
     readiness: readyForIndexing,
-    configHasErrors: configErrors.length > 0,
+    configHasErrors,
     steps,
     onStatus: opts.onStatus,
     installMissing: opts.installIndexers === true,
@@ -474,7 +294,7 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     cacheDir: paths.cacheDir,
     watchConfig,
     readiness: readyForIndexing,
-    configHasErrors: configErrors.length > 0,
+    configHasErrors,
     reindexResult,
     postReindexFreshness,
     steps,
@@ -490,73 +310,10 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     message: capabilitySummary(capabilities),
   });
 
-  opts.onStatus?.(
-    opts.runHealth === true ? 'Running optional full health audit…' : 'Skipping optional full health audit.',
-  );
-  const healthAttempt =
-    opts.runHealth === true
-      ? beginHealthDossierAttempt(
-          projectRoot,
-          {
-            runId: randomUUID(),
-            startedAt: new Date().toISOString(),
-            indexGeneration: publishedSqliteGenerationIdentity(paths.dbPath),
-          },
-          { dossierDir: opts.dossierDir },
-        )
-      : null;
-  if (healthAttempt?.interrupted) {
-    addStep(steps, {
-      id: 'health-dossier-attempt',
-      label: 'Previous health audit',
-      status: 'warn',
-      message: `A health audit started at ${healthAttempt.interrupted.startedAt} (index generation ${healthAttempt.interrupted.indexGeneration ?? 'unavailable'}) did not complete; the dossier it would have written was never published.`,
-      details: [healthAttempt.attemptPath],
-    });
-  }
+  const healthAttempt = beginSetupHealthAudit(projectRoot, paths, opts, steps);
   const health = opts.runHealth === true ? await runSetupHealth(paths.dbPath, steps) : skippedSetupHealth(steps);
-  const rustSemanticSession = readiness.languages.includes('rust')
-    ? rustSemanticSessionStatus(projectRoot, process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'])
-    : null;
-  addStep(steps, {
-    id: 'rust-semantic-session',
-    label: 'Rust semantic session',
-    status: rustSemanticSession === null ? 'skipped' : rustSemanticSession.valid ? 'ok' : 'failed',
-    // A language service the detected project cannot use is not missing readiness.
-    optional: rustSemanticSession === null,
-    message:
-      rustSemanticSession === null
-        ? 'Skipped because Rust was not detected.'
-        : `${rustSemanticSession.transport}/${rustSemanticSession.state} selected from ${rustSemanticSession.source}; ${rustSemanticSession.fallback} fallback; opt out with ${rustSemanticSession.optOut}.`,
-  });
-
-  let agentResult: SetupAgentResult | null = null;
-  try {
-    if (opts.noAgentGuidance) {
-      addStep(steps, {
-        id: 'agent-guidance',
-        label: 'Project agent guidance',
-        status: 'skipped',
-        message: 'Skipped by guided setup choice.',
-      });
-    } else {
-      agentResult = setupAgent(projectRoot);
-      addStep(steps, {
-        id: 'agent-guidance',
-        label: 'Project agent guidance',
-        status: agentResult.skipped.length > 0 ? 'warn' : 'ok',
-        message: `${agentResult.written.length} written, ${agentResult.unchanged.length} already wired, ${agentResult.skipped.length} skipped.`,
-        details: agentResult.skipped.map((entry) => `Skipped ${entry.target}: ${entry.reason}`),
-      });
-    }
-  } catch (error) {
-    addStep(steps, {
-      id: 'agent-guidance',
-      label: 'Project agent guidance',
-      status: 'failed',
-      message: errorMessage(error),
-    });
-  }
+  const rustSemanticSession = reportSetupRustSession(projectRoot, readiness.languages, steps);
+  const agentResult = prepareSetupAgentGuidance(projectRoot, opts.noAgentGuidance === true, steps);
 
   const smokeTests = buildSetupSmokeTests({
     reindexResult,
@@ -622,6 +379,358 @@ export async function runProjectSetup(opts: ProjectSetupOptions = {}): Promise<P
     verdict: setupVerdict(steps, readiness),
   };
 
+  return publishSetupHealthDossier(report, opts, healthAttempt);
+}
+
+function prepareSetupConfiguration(
+  context: ReturnType<typeof resolveCliProjectContext>,
+  opts: ProjectSetupOptions,
+  steps: ProjectSetupStep[],
+) {
+  const { projectRoot } = context;
+  const automaticRefresh = opts.automaticRefresh ?? context.config.watch?.enabled ?? true;
+  const initialDiagnostics = validateProjectConfig(context.config, { projectRoot });
+  const collaboration = prepareSetupCollaborationConfig(
+    projectRoot,
+    context.config,
+    initialDiagnostics.some((diagnostic) => diagnostic.level === 'error'),
+  );
+  const collaborationReadyConfig = collaboration.change?.config ?? context.config;
+  const languageConfig = opts.languages
+    ? configureProjectLanguages(projectRoot, collaborationReadyConfig, opts.languages)
+    : null;
+  const startingConfig = languageConfig?.config ?? collaborationReadyConfig;
+  const existingConfigDiagnostics = validateProjectConfig(startingConfig, { projectRoot });
+  const refresh = prepareSetupRefreshConfig(
+    projectRoot,
+    startingConfig,
+    automaticRefresh,
+    existingConfigDiagnostics.some((diagnostic) => diagnostic.level === 'error'),
+  );
+  const config = refresh.change?.config ?? startingConfig;
+  const scipCliInstalled = isScipInstalled();
+  addStep(steps, collaboration.step);
+  addStep(steps, refresh.step);
+  return {
+    config,
+    existingConfigDiagnostics,
+    collaborationConfig: collaboration.change,
+    languageConfig,
+    automaticRefreshConfig: refresh.change,
+    scipCliInstalled,
+  };
+}
+
+function prepareSetupCollaborationConfig(projectRoot: string, config: ProjectConfig, configHasErrors: boolean) {
+  let collaborationConfig: ProjectAutomaticRefreshConfigResult | null = null;
+  let collaborationConfigError: string | null = null;
+  if (!configHasErrors && !config.collaborationDomainId) {
+    try {
+      collaborationConfig = ensureProjectCollaborationDomain(projectRoot, config);
+    } catch (error) {
+      collaborationConfigError = errorMessage(error);
+    }
+  }
+  const step: ProjectSetupStep = {
+    id: 'collaboration-domain-config',
+    label: 'Collaboration domain',
+    status: collaborationConfigError !== null ? 'failed' : configHasErrors ? 'skipped' : 'ok',
+    message:
+      collaborationConfigError ??
+      (configHasErrors
+        ? 'Skipped because the existing project config has validation errors.'
+        : collaborationConfig?.changed
+          ? 'Generated the committed identity shared by merge-intended branches, clones, and forks.'
+          : 'The committed collaboration-domain identity is already present.'),
+    ...(collaborationConfig ? { details: [collaborationConfig.configPath] } : {}),
+  };
+  return { change: collaborationConfig, step };
+}
+
+function prepareSetupRefreshConfig(
+  projectRoot: string,
+  config: ProjectConfig,
+  automaticRefresh: boolean,
+  configHasErrors: boolean,
+) {
+  let automaticRefreshConfig: ProjectAutomaticRefreshConfigResult | null = null;
+  let automaticRefreshError: string | null = null;
+  if (!configHasErrors && config.watch?.enabled !== automaticRefresh) {
+    try {
+      automaticRefreshConfig = configureProjectAutomaticRefresh(projectRoot, config, automaticRefresh);
+    } catch (error) {
+      automaticRefreshError = errorMessage(error);
+    }
+  }
+  const step: ProjectSetupStep = {
+    id: 'automatic-indexing-config',
+    label: 'Automatic indexing config',
+    status: automaticRefreshError !== null ? 'failed' : configHasErrors || !automaticRefresh ? 'skipped' : 'ok',
+    message:
+      automaticRefreshError ??
+      (configHasErrors
+        ? 'Skipped because the existing project config has validation errors.'
+        : automaticRefresh
+          ? automaticRefreshConfig?.changed
+            ? 'Enabled demand-started automatic incremental indexing for this project.'
+            : 'Demand-started automatic incremental indexing is already enabled.'
+          : 'Automatic incremental indexing remains explicitly disabled for this project.'),
+    ...(automaticRefreshConfig ? { details: [automaticRefreshConfig.configPath] } : {}),
+  };
+  return { change: automaticRefreshConfig, step };
+}
+
+function reportSetupConverter(scipCliInstalled: boolean, installIndexers: boolean, steps: ProjectSetupStep[]): void {
+  const scipCliRequired = externalScipConverterSelected();
+  addStep(steps, {
+    id: 'scip-cli',
+    label: 'scip CLI',
+    status: scipCliInstalled || !scipCliRequired ? 'ok' : 'warn',
+    message: scipCliInstalled
+      ? 'scip CLI is available.'
+      : !scipCliRequired
+        ? 'scip CLI is not installed and not required: SCIP is converted to SQLite in-process (SCIP_QUERY_SQLITE_CONVERTER=scip-cli selects the external converter).'
+        : installIndexers
+          ? 'scip CLI is not installed; the reviewed release will be installed during the index refresh.'
+          : 'scip CLI is required by SCIP_QUERY_SQLITE_CONVERTER=scip-cli but not installed; pass --install-missing to install the reviewed release.',
+  });
+}
+
+function installSetupSkills(selected: boolean, steps: ProjectSetupStep[]): InstallSkillsResult {
+  const skills = !selected
+    ? { installed: [], skipped: [], alreadyLinked: [], pruned: [] }
+    : installSkills({ quiet: true });
+  addStep(steps, {
+    id: 'skills',
+    label: 'Agent skills',
+    status: !selected ? 'skipped' : skills.skipped.length > 0 ? 'warn' : 'ok',
+    message: !selected
+      ? 'Skipped by setup choice.'
+      : `${skills.installed.length} installed, ${skills.alreadyLinked.length} already linked, ${skills.pruned.length} pruned, ${skills.skipped.length} skipped.`,
+    details: [...skills.pruned.map((entry) => `Pruned ${entry}`), ...skills.skipped.map((entry) => `Skipped ${entry}`)],
+  });
+  return skills;
+}
+
+function reportSetupConfig(
+  configDiagnostics: ReturnType<typeof validateProjectConfig>,
+  steps: ProjectSetupStep[],
+): boolean {
+  const configErrors = configDiagnostics.filter((diagnostic) => diagnostic.level === 'error');
+  addStep(steps, {
+    id: 'config',
+    label: 'Project config',
+    status: configErrors.length > 0 ? 'failed' : configDiagnostics.length > 0 ? 'warn' : 'ok',
+    message:
+      configDiagnostics.length === 0
+        ? 'Config OK.'
+        : `${configDiagnostics.length} diagnostic(s), ${configErrors.length} error(s).`,
+    details: configDiagnostics.map(
+      (diagnostic) => `${diagnostic.level.toUpperCase()} ${diagnostic.path}: ${diagnostic.message}`,
+    ),
+  });
+  return configErrors.length > 0;
+}
+
+function readSetupReadiness(projectRoot: string, config: ProjectConfig, steps: ProjectSetupStep[]): ProjectReadiness {
+  const initialReadiness = getProjectReadiness(projectRoot, config);
+  addStep(steps, {
+    id: 'readiness',
+    label: 'Indexer readiness',
+    status:
+      initialReadiness.languages.length === 0
+        ? 'failed'
+        : initialReadiness.indexers.some((indexer) => !indexer.runnable)
+          ? 'warn'
+          : 'ok',
+    message:
+      initialReadiness.languages.length === 0
+        ? 'No supported project languages detected.'
+        : `Detected languages: ${initialReadiness.languages.join(', ')}`,
+    details: initialReadiness.indexers.map((indexer) => {
+      const state = indexer.runnable ? 'OK' : indexer.installed ? 'WARN' : 'MISSING';
+      return `${state} ${indexer.language}: ${indexer.binaryLabel}${indexer.note ? ` - ${indexer.note}` : ''}`;
+    }),
+  });
+  return initialReadiness;
+}
+
+function prepareSetupAstParsers(
+  languages: SupportedLanguage[],
+  install: boolean,
+  steps: ProjectSetupStep[],
+): AstParserSetupResult {
+  let astParsers: AstParserSetupResult;
+  if (install) {
+    astParsers = setupAstParsers(languages);
+    addStep(steps, {
+      id: 'ast-parsers',
+      label: 'AST parser packages',
+      status: astParsers.unavailable.length > 0 ? 'warn' : 'ok',
+      message:
+        astParsers.supportedLanguages.length === 0
+          ? 'No selected language uses a bundled Tree-sitter parser.'
+          : `${astParsers.availableAfter.length}/${astParsers.supportedLanguages.length} selected language parser(s) available${astParsers.installed.length > 0 ? `; installed ${astParsers.installed.join(', ')}` : ''}.`,
+      details: [
+        ...(astParsers.unavailable.length > 0 ? [`Unavailable: ${astParsers.unavailable.join(', ')}`] : []),
+        ...(astParsers.error ? [astParsers.error] : []),
+      ],
+    });
+    return astParsers;
+  }
+  // Without consent nothing is installed, but the parsers that ship
+  // prebuilt usually load already; report what loads instead of a skip
+  // that reads as missing.
+  const probe = probeAstParsers(languages);
+  astParsers = {
+    supportedLanguages: probe.supportedLanguages,
+    availableBefore: probe.available,
+    installed: [],
+    availableAfter: probe.available,
+    unavailable: probe.missing,
+    attempted: false,
+  };
+  addStep(steps, {
+    id: 'ast-parsers',
+    label: 'AST parser packages',
+    status: probe.missing.length === 0 ? 'ok' : 'skipped',
+    message:
+      probe.supportedLanguages.length === 0
+        ? 'No selected language uses a bundled Tree-sitter parser.'
+        : probe.missing.length === 0
+          ? `${probe.available.length}/${probe.supportedLanguages.length} selected language parser(s) available; nothing to install.`
+          : 'Skipped because installing missing parser packages requires explicit consent.',
+    details: probe.missing.length > 0 ? [`Missing: ${probe.missing.join(', ')}`] : [],
+  });
+  return astParsers;
+}
+
+function prepareSetupIndexers(
+  projectRoot: string,
+  initialReadiness: ProjectReadiness,
+  installIndexers: boolean,
+  steps: ProjectSetupStep[],
+): ProjectSetupIndexerRemediation[] {
+  const indexerRemediation = installIndexers ? remediateIndexers(projectRoot, initialReadiness, steps) : [];
+  if (!installIndexers) {
+    const missingIndexers = initialReadiness.indexers.filter((indexer) => !indexer.runnable);
+    addStep(
+      steps,
+      missingIndexers.length === 0
+        ? {
+            id: 'indexer-remediation',
+            label: 'Indexer remediation',
+            status: 'ok',
+            message: 'Nothing to install: every detected language has a runnable indexer.',
+          }
+        : {
+            id: 'indexer-remediation',
+            label: 'Indexer remediation',
+            status: 'skipped',
+            message: 'Skipped because installing missing indexers requires explicit consent.',
+            details: missingIndexers.map((indexer) => `Missing ${indexer.language}: ${indexer.binaryLabel}`),
+          },
+    );
+  }
+  return indexerRemediation;
+}
+
+function beginSetupHealthAudit(
+  projectRoot: string,
+  paths: ReturnType<typeof resolveCliProjectContext>['paths'],
+  opts: ProjectSetupOptions,
+  steps: ProjectSetupStep[],
+) {
+  opts.onStatus?.(
+    opts.runHealth === true ? 'Running optional full health audit…' : 'Skipping optional full health audit.',
+  );
+  const healthAttempt =
+    opts.runHealth === true
+      ? beginHealthDossierAttempt(
+          projectRoot,
+          {
+            runId: randomUUID(),
+            startedAt: new Date().toISOString(),
+            indexGeneration: publishedSqliteGenerationIdentity(paths.dbPath),
+          },
+          { dossierDir: opts.dossierDir },
+        )
+      : null;
+  if (healthAttempt?.interrupted) {
+    addStep(steps, {
+      id: 'health-dossier-attempt',
+      label: 'Previous health audit',
+      status: 'warn',
+      message: `A health audit started at ${healthAttempt.interrupted.startedAt} (index generation ${healthAttempt.interrupted.indexGeneration ?? 'unavailable'}) did not complete; the dossier it would have written was never published.`,
+      details: [healthAttempt.attemptPath],
+    });
+  }
+  return healthAttempt;
+}
+
+function reportSetupRustSession(
+  projectRoot: string,
+  languages: SupportedLanguage[],
+  steps: ProjectSetupStep[],
+): RustSemanticSessionStatus | null {
+  const rustSemanticSession = languages.includes('rust')
+    ? rustSemanticSessionStatus(projectRoot, process.env['SCIP_RUST_SEMANTIC_DURABLE_SESSION'])
+    : null;
+  addStep(steps, {
+    id: 'rust-semantic-session',
+    label: 'Rust semantic session',
+    status: rustSemanticSession === null ? 'skipped' : rustSemanticSession.valid ? 'ok' : 'failed',
+    // A language service the detected project cannot use is not missing readiness.
+    optional: rustSemanticSession === null,
+    message:
+      rustSemanticSession === null
+        ? 'Skipped because Rust was not detected.'
+        : `${rustSemanticSession.transport}/${rustSemanticSession.state} selected from ${rustSemanticSession.source}; ${rustSemanticSession.fallback} fallback; opt out with ${rustSemanticSession.optOut}.`,
+  });
+  return rustSemanticSession;
+}
+
+function prepareSetupAgentGuidance(
+  projectRoot: string,
+  skip: boolean,
+  steps: ProjectSetupStep[],
+): SetupAgentResult | null {
+  let agentResult: SetupAgentResult | null = null;
+  try {
+    if (skip) {
+      addStep(steps, {
+        id: 'agent-guidance',
+        label: 'Project agent guidance',
+        status: 'skipped',
+        message: 'Skipped by guided setup choice.',
+      });
+    } else {
+      agentResult = setupAgent(projectRoot);
+      addStep(steps, {
+        id: 'agent-guidance',
+        label: 'Project agent guidance',
+        status: agentResult.skipped.length > 0 ? 'warn' : 'ok',
+        message: `${agentResult.written.length} written, ${agentResult.unchanged.length} already wired, ${agentResult.skipped.length} skipped.`,
+        details: agentResult.skipped.map((entry) => `Skipped ${entry.target}: ${entry.reason}`),
+      });
+    }
+  } catch (error) {
+    addStep(steps, {
+      id: 'agent-guidance',
+      label: 'Project agent guidance',
+      status: 'failed',
+      message: errorMessage(error),
+    });
+  }
+  return agentResult;
+}
+
+function publishSetupHealthDossier(
+  report: ProjectSetupReport,
+  opts: ProjectSetupOptions,
+  healthAttempt: ReturnType<typeof beginSetupHealthAudit>,
+): ProjectSetupReport {
+  const { steps, readiness } = report;
   if (opts.runHealth !== true) {
     addStep(steps, {
       id: 'health-dossier',

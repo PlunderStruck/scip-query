@@ -163,126 +163,156 @@ export async function tryRunQueryServiceFastPath(argv: readonly string[]): Promi
   const invocation = parseFastPathInvocation(argv);
   if (!invocation) return false;
   const projectRoot = resolveProjectRoot();
-  if (invocation.kind === 'code') {
-    const response = tryCodeWithQueryService(projectRoot, invocation.selectors, invocation.options, {
-      allowDefault: true,
-    });
-    if (!response) return false;
-    writeSerializedJson(response.result.serializedJson);
-    return true;
+  // These two commands have resolution-dependent exit status, in addition to output transport.
+  if (invocation.kind === 'methods') return runMethodsFastPath(projectRoot, invocation);
+  if (invocation.kind === 'dependence-slice') return runDependenceSliceFastPath(projectRoot, invocation, argv);
+  const output = queryNavigationFastPath(projectRoot, invocation);
+  if (!output) return false;
+  if (output.mode === 'bounded') return writeUnpagedSerializedJsonResult(output.serialized);
+  if (output.mode === 'paged') {
+    await writeSerializedJsonResult(output.serialized, output.command ?? invocation.kind, argv);
+  } else {
+    writeSerializedJson(output.serialized);
   }
-  if (invocation.kind === 'files') {
-    const response = tryFilesWithQueryService(projectRoot, invocation.pattern, { allowDefault: true });
-    if (!response) return false;
-    await writeSerializedJsonResult(JSON.stringify(response.result), invocation.kind, argv);
-    return true;
-  }
-  if (invocation.kind === 'members') {
-    const response = tryMembersWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true });
-    if (!response) return false;
-    await writeSerializedJsonResult(JSON.stringify(response.result), invocation.kind, argv);
-    return true;
-  }
-  if (invocation.kind === 'methods') {
-    const response = tryMethodsWithQueryService(projectRoot, invocation.className, { allowDefault: true });
-    if (!response || !writeUnpagedJsonResult(response.result)) return false;
-    if (response.result.kind !== 'matched') process.exitCode = 1;
-    return true;
-  }
-  if (invocation.kind === 'file-dependencies') {
-    const response = tryFileDependenciesWithQueryService(projectRoot, invocation.direction, invocation.filePattern, {
-      allowDefault: true,
-    });
-    if (!response) return false;
-    const command = invocation.direction === 'outgoing' ? 'deps' : 'rdeps';
-    await writeSerializedJsonResult(JSON.stringify(response.result), command, argv);
-    return true;
-  }
-  if (invocation.kind === 'imported-by') {
-    const response = tryImportedByWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true });
-    if (!response) return false;
-    await writeSerializedJsonResult(JSON.stringify(response.result), invocation.kind, argv);
-    return true;
-  }
-  if (invocation.kind === 'hierarchy') {
-    const response = tryHierarchyWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true });
-    if (!response || !writeUnpagedJsonResult(response.result)) return false;
-    return true;
-  }
-  if (invocation.kind === 'by-kind') {
-    const response = tryByKindWithQueryService(projectRoot, invocation.kindQuery, { allowDefault: true });
-    if (!response || !writeUnpagedJsonResult(response.result)) return false;
-    return true;
-  }
-  if (invocation.kind === 'kind-counts') {
-    const response = tryKindCountsWithQueryService(projectRoot, { allowDefault: true });
-    if (!response || !writeUnpagedJsonResult(response.result)) return false;
-    return true;
-  }
-  if (invocation.kind === 'refs') {
-    const response = tryRefsWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true });
-    if (!response) return false;
-    await writeSerializedJsonResult(JSON.stringify(response.result), invocation.kind, argv);
-    return true;
-  }
-
-  if (invocation.kind === 'dependence-slice') {
-    const response = tryDependenceSliceWithQueryService(projectRoot, invocation.criterion, { allowDefault: true });
-    if (!response) return false;
-    const result = JSON.parse(response.result.serializedJson) as { resolution: string };
-    if (result.resolution !== 'matched') process.exitCode = 1;
-    await writeSerializedJsonResult(response.result.serializedJson, invocation.kind, argv);
-    return true;
-  }
-  if (invocation.kind === 'call-graph') {
-    const response = trySemanticNeighborhoodWithQueryService(projectRoot, invocation.kind, invocation.symbolPattern, {
-      allowDefault: true,
-    });
-    if (!response) return false;
-    await writeSerializedJsonResult(response.result.serializedJson, invocation.kind, argv);
-    return true;
-  }
-  if (invocation.kind === 'imports') {
-    const response = tryImportsWithQueryService(projectRoot, invocation.filePattern, { allowDefault: true });
-    if (!response || !writeUnpagedJsonResult(response.result)) return false;
-    return true;
-  }
-  if (invocation.kind === 'unused-imports') {
-    const response = tryUnusedImportsWithQueryService(projectRoot, invocation.filePattern, { allowDefault: true });
-    if (!response || !writeUnpagedJsonResult(response.result)) return false;
-    return true;
-  }
-  if (invocation.kind === 'system') {
-    const response = trySystemWithQueryService(projectRoot, invocation.modulePattern, { allowDefault: true });
-    if (!response) return false;
-    await writeSerializedJsonResult(response.result.serializedJson, invocation.kind, argv);
-    return true;
-  }
-  if (invocation.kind === 'surface') {
-    const response = trySurfaceWithQueryService(projectRoot, invocation.modulePattern, { allowDefault: true });
-    if (!response) return false;
-    await writeSerializedJsonResult(JSON.stringify(response.result), invocation.kind, argv);
-    return true;
-  }
-  if (invocation.kind === 'stats') {
-    const response = tryStatsWithQueryService(projectRoot, { allowDefault: true });
-    if (!response) return false;
-    writeSerializedJson(JSON.stringify(response.result));
-    return true;
-  }
-  if (invocation.kind === 'entrypoints') {
-    const response = tryEntryPointsWithQueryService(projectRoot, invocation.options, { allowDefault: true });
-    if (!response) return false;
-    writeSerializedJson(JSON.stringify(response.result));
-    return true;
-  }
-  const response =
-    invocation.kind === 'source-search'
-      ? trySearchSourceWithQueryService(projectRoot, invocation.pattern, invocation.options, { allowDefault: true })
-      : tryOutlineWithQueryService(projectRoot, invocation.filePattern, { allowDefault: true });
-  if (!response) return false;
-  writeSerializedJson(JSON.stringify(response.result));
   return true;
+}
+
+interface FastPathOutput {
+  serialized: string;
+  mode: 'direct' | 'bounded' | 'paged';
+  command?: string;
+}
+
+function jsonFastPathOutput(
+  response: { result: unknown } | null,
+  mode: FastPathOutput['mode'],
+  command?: string,
+): FastPathOutput | null {
+  return response ? { serialized: JSON.stringify(response.result), mode, command } : null;
+}
+
+function serializedFastPathOutput(
+  response: { result: { serializedJson: string } } | null,
+  mode: FastPathOutput['mode'],
+): FastPathOutput | null {
+  return response ? { serialized: response.result.serializedJson, mode } : null;
+}
+
+function runMethodsFastPath(projectRoot: string, invocation: MethodsFastPathInvocation): boolean {
+  const response = tryMethodsWithQueryService(projectRoot, invocation.className, { allowDefault: true });
+  if (!response || !writeUnpagedJsonResult(response.result)) return false;
+  if (response.result.kind !== 'matched') process.exitCode = 1;
+  return true;
+}
+
+async function runDependenceSliceFastPath(
+  projectRoot: string,
+  invocation: DependenceSliceFastPathInvocation,
+  argv: readonly string[],
+): Promise<boolean> {
+  const response = tryDependenceSliceWithQueryService(projectRoot, invocation.criterion, { allowDefault: true });
+  if (!response) return false;
+  const result = JSON.parse(response.result.serializedJson) as { resolution: string };
+  if (result.resolution !== 'matched') process.exitCode = 1;
+  await writeSerializedJsonResult(response.result.serializedJson, invocation.kind, argv);
+  return true;
+}
+
+function queryNavigationFastPath(
+  projectRoot: string,
+  invocation: Exclude<FastPathInvocation, MethodsFastPathInvocation | DependenceSliceFastPathInvocation>,
+): FastPathOutput | null {
+  switch (invocation.kind) {
+    case 'code':
+      return serializedFastPathOutput(
+        tryCodeWithQueryService(projectRoot, invocation.selectors, invocation.options, { allowDefault: true }),
+        'direct',
+      );
+    case 'files':
+      return jsonFastPathOutput(
+        tryFilesWithQueryService(projectRoot, invocation.pattern, { allowDefault: true }),
+        'paged',
+      );
+    case 'members':
+      return jsonFastPathOutput(
+        tryMembersWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true }),
+        'paged',
+      );
+    case 'file-dependencies':
+      return jsonFastPathOutput(
+        tryFileDependenciesWithQueryService(projectRoot, invocation.direction, invocation.filePattern, {
+          allowDefault: true,
+        }),
+        'paged',
+        invocation.direction === 'outgoing' ? 'deps' : 'rdeps',
+      );
+    case 'imported-by':
+      return jsonFastPathOutput(
+        tryImportedByWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true }),
+        'paged',
+      );
+    case 'hierarchy':
+      return jsonFastPathOutput(
+        tryHierarchyWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true }),
+        'bounded',
+      );
+    case 'by-kind':
+      return jsonFastPathOutput(
+        tryByKindWithQueryService(projectRoot, invocation.kindQuery, { allowDefault: true }),
+        'bounded',
+      );
+    case 'kind-counts':
+      return jsonFastPathOutput(tryKindCountsWithQueryService(projectRoot, { allowDefault: true }), 'bounded');
+    case 'refs':
+      return jsonFastPathOutput(
+        tryRefsWithQueryService(projectRoot, invocation.symbolPattern, { allowDefault: true }),
+        'paged',
+      );
+    case 'call-graph':
+      return serializedFastPathOutput(
+        trySemanticNeighborhoodWithQueryService(projectRoot, invocation.kind, invocation.symbolPattern, {
+          allowDefault: true,
+        }),
+        'paged',
+      );
+    case 'imports':
+      return jsonFastPathOutput(
+        tryImportsWithQueryService(projectRoot, invocation.filePattern, { allowDefault: true }),
+        'bounded',
+      );
+    case 'unused-imports':
+      return jsonFastPathOutput(
+        tryUnusedImportsWithQueryService(projectRoot, invocation.filePattern, { allowDefault: true }),
+        'bounded',
+      );
+    case 'system':
+      return serializedFastPathOutput(
+        trySystemWithQueryService(projectRoot, invocation.modulePattern, { allowDefault: true }),
+        'paged',
+      );
+    case 'surface':
+      return jsonFastPathOutput(
+        trySurfaceWithQueryService(projectRoot, invocation.modulePattern, { allowDefault: true }),
+        'paged',
+      );
+    case 'stats':
+      return jsonFastPathOutput(tryStatsWithQueryService(projectRoot, { allowDefault: true }), 'direct');
+    case 'entrypoints':
+      return jsonFastPathOutput(
+        tryEntryPointsWithQueryService(projectRoot, invocation.options, { allowDefault: true }),
+        'direct',
+      );
+    case 'source-search':
+      return jsonFastPathOutput(
+        trySearchSourceWithQueryService(projectRoot, invocation.pattern, invocation.options, { allowDefault: true }),
+        'direct',
+      );
+    case 'outline':
+      return jsonFastPathOutput(
+        tryOutlineWithQueryService(projectRoot, invocation.filePattern, { allowDefault: true }),
+        'direct',
+      );
+  }
 }
 
 export function parseFastPathInvocation(argv: readonly string[]): FastPathInvocation | null {

@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { externalScipConverterSelected } from '../../platform/scip-cli.js';
 import { dirname, join } from 'node:path';
 import type { SupportedLanguage } from '../../domain/types.js';
+import type { ReindexActivitySummary } from '../../domain/maintenance-types.js';
 import { resolveIndexStoragePaths } from '../../platform/cache-layout.js';
 import * as queries from '../../queries/index.js';
 import { augmentAuxiliaryDocuments, augmentVueResolvedReferencesAsync, detectLanguages } from '../../reindex/index.js';
@@ -1078,6 +1079,15 @@ function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>)
   }
   const pid = 'pid' in report ? ` (pid ${report.pid})` : '';
   console.log(`Watch service: ${report.state} [${report.mode}]${pid}`);
+  renderWatchServiceIdentity(report);
+  if ('reindexActivity' in report && report.reindexActivity) renderWatchReindexActivity(report.reindexActivity);
+  if ('refreshRequests' in report && report.refreshRequests) {
+    renderWatchRefreshRequestStatus(report.refreshRequests);
+  }
+  renderWatchTypeScriptStatus(report);
+}
+
+function renderWatchServiceIdentity(report: ReturnType<typeof watchServiceReport>): void {
   if ('projectRoot' in report && report.projectRoot) {
     const worktree = 'worktreeId' in report && report.worktreeId ? ` [${report.worktreeId.slice(0, 12)}]` : '';
     console.log(`Worktree: ${report.projectRoot}${worktree}`);
@@ -1089,51 +1099,55 @@ function renderWatchServiceReport(report: ReturnType<typeof watchServiceReport>)
   if ('idleDeadlineAt' in report && report.idleDeadlineAt) console.log(`Idle exit: ${report.idleDeadlineAt}`);
   if ('reason' in report) console.log(`Reason: ${report.reason}`);
   if ('lastError' in report && report.lastError) console.log(`Last error: ${report.lastError.message}`);
-  if ('reindexActivity' in report && report.reindexActivity) {
-    const activity = report.reindexActivity;
+}
+
+function renderWatchReindexActivity(activity: ReindexActivitySummary): void {
+  console.log(
+    `Recorded reindex activity (${activity.windowStartedAt} to ${activity.windowEndedAt}): ${activity.runs} run(s) ` +
+      `(${activity.rebuilt} rebuilt, ${activity.reused} reused, ${activity.failed} failed), ` +
+      `${activity.suppressed} redundant refresh(es) suppressed, ` +
+      `${formatBytes(activity.estimatedWriteBytes ?? activity.estimatedLogicalOutputBytes)} estimated writes ` +
+      `(${formatBytes(activity.estimatedLogicalOutputBytes)} logical output)` +
+      `${activity.confidence && activity.confidence !== 'complete' ? ` [${activity.confidence} evidence]` : ''}`,
+  );
+  if (activity.reflinkedBytes !== undefined || activity.fallbackCopiedBytes !== undefined) {
     console.log(
-      `Recorded reindex activity (${activity.windowStartedAt} to ${activity.windowEndedAt}): ${activity.runs} run(s) ` +
-        `(${activity.rebuilt} rebuilt, ${activity.reused} reused, ${activity.failed} failed), ` +
-        `${activity.suppressed} redundant refresh(es) suppressed, ` +
-        `${formatBytes(activity.estimatedWriteBytes ?? activity.estimatedLogicalOutputBytes)} estimated writes ` +
-        `(${formatBytes(activity.estimatedLogicalOutputBytes)} logical output)` +
-        `${activity.confidence && activity.confidence !== 'complete' ? ` [${activity.confidence} evidence]` : ''}`,
+      `Reindex staging: ${formatBytes(activity.reflinkedBytes ?? 0)} reflinked, ` +
+        `${formatBytes(activity.fallbackCopiedBytes ?? 0)} byte-copied`,
     );
-    if (activity.reflinkedBytes !== undefined || activity.fallbackCopiedBytes !== undefined) {
-      console.log(
-        `Reindex staging: ${formatBytes(activity.reflinkedBytes ?? 0)} reflinked, ` +
-          `${formatBytes(activity.fallbackCopiedBytes ?? 0)} byte-copied`,
-      );
-    }
-    for (const [language, detail] of Object.entries(activity.byLanguage ?? {}).sort(([left], [right]) =>
-      left.localeCompare(right),
-    )) {
-      if (!detail) continue;
-      console.log(
-        `Reindex language ${language}: ${detail.runs} run(s) ` +
-          `(${detail.rebuilt} rebuilt, ${detail.reused} reused), ` +
-          `${formatBytes(detail.producedOutputBytes)} produced, ` +
-          `${formatIndexerDuration(detail.durationMs)} cumulative indexer time`,
-      );
-    }
-    if (activity.languageAttribution && activity.languageAttribution !== 'complete') {
-      console.log(
-        `Reindex language attribution: ${activity.languageAttribution}; ` +
-          `${activity.unattributedRuns ?? 0} completed run(s) unattributed, ` +
-          `${activity.invalidLanguageDetails ?? 0} invalid detail(s) ignored`,
-      );
-    }
-    if (activity.confidence && activity.confidence !== 'complete') {
-      console.log(
-        `Reindex evidence: ${activity.recordsRead ?? 0} record(s) read, ` +
-          `${activity.invalidRecords ?? 0} invalid, ${activity.readErrors ?? 0} read error(s), ` +
-          `${activity.ignoredPartialTailBytes ?? 0} incomplete byte(s) ignored`,
-      );
-    }
   }
-  if ('refreshRequests' in report && report.refreshRequests) {
-    renderWatchRefreshRequestStatus(report.refreshRequests);
+  renderWatchReindexLanguages(activity);
+  if (activity.confidence && activity.confidence !== 'complete') {
+    console.log(
+      `Reindex evidence: ${activity.recordsRead ?? 0} record(s) read, ` +
+        `${activity.invalidRecords ?? 0} invalid, ${activity.readErrors ?? 0} read error(s), ` +
+        `${activity.ignoredPartialTailBytes ?? 0} incomplete byte(s) ignored`,
+    );
   }
+}
+
+function renderWatchReindexLanguages(activity: ReindexActivitySummary): void {
+  for (const [language, detail] of Object.entries(activity.byLanguage ?? {}).sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    if (!detail) continue;
+    console.log(
+      `Reindex language ${language}: ${detail.runs} run(s) ` +
+        `(${detail.rebuilt} rebuilt, ${detail.reused} reused), ` +
+        `${formatBytes(detail.producedOutputBytes)} produced, ` +
+        `${formatIndexerDuration(detail.durationMs)} cumulative indexer time`,
+    );
+  }
+  if (activity.languageAttribution && activity.languageAttribution !== 'complete') {
+    console.log(
+      `Reindex language attribution: ${activity.languageAttribution}; ` +
+        `${activity.unattributedRuns ?? 0} completed run(s) unattributed, ` +
+        `${activity.invalidLanguageDetails ?? 0} invalid detail(s) ignored`,
+    );
+  }
+}
+
+function renderWatchTypeScriptStatus(report: ReturnType<typeof watchServiceReport>): void {
   if ('typescriptSemantic' in report && report.typescriptSemantic) {
     const semantic = report.typescriptSemantic;
     console.log(

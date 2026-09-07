@@ -138,9 +138,14 @@
           "name": "runProjectSetup"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Configuration write outcomes, dependency preparation, readiness, optional guidance and dossier publication now have private phase owners; the coordinator retains sequencing. Current 76/95 becomes 5/2. Consent, failures, changed-file scopes and publication order are tested. Smaller retained helper findings and rationale are recorded in docs/plans/2026-09-07-ranked-complexity-cleanup.md.",
+      "verification": [
+        "221 focused tests across seven files passed.",
+        "Full suite: 3075 tests / 348 files passed.",
+        "Build, typecheck, formatting, changed-file lint, API/consumer and skill checks passed.",
+        "Fresh index, accounted source review and indexed architecture checked; coverage limitations recorded in the ranked cleanup plan."
+      ]
     },
     {
       "id": "complexity:src/queries/internal/connected-behavior.ts:focusedConnectorSlice",
@@ -202,9 +207,14 @@
           "name": "renderWatchServiceReport"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separate identity, reindex activity/language and TypeScript status sections preserve output fields, fallbacks and order. 52/59 becomes 8/8. Persisted-state command tests pass. Smaller retained helper findings and rationale are recorded in docs/plans/2026-09-07-ranked-complexity-cleanup.md.",
+      "verification": [
+        "221 focused tests across seven files passed.",
+        "Full suite: 3075 tests / 348 files passed.",
+        "Build, typecheck, formatting, changed-file lint, API/consumer and skill checks passed.",
+        "Fresh index, accounted source review and indexed architecture checked; coverage limitations recorded in the ranked cleanup plan."
+      ]
     },
     {
       "id": "complexity:src/queries/graph/system-map.ts:expandSystemMapSymbolFrontier",
@@ -236,9 +246,14 @@
           "name": "tryRunQueryServiceFastPath"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Centralized response serialization/output policy with exhaustive command dispatch; retained distinct methods and slice failure-status ordering. 51/71 becomes 10/9. New transport/fallback regression tests pass. Smaller retained helper findings and rationale are recorded in docs/plans/2026-09-07-ranked-complexity-cleanup.md.",
+      "verification": [
+        "221 focused tests across seven files passed.",
+        "Full suite: 3075 tests / 348 files passed.",
+        "Build, typecheck, formatting, changed-file lint, API/consumer and skill checks passed.",
+        "Fresh index, accounted source review and indexed architecture checked; coverage limitations recorded in the ranked cleanup plan."
+      ]
     },
     {
       "id": "complexity:src/queries/quality/slice-cohesion.ts:projectFlow",
@@ -251,9 +266,14 @@
           "name": "projectFlow"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separate point indexing, dependency projection, binding classification and ordered container effects, retaining candidate/control/parameter/closure rules. 45/75 becomes 1/0. Real-source slice and coverage tests pass. Smaller retained helper findings and rationale are recorded in docs/plans/2026-09-07-ranked-complexity-cleanup.md.",
+      "verification": [
+        "221 focused tests across seven files passed.",
+        "Full suite: 3075 tests / 348 files passed.",
+        "Build, typecheck, formatting, changed-file lint, API/consumer and skill checks passed.",
+        "Fresh index, accounted source review and indexed architecture checked; coverage limitations recorded in the ranked cleanup plan."
+      ]
     },
     {
       "id": "complexity:src/analysis/runtime-boundaries/carrier-discriminators.ts:deriveProducerDiscriminators",
@@ -266,9 +286,14 @@
           "name": "deriveProducerDiscriminators"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separate seed validation, field collection and caller propagation; first-seen queue deduplication has one owner. 34/73 becomes 6/8. Runtime-boundary extraction/persistence tests pass. Smaller retained helper findings and rationale are recorded in docs/plans/2026-09-07-ranked-complexity-cleanup.md.",
+      "verification": [
+        "221 focused tests across seven files passed.",
+        "Full suite: 3075 tests / 348 files passed.",
+        "Build, typecheck, formatting, changed-file lint, API/consumer and skill checks passed.",
+        "Fresh index, accounted source review and indexed architecture checked; coverage limitations recorded in the ranked cleanup plan."
+      ]
     },
     {
       "id": "complexity:src/runtime/observation-receipt.ts:buildObservationReceipt",

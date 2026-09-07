@@ -1423,6 +1423,21 @@ describe('watch command config gate', () => {
       handleWatch({ status: true });
       const rendered = log.mock.calls.map((call) => String(call[0])).join('\n');
       expect(rendered).toContain('Index generation: aaaaaaaaaaaa');
+      expect(rendered).toContain(
+        `Recorded reindex activity (${now} to ${now}): 2 run(s) (1 rebuilt, 1 reused, 0 failed), 0 redundant refresh(es) suppressed, 4 KB estimated writes (4 KB logical output)`,
+      );
+      expect(rendered).toContain('Reindex staging: 0 B reflinked, 0 B byte-copied');
+      const sections = [
+        'Index generation:',
+        'Recorded reindex activity',
+        'Reindex staging:',
+        'Reindex language typescript:',
+        'Reindex language attribution:',
+        'Refresh requests:',
+      ];
+      const positions = sections.map((section) => rendered.indexOf(section));
+      expect(positions.every((position) => position >= 0)).toBe(true);
+      expect(positions).toEqual([...positions].sort((a, b) => a - b));
       expect(rendered).toContain('Refresh requests: 2 pending, 0 claimed, 0 completed, 0 expired');
       expect(rendered).toContain(
         'Reindex language typescript: 1 run(s) (1 rebuilt, 0 reused), 1 KB produced, 268 ms cumulative indexer time',

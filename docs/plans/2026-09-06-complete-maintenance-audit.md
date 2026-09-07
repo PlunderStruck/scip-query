@@ -196,3 +196,7 @@ The legacy watcher decoder uses Number.isInteger for PIDs, accepting integers ou
 #### Legacy decoder batch ready to commit
 
 Build, public API contract, public consumer compilation, skill links, typecheck, lint, formatting and diff checks pass. The four distinguishing regressions and all61 focused tests pass. Refreshed the local index successfully (12.8s), confirmed fresh status, and reran diff-impact; it identifies the changed legacy decoder. The report still explicitly excludes four non-indexed paths and leaves the import-line edit unattributed; no complete-consumer or absence claim is made from that packet. No additional agent benchmark was run after the user requested focus on fixes.
+
+### 2026-09-07: highest-ranked complexity batch
+
+Completed the first five current-source hotspots, with behavior preservation, retained helper findings and the next ranked queue recorded in [the ranked cleanup plan](2026-09-07-ranked-complexity-cleanup.md). Full suite: 3,075 tests / 348 files. Five historical inventory entries moved from pending to fixed. This does not close the broader audit or classify every remaining warning as a defect. The current raw warning count is 643 because five large functions were decomposed into smaller phases that include eleven retained threshold findings. No thresholds, architecture policy or suppression rules were weakened. No agent benchmarks ran.
