@@ -768,7 +768,7 @@ function addSystemMapBoundaryObservation(input: {
   return null;
 }
 
-function seedSystemMapAnchors(input: {
+interface SystemMapAnchorInput {
   db: ScipDatabase;
   index: ProjectIndex;
   searches: readonly string[];
@@ -795,117 +795,149 @@ function seedSystemMapAnchors(input: {
   ): SourceConstructState;
   literalHits: SystemMapLiteralHit[];
   anchors: SystemMapAnchor[];
-}): { omittedSymbolCandidates: number; broadLiteralAnchors: number; withheldLiteralMatches: number } {
-  let omittedSymbolCandidates = 0;
+}
+
+function seedSystemMapAnchors(input: SystemMapAnchorInput): {
+  omittedSymbolCandidates: number;
+  broadLiteralAnchors: number;
+  withheldLiteralMatches: number;
+} {
   let broadLiteralAnchors = 0;
   let withheldLiteralMatches = 0;
   for (const query of input.searches) {
-    const matches = systemMapLiteralMatches(input.db, input.index, query, input.boundaryObservationLocations);
-    const traversalEligible = matches.filter((match) => literalMatchCanSeed(match, input.sourceAllowed));
-    const broad =
-      !input.opts.fullLiteralTraversal &&
-      (matches.length > DEFAULT_LITERAL_MATCH_LIMIT || traversalEligible.length > DEFAULT_LITERAL_SEED_LIMIT);
-    const materializedMatches = broad ? [] : matches;
-    const activeTraversalSeeds = new Set(
-      (broad
-        ? []
-        : input.opts.fullLiteralTraversal
-          ? traversalEligible
-          : [...traversalEligible]
-              .sort(compareLiteralTraversalSeedCandidates)
-              .slice(0, DEFAULT_ACTIVE_LITERAL_SEED_LIMIT)
-      ).map(literalMatchIdentity),
-    );
-    if (broad) {
-      broadLiteralAnchors += 1;
-      withheldLiteralMatches += matches.length;
-    }
-    for (const match of materializedMatches) {
-      const traversalSeed = activeTraversalSeeds.has(literalMatchIdentity(match));
-      const sourceOwnedSeed =
-        traversalSeed && !match.ownerSymbol && match.ownerStartLine !== null && match.ownerEndLine !== null;
-      input.addFile(
-        match.relativePath,
-        0,
-        `${traversalSeed ? 'literal-anchor' : 'literal-match'}:${query}`,
-        sourceOwnedSeed,
-        sourceOwnedSeed,
-      );
-      if (sourceOwnedSeed) {
-        input.addSourceConstruct(
-          {
-            file: match.relativePath,
-            name: match.ownerShortName ?? `${match.relativePath}:${match.ownerStartLine! + 1}`,
-            startLine: match.ownerStartLine!,
-            endLine: match.ownerEndLine!,
-          },
-          0,
-          `literal-source-owner:${query}`,
-          query,
-          true,
-        );
-      }
-      if (traversalSeed && match.ownerSymbol) {
-        const owner = resolveIndexedDefinitions(input.db, input.index, match.ownerSymbol).matches[0];
-        if (owner && !isModuleLikeSymbol(owner.symbol)) input.addSymbol(owner, 0, 'literal-owner', query, 'all', true);
-      }
-      input.literalHits.push({
+    const selection = selectLiteralAnchorMatches(input, query);
+    for (const match of selection.materializedMatches) {
+      materializeLiteralAnchorMatch(
+        input,
         query,
-        file: match.relativePath,
-        line: match.line,
-        ownerSymbol: match.ownerSymbol,
-        ownerShortName: match.ownerShortName,
-        ownerStartLine: match.ownerStartLine,
-        ownerEndLine: match.ownerEndLine,
-        sourceLine: match.sourceLine.trim(),
-        matchKind: match.matchKind,
-        traversalSeed,
-      });
+        match,
+        selection.activeTraversalSeeds.has(literalMatchIdentity(match)),
+      );
     }
-    input.anchors.push({
-      kind: 'literal',
-      query,
-      status: matches.length > 0 ? 'matched' : 'missing',
-      matchedRegionIds: [],
-      matchingLines: matches.length,
-      seedMatchingLines: broad ? 0 : activeTraversalSeeds.size,
-      matchOnlyLines: matches.length - activeTraversalSeeds.size,
-      eligibleSeedMatchingLines: traversalEligible.length,
-      materializedMatchingLines: materializedMatches.length,
-      withheldMatchingLines: broad ? matches.length : 0,
-      literalTraversal: broad ? 'withheld-broad' : 'materialized',
-      representativeMatches: broad ? selectLiteralRepresentatives(query, matches) : undefined,
-      narrowingCommands: broad ? literalNarrowingCommands(query, matches) : undefined,
-      exhaustiveTraversalCommand:
-        broad || activeTraversalSeeds.size < traversalEligible.length
-          ? `scip-query system-map --search ${shellArgument(query)} --full-literal-traversal`
-          : undefined,
-      seedRegionIds: [],
-      matchOnlyRegionIds: [],
-    });
+    input.anchors.push(describeLiteralAnchor(query, selection));
+    if (selection.broad) {
+      broadLiteralAnchors += 1;
+      withheldLiteralMatches += selection.matches.length;
+    }
   }
-  for (const query of input.symbolQueries) {
-    const resolution = resolveIndexedDefinitions(input.db, input.index, query);
-    omittedSymbolCandidates += resolution.omitted;
-    const sourceConstruct = sourceConstructForLocationQuery(input.db, query);
-    const preciseCompilerMatches = resolution.matches.filter((definition) => !isModuleLikeSymbol(definition.symbol));
-    const useSourceConstruct = sourceConstruct !== null && preciseCompilerMatches.length === 0;
-    if (useSourceConstruct) input.addSourceConstruct(sourceConstruct, 0, 'source-construct-anchor', query, true);
-    const selectedDefinitions = useSourceConstruct ? preciseCompilerMatches : resolution.matches;
-    for (const definition of selectedDefinitions) input.addSymbol(definition, 0, 'symbol-anchor', query, 'all', true);
-    const sourceCandidate = useSourceConstruct ? sourceConstructAnchorCandidate(sourceConstruct) : null;
-    const totalCandidates = useSourceConstruct ? 1 : resolution.total;
-    input.anchors.push({
-      kind: 'symbol',
-      query,
-      status: totalCandidates === 0 ? 'missing' : totalCandidates === 1 ? 'matched' : 'ambiguous',
-      matchedRegionIds: [],
-      symbolCandidates: [...(sourceCandidate ? [sourceCandidate] : []), ...selectedDefinitions.map(anchorCandidate)],
-      totalSymbolCandidates: totalCandidates,
-      omittedSymbolCandidates: resolution.omitted,
-    });
-  }
+  let omittedSymbolCandidates = 0;
+  for (const query of input.symbolQueries) omittedSymbolCandidates += seedSymbolAnchor(input, query);
   return { omittedSymbolCandidates, broadLiteralAnchors, withheldLiteralMatches };
+}
+
+function selectLiteralAnchorMatches(input: SystemMapAnchorInput, query: string) {
+  const matches = systemMapLiteralMatches(input.db, input.index, query, input.boundaryObservationLocations);
+  const traversalEligible = matches.filter((match) => literalMatchCanSeed(match, input.sourceAllowed));
+  const broad =
+    !input.opts.fullLiteralTraversal &&
+    (matches.length > DEFAULT_LITERAL_MATCH_LIMIT || traversalEligible.length > DEFAULT_LITERAL_SEED_LIMIT);
+  const materializedMatches = broad ? [] : matches;
+  const activeTraversalSeeds = new Set(
+    (broad
+      ? []
+      : input.opts.fullLiteralTraversal
+        ? traversalEligible
+        : [...traversalEligible].sort(compareLiteralTraversalSeedCandidates).slice(0, DEFAULT_ACTIVE_LITERAL_SEED_LIMIT)
+    ).map(literalMatchIdentity),
+  );
+  return { matches, traversalEligible, broad, materializedMatches, activeTraversalSeeds };
+}
+
+function materializeLiteralAnchorMatch(
+  input: SystemMapAnchorInput,
+  query: string,
+  match: ReturnType<typeof systemMapLiteralMatches>[number],
+  traversalSeed: boolean,
+): void {
+  const sourceOwnedSeed =
+    traversalSeed && !match.ownerSymbol && match.ownerStartLine !== null && match.ownerEndLine !== null;
+  input.addFile(
+    match.relativePath,
+    0,
+    `${traversalSeed ? 'literal-anchor' : 'literal-match'}:${query}`,
+    sourceOwnedSeed,
+    sourceOwnedSeed,
+  );
+  if (sourceOwnedSeed) {
+    input.addSourceConstruct(
+      {
+        file: match.relativePath,
+        name: match.ownerShortName ?? `${match.relativePath}:${match.ownerStartLine! + 1}`,
+        startLine: match.ownerStartLine!,
+        endLine: match.ownerEndLine!,
+      },
+      0,
+      `literal-source-owner:${query}`,
+      query,
+      true,
+    );
+  }
+  if (traversalSeed && match.ownerSymbol) {
+    const owner = resolveIndexedDefinitions(input.db, input.index, match.ownerSymbol).matches[0];
+    if (owner && !isModuleLikeSymbol(owner.symbol)) input.addSymbol(owner, 0, 'literal-owner', query, 'all', true);
+  }
+  input.literalHits.push({
+    query,
+    file: match.relativePath,
+    line: match.line,
+    ownerSymbol: match.ownerSymbol,
+    ownerShortName: match.ownerShortName,
+    ownerStartLine: match.ownerStartLine,
+    ownerEndLine: match.ownerEndLine,
+    sourceLine: match.sourceLine.trim(),
+    matchKind: match.matchKind,
+    traversalSeed,
+  });
+}
+
+function describeLiteralAnchor(
+  query: string,
+  selection: ReturnType<typeof selectLiteralAnchorMatches>,
+): SystemMapAnchor {
+  const { matches, traversalEligible, broad, materializedMatches, activeTraversalSeeds } = selection;
+  return {
+    kind: 'literal',
+    query,
+    status: matches.length > 0 ? 'matched' : 'missing',
+    matchedRegionIds: [],
+    matchingLines: matches.length,
+    seedMatchingLines: broad ? 0 : activeTraversalSeeds.size,
+    matchOnlyLines: matches.length - activeTraversalSeeds.size,
+    eligibleSeedMatchingLines: traversalEligible.length,
+    materializedMatchingLines: materializedMatches.length,
+    withheldMatchingLines: broad ? matches.length : 0,
+    literalTraversal: broad ? 'withheld-broad' : 'materialized',
+    representativeMatches: broad ? selectLiteralRepresentatives(query, matches) : undefined,
+    narrowingCommands: broad ? literalNarrowingCommands(query, matches) : undefined,
+    exhaustiveTraversalCommand:
+      broad || activeTraversalSeeds.size < traversalEligible.length
+        ? `scip-query system-map --search ${shellArgument(query)} --full-literal-traversal`
+        : undefined,
+    seedRegionIds: [],
+    matchOnlyRegionIds: [],
+  };
+}
+
+function seedSymbolAnchor(input: SystemMapAnchorInput, query: string): number {
+  const resolution = resolveIndexedDefinitions(input.db, input.index, query);
+  const sourceConstruct = sourceConstructForLocationQuery(input.db, query);
+  const preciseCompilerMatches = resolution.matches.filter((definition) => !isModuleLikeSymbol(definition.symbol));
+  const useSourceConstruct = sourceConstruct !== null && preciseCompilerMatches.length === 0;
+  if (useSourceConstruct) input.addSourceConstruct(sourceConstruct, 0, 'source-construct-anchor', query, true);
+  const selectedDefinitions = useSourceConstruct ? preciseCompilerMatches : resolution.matches;
+  for (const definition of selectedDefinitions) input.addSymbol(definition, 0, 'symbol-anchor', query, 'all', true);
+  const sourceCandidate = useSourceConstruct ? sourceConstructAnchorCandidate(sourceConstruct) : null;
+  const totalCandidates = useSourceConstruct ? 1 : resolution.total;
+  input.anchors.push({
+    kind: 'symbol',
+    query,
+    status: totalCandidates === 0 ? 'missing' : totalCandidates === 1 ? 'matched' : 'ambiguous',
+    matchedRegionIds: [],
+    symbolCandidates: [...(sourceCandidate ? [sourceCandidate] : []), ...selectedDefinitions.map(anchorCandidate)],
+    totalSymbolCandidates: totalCandidates,
+    omittedSymbolCandidates: resolution.omitted,
+  });
+  return resolution.omitted;
 }
 
 function finalizeSystemMap(input: {

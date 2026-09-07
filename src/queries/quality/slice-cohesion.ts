@@ -943,68 +943,79 @@ function modelBody(
     bases.add(base);
     aliases.set(name, bases);
   };
+  const recordAliases = (names: readonly string[], expression: TypeScript.Expression): void => {
+    for (const root of aliasRoots(ts, expression)) for (const name of names) addAlias(name, root);
+  };
   const recordInitializer = (names: readonly string[], initializer: TypeScript.Expression): void => {
     const value = unwrapExpression(ts, initializer);
     if (isAggregate(ts, value)) {
       for (const name of names) containers.add(name);
       return;
     }
-    for (const root of aliasRoots(ts, value)) for (const name of names) addAlias(name, root);
+    recordAliases(names, value);
   };
-  const visit = (node: TypeScript.Node): void => {
-    if (ts.isVariableDeclaration(node)) {
-      const names = bindingNames(node.name);
-      for (const name of names) localNames.add(name);
-      const initializer = node.initializer ? unwrapExpression(ts, node.initializer) : null;
-      const closure = initializer ? closureExpression(ts, initializer) : null;
-      if (closure && ts.isIdentifier(node.name)) {
-        closureNodes.set(node.name.text, closure);
-      } else if (node.initializer) {
-        recordInitializer(names, node.initializer);
-        const setter = tupleStateSetter(ts, node);
-        if (setter) stateSetters.set(setter.setter, setter.state);
-      } else {
-        const source = iterationSourceOf(ts, node);
-        if (source)
-          for (const root of aliasRoots(ts, unwrapExpression(ts, source)))
-            for (const name of names) addAlias(name, root);
-      }
-    } else if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-      const left = unwrapExpression(ts, node.left);
-      const right = unwrapExpression(ts, node.right);
-      if (ts.isIdentifier(left)) {
-        recordInitializer([left.text], node.right);
-      } else if (ts.isIdentifier(right)) {
-        // `target.set(...)` is below; `container.field = local` stores the local inside the container.
-        addAlias(right.text, baseName(ts, left));
-      }
-    } else if (ts.isCallExpression(node)) {
-      const callee = unwrapExpression(ts, node.expression);
-      const mutating =
-        ts.isElementAccessExpression(callee) ||
-        (ts.isPropertyAccessExpression(callee) && !READ_ONLY_METHODS.has(callee.name.text));
-      if (mutating && (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee))) {
-        const receiver = baseName(ts, callee);
-        for (const argument of node.arguments) {
-          const value = unwrapExpression(ts, argument);
-          if (ts.isIdentifier(value)) addAlias(value.text, receiver);
-        }
-      }
-    } else if (ts.isParameter(node) && node.parent !== callable) {
+  const recordVariable = (node: TypeScript.VariableDeclaration): void => {
+    const names = bindingNames(node.name);
+    for (const name of names) localNames.add(name);
+    const initializer = node.initializer ? unwrapExpression(ts, node.initializer) : null;
+    const closure = initializer ? closureExpression(ts, initializer) : null;
+    if (closure && ts.isIdentifier(node.name)) {
+      closureNodes.set(node.name.text, closure);
+      return;
+    }
+    if (node.initializer) {
+      recordInitializer(names, node.initializer);
+      const setter = tupleStateSetter(ts, node);
+      if (setter) stateSetters.set(setter.setter, setter.state);
+      return;
+    }
+    const source = iterationSourceOf(ts, node);
+    if (source) recordAliases(names, unwrapExpression(ts, source));
+  };
+  const recordAssignment = (node: TypeScript.BinaryExpression): void => {
+    const left = unwrapExpression(ts, node.left);
+    const right = unwrapExpression(ts, node.right);
+    if (ts.isIdentifier(left)) recordInitializer([left.text], node.right);
+    else if (ts.isIdentifier(right)) {
+      // `container.field = local` stores the local inside the container.
+      addAlias(right.text, baseName(ts, left));
+    }
+  };
+  const recordCallAliases = (node: TypeScript.CallExpression): void => {
+    const callee = unwrapExpression(ts, node.expression);
+    if (!ts.isPropertyAccessExpression(callee) && !ts.isElementAccessExpression(callee)) return;
+    if (ts.isPropertyAccessExpression(callee) && READ_ONLY_METHODS.has(callee.name.text)) return;
+    const receiver = baseName(ts, callee);
+    for (const argument of node.arguments) {
+      const value = unwrapExpression(ts, argument);
+      if (ts.isIdentifier(value)) addAlias(value.text, receiver);
+    }
+  };
+  const recordDeclaration = (node: TypeScript.Node): void => {
+    if (ts.isParameter(node) && node.parent !== callable) {
       for (const name of bindingNames(node.name)) localNames.add(name);
-    } else if (ts.isFunctionDeclaration(node) && node.name) {
+    } else if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) {
+      if (!node.name) return;
       localNames.add(node.name.text);
-      if (node.body) closureNodes.set(node.name.text, node);
-    } else if (ts.isClassDeclaration(node) && node.name) {
-      localNames.add(node.name.text);
+      if (ts.isFunctionDeclaration(node) && node.body) closureNodes.set(node.name.text, node);
     } else if (ts.isCatchClause(node) && node.variableDeclaration) {
       for (const name of bindingNames(node.variableDeclaration.name)) localNames.add(name);
     }
+  };
+  const recordCalleeSpan = (node: TypeScript.Node): void => {
     if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
       calleeSpans.add(`${node.expression.getStart(sourceFile)}:${node.expression.getEnd()}`);
     } else if (ts.isTaggedTemplateExpression(node)) {
       calleeSpans.add(`${node.tag.getStart(sourceFile)}:${node.tag.getEnd()}`);
     }
+  };
+  const visit = (node: TypeScript.Node): void => {
+    if (ts.isVariableDeclaration(node)) recordVariable(node);
+    else if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken)
+      recordAssignment(node);
+    else if (ts.isCallExpression(node)) recordCallAliases(node);
+    else recordDeclaration(node);
+    recordCalleeSpan(node);
     node.forEachChild(visit);
   };
   visit(callableBody);
@@ -1783,126 +1794,130 @@ function isLocalBase(body: BodyModel, base: string): boolean {
 // ── Outputs ─────────────────────────────────────────────────────────
 
 function collectOutputs(body: BodyModel, flow: FlowModel): OutputSeed[] {
-  const { ts, sourceFile } = body;
   const outputs: OutputSeed[] = [];
   const usePoints = [...flow.pointById.values()].filter((point) => point.kind === 'use');
-  const pointsInRange = (start: number, end: number): TypeScriptLocalFlowPoint[] =>
-    usePoints.filter((point) => point.start >= start && point.end <= end);
   for (const unit of body.units) {
-    const line = unit.startLine;
-    if (unit.kind === 'return') {
-      const expression = ts.isReturnStatement(unit.node) ? unit.node.expression : (unit.node as TypeScript.Expression);
-      if (!expression) continue;
-      const literal = unwrapExpression(ts, expression);
-      if (ts.isObjectLiteralExpression(literal) && literal.properties.length >= 2) {
-        // Each returned field is one output; the same field on another return statement is the same output.
-        for (const property of literal.properties) {
-          const name = propertyLabel(ts, sourceFile, property);
-          outputs.push({
-            id: `return.${name}@${line + 1}`,
-            kind: 'return-property',
-            label: `return.${name}`,
-            line,
-            unit: unit.index,
-            group: `return.${name}`,
-            hook: false,
-            seedPoints: pointsInRange(property.getStart(sourceFile), property.getEnd()),
-          });
-        }
-        continue;
-      }
-      // A function has one return value; every return statement produces it.
+    if (unit.kind === 'return') outputs.push(...returnOutputSeeds(body, unit, usePoints));
+    else if (unit.kind === 'throw') {
       outputs.push({
-        id: `return@${line + 1}`,
-        kind: 'return',
-        label: 'return',
-        line,
-        unit: unit.index,
-        group: 'return',
-        hook: false,
-        seedPoints: null,
-      });
-      continue;
-    }
-    if (unit.kind === 'throw') {
-      outputs.push({
-        id: `throw@${line + 1}`,
+        id: `throw@${unit.startLine + 1}`,
         kind: 'throw',
         label: unit.label,
-        line,
+        line: unit.startLine,
         unit: unit.index,
-        group: `throw@${line + 1}`,
+        group: `throw@${unit.startLine + 1}`,
         hook: false,
         seedPoints: null,
       });
-      continue;
+    } else if (unit.kind === 'statement') {
+      const output = statementOutputSeed(body, flow, unit);
+      if (output) outputs.push(output);
     }
-    if (unit.kind !== 'statement') continue;
-    const expression = statementExpression(ts, unit.node);
-    if (!expression) continue;
-    const written = writtenBase(body, expression);
-    const unitWrites = flow.writesByUnit.get(unit.index);
-    const external = unitWrites ? [...unitWrites.external] : [];
-    const isCall =
-      ts.isCallExpression(expression) || ts.isNewExpression(expression) || ts.isTaggedTemplateExpression(expression);
-    if (written !== null && isLocalBase(body, written)) {
-      // A write to something the function owns; an output only when an alias makes it someone else's.
-      if (external.length > 0) {
-        outputs.push({
-          id: `write:${external[0]}@${line + 1}`,
-          kind: 'mutation',
-          label: unit.label,
-          line,
-          unit: unit.index,
-          group: `write:${external[0]}@${line + 1}`,
-          hook: false,
-          seedPoints: null,
-        });
-      }
-      continue;
-    }
-    if (isCall) {
-      const callee = ts.isTaggedTemplateExpression(expression)
-        ? expression.tag
-        : unwrapExpression(ts, expression.expression);
-      if (written === null) {
-        if (ts.isIdentifier(callee)) {
-          const summary = body.closures.get(callee.text);
-          if (summary && ![...summary.writes].some((base) => !isLocalBase(body, base))) continue;
-        }
-        // A call that receives a fresh local aggregate fills it, and a state
-        // write is the function's own work; neither is an effect on the outside.
-        if (unitWrites && unitWrites.local.size > 0 && external.length === 0) continue;
-      }
-      const calleeText = compact(callee.getText(sourceFile));
-      const leaf = ts.isTaggedTemplateExpression(expression) ? null : calleeLeafName(ts, callee);
-      outputs.push({
-        id: `call:${calleeText}@${line + 1}`,
-        kind: 'effect-call',
-        label: `${calleeText}(…)`,
-        line,
-        unit: unit.index,
-        group: `call:${calleeText}@${line + 1}`,
-        hook: leaf !== null && HOOK_NAME.test(leaf),
-        seedPoints: null,
-      });
-      continue;
-    }
-    if (written === null) continue;
-    if (written !== 'this' && !body.paramNames.has(written) && isLocalIdentifierWrite(body, expression, flow, unit))
-      continue;
-    outputs.push({
-      id: `write:${written}@${line + 1}`,
-      kind: 'mutation',
-      label: unit.label,
-      line,
-      unit: unit.index,
-      group: `write:${written}@${line + 1}`,
-      hook: false,
-      seedPoints: null,
-    });
   }
   return outputs;
+}
+
+function returnOutputSeeds(body: BodyModel, unit: Unit, usePoints: readonly TypeScriptLocalFlowPoint[]): OutputSeed[] {
+  const { ts, sourceFile } = body;
+  const line = unit.startLine;
+  const expression = ts.isReturnStatement(unit.node) ? unit.node.expression : (unit.node as TypeScript.Expression);
+  if (!expression) return [];
+  const literal = unwrapExpression(ts, expression);
+  if (ts.isObjectLiteralExpression(literal) && literal.properties.length >= 2) {
+    return literal.properties.map((property) => {
+      const name = propertyLabel(ts, sourceFile, property);
+      const start = property.getStart(sourceFile);
+      const end = property.getEnd();
+      return {
+        id: `return.${name}@${line + 1}`,
+        kind: 'return-property',
+        label: `return.${name}`,
+        line,
+        unit: unit.index,
+        group: `return.${name}`,
+        hook: false,
+        seedPoints: usePoints.filter((point) => point.start >= start && point.end <= end),
+      };
+    });
+  }
+  return [
+    {
+      id: `return@${line + 1}`,
+      kind: 'return',
+      label: 'return',
+      line,
+      unit: unit.index,
+      group: 'return',
+      hook: false,
+      seedPoints: null,
+    },
+  ];
+}
+
+function mutationOutputSeed(unit: Unit, base: string): OutputSeed {
+  return {
+    id: `write:${base}@${unit.startLine + 1}`,
+    kind: 'mutation',
+    label: unit.label,
+    line: unit.startLine,
+    unit: unit.index,
+    group: `write:${base}@${unit.startLine + 1}`,
+    hook: false,
+    seedPoints: null,
+  };
+}
+
+function statementOutputSeed(body: BodyModel, flow: FlowModel, unit: Unit): OutputSeed | null {
+  const { ts } = body;
+  const expression = statementExpression(ts, unit.node);
+  if (!expression) return null;
+  const written = writtenBase(body, expression);
+  const unitWrites = flow.writesByUnit.get(unit.index);
+  if (written !== null && isLocalBase(body, written)) {
+    // A local write is external only through the first observed external alias.
+    const external = unitWrites ? [...unitWrites.external] : [];
+    return external.length > 0 ? mutationOutputSeed(unit, external[0]!) : null;
+  }
+  if (ts.isCallExpression(expression) || ts.isNewExpression(expression) || ts.isTaggedTemplateExpression(expression)) {
+    return callOutputSeed(body, unit, expression, written, unitWrites);
+  }
+  if (written === null) return null;
+  if (written !== 'this' && !body.paramNames.has(written) && isLocalIdentifierWrite(body, expression, flow, unit))
+    return null;
+  return mutationOutputSeed(unit, written);
+}
+
+function callOutputSeed(
+  body: BodyModel,
+  unit: Unit,
+  expression: TypeScript.CallExpression | TypeScript.NewExpression | TypeScript.TaggedTemplateExpression,
+  written: string | null,
+  unitWrites: UnitWrites | undefined,
+): OutputSeed | null {
+  const { ts, sourceFile } = body;
+  const callee = ts.isTaggedTemplateExpression(expression)
+    ? expression.tag
+    : unwrapExpression(ts, expression.expression);
+  if (written === null) {
+    if (ts.isIdentifier(callee)) {
+      const summary = body.closures.get(callee.text);
+      if (summary && ![...summary.writes].some((base) => !isLocalBase(body, base))) return null;
+    }
+    // Filling a local aggregate or updating local state is not an external effect.
+    if (unitWrites && unitWrites.local.size > 0 && unitWrites.external.size === 0) return null;
+  }
+  const calleeText = compact(callee.getText(sourceFile));
+  const leaf = ts.isTaggedTemplateExpression(expression) ? null : calleeLeafName(ts, callee);
+  return {
+    id: `call:${calleeText}@${unit.startLine + 1}`,
+    kind: 'effect-call',
+    label: `${calleeText}(…)`,
+    line: unit.startLine,
+    unit: unit.index,
+    group: `call:${calleeText}@${unit.startLine + 1}`,
+    hook: leaf !== null && HOOK_NAME.test(leaf),
+    seedPoints: null,
+  };
 }
 
 /** An assignment to a bare identifier the function itself declared is local state, not a write to the outside. */

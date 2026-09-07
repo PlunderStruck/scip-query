@@ -86,109 +86,107 @@ export function buildObservationReceipt(input: ObservationReceiptInput): Observa
     input.gitContext ??
     snapshot?.gitContext ??
     (declaredSources?.has('live-workspace') ? resolveGitWorktreeContext(input.projectRoot) : undefined);
-  const collaborationDomainId = input.collaborationDomainId ?? input.db?.config.collaborationDomainId;
-  const collaborationDomain = collaborationDomainId
-    ? createObservationIdentity(COLLABORATION_DOMAIN_IDENTITY_PROJECTION, 1, collaborationDomainId)
-    : undefined;
-  const workspaceInstance = gitContext
-    ? createObservationIdentity(WORKSPACE_INSTANCE_IDENTITY_PROJECTION, 1, gitContext.worktreeId)
-    : undefined;
-  const repositoryContent = snapshot
-    ? createObservationIdentity(
-        REPOSITORY_CONTENT_IDENTITY_PROJECTION,
-        1,
-        canonicalRepositoryContentSnapshot(snapshot.repositoryContent),
-      )
-    : undefined;
-  const snapshotIndexInputs = snapshot
-    ? createObservationIdentity(
-        INDEX_INPUT_IDENTITY_PROJECTION,
-        snapshot.indexInputs.version,
-        canonicalProjectInputSnapshot(snapshot.indexInputs),
-      )
-    : undefined;
-  const generationInputs =
-    input.db && snapshot ? generationIndexInputIdentity(input.db.generation.metadataRaw) : undefined;
-  const index = input.db
-    ? {
-        generation: createObservationIdentity(INDEX_GENERATION_IDENTITY_PROJECTION, 1, input.db.generation.identity),
-        ...(generationInputs ? { inputs: generationInputs } : {}),
-        source: input.db.generation.source,
-      }
-    : undefined;
-  const observedSourceKinds =
-    declaredSources ??
-    new Set([
-      ...(index ? (['index-generation'] as const) : []),
-      ...(repositoryContent
-        ? (['repository-snapshot'] as const)
-        : workspaceInstance
-          ? (['live-workspace'] as const)
-          : []),
-    ]);
-  const observedSources: ObservationSourceFact[] = [
-    ...(index && observedSourceKinds.has('index-generation')
-      ? [{ kind: 'index-generation' as const, identity: index.generation }]
-      : []),
-    ...(repositoryContent && observedSourceKinds.has('repository-snapshot')
-      ? [{ kind: 'repository-snapshot' as const, identity: repositoryContent }]
-      : []),
-    ...(workspaceInstance && observedSourceKinds.has('live-workspace')
-      ? [{ kind: 'live-workspace' as const, identity: workspaceInstance }]
-      : []),
-    ...(observedSourceKinds.has('process') ? [{ kind: 'process' as const }] : []),
-  ];
-  const stabilityProofs: ObservationStabilityProof[] = [
-    ...(index && observedSourceKinds.has('index-generation')
-      ? [
-          {
-            source: 'index-generation' as const,
-            kind: index.source === 'immutable' ? ('immutable' as const) : ('not-established' as const),
-          },
-        ]
-      : []),
-    ...(repositoryContent && observedSourceKinds.has('repository-snapshot')
-      ? [{ source: 'repository-snapshot' as const, kind: 'fixed-snapshot' as const }]
-      : []),
-    ...(workspaceInstance && observedSourceKinds.has('live-workspace')
-      ? [{ source: 'live-workspace' as const, kind: 'not-established' as const }]
-      : []),
-    ...(observedSourceKinds.has('process') ? [{ source: 'process' as const, kind: 'not-established' as const }] : []),
-  ];
-  if (observedSources.length === 0) {
-    observedSources.push({ kind: 'process' });
-    stabilityProofs.push({ source: 'process', kind: 'not-established' });
-  }
+  const facts = buildObservationFacts(input, gitContext);
+  const sources = declaredSources ?? inferredObservationSources(facts);
+  const evidence = observationSourceEvidence(facts, sources);
   return {
     schemaVersion: OBSERVATION_RECEIPT_SCHEMA_VERSION,
     observedAt: (input.observedAt ?? (snapshot ? new Date(snapshot.capturedAt) : new Date())).toISOString(),
-    facts: {
-      ...(collaborationDomain ? { collaborationDomain } : {}),
-      ...(workspaceInstance ? { workspaceInstance } : {}),
-      ...(repositoryContent ? { wholeContent: repositoryContent } : {}),
-      ...(snapshotIndexInputs
-        ? {
-            relevantInputs: [
-              {
-                subject: INDEX_INPUT_RELEVANT_SUBJECT,
-                identity: snapshotIndexInputs,
-              },
-            ],
-          }
-        : {}),
-      ...(index ? { index } : {}),
-    },
-    observedSources,
-    stabilityProofs,
-    ...(gitContext
-      ? {
-          diagnostics: {
-            clean: gitContext.clean,
-            ...(gitContext.headCommit ? { headCommit: gitContext.headCommit } : {}),
-            ...(gitContext.treeOid ? { treeOid: gitContext.treeOid } : {}),
-          },
-        }
-      : {}),
+    facts,
+    ...evidence,
+    ...(gitContext ? { diagnostics: observationGitDiagnostics(gitContext) } : {}),
+  };
+}
+
+function buildObservationFacts(
+  input: ObservationReceiptInput,
+  gitContext: GitWorktreeContext | undefined,
+): ObservationReceiptV2['facts'] {
+  const facts: ObservationReceiptV2['facts'] = {};
+  const collaborationDomainId = input.collaborationDomainId ?? input.db?.config.collaborationDomainId;
+  if (collaborationDomainId) {
+    facts.collaborationDomain = createObservationIdentity(
+      COLLABORATION_DOMAIN_IDENTITY_PROJECTION,
+      1,
+      collaborationDomainId,
+    );
+  }
+  if (gitContext) {
+    facts.workspaceInstance = createObservationIdentity(
+      WORKSPACE_INSTANCE_IDENTITY_PROJECTION,
+      1,
+      gitContext.worktreeId,
+    );
+  }
+  if (input.snapshot) {
+    facts.wholeContent = createObservationIdentity(
+      REPOSITORY_CONTENT_IDENTITY_PROJECTION,
+      1,
+      canonicalRepositoryContentSnapshot(input.snapshot.repositoryContent),
+    );
+    facts.relevantInputs = [
+      {
+        subject: INDEX_INPUT_RELEVANT_SUBJECT,
+        identity: createObservationIdentity(
+          INDEX_INPUT_IDENTITY_PROJECTION,
+          input.snapshot.indexInputs.version,
+          canonicalProjectInputSnapshot(input.snapshot.indexInputs),
+        ),
+      },
+    ];
+  }
+  if (input.db) {
+    const inputs = input.snapshot ? generationIndexInputIdentity(input.db.generation.metadataRaw) : undefined;
+    facts.index = {
+      generation: createObservationIdentity(INDEX_GENERATION_IDENTITY_PROJECTION, 1, input.db.generation.identity),
+      ...(inputs ? { inputs } : {}),
+      source: input.db.generation.source,
+    };
+  }
+  return facts;
+}
+
+function inferredObservationSources(facts: ObservationReceiptV2['facts']): Set<ObservationSourceFact['kind']> {
+  const sources = new Set<ObservationSourceFact['kind']>();
+  if (facts.index) sources.add('index-generation');
+  if (facts.wholeContent) sources.add('repository-snapshot');
+  else if (facts.workspaceInstance) sources.add('live-workspace');
+  return sources;
+}
+
+/** Record a source and its stability proof together, under the same eligibility decision. */
+function observationSourceEvidence(
+  facts: ObservationReceiptV2['facts'],
+  sources: ReadonlySet<ObservationSourceFact['kind']>,
+): Pick<ObservationReceiptV2, 'observedSources' | 'stabilityProofs'> {
+  const observedSources: ObservationSourceFact[] = [];
+  const stabilityProofs: ObservationStabilityProof[] = [];
+  const add = (fact: ObservationSourceFact, kind: ObservationStabilityProof['kind']): void => {
+    observedSources.push(fact);
+    stabilityProofs.push({ source: fact.kind, kind });
+  };
+  if (facts.index && sources.has('index-generation')) {
+    add(
+      { kind: 'index-generation', identity: facts.index.generation },
+      facts.index.source === 'immutable' ? 'immutable' : 'not-established',
+    );
+  }
+  if (facts.wholeContent && sources.has('repository-snapshot')) {
+    add({ kind: 'repository-snapshot', identity: facts.wholeContent }, 'fixed-snapshot');
+  }
+  if (facts.workspaceInstance && sources.has('live-workspace')) {
+    add({ kind: 'live-workspace', identity: facts.workspaceInstance }, 'not-established');
+  }
+  if (sources.has('process')) add({ kind: 'process' }, 'not-established');
+  if (observedSources.length === 0) add({ kind: 'process' }, 'not-established');
+  return { observedSources, stabilityProofs };
+}
+
+function observationGitDiagnostics(gitContext: GitWorktreeContext): ObservationReceiptV2['diagnostics'] {
+  return {
+    clean: gitContext.clean,
+    ...(gitContext.headCommit ? { headCommit: gitContext.headCommit } : {}),
+    ...(gitContext.treeOid ? { treeOid: gitContext.treeOid } : {}),
   };
 }
 

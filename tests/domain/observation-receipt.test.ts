@@ -20,6 +20,25 @@ import {
 } from '../../src/runtime/observation-receipt.js';
 
 describe('observation receipts', () => {
+  it.each(
+    ([[], ['index-generation'], ['repository-snapshot'], ['process']] as const).map((observedSourceKinds) => ({
+      observedSourceKinds,
+    })),
+  )('keeps unavailable declared sources out of both evidence lists: %j', ({ observedSourceKinds }) => {
+    const receipt = buildObservationReceipt({
+      projectRoot: '/repo',
+      observedAt: new Date('2026-09-07T00:00:00.000Z'),
+      observedSourceKinds,
+    });
+    expect(receipt).toEqual({
+      schemaVersion: 2,
+      observedAt: '2026-09-07T00:00:00.000Z',
+      facts: {},
+      observedSources: [{ kind: 'process' }],
+      stabilityProofs: [{ source: 'process', kind: 'not-established' }],
+    });
+  });
+
   it('records a suppression generation without pretending to snapshot repository contents', () => {
     const receipt = buildIndexGenerationObservationReceipt({
       projectRoot: '/repo',

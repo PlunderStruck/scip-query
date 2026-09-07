@@ -306,9 +306,13 @@
           "name": "buildObservationReceipt"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated identity facts from source/proof pairing and Git diagnostics; process fallback and identity precedence preserved. Now cyclomatic 9, cognitive 4.",
+      "verification": [
+        "200 focused tests passed across six files; full suite 3079 tests / 348 files passed.",
+        "Build, typecheck, changed-file lint, format, public API contract, public API consumer, and skill links passed.",
+        "Current-source review accounted; fresh indexed diff-impact mapped 27 changed symbols to 8 affected files; configured architecture checks passed."
+      ]
     },
     {
       "id": "complexity:src/queries/graph/system-map.ts:seedSystemMapAnchors",
@@ -321,9 +325,13 @@
           "name": "seedSystemMapAnchors"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated literal selection, source materialization, reporting, and symbol seeding; ambiguity and traversal limits preserved. Now cyclomatic 5, cognitive 6.",
+      "verification": [
+        "200 focused tests passed across six files; full suite 3079 tests / 348 files passed.",
+        "Build, typecheck, changed-file lint, format, public API contract, public API consumer, and skill links passed.",
+        "Current-source review accounted; fresh indexed diff-impact mapped 27 changed symbols to 8 affected files; configured architecture checks passed."
+      ]
     },
     {
       "id": "complexity:src/queries/quality/slice-cohesion.ts:collectOutputs",
@@ -336,9 +344,13 @@
           "name": "collectOutputs"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated return fields, mutation outputs, and call effects while preserving alias and local-closure exclusions. Now cyclomatic 6, cognitive 8.",
+      "verification": [
+        "200 focused tests passed across six files; full suite 3079 tests / 348 files passed.",
+        "Build, typecheck, changed-file lint, format, public API contract, public API consumer, and skill links passed.",
+        "Current-source review accounted; fresh indexed diff-impact mapped 27 changed symbols to 8 affected files; configured architecture checks passed."
+      ]
     },
     {
       "id": "complexity:src/runtime/commands/command-handlers.ts:handleWatch",
@@ -351,9 +363,13 @@
           "name": "handleWatch"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Centralized timing validation and separated watch operations while preserving rejection precedence and foreground/daemon ownership. Now cyclomatic 8, cognitive 10.",
+      "verification": [
+        "200 focused tests passed across six files; full suite 3079 tests / 348 files passed.",
+        "Build, typecheck, changed-file lint, format, public API contract, public API consumer, and skill links passed.",
+        "Current-source review accounted; fresh indexed diff-impact mapped 27 changed symbols to 8 affected files; configured architecture checks passed."
+      ]
     },
     {
       "id": "complexity:src/queries/quality/slice-cohesion.ts:modelBody.visit",
@@ -366,9 +382,13 @@
           "name": "modelBody.visit"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated declaration, initializer, assignment, call-alias, and callee-span facts while preserving AST traversal order. Now cyclomatic 5, cognitive 5.",
+      "verification": [
+        "200 focused tests passed across six files; full suite 3079 tests / 348 files passed.",
+        "Build, typecheck, changed-file lint, format, public API contract, public API consumer, and skill links passed.",
+        "Current-source review accounted; fresh indexed diff-impact mapped 27 changed symbols to 8 affected files; configured architecture checks passed."
+      ]
     },
     {
       "id": "complexity:src/reindex/index.ts:runLanguageIndexersForFreshReindex",

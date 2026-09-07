@@ -837,139 +837,152 @@ export function handleUninstall(rawOpts: unknown): void {
   for (const line of formatUninstallReport(report, { verbose: booleanOptionValue(opts, 'verbose') })) console.log(line);
 }
 
-// scip-query: ignore-extract — long-running watch command lifecycle: option
-// overrides, watcher callbacks, start/stop behavior, and SIGINT handling are
-// one process action.
-export async function handleWatch(rawOpts: unknown): Promise<void> {
-  const opts = commandOptions(rawOpts);
-  const debounce = numberOptionValue(opts, 'debounce');
-  const cooldown = numberOptionValue(opts, 'cooldown');
-  const gitPoll = numberOptionValue(opts, 'gitPoll');
-  const idleTimeout = numberOptionValue(opts, 'idleTimeout');
-  const daemon = booleanOptionValue(opts, 'daemon');
-  const status = booleanOptionValue(opts, 'status');
-  const stop = booleanOptionValue(opts, 'stop');
-  const prune = booleanOptionValue(opts, 'prune');
-  const json = booleanOptionValue(opts, 'json');
-  const lifecycleModes = [daemon, status, stop, prune].filter(Boolean).length;
-  if (lifecycleModes > 1) {
-    console.error('error: choose only one of --daemon, --status, --stop, or --prune.');
-    process.exitCode = 1;
-    return;
-  }
-  if (json && lifecycleModes === 0) {
-    console.error('error: --json requires --daemon, --status, --stop, or --prune.');
-    process.exitCode = 1;
-    return;
-  }
-  const timingOptions = [
-    ['--debounce', debounce],
-    ['--cooldown', cooldown],
-    ['--git-poll', gitPoll],
-    ['--idle-timeout', idleTimeout],
-  ] as const;
-  const providedTimingOptions = timingOptions.filter(([, value]) => value !== undefined);
-  if ((status || stop || prune) && providedTimingOptions.length > 0) {
-    console.error(
-      `error: timing options (${providedTimingOptions.map(([flag]) => flag).join(', ')}) only apply when starting a foreground or daemon watcher; ${prune ? '--prune does' : '--status and --stop do'} not accept them.`,
-    );
-    process.exitCode = 1;
-    return;
-  }
-  const invalidTiming = [
-    ['--debounce', debounce, false],
-    ['--cooldown', cooldown, true],
-    ['--git-poll', gitPoll, false],
-    ['--idle-timeout', idleTimeout, true],
-  ].find(([, value, allowZero]) => {
-    return value !== undefined && (!Number.isInteger(value) || (allowZero ? Number(value) < 0 : Number(value) <= 0));
-  });
-  if (invalidTiming) {
-    console.error(`error: ${invalidTiming[0]} requires ${invalidTiming[2] ? 'a non-negative' : 'a positive'} integer.`);
-    process.exitCode = 1;
-    return;
-  }
-  if (prune) {
-    handleWatchPrune(opts, json);
-    return;
-  }
+type WatchCommandMode = 'foreground' | 'daemon' | 'status' | 'stop' | 'prune';
+const WATCH_TIMING_OPTIONS = [
+  { option: 'debounce', flag: '--debounce', field: 'debounceMs', allowZero: false },
+  { option: 'cooldown', flag: '--cooldown', field: 'cooldownMs', allowZero: true },
+  { option: 'gitPoll', flag: '--git-poll', field: 'gitPollMs', allowZero: false },
+  { option: 'idleTimeout', flag: '--idle-timeout', field: 'idleTimeoutMs', allowZero: true },
+] as const;
 
+function readWatchCommandOptions(opts: ReturnType<typeof commandOptions>) {
+  const timings = WATCH_TIMING_OPTIONS.map((entry) => ({ ...entry, value: numberOptionValue(opts, entry.option) }));
+  const modes = (['daemon', 'status', 'stop', 'prune'] as const).filter((mode) => booleanOptionValue(opts, mode));
+  const json = booleanOptionValue(opts, 'json');
+  const mode: WatchCommandMode = modes.at(0) ?? 'foreground';
+  if (modes.length > 1) return { error: 'choose only one of --daemon, --status, --stop, or --prune.' } as const;
+  if (json && mode === 'foreground')
+    return { error: '--json requires --daemon, --status, --stop, or --prune.' } as const;
+  const provided = timings.filter((entry): entry is typeof entry & { value: number } => entry.value !== undefined);
+  const error = watchTimingError(mode, provided);
+  if (error) return { error } as const;
+  return { mode, json, provided } as const;
+}
+
+type WatchTimingValue = (typeof WATCH_TIMING_OPTIONS)[number] & { value: number };
+
+function watchTimingError(mode: WatchCommandMode, timings: readonly WatchTimingValue[]): string | null {
+  if (['status', 'stop', 'prune'].includes(mode) && timings.length > 0) {
+    return `timing options (${timings.map((entry) => entry.flag).join(', ')}) only apply when starting a foreground or daemon watcher; ${mode === 'prune' ? '--prune does' : '--status and --stop do'} not accept them.`;
+  }
+  const invalid = timings.find(
+    ({ value, allowZero }) => !Number.isInteger(value) || (allowZero ? value < 0 : value <= 0),
+  );
+  return invalid ? `${invalid.flag} requires ${invalid.allowZero ? 'a non-negative' : 'a positive'} integer.` : null;
+}
+
+function watchCommandContext(timings: readonly WatchTimingValue[]) {
   const projectRoot = resolveProjectRoot();
   const config = loadProjectConfig(projectRoot);
-  const watchOverrides = {
-    ...(debounce === undefined ? {} : { debounceMs: debounce }),
-    ...(cooldown === undefined ? {} : { cooldownMs: cooldown }),
-    ...(gitPoll === undefined ? {} : { gitPollMs: gitPoll }),
-    ...(idleTimeout === undefined ? {} : { idleTimeoutMs: idleTimeout }),
-  };
-  if (debounce) (config.watch ??= {}).debounceMs = debounce;
-  if (cooldown !== undefined) (config.watch ??= {}).cooldownMs = cooldown;
-  if (gitPoll) (config.watch ??= {}).gitPollMs = gitPoll;
-  if (idleTimeout !== undefined) (config.watch ??= {}).idleTimeoutMs = idleTimeout;
+  const watchOverrides: NonNullable<Parameters<typeof ensureWatchService>[0]['watchOverrides']> = {};
+  for (const { field, value } of timings) watchOverrides[field] = value;
+  if (timings.length > 0) Object.assign((config.watch ??= {}), watchOverrides);
   const watchConfig = resolveWatchConfig(config);
   config.watch = watchConfig;
   const paths = resolveIndexStoragePaths(projectRoot, config);
-  const controllerOptions = { projectRoot, cacheDir: paths.cacheDir, cliVersion, watchOverrides };
+  return {
+    projectRoot,
+    watchConfig,
+    controllerOptions: { projectRoot, cacheDir: paths.cacheDir, cliVersion, watchOverrides },
+  };
+}
 
-  if (status) {
-    const report = watchServiceReport(inspectWatchService(controllerOptions), watchConfig.enabled);
+export async function handleWatch(rawOpts: unknown): Promise<void> {
+  const opts = commandOptions(rawOpts);
+  const request = readWatchCommandOptions(opts);
+  if ('error' in request) {
+    console.error(`error: ${request.error}`);
+    process.exitCode = 1;
+    return;
+  }
+  const { mode, json, provided } = request;
+  if (mode === 'prune') {
+    handleWatchPrune(opts, json);
+    return;
+  }
+  const context = watchCommandContext(provided);
+  if (mode === 'status') {
+    const report = watchServiceReport(inspectWatchService(context.controllerOptions), context.watchConfig.enabled);
     if (json) printJsonEnvelope('watch', [], opts, report);
     else renderWatchServiceReport(report);
     return;
   }
-  if (stop) {
-    try {
-      const result = stopWatchService(controllerOptions);
-      if (json) printJsonEnvelope('watch', [], opts, result);
-      else
-        console.log(
-          result.disposition === 'stopped'
-            ? `Stopped watch service${result.pid ? ` (pid ${result.pid})` : ''}.`
-            : 'Watch service is already stopped.',
-        );
-    } catch (error) {
-      console.error(`error: ${error instanceof Error ? error.message : String(error)}`);
-      process.exitCode = 1;
-    }
+  if (mode === 'stop') {
+    handleWatchStop(context, opts, json);
     return;
   }
-
-  if (!watchConfig.enabled) {
+  if (!context.watchConfig.enabled) {
     console.error('error: watch mode is disabled. Set "watch.enabled": true in .scipquery.json to start it.');
     process.exitCode = 1;
     return;
   }
-  if (daemon) {
-    try {
-      if (providedTimingOptions.length > 0) {
-        const inspection = inspectWatchService(controllerOptions);
-        if (inspection.classification.kind === 'live') {
-          throw new Error(
-            `watch service pid ${inspection.classification.state.pid} is already running. Timing options only apply when the process starts; run "scip-query watch --stop", then repeat this daemon command.`,
-          );
-        }
-      }
-      const result = ensureWatchService(controllerOptions);
-      if (json) printJsonEnvelope('watch', [], opts, result);
-      else {
-        console.log(
-          `${result.disposition === 'started' ? 'Started' : 'Reused'} watch service for ${projectRoot} (pid ${result.state.pid}).`,
-        );
-        if (providedTimingOptions.length > 0) {
-          console.log(
-            `Process-local timing overrides: ${providedTimingOptions
-              .map(([flag, value]) => `${flag}=${value}`)
-              .join(', ')}. These were not written to .scipquery.json.`,
-          );
-        }
-      }
-    } catch (error) {
-      console.error(`error: ${error instanceof Error ? error.message : String(error)}`);
-      process.exitCode = 1;
-    }
-    return;
-  }
+  if (mode === 'daemon') handleWatchDaemon(context, opts, json, provided);
+  else await handleWatchForeground(context);
+}
 
+function handleWatchStop(
+  context: ReturnType<typeof watchCommandContext>,
+  opts: ReturnType<typeof commandOptions>,
+  json: boolean,
+): void {
+  const { controllerOptions } = context;
+  try {
+    const result = stopWatchService(controllerOptions);
+    if (json) printJsonEnvelope('watch', [], opts, result);
+    else
+      console.log(
+        result.disposition === 'stopped'
+          ? `Stopped watch service${result.pid ? ` (pid ${result.pid})` : ''}.`
+          : 'Watch service is already stopped.',
+      );
+  } catch (error) {
+    console.error(`error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+  }
+}
+
+function handleWatchDaemon(
+  context: ReturnType<typeof watchCommandContext>,
+  opts: ReturnType<typeof commandOptions>,
+  json: boolean,
+  timings: readonly WatchTimingValue[],
+): void {
+  const { controllerOptions, projectRoot } = context;
+  try {
+    if (timings.length > 0) {
+      const inspection = inspectWatchService(controllerOptions);
+      if (inspection.classification.kind === 'live') {
+        throw new Error(
+          `watch service pid ${inspection.classification.state.pid} is already running. Timing options only apply when the process starts; run "scip-query watch --stop", then repeat this daemon command.`,
+        );
+      }
+    }
+    const result = ensureWatchService(controllerOptions);
+    if (json) printJsonEnvelope('watch', [], opts, result);
+    else {
+      console.log(
+        `${result.disposition === 'started' ? 'Started' : 'Reused'} watch service for ${projectRoot} (pid ${result.state.pid}).`,
+      );
+      if (timings.length > 0) {
+        console.log(
+          `Process-local timing overrides: ${timings
+            .map(({ flag, value }) => `${flag}=${value}`)
+            .join(', ')}. These were not written to .scipquery.json.`,
+        );
+      }
+    }
+  } catch (error) {
+    console.error(`error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+  }
+}
+
+async function handleWatchForeground(context: ReturnType<typeof watchCommandContext>): Promise<void> {
+  const {
+    projectRoot,
+    watchConfig,
+    controllerOptions: { watchOverrides },
+  } = context;
   console.log(`Watching ${projectRoot}`);
   console.log(
     `Debounce: ${watchConfig.debounceMs}ms | Cooldown: ${watchConfig.cooldownMs}ms | Git poll: ${watchConfig.gitPollMs}ms`,
