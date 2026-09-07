@@ -46,3 +46,9 @@ Graph batch started. No implementation changes yet beyond this durable inventory
 All 3,008 tests across 344 files pass on the completed build, including the independent regression cases described above. Build, typecheck, changed-file ESLint, formatting, API (`88ac6629033f84f6`, 66 paths), public-consumer compilation and skill links pass. Source review is accounted with zero blocking findings. Three initial numerical findings resolve; the original connector function's residual finding remains tracked. Index impact is qualified by absent/excluded paths and is not claimed as full semantic-consumer coverage.
 
 Next active work: correct build identity for persistent evidence/health caches, then finish duplicate-group assessment and the remaining inventory. The complete audit remains ongoing.
+
+### Package runtime cache identity — fixed
+
+Persistent evidence and health caches now identify this package's runtime tree and package metadata, rather than `process.argv[1]`. Fixed-name implementation bundles and nested JavaScript chunks participate in the digest. Source execution hashes `src`; installed execution hashes `dist`. Relative paths make relocation irrelevant. The digest is memoized per process; a failed read uses a process-private identity rather than the shared `source` fallback. This does not promise a coherent snapshot during an in-place installation replacement or fingerprint external dependency installations.
+
+Validation: five new real-filesystem identity tests plus existing evidence-cache and health-cache tests passed (34 tests total). Typecheck, changed-file ESLint, build, and diff whitespace checks passed. Source review reports accounted coverage and no blocking findings. This is a bounded cache fix, not completion of the maintenance inventory.
