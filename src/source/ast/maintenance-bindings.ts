@@ -132,3 +132,69 @@ function exportedBindings(source: ts.SourceFile, checker: ts.TypeChecker): Map<t
   }
   return result;
 }
+
+/** A variable declaration and its same-binding references within one parsed source file.
+ * These are lexical identities, not reaching definitions or an interprocedural data-flow proof.
+ */
+export interface LexicalBindingReference {
+  name: string;
+  startLine: number;
+  endLine: number;
+  referenceLines: number[];
+}
+
+export function lexicalBindingReferences(analysis: FunctionAnalysis): LexicalBindingReference[] {
+  if (analysis.errors.length > 0) return [];
+  const { sourceFile, checker } = analysis;
+  const bindings = new Map<ts.Symbol, LexicalBindingReference>();
+  const declarations = new Set<ts.Node>();
+  const collect = (node: ts.Node): void => {
+    if (ts.isIdentifier(node)) {
+      const symbol = checker.getSymbolAtLocation(node);
+      const declaration = symbol?.valueDeclaration;
+      if (
+        symbol &&
+        declaration &&
+        (ts.isVariableDeclaration(declaration) || ts.isBindingElement(declaration)) &&
+        declaration.name === node
+      ) {
+        const variable = containingVariableDeclaration(declaration);
+        if (variable) {
+          declarations.add(node);
+          bindings.set(symbol, {
+            name: node.text,
+            startLine: sourceFile.getLineAndCharacterOfPosition(variable.parent.getStart(sourceFile)).line,
+            endLine: sourceFile.getLineAndCharacterOfPosition(variable.end - 1).line,
+            referenceLines: [],
+          });
+        }
+      }
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(sourceFile);
+  const visit = (node: ts.Node): void => {
+    if (ts.isIdentifier(node) && !declarations.has(node)) {
+      const symbol = ts.isShorthandPropertyAssignment(node.parent)
+        ? checker.getShorthandAssignmentValueSymbol(node.parent)
+        : checker.getSymbolAtLocation(node);
+      const binding = symbol && bindings.get(symbol);
+      if (binding)
+        binding.referenceLines.push(sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return [...bindings.values()].map((binding) => ({
+    ...binding,
+    referenceLines: [...new Set(binding.referenceLines)].sort((a, b) => a - b),
+  }));
+}
+
+function containingVariableDeclaration(node: ts.Node): ts.VariableDeclaration | null {
+  if (ts.isVariableDeclaration(node)) return node;
+  if (ts.isBindingElement(node) || ts.isObjectBindingPattern(node) || ts.isArrayBindingPattern(node)) {
+    return containingVariableDeclaration(node.parent);
+  }
+  return null;
+}

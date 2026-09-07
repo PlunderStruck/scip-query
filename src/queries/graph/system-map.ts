@@ -24,7 +24,7 @@ import { focusedSourceConstructRange, readableSourceUnitRange } from '../../sour
 import type { ScipDatabase } from '../../storage/db.js';
 import { indexedDocumentPaths, resolveIndexedDocumentCandidates } from '../../storage/scip-documents.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from '../../symbols/definition-catalog.js';
-import type { CalleeEvidenceSource } from '../../symbols/graph/call-graph-evidence.js';
+import type { CalleeRow, CalleeEvidenceSource } from '../../symbols/graph/call-graph-evidence.js';
 import {
   importedMemberCallTargets,
   serviceDeclarationFilesForImplementation,
@@ -1297,336 +1297,332 @@ function finalizeSystemMap(input: {
   };
 }
 
-function expandSourceConstructCallFrontier(context: SystemMapTraversalContext, depth: number): void {
-  const {
-    db,
-    relationPolicy,
-    sourceConstructs,
-    reverseExpandedSourceConstructs,
-    pendingRelations,
-    reverseFileGraph,
-    serviceCallerFilesBySourceConstruct,
-    sourceAllowed,
-    memberCallTargetsForWholeFile,
-    addSymbol,
-    addSourceConstruct,
-  } = context;
-  if (relationPolicy.has('call')) {
-    const sourceConstructFrontier = [...sourceConstructs.values()].filter(
-      (state) =>
-        state.traversalEligible &&
-        state.reverseCallExpansion &&
-        state.depth <= depth &&
-        !reverseExpandedSourceConstructs.has(sourceConstructKey(state)),
+function sourceRangesOverlap(
+  left: { startLine: number; endLine: number },
+  right: { startLine: number; endLine: number },
+): boolean {
+  return left.startLine <= right.endLine && left.endLine >= right.startLine;
+}
+
+function addReverseSourceCallOwner(
+  context: SystemMapTraversalContext,
+  target: SourceConstructState,
+  file: string,
+  line: number,
+  depth: number,
+  kind: 'local' | 'member',
+) {
+  const { db, addSymbol, addSourceConstruct } = context;
+  const callable = sourceOwnerConstructAtLine(db, file, line);
+  if (kind === 'local' && callable && sourceConstructKey(callable) === sourceConstructKey(target)) return null;
+  const definition = findEnclosingDefinition(getDefinitionsForFile(db, file), line);
+  if (definition && !isModuleLikeSymbol(definition.symbol)) {
+    addSymbol(
+      definition,
+      depth,
+      `reverse-${kind}-call-owner`,
+      undefined,
+      kind === 'local' ? 'forward-regions' : 'cross-workspace-or-forward',
+      true,
     );
-    for (const targetConstruct of sourceConstructFrontier) {
-      reverseExpandedSourceConstructs.add(sourceConstructKey(targetConstruct));
+    return { fromSymbol: definition.symbol, fromSourceConstruct: undefined };
+  }
+  if (!callable) return null;
+  const construct = addSourceConstruct(callable, depth, `reverse-${kind}-call-source-owner`, undefined, true);
+  return construct ? { fromSymbol: null, fromSourceConstruct: sourceConstructIdentity(construct) } : null;
+}
 
-      // Source-only callables still form a real local activation chain even
-      // when the compiler emitted no symbol for a wrapped function. Admit a
-      // reverse edge only when this file has one callable with the target
-      // name and the call is a direct (not receiver-member) invocation. The
-      // result is a candidate because lexical shadowing can
-      // still change runtime identity without a compiler occurrence.
-      const targetFacts = getSourceFacts(db, targetConstruct.file);
-      const matchingLocalDefinitions = (targetFacts?.callables ?? []).filter(
-        (callable) =>
-          callable.name === targetConstruct.name &&
-          callable.startLine <= targetConstruct.endLine &&
-          callable.endLine >= targetConstruct.startLine,
+function expandLocalSourceCallers(
+  context: SystemMapTraversalContext,
+  targetConstruct: SourceConstructState,
+  depth: number,
+): void {
+  const { db, pendingRelations } = context;
+  // Source-only callables still form a real local activation chain even
+  // when the compiler emitted no symbol for a wrapped function. Admit a
+  // reverse edge only when this file has one callable with the target
+  // name and the call is a direct (not receiver-member) invocation. The
+  // result is a candidate because lexical shadowing can
+  // still change runtime identity without a compiler occurrence.
+  const targetFacts = getSourceFacts(db, targetConstruct.file);
+  const matchingLocalDefinitions = (targetFacts?.callables ?? []).filter(
+    (callable) => callable.name === targetConstruct.name && sourceRangesOverlap(callable, targetConstruct),
+  );
+  if (matchingLocalDefinitions.length === 1) {
+    const localCallsites = (targetFacts?.callSites ?? []).filter(
+      (callsite) => callsite.calleeLeaf === targetConstruct.name && !callsite.memberAccess,
+    );
+    for (const callsite of localCallsites) {
+      const owner = addReverseSourceCallOwner(
+        context,
+        targetConstruct,
+        targetConstruct.file,
+        callsite.line,
+        depth + 1,
+        'local',
       );
-      if (matchingLocalDefinitions.length === 1) {
-        const localCallsites = (targetFacts?.callSites ?? []).filter(
-          (callsite) => callsite.calleeLeaf === targetConstruct.name && !callsite.memberAccess,
-        );
-        for (const callsite of localCallsites) {
-          const nextDepth = depth + 1;
-          const owner = findEnclosingDefinition(getDefinitionsForFile(db, targetConstruct.file), callsite.line);
-          let fromSymbol: string | null = null;
-          let fromSourceConstruct: SourceConstructState | null = null;
-          if (owner && !isModuleLikeSymbol(owner.symbol)) {
-            if (
-              owner.relativePath === targetConstruct.file &&
-              owner.startLine <= targetConstruct.endLine &&
-              owner.endLine >= targetConstruct.startLine
-            )
-              continue;
-            addSymbol(owner, nextDepth, 'reverse-local-call-owner', undefined, 'forward-regions', true);
-            fromSymbol = owner.symbol;
-          } else {
-            const callable = sourceOwnerConstructAtLine(db, targetConstruct.file, callsite.line);
-            if (callable && sourceConstructKey(callable) !== sourceConstructKey(targetConstruct)) {
-              fromSourceConstruct = addSourceConstruct(
-                callable,
-                nextDepth,
-                'reverse-local-call-source-owner',
-                undefined,
-                true,
-              );
-            }
-          }
-          if (!fromSymbol && !fromSourceConstruct) continue;
-          addRelation(pendingRelations, {
-            kind: 'call',
-            evidence: 'ast-callsite',
-            fromFile: targetConstruct.file,
-            fromSymbol,
-            toFile: targetConstruct.file,
-            toSymbol: null,
-            fromSourceConstruct: fromSourceConstruct ? sourceConstructIdentity(fromSourceConstruct) : undefined,
-            toSourceConstruct: sourceConstructIdentity(targetConstruct),
-            line: callsite.line,
-            strength: 'candidate',
-          });
-        }
-      }
-
-      const reverseCallerFiles = new Set([
-        ...(reverseFileGraph.get(targetConstruct.file) ?? []),
-        ...(serviceCallerFilesBySourceConstruct.get(sourceConstructKey(targetConstruct)) ?? []),
-        ...serviceDeclarationFilesForImplementation(db, targetConstruct.file).flatMap((serviceFile) => [
-          ...(reverseFileGraph.get(serviceFile) ?? []),
-        ]),
-      ]);
-      for (const callerFile of reverseCallerFiles) {
-        if (!sourceAllowed(callerFile)) continue;
-        const memberTargets = memberCallTargetsForWholeFile(callerFile);
-        const matchingCalls = memberTargets.targets.filter(
-          (target) =>
-            target.targetFile === targetConstruct.file &&
-            target.targetStartLine <= targetConstruct.endLine &&
-            target.targetEndLine >= targetConstruct.startLine,
-        );
-        for (const target of matchingCalls) {
-          const nextDepth = depth + 1;
-          const owner = findEnclosingDefinition(getDefinitionsForFile(db, callerFile), target.line);
-          let fromSymbol: string | null = null;
-          let fromSourceConstruct: SourceConstructState | null = null;
-          if (owner && !isModuleLikeSymbol(owner.symbol)) {
-            addSymbol(owner, nextDepth, 'reverse-member-call-owner', undefined, 'cross-workspace-or-forward', true);
-            fromSymbol = owner.symbol;
-          } else {
-            const callable = sourceOwnerConstructAtLine(db, callerFile, target.line);
-            if (callable) {
-              fromSourceConstruct = addSourceConstruct(
-                callable,
-                nextDepth,
-                'reverse-member-call-source-owner',
-                undefined,
-                true,
-              );
-            }
-          }
-          if (!fromSymbol && !fromSourceConstruct) continue;
-          addRelation(pendingRelations, {
-            kind: 'call',
-            evidence: 'ast-service-member-callsite',
-            fromFile: callerFile,
-            fromSymbol,
-            toFile: targetConstruct.file,
-            toSymbol: null,
-            fromSourceConstruct: fromSourceConstruct ? sourceConstructIdentity(fromSourceConstruct) : undefined,
-            toSourceConstruct: sourceConstructIdentity(targetConstruct),
-            line: target.line,
-            strength: target.strength === 'exact' ? 'exact' : 'derived',
-          });
-        }
-      }
+      if (!owner) continue;
+      addRelation(pendingRelations, {
+        kind: 'call',
+        evidence: 'ast-callsite',
+        fromFile: targetConstruct.file,
+        ...owner,
+        toFile: targetConstruct.file,
+        toSymbol: null,
+        toSourceConstruct: sourceConstructIdentity(targetConstruct),
+        line: callsite.line,
+        strength: 'candidate',
+      });
     }
   }
 }
 
-function expandSystemMapSymbolFrontier(context: SystemMapTraversalContext, depth: number): void {
+function expandImportedSourceCallers(
+  context: SystemMapTraversalContext,
+  targetConstruct: SourceConstructState,
+  depth: number,
+): void {
   const {
     db,
-    index,
-    relationPolicy,
-    symbols,
+    reverseFileGraph,
+    serviceCallerFilesBySourceConstruct,
     sourceAllowed,
-    files,
-    workspaces,
-    addFile,
-    addSymbol,
-    addSourceConstruct,
+    memberCallTargetsForWholeFile,
     pendingRelations,
-    fileGraph,
-    traversalMetrics,
   } = context;
-  const symbolFrontier = [...symbols.values()].filter((state) => !state.processed && state.depth <= depth);
+  const reverseCallerFiles = new Set([
+    ...(reverseFileGraph.get(targetConstruct.file) ?? []),
+    ...(serviceCallerFilesBySourceConstruct.get(sourceConstructKey(targetConstruct)) ?? []),
+    ...serviceDeclarationFilesForImplementation(db, targetConstruct.file).flatMap((serviceFile) => [
+      ...(reverseFileGraph.get(serviceFile) ?? []),
+    ]),
+  ]);
+  for (const callerFile of reverseCallerFiles) {
+    if (!sourceAllowed(callerFile)) continue;
+    const memberTargets = memberCallTargetsForWholeFile(callerFile);
+    const matchingCalls = memberTargets.targets.filter(
+      (target) =>
+        target.targetFile === targetConstruct.file &&
+        target.targetStartLine <= targetConstruct.endLine &&
+        target.targetEndLine >= targetConstruct.startLine,
+    );
+    for (const target of matchingCalls) {
+      const owner = addReverseSourceCallOwner(context, targetConstruct, callerFile, target.line, depth + 1, 'member');
+      if (!owner) continue;
+      addRelation(pendingRelations, {
+        kind: 'call',
+        ...memberCallEvidence(target),
+        fromFile: callerFile,
+        ...owner,
+        toFile: targetConstruct.file,
+        toSymbol: null,
+        toSourceConstruct: sourceConstructIdentity(targetConstruct),
+        line: target.line,
+      });
+    }
+  }
+}
+
+function expandSourceConstructCallFrontier(context: SystemMapTraversalContext, depth: number): void {
+  const { relationPolicy, sourceConstructs, reverseExpandedSourceConstructs } = context;
+  if (!relationPolicy.has('call')) return;
+  const frontier = [...sourceConstructs.values()].filter(
+    (state) =>
+      state.traversalEligible &&
+      state.reverseCallExpansion &&
+      state.depth <= depth &&
+      !reverseExpandedSourceConstructs.has(sourceConstructKey(state)),
+  );
+  for (const target of frontier) {
+    reverseExpandedSourceConstructs.add(sourceConstructKey(target));
+    expandLocalSourceCallers(context, target, depth);
+    expandImportedSourceCallers(context, target, depth);
+  }
+}
+
+type SymbolReferenceSite = ReturnType<typeof systemMapReferenceSites>[number];
+interface SymbolReferenceEvidence {
+  site: SymbolReferenceSite;
+  isCallsite: boolean;
+  owner: IndexedDefinition | undefined;
+}
+
+function symbolReferenceEvidence(context: SystemMapTraversalContext, state: SymbolState): SymbolReferenceEvidence[] {
+  const { db, index, sourceAllowed, files, workspaces, relationPolicy } = context;
+  return systemMapReferenceSites(db, index, state.definition)
+    .filter((site) => sourceAllowed(site.file) && referenceSiteIsInScope(state, site.file, files, workspaces))
+    .map((site) => {
+      const isCallsite =
+        relationPolicy.has('call') &&
+        getSourceFacts(db, site.file)?.callSites.some(
+          (callsite) =>
+            callsite.line === site.line && sourceCallsiteTargetsDefinition(db, site.file, callsite, state.definition),
+        ) === true;
+      const resolved = site.enclosingSymbol
+        ? resolveIndexedDefinitions(db, index, site.enclosingSymbol).matches[0]
+        : undefined;
+      return { site, isCallsite, owner: resolved && !isModuleLikeSymbol(resolved.symbol) ? resolved : undefined };
+    });
+}
+
+function selectRecursiveCallerSymbols(
+  context: SystemMapTraversalContext,
+  definition: IndexedDefinition,
+  references: SymbolReferenceEvidence[],
+): Set<string> {
+  const { db, workspaces } = context;
+  const targetWorkspace = workspaceForFile(definition.relativePath, workspaces).relativeDir;
+  const candidates = references
+    .flatMap(({ isCallsite, owner }) => {
+      if (!isCallsite || !owner) return [];
+      const workspace = workspaceForFile(owner.relativePath, workspaces).relativeDir;
+      return [
+        {
+          symbol: owner.symbol,
+          workspace,
+          local: workspace === targetWorkspace,
+          priority: publicEntryPriorityForDefinition(db, owner),
+          span: owner.endLine - owner.startLine,
+        },
+      ];
+    })
+    .sort(
+      (left, right) =>
+        Number(right.local) - Number(left.local) ||
+        right.priority - left.priority ||
+        left.span - right.span ||
+        left.symbol.localeCompare(right.symbol),
+    );
+  const selected = new Set<string>();
+  const selectedWorkspaces = new Set<string>();
+  for (const candidate of candidates) {
+    if (selected.size >= MAX_RECURSIVE_CALLER_BRANCHES) break;
+    if (selected.has(candidate.symbol) || selectedWorkspaces.has(candidate.workspace)) continue;
+    selected.add(candidate.symbol);
+    selectedWorkspaces.add(candidate.workspace);
+  }
+  return selected;
+}
+
+function addSymbolReferenceOwner(
+  context: SystemMapTraversalContext,
+  state: SymbolState,
+  reference: SymbolReferenceEvidence,
+  recursiveCallerSymbols: Set<string>,
+  depth: number,
+) {
+  const { db, addSymbol, addSourceConstruct } = context;
+  const { site, owner, isCallsite } = reference;
+  if (owner) {
+    // Only selected callers inherit reverse expansion. Non-call references remain one-hop evidence.
+    addSymbol(
+      owner,
+      depth + 1,
+      'reference-owner',
+      undefined,
+      isCallsite && recursiveCallerSymbols.has(owner.symbol) ? state.referenceScope : 'none',
+    );
+    return { fromSymbol: owner.symbol, fromSourceConstruct: undefined };
+  }
+  const callable = site.line === null ? null : sourceOwnerConstructAtLine(db, site.file, site.line);
+  const construct = callable
+    ? addSourceConstruct(callable, depth + 1, 'reference-source-owner', undefined, isCallsite)
+    : null;
+  return { fromSymbol: null, fromSourceConstruct: construct ? sourceConstructIdentity(construct) : undefined };
+}
+
+function expandSymbolReferences(context: SystemMapTraversalContext, state: SymbolState, depth: number): void {
+  const { relationPolicy, workspaces, addFile, pendingRelations } = context;
+  if (state.referenceScope === 'none') return;
+  if (!relationPolicy.has('call') && !relationPolicy.has('reference') && !relationPolicy.has('contract-symbol')) return;
+  const references = symbolReferenceEvidence(context, state);
+  const recursiveCallers = selectRecursiveCallerSymbols(context, state.definition, references);
+  for (const reference of references) {
+    const { site, isCallsite } = reference;
+    addFile(site.file, depth + 1, `reference:${shortenSymbol(state.definition.symbol)}`, true);
+    const relation = {
+      fromFile: site.file,
+      ...addSymbolReferenceOwner(context, state, reference, recursiveCallers, depth),
+      toFile: state.definition.relativePath,
+      toSymbol: state.definition.symbol,
+      line: site.line,
+    };
+    if (relationPolicy.has('reference'))
+      addRelation(pendingRelations, {
+        ...relation,
+        kind: 'reference',
+        evidence: 'indexed-or-source-reference',
+        strength: 'mixed',
+      });
+    if (isCallsite)
+      addRelation(pendingRelations, {
+        ...relation,
+        kind: 'call',
+        evidence: 'ast-callsite',
+        strength: 'candidate',
+      });
+    if (
+      relationPolicy.has('contract-symbol') &&
+      workspaceForFile(site.file, workspaces).relativeDir !==
+        workspaceForFile(state.definition.relativePath, workspaces).relativeDir
+    ) {
+      addRelation(pendingRelations, {
+        ...relation,
+        kind: 'contract-symbol',
+        evidence: 'compiler-cross-workspace-symbol',
+        strength: 'exact',
+      });
+    }
+  }
+}
+
+function expandStructuralCallees(
+  context: SystemMapTraversalContext,
+  definition: IndexedDefinition,
+  callees: readonly CalleeRow[],
+  depth: number,
+): void {
+  const { db, index, sourceAllowed, fileGraph, traversalMetrics, addSymbol, pendingRelations } = context;
+  for (const callee of callees) {
+    const target = resolveIndexedDefinitions(db, index, callee.symbol).matches.find(
+      (candidate) => candidate.relativePath === callee.file,
+    );
+    if (!target) continue;
+    if (!sourceAllowed(target.relativePath)) continue;
+    const validated =
+      target.relativePath === definition.relativePath ||
+      (fileGraph.get(definition.relativePath) ?? new Set()).has(target.relativePath);
+    if (!validated) {
+      traversalMetrics.filteredUnverifiedCallEdges += 1;
+      continue;
+    }
+    addSymbol(target, depth + 1, `call:${shortenSymbol(definition.symbol)}`, undefined, 'none', true);
+    addRelation(pendingRelations, {
+      kind: 'call',
+      evidence: callee.source,
+      fromFile: definition.relativePath,
+      fromSymbol: definition.symbol,
+      toFile: target.relativePath,
+      toSymbol: target.symbol,
+      line: null,
+      strength: calleeEvidenceStrength(callee.source),
+    });
+  }
+}
+
+function expandSystemMapSymbolFrontier(context: SystemMapTraversalContext, depth: number): void {
+  const { index, relationPolicy, symbols } = context;
+  const frontier = [...symbols.values()].filter((state) => !state.processed && state.depth <= depth);
   const structuralCallees = relationPolicy.has('call')
     ? index.calleeMap(
-        symbolFrontier.map((state) => state.definition),
+        frontier.map((state) => state.definition),
         { additive: false, semantic: false },
       )
     : new Map();
-  for (const state of symbolFrontier) {
+  for (const state of frontier) {
     state.processed = true;
-    const definition = state.definition;
-    if (
-      state.referenceScope !== 'none' &&
-      (relationPolicy.has('call') || relationPolicy.has('reference') || relationPolicy.has('contract-symbol'))
-    ) {
-      const referenceSites = systemMapReferenceSites(db, index, definition).filter(
-        (site) => sourceAllowed(site.file) && referenceSiteIsInScope(state, site.file, files, workspaces),
-      );
-      const recursiveCallerSymbols = new Set(
-        referenceSites
-          .flatMap((site) => {
-            const isCallsite =
-              relationPolicy.has('call') &&
-              getSourceFacts(db, site.file)?.callSites.some(
-                (callsite) =>
-                  callsite.line === site.line && sourceCallsiteTargetsDefinition(db, site.file, callsite, definition),
-              ) === true;
-            if (!isCallsite || !site.enclosingSymbol) return [];
-            const owner = resolveIndexedDefinitions(db, index, site.enclosingSymbol).matches[0];
-            return owner && !isModuleLikeSymbol(owner.symbol) ? [{ owner, site }] : [];
-          })
-          .sort((left, right) => {
-            const targetWorkspace = workspaceForFile(definition.relativePath, workspaces).relativeDir;
-            const leftLocal = workspaceForFile(left.owner.relativePath, workspaces).relativeDir === targetWorkspace;
-            const rightLocal = workspaceForFile(right.owner.relativePath, workspaces).relativeDir === targetWorkspace;
-            const leftPublic = publicEntryPriorityForDefinition(db, left.owner);
-            const rightPublic = publicEntryPriorityForDefinition(db, right.owner);
-            const leftSpan = left.owner.endLine - left.owner.startLine;
-            const rightSpan = right.owner.endLine - right.owner.startLine;
-            return (
-              Number(rightLocal) - Number(leftLocal) ||
-              rightPublic - leftPublic ||
-              leftSpan - rightSpan ||
-              left.owner.symbol.localeCompare(right.owner.symbol)
-            );
-          })
-          .filter(
-            (candidate, index, candidates) =>
-              candidates.findIndex((other) => other.owner.symbol === candidate.owner.symbol) === index,
-          )
-          .reduce<Array<{ symbol: string; workspace: string }>>((selected, candidate) => {
-            if (selected.length >= MAX_RECURSIVE_CALLER_BRANCHES) return selected;
-            const workspace = workspaceForFile(candidate.owner.relativePath, workspaces).relativeDir;
-            if (selected.some((entry) => entry.workspace === workspace)) return selected;
-            selected.push({ symbol: candidate.owner.symbol, workspace });
-            return selected;
-          }, [])
-          .map((candidate) => candidate.symbol),
-      );
-      for (const site of referenceSites) {
-        const nextDepth = depth + 1;
-        addFile(site.file, nextDepth, `reference:${shortenSymbol(definition.symbol)}`, true);
-        const isCallsite =
-          relationPolicy.has('call') &&
-          getSourceFacts(db, site.file)?.callSites.some(
-            (callsite) =>
-              callsite.line === site.line && sourceCallsiteTargetsDefinition(db, site.file, callsite, definition),
-          ) === true;
-        let referenceOwnerSymbol: string | null = null;
-        let referenceSourceConstruct: SourceConstructState | null = null;
-        if (site.enclosingSymbol) {
-          const owner = resolveIndexedDefinitions(db, index, site.enclosingSymbol).matches[0];
-          if (owner && !isModuleLikeSymbol(owner.symbol)) {
-            // A proven callsite is one step in the selected operation's
-            // activation chain. Preserve the bounded reverse scope so the
-            // next graph layer can discover its caller. Non-call references
-            // remain one-hop evidence and cannot recursively fan out.
-            addSymbol(
-              owner,
-              nextDepth,
-              'reference-owner',
-              undefined,
-              isCallsite && recursiveCallerSymbols.has(owner.symbol) ? state.referenceScope : 'none',
-            );
-            referenceOwnerSymbol = owner.symbol;
-          }
-        }
-        if (!referenceOwnerSymbol && site.line !== null) {
-          const callable = sourceOwnerConstructAtLine(db, site.file, site.line);
-          if (callable) {
-            referenceSourceConstruct = addSourceConstruct(
-              callable,
-              nextDepth,
-              'reference-source-owner',
-              undefined,
-              isCallsite,
-            );
-          }
-        }
-        if (relationPolicy.has('reference')) {
-          addRelation(pendingRelations, {
-            kind: 'reference',
-            evidence: 'indexed-or-source-reference',
-            fromFile: site.file,
-            fromSymbol: referenceOwnerSymbol,
-            toFile: definition.relativePath,
-            toSymbol: definition.symbol,
-            fromSourceConstruct: referenceSourceConstruct
-              ? sourceConstructIdentity(referenceSourceConstruct)
-              : undefined,
-            line: site.line,
-            strength: 'mixed',
-          });
-        }
-        if (isCallsite) {
-          addRelation(pendingRelations, {
-            kind: 'call',
-            evidence: 'ast-callsite',
-            fromFile: site.file,
-            fromSymbol: referenceOwnerSymbol,
-            toFile: definition.relativePath,
-            toSymbol: definition.symbol,
-            fromSourceConstruct: referenceSourceConstruct
-              ? sourceConstructIdentity(referenceSourceConstruct)
-              : undefined,
-            line: site.line,
-            strength: 'candidate',
-          });
-        }
-        if (
-          relationPolicy.has('contract-symbol') &&
-          workspaceForFile(site.file, workspaces).relativeDir !==
-            workspaceForFile(definition.relativePath, workspaces).relativeDir
-        ) {
-          addRelation(pendingRelations, {
-            kind: 'contract-symbol',
-            evidence: 'compiler-cross-workspace-symbol',
-            fromFile: site.file,
-            fromSymbol: referenceOwnerSymbol,
-            toFile: definition.relativePath,
-            toSymbol: definition.symbol,
-            fromSourceConstruct: referenceSourceConstruct
-              ? sourceConstructIdentity(referenceSourceConstruct)
-              : undefined,
-            line: site.line,
-            strength: 'exact',
-          });
-        }
-      }
-    }
-
-    for (const callee of structuralCallees.get(definition.symbolId) ?? []) {
-      const target = resolveIndexedDefinitions(db, index, callee.symbol).matches.find(
-        (candidate) => candidate.relativePath === callee.file,
-      );
-      if (!target) continue;
-      if (!sourceAllowed(target.relativePath)) continue;
-      const validated =
-        target.relativePath === definition.relativePath ||
-        (fileGraph.get(definition.relativePath) ?? new Set()).has(target.relativePath);
-      if (!validated) {
-        traversalMetrics.filteredUnverifiedCallEdges += 1;
-        continue;
-      }
-      addSymbol(target, depth + 1, `call:${shortenSymbol(definition.symbol)}`, undefined, 'none', true);
-      addRelation(pendingRelations, {
-        kind: 'call',
-        evidence: callee.source,
-        fromFile: definition.relativePath,
-        fromSymbol: definition.symbol,
-        toFile: target.relativePath,
-        toSymbol: target.symbol,
-        line: null,
-        strength: calleeEvidenceStrength(callee.source),
-      });
-    }
+    expandSymbolReferences(context, state, depth);
+    expandStructuralCallees(context, state.definition, structuralCallees.get(state.definition.symbolId) ?? [], depth);
   }
 }
 

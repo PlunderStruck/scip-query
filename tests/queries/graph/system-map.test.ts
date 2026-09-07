@@ -652,6 +652,116 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
+  it.each(['true', 'child()'])(
+    'keeps an indexed parent as the caller of its nested source-only callable returning %s',
+    async (resultExpression) => {
+      root = mkdtempSync(join(tmpdir(), 'scip-system-map-nested-source-caller-'));
+      const projectRoot = join(root, 'project');
+      const dbPath = join(root, 'index.db');
+      writeFixtureFiles(projectRoot, {
+        'src/service.ts': [
+          'export const Service = Context.GenericTag("Service");',
+          'export function parent() {',
+          `  const child = () => ${resultExpression};`,
+          '  child();',
+          '  return Service.of({ process: child });',
+          '}',
+        ],
+        'src/caller.ts': [
+          "import * as Work from './service.js';",
+          'export const loop = Effect.fn("loop")(function* () {',
+          '  const service = yield* Work.Service;',
+          '  return yield* service.process();',
+          '});',
+        ],
+      });
+      const symbol = 'scip-typescript npm fixture 1.0.0 src/`service.ts`/parent().';
+      evidenceFixtureDb(dbPath)
+        .document(1, 'typescript', 'src/service.ts')
+        .document(2, 'typescript', 'src/caller.ts')
+        .symbol(1, symbol, 'parent', 17)
+        .definition(1, 1, 1, 1, 0, 5, 1)
+        .chunk(1, 1, 0, 5)
+        .mention(1, 1, 1)
+        .write();
+      const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(root, 'index.scip') });
+      try {
+        expect(importedMemberCallTargets(db, 'src/caller.ts', { excludeIndexedTargets: false }).targets).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ targetFile: 'src/service.ts', targetStartLine: 2, targetEndLine: 2 }),
+          ]),
+        );
+        const result = systemMap(db, { symbols: ['src/caller.ts:2-5'], maxDepth: 2, relations: ['call'] });
+        const calls = result.topology?.edges.filter((edge) => edge.kind === 'call');
+        const parentCalls =
+          calls?.filter((edge) => edge.fromNodeId.includes('parent().') && edge.toNodeId.includes('child')) ?? [];
+        expect(parentCalls).toHaveLength(1);
+        expect(parentCalls[0]?.evidence.map((evidence) => evidence.location?.line)).toEqual([3]);
+        expect(calls).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              fromNodeId: expect.stringContaining('parent().'),
+              toNodeId: expect.stringContaining('child'),
+              evidence: expect.arrayContaining([
+                expect.objectContaining({ method: 'ast-callsite', strength: 'candidate' }),
+              ]),
+            }),
+          ]),
+        );
+      } finally {
+        db.close();
+      }
+    },
+  );
+
+  it('keeps ambiguous service implementations as candidates in both traversal directions', async () => {
+    root = mkdtempSync(join(tmpdir(), 'scip-system-map-ambiguous-service-'));
+    const projectRoot = join(root, 'project');
+    const dbPath = join(root, 'index.db');
+    writeFixtureFiles(projectRoot, {
+      'src/service.ts': [
+        'const first = () => true;',
+        'const second = () => false;',
+        'export const Service = Context.GenericTag("Service");',
+        'const one = Service.of({ process: first });',
+        'const two = Service.of({ process: second });',
+      ],
+      'src/caller.ts': [
+        "import * as Work from './service.js';",
+        'export const loop = Effect.fn("loop")(function* () {',
+        '  const service = yield* Work.Service;',
+        '  return yield* service.process();',
+        '});',
+      ],
+    });
+    evidenceFixtureDb(dbPath)
+      .document(1, 'typescript', 'src/service.ts')
+      .document(2, 'typescript', 'src/caller.ts')
+      .write();
+    const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(root, 'index.scip') });
+    try {
+      const targets = importedMemberCallTargets(db, 'src/caller.ts', { excludeIndexedTargets: false }).targets;
+      expect(targets).toHaveLength(2);
+      expect(targets.every((target) => target.resolutionAlternativeCount === 2)).toBe(true);
+      for (const maxDepth of [1, 2])
+        for (const anchor of ['src/caller.ts:2-5', 'src/service.ts:1-1']) {
+          const result = systemMap(db, { symbols: [anchor], maxDepth, relations: ['call'] });
+          const calls =
+            result.topology?.edges.filter((edge) => edge.kind === 'call' && edge.fromNodeId.includes('loop')) ?? [];
+          expect(calls.length).toBeGreaterThan(0);
+          for (const edge of calls) {
+            expect(
+              edge.evidence
+                .filter((evidence) => evidence.method === 'ast-service-member-callsite')
+                .map((evidence) => evidence.strength),
+            ).toEqual(['candidate']);
+          }
+        }
+    } finally {
+      db.close();
+    }
+  });
+
   it('reverse-connects service callers through a separate declaration and provider file', async () => {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-split-service-provider-'));
     const projectRoot = join(root, 'project');
@@ -1816,6 +1926,64 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           }),
         ]),
       );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('retains typed multiline binding declarations in a focused source slice without pulling in string matches', async () => {
+    root = mkdtempSync(join(tmpdir(), 'scip-system-map-lexical-slice-'));
+    const projectRoot = join(root, 'project');
+    const dbPath = join(root, 'index.db');
+    const source = [
+      'export function run() {',
+      '  const {',
+      '    payload: selected',
+      '  }: Input = read();',
+      '  const value:',
+      '    Result = transform(selected);',
+      '  noise("value selected");',
+      '  if (value.ok) { consume(value); }',
+      ...Array.from({ length: 220 }, (_, i) => `  unrelated${i}();`),
+      '}',
+    ];
+    writeFixtureFiles(projectRoot, { 'src/flow.ts': source });
+    evidenceFixtureDb(dbPath).document(1, 'typescript', 'src/flow.ts').write();
+    const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(root, 'index.scip') });
+    try {
+      const topology = createExplorationTopology({
+        anchors: [
+          {
+            id: 'anchor:run',
+            kind: 'symbol',
+            query: 'run',
+            status: 'matched',
+            nodeIds: ['run'],
+            candidateNodeIds: [],
+            omittedCandidates: 0,
+          },
+        ],
+        nodes: [
+          {
+            id: 'run',
+            kind: 'symbol',
+            label: 'run',
+            disposition: 'emitted',
+            location: { file: 'src/flow.ts', line: 0, endLine: source.length - 1 },
+            anchorIds: ['anchor:run'],
+            attributes: { leaf: 'run' },
+          },
+        ],
+        edges: [],
+        paths: [],
+        scope: 'lexical slice fixture',
+      });
+      const packet = connectedBehaviorPacket(db, topology, { focusLocations: [{ file: 'src/flow.ts', line: 7 }] });
+      const behavior = packet.steps.find((step) => step.label === 'run')?.behavior;
+      expect(behavior?.kind).toBe('connector-slice');
+      const lines = behavior?.lines.map((line) => line.line) ?? [];
+      expect(lines).toEqual(expect.arrayContaining([1, 2, 3, 4, 5, 7]));
+      expect(lines).not.toContain(6);
     } finally {
       db.close();
     }
