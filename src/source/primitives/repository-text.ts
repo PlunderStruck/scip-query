@@ -82,24 +82,6 @@ export function readRepositoryTextFile(db: ScipDatabase, candidatePath: string):
   return repositoryTextFile(relativePath, bytes, text, indexedFingerprintMap(db), indexedDocumentSet(db));
 }
 
-/**
- * Read every current project text file exactly once. Binary, unreadable, and
- * oversized paths are disclosed separately rather than silently becoming an
- * absence claim.
- */
-export function repositoryTextInventory(db: ScipDatabase, opts: { scope?: string } = {}): RepositoryTextInventory {
-  const files: RepositoryTextFile[] = [];
-  const scan = scanRepositoryText(db, opts, (file) => files.push(file));
-  return {
-    files,
-    candidateFiles: scan.candidateFiles,
-    scannedBytes: scan.scannedBytes,
-    skippedBinaryPaths: scan.skippedBinaryPaths,
-    skippedUnreadablePaths: scan.skippedUnreadablePaths,
-    skippedOversizedPaths: scan.skippedOversizedPaths,
-  };
-}
-
 /** Visits current UTF-8 project files without retaining every file body in memory. */
 export function scanRepositoryText(
   db: ScipDatabase,

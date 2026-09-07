@@ -20,12 +20,8 @@ import type {
   SemanticProvider,
   SemanticProviderLanguage,
   SemanticReference,
-  SemanticCalleeCoverage,
 } from './types.js';
 import { getSemanticProvider, semanticProviderLanguageForPath } from './provider-cache.js';
-import { loadTsMorph, typescriptProjectFileNames } from './typescript/ts-morph-runtime.js';
-import { discoverTypeScriptTsconfigs } from './typescript/tsconfig-discovery.js';
-import { resolve } from 'node:path';
 import { profileEnabled, profileSpan } from '../instrumentation/profile.js';
 import { rustSemanticEngineIdentity } from './rust/engine-identity.js';
 import { rustDefaultImplReferenceMap, rustDefaultImplReferencesForDefinition } from './rust/default-impl-references.js';
@@ -819,54 +815,6 @@ export function semanticCalleeMap(
   definitions: ReadonlyArray<IndexedDefinition | SymbolMatch>,
 ): Map<number, SemanticCallee[]> {
   return semanticEvidenceProduct(db).calleeMap(definitions);
-}
-
-/**
- * Which compiler project a file belongs to, from the tsconfigs alone. The
- * reference oracle searches one project at a time, so a reference the cheap
- * path finds in a file outside every project (a test excluded from the build
- * config) or in another project than the definition's (a workspace package
- * consumer) is one the oracle could never confirm; an audit must not count
- * it as a false positive.
- */
-export function semanticCompilerProjectOf(db: ScipDatabase): ((relativePath: string) => number | null) | null {
-  const tsMorph = loadTsMorph();
-  if (!tsMorph) return null;
-  const tsconfigPaths = discoverTypeScriptTsconfigs(db);
-  if (tsconfigPaths.length === 0) return null;
-  const projectByFile = new Map<string, number>();
-  tsconfigPaths.forEach((tsconfigPath, index) => {
-    for (const fileName of typescriptProjectFileNames(tsMorph, [tsconfigPath])) {
-      if (!projectByFile.has(fileName)) projectByFile.set(fileName, index);
-    }
-  });
-  return (relativePath) => projectByFile.get(resolve(db.config.projectRoot, relativePath)) ?? null;
-}
-
-/**
- * Compiler accounting of every call and render site in the given definitions,
- * for judging whether the compiler's callee answer is complete. Never cached:
- * it is an audit instrument, not an evidence product.
- */
-export function semanticCalleeCoverage(
-  db: ScipDatabase,
-  definitions: ReadonlyArray<IndexedDefinition>,
-): Map<number, SemanticCalleeCoverage> {
-  const result = new Map<number, SemanticCalleeCoverage>();
-  const groups = new Map<SemanticProvider, IndexedDefinition[]>();
-  for (const definition of definitions) {
-    const provider = availableSemanticProvider(db, definition.relativePath);
-    if (!provider?.calleeCoverageForDefinitions) continue;
-    const bucket = groups.get(provider);
-    if (bucket) bucket.push(definition);
-    else groups.set(provider, [definition]);
-  }
-  for (const [provider, grouped] of groups) {
-    for (const batch of calleeRequestBatches(grouped)) {
-      for (const [symbolId, coverage] of provider.calleeCoverageForDefinitions!(batch)) result.set(symbolId, coverage);
-    }
-  }
-  return result;
 }
 
 function buildSemanticCalleeMap(

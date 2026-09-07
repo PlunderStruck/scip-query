@@ -182,15 +182,6 @@ export function hasFileScopedProject(projects: readonly ProjectBundle[]): boolea
   return projects.some((bundle) => bundle.scope === 'file-closure');
 }
 
-/** Every absolute path the given tsconfigs list, read from the configs without building a compiler project. */
-export function typescriptProjectFileNames(tsMorph: TsMorphModule, tsconfigPaths: readonly string[]): Set<string> {
-  const files = new Set<string>();
-  for (const tsconfigPath of tsconfigPaths) {
-    for (const fileName of readTsconfigFileNames(tsMorph, tsconfigPath) ?? []) files.add(fileName);
-  }
-  return files;
-}
-
 function readTsconfigFileNames(tsMorph: TsMorphModule, tsconfigPath: string): ReadonlySet<string> | null {
   try {
     const ts = tsMorph.ts;

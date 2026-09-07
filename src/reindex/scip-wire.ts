@@ -81,10 +81,6 @@ export function* eachWireField(buffer: Uint8Array, start = 0, end = buffer.lengt
   }
 }
 
-export function isLengthDelimited(field: WireField): boolean {
-  return field.wireType === WIRE_LENGTH_DELIMITED;
-}
-
 export function encodeVarint(value: number): Uint8Array {
   if (!Number.isSafeInteger(value) || value < 0) throw new ScipWireError(`cannot encode varint ${value}`);
   const bytes: number[] = [];

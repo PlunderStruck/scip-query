@@ -272,17 +272,6 @@ export function budgetedTableCommand<Row>(
   );
 }
 
-export function budgetedGroupedByFileCommand<Row>(
-  commandName: string,
-  spec: RowCommandSpec<Row, BudgetedCommandContext> & {
-    key?: (row: Row, ctx: BudgetedCommandContext) => string;
-  },
-): CommandHandler {
-  return budgetedDbCommand(commandName, (ctx) =>
-    renderRows(ctx, { ...spec, commandName }, { kind: 'grouped', key: spec.key }),
-  );
-}
-
 export function stringArg(args: readonly unknown[], index: number): string {
   return String(args[index]);
 }
