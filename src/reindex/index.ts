@@ -310,6 +310,108 @@ interface ReindexLockMetadata {
   trigger?: RefreshTrigger;
 }
 
+function reportFingerprintBuild(
+  opts: ReindexOptions,
+  fingerprintBuild: ReturnType<typeof buildProjectInputFingerprintFromJournal>,
+  previousFingerprint: ReturnType<typeof previousProjectInputSnapshot>,
+  onStatus: (message: string) => void,
+): void {
+  const changedAcceptedPaths =
+    fingerprintBuild.mode === 'delta'
+      ? (opts.changeJournal?.entries.filter((entry) => entry.kind !== 'add').length ?? 0)
+      : 0;
+  const reusedFingerprintCount = Math.max(0, (previousFingerprint?.files.length ?? 0) - changedAcceptedPaths);
+  onStatus(
+    fingerprintBuild.mode === 'delta'
+      ? `Project fingerprint revalidated ${fingerprintBuild.changedPaths.length} changed path(s), ` +
+          `reused ${reusedFingerprintCount} accepted file fingerprint(s), and accepted ${fingerprintBuild.fingerprint.files.length} input(s)`
+      : `Project fingerprint used full scan: ${fingerprintBuild.reason}`,
+  );
+}
+
+function acquireReindexLifecycleLock(
+  outputDb: string,
+  trigger: ReindexOptions['trigger'],
+  releaseSharedBuildLock: (() => void) | undefined,
+) {
+  const watcherRefresh = isWatcherRefreshTrigger(trigger);
+  const cacheLifecycleLock = acquireProcessFileLock(join(dirname(outputDb), 'cache-lifecycle.lock'), {
+    // A watcher must not sit on a spare Node process for 30 seconds while a
+    // manual refresh owns the cache. Report a retryable outcome and back off.
+    waitMs: watcherRefresh ? 1_000 : 30_000,
+  });
+  if (!cacheLifecycleLock) {
+    releaseSharedBuildLock?.();
+    throw new ReindexLockUnavailableError(
+      watcherRefresh
+        ? `Could not acquire scip-query cache lifecycle lock for ${dirname(outputDb)}; another refresh is publishing, so the watcher will retry.`
+        : `Could not acquire scip-query cache lifecycle lock for ${dirname(outputDb)}. ` +
+            'A watch daemon or another reindex may hold it. Run "scip-query watch --stop", retry the reindex, then restart with "scip-query watch --daemon".',
+    );
+  }
+  return cacheLifecycleLock;
+}
+
+function reportStaleRunCleanup(outputDb: string, onStatus: (message: string) => void): void {
+  const staleRunCleanup = pruneStaleReindexRunDirectories(dirname(outputDb));
+  if (staleRunCleanup.removed > 0) {
+    onStatus(`Removed ${staleRunCleanup.removed} abandoned reindex workspace(s)`);
+  }
+  for (const error of staleRunCleanup.errors) {
+    onStatus(`Could not remove abandoned reindex workspace: ${error}`);
+  }
+}
+
+function finishSuccessfulReindex(input: Parameters<typeof publishSharedReindexResult>[0], result: ReindexResult): void {
+  publishSharedReindexResult(input);
+  const activityWrite = recordReindexRunActivity(input.paths.outputDb, result);
+  if (activityWrite.state === 'failed') {
+    input.onStatus(`Warning: reindex succeeded, but activity telemetry was not recorded: ${activityWrite.reason}`);
+  }
+  hardenOwnedCacheTreeIfOwned(input.projectRoot, dirname(input.paths.outputDb));
+}
+
+function recordReindexFailure(
+  opts: ReindexOptions,
+  paths: ReindexOutputPaths,
+  start: number,
+  monotonicStart: number,
+  error: unknown,
+  onStatus: (message: string) => void,
+): void {
+  const lastRefresh = buildLastRefresh({
+    trigger: opts.trigger,
+    result: 'failed',
+    start,
+    monotonicStart,
+    error: error instanceof Error ? error.message : String(error),
+  });
+  updateReindexLastRefresh(paths.metaPath, lastRefresh);
+  const activityWrite = recordFailedReindexActivity(paths.outputDb, lastRefresh);
+  if (activityWrite.state === 'failed') {
+    onStatus(`Warning: failed reindex activity telemetry was not recorded: ${activityWrite.reason}`);
+  }
+}
+
+function resolveReindexLanguages(opts: ReindexOptions, onStatus: (message: string) => void): SupportedLanguage[] {
+  // Detect or use provided languages
+  const languages = opts.languages ?? detectLanguages(opts.projectRoot);
+  if (languages.length === 0) {
+    throw new Error(
+      'No supported languages detected in this project. ' +
+        'Looked for: tsconfig.json, Cargo.toml, go.mod, pyproject.toml, etc.',
+    );
+  }
+
+  onStatus(`Detected languages: ${languages.join(', ')}`);
+
+  return languages;
+}
+
+function reindexMaxHeapMb(opts: ReindexOptions): number {
+  return opts.maxHeapMb ?? inheritedMaxOldSpaceMb(process.env['NODE_OPTIONS']) ?? 8192;
+}
+
 /**
  * Reindex a project: detect languages, run the appropriate SCIP indexer(s),
  * and convert the output to SQLite.
@@ -319,7 +421,7 @@ interface ReindexLockMetadata {
 // behavior harder to audit.
 export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
   const { projectRoot, onStatus = console.log } = opts;
-  const maxHeapMb = opts.maxHeapMb ?? inheritedMaxOldSpaceMb(process.env['NODE_OPTIONS']) ?? 8192;
+  const maxHeapMb = reindexMaxHeapMb(opts);
   // Compatibility note: skipAutoInstall=true still wins, but false does not
   // grant host-mutation authority. Only installMissing=true does.
   const skipAutoInstall = opts.skipAutoInstall === true || opts.installMissing !== true;
@@ -330,16 +432,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
   mkdirSync(dirname(paths.outputScip), { recursive: true });
   mkdirSync(dirname(paths.outputDb), { recursive: true });
 
-  // Detect or use provided languages
-  const languages = opts.languages ?? detectLanguages(projectRoot);
-  if (languages.length === 0) {
-    throw new Error(
-      'No supported languages detected in this project. ' +
-        'Looked for: tsconfig.json, Cargo.toml, go.mod, pyproject.toml, etc.',
-    );
-  }
-
-  onStatus(`Detected languages: ${languages.join(', ')}`);
+  const languages = resolveReindexLanguages(opts, onStatus);
 
   const previousFingerprint = previousProjectInputSnapshot(paths.metaPath);
   let fingerprintBuild = profileSpan(
@@ -361,35 +454,11 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
     { languages: languages.length },
   );
   let fingerprint = fingerprintBuild.fingerprint;
-  const changedAcceptedPaths =
-    fingerprintBuild.mode === 'delta'
-      ? (opts.changeJournal?.entries.filter((entry) => entry.kind !== 'add').length ?? 0)
-      : 0;
-  const reusedFingerprintCount = Math.max(0, (previousFingerprint?.files.length ?? 0) - changedAcceptedPaths);
-  onStatus(
-    fingerprintBuild.mode === 'delta'
-      ? `Project fingerprint revalidated ${fingerprintBuild.changedPaths.length} changed path(s), ` +
-          `reused ${reusedFingerprintCount} accepted file fingerprint(s), and accepted ${fingerprint.files.length} input(s)`
-      : `Project fingerprint used full scan: ${fingerprintBuild.reason}`,
-  );
+  reportFingerprintBuild(opts, fingerprintBuild, previousFingerprint, onStatus);
   const sharedGeneration = await prepareSharedGenerationCache({ opts, paths, languages, fingerprint, onStatus });
   let sharedSnapshot = sharedGeneration.snapshot;
   let releaseSharedBuildLock = sharedGeneration.releaseBuildLock;
-  const watcherRefresh = isWatcherRefreshTrigger(opts.trigger);
-  const cacheLifecycleLock = acquireProcessFileLock(join(dirname(paths.outputDb), 'cache-lifecycle.lock'), {
-    // A watcher must not sit on a spare Node process for 30 seconds while a
-    // manual refresh owns the cache. Report a retryable outcome and back off.
-    waitMs: watcherRefresh ? 1_000 : 30_000,
-  });
-  if (!cacheLifecycleLock) {
-    releaseSharedBuildLock?.();
-    throw new ReindexLockUnavailableError(
-      watcherRefresh
-        ? `Could not acquire scip-query cache lifecycle lock for ${dirname(paths.outputDb)}; another refresh is publishing, so the watcher will retry.`
-        : `Could not acquire scip-query cache lifecycle lock for ${dirname(paths.outputDb)}. ` +
-            'A watch daemon or another reindex may hold it. Run "scip-query watch --stop", retry the reindex, then restart with "scip-query watch --daemon".',
-    );
-  }
+  const cacheLifecycleLock = acquireReindexLifecycleLock(paths.outputDb, opts.trigger, releaseSharedBuildLock);
   let releaseLock: (() => void) | undefined;
   try {
     releaseLock = await profileAsyncSpan(
@@ -428,13 +497,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       onStatus('Project fingerprint used full scan: accepted-generation-changed-before-lock');
     }
     ensureImmutableSqliteGeneration(paths.outputDb, paths.outputScip, paths.metaPath);
-    const staleRunCleanup = pruneStaleReindexRunDirectories(dirname(paths.outputDb));
-    if (staleRunCleanup.removed > 0) {
-      onStatus(`Removed ${staleRunCleanup.removed} abandoned reindex workspace(s)`);
-    }
-    for (const error of staleRunCleanup.errors) {
-      onStatus(`Could not remove abandoned reindex workspace: ${error}`);
-    }
+    reportStaleRunCleanup(paths.outputDb, onStatus);
 
     let reuseObservation: ReindexResult | null = null;
     const reused = await profileAsyncSpan(
@@ -454,12 +517,7 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
       () => ({ languages: languages.length, reused: reuseObservation !== null }),
     );
     if (reused) {
-      publishSharedReindexResult({ snapshot: sharedSnapshot, paths, projectRoot, fingerprint, onStatus });
-      const activityWrite = recordReindexRunActivity(paths.outputDb, reused);
-      if (activityWrite.state === 'failed') {
-        onStatus(`Warning: reindex succeeded, but activity telemetry was not recorded: ${activityWrite.reason}`);
-      }
-      hardenOwnedCacheTreeIfOwned(projectRoot, dirname(paths.outputDb));
+      finishSuccessfulReindex({ snapshot: sharedSnapshot, paths, projectRoot, fingerprint, onStatus }, reused);
       return reused;
     }
 
@@ -495,26 +553,10 @@ export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
         skipped: freshObservation?.skipped.length,
       }),
     );
-    publishSharedReindexResult({ snapshot: sharedSnapshot, paths, projectRoot, fingerprint, onStatus });
-    const activityWrite = recordReindexRunActivity(paths.outputDb, freshResult);
-    if (activityWrite.state === 'failed') {
-      onStatus(`Warning: reindex succeeded, but activity telemetry was not recorded: ${activityWrite.reason}`);
-    }
-    hardenOwnedCacheTreeIfOwned(projectRoot, dirname(paths.outputDb));
+    finishSuccessfulReindex({ snapshot: sharedSnapshot, paths, projectRoot, fingerprint, onStatus }, freshResult);
     return freshResult;
   } catch (error) {
-    const lastRefresh = buildLastRefresh({
-      trigger: opts.trigger,
-      result: 'failed',
-      start,
-      monotonicStart,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    updateReindexLastRefresh(paths.metaPath, lastRefresh);
-    const activityWrite = recordFailedReindexActivity(paths.outputDb, lastRefresh);
-    if (activityWrite.state === 'failed') {
-      onStatus(`Warning: failed reindex activity telemetry was not recorded: ${activityWrite.reason}`);
-    }
+    recordReindexFailure(opts, paths, start, monotonicStart, error, onStatus);
     throw error;
   } finally {
     if (runDir) {
@@ -2691,7 +2733,7 @@ function prepareBoundedTypeScriptCompilerShardRuns(
   );
 }
 
-function prepareIndexerRun(opts: {
+type PrepareIndexerRunOptions = {
   id: string;
   language: SupportedLanguage;
   label: string;
@@ -2709,47 +2751,85 @@ function prepareIndexerRun(opts: {
   shardInputPaths?: readonly string[];
   clojureConfigPath?: string;
   onStatus: (message: string) => void;
-}): { prepared: PreparedIndexerRun } | { skipped: { language: SupportedLanguage; reason: string } } {
-  const config = getIndexerConfig(opts.language);
+};
+type PreparedIndexerOutcome =
+  | { prepared: PreparedIndexerRun }
+  | { skipped: { language: SupportedLanguage; reason: string } };
+
+function skipIndexerRun(opts: PrepareIndexerRunOptions, reason: string) {
+  opts.onStatus(`Skipping ${opts.language}: ${reason}`);
+  return { skipped: { language: opts.language, reason } };
+}
+
+function ensureIndexerAvailable(
+  config: ReturnType<typeof getIndexerConfig>,
+  binaryLabel: string,
+  opts: PrepareIndexerRunOptions,
+): string | null {
+  if (isIndexerInstalled(config)) return null;
+  if (opts.skipAutoInstall) {
+    return (
+      `${binaryLabel} not found on PATH. To install the reviewed version, run: ` +
+      `scip-query reindex --install-missing${config.installUrl ? ` (manual source: ${config.installUrl})` : ''}`
+    );
+  }
+  opts.onStatus(`${binaryLabel} not found. Attempting auto-install...`);
+  if (tryInstallIndexer(config, opts.onStatus)) return null;
+  return `${binaryLabel} could not be auto-installed. ${config.installUrl ? `Install manually from ${config.installUrl}` : `Install ${binaryLabel} and put it on PATH.`}`;
+}
+
+function trustedIndexerTool(
+  opts: PrepareIndexerRunOptions,
+  config: ReturnType<typeof getIndexerConfig>,
+  discoveredProjectLocalBinary: ReturnType<typeof resolveProjectLocalIndexerBinary>,
+) {
+  return opts.trustProjectTools && discoveredProjectLocalBinary
+    ? trustProjectLocalIndexerBinary(config, opts.projectRoot)
+    : null;
+}
+
+function resolvePreparedIndexerBinary(opts: PrepareIndexerRunOptions, config: ReturnType<typeof getIndexerConfig>) {
   const binaryLabel = describeIndexerBinary(config);
   const discoveredProjectLocalBinary = resolveProjectLocalIndexerBinary(config, opts.projectRoot);
-  const trustedProjectTool =
-    opts.trustProjectTools && discoveredProjectLocalBinary
-      ? trustProjectLocalIndexerBinary(config, opts.projectRoot)
-      : null;
+  const trustedProjectTool = trustedIndexerTool(opts, config, discoveredProjectLocalBinary);
   const installedBinary = resolveIndexerBinary(config);
 
   if (!trustedProjectTool && !installedBinary && discoveredProjectLocalBinary) {
     const reason =
       `${binaryLabel} is available only as repository-local code at ${discoveredProjectLocalBinary}. ` +
       'Review that exact tool and rerun with --trust-project-tools.';
-    opts.onStatus(`Skipping ${opts.language}: ${reason}`);
-    return { skipped: { language: opts.language, reason } };
+    return skipIndexerRun(opts, reason);
   }
 
-  if (!trustedProjectTool && !installedBinary && !isIndexerInstalled(config)) {
-    if (opts.skipAutoInstall) {
-      const reason =
-        `${binaryLabel} not found on PATH. To install the reviewed version, run: ` +
-        `scip-query reindex --install-missing${config.installUrl ? ` (manual source: ${config.installUrl})` : ''}`;
-      opts.onStatus(`Skipping ${opts.language}: ${reason}`);
-      return { skipped: { language: opts.language, reason } };
-    }
-    opts.onStatus(`${binaryLabel} not found. Attempting auto-install...`);
-    if (!tryInstallIndexer(config, opts.onStatus)) {
-      const reason = `${binaryLabel} could not be auto-installed. ${config.installUrl ? `Install manually from ${config.installUrl}` : `Install ${binaryLabel} and put it on PATH.`}`;
-      opts.onStatus(`Skipping ${opts.language}: ${reason}`);
-      return { skipped: { language: opts.language, reason } };
-    }
+  if (!trustedProjectTool && !installedBinary) {
+    const reason = ensureIndexerAvailable(config, binaryLabel, opts);
+    if (reason !== null) return skipIndexerRun(opts, reason);
   }
 
   const resolvedBinary = trustedProjectTool?.canonicalPath ?? resolveIndexerBinary(config);
   if (!resolvedBinary) {
     const reason = `${binaryLabel} was not found after installation checks.`;
-    opts.onStatus(`Skipping ${opts.language}: ${reason}`);
-    return { skipped: { language: opts.language, reason } };
+    return skipIndexerRun(opts, reason);
   }
 
+  return { resolvedBinary, trustedProjectTool };
+}
+
+function preparedIndexerOptionalFields(opts: PrepareIndexerRunOptions, rootConfigContent: string | undefined) {
+  return {
+    ...(rootConfigContent === undefined ? {} : { temporaryRootConfigContent: rootConfigContent }),
+    ...(opts.temporaryProjectConfigs === undefined ? {} : { temporaryProjectConfigs: opts.temporaryProjectConfigs }),
+    ...(opts.boundedConcurrency === undefined ? {} : { boundedConcurrency: opts.boundedConcurrency }),
+    ...(opts.outputComposition ? { outputComposition: opts.outputComposition } : {}),
+    ...(opts.shardInputPaths === undefined ? {} : { shardInputPaths: opts.shardInputPaths }),
+  };
+}
+
+function prepareIndexerRun(opts: PrepareIndexerRunOptions): PreparedIndexerOutcome {
+  const config = getIndexerConfig(opts.language);
+  const resolution = resolvePreparedIndexerBinary(opts, config);
+  if ('skipped' in resolution) return resolution;
+  const { resolvedBinary, trustedProjectTool } = resolution;
   const { binary, args } = config.indexArgs({
     projectRoot: opts.projectRoot,
     outputPath: opts.scipPath,
@@ -2787,11 +2867,7 @@ function prepareIndexerRun(opts: {
       binary,
       args,
       env: getIndexerExecutionEnv(config, opts.env, resolvedBinary),
-      ...(rootConfigContent === undefined ? {} : { temporaryRootConfigContent: rootConfigContent }),
-      ...(opts.temporaryProjectConfigs === undefined ? {} : { temporaryProjectConfigs: opts.temporaryProjectConfigs }),
-      ...(opts.boundedConcurrency === undefined ? {} : { boundedConcurrency: opts.boundedConcurrency }),
-      ...(opts.outputComposition ? { outputComposition: opts.outputComposition } : {}),
-      ...(opts.shardInputPaths === undefined ? {} : { shardInputPaths: opts.shardInputPaths }),
+      ...preparedIndexerOptionalFields(opts, rootConfigContent),
       ...(trustedProjectTool ? { trustedProjectTool } : {}),
     },
   };

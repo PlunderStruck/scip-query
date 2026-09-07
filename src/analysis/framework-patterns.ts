@@ -120,27 +120,9 @@ function getJsTestExclusions(db: ScipDatabase, relativePath: string): ExclusionE
   const cached = EXCLUSION_CACHE.get(tree);
   if (cached) return cached;
 
-  // Scan top-level `expression_statement > call_expression > identifier`
-  // for test-framework names. Presence of any one classifies the whole
-  // file as a test file — its top-level helpers are then framework-owned.
-  let isTestFile = false;
   const program = tree.rootNode;
-  for (const child of program.namedChildren) {
-    if (child.type !== 'expression_statement') continue;
-    const call = child.namedChild(0);
-    if (!call || call.type !== 'call_expression') continue;
-    const target = call.namedChild(0);
-    if (!target) continue;
-    const name =
-      target.type === 'member_expression' ? target.namedChild(target.namedChildCount - 1)?.text : target.text;
-    if (name && TEST_FRAMEWORK_NAMES.has(name)) {
-      isTestFile = true;
-      break;
-    }
-  }
-
   const out: ExclusionEntry[] = [];
-  if (isTestFile) {
+  if (hasTopLevelTestCall(program)) {
     out.push({
       startLine: 0,
       endLine: program.endPosition.row,
@@ -149,42 +131,7 @@ function getJsTestExclusions(db: ScipDatabase, relativePath: string): ExclusionE
     });
   }
 
-  // Custom React hook detection: top-level function whose name starts with
-  // `use` followed by an uppercase letter is invoked by React's render loop
-  // when called from a component — same dispatch invisibility as Tauri
-  // commands and trait impls.
-  for (const child of program.namedChildren) {
-    let funcName: string | null = null;
-    let funcNode: SyntaxNode | null = null;
-    if (child.type === 'function_declaration') {
-      funcName = child.namedChild(0)?.text ?? null;
-      funcNode = child;
-    } else if (child.type === 'export_statement') {
-      const inner = child.namedChild(0);
-      if (inner?.type === 'function_declaration') {
-        funcName = inner.namedChild(0)?.text ?? null;
-        funcNode = inner;
-      }
-    } else if (child.type === 'lexical_declaration') {
-      const decl = child.namedChild(0);
-      if (decl?.type === 'variable_declarator') {
-        const name = decl.namedChild(0)?.text;
-        const value = decl.namedChild(1);
-        if (name && (value?.type === 'arrow_function' || value?.type === 'function_expression')) {
-          funcName = name;
-          funcNode = decl;
-        }
-      }
-    }
-    if (funcName && /^use[A-Z]/.test(funcName) && funcNode) {
-      out.push({
-        startLine: funcNode.startPosition.row,
-        endLine: funcNode.endPosition.row,
-        reason: 'React custom hook (use*)',
-        disposition: 'exclude',
-      });
-    }
-  }
+  out.push(...topLevelReactHookExclusions(program));
 
   out.push(
     ...collectSuppressionExclusions(
@@ -203,6 +150,59 @@ function getJsTestExclusions(db: ScipDatabase, relativePath: string): ExclusionE
     ),
   );
   EXCLUSION_CACHE.set(tree, out);
+  return out;
+}
+
+function hasTopLevelTestCall(program: SyntaxNode): boolean {
+  // A top-level framework call makes this file's helpers framework-owned.
+  return program.namedChildren.some((child) => {
+    if (child.type !== 'expression_statement') return false;
+    const call = child.namedChild(0);
+    if (call?.type !== 'call_expression') return false;
+    const target = call.namedChild(0);
+    if (!target) return false;
+    const name =
+      target.type === 'member_expression' ? target.namedChild(target.namedChildCount - 1)?.text : target.text;
+    return name !== undefined && TEST_FRAMEWORK_NAMES.has(name);
+  });
+}
+
+function topLevelHookDeclaration(child: SyntaxNode): { name: string; node: SyntaxNode } | undefined {
+  if (child.type === 'function_declaration') {
+    const name = child.namedChild(0)?.text;
+    return name ? { name, node: child } : undefined;
+  }
+  if (child.type === 'export_statement') {
+    const inner = child.namedChild(0);
+    if (inner?.type !== 'function_declaration') return undefined;
+    const name = inner.namedChild(0)?.text;
+    return name ? { name, node: inner } : undefined;
+  }
+  return lexicalHookDeclaration(child);
+}
+
+function lexicalHookDeclaration(child: SyntaxNode): { name: string; node: SyntaxNode } | undefined {
+  if (child.type !== 'lexical_declaration') return undefined;
+  const decl = child.namedChild(0);
+  if (decl?.type !== 'variable_declarator') return undefined;
+  const name = decl.namedChild(0)?.text;
+  const value = decl.namedChild(1);
+  if (!name || (value?.type !== 'arrow_function' && value?.type !== 'function_expression')) return undefined;
+  return { name, node: decl };
+}
+
+function topLevelReactHookExclusions(program: SyntaxNode): ExclusionEntry[] {
+  const out: ExclusionEntry[] = [];
+  for (const child of program.namedChildren) {
+    const declaration = topLevelHookDeclaration(child);
+    if (!declaration || !/^use[A-Z]/.test(declaration.name)) continue;
+    out.push({
+      startLine: declaration.node.startPosition.row,
+      endLine: declaration.node.endPosition.row,
+      reason: 'React custom hook (use*)',
+      disposition: 'exclude',
+    });
+  }
   return out;
 }
 

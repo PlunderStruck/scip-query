@@ -1013,9 +1013,7 @@ export function touchExistingWorktreeLease(
     if (!observedPointer) return null;
     const repositoryCacheDir = resolveRepositoryCacheDir(observedPointer.repositoryId);
     options.onBeforeRepositoryLock?.();
-    const lock = acquireRepositoryCacheLock(repositoryCacheDir, { waitMs: 5_000 });
-    if (!lock) return null;
-    try {
+    const touchLockedLease = (): WorktreeCacheLease | null => {
       const pointer = readWorktreeCachePointer(localCacheDir);
       if (
         !pointer ||
@@ -1032,49 +1030,79 @@ export function touchExistingWorktreeLease(
         }),
       ) as WorktreeCacheLease;
       const context = resolvedContext ?? resolveGitWorktreeContext(projectRoot);
-      if (
-        !context?.clean ||
-        !context.treeOid ||
-        lease.version !== 1 ||
-        lease.repositoryId !== pointer.repositoryId ||
-        lease.worktreeId !== pointer.worktreeId ||
-        lease.repositoryId !== context.repositoryId ||
-        lease.worktreeId !== context.worktreeId ||
-        resolve(lease.projectRoot) !== resolve(context.projectRoot) ||
-        lease.treeOid !== context.treeOid ||
-        resolve(lease.localCacheDir) !== resolve(localCacheDir) ||
-        lease.ownershipChecksum !== worktreeLeaseOwnershipChecksum(lease)
-      ) {
-        return null;
-      }
-      const metadata = readPublishableReindexMetadata(localCacheDir);
-      if (!isProjectInputFingerprint(metadata?.fingerprint)) return null;
-      const snapshot = buildSharedGenerationSnapshot(context, metadata.fingerprint);
-      if (
-        !snapshot ||
-        snapshot.repositoryCacheDir !== repositoryCacheDir ||
-        lease.baseGenerationId !== snapshot.generationId ||
-        lease.activeGenerationId !== snapshot.generationId ||
-        !validateSourceGeneration(localCacheDir, projectRoot, snapshot.fingerprint, true, false)
-      ) {
-        return null;
-      }
-      const current = (now ?? (() => new Date()))();
-      if (
-        Number.isFinite(Date.parse(lease.lastSeenAt)) &&
-        current.getTime() - Date.parse(lease.lastSeenAt) < WORKTREE_LEASE_TOUCH_INTERVAL_MS
-      ) {
-        return lease;
-      }
-      const touched = { ...lease, lastSeenAt: current.toISOString() };
-      writeJsonDurable(leasePath, touched, { spacing: 2, trailingNewline: true });
-      return touched;
+      if (!context?.clean || !context.treeOid) return null;
+      if (!leaseMatchesWorktree(lease, pointer, context, localCacheDir)) return null;
+      if (!leaseMatchesCurrentGeneration(lease, context, localCacheDir, repositoryCacheDir, projectRoot)) return null;
+      return refreshWorktreeLeaseTimestamp(leasePath, lease, now);
+    };
+    const lock = acquireRepositoryCacheLock(repositoryCacheDir, { waitMs: 5_000 });
+    if (!lock) return null;
+    try {
+      return touchLockedLease();
     } finally {
       lock.release();
     }
   } catch {
     return null;
   }
+}
+
+function leaseMatchesWorktree(
+  lease: WorktreeCacheLease,
+  pointer: NonNullable<ReturnType<typeof readWorktreeCachePointer>>,
+  context: GitWorktreeContext,
+  localCacheDir: string,
+): boolean {
+  return (
+    lease.version === 1 &&
+    lease.repositoryId === pointer.repositoryId &&
+    lease.worktreeId === pointer.worktreeId &&
+    lease.repositoryId === context.repositoryId &&
+    lease.worktreeId === context.worktreeId &&
+    resolve(lease.projectRoot) === resolve(context.projectRoot) &&
+    lease.treeOid === context.treeOid &&
+    resolve(lease.localCacheDir) === resolve(localCacheDir) &&
+    lease.ownershipChecksum === worktreeLeaseOwnershipChecksum(lease)
+  );
+}
+
+function leaseMatchesCurrentGeneration(
+  lease: WorktreeCacheLease,
+  context: GitWorktreeContext,
+  localCacheDir: string,
+  repositoryCacheDir: string,
+  projectRoot: string,
+): boolean {
+  const metadata = readPublishableReindexMetadata(localCacheDir);
+  if (!isProjectInputFingerprint(metadata?.fingerprint)) return false;
+  const snapshot = buildSharedGenerationSnapshot(context, metadata.fingerprint);
+  if (
+    !snapshot ||
+    snapshot.repositoryCacheDir !== repositoryCacheDir ||
+    lease.baseGenerationId !== snapshot.generationId ||
+    lease.activeGenerationId !== snapshot.generationId ||
+    !validateSourceGeneration(localCacheDir, projectRoot, snapshot.fingerprint, true, false)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function refreshWorktreeLeaseTimestamp(
+  leasePath: string,
+  lease: WorktreeCacheLease,
+  now: (() => Date) | undefined,
+): WorktreeCacheLease {
+  const current = (now ?? (() => new Date()))();
+  if (
+    Number.isFinite(Date.parse(lease.lastSeenAt)) &&
+    current.getTime() - Date.parse(lease.lastSeenAt) < WORKTREE_LEASE_TOUCH_INTERVAL_MS
+  ) {
+    return lease;
+  }
+  const touched = { ...lease, lastSeenAt: current.toISOString() };
+  writeJsonDurable(leasePath, touched, { spacing: 2, trailingNewline: true });
+  return touched;
 }
 
 export function parseSharedGenerationManifest(value: string): SharedGenerationManifest {

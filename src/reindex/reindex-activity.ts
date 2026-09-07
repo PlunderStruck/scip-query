@@ -387,14 +387,7 @@ function parseReindexActivityRecord(line: string): ParsedReindexActivityRecord |
     const value = JSON.parse(line) as unknown;
     if (!value || typeof value !== 'object') return null;
     const record = value as Partial<ReindexActivityRecord>;
-    if (
-      record.version !== 1 ||
-      !isValidRecordTimestamp(record.recordedAt) ||
-      !record.trigger ||
-      !isRefreshTriggerKind(record.trigger.kind)
-    ) {
-      return null;
-    }
+    if (!hasValidActivityHeader(record)) return null;
     if (record.event === 'suppressed') {
       return record.reason === 'completed-index-is-fresh'
         ? {
@@ -404,18 +397,7 @@ function parseReindexActivityRecord(line: string): ParsedReindexActivityRecord |
           }
         : null;
     }
-    if (
-      record.event !== 'run' ||
-      (record.result !== 'rebuilt' && record.result !== 'reused' && record.result !== 'failed') ||
-      !isNonNegativeFiniteNumber(record.durationMs) ||
-      !isNonNegativeFiniteNumber(record.estimatedLogicalOutputBytes) ||
-      (record.estimatedWriteBytes !== undefined && !isNonNegativeFiniteNumber(record.estimatedWriteBytes)) ||
-      (record.reflinkedBytes !== undefined && !isNonNegativeFiniteNumber(record.reflinkedBytes)) ||
-      (record.fallbackCopiedBytes !== undefined && !isNonNegativeFiniteNumber(record.fallbackCopiedBytes)) ||
-      (record.incrementalWrittenBytes !== undefined && !isNonNegativeFiniteNumber(record.incrementalWrittenBytes))
-    ) {
-      return null;
-    }
+    if (!isValidRunActivity(record)) return null;
     const runRecord = record as ReindexRunActivity;
     const { byLanguage: _untrustedByLanguage, ...baseRecord } = runRecord;
     const parsedLanguages = parseLanguageActivity(_untrustedByLanguage);
@@ -431,6 +413,28 @@ function parseReindexActivityRecord(line: string): ParsedReindexActivityRecord |
   } catch {
     return null;
   }
+}
+
+function hasValidActivityHeader(record: Partial<ReindexActivityRecord>): boolean {
+  return (
+    record.version === 1 &&
+    isValidRecordTimestamp(record.recordedAt) &&
+    !!record.trigger &&
+    isRefreshTriggerKind(record.trigger.kind)
+  );
+}
+
+function isValidRunActivity(record: Partial<ReindexActivityRecord>): boolean {
+  if (record.event !== 'run') return false;
+  if (record.result !== 'rebuilt' && record.result !== 'reused' && record.result !== 'failed') return false;
+  if (!isNonNegativeFiniteNumber(record.durationMs)) return false;
+  if (!isNonNegativeFiniteNumber(record.estimatedLogicalOutputBytes)) return false;
+  return [
+    record.estimatedWriteBytes,
+    record.reflinkedBytes,
+    record.fallbackCopiedBytes,
+    record.incrementalWrittenBytes,
+  ].every((value) => value === undefined || isNonNegativeFiniteNumber(value));
 }
 
 function effectiveRecordedWriteBytes(record: ReindexRunActivity): number {

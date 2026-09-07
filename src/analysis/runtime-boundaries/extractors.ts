@@ -438,79 +438,67 @@ function httpExtractor(): BoundaryExtractor {
       /\b(?:FastAPI|Flask|APIRouter|axum|Router::new)\b/u.test(source),
     extract: (context) => {
       const observations: BoundaryObservation[] = [];
-      visitDescendantsOfType(context.root, ['decorator', 'call_expression'], (node) => {
-        if (node.type === 'decorator') {
-          const match = /^@[^\s(]+\.(get|post|put|patch|delete|options|head)\s*\(\s*(['"`])([^'"`]+)\2/iu.exec(
-            node.text.trim(),
-          );
-          if (!match || !hasPackageImport(context.source, ['fastapi', 'flask'])) return;
-          observations.push(
-            observation(
-              context,
-              node,
-              'builtin.http',
-              'http.handle',
-              [
-                { name: 'method', value: match[1]!.toUpperCase(), evidence: 'literal' },
-                { name: 'path', value: match[3]!, evidence: 'literal' },
-              ],
-              'exact',
-              'framework-decorator',
-            ),
-          );
-          return;
-        }
-        if (node.type !== 'call_expression') return;
-        const callee = callTarget(node);
-        if (!callee) return;
-        const leaf = callee.split('.').at(-1)?.toLowerCase() ?? '';
-        const receiver = callee.includes('.') ? callee.slice(0, callee.lastIndexOf('.')) : '';
-        const args = callArguments(node);
-
-        if (leaf === 'route' && hasPackageImport(context.source, ['axum'])) {
-          const path = addressedArgument(args[0], context);
-          const method = /^\s*(get|post|put|patch|delete|options|head)\s*\(/iu.exec(args[1]?.text ?? '')?.[1];
-          if (!path || !method) return;
-          observations.push(
-            observation(
-              context,
-              node,
-              'builtin.http',
-              'http.handle',
-              [
-                { name: 'method', value: method.toUpperCase(), evidence: 'literal' },
-                { name: 'path', ...path },
-              ],
-              resolvedStrength([{ name: 'path', ...path }]),
-              'framework-adapter',
-            ),
-          );
-          return;
-        }
-
-        if (callee === 'fetch' || callee.endsWith('.fetch')) {
-          const path = addressedArgument(args[0], context);
-          if (!path) return;
-          const explicitMethod = /\bmethod\s*:\s*['"`]([A-Za-z]+)['"`]/u.exec(args[1]?.text ?? '')?.[1]?.toUpperCase();
-          const method = explicitMethod ?? (args[1] ? null : 'GET');
-          const keyParts: BoundaryKeyPart[] = [
-            ...(method ? [{ name: 'method', value: method, evidence: 'literal' as const }] : []),
-            { name: 'path', ...path },
-          ];
-          observations.push(
-            observation(
-              context,
-              node,
-              'builtin.http',
-              'http.request',
-              keyParts,
-              method ? resolvedStrength(keyParts) : 'candidate',
-              'call-expression',
-            ),
-          );
-          return;
-        }
-
+      const collectDecorator = (node: SyntaxNode): void => {
+        const match = /^@[^\s(]+\.(get|post|put|patch|delete|options|head)\s*\(\s*(['"`])([^'"`]+)\2/iu.exec(
+          node.text.trim(),
+        );
+        if (!match || !hasPackageImport(context.source, ['fastapi', 'flask'])) return;
+        observations.push(
+          observation(
+            context,
+            node,
+            'builtin.http',
+            'http.handle',
+            [
+              { name: 'method', value: match[1]!.toUpperCase(), evidence: 'literal' },
+              { name: 'path', value: match[3]!, evidence: 'literal' },
+            ],
+            'exact',
+            'framework-decorator',
+          ),
+        );
+      };
+      const collectAxumRoute = (node: SyntaxNode, args: SyntaxNode[]): void => {
+        const path = addressedArgument(args[0], context);
+        const method = /^\s*(get|post|put|patch|delete|options|head)\s*\(/iu.exec(args[1]?.text ?? '')?.[1];
+        if (!path || !method) return;
+        observations.push(
+          observation(
+            context,
+            node,
+            'builtin.http',
+            'http.handle',
+            [
+              { name: 'method', value: method.toUpperCase(), evidence: 'literal' },
+              { name: 'path', ...path },
+            ],
+            resolvedStrength([{ name: 'path', ...path }]),
+            'framework-adapter',
+          ),
+        );
+      };
+      const collectFetchRequest = (node: SyntaxNode, args: SyntaxNode[]): void => {
+        const path = addressedArgument(args[0], context);
+        if (!path) return;
+        const explicitMethod = /\bmethod\s*:\s*['"`]([A-Za-z]+)['"`]/u.exec(args[1]?.text ?? '')?.[1]?.toUpperCase();
+        const method = explicitMethod ?? (args[1] ? null : 'GET');
+        const keyParts: BoundaryKeyPart[] = [
+          ...(method ? [{ name: 'method', value: method, evidence: 'literal' as const }] : []),
+          { name: 'path', ...path },
+        ];
+        observations.push(
+          observation(
+            context,
+            node,
+            'builtin.http',
+            'http.request',
+            keyParts,
+            method ? resolvedStrength(keyParts) : 'candidate',
+            'call-expression',
+          ),
+        );
+      };
+      const collectMethodCall = (node: SyntaxNode, args: SyntaxNode[], leaf: string, receiver: string): void => {
         if (!HTTP_METHODS.has(leaf)) return;
         const path = addressedArgument(args[0], context);
         if (!path) return;
@@ -553,6 +541,18 @@ function httpExtractor(): BoundaryExtractor {
             ),
           );
         }
+      };
+      visitDescendantsOfType(context.root, ['decorator', 'call_expression'], (node) => {
+        if (node.type === 'decorator') return collectDecorator(node);
+        if (node.type !== 'call_expression') return;
+        const callee = callTarget(node);
+        if (!callee) return;
+        const leaf = callee.split('.').at(-1)?.toLowerCase() ?? '';
+        const receiver = callee.includes('.') ? callee.slice(0, callee.lastIndexOf('.')) : '';
+        const args = callArguments(node);
+        if (leaf === 'route' && hasPackageImport(context.source, ['axum'])) return collectAxumRoute(node, args);
+        if (callee === 'fetch' || callee.endsWith('.fetch')) return collectFetchRequest(node, args);
+        collectMethodCall(node, args, leaf, receiver);
       });
       return observations;
     },

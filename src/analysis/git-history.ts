@@ -610,17 +610,7 @@ function coChangePairsFromHistory(
 ): CoChangePair[] {
   const { minTogether = 4, minConfidence = 0.6, maxFilesPerCommit = BULK_COMMIT_FILE_CAP } = opts;
   const fileChanges = new Map<string, number>();
-  const pairContext = new Map<
-    string,
-    {
-      together: number;
-      focusedTogether: number;
-      broadTogether: number;
-      lastTogetherAt: number;
-      timestamps: number[];
-      subjects: string[];
-    }
-  >();
+  const pairContext = new Map<string, CoChangeContext>();
   let newestAnalyzedAt = history.newestAnalyzedAt ?? 0;
   for (const commit of history.commits) {
     const files = [...new Set(commit.files)].sort();
@@ -630,64 +620,16 @@ function coChangePairsFromHistory(
     }
     const broadCommit = isBroadCoChangeCommit(files);
     const hasFocusFile = focusFiles === undefined || files.some((file) => focusFiles.has(file));
-    for (const file of files) {
-      fileChanges.set(file, (fileChanges.get(file) ?? 0) + 1);
-    }
+    recordCoChangeFileCounts(fileChanges, files);
     if (!hasFocusFile) continue;
-    for (let i = 0; i < files.length; i++) {
-      for (let j = i + 1; j < files.length; j++) {
-        if (focusFiles && !focusFiles.has(files[i]!) && !focusFiles.has(files[j]!)) continue;
-        const key = `${files[i]}\x00${files[j]}`;
-        const entry = pairContext.get(key) ?? {
-          together: 0,
-          focusedTogether: 0,
-          broadTogether: 0,
-          lastTogetherAt: 0,
-          timestamps: [],
-          subjects: [],
-        };
-        entry.together += 1;
-        if (broadCommit) {
-          entry.broadTogether += 1;
-        } else {
-          entry.focusedTogether += 1;
-        }
-        if (commit.timestamp > entry.lastTogetherAt) entry.lastTogetherAt = commit.timestamp;
-        entry.timestamps.push(commit.timestamp);
-        entry.subjects.push(commit.subject);
-        pairContext.set(key, entry);
-      }
-    }
+    accumulateCoChangePairs(pairContext, files, commit, broadCommit, focusFiles);
   }
 
   const pairs: CoChangePair[] = [];
   const recentCutoff = newestAnalyzedAt - RECENT_COCHANGE_WINDOW_SECONDS;
   for (const [key, context] of pairContext) {
-    const together = context.together;
-    if (together < minTogether) continue;
-    const [fileA, fileB] = key.split('\x00') as [string, string];
-    const changesA = fileChanges.get(fileA) ?? together;
-    const changesB = fileChanges.get(fileB) ?? together;
-    const confidence = Math.max(together / changesA, together / changesB);
-    if (confidence < minConfidence) continue;
-    const broadCommitRatio = context.broadTogether / together;
-    const recentTogether = context.timestamps.filter((timestamp) => timestamp >= recentCutoff).length;
-    pairs.push({
-      fileA,
-      fileB,
-      together,
-      confidence,
-      changesA,
-      changesB,
-      focusedTogether: context.focusedTogether,
-      broadTogether: context.broadTogether,
-      broadCommitRatio,
-      lastTogetherAt: context.lastTogetherAt,
-      recentTogether,
-      commitScope: coChangeCommitScope(context.broadTogether, together),
-      recency: recentTogether > 0 ? 'recent' : 'stale',
-      subjectContext: coChangeSubjectContext(context.subjects),
-    });
+    const pair = coChangePairFromContext(key, context, fileChanges, minTogether, minConfidence, recentCutoff);
+    if (pair) pairs.push(pair);
   }
 
   pairs.sort(
@@ -695,6 +637,95 @@ function coChangePairsFromHistory(
       right.together - left.together || right.confidence - left.confidence || left.fileA.localeCompare(right.fileA),
   );
   return pairs;
+}
+
+function recordCoChangeFileCounts(fileChanges: Map<string, number>, files: readonly string[]): void {
+  for (const file of files) fileChanges.set(file, (fileChanges.get(file) ?? 0) + 1);
+}
+
+interface CoChangeContext {
+  together: number;
+  focusedTogether: number;
+  broadTogether: number;
+  lastTogetherAt: number;
+  timestamps: number[];
+  subjects: string[];
+}
+
+function accumulateCoChangePairs(
+  pairContext: Map<string, CoChangeContext>,
+  files: string[],
+  commit: CommitHistory['commits'][number],
+  broadCommit: boolean,
+  focusFiles?: ReadonlySet<string>,
+): void {
+  for (let i = 0; i < files.length; i++) {
+    for (let j = i + 1; j < files.length; j++) {
+      if (focusFiles && !focusFiles.has(files[i]!) && !focusFiles.has(files[j]!)) continue;
+      accumulateCoChangePair(pairContext, `${files[i]}\x00${files[j]}`, commit, broadCommit);
+    }
+  }
+}
+
+function accumulateCoChangePair(
+  pairContext: Map<string, CoChangeContext>,
+  key: string,
+  commit: CommitHistory['commits'][number],
+  broadCommit: boolean,
+): void {
+  const entry = pairContext.get(key) ?? {
+    together: 0,
+    focusedTogether: 0,
+    broadTogether: 0,
+    lastTogetherAt: 0,
+    timestamps: [],
+    subjects: [],
+  };
+  entry.together += 1;
+  if (broadCommit) {
+    entry.broadTogether += 1;
+  } else {
+    entry.focusedTogether += 1;
+  }
+  if (commit.timestamp > entry.lastTogetherAt) entry.lastTogetherAt = commit.timestamp;
+  entry.timestamps.push(commit.timestamp);
+  entry.subjects.push(commit.subject);
+  pairContext.set(key, entry);
+}
+
+function coChangePairFromContext(
+  key: string,
+  context: CoChangeContext,
+  fileChanges: ReadonlyMap<string, number>,
+  minTogether: number,
+  minConfidence: number,
+  recentCutoff: number,
+): CoChangePair | null {
+  const together = context.together;
+  if (together < minTogether) return null;
+  const [fileA, fileB] = key.split('\x00') as [string, string];
+  const changesA = fileChanges.get(fileA) ?? together;
+  const changesB = fileChanges.get(fileB) ?? together;
+  const confidence = Math.max(together / changesA, together / changesB);
+  if (confidence < minConfidence) return null;
+  const broadCommitRatio = context.broadTogether / together;
+  const recentTogether = context.timestamps.filter((timestamp) => timestamp >= recentCutoff).length;
+  return {
+    fileA,
+    fileB,
+    together,
+    confidence,
+    changesA,
+    changesB,
+    focusedTogether: context.focusedTogether,
+    broadTogether: context.broadTogether,
+    broadCommitRatio,
+    lastTogetherAt: context.lastTogetherAt,
+    recentTogether,
+    commitScope: coChangeCommitScope(context.broadTogether, together),
+    recency: recentTogether > 0 ? 'recent' : 'stale',
+    subjectContext: coChangeSubjectContext(context.subjects),
+  };
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.

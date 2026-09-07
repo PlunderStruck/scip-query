@@ -194,42 +194,54 @@ function persistOverlayManifest(cacheDir: string, manifest: TypeScriptOverlayMan
   writeJsonAtomic(path, manifest, { spacing: 2, trailingNewline: true });
 }
 
+type TypeScriptOverlayManifestHeader = Omit<TypeScriptOverlayManifest, 'overlays'> & { overlays: unknown[] };
+
 function parseOverlayManifest(raw: string): TypeScriptOverlayManifest {
-  const value = JSON.parse(raw) as Partial<TypeScriptOverlayManifest>;
+  const value = JSON.parse(raw) as Partial<TypeScriptOverlayManifestHeader>;
+  validateOverlayManifestHeader(value);
+  const seen = new Set<string>();
+  for (const overlay of value.overlays) {
+    validateOverlayRecord(overlay);
+    validateRelativePath(overlay.relativePath);
+    if (seen.has(overlay.relativePath)) throw new Error('duplicate TypeScript overlay record');
+    seen.add(overlay.relativePath);
+  }
+  return value as TypeScriptOverlayManifest;
+}
+
+function validateOverlayManifestHeader(
+  value: Partial<TypeScriptOverlayManifestHeader>,
+): asserts value is TypeScriptOverlayManifestHeader {
   if (
     value.version !== TYPESCRIPT_OVERLAY_STORE_VERSION ||
-    typeof value.producerIdentity !== 'string' ||
-    !value.producerIdentity ||
-    typeof value.projectIdentity !== 'string' ||
-    !value.projectIdentity ||
-    typeof value.baseGenerationIdentity !== 'string' ||
-    !value.baseGenerationIdentity ||
-    typeof value.generationIdentity !== 'string' ||
-    !value.generationIdentity ||
+    !isOverlayIdentity(value.producerIdentity) ||
+    !isOverlayIdentity(value.projectIdentity) ||
+    !isOverlayIdentity(value.baseGenerationIdentity) ||
+    !isOverlayIdentity(value.generationIdentity) ||
     typeof value.createdAt !== 'string' ||
     !Number.isFinite(Date.parse(value.createdAt)) ||
     !Array.isArray(value.overlays)
   ) {
     throw new Error('invalid TypeScript overlay manifest');
   }
-  const seen = new Set<string>();
-  for (const overlay of value.overlays) {
-    if (
-      !overlay ||
-      typeof overlay.relativePath !== 'string' ||
-      (overlay.blobHash !== null &&
-        (typeof overlay.blobHash !== 'string' || !/^[a-f0-9]{64}$/.test(overlay.blobHash))) ||
-      !Number.isInteger(overlay.byteLength) ||
-      overlay.byteLength < 0 ||
-      (overlay.blobHash === null && overlay.byteLength !== 0)
-    ) {
-      throw new Error('invalid TypeScript overlay record');
-    }
-    validateRelativePath(overlay.relativePath);
-    if (seen.has(overlay.relativePath)) throw new Error('duplicate TypeScript overlay record');
-    seen.add(overlay.relativePath);
+}
+
+function isOverlayIdentity(value: unknown): value is string {
+  return typeof value === 'string' && value !== '';
+}
+
+function validateOverlayRecord(overlay: unknown): asserts overlay is TypeScriptOverlayRecord {
+  const record = overlay as Partial<TypeScriptOverlayRecord> | null | undefined;
+  if (
+    !record ||
+    typeof record.relativePath !== 'string' ||
+    (record.blobHash !== null && (typeof record.blobHash !== 'string' || !/^[a-f0-9]{64}$/.test(record.blobHash))) ||
+    !Number.isInteger(record.byteLength) ||
+    record.byteLength! < 0 ||
+    (record.blobHash === null && record.byteLength !== 0)
+  ) {
+    throw new Error('invalid TypeScript overlay record');
   }
-  return value as TypeScriptOverlayManifest;
 }
 
 function overlayRoot(cacheDir: string): string {

@@ -525,6 +525,12 @@ function focusAlignedCausalTargetNodeIds(
   ).slice(0, limit);
 }
 
+function isBehaviorSourceNode(
+  node: ExplorationTopologyNode,
+): node is ExplorationTopologyNode & { location: NonNullable<ExplorationTopologyNode['location']> } {
+  return node.location != null && ['symbol', 'source-construct', 'runtime-boundary-participant'].includes(node.kind);
+}
+
 function behaviorForNode(
   db: ScipDatabase,
   node: ExplorationTopologyNode,
@@ -535,25 +541,86 @@ function behaviorForNode(
   preferCompleteSmallConstruct: boolean,
   preferCompleteOutline: boolean,
 ): ConnectedBehaviorRepresentation | null {
-  if (!node.location || !['symbol', 'source-construct', 'runtime-boundary-participant'].includes(node.kind))
-    return null;
-  const endLine = node.location.endLine ?? node.location.line;
-  const sourceLines = getSourceLines(db, node.location.file);
-  const rangeFocusLines = focusLines.length > 0 ? focusLines : [node.location.line];
+  if (!isBehaviorSourceNode(node)) return null;
+  const { sourceLines, range, inRangeFocusLines, outline, causalOutline, connectorSlice } = prepareNodeBehavior(
+    db,
+    node,
+    focusLines,
+    includeEffectReceipt,
+  );
+  const exactSourceCharacters = sourceLines.slice(range.startLine, range.endLine + 1).join('\n').length;
+  const hasOversizedMaterialLine = hasOversizedBehaviorLine(db, node.location.file, range, sourceLines);
+  const withSupport = (representation: ConnectedBehaviorRepresentation): ConnectedBehaviorRepresentation =>
+    withCompilerReferencedSupportingDeclarations(
+      db,
+      node,
+      range.startLine,
+      range.endLine,
+      explicitCausalTargetLines.filter((line) => line >= range.startLine && line <= range.endLine),
+      representation,
+    );
+  const retainCompleteConstruct = shouldRetainCompleteConstruct(
+    node,
+    preferCompleteSmallConstruct,
+    exactSourceCharacters,
+  );
+  // Small anchors remain complete. A source-large anchor with explicit causal
+  // focus uses the closed connector slice below; that slice must retain the
+  // governing predicates and sibling outcomes while omitting unrelated regions.
+  const retainCompleteAnchorBehavior =
+    preserveCompleteAnchorBehavior && (inRangeFocusLines.length === 0 || retainCompleteConstruct);
+  const selected = selectNodeBehaviorRepresentation(
+    outline,
+    connectorSlice,
+    preferCompleteOutline || retainCompleteAnchorBehavior,
+    retainCompleteConstruct,
+    hasOversizedMaterialLine,
+    causalOutline?.outlineCharacters ?? exactSourceCharacters,
+  );
+  return withSupport(selected ?? completeSourceRepresentation(db, node.location.file, range, sourceLines, node.label));
+}
+
+function selectNodeBehaviorRepresentation(
+  outline: ReturnType<typeof behaviorSkeleton>,
+  connectorSlice: ConnectedBehaviorRepresentation | null,
+  preferOutline: boolean,
+  retainCompleteConstruct: boolean,
+  oversized: boolean,
+  alternativeCharacters: number,
+): ConnectedBehaviorRepresentation | null {
+  if (outline && preferOutline) return outlineRepresentation(outline);
+  if (
+    !preferOutline &&
+    !retainCompleteConstruct &&
+    preferConnectorSlice(connectorSlice, oversized, alternativeCharacters)
+  )
+    return connectorSlice;
+  return outline ? outlineRepresentation(outline) : null;
+}
+
+function prepareNodeBehavior(
+  db: ScipDatabase,
+  node: ExplorationTopologyNode,
+  focusLines: readonly number[],
+  includeEffectReceipt: boolean,
+) {
+  const endLine = node.location!.endLine ?? node.location!.line;
+  const sourceLines = getSourceLines(db, node.location!.file);
+  const rangeFocusLines = focusLines.length > 0 ? focusLines : [node.location!.line];
   // A boundary observation often identifies one discriminator line inside an
   // object-property handler that has no SCIP symbol. Search the enclosing file
   // for the smallest callable around that exact line, while ordinary symbol
   // nodes stay bounded by their compiler-owned range.
   const range =
     node.kind === 'runtime-boundary-participant'
-      ? behaviorConstructRange(db, node.location.file, 0, Math.max(0, sourceLines.length - 1), [node.location.line])
-      : behaviorConstructRange(db, node.location.file, node.location.line, endLine, rangeFocusLines);
+      ? behaviorConstructRange(db, node.location!.file, 0, Math.max(0, sourceLines.length - 1), [node.location!.line])
+      : behaviorConstructRange(db, node.location!.file, node.location!.line, endLine, rangeFocusLines);
   const inRangeFocusLines = focusLines.filter((line) => line >= range.startLine && line <= range.endLine);
-  const outline = behaviorSkeleton(db, node.location.file, range.startLine, range.endLine, inRangeFocusLines);
+  const outline = behaviorSkeleton(db, node.location!.file, range.startLine, range.endLine, inRangeFocusLines);
   const causalOutline =
     outline ??
     (inRangeFocusLines.length > 0
-      ? behaviorSkeleton(db, node.location.file, range.startLine, range.endLine, inRangeFocusLines, {
+      ? behaviorSkeleton(db, node.location!.file, range.startLine, range.endLine, inRangeFocusLines, {
           requireSavings: false,
         })
       : null);
@@ -569,9 +636,36 @@ function behaviorForNode(
           includeEffectReceipt,
         )
       : null;
-  const exactSourceCharacters = sourceLines.slice(range.startLine, range.endLine + 1).join('\n').length;
-  const rangeSignals = behaviorSignalsByLine(db, node.location.file, range.startLine, range.endLine);
-  const hasOversizedMaterialLine = sourceLines
+  return { sourceLines, range, inRangeFocusLines, outline, causalOutline, connectorSlice };
+}
+
+function shouldRetainCompleteConstruct(
+  node: ExplorationTopologyNode,
+  preferCompleteSmallConstruct: boolean,
+  exactSourceCharacters: number,
+): boolean {
+  return (
+    (preferCompleteSmallConstruct || node.kind === 'runtime-boundary-participant' || node.anchorIds.length > 0) &&
+    exactSourceCharacters <= COMPLETE_ANCHOR_SOURCE_CHARACTER_LIMIT
+  );
+}
+
+function preferConnectorSlice(
+  slice: ConnectedBehaviorRepresentation | null,
+  oversized: boolean,
+  alternativeCharacters: number,
+): boolean {
+  return slice !== null && !oversized && slice.renderedCharacters < alternativeCharacters;
+}
+
+function hasOversizedBehaviorLine(
+  db: ScipDatabase,
+  file: string,
+  range: { startLine: number; endLine: number },
+  sourceLines: readonly string[],
+): boolean {
+  const rangeSignals = behaviorSignalsByLine(db, file, range.startLine, range.endLine);
+  return sourceLines
     .slice(range.startLine, range.endLine + 1)
     .some(
       (text, offset) =>
@@ -580,44 +674,22 @@ function behaviorForNode(
           ['binding', 'branch', 'loop', 'call', 'return', 'throw', 'mutation'].includes(signal),
         ),
     );
-  const withSupport = (representation: ConnectedBehaviorRepresentation): ConnectedBehaviorRepresentation =>
-    withCompilerReferencedSupportingDeclarations(
-      db,
-      node,
-      range.startLine,
-      range.endLine,
-      explicitCausalTargetLines.filter((line) => line >= range.startLine && line <= range.endLine),
-      representation,
-    );
-  const retainCompleteConstruct =
-    (preferCompleteSmallConstruct || node.kind === 'runtime-boundary-participant' || node.anchorIds.length > 0) &&
-    exactSourceCharacters <= COMPLETE_ANCHOR_SOURCE_CHARACTER_LIMIT;
-  // Small anchors remain complete. A source-large anchor with explicit causal
-  // focus uses the closed connector slice below; that slice must retain the
-  // governing predicates and sibling outcomes while omitting unrelated regions.
-  const retainCompleteAnchorBehavior =
-    preserveCompleteAnchorBehavior && (inRangeFocusLines.length === 0 || retainCompleteConstruct);
-  if (outline && (preferCompleteOutline || retainCompleteAnchorBehavior)) {
-    return withSupport(outlineRepresentation(outline));
-  }
-  if (
-    !preferCompleteOutline &&
-    !retainCompleteAnchorBehavior &&
-    connectorSlice &&
-    !hasOversizedMaterialLine &&
-    !retainCompleteConstruct &&
-    connectorSlice.renderedCharacters < (causalOutline?.outlineCharacters ?? exactSourceCharacters)
-  ) {
-    return withSupport(connectorSlice);
-  }
-  if (outline) return withSupport(outlineRepresentation(outline));
+}
+
+function completeSourceRepresentation(
+  db: ScipDatabase,
+  file: string,
+  range: { startLine: number; endLine: number },
+  sourceLines: readonly string[],
+  label: string,
+): ConnectedBehaviorRepresentation {
   const selectedSourceLines = sourceLines.slice(range.startLine, range.endLine + 1);
   const source = selectedSourceLines.join('\n');
-  const signalsByLine = behaviorSignalsByLine(db, node.location.file, range.startLine, range.endLine);
-  return withSupport({
+  const signalsByLine = behaviorSignalsByLine(db, file, range.startLine, range.endLine);
+  return {
     kind: 'source',
     constructKind: 'source construct',
-    signature: selectedSourceLines.find((line) => line.trim().length > 0)?.trim() ?? node.label,
+    signature: selectedSourceLines.find((line) => line.trim().length > 0)?.trim() ?? label,
     lines: selectedSourceLines.map((text, offset) => ({
       line: range.startLine + offset,
       endLine: range.startLine + offset,
@@ -634,7 +706,7 @@ function behaviorForNode(
     },
     rawCharacters: source.length,
     renderedCharacters: source.length,
-  });
+  };
 }
 
 type CompilerDeclarationTarget = ReturnType<typeof scipOccurrenceDefinitionTargetsForRange>['targets'][number];
@@ -917,45 +989,77 @@ function focusLinesForNode(
   pathEdgeIds: ReadonlySet<string>,
   expansiveNodeIds: ReadonlySet<string>,
 ): number[] {
-  if (!node.location || !['symbol', 'source-construct', 'runtime-boundary-participant'].includes(node.kind)) return [];
+  if (!isBehaviorSourceNode(node)) return [];
   const lines = new Set<number>();
   const callLines = new Set(getSourceFacts(db, node.location.file)?.callSites.map((site) => site.line) ?? []);
   if (node.kind === 'runtime-boundary-participant') lines.add(node.location.line);
   if (expansiveNodeIds.has(node.id)) {
-    for (const observation of readRuntimeBoundaryObservations(db, { files: [node.location.file] })) {
-      if (
-        observation.source.startLine >= node.location.line &&
-        observation.source.startLine <= (node.location.endLine ?? node.location.line)
-      ) {
-        lines.add(observation.source.startLine);
-      }
-    }
+    runtimeObservationFocusLines(db, node.location).forEach((line) => lines.add(line));
   }
   for (const edge of edges) {
     if (edge.fromNodeId !== node.id && edge.toNodeId !== node.id) continue;
     const otherNode = nodeById.get(edge.fromNodeId === node.id ? edge.toNodeId : edge.fromNodeId);
-    const isExpansiveOutgoingCausalEdge =
-      expansiveNodeIds.has(node.id) &&
-      ['call', 'reference', 'runtime-boundary'].includes(edge.kind) &&
-      edge.fromNodeId === node.id;
-    const touchesExplicitAnchor = (otherNode?.anchorIds.length ?? 0) > 0;
-    if (!pathEdgeIds.has(edge.id) && !isExpansiveOutgoingCausalEdge && !touchesExplicitAnchor) continue;
-    const evidenceLines = edge.evidence.flatMap((source) =>
-      source.location?.file === node.location!.file ? [source.location.line] : [],
-    );
-    const callsiteEvidenceLines = evidenceLines.filter((line) => callLines.has(line));
-    for (const line of callsiteEvidenceLines.length > 0 ? callsiteEvidenceLines : evidenceLines) {
-      lines.add(line);
-    }
-    const leaf = otherNode?.attributes['leaf'];
-    if (typeof leaf !== 'string' || leaf.length === 0) continue;
-    const identifierLines = findIdentifierLines(db, node.location.file, leaf).filter(
-      (line) => line >= node.location!.line && line <= (node.location!.endLine ?? node.location!.line),
-    );
-    const firstLine = identifierLines.find((line) => callLines.has(line)) ?? identifierLines[0];
-    if (firstLine !== undefined) lines.add(firstLine);
+    if (!shouldFocusBehaviorEdge(node, edge, otherNode, pathEdgeIds, expansiveNodeIds)) continue;
+    edgeFocusLines(db, node.location, edge, otherNode, callLines).forEach((line) => lines.add(line));
   }
   return [...lines].sort((left, right) => left - right);
+}
+
+function runtimeObservationFocusLines(
+  db: ScipDatabase,
+  location: NonNullable<ExplorationTopologyNode['location']>,
+): number[] {
+  return readRuntimeBoundaryObservations(db, { files: [location.file] })
+    .filter(
+      (observation) =>
+        observation.source.startLine >= location.line &&
+        observation.source.startLine <= (location.endLine ?? location.line),
+    )
+    .map((observation) => observation.source.startLine);
+}
+
+function shouldFocusBehaviorEdge(
+  node: ExplorationTopologyNode,
+  edge: ExplorationTopologyEdge,
+  otherNode: ExplorationTopologyNode | undefined,
+  pathEdgeIds: ReadonlySet<string>,
+  expansiveNodeIds: ReadonlySet<string>,
+): boolean {
+  const isExpansiveOutgoingCausalEdge =
+    expansiveNodeIds.has(node.id) &&
+    ['call', 'reference', 'runtime-boundary'].includes(edge.kind) &&
+    edge.fromNodeId === node.id;
+  return pathEdgeIds.has(edge.id) || isExpansiveOutgoingCausalEdge || (otherNode?.anchorIds.length ?? 0) > 0;
+}
+
+function edgeFocusLines(
+  db: ScipDatabase,
+  location: NonNullable<ExplorationTopologyNode['location']>,
+  edge: ExplorationTopologyEdge,
+  otherNode: ExplorationTopologyNode | undefined,
+  callLines: ReadonlySet<number>,
+): number[] {
+  const evidenceLines = edge.evidence.flatMap((source) =>
+    source.location?.file === location.file ? [source.location.line] : [],
+  );
+  const callsiteEvidenceLines = evidenceLines.filter((line) => callLines.has(line));
+  const lines = callsiteEvidenceLines.length > 0 ? callsiteEvidenceLines : evidenceLines;
+  const identifierLine = firstCallableIdentifierLine(db, location, otherNode?.attributes['leaf'], callLines);
+  if (identifierLine !== undefined) lines.push(identifierLine);
+  return lines;
+}
+
+function firstCallableIdentifierLine(
+  db: ScipDatabase,
+  location: NonNullable<ExplorationTopologyNode['location']>,
+  leaf: unknown,
+  callLines: ReadonlySet<number>,
+): number | undefined {
+  if (typeof leaf !== 'string' || leaf.length === 0) return undefined;
+  const identifierLines = findIdentifierLines(db, location.file, leaf).filter(
+    (line) => line >= location.line && line <= (location.endLine ?? location.line),
+  );
+  return identifierLines.find((line) => callLines.has(line)) ?? identifierLines[0];
 }
 
 function explicitFocusLinesForNode(

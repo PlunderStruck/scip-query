@@ -583,15 +583,29 @@ class TsMorphSemanticProvider implements SemanticProvider {
     stats?: ReferenceMapProfileStats,
   ): void {
     const families = new Map<string, Map<number, HierarchyMemberDefinition>>();
-    for (const definition of definitions) {
+    const appendAncestorReferences = (
+      bucket: SemanticReference[],
+      checker: TypeScriptTypeChecker,
+      container: TypeScriptHierarchyContainer,
+      memberSymbol: TypeScriptSymbol,
+    ): void => {
+      for (const hierarchySymbol of this.hierarchyMemberSymbols(checker, container, memberSymbol)) {
+        if (hierarchySymbol === memberSymbol) continue;
+        for (const location of this.compilerSymbolLocations(hierarchySymbol)) {
+          bucket.push(location);
+          if (stats) stats.hierarchyReferences += 1;
+        }
+      }
+    };
+    const addDefinition = (definition: IndexedDefinition): void => {
       const node = this.nodeForDefinition(definition);
       const member = node?.compilerNode;
-      if (!member || !this.isHierarchyMethod(member)) continue;
+      if (!member || !this.isHierarchyMethod(member)) return;
       const container = member.parent;
-      if (!this.isHierarchyContainer(container)) continue;
+      if (!this.isHierarchyContainer(container)) return;
       const checker = this.compilerCheckerForSourceFile(node!.getSourceFile());
       const memberSymbol = checker.getSymbolAtLocation(member.name);
-      if (!memberSymbol) continue;
+      if (!memberSymbol) return;
       const sourceFile = member.getSourceFile();
       const position = sourceFile.getLineAndCharacterOfPosition(member.name.getStart(sourceFile));
       const entry = {
@@ -603,13 +617,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
         },
       };
       const bucket = result.get(definition.symbolId) ?? [];
-      for (const hierarchySymbol of this.hierarchyMemberSymbols(checker, container, memberSymbol)) {
-        if (hierarchySymbol === memberSymbol) continue;
-        for (const location of this.compilerSymbolLocations(hierarchySymbol)) {
-          bucket.push(location);
-          if (stats) stats.hierarchyReferences += 1;
-        }
-      }
+      appendAncestorReferences(bucket, checker, container, memberSymbol);
       result.set(definition.symbolId, bucket);
       const roots = this.hierarchyRootMemberSymbols(checker, container, memberSymbol);
       for (const root of roots) {
@@ -618,11 +626,8 @@ class TsMorphSemanticProvider implements SemanticProvider {
         families.set(root, family);
       }
       if (stats) stats.hierarchyDefinitions += 1;
-    }
-
-    for (const family of families.values()) {
-      if (family.size < 2) continue;
-      if (stats) stats.hierarchyFamilies += 1;
+    };
+    const appendFamilyReferences = (family: Map<number, HierarchyMemberDefinition>): void => {
       for (const { definition } of family.values()) {
         const bucket = result.get(definition.symbolId) ?? [];
         for (const other of family.values()) {
@@ -632,6 +637,12 @@ class TsMorphSemanticProvider implements SemanticProvider {
         }
         result.set(definition.symbolId, bucket);
       }
+    };
+    for (const definition of definitions) addDefinition(definition);
+    for (const family of families.values()) {
+      if (family.size < 2) continue;
+      if (stats) stats.hierarchyFamilies += 1;
+      appendFamilyReferences(family);
     }
   }
 

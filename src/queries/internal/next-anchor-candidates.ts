@@ -267,52 +267,10 @@ function collectNextAnchorGraphRelationCandidates(
       edge.disposition !== 'unsupported',
   );
   for (const edge of adjacentCausalEdges) {
-    const incoming = edge.toNodeId === step.nodeId;
-    const candidateNodeId = incoming ? edge.fromNodeId : edge.toNodeId;
-    if (context.returnedNodeIds.has(candidateNodeId)) continue;
-    const candidateNode = context.nodeById.get(candidateNodeId);
-    if (!candidateNode?.location || !context.sourceAllowed(candidateNode.location.file)) continue;
-    const alternative =
-      edge.kind === 'call' ? callableAlternativeForNode(context.db, candidateNode) : alternativeForNode(candidateNode);
-    if (!alternative) continue;
-    if (context.alternativeAlreadyReturned(alternative)) continue;
-    const location = evidenceLocation(edge, candidateNode.location.file) ?? candidateNode.location;
-    const sourceLine = getSourceLines(context.db, location.file)[location.line]?.trim();
-    const direction = incoming ? 'upstream' : 'downstream';
-    const causalRole =
-      edge.kind === 'runtime-boundary'
-        ? incoming
-          ? 'runtime-producer'
-          : 'runtime-consumer'
-        : incoming
-          ? 'caller'
-          : 'callee';
-    const strength = strongestEvidence(edge.evidence);
-    const leaf = nodeLeaf(candidateNode);
-    candidates.push({
-      anchor: {
-        id: nextAnchorId(step.id, location.line, candidateNode.id),
-        status: strength,
-        source: 'graph-relation',
-        direction,
-        causalRole,
-        relationKind: edge.kind,
-        fromStepId: step.id,
-        fromLabel: step.label,
-        callsite: {
-          file: location.file,
-          line: location.line,
-          endLine: location.endLine ?? location.line,
-          text: sourceLine || `${candidateNode.label} → ${step.label}`,
-          signals: ['call'],
-          calleeLeaf: leaf,
-        },
-        alternatives: [alternative],
-        alternativeCount: 1,
-        evidence: edge.evidence,
-      },
-    });
-    if (incoming) upstreamCandidates += 1;
+    const candidate = nextAnchorForCausalEdge(step, context, edge);
+    if (!candidate) continue;
+    candidates.push(candidate);
+    if (candidate.anchor.direction === 'upstream') upstreamCandidates += 1;
     if (edge.kind === 'runtime-boundary') runtimeCandidates += 1;
   }
 
@@ -325,47 +283,118 @@ function collectNextAnchorGraphRelationCandidates(
       !context.returnedNodeIds.has(edge.toNodeId),
   );
   for (const edge of callableReferences) {
-    const target = context.nodeById.get(edge.toNodeId);
-    if (!target?.location || !context.sourceAllowed(target.location.file)) continue;
-    const alternative = callableAlternativeForNode(context.db, target);
-    if (!alternative) continue;
-    if (context.alternativeAlreadyReturned(alternative)) continue;
-    const leaf = nodeLeaf(target);
-    const line = evidenceLocation(edge, step.location.file)?.line;
-    const materialLine = step.behavior.lines.find(
-      (candidate) =>
-        (line === undefined || (line >= candidate.line && line <= candidate.endLine)) && candidate.text.includes(leaf),
-    );
-    if (!materialLine) continue;
-    const causalRole = callableReferenceCausalRole(materialLine.signals);
-    const strength = strongestEvidence(edge.evidence);
-    candidates.push({
-      anchor: {
-        id: nextAnchorId(step.id, materialLine.line, target.id),
-        status: strength,
-        source: 'graph-relation',
-        direction: 'downstream',
-        causalRole,
-        relationKind: 'reference',
-        fromStepId: step.id,
-        fromLabel: step.label,
-        callsite: {
-          file: step.location.file,
-          line: materialLine.line,
-          endLine: materialLine.endLine,
-          text: materialLine.text,
-          signals: materialLine.signals,
-          calleeLeaf: leaf,
-        },
-        alternatives: [alternative],
-        alternativeCount: 1,
-        evidence: edge.evidence,
-      },
-    });
-    if (causalRole === 'result-callback') resultCandidates += 1;
+    const candidate = nextAnchorForCallableReference(step, context, edge, step.location, step.behavior);
+    if (!candidate) continue;
+    candidates.push(candidate);
+    if (candidate.anchor.causalRole === 'result-callback') resultCandidates += 1;
   }
-
   return { candidates, upstreamCandidates, resultCandidates, runtimeCandidates };
+}
+
+function causalEdgeRole(edge: ExplorationTopologyEdge, incoming: boolean): SystemMapNextAnchor['causalRole'] {
+  if (edge.kind === 'runtime-boundary') return incoming ? 'runtime-producer' : 'runtime-consumer';
+  return incoming ? 'caller' : 'callee';
+}
+
+function isNextAnchorSourceNode(
+  context: NextAnchorStepContext,
+  node: ExplorationTopologyNode | undefined,
+): node is ExplorationTopologyNode & { location: NonNullable<ExplorationTopologyNode['location']> } {
+  return Boolean(node?.location && context.sourceAllowed(node.location.file));
+}
+
+function nextAnchorForCausalEdge(
+  step: ConnectedBehaviorStep,
+  context: NextAnchorStepContext,
+  edge: ExplorationTopologyEdge,
+): NextAnchorCandidate | undefined {
+  const incoming = edge.toNodeId === step.nodeId;
+  const candidateNodeId = incoming ? edge.fromNodeId : edge.toNodeId;
+  if (context.returnedNodeIds.has(candidateNodeId)) return undefined;
+  const candidateNode = context.nodeById.get(candidateNodeId);
+  if (!isNextAnchorSourceNode(context, candidateNode)) return undefined;
+  const alternative =
+    edge.kind === 'call' ? callableAlternativeForNode(context.db, candidateNode) : alternativeForNode(candidateNode);
+  if (!alternative) return undefined;
+  if (context.alternativeAlreadyReturned(alternative)) return undefined;
+  const location = evidenceLocation(edge, candidateNode.location.file) ?? candidateNode.location;
+  const direction = incoming ? 'upstream' : 'downstream';
+  const causalRole = causalEdgeRole(edge, incoming);
+  const strength = strongestEvidence(edge.evidence);
+  const leaf = nodeLeaf(candidateNode);
+  const callsite = (): SystemMapNextAnchor['callsite'] => {
+    const sourceLine = getSourceLines(context.db, location.file)[location.line]?.trim();
+    return {
+      file: location.file,
+      line: location.line,
+      endLine: location.endLine ?? location.line,
+      text: sourceLine || `${candidateNode.label} → ${step.label}`,
+      signals: ['call'],
+      calleeLeaf: leaf,
+    };
+  };
+  return {
+    anchor: {
+      id: nextAnchorId(step.id, location.line, candidateNode.id),
+      status: strength,
+      source: 'graph-relation',
+      direction,
+      causalRole,
+      relationKind: edge.kind,
+      fromStepId: step.id,
+      fromLabel: step.label,
+      callsite: callsite(),
+      alternatives: [alternative],
+      alternativeCount: 1,
+      evidence: edge.evidence,
+    },
+  };
+}
+
+function nextAnchorForCallableReference(
+  step: ConnectedBehaviorStep,
+  context: NextAnchorStepContext,
+  edge: ExplorationTopologyEdge,
+  location: NonNullable<ConnectedBehaviorStep['location']>,
+  behavior: NonNullable<ConnectedBehaviorStep['behavior']>,
+): NextAnchorCandidate | undefined {
+  const target = context.nodeById.get(edge.toNodeId);
+  if (!isNextAnchorSourceNode(context, target)) return undefined;
+  const alternative = callableAlternativeForNode(context.db, target);
+  if (!alternative) return undefined;
+  if (context.alternativeAlreadyReturned(alternative)) return undefined;
+  const leaf = nodeLeaf(target);
+  const line = evidenceLocation(edge, location.file)?.line;
+  const materialLine = behavior.lines.find(
+    (candidate) =>
+      (line === undefined || (line >= candidate.line && line <= candidate.endLine)) && candidate.text.includes(leaf),
+  );
+  if (!materialLine) return undefined;
+  const causalRole = callableReferenceCausalRole(materialLine.signals);
+  const strength = strongestEvidence(edge.evidence);
+  return {
+    anchor: {
+      id: nextAnchorId(step.id, materialLine.line, target.id),
+      status: strength,
+      source: 'graph-relation',
+      direction: 'downstream',
+      causalRole,
+      relationKind: 'reference',
+      fromStepId: step.id,
+      fromLabel: step.label,
+      callsite: {
+        file: location.file,
+        line: materialLine.line,
+        endLine: materialLine.endLine,
+        text: materialLine.text,
+        signals: materialLine.signals,
+        calleeLeaf: leaf,
+      },
+      alternatives: [alternative],
+      alternativeCount: 1,
+      evidence: edge.evidence,
+    },
+  };
 }
 
 function collectNextAnchorExactOccurrenceCandidates(

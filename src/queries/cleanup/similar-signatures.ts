@@ -319,60 +319,59 @@ function normalizeSourceSignature(raw: string | null, leaf: string): string | nu
   return normalized.length >= 3 ? normalized : null;
 }
 
-function truncateAtImplementationStart(suffix: string): string {
-  let parenDepth = 0;
-  let braceDepth = 0;
-  let bracketDepth = 0;
-  let angleDepth = 0;
-  let quote: '"' | "'" | '`' | null = null;
-  let escaping = false;
+interface SignatureScanState {
+  depths: Record<'paren' | 'brace' | 'bracket' | 'angle', number>;
+  quote: string | null;
+  escaping: boolean;
+}
 
+/** Consume a quoted character without interpreting punctuation inside literals. */
+function consumeSignatureQuote(state: SignatureScanState, char: string): boolean {
+  if (state.quote) {
+    if (state.escaping) state.escaping = false;
+    else if (char === '\\') state.escaping = true;
+    else if (char === state.quote) state.quote = null;
+    return true;
+  }
+  if (!['"', "'", '`'].includes(char)) return false;
+  state.quote = char;
+  return true;
+}
+
+const SIGNATURE_DELIMITERS: Readonly<Record<string, readonly [keyof SignatureScanState['depths'], number]>> = {
+  '(': ['paren', 1],
+  ')': ['paren', -1],
+  '[': ['bracket', 1],
+  ']': ['bracket', -1],
+  '<': ['angle', 1],
+  '>': ['angle', -1],
+  '{': ['brace', 1],
+  '}': ['brace', -1],
+};
+
+function startsSignatureImplementation(suffix: string, index: number, state: SignatureScanState): boolean {
+  const { paren, bracket, angle, brace } = state.depths;
+  if (paren !== 0 || bracket !== 0 || angle !== 0) return false;
+  if (suffix[index] === '{') return true;
+  return suffix[index] === '=' && suffix[index + 1] === '>' && brace === 0;
+}
+
+function truncateAtImplementationStart(suffix: string): string {
+  const state: SignatureScanState = {
+    depths: { paren: 0, brace: 0, bracket: 0, angle: 0 },
+    quote: null,
+    escaping: false,
+  };
   for (let index = 0; index < suffix.length; index += 1) {
     const char = suffix[index]!;
-
-    if (quote) {
-      if (escaping) {
-        escaping = false;
-        continue;
-      }
-      if (char === '\\') {
-        escaping = true;
-        continue;
-      }
-      if (char === quote) quote = null;
-      continue;
-    }
-
-    if (char === '"' || char === "'" || char === '`') {
-      quote = char;
-      continue;
-    }
-
-    if (char === '(') parenDepth += 1;
-    else if (char === ')') parenDepth = Math.max(0, parenDepth - 1);
-    else if (char === '[') bracketDepth += 1;
-    else if (char === ']') bracketDepth = Math.max(0, bracketDepth - 1);
-    else if (char === '<') angleDepth += 1;
-    else if (char === '>') angleDepth = Math.max(0, angleDepth - 1);
-    else if (char === '{') {
-      if (parenDepth === 0 && bracketDepth === 0 && angleDepth === 0) {
-        return suffix.slice(0, index);
-      }
-      braceDepth += 1;
-    } else if (char === '}') {
-      braceDepth = Math.max(0, braceDepth - 1);
-    } else if (
-      char === '=' &&
-      suffix[index + 1] === '>' &&
-      parenDepth === 0 &&
-      braceDepth === 0 &&
-      bracketDepth === 0 &&
-      angleDepth === 0
-    ) {
-      return suffix.slice(0, index);
+    if (consumeSignatureQuote(state, char)) continue;
+    if (startsSignatureImplementation(suffix, index, state)) return suffix.slice(0, index);
+    const delimiter = SIGNATURE_DELIMITERS[char];
+    if (delimiter) {
+      const [kind, delta] = delimiter;
+      state.depths[kind] = Math.max(0, state.depths[kind] + delta);
     }
   }
-
   return suffix;
 }
 

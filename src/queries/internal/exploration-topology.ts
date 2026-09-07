@@ -550,49 +550,11 @@ export function selectExplorationTopology(
   const selectedNodeIds = new Set(
     topology.anchors.flatMap((anchor) => [...anchor.nodeIds, ...anchor.candidateNodeIds]),
   );
-  const paths: ExplorationTopologyPath[] = [];
-  const connectedAnchors = topology.anchors.filter(
-    (anchor) => anchor.status !== 'missing' && anchor.nodeIds.length + anchor.candidateNodeIds.length > 0,
-  );
-
-  for (let leftIndex = 0; leftIndex < connectedAnchors.length; leftIndex += 1) {
-    for (let rightIndex = leftIndex + 1; rightIndex < connectedAnchors.length; rightIndex += 1) {
-      const left = connectedAnchors[leftIndex]!;
-      const right = connectedAnchors[rightIndex]!;
-      const proved = shortestAnchorPath(topology, left, right, false);
-      const candidate = proved ?? shortestAnchorPath(topology, left, right, true);
-      const path = candidate;
-      if (path) {
-        path.nodeIds.forEach((id) => selectedNodeIds.add(id));
-        paths.push({
-          id: stableTopologyId('path', left.id, right.id),
-          fromAnchorId: left.id,
-          toAnchorId: right.id,
-          status: !proved || left.status === 'ambiguous' || right.status === 'ambiguous' ? 'candidate' : 'connected',
-          nodeIds: path.nodeIds,
-          edgeIds: path.edgeIds,
-        });
-      } else {
-        paths.push({
-          id: stableTopologyId('path', left.id, right.id),
-          fromAnchorId: left.id,
-          toAnchorId: right.id,
-          status: 'partial',
-          nodeIds: [],
-          edgeIds: [],
-        });
-      }
-    }
-  }
+  const paths = selectAnchorConnectorPaths(topology, selectedNodeIds);
 
   const requestedRouteIds = uniqueSorted(options.routeIds ?? []);
   const routeCatalog = catalogExplorationRoutes(topology, requestedRouteIds);
-  const knownRouteIds = new Set(routeCatalog.routes.map((route) => route.id));
-  const unknownRouteIds = requestedRouteIds.filter((id) => !knownRouteIds.has(id));
-  if (unknownRouteIds.length > 0) {
-    throw new Error(`Unknown exploration route id(s): ${unknownRouteIds.join(', ')}`);
-  }
-  const explicitlySelectedRoutes = routeCatalog.routes.filter((route) => requestedRouteIds.includes(route.id));
+  const explicitlySelectedRoutes = selectRequestedExplorationRoutes(routeCatalog, requestedRouteIds);
   const upstreamCausalPaths = explicitlySelectedRoutes.map(
     (route): UpstreamCausalPath => ({
       anchorNodeId: route.anchorNodeId,
@@ -607,8 +569,133 @@ export function selectExplorationTopology(
 
   const hasSelectedConnectorPath = paths.length === 0 || paths.some((path) => path.edgeIds.length > 0);
   if (hasSelectedConnectorPath) addAdjacentJunctionsToFixedPoint(topology, selectedNodeIds, maxSelectedNodes);
+  expandSelectedTopologyFrontiers(topology, selectedNodeIds, options.expandedFrontierIds);
+  if (hasSelectedConnectorPath) addAdjacentJunctionsToFixedPoint(topology, selectedNodeIds, maxSelectedNodes);
+
+  const nodes = selectedTopologyNodes(topology, upstreamCausalPaths, selectedNodeIds);
+  const edges = selectedTopologyEdges(topology, paths, upstreamCausalPaths, selectedNodeIds);
+  const selectedTopology = createExplorationTopology({
+    anchors: topology.anchors,
+    nodes,
+    edges,
+    paths,
+    frontiers: [
+      ...topology.frontiers.filter((frontier) => frontier.disposition !== 'folded'),
+      ...foldedComponentFrontiers({ ...topology, nodes, edges }, selectedNodeIds),
+    ],
+    scope: topology.coverage.scope,
+    blindSpots: topology.coverage.blindSpots,
+    incompleteReasons: topology.coverage.status === 'incomplete' ? [topology.coverage.explanation] : [],
+    routeCatalog,
+  });
+
+  assertFoldedEdgesAccounted(selectedTopology);
+  return selectedTopology;
+}
+
+function selectRequestedExplorationRoutes(
+  routeCatalog: ExplorationRouteCatalog,
+  requestedRouteIds: readonly string[],
+): ExplorationRoute[] {
+  const knownRouteIds = new Set(routeCatalog.routes.map((route) => route.id));
+  const unknownRouteIds = requestedRouteIds.filter((id) => !knownRouteIds.has(id));
+  if (unknownRouteIds.length > 0) {
+    throw new Error(`Unknown exploration route id(s): ${unknownRouteIds.join(', ')}`);
+  }
+  const explicitlySelectedRoutes = routeCatalog.routes.filter((route) => requestedRouteIds.includes(route.id));
+  return explicitlySelectedRoutes;
+}
+
+function selectedTopologyEdges(
+  topology: ExplorationTopology,
+  paths: readonly ExplorationTopologyPath[],
+  upstreamCausalPaths: readonly UpstreamCausalPath[],
+  selectedNodeIds: ReadonlySet<string>,
+): ExplorationTopologyEdge[] {
+  const selectedEdges = new Set([
+    ...paths.flatMap((path) => path.edgeIds),
+    ...upstreamCausalPaths.flatMap((path) => path.edgeIds),
+  ]);
+  const edges = topology.edges.map(
+    (edge): ExplorationTopologyEdge => ({
+      ...edge,
+      disposition:
+        edge.disposition === 'excluded' || edge.disposition === 'unsupported'
+          ? edge.disposition
+          : selectedEdges.has(edge.id) || (selectedNodeIds.has(edge.fromNodeId) && selectedNodeIds.has(edge.toNodeId))
+            ? 'emitted'
+            : 'folded',
+    }),
+  );
+  return edges;
+}
+
+function assertFoldedEdgesAccounted(selectedTopology: ExplorationTopology): void {
+  // A verifier-friendly invariant: every folded edge belongs to one frontier.
+  const accountedFoldedEdgeIds = new Set(selectedTopology.frontiers.flatMap((frontier) => frontier.edgeIds));
+  const unaccounted = selectedTopology.edges
+    .filter((edge) => edge.disposition === 'folded' && !accountedFoldedEdgeIds.has(edge.id))
+    .map((edge) => edge.id);
+  if (unaccounted.length > 0) {
+    throw new Error(`Folded exploration edge(s) are not frontier-accounted: ${unaccounted.sort().join(', ')}`);
+  }
+}
+
+function selectAnchorConnectorPaths(topology: ExplorationTopology, selectedNodeIds: Set<string>) {
+  const paths: ExplorationTopologyPath[] = [];
+  const connectedAnchors = topology.anchors.filter(
+    (anchor) => anchor.status !== 'missing' && anchor.nodeIds.length + anchor.candidateNodeIds.length > 0,
+  );
+
+  for (let leftIndex = 0; leftIndex < connectedAnchors.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < connectedAnchors.length; rightIndex += 1) {
+      const left = connectedAnchors[leftIndex]!;
+      const right = connectedAnchors[rightIndex]!;
+      const path = anchorConnectorPath(topology, left, right);
+      path.nodeIds.forEach((id) => selectedNodeIds.add(id));
+      paths.push(path);
+    }
+  }
+
+  return paths;
+}
+
+function anchorConnectorPath(
+  topology: ExplorationTopology,
+  left: ExplorationTopology['anchors'][number],
+  right: ExplorationTopology['anchors'][number],
+): ExplorationTopologyPath {
+  const proved = shortestAnchorPath(topology, left, right, false);
+  const candidate = proved ?? shortestAnchorPath(topology, left, right, true);
+  const path = candidate;
+  if (path) {
+    return {
+      id: stableTopologyId('path', left.id, right.id),
+      fromAnchorId: left.id,
+      toAnchorId: right.id,
+      status: !proved || left.status === 'ambiguous' || right.status === 'ambiguous' ? 'candidate' : 'connected',
+      nodeIds: path.nodeIds,
+      edgeIds: path.edgeIds,
+    };
+  } else {
+    return {
+      id: stableTopologyId('path', left.id, right.id),
+      fromAnchorId: left.id,
+      toAnchorId: right.id,
+      status: 'partial',
+      nodeIds: [],
+      edgeIds: [],
+    };
+  }
+}
+
+function expandSelectedTopologyFrontiers(
+  topology: ExplorationTopology,
+  selectedNodeIds: Set<string>,
+  expandedFrontierIds: readonly string[] | undefined,
+): void {
   const baselineFrontiers = foldedComponentFrontiers(topology, selectedNodeIds);
-  const requestedFrontiers = new Set(options.expandedFrontierIds ?? []);
+  const requestedFrontiers = new Set(expandedFrontierIds ?? []);
   const knownFrontierIds = new Set(baselineFrontiers.map((frontier) => frontier.id));
   const unknownFrontierIds = [...requestedFrontiers].filter((id) => !knownFrontierIds.has(id)).sort();
   if (unknownFrontierIds.length > 0) {
@@ -618,8 +705,13 @@ export function selectExplorationTopology(
     if (!requestedFrontiers.has(frontier.id)) continue;
     frontier.memberNodeIds.forEach((id) => selectedNodeIds.add(id));
   }
-  if (hasSelectedConnectorPath) addAdjacentJunctionsToFixedPoint(topology, selectedNodeIds, maxSelectedNodes);
+}
 
+function selectedTopologyNodes(
+  topology: ExplorationTopology,
+  upstreamCausalPaths: readonly UpstreamCausalPath[],
+  selectedNodeIds: Set<string>,
+): ExplorationTopologyNode[] {
   const upstreamEndpointByNodeId = new Map(
     upstreamCausalPaths.map((path) => [path.endpointNodeId, path.endpointKind] as const),
   );
@@ -652,45 +744,7 @@ export function selectExplorationTopology(
             : 'folded',
     };
   });
-  const selectedEdges = new Set([
-    ...paths.flatMap((path) => path.edgeIds),
-    ...upstreamCausalPaths.flatMap((path) => path.edgeIds),
-  ]);
-  const edges = topology.edges.map(
-    (edge): ExplorationTopologyEdge => ({
-      ...edge,
-      disposition:
-        edge.disposition === 'excluded' || edge.disposition === 'unsupported'
-          ? edge.disposition
-          : selectedEdges.has(edge.id) || (selectedNodeIds.has(edge.fromNodeId) && selectedNodeIds.has(edge.toNodeId))
-            ? 'emitted'
-            : 'folded',
-    }),
-  );
-  const selectedTopology = createExplorationTopology({
-    anchors: topology.anchors,
-    nodes,
-    edges,
-    paths,
-    frontiers: [
-      ...topology.frontiers.filter((frontier) => frontier.disposition !== 'folded'),
-      ...foldedComponentFrontiers({ ...topology, nodes, edges }, selectedNodeIds),
-    ],
-    scope: topology.coverage.scope,
-    blindSpots: topology.coverage.blindSpots,
-    incompleteReasons: topology.coverage.status === 'incomplete' ? [topology.coverage.explanation] : [],
-    routeCatalog,
-  });
-
-  // A verifier-friendly invariant: every folded edge belongs to one frontier.
-  const accountedFoldedEdgeIds = new Set(selectedTopology.frontiers.flatMap((frontier) => frontier.edgeIds));
-  const unaccounted = selectedTopology.edges
-    .filter((edge) => edge.disposition === 'folded' && !accountedFoldedEdgeIds.has(edge.id))
-    .map((edge) => edge.id);
-  if (unaccounted.length > 0) {
-    throw new Error(`Folded exploration edge(s) are not frontier-accounted: ${unaccounted.sort().join(', ')}`);
-  }
-  return selectedTopology;
+  return nodes;
 }
 
 interface TraversedPath {
@@ -719,111 +773,19 @@ export function catalogExplorationRoutes(
 ): ExplorationRouteCatalog {
   const nodeById = new Map(topology.nodes.map((node) => [node.id, node]));
   const edgeById = new Map(topology.edges.map((edge) => [edge.id, edge]));
-  const incoming = new Map<string, ExplorationTopologyEdge[]>();
-  for (const edge of topology.edges) {
-    if (!isProvedCausalEdge(edge)) continue;
-    const edges = incoming.get(edge.toNodeId) ?? [];
-    edges.push(edge);
-    incoming.set(edge.toNodeId, edges);
-  }
-  for (const edges of incoming.values()) {
-    edges.sort(
-      (left, right) =>
-        Number(isRuntimeCausalEdge(right)) - Number(isRuntimeCausalEdge(left)) ||
-        topologyEdgeEvidenceRank(right) - topologyEdgeEvidenceRank(left) ||
-        left.fromNodeId.localeCompare(right.fromNodeId) ||
-        left.id.localeCompare(right.id),
-    );
-  }
+  const incoming = incomingProvedCausalEdges(topology);
 
   const anchorNodeIds = uniqueSorted(
     topology.anchors.filter((anchor) => anchor.status === 'matched').flatMap((anchor) => anchor.nodeIds),
   );
   const routesByEndpoint = new Map<string, ExplorationRoute>();
   const depthLimitedAnchorNodeIds = new Set<string>();
-  const recordRoute = (
-    anchorNodeId: string,
-    pathFromAnchor: TraversedPath,
-    endpointKind: ExplorationRoute['endpointKind'],
-  ): void => {
-    const endpointNodeId = pathFromAnchor.nodeIds[pathFromAnchor.nodeIds.length - 1]!;
-    const endpoint = nodeById.get(endpointNodeId);
-    const anchor = nodeById.get(anchorNodeId);
-    if (!endpoint?.location || !anchor) return;
-    const nodeIds = [...pathFromAnchor.nodeIds].reverse();
-    const edgeIds = [...pathFromAnchor.edgeIds].reverse();
-    const routeNodeIds = new Set(nodeIds);
-    const spineEdges = edgeIds.flatMap((edgeId) => {
-      const edge = edgeById.get(edgeId);
-      return edge ? [edge] : [];
-    });
-    const relatedEdges = topology.edges.filter(
-      (edge) =>
-        edge.disposition !== 'excluded' &&
-        edge.disposition !== 'unsupported' &&
-        (routeNodeIds.has(edge.fromNodeId) || routeNodeIds.has(edge.toNodeId)),
-    );
-    const route: ExplorationRoute = {
-      id: stableTopologyId('route', anchorNodeId, endpointNodeId, endpointKind, ...edgeIds),
-      status: 'proved',
-      anchorNodeId,
-      anchorLabel: anchor.label,
-      endpointNodeId,
-      endpointLabel: endpoint.label,
-      endpointLocation: { ...endpoint.location },
-      endpointKind,
-      nodeIds,
-      edgeIds,
-      evidenceStrengths: uniqueSorted(spineEdges.flatMap((edge) => edge.evidence.map((source) => source.strength))),
-      spineEdgeFamilies: edgeFamilies(spineEdges, true),
-      relatedEdgeFamilies: edgeFamilies(relatedEdges, false),
-      crossesRuntimeBoundary: spineEdges.some(isRuntimeCausalEdge),
-    };
-    const key = `${anchorNodeId}\u0000${endpointNodeId}\u0000${endpointKind}`;
-    const existing = routesByEndpoint.get(key);
-    if (!existing || compareExplorationRoutes(route, existing) < 0) routesByEndpoint.set(key, route);
+  const recordRoute: RecordExplorationRoute = (anchorNodeId, path, endpointKind) => {
+    recordEndpointRoute(topology, nodeById, edgeById, routesByEndpoint, anchorNodeId, path, endpointKind);
   };
 
   for (const anchorNodeId of anchorNodeIds) {
-    if (nodeById.get(anchorNodeId)?.attributes['publicEntry'] === true) {
-      recordRoute(anchorNodeId, { nodeIds: [anchorNodeId], edgeIds: [] }, 'public-entry');
-    }
-    const queue: TraversedPath[] = [{ nodeIds: [anchorNodeId], edgeIds: [] }];
-    const shortestDistance = new Map<string, number>([[anchorNodeId, 0]]);
-    for (let cursor = 0; cursor < queue.length; cursor += 1) {
-      const path = queue[cursor]!;
-      const currentNodeId = path.nodeIds[path.nodeIds.length - 1]!;
-      if (
-        path.edgeIds.length > 0 &&
-        nodeById.get(currentNodeId)?.location &&
-        nodeById.get(currentNodeId)?.attributes['publicEntry'] === true
-      ) {
-        recordRoute(anchorNodeId, path, 'public-entry');
-      }
-      const currentIncoming = incoming.get(currentNodeId) ?? [];
-      if (path.edgeIds.length >= MAX_UPSTREAM_CAUSAL_DEPTH) {
-        if (currentIncoming.some((edge) => !path.nodeIds.includes(edge.fromNodeId))) {
-          depthLimitedAnchorNodeIds.add(anchorNodeId);
-        }
-        continue;
-      }
-      for (const edge of currentIncoming) {
-        if (path.nodeIds.includes(edge.fromNodeId)) continue;
-        const nextDistance = path.edgeIds.length + 1;
-        const previousDistance = shortestDistance.get(edge.fromNodeId);
-        if (previousDistance !== undefined && previousDistance <= nextDistance) continue;
-        const nextPath = {
-          nodeIds: [...path.nodeIds, edge.fromNodeId],
-          edgeIds: [...path.edgeIds, edge.id],
-        };
-        shortestDistance.set(edge.fromNodeId, nextDistance);
-        if (isRuntimeCausalEdge(edge) && nodeById.get(edge.fromNodeId)?.location) {
-          recordRoute(anchorNodeId, nextPath, 'runtime-boundary');
-          continue;
-        }
-        queue.push(nextPath);
-      }
-    }
+    enumerateAnchorRoutes(anchorNodeId, nodeById, incoming, recordRoute, depthLimitedAnchorNodeIds);
   }
 
   const routes = [...routesByEndpoint.values()].sort(compareExplorationRoutes);
@@ -856,6 +818,140 @@ export function catalogExplorationRoutes(
           : 'Route enumeration is incomplete because the supplied topology has incomplete coverage or a traversal reached the route-depth bound.',
     },
   };
+}
+
+function recordEndpointRoute(
+  topology: ExplorationTopology,
+  nodeById: ReadonlyMap<string, ExplorationTopologyNode>,
+  edgeById: ReadonlyMap<string, ExplorationTopologyEdge>,
+  routesByEndpoint: Map<string, ExplorationRoute>,
+  anchorNodeId: string,
+  pathFromAnchor: TraversedPath,
+  endpointKind: ExplorationRoute['endpointKind'],
+): void {
+  const endpointNodeId = pathFromAnchor.nodeIds[pathFromAnchor.nodeIds.length - 1]!;
+  const endpoint = nodeById.get(endpointNodeId);
+  const anchor = nodeById.get(anchorNodeId);
+  if (!endpoint?.location || !anchor) return;
+  const nodeIds = [...pathFromAnchor.nodeIds].reverse();
+  const edgeIds = [...pathFromAnchor.edgeIds].reverse();
+  const routeNodeIds = new Set(nodeIds);
+  const spineEdges = edgeIds.flatMap((edgeId) => {
+    const edge = edgeById.get(edgeId);
+    return edge ? [edge] : [];
+  });
+  const relatedEdges = topology.edges.filter(
+    (edge) =>
+      edge.disposition !== 'excluded' &&
+      edge.disposition !== 'unsupported' &&
+      (routeNodeIds.has(edge.fromNodeId) || routeNodeIds.has(edge.toNodeId)),
+  );
+  const route: ExplorationRoute = {
+    id: stableTopologyId('route', anchorNodeId, endpointNodeId, endpointKind, ...edgeIds),
+    status: 'proved',
+    anchorNodeId,
+    anchorLabel: anchor.label,
+    endpointNodeId,
+    endpointLabel: endpoint.label,
+    endpointLocation: { ...endpoint.location },
+    endpointKind,
+    nodeIds,
+    edgeIds,
+    evidenceStrengths: uniqueSorted(spineEdges.flatMap((edge) => edge.evidence.map((source) => source.strength))),
+    spineEdgeFamilies: edgeFamilies(spineEdges, true),
+    relatedEdgeFamilies: edgeFamilies(relatedEdges, false),
+    crossesRuntimeBoundary: spineEdges.some(isRuntimeCausalEdge),
+  };
+  const key = `${anchorNodeId}\u0000${endpointNodeId}\u0000${endpointKind}`;
+  const existing = routesByEndpoint.get(key);
+  if (!existing || compareExplorationRoutes(route, existing) < 0) routesByEndpoint.set(key, route);
+}
+
+function incomingProvedCausalEdges(topology: ExplorationTopology) {
+  const incoming = new Map<string, ExplorationTopologyEdge[]>();
+  for (const edge of topology.edges) {
+    if (!isProvedCausalEdge(edge)) continue;
+    const edges = incoming.get(edge.toNodeId) ?? [];
+    edges.push(edge);
+    incoming.set(edge.toNodeId, edges);
+  }
+  for (const edges of incoming.values()) {
+    edges.sort(
+      (left, right) =>
+        Number(isRuntimeCausalEdge(right)) - Number(isRuntimeCausalEdge(left)) ||
+        topologyEdgeEvidenceRank(right) - topologyEdgeEvidenceRank(left) ||
+        left.fromNodeId.localeCompare(right.fromNodeId) ||
+        left.id.localeCompare(right.id),
+    );
+  }
+
+  return incoming;
+}
+
+type RecordExplorationRoute = (
+  anchorNodeId: string,
+  path: TraversedPath,
+  endpointKind: ExplorationRoute['endpointKind'],
+) => void;
+
+function enumerateAnchorRoutes(
+  anchorNodeId: string,
+  nodeById: ReadonlyMap<string, ExplorationTopologyNode>,
+  incoming: ReadonlyMap<string, ExplorationTopologyEdge[]>,
+  recordRoute: RecordExplorationRoute,
+  depthLimitedAnchorNodeIds: Set<string>,
+): void {
+  if (nodeById.get(anchorNodeId)?.attributes['publicEntry'] === true) {
+    recordRoute(anchorNodeId, { nodeIds: [anchorNodeId], edgeIds: [] }, 'public-entry');
+  }
+  const queue: TraversedPath[] = [{ nodeIds: [anchorNodeId], edgeIds: [] }];
+  const shortestDistance = new Map<string, number>([[anchorNodeId, 0]]);
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const path = queue[cursor]!;
+    const currentNodeId = path.nodeIds[path.nodeIds.length - 1]!;
+    if (
+      path.edgeIds.length > 0 &&
+      nodeById.get(currentNodeId)?.location &&
+      nodeById.get(currentNodeId)?.attributes['publicEntry'] === true
+    ) {
+      recordRoute(anchorNodeId, path, 'public-entry');
+    }
+    const currentIncoming = incoming.get(currentNodeId) ?? [];
+    if (path.edgeIds.length >= MAX_UPSTREAM_CAUSAL_DEPTH) {
+      if (currentIncoming.some((edge) => !path.nodeIds.includes(edge.fromNodeId))) {
+        depthLimitedAnchorNodeIds.add(anchorNodeId);
+      }
+      continue;
+    }
+    extendAnchorRoutePaths(anchorNodeId, path, currentIncoming, shortestDistance, nodeById, recordRoute, queue);
+  }
+}
+
+function extendAnchorRoutePaths(
+  anchorNodeId: string,
+  path: TraversedPath,
+  currentIncoming: readonly ExplorationTopologyEdge[],
+  shortestDistance: Map<string, number>,
+  nodeById: ReadonlyMap<string, ExplorationTopologyNode>,
+  recordRoute: RecordExplorationRoute,
+  queue: TraversedPath[],
+): void {
+  for (const edge of currentIncoming) {
+    if (path.nodeIds.includes(edge.fromNodeId)) continue;
+    const nextDistance = path.edgeIds.length + 1;
+    const previousDistance = shortestDistance.get(edge.fromNodeId);
+    if (previousDistance !== undefined && previousDistance <= nextDistance) continue;
+    const nextPath = {
+      nodeIds: [...path.nodeIds, edge.fromNodeId],
+      edgeIds: [...path.edgeIds, edge.id],
+    };
+    shortestDistance.set(edge.fromNodeId, nextDistance);
+    if (isRuntimeCausalEdge(edge) && nodeById.get(edge.fromNodeId)?.location) {
+      recordRoute(anchorNodeId, nextPath, 'runtime-boundary');
+      continue;
+    }
+    queue.push(nextPath);
+  }
 }
 
 function edgeFamilies(edges: readonly ExplorationTopologyEdge[], causalFallback: boolean): ProgramEdgeFamily[] {

@@ -270,9 +270,29 @@ function validateProjectHeaderConfig(config: ProjectConfig, diagnostics: ConfigD
 }
 
 function validateWatchConfig(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
-  if (config.watch?.debounceMs !== undefined && config.watch.debounceMs <= 0) {
-    diagnostics.push({ level: 'error', path: 'watch.debounceMs', message: 'Must be greater than 0.' });
+  validatePositiveWatchInterval(config.watch?.debounceMs, 'debounceMs', diagnostics);
+  validateWatchCooldown(config, diagnostics);
+  validatePositiveWatchInterval(config.watch?.gitPollMs, 'gitPollMs', diagnostics);
+  validateWatchIdleTimeout(config, diagnostics);
+  for (const key of ['autoStart', 'allowExpensiveRebuild', 'autoRefresh'] as const) {
+    validateWatchBoolean(config.watch?.[key], `watch.${key}`, diagnostics);
   }
+  validateWatchResourceBudget(config, diagnostics);
+}
+
+function validatePositiveWatchInterval(value: number | undefined, key: string, diagnostics: ConfigDiagnostic[]): void {
+  if (value !== undefined && value <= 0) {
+    diagnostics.push({ level: 'error', path: `watch.${key}`, message: 'Must be greater than 0.' });
+  }
+}
+
+function validateWatchBoolean(value: unknown, path: string, diagnostics: ConfigDiagnostic[]): void {
+  if (value !== undefined && typeof value !== 'boolean') {
+    diagnostics.push({ level: 'error', path, message: 'Must be a boolean.' });
+  }
+}
+
+function validateWatchCooldown(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
   if (
     config.watch?.cooldownMs !== undefined &&
     (!Number.isInteger(config.watch.cooldownMs) || config.watch.cooldownMs < 0)
@@ -289,9 +309,9 @@ function validateWatchConfig(config: ProjectConfig, diagnostics: ConfigDiagnosti
       message: `Values below ${MIN_WATCH_COOLDOWN_MS}ms are raised to the safety floor at runtime.`,
     });
   }
-  if (config.watch?.gitPollMs !== undefined && config.watch.gitPollMs <= 0) {
-    diagnostics.push({ level: 'error', path: 'watch.gitPollMs', message: 'Must be greater than 0.' });
-  }
+}
+
+function validateWatchIdleTimeout(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
   if (
     config.watch?.idleTimeoutMs !== undefined &&
     (!Number.isInteger(config.watch.idleTimeoutMs) || config.watch.idleTimeoutMs < 0)
@@ -302,15 +322,9 @@ function validateWatchConfig(config: ProjectConfig, diagnostics: ConfigDiagnosti
       message: 'Must be a non-negative integer; 0 disables idle shutdown.',
     });
   }
-  if (config.watch?.autoStart !== undefined && typeof config.watch.autoStart !== 'boolean') {
-    diagnostics.push({ level: 'error', path: 'watch.autoStart', message: 'Must be a boolean.' });
-  }
-  if (config.watch?.allowExpensiveRebuild !== undefined && typeof config.watch.allowExpensiveRebuild !== 'boolean') {
-    diagnostics.push({ level: 'error', path: 'watch.allowExpensiveRebuild', message: 'Must be a boolean.' });
-  }
-  if (config.watch?.autoRefresh !== undefined && typeof config.watch.autoRefresh !== 'boolean') {
-    diagnostics.push({ level: 'error', path: 'watch.autoRefresh', message: 'Must be a boolean.' });
-  }
+}
+
+function validateWatchResourceBudget(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
   const resourceBudget = config.watch?.resourceBudget;
   if (resourceBudget?.enabled !== undefined && typeof resourceBudget.enabled !== 'boolean') {
     diagnostics.push({ level: 'error', path: 'watch.resourceBudget.enabled', message: 'Must be a boolean.' });

@@ -635,18 +635,32 @@ function parseLedger(
 function validPersistedRange(value: unknown): value is PersistedSourceRange {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const range = value as Partial<PersistedSourceRange>;
+  return validPersistedRangeLocation(range) && validPersistedRangeReceipt(range) && validPersistedRangeHashes(range);
+}
+
+function validPersistedRangeLocation(range: Partial<PersistedSourceRange>): boolean {
   return (
     typeof range.relativePath === 'string' &&
     range.relativePath !== '' &&
     Number.isSafeInteger(range.startLine) &&
     (range.startLine ?? -1) >= 0 &&
     Number.isSafeInteger(range.endLine) &&
-    (range.endLine ?? -1) >= (range.startLine ?? 0) &&
+    (range.endLine ?? -1) >= (range.startLine ?? 0)
+  );
+}
+
+function validPersistedRangeReceipt(range: Partial<PersistedSourceRange>): boolean {
+  return (
     Number.isSafeInteger(range.ordinal) &&
     (range.ordinal ?? 0) > 0 &&
     typeof range.command === 'string' &&
     range.command !== '' &&
-    (range.policy === 'exact-unit' || range.policy === 'preview') &&
+    (range.policy === 'exact-unit' || range.policy === 'preview')
+  );
+}
+
+function validPersistedRangeHashes(range: Partial<PersistedSourceRange>): boolean {
+  return (
     Array.isArray(range.lineHashes) &&
     range.lineHashes.length === (range.endLine ?? 0) - (range.startLine ?? 0) + 1 &&
     range.lineHashes.every(isSha256Hex) &&

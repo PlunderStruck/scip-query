@@ -230,25 +230,10 @@ export function readProcessFileLock(
 export function parseProcessFileLockRecord(value: unknown): ProcessFileLockRecord | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const parsed = value as Partial<ProcessFileLockRecord>;
-  if (
-    parsed.protocol !== PROCESS_FILE_LOCK_PROTOCOL ||
-    parsed.version !== PROCESS_FILE_LOCK_VERSION ||
-    typeof parsed.kind !== 'string' ||
-    parsed.kind.trim() === '' ||
-    typeof parsed.pid !== 'number' ||
-    !Number.isSafeInteger(parsed.pid) ||
-    parsed.pid <= 0 ||
-    typeof parsed.token !== 'string' ||
-    parsed.token.trim() === '' ||
-    typeof parsed.startedAt !== 'string' ||
-    !Number.isFinite(Date.parse(parsed.startedAt)) ||
-    (parsed.detail !== undefined &&
-      (typeof parsed.detail !== 'object' || parsed.detail === null || Array.isArray(parsed.detail)))
-  ) {
-    return null;
-  }
-  const processIdentity = parsed.processIdentity === undefined ? null : parseProcessIdentity(parsed.processIdentity);
-  if (parsed.processIdentity !== undefined && (!processIdentity || processIdentity.pid !== parsed.pid)) return null;
+  if (!validProcessLockOwner(parsed) || !validProcessLockMetadata(parsed)) return null;
+  const ownerIdentity = parseLockRecordProcessIdentity(parsed);
+  if (!ownerIdentity) return null;
+  const { processIdentity } = ownerIdentity;
   return {
     protocol: PROCESS_FILE_LOCK_PROTOCOL,
     version: PROCESS_FILE_LOCK_VERSION,
@@ -259,6 +244,41 @@ export function parseProcessFileLockRecord(value: unknown): ProcessFileLockRecor
     startedAt: parsed.startedAt,
     ...(parsed.detail ? { detail: parsed.detail } : {}),
   };
+}
+
+function parseLockRecordProcessIdentity(
+  parsed: Pick<ProcessFileLockRecord, 'pid' | 'processIdentity'>,
+): { processIdentity: ProcessIdentity | null } | null {
+  const processIdentity = parsed.processIdentity === undefined ? null : parseProcessIdentity(parsed.processIdentity);
+  if (parsed.processIdentity !== undefined && (!processIdentity || processIdentity.pid !== parsed.pid)) return null;
+  return { processIdentity };
+}
+
+function validProcessLockOwner(
+  parsed: Partial<ProcessFileLockRecord>,
+): parsed is Partial<ProcessFileLockRecord> & Pick<ProcessFileLockRecord, 'kind' | 'pid' | 'token'> {
+  return (
+    parsed.protocol === PROCESS_FILE_LOCK_PROTOCOL &&
+    parsed.version === PROCESS_FILE_LOCK_VERSION &&
+    typeof parsed.kind === 'string' &&
+    parsed.kind.trim() !== '' &&
+    typeof parsed.pid === 'number' &&
+    Number.isSafeInteger(parsed.pid) &&
+    parsed.pid > 0 &&
+    typeof parsed.token === 'string' &&
+    parsed.token.trim() !== ''
+  );
+}
+
+function validProcessLockMetadata(
+  parsed: Partial<ProcessFileLockRecord>,
+): parsed is Partial<ProcessFileLockRecord> & Pick<ProcessFileLockRecord, 'startedAt'> {
+  return (
+    typeof parsed.startedAt === 'string' &&
+    Number.isFinite(Date.parse(parsed.startedAt)) &&
+    (parsed.detail === undefined ||
+      (typeof parsed.detail === 'object' && parsed.detail !== null && !Array.isArray(parsed.detail)))
+  );
 }
 
 export function reclaimProcessFileLock(

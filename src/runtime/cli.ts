@@ -2,6 +2,32 @@ import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runCliWithErrorBoundary } from './cli-error-boundary.js';
 
+const QUERY_SERVICE_FAST_PATH_COMMANDS = new Set([
+  'search',
+  'outline',
+  'code',
+  'entrypoints',
+  'files',
+  'stats',
+  'members',
+  'methods',
+  'deps',
+  'rdeps',
+  'imported-by',
+  'hierarchy',
+  'by-kind',
+  'kind-counts',
+  'refs',
+  'trace',
+  'value-flow',
+  'dependence-slice',
+  'call-graph',
+  'imports',
+  'unused-imports',
+  'system',
+  'surface',
+]);
+
 if (isCliEntrypoint()) {
   await runCliWithErrorBoundary(async () => {
     const argv = process.argv.slice(2);
@@ -29,29 +55,7 @@ function isCliEntrypoint(): boolean {
 
 function mayUseQueryServiceFastPath(argv: readonly string[]): boolean {
   return (
-    (argv[0] === 'search' ||
-      argv[0] === 'outline' ||
-      argv[0] === 'code' ||
-      argv[0] === 'entrypoints' ||
-      argv[0] === 'files' ||
-      argv[0] === 'stats' ||
-      argv[0] === 'members' ||
-      argv[0] === 'methods' ||
-      argv[0] === 'deps' ||
-      argv[0] === 'rdeps' ||
-      argv[0] === 'imported-by' ||
-      argv[0] === 'hierarchy' ||
-      argv[0] === 'by-kind' ||
-      argv[0] === 'kind-counts' ||
-      argv[0] === 'refs' ||
-      argv[0] === 'trace' ||
-      argv[0] === 'value-flow' ||
-      argv[0] === 'dependence-slice' ||
-      argv[0] === 'call-graph' ||
-      argv[0] === 'imports' ||
-      argv[0] === 'unused-imports' ||
-      argv[0] === 'system' ||
-      argv[0] === 'surface') &&
+    QUERY_SERVICE_FAST_PATH_COMMANDS.has(argv[0] ?? '') &&
     argv.includes('--json') &&
     argv.includes('--result-only') &&
     argv.includes('--compact') &&

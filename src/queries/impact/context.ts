@@ -183,39 +183,7 @@ export function repositoryContext(
       symbols: result.symbols.length,
     }),
   );
-  const reuseSystemEdges = systemResult.files.length === 1;
-  const depsResults = profileRepositoryContextComponent(
-    'deps',
-    target,
-    () =>
-      reuseSystemEdges
-        ? systemResult.dependsOn.map((relativePath) => ({
-            relativePath,
-            edgeBasis: 'symbol-references' as const,
-            evidence: 'cross-file SCIP references plus resolved source imports' as const,
-          }))
-        : deps(db, target),
-    (result) => ({
-      files: result.length,
-      reusedSystem: reuseSystemEdges,
-    }),
-  );
-  const rdepsResults = profileRepositoryContextComponent(
-    'rdeps',
-    target,
-    () =>
-      reuseSystemEdges
-        ? systemResult.dependedOnBy.map((relativePath) => ({
-            relativePath,
-            edgeBasis: 'symbol-references' as const,
-            evidence: 'cross-file SCIP references plus resolved source imports' as const,
-          }))
-        : rdeps(db, target),
-    (result) => ({
-      files: result.length,
-      reusedSystem: reuseSystemEdges,
-    }),
-  );
+  const { depsResults, rdepsResults } = buildRepositoryContextDependencies(db, target, systemResult);
   const surfaceResults = profileRepositoryContextComponent(
     'surface',
     target,
@@ -225,32 +193,18 @@ export function repositoryContext(
     }),
   );
 
-  const matched = {
-    symbol:
-      traceResult.definitions.length > 0 ||
-      traceResult.referencedBy.length > 0 ||
-      callGraphResult !== null ||
-      complexityResult !== null ||
-      affectedResults.length > 0,
-    file: changeSurfaceResult !== null || depsResults.length > 0 || rdepsResults.length > 0,
-    module: systemResult.files.length > 0 || systemResult.symbols.length > 0 || surfaceResults.length > 0,
-  };
-
-  const warnings: string[] = [];
-  if (pathResolution && !pathResolution.primary && pathResolution.callableCount > 1) {
-    warnings.push(
-      `File target has ${pathResolution.callableCount} callable symbols; use one callable name for compiler-resolved relationships.`,
-    );
-  }
-  const referencedFiles = [...new Set(traceResult.referencedBy.map((reference) => reference.relativePath))];
-  if (referencedFiles.length > 0 && referencedFiles.every((file) => classifyFile(file) === 'test')) {
-    warnings.push(
-      'Only test references were found for this target. For replacement or retirement work, map the currently wired owner or one production entry point before planning; this target does not describe the live affected surface.',
-    );
-  }
-  if (!matched.symbol && !matched.file && !matched.module) {
-    warnings.push('No symbol, file, or module matched target.');
-  }
+  const matched = repositoryContextMatches(
+    traceResult,
+    callGraphResult,
+    complexityResult,
+    affectedResults,
+    changeSurfaceResult,
+    depsResults,
+    rdepsResults,
+    systemResult,
+    surfaceResults,
+  );
+  const warnings = repositoryContextWarnings(pathResolution, traceResult, matched);
 
   const historyFile = changeSurfaceResult?.file ?? traceResult.definitions[0]?.relativePath ?? null;
 
@@ -289,6 +243,90 @@ export function repositoryContext(
     ),
     warnings,
   };
+}
+
+function buildRepositoryContextDependencies(db: ScipDatabase, target: string, systemResult: SystemResult) {
+  const reuseSystemEdges = systemResult.files.length === 1;
+  const depsResults = profileRepositoryContextComponent(
+    'deps',
+    target,
+    () =>
+      reuseSystemEdges
+        ? systemResult.dependsOn.map((relativePath) => ({
+            relativePath,
+            edgeBasis: 'symbol-references' as const,
+            evidence: 'cross-file SCIP references plus resolved source imports' as const,
+          }))
+        : deps(db, target),
+    (result) => ({
+      files: result.length,
+      reusedSystem: reuseSystemEdges,
+    }),
+  );
+  const rdepsResults = profileRepositoryContextComponent(
+    'rdeps',
+    target,
+    () =>
+      reuseSystemEdges
+        ? systemResult.dependedOnBy.map((relativePath) => ({
+            relativePath,
+            edgeBasis: 'symbol-references' as const,
+            evidence: 'cross-file SCIP references plus resolved source imports' as const,
+          }))
+        : rdeps(db, target),
+    (result) => ({
+      files: result.length,
+      reusedSystem: reuseSystemEdges,
+    }),
+  );
+  return { depsResults, rdepsResults };
+}
+
+function repositoryContextMatches(
+  traceResult: TraceEvidenceResult,
+  callGraphResult: CallGraphResult | null,
+  complexityResult: ComplexityResult | null,
+  affectedResults: readonly AffectedResult[],
+  changeSurfaceResult: ChangeSurfaceResult | null,
+  depsResults: readonly DepResult[],
+  rdepsResults: readonly DepResult[],
+  systemResult: SystemResult,
+  surfaceResults: readonly SurfaceResult[],
+): RepositoryContextResult['matched'] {
+  return {
+    symbol:
+      traceResult.definitions.length > 0 ||
+      traceResult.referencedBy.length > 0 ||
+      callGraphResult !== null ||
+      complexityResult !== null ||
+      affectedResults.length > 0,
+    file: changeSurfaceResult !== null || depsResults.length > 0 || rdepsResults.length > 0,
+    module: systemResult.files.length > 0 || systemResult.symbols.length > 0 || surfaceResults.length > 0,
+  };
+}
+
+function repositoryContextWarnings(
+  pathResolution: PrimaryCallableResolution | null,
+  traceResult: TraceEvidenceResult,
+  matched: RepositoryContextResult['matched'],
+): string[] {
+  const warnings: string[] = [];
+  if (pathResolution && !pathResolution.primary && pathResolution.callableCount > 1) {
+    warnings.push(
+      `File target has ${pathResolution.callableCount} callable symbols; use one callable name for compiler-resolved relationships.`,
+    );
+  }
+  const referencedFiles = [...new Set(traceResult.referencedBy.map((reference) => reference.relativePath))];
+  if (referencedFiles.length > 0 && referencedFiles.every((file) => classifyFile(file) === 'test')) {
+    warnings.push(
+      'Only test references were found for this target. For replacement or retirement work, map the currently wired owner or one production entry point before planning; this target does not describe the live affected surface.',
+    );
+  }
+  if (!matched.symbol && !matched.file && !matched.module) {
+    warnings.push('No symbol, file, or module matched target.');
+  }
+
+  return warnings;
 }
 
 function buildRepositoryContextSymbolComponents(
@@ -434,36 +472,90 @@ function buildRepositoryContextSourcePacket(
       role: 'reuse-candidate' as const,
     })),
   ];
-  const definitionSlices = new Map<string, RepositoryContextSourceSlice>();
-  for (const candidate of preferCallablePlanSourceCandidates(definitionCandidates)) {
-    if (definitionSlices.has(candidate.definition.symbol)) continue;
-    const lineLimit = candidate.role === 'target' ? SOURCE_PACKET_TARGET_LINE_LIMIT : SOURCE_PACKET_REUSE_LINE_LIMIT;
-    const recoveredUnit =
-      candidate.definition.endLine <= candidate.definition.startLine
-        ? enclosingSourceUnitSnippet(db, candidate.definition.relativePath, candidate.definition.startLine, lineLimit)
-        : null;
-    const source = recoveredUnit?.unitType ? recoveredUnit.source : definitionSourceSnippet(db, candidate.definition);
-    if (!source) continue;
-    const lines = source.split('\n');
-    const kept = Math.min(lines.length, lineLimit);
-    const startLine = recoveredUnit?.unitType ? recoveredUnit.startLine : candidate.definition.startLine;
-    definitionSlices.set(candidate.definition.symbol, {
-      role: candidate.role,
-      symbol: candidate.definition.symbol,
-      shortName: leafName(candidate.definition.symbol),
-      file: candidate.definition.relativePath,
-      startLine,
-      endLine: startLine + kept - 1,
-      source: lines.slice(0, kept).join('\n'),
-      omittedLines: (recoveredUnit?.unitType ? recoveredUnit.omittedLines : 0) + Math.max(0, lines.length - kept),
-    });
-  }
+  const definitionSlices = collectRepositoryDefinitionSlices(db, definitionCandidates);
+  const consumerSlices = collectRepositoryConsumerSlices(traceResult);
 
+  const candidates = [
+    ...[...definitionSlices.values()].filter((slice) => slice.role === 'target'),
+    ...consumerSlices.values(),
+    ...[...definitionSlices.values()].filter((slice) => slice.role === 'reuse-candidate'),
+  ];
+  const slices = limitRepositorySourceSlices(candidates);
+  return {
+    slices,
+    candidateSlices: candidates.length,
+    omittedSlices: Math.max(0, candidates.length - slices.length),
+    maxSlices: SOURCE_PACKET_SLICE_LIMIT,
+    maxLinesPerSlice: SOURCE_PACKET_TARGET_LINE_LIMIT,
+    maxTotalLines: SOURCE_PACKET_TOTAL_LINE_LIMIT,
+    targetLineLimit: SOURCE_PACKET_TARGET_LINE_LIMIT,
+    consumerContextLines: SOURCE_PACKET_CONSUMER_CONTEXT_LINES,
+    reuseLineLimit: SOURCE_PACKET_REUSE_LINE_LIMIT,
+  };
+}
+
+type RepositoryDefinitionCandidate = {
+  definition: IndexedDefinition | null;
+  role: 'target' | 'reuse-candidate';
+};
+
+function collectRepositoryDefinitionSlices(db: ScipDatabase, candidates: RepositoryDefinitionCandidate[]) {
+  const definitionSlices = new Map<string, RepositoryContextSourceSlice>();
+  for (const candidate of preferCallablePlanSourceCandidates(candidates)) {
+    if (definitionSlices.has(candidate.definition.symbol)) continue;
+    const slice = repositoryDefinitionSlice(db, candidate);
+    if (slice) definitionSlices.set(candidate.definition.symbol, slice);
+  }
+  return definitionSlices;
+}
+
+function repositoryDefinitionSlice(
+  db: ScipDatabase,
+  candidate: RepositoryDefinitionCandidate & { definition: IndexedDefinition },
+): RepositoryContextSourceSlice | null {
+  const lineLimit = candidate.role === 'target' ? SOURCE_PACKET_TARGET_LINE_LIMIT : SOURCE_PACKET_REUSE_LINE_LIMIT;
+  const recoveredUnit =
+    candidate.definition.endLine <= candidate.definition.startLine
+      ? enclosingSourceUnitSnippet(db, candidate.definition.relativePath, candidate.definition.startLine, lineLimit)
+      : null;
+  const source = recoveredUnit?.unitType ? recoveredUnit.source : definitionSourceSnippet(db, candidate.definition);
+  if (!source) return null;
+  const lines = source.split('\n');
+  const kept = Math.min(lines.length, lineLimit);
+  const startLine = recoveredUnit?.unitType ? recoveredUnit.startLine : candidate.definition.startLine;
+  return {
+    role: candidate.role,
+    symbol: candidate.definition.symbol,
+    shortName: leafName(candidate.definition.symbol),
+    file: candidate.definition.relativePath,
+    startLine,
+    endLine: startLine + kept - 1,
+    source: lines.slice(0, kept).join('\n'),
+    omittedLines: (recoveredUnit?.unitType ? recoveredUnit.omittedLines : 0) + Math.max(0, lines.length - kept),
+  };
+}
+
+function hasRepositoryConsumerSource(
+  reference: TraceEvidenceResult['referencedBy'][number],
+): reference is TraceEvidenceResult['referencedBy'][number] & {
+  source: string;
+  sourceStartLine: number;
+  sourceEndLine: number;
+} {
+  return (
+    reference.source !== undefined &&
+    reference.source !== null &&
+    reference.sourceStartLine !== undefined &&
+    reference.sourceStartLine !== null &&
+    reference.sourceEndLine !== undefined &&
+    reference.sourceEndLine !== null
+  );
+}
+
+function collectRepositoryConsumerSlices(traceResult: TraceEvidenceResult) {
   const consumerSlices = new Map<string, RepositoryContextSourceSlice>();
   for (const reference of traceResult.referencedBy) {
-    if (reference.source === undefined || reference.source === null) continue;
-    if (reference.sourceStartLine === undefined || reference.sourceStartLine === null) continue;
-    if (reference.sourceEndLine === undefined || reference.sourceEndLine === null) continue;
+    if (!hasRepositoryConsumerSource(reference)) continue;
     const key = `${reference.relativePath}:${reference.sourceStartLine}-${reference.sourceEndLine}`;
     const existing = consumerSlices.get(key);
     if (existing) {
@@ -483,11 +575,10 @@ function buildRepositoryContextSourcePacket(
     });
   }
 
-  const candidates = [
-    ...[...definitionSlices.values()].filter((slice) => slice.role === 'target'),
-    ...consumerSlices.values(),
-    ...[...definitionSlices.values()].filter((slice) => slice.role === 'reuse-candidate'),
-  ];
+  return consumerSlices;
+}
+
+function limitRepositorySourceSlices(candidates: RepositoryContextSourceSlice[]): RepositoryContextSourceSlice[] {
   const slices: RepositoryContextSourceSlice[] = [];
   let remainingLines = SOURCE_PACKET_TOTAL_LINE_LIMIT;
   for (const candidate of candidates) {
@@ -505,17 +596,7 @@ function buildRepositoryContextSourcePacket(
     });
     remainingLines -= kept;
   }
-  return {
-    slices,
-    candidateSlices: candidates.length,
-    omittedSlices: Math.max(0, candidates.length - slices.length),
-    maxSlices: SOURCE_PACKET_SLICE_LIMIT,
-    maxLinesPerSlice: SOURCE_PACKET_TARGET_LINE_LIMIT,
-    maxTotalLines: SOURCE_PACKET_TOTAL_LINE_LIMIT,
-    targetLineLimit: SOURCE_PACKET_TARGET_LINE_LIMIT,
-    consumerContextLines: SOURCE_PACKET_CONSUMER_CONTEXT_LINES,
-    reuseLineLimit: SOURCE_PACKET_REUSE_LINE_LIMIT,
-  };
+  return slices;
 }
 
 function resolveIndexedDefinition(db: ScipDatabase, symbol: string): IndexedDefinition | null {

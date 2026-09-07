@@ -41,50 +41,58 @@ export function parseProjectInputChangeJournal(value: string | undefined): Proje
   }
 }
 
-export function decodeProjectInputChangeJournal(value: unknown): ProjectInputChangeJournal | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-  const record = value as {
-    version?: unknown;
-    baseGeneration?: unknown;
-    complete?: unknown;
-    incompleteReason?: unknown;
-    entries?: unknown;
-  };
-  if (
-    record.version !== PROJECT_INPUT_CHANGE_JOURNAL_VERSION ||
-    (record.baseGeneration !== null && typeof record.baseGeneration !== 'string') ||
-    typeof record.complete !== 'boolean' ||
-    !Array.isArray(record.entries) ||
-    record.entries.length > MAX_PROJECT_INPUT_CHANGE_ENTRIES ||
-    (record.incompleteReason !== undefined && typeof record.incompleteReason !== 'string')
-  ) {
-    return undefined;
-  }
+type JournalRecord = Omit<ProjectInputChangeJournal, 'entries'> & { entries: unknown[] };
 
+function isJournalRecord(value: unknown): value is JournalRecord {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Partial<Record<keyof ProjectInputChangeJournal, unknown>>;
+  return (
+    record.version === PROJECT_INPUT_CHANGE_JOURNAL_VERSION &&
+    (record.baseGeneration === null || typeof record.baseGeneration === 'string') &&
+    typeof record.complete === 'boolean' &&
+    isBoundedJournalEntries(record.entries) &&
+    (record.incompleteReason === undefined || typeof record.incompleteReason === 'string')
+  );
+}
+
+function isBoundedJournalEntries(value: unknown): value is unknown[] {
+  return Array.isArray(value) && value.length <= MAX_PROJECT_INPUT_CHANGE_ENTRIES;
+}
+
+function decodeJournalEntry(value: unknown): ProjectInputChangeEntry | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const candidate = value as { path?: unknown; kind?: unknown };
+  if (typeof candidate.path !== 'string' || !isProjectRelativeJournalPath(candidate.path)) return undefined;
+  if (candidate.kind !== 'add' && candidate.kind !== 'change' && candidate.kind !== 'delete') return undefined;
+  return { path: candidate.path, kind: candidate.kind };
+}
+
+function decodeUniqueJournalEntries(values: unknown[]): ProjectInputChangeEntry[] | undefined {
   const entries: ProjectInputChangeEntry[] = [];
   const paths = new Set<string>();
-  for (const entry of record.entries) {
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return undefined;
-    const candidate = entry as { path?: unknown; kind?: unknown };
-    if (
-      typeof candidate.path !== 'string' ||
-      !isProjectRelativeJournalPath(candidate.path) ||
-      (candidate.kind !== 'add' && candidate.kind !== 'change' && candidate.kind !== 'delete') ||
-      paths.has(candidate.path)
-    ) {
-      return undefined;
-    }
-    paths.add(candidate.path);
-    entries.push({ path: candidate.path, kind: candidate.kind });
+  for (const value of values) {
+    const entry = decodeJournalEntry(value);
+    if (!entry || paths.has(entry.path)) return undefined;
+    paths.add(entry.path);
+    entries.push(entry);
   }
+  return entries;
+}
 
-  if (record.complete && record.incompleteReason !== undefined) return undefined;
-  if (!record.complete && (!record.incompleteReason || record.incompleteReason.trim() === '')) return undefined;
+function hasConsistentJournalCompleteness(record: JournalRecord): boolean {
+  if (record.complete) return record.incompleteReason === undefined;
+  return record.incompleteReason !== undefined && record.incompleteReason.trim() !== '';
+}
+
+export function decodeProjectInputChangeJournal(value: unknown): ProjectInputChangeJournal | undefined {
+  if (!isJournalRecord(value)) return undefined;
+  const entries = decodeUniqueJournalEntries(value.entries);
+  if (!entries || !hasConsistentJournalCompleteness(value)) return undefined;
   return {
     version: PROJECT_INPUT_CHANGE_JOURNAL_VERSION,
-    baseGeneration: record.baseGeneration,
-    complete: record.complete,
-    ...(record.incompleteReason === undefined ? {} : { incompleteReason: record.incompleteReason }),
+    baseGeneration: value.baseGeneration,
+    complete: value.complete,
+    ...(value.incompleteReason === undefined ? {} : { incompleteReason: value.incompleteReason }),
     entries,
   };
 }

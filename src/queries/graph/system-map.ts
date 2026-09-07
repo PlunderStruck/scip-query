@@ -1045,87 +1045,112 @@ function finalizeSystemMap(input: {
   const frontierFiles = [...files.values()].filter((state) => state.primary && !state.processed).length;
   const supportFilesNotTraversed = [...files.values()].filter((state) => !state.primary && !state.processed).length;
   const processedSymbols = [...symbols.values()].filter((state) => state.processed);
-  const boundaryFrontiers: SystemMapBoundaryFrontier[] = (runtimeBoundaries?.frontiers ?? [])
-    .flatMap((frontier) => {
-      const observation = boundaryObservations.get(frontier.observationId);
-      if (!observation && frontier.source && frontier.action && frontier.strength) {
-        if (
-          !relationPolicy.has('runtime-boundary') ||
-          !sourceAllowed(frontier.source.file) ||
-          evidenceFloor === 'exact' ||
-          !files.has(frontier.source.file)
-        )
-          return [];
-        return [
-          {
-            observationId: frontier.observationId,
-            action: frontier.action,
-            strength: frontier.strength,
-            file: frontier.source.file,
-            line: frontier.source.startLine,
-            ownerShortName: frontier.ownerShortName ?? null,
-            address: frontier.address ?? frontier.missingKeyParts.join(', '),
-            reason: frontier.reason,
-          },
-        ];
-      }
+  const collectBoundaryEvidence = () => {
+    const unobservedBoundaryFrontier = (
+      frontier: NonNullable<SystemMapGenerationContext['runtimeBoundaries']>['frontiers'][number],
+    ): SystemMapBoundaryFrontier[] => {
+      if (!frontier.source || !frontier.action || !frontier.strength) return [];
       if (
         !relationPolicy.has('runtime-boundary') ||
-        !observation ||
-        !sourceAllowed(observation.source.file) ||
-        (evidenceFloor === 'exact' && observation.strength !== 'exact') ||
-        !files.has(observation.source.file)
+        !sourceAllowed(frontier.source.file) ||
+        evidenceFloor === 'exact' ||
+        !files.has(frontier.source.file)
       )
         return [];
       return [
         {
-          observationId: observation.id,
-          action: observation.action,
-          strength: observation.strength,
-          file: observation.source.file,
-          line: observation.source.startLine,
-          ownerShortName: observation.owner.name,
-          address: renderBoundaryAddress(observation),
+          observationId: frontier.observationId,
+          action: frontier.action,
+          strength: frontier.strength,
+          file: frontier.source.file,
+          line: frontier.source.startLine,
+          ownerShortName: frontier.ownerShortName ?? null,
+          address: frontier.address ?? frontier.missingKeyParts.join(', '),
           reason: frontier.reason,
-          protocol: observation.protocol,
-          role: observation.role,
-          modality: observation.modality,
-          resolution: observation.resolution,
-          sourceScope: observation.sourceScope,
-          keyParts: observation.keyParts.map((part) => ({
-            name: part.name,
-            value: part.value,
-            evidence: part.evidence,
-          })),
         },
       ];
-    })
-    .sort((left, right) => left.file.localeCompare(right.file) || left.line - right.line);
-  const relevantBoundaryLinks = (runtimeBoundaries?.links ?? []).filter((link) => {
-    if (!relationPolicy.has('runtime-boundary')) return false;
-    if (evidenceFloor === 'exact' && link.strength !== 'exact') return false;
-    const from = boundaryObservations.get(link.from);
-    const to = boundaryObservations.get(link.to);
-    return Boolean(
-      from &&
-      to &&
-      sourceAllowed(from.source.file) &&
-      sourceAllowed(to.source.file) &&
-      (files.has(from.source.file) || files.has(to.source.file)),
-    );
-  });
-  const exactBoundaryLinks = relevantBoundaryLinks.filter((link) => link.strength === 'exact').length;
-  const derivedBoundaryLinks = relevantBoundaryLinks.filter((link) => link.strength === 'derived').length;
-  const candidateBoundaryLinks = relevantBoundaryLinks.filter((link) => link.strength === 'candidate').length;
-  const repositoryExactBoundaryLinks = runtimeBoundaries?.links.filter((link) => link.strength === 'exact').length ?? 0;
-  const repositoryDerivedBoundaryLinks =
-    runtimeBoundaries?.links.filter((link) => link.strength === 'derived').length ?? 0;
-  const repositoryCandidateBoundaryLinks =
-    runtimeBoundaries?.links.filter((link) => link.strength === 'candidate').length ?? 0;
+    };
+    const boundaryFrontiers: SystemMapBoundaryFrontier[] = (runtimeBoundaries?.frontiers ?? [])
+      .flatMap((frontier) => {
+        const observation = boundaryObservations.get(frontier.observationId);
+        if (!observation) return unobservedBoundaryFrontier(frontier);
+
+        if (
+          !relationPolicy.has('runtime-boundary') ||
+          !sourceAllowed(observation.source.file) ||
+          (evidenceFloor === 'exact' && observation.strength !== 'exact') ||
+          !files.has(observation.source.file)
+        )
+          return [];
+        return [
+          {
+            observationId: observation.id,
+            action: observation.action,
+            strength: observation.strength,
+            file: observation.source.file,
+            line: observation.source.startLine,
+            ownerShortName: observation.owner.name,
+            address: renderBoundaryAddress(observation),
+            reason: frontier.reason,
+            protocol: observation.protocol,
+            role: observation.role,
+            modality: observation.modality,
+            resolution: observation.resolution,
+            sourceScope: observation.sourceScope,
+            keyParts: observation.keyParts.map((part) => ({
+              name: part.name,
+              value: part.value,
+              evidence: part.evidence,
+            })),
+          },
+        ];
+      })
+      .sort((left, right) => left.file.localeCompare(right.file) || left.line - right.line);
+    const relevantBoundaryLinks = (runtimeBoundaries?.links ?? []).filter((link) => {
+      if (!relationPolicy.has('runtime-boundary')) return false;
+      if (evidenceFloor === 'exact' && link.strength !== 'exact') return false;
+      const from = boundaryObservations.get(link.from);
+      const to = boundaryObservations.get(link.to);
+      return Boolean(
+        from &&
+        to &&
+        sourceAllowed(from.source.file) &&
+        sourceAllowed(to.source.file) &&
+        (files.has(from.source.file) || files.has(to.source.file)),
+      );
+    });
+    const exactBoundaryLinks = relevantBoundaryLinks.filter((link) => link.strength === 'exact').length;
+    const derivedBoundaryLinks = relevantBoundaryLinks.filter((link) => link.strength === 'derived').length;
+    const candidateBoundaryLinks = relevantBoundaryLinks.filter((link) => link.strength === 'candidate').length;
+    const repositoryExactBoundaryLinks =
+      runtimeBoundaries?.links.filter((link) => link.strength === 'exact').length ?? 0;
+    const repositoryDerivedBoundaryLinks =
+      runtimeBoundaries?.links.filter((link) => link.strength === 'derived').length ?? 0;
+    const repositoryCandidateBoundaryLinks =
+      runtimeBoundaries?.links.filter((link) => link.strength === 'candidate').length ?? 0;
+    return {
+      boundaryFrontiers,
+      exactBoundaryLinks,
+      derivedBoundaryLinks,
+      candidateBoundaryLinks,
+      repositoryExactBoundaryLinks,
+      repositoryDerivedBoundaryLinks,
+      repositoryCandidateBoundaryLinks,
+    };
+  };
+  const {
+    boundaryFrontiers,
+    exactBoundaryLinks,
+    derivedBoundaryLinks,
+    candidateBoundaryLinks,
+    repositoryExactBoundaryLinks,
+    repositoryDerivedBoundaryLinks,
+    repositoryCandidateBoundaryLinks,
+  } = collectBoundaryEvidence();
   const externalBoundaries = buildExternalBoundaries(externalImports, regionForFile);
   const incompleteReasons = systemMapIncompleteReasons(anchors, omittedSymbolCandidates);
   const closureStatus = incompleteReasons.length === 0 ? 'accounted' : 'incomplete';
-  const blindSpots = [
+  const buildBlindSpots = (): string[] => [
     ...(broadLiteralAnchors > 0
       ? [
           `${broadLiteralAnchors} broad literal anchor(s) withheld ${withheldLiteralMatches} exact match(es) before graph traversal; representative identities and scoped search commands preserve recovery without treating every textual occurrence as relevant.`,
@@ -1142,6 +1167,7 @@ function finalizeSystemMap(input: {
     `Traversal stops after depth ${maxDepth}; nonzero frontier counts identify evidence that was discovered but not traversed.`,
     'Region labels are structural path groupings, not inferred runtime or architectural boundaries.',
   ];
+  const blindSpots = buildBlindSpots();
   const topology = buildSystemMapTopology({
     db,
     anchors,
@@ -1167,166 +1193,177 @@ function finalizeSystemMap(input: {
     fullLiteralTraversal: opts.fullLiteralTraversal ?? false,
   });
   if (mode === 'topology') return topology;
-  const focusedBehaviorNodes =
-    (opts.behaviorFocusLocations?.length ?? 0) > 0
-      ? new Set([
-          ...topology.anchors.flatMap((anchor) => anchor.nodeIds),
-          ...topology.paths.flatMap((path) => path.nodeIds),
-        ]).size
-      : undefined;
-  const behavior = connectedBehaviorPacket(db, topology, {
-    focusLocations: opts.behaviorFocusLocations,
-    ...(focusedBehaviorNodes ? { maxSteps: focusedBehaviorNodes } : {}),
-  });
-  enrichResultCallbackControlSemantics(db, topology, behavior);
-  const corridorFocusLocations = causalCorridorFocusLocations(
-    db,
-    topology,
-    behavior,
-    opts.behaviorFocusLocations ?? [],
-  );
-  topology.corridor = buildCausalCorridor(topology, { focusLocations: corridorFocusLocations });
-  const nextAnchors = systemMapNextAnchorPacket(db, topology, behavior, {
-    sourceAllowed,
-    selectionTerms: opts.selectionTerms,
-  });
-  const connectorRegionIds = topologyRegionIds(topology);
-  const presentation = buildSystemMapPresentation(
-    searches,
-    symbolQueries,
-    maxDepth,
-    requestedRelationKinds,
-    evidenceFloor,
-    includedSourceScopes,
-    opts.fullLiteralTraversal ?? false,
-    maxTopologyCharacters,
-    regions,
-    regionRelations,
-    directSeedRegionIds,
-    expandedIds,
-    connectorRegionIds,
-  );
-  const expansion = buildSystemMapExpansion(
-    searches,
-    symbolQueries,
-    maxDepth,
-    regions.filter((region) => connectorRegionIds.has(region.id)),
-    directSeedRegionIds,
-    requestedRelationKinds,
-    evidenceFloor,
-    includedSourceScopes,
-    opts.fullLiteralTraversal ?? false,
-    maxTopologyCharacters,
-  );
-  return {
-    anchors,
-    regions,
-    regionRelations,
-    externalBoundaries,
-    boundaryFrontiers,
-    unmatchedExpansions,
-    expansion,
-    drilldown,
-    presentation,
-    topology,
-    behavior,
-    nextAnchors,
-    closure: {
-      status: closureStatus,
-      emitted: { regions: regions.length, relations: relations.length, runtimeLinks: representedBoundaryLinkIds.size },
-      withheld: {
-        symbols: frontierSymbols,
-        files: frontierFiles + supportFilesNotTraversed,
-        regions: topology.nodes.filter((node) => node.kind === 'structural-region' && node.disposition === 'folded')
-          .length,
-        drillAnchors: (drilldown?.omittedAnchors ?? 0) + nextAnchors.omittedAnchors,
-        literalMatches: withheldLiteralMatches,
-      },
-      ambiguous: {
-        anchors: anchors.filter((anchor) => anchor.status === 'ambiguous').length,
-        omittedSymbolCandidates,
-      },
-      external: externalBoundaries.length,
-      unresolved: boundaryFrontiers.length,
-      explanation:
-        closureStatus === 'accounted'
-          ? 'Every fact reached under the declared anchors, relations, depth, evidence floor, source scopes, and installed analyzers is accounted for as emitted, withheld, ambiguous, external, or unresolved.'
-          : incompleteReasons.join('; '),
-    },
-    coverage: {
-      explicitAnchorCount: anchors.length,
+  const buildFocusedBehavior = () => {
+    const focusedBehaviorNodes =
+      (opts.behaviorFocusLocations?.length ?? 0) > 0
+        ? new Set([
+            ...topology.anchors.flatMap((anchor) => anchor.nodeIds),
+            ...topology.paths.flatMap((path) => path.nodeIds),
+          ]).size
+        : undefined;
+    const behavior = connectedBehaviorPacket(db, topology, {
+      focusLocations: opts.behaviorFocusLocations,
+      ...(focusedBehaviorNodes ? { maxSteps: focusedBehaviorNodes } : {}),
+    });
+    enrichResultCallbackControlSemantics(db, topology, behavior);
+    const corridorFocusLocations = causalCorridorFocusLocations(
+      db,
+      topology,
+      behavior,
+      opts.behaviorFocusLocations ?? [],
+    );
+    topology.corridor = buildCausalCorridor(topology, { focusLocations: corridorFocusLocations });
+    return behavior;
+  };
+  const behavior = buildFocusedBehavior();
+  const buildFullResult = (): SystemMapResult => {
+    const nextAnchors = systemMapNextAnchorPacket(db, topology, behavior, {
+      sourceAllowed,
+      selectionTerms: opts.selectionTerms,
+    });
+    const connectorRegionIds = topologyRegionIds(topology);
+    const presentation = buildSystemMapPresentation(
+      searches,
+      symbolQueries,
+      maxDepth,
       requestedRelationKinds,
       evidenceFloor,
       includedSourceScopes,
-      matchedAnchorCount: anchors.filter((anchor) => anchor.status !== 'missing').length,
-      literalSearchesComplete: true,
-      broadLiteralAnchors,
-      withheldLiteralMatches,
-      symbolCandidateSetsComplete: omittedSymbolCandidates === 0,
-      omittedSymbolCandidates,
-      maxTraversalDepth: maxDepth,
-      frontierSymbols,
-      frontierFiles,
-      supportFilesNotTraversed,
-      filteredUnverifiedCallEdges,
-      memberCallCandidateEdges,
-      unresolvedMemberCallsites,
-      runtimeBoundaryEvidenceAvailable: runtimeBoundaries !== null,
-      runtimeBoundaryObservations: runtimeBoundaries?.observations.length ?? 0,
-      runtimeBoundaryExactLinks: exactBoundaryLinks,
-      runtimeBoundaryDerivedLinks: derivedBoundaryLinks,
-      runtimeBoundaryCandidateLinks: candidateBoundaryLinks,
-      repositoryRuntimeBoundaryExactLinks: repositoryExactBoundaryLinks,
-      repositoryRuntimeBoundaryDerivedLinks: repositoryDerivedBoundaryLinks,
-      repositoryRuntimeBoundaryCandidateLinks: repositoryCandidateBoundaryLinks,
-      runtimeBoundaryTraversedLinks: representedBoundaryLinkIds.size,
-      runtimeBoundaryFrontiers: boundaryFrontiers.length,
-      referenceExpansionEligibleSymbols: processedSymbols.filter((state) => state.referenceScope !== 'none').length,
-      referenceExpansionSkippedSymbols: processedSymbols.filter((state) => state.referenceScope === 'none').length,
-      dynamicDispatchRepresented:
-        runtimeBoundaries?.links.some(
-          (link) => link.joinRule === 'carrier.discriminator' && representedBoundaryLinkIds.has(link.id),
-        ) ?? false,
-      runtimeGeneratedLinksRepresented: runtimeBoundaries !== null,
-      regionBoundariesAreStructural: true,
-      relationFamilies: {
-        'literal-anchor': {
-          evidence: 'exact-source',
-          scope: 'all indexed documents for each explicit literal',
-          completeWithinScope: true,
+      opts.fullLiteralTraversal ?? false,
+      maxTopologyCharacters,
+      regions,
+      regionRelations,
+      directSeedRegionIds,
+      expandedIds,
+      connectorRegionIds,
+    );
+    const expansion = buildSystemMapExpansion(
+      searches,
+      symbolQueries,
+      maxDepth,
+      regions.filter((region) => connectorRegionIds.has(region.id)),
+      directSeedRegionIds,
+      requestedRelationKinds,
+      evidenceFloor,
+      includedSourceScopes,
+      opts.fullLiteralTraversal ?? false,
+      maxTopologyCharacters,
+    );
+    return {
+      anchors,
+      regions,
+      regionRelations,
+      externalBoundaries,
+      boundaryFrontiers,
+      unmatchedExpansions,
+      expansion,
+      drilldown,
+      presentation,
+      topology,
+      behavior,
+      nextAnchors,
+      closure: {
+        status: closureStatus,
+        emitted: {
+          regions: regions.length,
+          relations: relations.length,
+          runtimeLinks: representedBoundaryLinkIds.size,
         },
-        reference: {
-          evidence: 'compiler-graph',
-          scope:
-            'all cross-file indexed/source-attributed sites for explicit anchors and promoted non-module boundary symbols',
-          completeWithinScope: true,
+        withheld: {
+          symbols: frontierSymbols,
+          files: frontierFiles + supportFilesNotTraversed,
+          regions: topology.nodes.filter((node) => node.kind === 'structural-region' && node.disposition === 'folded')
+            .length,
+          drillAnchors: (drilldown?.omittedAnchors ?? 0) + nextAnchors.omittedAnchors,
+          literalMatches: withheldLiteralMatches,
         },
-        call: {
-          evidence: 'mixed',
-          scope:
-            'static callees plus exact SCIP call occurrences in traversed source ranges, exact constructor-assigned member receivers, and uniquely attributed direct-import member candidates',
-          completeWithinScope: true,
+        ambiguous: {
+          anchors: anchors.filter((anchor) => anchor.status === 'ambiguous').length,
+          omittedSymbolCandidates,
         },
-        'contract-symbol': {
-          evidence: 'compiler-graph',
-          scope: 'compiler-resolved symbol identities referenced across inferred workspace boundaries',
-          completeWithinScope: true,
-        },
-        import: {
-          evidence: 'compiler-graph',
-          scope: 'all indexed or source-resolved imports of traversed primary files',
-          completeWithinScope: true,
-        },
-        'runtime-boundary': {
-          evidence: 'exact-source',
-          scope:
-            'direct and mechanically derived links produced by grounded runtime adapters and factorized relation groups',
-          completeWithinScope: true,
-        },
+        external: externalBoundaries.length,
+        unresolved: boundaryFrontiers.length,
+        explanation:
+          closureStatus === 'accounted'
+            ? 'Every fact reached under the declared anchors, relations, depth, evidence floor, source scopes, and installed analyzers is accounted for as emitted, withheld, ambiguous, external, or unresolved.'
+            : incompleteReasons.join('; '),
       },
-      blindSpots,
-    },
+      coverage: {
+        explicitAnchorCount: anchors.length,
+        requestedRelationKinds,
+        evidenceFloor,
+        includedSourceScopes,
+        matchedAnchorCount: anchors.filter((anchor) => anchor.status !== 'missing').length,
+        literalSearchesComplete: true,
+        broadLiteralAnchors,
+        withheldLiteralMatches,
+        symbolCandidateSetsComplete: omittedSymbolCandidates === 0,
+        omittedSymbolCandidates,
+        maxTraversalDepth: maxDepth,
+        frontierSymbols,
+        frontierFiles,
+        supportFilesNotTraversed,
+        filteredUnverifiedCallEdges,
+        memberCallCandidateEdges,
+        unresolvedMemberCallsites,
+        runtimeBoundaryEvidenceAvailable: runtimeBoundaries !== null,
+        runtimeBoundaryObservations: runtimeBoundaries?.observations.length ?? 0,
+        runtimeBoundaryExactLinks: exactBoundaryLinks,
+        runtimeBoundaryDerivedLinks: derivedBoundaryLinks,
+        runtimeBoundaryCandidateLinks: candidateBoundaryLinks,
+        repositoryRuntimeBoundaryExactLinks: repositoryExactBoundaryLinks,
+        repositoryRuntimeBoundaryDerivedLinks: repositoryDerivedBoundaryLinks,
+        repositoryRuntimeBoundaryCandidateLinks: repositoryCandidateBoundaryLinks,
+        runtimeBoundaryTraversedLinks: representedBoundaryLinkIds.size,
+        runtimeBoundaryFrontiers: boundaryFrontiers.length,
+        referenceExpansionEligibleSymbols: processedSymbols.filter((state) => state.referenceScope !== 'none').length,
+        referenceExpansionSkippedSymbols: processedSymbols.filter((state) => state.referenceScope === 'none').length,
+        dynamicDispatchRepresented:
+          runtimeBoundaries?.links.some(
+            (link) => link.joinRule === 'carrier.discriminator' && representedBoundaryLinkIds.has(link.id),
+          ) ?? false,
+        runtimeGeneratedLinksRepresented: runtimeBoundaries !== null,
+        regionBoundariesAreStructural: true,
+        relationFamilies: {
+          'literal-anchor': {
+            evidence: 'exact-source',
+            scope: 'all indexed documents for each explicit literal',
+            completeWithinScope: true,
+          },
+          reference: {
+            evidence: 'compiler-graph',
+            scope:
+              'all cross-file indexed/source-attributed sites for explicit anchors and promoted non-module boundary symbols',
+            completeWithinScope: true,
+          },
+          call: {
+            evidence: 'mixed',
+            scope:
+              'static callees plus exact SCIP call occurrences in traversed source ranges, exact constructor-assigned member receivers, and uniquely attributed direct-import member candidates',
+            completeWithinScope: true,
+          },
+          'contract-symbol': {
+            evidence: 'compiler-graph',
+            scope: 'compiler-resolved symbol identities referenced across inferred workspace boundaries',
+            completeWithinScope: true,
+          },
+          import: {
+            evidence: 'compiler-graph',
+            scope: 'all indexed or source-resolved imports of traversed primary files',
+            completeWithinScope: true,
+          },
+          'runtime-boundary': {
+            evidence: 'exact-source',
+            scope:
+              'direct and mechanically derived links produced by grounded runtime adapters and factorized relation groups',
+            completeWithinScope: true,
+          },
+        },
+        blindSpots,
+      },
+    };
   };
+  return buildFullResult();
 }
 
 function sourceRangesOverlap(

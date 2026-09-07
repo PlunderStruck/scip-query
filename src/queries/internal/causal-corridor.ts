@@ -258,6 +258,55 @@ function closeMaterialFacts(
   }
 }
 
+interface ClosureFocus {
+  fromProtected: boolean;
+  toProtected: boolean;
+  fromFocused: boolean;
+  toFocused: boolean;
+  edgeFocused: boolean;
+}
+
+function closesControlSemantic(semantic: ProgramEdgeSemantic, focus: ClosureFocus): boolean {
+  if (isNavigationSemantic(semantic)) return false;
+  if (['returns', 'throws'].includes(semantic.subtype) && !focus.toProtected && !focus.toFocused) return false;
+  return (
+    EXPLICIT_CONTROL_OUTCOMES.has(semantic.subtype) ||
+    isBranchSemantic(semantic) ||
+    semantic.subtype === 'completion-callback'
+  );
+}
+
+function closesTemporalSemantic(semantic: ProgramEdgeSemantic, focus: ClosureFocus): boolean {
+  return semantic.subtype !== 'lexical-successor' || (focus.fromProtected && focus.toProtected);
+}
+
+function closesIdentitySemantic(semantic: ProgramEdgeSemantic, focus: ClosureFocus): boolean {
+  return OWNERSHIP_SUBTYPES.has(semantic.subtype) && (focus.toProtected || focus.toFocused);
+}
+
+function closesSemantic(semantic: ProgramEdgeSemantic, focus: ClosureFocus): boolean {
+  switch (semantic.family) {
+    case 'identity':
+      return closesIdentitySemantic(semantic, focus);
+    case 'contract':
+      return true;
+    case 'state':
+      return focus.fromProtected && focus.fromFocused;
+    case 'temporal':
+      return closesTemporalSemantic(semantic, focus);
+    case 'data':
+      return closesDataFocus(focus);
+    case 'control':
+      return closesControlSemantic(semantic, focus);
+    default:
+      return false;
+  }
+}
+
+function closesDataFocus(focus: ClosureFocus): boolean {
+  return focus.toProtected && (focus.fromProtected || focus.fromFocused || focus.edgeFocused);
+}
+
 function isClosureEdge(
   edge: ExplorationTopologyEdge,
   protectedNodes: ReadonlySet<string>,
@@ -267,48 +316,14 @@ function isClosureEdge(
   const fromProtected = protectedNodes.has(edge.fromNodeId);
   const toProtected = protectedNodes.has(edge.toNodeId);
   if (!fromProtected && !toProtected) return false;
-  return (edge.semantics ?? []).some((semantic) => {
-    if (semantic.family === 'identity') {
-      return (
-        OWNERSHIP_SUBTYPES.has(semantic.subtype) &&
-        (toProtected || focusedNodeIds === null || focusedNodeIds.has(edge.toNodeId))
-      );
-    }
-    if (semantic.family === 'contract') return true;
-    if (semantic.family === 'state') {
-      return fromProtected && (focusedNodeIds === null || focusedNodeIds.has(edge.fromNodeId));
-    }
-    if (semantic.family === 'temporal') {
-      if (semantic.subtype === 'lexical-successor') return fromProtected && toProtected;
-      return true;
-    }
-    if (semantic.family === 'data') {
-      return (
-        toProtected &&
-        (fromProtected ||
-          focusedNodeIds === null ||
-          focusedNodeIds.has(edge.fromNodeId) ||
-          focusedEdgeIds?.has(edge.id) === true)
-      );
-    }
-    if (semantic.family === 'control') {
-      if (isNavigationSemantic(semantic)) return false;
-      if (
-        ['returns', 'throws'].includes(semantic.subtype) &&
-        !toProtected &&
-        focusedNodeIds !== null &&
-        !focusedNodeIds.has(edge.toNodeId)
-      ) {
-        return false;
-      }
-      return (
-        EXPLICIT_CONTROL_OUTCOMES.has(semantic.subtype) ||
-        isBranchSemantic(semantic) ||
-        semantic.subtype === 'completion-callback'
-      );
-    }
-    return false;
-  });
+  const focus: ClosureFocus = {
+    fromProtected,
+    toProtected,
+    fromFocused: focusedNodeIds === null || focusedNodeIds.has(edge.fromNodeId),
+    toFocused: focusedNodeIds === null || focusedNodeIds.has(edge.toNodeId),
+    edgeFocused: focusedEdgeIds?.has(edge.id) === true,
+  };
+  return (edge.semantics ?? []).some((semantic) => closesSemantic(semantic, focus));
 }
 
 function mechanicalOutcomeNodeIds(forward: ReadonlySet<string>, edges: readonly ExplorationTopologyEdge[]): string[] {
@@ -361,6 +376,54 @@ function reachable(
   return visited;
 }
 
+function traversesTemporalFocus(semantic: ProgramEdgeSemantic, fromFocused: boolean, toFocused: boolean): boolean {
+  return semantic.subtype === 'lexical-successor' ? fromFocused && toFocused : fromFocused || toFocused;
+}
+
+function traversesFocusedSemantic(
+  semantic: ProgramEdgeSemantic,
+  edge: ExplorationTopologyEdge,
+  focusedNodeIds: ReadonlySet<string>,
+  focusedEdgeIds: ReadonlySet<string> | null,
+  nodeById: ReadonlyMap<string, ExplorationTopologyNode>,
+): boolean {
+  const fromFocused = focusedNodeIds.has(edge.fromNodeId);
+  const toFocused = focusedNodeIds.has(edge.toNodeId);
+  switch (semantic.family) {
+    case 'state':
+      return fromFocused;
+    case 'data':
+      return fromFocused || toFocused || focusedEdgeIds?.has(edge.id) === true;
+    case 'temporal':
+      return traversesTemporalFocus(semantic, fromFocused, toFocused);
+    case 'control':
+      return isSameOwnerProgramEdge(edge, nodeById) && (fromFocused || toFocused);
+    default:
+      return false;
+  }
+}
+
+function traversesSemantic(
+  semantic: ProgramEdgeSemantic,
+  edge: ExplorationTopologyEdge,
+  focusedNodeIds: ReadonlySet<string> | null,
+  focusedEdgeIds: ReadonlySet<string> | null,
+  focusedEdgeNodeIds: ReadonlySet<string> | null,
+  nodeById: ReadonlyMap<string, ExplorationTopologyNode>,
+): boolean {
+  if (semantic.family === 'identity' && OWNERSHIP_SUBTYPES.has(semantic.subtype)) {
+    return (
+      focusedNodeIds === null || focusedNodeIds.has(edge.toNodeId) || focusedEdgeNodeIds?.has(edge.toNodeId) === true
+    );
+  }
+  if (!TRAVERSAL_FAMILIES.has(semantic.family) || isNavigationSemantic(semantic)) return false;
+  if (focusedNodeIds === null) return true;
+  if (semantic.family === 'control' && ['returns', 'throws'].includes(semantic.subtype)) {
+    return focusedNodeIds.has(edge.toNodeId);
+  }
+  return traversesFocusedSemantic(semantic, edge, focusedNodeIds, focusedEdgeIds, nodeById);
+}
+
 function isTraversableEdge(
   edge: ExplorationTopologyEdge,
   focusedNodeIds: ReadonlySet<string> | null,
@@ -371,38 +434,7 @@ function isTraversableEdge(
 ): boolean {
   return (edge.semantics ?? []).some((semantic) => {
     if (edge.disposition === 'emitted' || pathEdgeIds.has(edge.id)) return true;
-    if (semantic.family === 'identity' && OWNERSHIP_SUBTYPES.has(semantic.subtype)) {
-      return (
-        focusedNodeIds === null || focusedNodeIds.has(edge.toNodeId) || focusedEdgeNodeIds?.has(edge.toNodeId) === true
-      );
-    }
-    if (!TRAVERSAL_FAMILIES.has(semantic.family)) return false;
-    if (isNavigationSemantic(semantic)) return false;
-    if (semantic.family === 'control' && ['returns', 'throws'].includes(semantic.subtype) && focusedNodeIds !== null) {
-      return focusedNodeIds.has(edge.toNodeId);
-    }
-    if (focusedNodeIds === null) return true;
-    if (semantic.family === 'state') return focusedNodeIds.has(edge.fromNodeId);
-    if (semantic.family === 'data') {
-      return (
-        focusedNodeIds.has(edge.fromNodeId) ||
-        focusedNodeIds.has(edge.toNodeId) ||
-        focusedEdgeIds?.has(edge.id) === true
-      );
-    }
-    if (semantic.family === 'temporal') {
-      if (semantic.subtype === 'lexical-successor') {
-        return focusedNodeIds.has(edge.fromNodeId) && focusedNodeIds.has(edge.toNodeId);
-      }
-      return focusedNodeIds.has(edge.fromNodeId) || focusedNodeIds.has(edge.toNodeId);
-    }
-    if (semantic.family === 'control') {
-      return (
-        isSameOwnerProgramEdge(edge, nodeById) &&
-        (focusedNodeIds.has(edge.fromNodeId) || focusedNodeIds.has(edge.toNodeId))
-      );
-    }
-    return false;
+    return traversesSemantic(semantic, edge, focusedNodeIds, focusedEdgeIds, focusedEdgeNodeIds, nodeById);
   });
 }
 

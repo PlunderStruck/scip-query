@@ -24,7 +24,7 @@ export function buildTypeContainerMap(tree: Tree, language: AstLanguage): Map<st
     for (const child of root.children) walk(child);
   };
 
-  if (language === 'rust') {
+  const collectRustContainers = (): void => {
     for (const node of tree.rootNode.descendantsOfType(['struct_item', 'enum_item', 'union_item', 'type_item'])) {
       const name = node.namedChildren.find((child) => child.type === 'type_identifier')?.text;
       if (!name) continue;
@@ -37,7 +37,8 @@ export function buildTypeContainerMap(tree: Tree, language: AstLanguage): Map<st
       if (body) collectChildren(body, name);
       if (node.type === 'type_item') collectChildren(node, name);
     }
-  } else if (language === 'python') {
+  };
+  const collectPythonContainers = (): void => {
     for (const cls of tree.rootNode.descendantsOfType('class_definition')) {
       const name = cls.namedChildren.find((child) => child.type === 'identifier')?.text;
       if (!name) continue;
@@ -50,11 +51,12 @@ export function buildTypeContainerMap(tree: Tree, language: AstLanguage): Map<st
       if (!body) continue;
       for (const typeNode of body.descendantsOfType('type')) {
         for (const id of typeNode.descendantsOfType('identifier')) {
-          if (id.text !== name) link(id.text, name);
+          link(id.text, name);
         }
       }
     }
-  } else {
+  };
+  const collectDeclaredTypeContainers = (): void => {
     for (const node of tree.rootNode.descendantsOfType([
       'interface_declaration',
       'type_alias_declaration',
@@ -64,7 +66,10 @@ export function buildTypeContainerMap(tree: Tree, language: AstLanguage): Map<st
       if (!name) continue;
       collectChildren(node, name);
     }
-  }
+  };
+  if (language === 'rust') collectRustContainers();
+  else if (language === 'python') collectPythonContainers();
+  else collectDeclaredTypeContainers();
 
   return result;
 }

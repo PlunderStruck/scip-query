@@ -322,26 +322,8 @@ function factoryCallbackMemberTargets(
   sourceFile: string,
   site: NonNullable<ReturnType<typeof getCallSites>>[number],
 ): ImportedMemberCallTarget[] {
-  const receiver = site.calleeQualifier;
-  if (!receiver || !/^[A-Za-z_$][\w$]*$/u.test(receiver)) return [];
-  const root = getAst(db, sourceFile)?.rootNode;
-  if (!root) return [];
-  const callsite = callExpressionForSite(db, sourceFile, root, site.line, site.calleeLeaf, receiver);
-  const factoryCallable = callsite ? enclosingCallableDeclaringParameter(callsite, receiver) : null;
-  if (!factoryCallable) return [];
-  if (!callableReturnsObject(factoryCallable)) return [];
-  const factorySite = (getCallableSites(db, sourceFile) ?? [])
-    .filter(
-      (callable) =>
-        callable.startLine <= factoryCallable.startPosition.row && callable.endLine >= factoryCallable.endPosition.row,
-    )
-    .sort((left, right) => left.endLine - left.startLine - (right.endLine - right.startLine))[0];
-  if (!factorySite) return [];
-  const factoryDefinitions = getDefinitionsForFile(db, sourceFile).filter(
-    (definition) => definition.isFunctionLike && definition.leaf === factorySite.name,
-  );
-  if (factoryDefinitions.length !== 1) return [];
-  const factory = factoryDefinitions[0]!;
+  const factory = callbackFactoryDefinition(db, sourceFile, site);
+  if (!factory) return [];
   let byFactory = FACTORY_CALLBACK_IMPLEMENTATIONS.get(db);
   if (!byFactory) {
     byFactory = new Map();
@@ -352,32 +334,9 @@ function factoryCallbackMemberTargets(
   if (!unique) {
     const targets: Array<{ name: string; file: string; startLine: number; endLine: number }> = [];
     for (const reference of getResolvedReferenceSites(db, factory)) {
-      const callerRoot = getAst(db, reference.file)?.rootNode;
-      if (!callerRoot) continue;
-      const calls = nodesOfTypes(callerRoot, 'call_expression').filter((node) => {
-        if (node.startPosition.row > reference.line || node.endPosition.row < reference.line) return false;
-        const callee = node.childForFieldName('function') ?? node.namedChild(0);
-        const leaf = callee?.text
-          .replace(/\s+/gu, '')
-          .replace(/<[^<>]*>$/u, '')
-          .match(/[A-Za-z_$][\w$]*$/u)?.[0];
-        return leaf === factory.leaf;
-      });
-      if (calls.length !== 1) continue;
-      const argumentsNode = calls[0]!.childForFieldName('arguments');
-      const object = argumentsNode?.namedChildren.find((argument) => unwrap(argument).type === 'object');
-      if (!object) continue;
-      for (const child of unwrap(object).namedChildren) {
-        if (child.type === 'shorthand_property_identifier' && child.text === site.calleeLeaf) {
-          targets.push(...callableTargetsFromArgumentValue(db, reference.file, site.calleeLeaf, child, child));
-          continue;
-        }
-        if (child.type !== 'pair') continue;
-        const key = child.childForFieldName('key') ?? child.namedChild(0);
-        const value = child.childForFieldName('value') ?? child.namedChild(1);
-        if (unquotedPropertyName(key?.text) !== site.calleeLeaf || !value) continue;
-        targets.push(...callableTargetsFromArgumentValue(db, reference.file, site.calleeLeaf, value, child));
-      }
+      targets.push(
+        ...factoryReferenceCallbackTargets(db, factory.leaf, reference.file, reference.line, site.calleeLeaf),
+      );
     }
     unique = targets.filter(
       (target, index, all) =>
@@ -402,6 +361,69 @@ function factoryCallbackMemberTargets(
     resolution: 'factory-callback-member',
     strength: unique.length === 1 ? 'exact' : 'candidate',
   }));
+}
+
+function callbackFactoryDefinition(
+  db: ScipDatabase,
+  sourceFile: string,
+  site: NonNullable<ReturnType<typeof getCallSites>>[number],
+) {
+  const receiver = site.calleeQualifier;
+  if (!receiver || !/^[A-Za-z_$][\w$]*$/u.test(receiver)) return null;
+  const root = getAst(db, sourceFile)?.rootNode;
+  if (!root) return null;
+  const callsite = callExpressionForSite(db, sourceFile, root, site.line, site.calleeLeaf, receiver);
+  const factoryCallable = callsite ? enclosingCallableDeclaringParameter(callsite, receiver) : null;
+  if (!factoryCallable) return null;
+  if (!callableReturnsObject(factoryCallable)) return null;
+  const factorySite = (getCallableSites(db, sourceFile) ?? [])
+    .filter(
+      (callable) =>
+        callable.startLine <= factoryCallable.startPosition.row && callable.endLine >= factoryCallable.endPosition.row,
+    )
+    .sort((left, right) => left.endLine - left.startLine - (right.endLine - right.startLine))[0];
+  if (!factorySite) return null;
+  const factoryDefinitions = getDefinitionsForFile(db, sourceFile).filter(
+    (definition) => definition.isFunctionLike && definition.leaf === factorySite.name,
+  );
+  if (factoryDefinitions.length !== 1) return null;
+  return factoryDefinitions[0]!;
+}
+
+function factoryReferenceCallbackTargets(
+  db: ScipDatabase,
+  factoryLeaf: string,
+  file: string,
+  line: number,
+  member: string,
+) {
+  const callerRoot = getAst(db, file)?.rootNode;
+  if (!callerRoot) return [];
+  const calls = nodesOfTypes(callerRoot, 'call_expression').filter((node) => {
+    if (node.startPosition.row > line || node.endPosition.row < line) return false;
+    const callee = node.childForFieldName('function') ?? node.namedChild(0);
+    const leaf = callee?.text
+      .replace(/\s+/gu, '')
+      .replace(/<[^<>]*>$/u, '')
+      .match(/[A-Za-z_$][\w$]*$/u)?.[0];
+    return leaf === factoryLeaf;
+  });
+  if (calls.length !== 1) return [];
+  const argumentsNode = calls[0]!.childForFieldName('arguments');
+  const object = argumentsNode?.namedChildren.find((argument) => unwrap(argument).type === 'object');
+  if (!object) return [];
+  return unwrap(object).namedChildren.flatMap((child) => factoryPropertyCallbackTargets(db, file, member, child));
+}
+
+function factoryPropertyCallbackTargets(db: ScipDatabase, file: string, member: string, child: SyntaxNode) {
+  if (child.type === 'shorthand_property_identifier' && child.text === member) {
+    return callableTargetsFromArgumentValue(db, file, member, child, child);
+  }
+  if (child.type !== 'pair') return [];
+  const key = child.childForFieldName('key') ?? child.namedChild(0);
+  const value = child.childForFieldName('value') ?? child.namedChild(1);
+  if (unquotedPropertyName(key?.text) !== member || !value) return [];
+  return callableTargetsFromArgumentValue(db, file, member, value, child);
 }
 
 function callExpressionForSite(

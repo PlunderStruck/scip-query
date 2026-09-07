@@ -75,7 +75,7 @@ export function cleanupPlan(
   const visited = new Set<string>(seed.map((entry) => entry.symbol));
   const pending = new Set<string>();
 
-  for (let depth = 1; depth <= maxDepth && frontier.length > 0; depth++) {
+  const candidateNamesForFrontier = (frontier: IndexedDefinition[]): Set<string> => {
     const calleeMap = index.calleeMap(frontier, { semantic: false });
     const candidateNames = new Set(pending);
     for (const definition of frontier) {
@@ -83,17 +83,13 @@ export function cleanupPlan(
         if (!visited.has(callee.symbol)) candidateNames.add(callee.symbol);
       }
     }
-
+    return candidateNames;
+  };
+  const collectNextBatch = (candidateNames: Set<string>): PlanEntryInternal[] => {
     const next: PlanEntryInternal[] = [];
     for (const name of candidateNames) {
-      const definition = resolveDefinition(db, name);
+      const definition = resolveCascadeCandidate(db, index, name);
       if (!definition) continue;
-      if (db.isIgnored(definition.relativePath)) continue;
-      if (isEntrySurface(db, definition.relativePath)) continue;
-      if (isRootedSymbol(db, definition.symbol, definition.relativePath)) continue;
-      if (index.fileKind(definition.relativePath) === 'test') continue;
-      if (index.hasSuppressionComment(definition)) continue;
-
       const verdict = cascadeVerdict(db, definition, removedRanges);
       if (verdict.removable) {
         visited.add(name);
@@ -109,6 +105,11 @@ export function cleanupPlan(
         });
       }
     }
+    return next;
+  };
+
+  for (let depth = 1; depth <= maxDepth && frontier.length > 0; depth++) {
+    const next = collectNextBatch(candidateNamesForFrontier(frontier));
 
     if (next.length === 0) break;
     for (const entry of next) removedRanges.add(entry);
@@ -151,6 +152,18 @@ function collectSeed(
     });
   }
   return entries;
+}
+
+function resolveCascadeCandidate(db: ScipDatabase, index: ProjectIndex, name: string): IndexedDefinition | undefined {
+  const definition = resolveDefinition(db, name);
+  if (!definition) return undefined;
+  if (db.isIgnored(definition.relativePath)) return undefined;
+  if (isEntrySurface(db, definition.relativePath)) return undefined;
+  if (isRootedSymbol(db, definition.symbol, definition.relativePath)) return undefined;
+  if (index.fileKind(definition.relativePath) === 'test') return undefined;
+  if (index.hasSuppressionComment(definition)) return undefined;
+
+  return definition;
 }
 
 function toEntry(definition: IndexedDefinition, evidence: CleanupPlanEntry['evidence']): PlanEntryInternal {

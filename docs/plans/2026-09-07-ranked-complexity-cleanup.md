@@ -245,3 +245,212 @@ Batch-ten queue from the complete 614-finding scan: collectNextAnchorGraphRelati
 ### Batch nine completion
 
 All checks passed: 153 focused tests, full suite 3,136 tests across 350 files, build, source types, changed-file lint, format, public API/consumer and skill links. Fresh index/diff-impact maps 17 changed symbols in five source files to seven affected files. Current-source health is accounted across 563 files and 12,463 functions, with 614 complexity findings and no reported duplication, dependency cycles or configured violations; all files mapped, 47/47 dependency rows declared. Historical inventory: 65 fixed, six assessed-retained, 584 pending. Two newly extracted helper warnings remain in the queue. Continue batch ten above. No thresholds/suppression policy changes or VM reinstall.
+
+### Batch ten expanded to fifteen
+
+User increased the batch size from five to fifteen on September 7. This applies to this in-progress batch and all subsequent batches. The same ranking, behavior preservation, no-suppression policy and verification requirements apply.
+
+1. collectNextAnchorGraphRelationCandidates: cyclomatic 27, cognitive 43. `src/queries/internal/next-anchor-candidates.ts`.
+2. buildTypeContainerMap: cyclomatic 17, cognitive 43. `src/source/facts/source-type-containers.ts`.
+3. getJsTestExclusions: cyclomatic 28, cognitive 38. `src/analysis/framework-patterns.ts`.
+4. decodeProjectInputChangeJournal: cyclomatic 28, cognitive 20. `src/domain/project-input-change-journal.ts`.
+5. probeProjectFileBytesForLiterals: cyclomatic 28, cognitive 40. `src/platform/project-files.ts`.
+6. programStateTemporalElementsForTopologyNodes: cyclomatic 28, cognitive 38. `src/queries/graph/program-state-temporal-edges.ts`.
+7. touchExistingWorktreeLease: cyclomatic 28, cognitive 12. `src/reindex/shared-generation-store.ts`.
+8. mayUseQueryServiceFastPath: cyclomatic 28, cognitive 2. `src/runtime/cli.ts`.
+9. handleDead.<callback:budgetedDbCommand:1>: cyclomatic 28, cognitive 31. `src/runtime/query-commands/cleanup/handlers.ts`.
+10. TsMorphSemanticProvider.addHierarchyMemberReferences: cyclomatic 22, cognitive 42. `src/semantic/typescript/ts-morph-provider.ts`.
+11. cleanupPlan: cyclomatic 20, cognitive 41. `src/queries/cleanup/cleanup-plan.ts`.
+12. httpExtractor.extract.<callback:visitDescendantsOfType:2>: cyclomatic 27, cognitive 27. `src/analysis/runtime-boundaries/extractors.ts`.
+13. downloadVerifiedBinary: cyclomatic 27, cognitive 29. `src/platform/verified-binary-fetch.ts`.
+14. reachesSameNameTarget: cyclomatic 27, cognitive 36. `src/queries/cleanup/twin-drift.ts`.
+15. finalizeSystemMap: cyclomatic 27, cognitive 11. `src/queries/graph/system-map.ts`.
+
+Cross-language containment assertions passed on the original implementation before extraction. Each additional target will be inspected for its decisions, effects, ordering and cleanup before editing.
+
+### Parallel expansion authorized
+
+The user requested independent subagent sets and combined validation to accelerate cleanup. The environment permits three concurrent subagents; each is assigned ten ranked symbols with exclusive source-file ownership, using Astra medium. The root agent retains its fifteen-file batch. Workers record their results in separate checkpoint files, avoid changing shared docs and build artifacts, and do not commit. Integration validates the combined tree.
+
+Worker 1: targets in `/tmp/complexity-parallel-1-targets.json`; durable record `docs/plans/2026-09-07-complexity-worker-1.md`.
+
+- decodeCliJsonEnvelope: cyclomatic 27, cognitive 27. `src/runtime/cli-json-envelope.ts`.
+- catalogExplorationRoutes: cyclomatic 23, cognitive 40. `src/queries/internal/exploration-topology.ts`.
+- selectExplorationTopology: cyclomatic 26, cognitive 28. `src/queries/internal/exploration-topology.ts`.
+- validPersistedRange: cyclomatic 26, cognitive 5. `src/runtime/source-emission-session.ts`.
+- parseProcessFileLockRecord: cyclomatic 25, cognitive 12. `src/platform/process-file-lock.ts`.
+- repositoryContext: cyclomatic 25, cognitive 12. `src/queries/impact/context.ts`.
+- validateWatchConfig: cyclomatic 25, cognitive 25. `src/runtime/config.ts`.
+- parseBenchmarkCommand: cyclomatic 24, cognitive 4. `scripts/benchmark-query-service.ts`.
+- buildRepositoryContextSourcePacket: cyclomatic 24, cognitive 34. `src/queries/impact/context.ts`.
+- parseOverlayManifest: cyclomatic 24, cognitive 11. `src/reindex/typescript-overlay-store.ts`.
+
+Worker 2: targets in `/tmp/complexity-parallel-2-targets.json`; durable record `docs/plans/2026-09-07-complexity-worker-2.md`.
+
+- printJsonEnvelope: cyclomatic 27, cognitive 31. `src/runtime/command-kit/command-execution.ts`.
+- truncateAtImplementationStart: cyclomatic 26, cognitive 30. `src/queries/cleanup/similar-signatures.ts`.
+- reindex: cyclomatic 26, cognitive 24. `src/reindex/index.ts`.
+- inflightClaims: cyclomatic 20, cognitive 38. `src/storage/bounded-mailbox.ts`.
+- orientRecentDuplicate: cyclomatic 25, cognitive 24. `src/queries/cleanup/recent-duplicates.ts`.
+- isClosureEdge.<callback:(edge.semantics ?? []).some:0>: cyclomatic 25, cognitive 21. `src/queries/internal/causal-corridor.ts`.
+- prepareIndexerRun: cyclomatic 25, cognitive 27. `src/reindex/index.ts`.
+- rowIdentity: cyclomatic 24, cognitive 13. `scripts/score-detector-labels.ts`.
+- isTraversableEdge.<callback:(edge.semantics ?? []).some:0>: cyclomatic 24, cognitive 21. `src/queries/internal/causal-corridor.ts`.
+- executeRequest: cyclomatic 24, cognitive 27. `src/runtime/query-service-server.ts`.
+
+Worker 3: targets in `/tmp/complexity-parallel-3-targets.json`; durable record `docs/plans/2026-09-07-complexity-worker-3.md`.
+
+- buildSetupSmokeTests: cyclomatic 27, cognitive 27. `src/runtime/project-setup.ts`.
+- behaviorForNode: cyclomatic 26, cognitive 16. `src/queries/internal/connected-behavior.ts`.
+- focusLinesForNode: cyclomatic 26, cognitive 30. `src/queries/internal/connected-behavior.ts`.
+- factoryCallbackMemberTargets: cyclomatic 24, cognitive 38. `src/symbols/graph/member-call-targets.ts`.
+- classifySimilarityEvidence: cyclomatic 25, cognitive 28. `src/queries/cleanup/similar.ts`.
+- parseReindexActivityRecord: cyclomatic 25, cognitive 16. `src/reindex/reindex-activity.ts`.
+- coChangePairsFromHistory: cyclomatic 24, cognitive 37. `src/analysis/git-history.ts`.
+- resolveMember: cyclomatic 15, cognitive 36. `src/analysis/runtime-boundaries/object-members.ts`.
+- collectFileMatches: cyclomatic 24, cognitive 22. `src/queries/navigation/source-search-batch.ts`.
+- materializeSemanticCalleeCache.<callback:profileSpan:1>: cyclomatic 14, cognitive 36. `src/semantic/symbol-evidence.ts`.
+
+### Root fifteen implementation checkpoint
+
+The root-owned targets are implemented; this is an intermediate checkpoint, not a completed combined validation or commit. The first source review measured all fifteen below the existing warning thresholds. Three extracted helpers initially exceeded those thresholds and were split by source eligibility, hook declaration kind and bounded journal entry validation. One existing boundary-frontier callback moved under the new finalization phase; its unresolved/observed branches were then separated as well.
+
+Preserved contracts:
+
+- Graph anchors retain call/runtime/reference pass order, source eligibility, returned-alternative exclusions, strength and upstream/result/runtime counts. Source state/temporal construction retains mutation/value/temporal/unsupported ordering, map identities, unsupported frontiers and sorted blind spots. Full system-map finalization keeps topology-only early return, focused behavior, callback enrichment, corridor construction, recovery, counts and coverage.
+- Type containment retains Rust field/variant/alias traversal, Python superclass and annotation consumers and TypeScript-like declarations without self-links. Framework exclusions retain source prefilter before AST/cache, current top-level declaration eligibility, test/hook/suppression order and cached results.
+- Change journals retain schema, canonical relative paths, unique paths, entry/byte bounds and completeness explanations. File probes retain snapshot/live separation, bounded scratch reads, cross-chunk literals and UTF-8 carries, optional hashes, identity rechecks, matched-only byte materialization and descriptor cleanup.
+- Lease touching still rechecks pointer, worktree ownership and accepted generation under the same repository lock before its 60-second throttle or durable write; failures return null and the lock is released. CLI fast-path command membership and required flags/profile exclusions are unchanged; its lookup set initializes before the entrypoint executes.
+- Dead output retains category filters, exhaustive JSON groups/totals, 20-row human limits, complete LOC/count totals, explanations, ordering and empty behavior. Cleanup cascades retain pending/visited/blocked state, eligibility checks, predecessor-batch removal semantics and maximum depth. Hierarchy references retain ancestor and sibling-family insertion and profile counts.
+- HTTP extraction retains decorator, Axum, fetch and method/client branch precedence and evidence strengths. Download verification retains abort/error classification, declared and observed length/checksum validation before promotion, descriptor ownership and staged-file cleanup. Twin delegation retains alias rules, receiver/import/re-export paths, three-hop bound and shared visited set.
+
+Checks so far: 156 first-five tests in seven files, 98 middle tests in eleven files and 153 last-five tests in five files passed (system-map tests overlap; do not sum these as distinct). Cross-language containment assertions passed before and after extraction. Source types passed before the final helper cleanups. New output/journal tests and final focused reruns are in progress. Workers are still editing their exclusive files; full build, suite, API, fresh source scan and diff impact remain pending.
+
+### Parallel review checkpoint
+
+Root reviewed the combined source diffs. Worker 1 corrected a newly extracted overlay-header assertion so it proves only header fields and an unknown-record array; each record gets its own runtime validation. Worker 2 restored the existing reindex annotation to its original function and protected the service dispatch table against inherited object keys while retaining its old code fallback. Root requested preserving the original semantic-array `some` witness even for sparse arrays. Worker 3 corrected readonly source-line parameter contracts after the provisional typecheck.
+
+The provisional combined source review correctly reported incomplete coverage when three worker files changed during analysis. Its deltas are not a completed review; repeat on the frozen tree before committing. It also identified several remaining target/helper warnings; workers have addressed those and the final scan must confirm them. Root's last causal-anchor helper now isolates callsite source rendering; its six focused tests pass. Added dead-output and journal-bound tests passed in the final 99-test focused run. Root changed-file ESLint passes. Worker-specific test and behavior details are in each worker checkpoint.
+
+### Next parallel wave prepared
+
+The first parallel wave reduced current complexity findings from 614 to 568 across 563/563 eligible source files; full tests are still running. The following assignments are prepared from that frozen, accounted scan. Do not begin source edits until the first wave passes verification and is committed.
+
+root: targets `/tmp/complexity-wave2-root-targets.json`.
+
+- parseSharedGenerationManifest: cyclomatic 27, cognitive 11. `src/reindex/shared-generation-store.ts`.
+- handleSliceCohesion.<callback:budgetedDbCommand:1>: cyclomatic 22, cognitive 40. `src/runtime/query-commands/cleanup/handlers.ts`.
+- sourceRangeNextAnchorPacket: cyclomatic 24, cognitive 38. `src/queries/internal/next-anchor-candidates.ts`.
+- systemMapLiteralMatches: cyclomatic 24, cognitive 31. `src/queries/graph/system-map.ts`.
+- validateIndexerAndSemanticConfig: cyclomatic 24, cognitive 33. `src/runtime/config.ts`.
+- parseTypeScriptSemanticEnvelope: cyclomatic 24, cognitive 10. `src/semantic/typescript/session-protocol.ts`.
+- extractPublicExports: cyclomatic 21, cognitive 35. `scripts/api-surface-contract.mjs`.
+- summarizeClosures: cyclomatic 13, cognitive 35. `src/queries/quality/slice-cohesion.ts`.
+- parseSourceSearchInvocation: cyclomatic 22, cognitive 35. `src/runtime/query-service-fastpath.ts`.
+- tokenizeTsSafe: cyclomatic 17, cognitive 35. `src/source/primitives/source-stripper.ts`.
+- validateSupportedMetadata: cyclomatic 23, cognitive 19. `src/domain/reindex-metadata.ts`.
+- fingerprintProjectFile: cyclomatic 23, cognitive 23. `src/platform/project-files.ts`.
+- executeSystemMap: cyclomatic 23, cognitive 15. `src/queries/graph/system-map.ts`.
+- systemMapTopologyOwnerNodes: cyclomatic 23, cognitive 25. `src/queries/graph/system-map.ts`.
+- buildHealthValidation: cyclomatic 23, cognitive 16. `src/queries/health/health-report.ts`.
+
+worker-1: targets `/tmp/complexity-wave2-worker-1-targets.json`.
+
+- captureOutputSnapshotPage: cyclomatic 23, cognitive 21. `src/runtime/output-pagination.ts`.
+- parseCachedDefinition: cyclomatic 23, cognitive 9. `src/symbols/definition-catalog.ts`.
+- programDataElementsForSystemMapRelations: cyclomatic 21, cognitive 33. `src/queries/graph/program-data-edges.ts`.
+- isTypeScriptIndexRequest: cyclomatic 22, cognitive 7. `src/reindex/typescript-index-protocol.ts`.
+- targetedCallerRowsMapForSymbols: cyclomatic 22, cognitive 26. `src/symbols/graph/call-graph-evidence.ts`.
+- productionCallableDefinitions: cyclomatic 21, cognitive 31. `src/queries/internal/production-callables.ts`.
+- sweepRepositoryCacheDirectory: cyclomatic 21, cognitive 24. `src/runtime/repository-cache-lifecycle.ts`.
+- handleCheckDeps: cyclomatic 19, cognitive 31. `src/runtime/commands/command-handlers.ts`.
+- findCallerFiles: cyclomatic 15, cognitive 31. `src/symbols/identifier-attribution.ts`.
+- isObservationReceiptV1: cyclomatic 20, cognitive 10. `src/domain/observation-receipt.ts`.
+
+worker-2: targets `/tmp/complexity-wave2-worker-2-targets.json`.
+
+- parseLedger: cyclomatic 23, cognitive 8. `src/runtime/source-emission-session.ts`.
+- maintainBoundedMailboxUnlocked: cyclomatic 16, cognitive 34. `src/storage/bounded-mailbox.ts`.
+- deadCandidateDecision: cyclomatic 22, cognitive 22. `src/queries/internal/dead-candidate-gate.ts`.
+- <callback:program.hook:1>: cyclomatic 22, cognitive 25. `src/runtime/cli-main.ts`.
+- materializeBoundedLinks: cyclomatic 19, cognitive 32. `src/analysis/runtime-boundaries/graph.ts`.
+- boundarySourceHashes: cyclomatic 21, cognitive 24. `src/analysis/runtime-boundaries/graph.ts`.
+- decodeCurrentCorrelation: cyclomatic 21, cognitive 7. `src/semantic/rust/durable-session-protocol.ts`.
+- decodeDurableRustMailboxResponse: cyclomatic 21, cognitive 15. `src/semantic/rust/durable-session-protocol.ts`.
+- parseArgs: cyclomatic 20, cognitive 21. `scripts/typescript-semantic-provider-comparison.mjs`.
+- buildProjectChangeManifest: cyclomatic 20, cognitive 16. `src/domain/project-input.ts`.
+
+worker-3: targets `/tmp/complexity-wave2-worker-3-targets.json`.
+
+- recordClojureMembers: cyclomatic 23, cognitive 30. `src/source/facts/clojure-facts.ts`.
+- benchmarkArguments: cyclomatic 22, cognitive 12. `scripts/benchmark-query-service.ts`.
+- planTypeScriptIncrementalUpdate: cyclomatic 22, cognitive 18. `src/reindex/typescript-incremental-index.ts`.
+- TsMorphSemanticProvider.referencesForDefinitionsBySymbolScan.<callback:profileSpan:1>: cyclomatic 22, cognitive 25. `src/semantic/typescript/ts-morph-provider.ts`.
+- TsMorphSemanticProvider.semanticCalleeForCallNode: cyclomatic 22, cognitive 33. `src/semantic/typescript/ts-morph-provider.ts`.
+- validateJsonOutputOptions: cyclomatic 21, cognitive 22. `src/runtime/commands/command-registry.ts`.
+- behaviorReceipt: cyclomatic 21, cognitive 18. `src/source/facts/behavior-skeleton.ts`.
+- TsMorphSemanticProvider.calleeCoverageForDefinitions.visit: cyclomatic 14, cognitive 31. `src/semantic/typescript/ts-morph-provider.ts`.
+- stronglyConnectedComponents: cyclomatic 11, cognitive 30. `src/analysis/strongly-connected-components.ts`.
+- flattenRustUseTree: cyclomatic 20, cognitive 14. `src/language-parsers/languages/rust.ts`.
+
+### First parallel complexity wave completed
+
+Completed the root batch of fifteen plus three exclusive worker sets of ten: **45 ranked targets**, all at cyclomatic 10 or below and cognitive 14 or below. The full source scan resolves **46 existing findings**, including the additional system-map frontier callback. New helpers remain under the configured warning thresholds. No thresholds, source scope, suppressions or dependency policy were changed.
+
+First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim.
+
+All 563 source files remain mapped and all 47 dependency rows declared, with no reported duplicates, dependency cycles or configured violations. The source review retains one uncomparable pre-existing anonymous-callback finding in `publishFreshReindexArtifacts` because its name does not uniquely identify a callback; that untouched body is not claimed resolved. The source scan still reports it. Indexed impact omits eleven changed paths (docs/tests and scripts outside its symbol index); source review accounts for the eligible TS/JS scripts. The historical inventory and current scan remain different populations.
+
+Validation included new parser-backed Rust/Python/TypeScript containment tests, dead-output category/budget/totals tests, journal path/entry/UTF-8-byte-bound tests, and envelope-precedence/object-identity tests. Worker 2 also compared the signature scanner on 30,000 inputs and corridor decisions across 4,480 combinations with the baseline. No agent benchmarks were run. Review corrections preserved overlay type guarantees, original reindex annotation ownership, dispatch fallback for inherited keys and the original semantic-array witness behavior.
+
+The VM stays on the previously verified installation from `931fe6c1`, with linked skills current. This wave changes internal structure while preserving intended behavior, so the user's instruction does not require another reinstall.
+
+Target measurements (cyclomatic/cognitive):
+
+- `collectNextAnchorGraphRelationCandidates` → 10/14 (`src/queries/internal/next-anchor-candidates.ts`).
+- `buildTypeContainerMap` → 4/4 (`src/source/facts/source-type-containers.ts`).
+- `getJsTestExclusions` → 6/5 (`src/analysis/framework-patterns.ts`).
+- `decodeProjectInputChangeJournal` → 5/4 (`src/domain/project-input-change-journal.ts`).
+- `probeProjectFileBytesForLiterals` → 9/9 (`src/platform/project-files.ts`).
+- `programStateTemporalElementsForTopologyNodes` → 9/12 (`src/queries/graph/program-state-temporal-edges.ts`).
+- `touchExistingWorktreeLease` → 4/3 (`src/reindex/shared-generation-store.ts`).
+- `mayUseQueryServiceFastPath` → 7/1 (`src/runtime/cli.ts`).
+- `handleDead.<callback:budgetedDbCommand:1>` → 3/2 (`src/runtime/query-commands/cleanup/handlers.ts`).
+- `TsMorphSemanticProvider.addHierarchyMemberReferences` → 5/6 (`src/semantic/typescript/ts-morph-provider.ts`).
+- `cleanupPlan` → 7/8 (`src/queries/cleanup/cleanup-plan.ts`).
+- `httpExtractor.extract.<callback:visitDescendantsOfType:2>` → 10/8 (`src/analysis/runtime-boundaries/extractors.ts`).
+- `downloadVerifiedBinary` → 8/7 (`src/platform/verified-binary-fetch.ts`).
+- `reachesSameNameTarget` → 6/5 (`src/queries/cleanup/twin-drift.ts`).
+- `finalizeSystemMap` → 10/6 (`src/queries/graph/system-map.ts`).
+- `decodeCliJsonEnvelope` → 7/6 (`src/runtime/cli-json-envelope.ts`).
+- `catalogExplorationRoutes` → 5/4 (`src/queries/internal/exploration-topology.ts`).
+- `selectExplorationTopology` → 10/7 (`src/queries/internal/exploration-topology.ts`).
+- `validPersistedRange` → 6/3 (`src/runtime/source-emission-session.ts`).
+- `parseProcessFileLockRecord` → 9/7 (`src/platform/process-file-lock.ts`).
+- `repositoryContext` → 9/3 (`src/queries/impact/context.ts`).
+- `validateWatchConfig` → 2/1 (`src/runtime/config.ts`).
+- `parseBenchmarkCommand` → 4/3 (`scripts/benchmark-query-service.ts`).
+- `buildRepositoryContextSourcePacket` → 2/1 (`src/queries/impact/context.ts`).
+- `parseOverlayManifest` → 3/3 (`src/reindex/typescript-overlay-store.ts`).
+- `printJsonEnvelope` → 10/10 (`src/runtime/command-kit/command-execution.ts`).
+- `truncateAtImplementationStart` → 5/7 (`src/queries/cleanup/similar-signatures.ts`).
+- `reindex` → 9/8 (`src/reindex/index.ts`).
+- `inflightClaims` → 5/6 (`src/storage/bounded-mailbox.ts`).
+- `orientRecentDuplicate` → 10/6 (`src/queries/cleanup/recent-duplicates.ts`).
+- `isClosureEdge.<callback:(edge.semantics ?? []).some:0>` → 1/0 (`src/queries/internal/causal-corridor.ts`).
+- `prepareIndexerRun` → 7/6 (`src/reindex/index.ts`).
+- `rowIdentity` → 5/1 (`scripts/score-detector-labels.ts`).
+- `isTraversableEdge.<callback:(edge.semantics ?? []).some:0>` → 3/2 (`src/queries/internal/causal-corridor.ts`).
+- `executeRequest` → 2/1 (`src/runtime/query-service-server.ts`).
+- `buildSetupSmokeTests` → 1/0 (`src/runtime/project-setup.ts`).
+- `behaviorForNode` → 7/4 (`src/queries/internal/connected-behavior.ts`).
+- `focusLinesForNode` → 10/11 (`src/queries/internal/connected-behavior.ts`).
+- `factoryCallbackMemberTargets` → 5/5 (`src/symbols/graph/member-call-targets.ts`).
+- `classifySimilarityEvidence` → 10/8 (`src/queries/cleanup/similar.ts`).
+- `parseReindexActivityRecord` → 9/9 (`src/reindex/reindex-activity.ts`).
+- `coChangePairsFromHistory` → 10/12 (`src/analysis/git-history.ts`).
+- `resolveMember` → 1/0 (`src/analysis/runtime-boundaries/object-members.ts`).
+- `collectFileMatches` → 9/7 (`src/queries/navigation/source-search-batch.ts`).
+- `materializeSemanticCalleeCache.<callback:profileSpan:1>` → 1/0 (`src/semantic/symbol-evidence.ts`).
+
+The prepared second parallel wave is next. Artifacts: `/tmp/complexity-wave1-{review,health,impact,metrics}.json`; verification logs use `/tmp/complexity-wave1-*.log`.

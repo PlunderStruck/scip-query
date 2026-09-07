@@ -232,3 +232,65 @@ All checks passed: 154 focused tests, full suite 3,133 tests across 350 files, b
 ### Batch nine completion
 
 All checks passed: 153 focused tests, full suite 3,136 tests across 350 files, build, source types, changed-file lint, format, public API/consumer and skill links. Fresh index/diff-impact maps 17 changed symbols in five source files to seven affected files. Current-source health is accounted across 563 files and 12,463 functions, with 614 complexity findings and no reported duplication, dependency cycles or configured violations; all files mapped, 47/47 dependency rows declared. Historical inventory: 65 fixed, six assessed-retained, 584 pending. Two newly extracted helper warnings remain in the queue. Continue batch ten in the ranked complexity cleanup plan. No thresholds/suppression policy changes or VM reinstall.
+
+### First parallel complexity wave completed
+
+Completed the root batch of fifteen plus three exclusive worker sets of ten: **45 ranked targets**, all at cyclomatic 10 or below and cognitive 14 or below. The full source scan resolves **46 existing findings**, including the additional system-map frontier callback. New helpers remain under the configured warning thresholds. No thresholds, source scope, suppressions or dependency policy were changed.
+
+First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim.
+
+All 563 source files remain mapped and all 47 dependency rows declared, with no reported duplicates, dependency cycles or configured violations. The source review retains one uncomparable pre-existing anonymous-callback finding in `publishFreshReindexArtifacts` because its name does not uniquely identify a callback; that untouched body is not claimed resolved. The source scan still reports it. Indexed impact omits eleven changed paths (docs/tests and scripts outside its symbol index); source review accounts for the eligible TS/JS scripts. The historical inventory and current scan remain different populations.
+
+Validation included new parser-backed Rust/Python/TypeScript containment tests, dead-output category/budget/totals tests, journal path/entry/UTF-8-byte-bound tests, and envelope-precedence/object-identity tests. Worker 2 also compared the signature scanner on 30,000 inputs and corridor decisions across 4,480 combinations with the baseline. No agent benchmarks were run. Review corrections preserved overlay type guarantees, original reindex annotation ownership, dispatch fallback for inherited keys and the original semantic-array witness behavior.
+
+The VM stays on the previously verified installation from `931fe6c1`, with linked skills current. This wave changes internal structure while preserving intended behavior, so the user's instruction does not require another reinstall.
+
+Target measurements (cyclomatic/cognitive):
+
+- `collectNextAnchorGraphRelationCandidates` → 10/14 (`src/queries/internal/next-anchor-candidates.ts`).
+- `buildTypeContainerMap` → 4/4 (`src/source/facts/source-type-containers.ts`).
+- `getJsTestExclusions` → 6/5 (`src/analysis/framework-patterns.ts`).
+- `decodeProjectInputChangeJournal` → 5/4 (`src/domain/project-input-change-journal.ts`).
+- `probeProjectFileBytesForLiterals` → 9/9 (`src/platform/project-files.ts`).
+- `programStateTemporalElementsForTopologyNodes` → 9/12 (`src/queries/graph/program-state-temporal-edges.ts`).
+- `touchExistingWorktreeLease` → 4/3 (`src/reindex/shared-generation-store.ts`).
+- `mayUseQueryServiceFastPath` → 7/1 (`src/runtime/cli.ts`).
+- `handleDead.<callback:budgetedDbCommand:1>` → 3/2 (`src/runtime/query-commands/cleanup/handlers.ts`).
+- `TsMorphSemanticProvider.addHierarchyMemberReferences` → 5/6 (`src/semantic/typescript/ts-morph-provider.ts`).
+- `cleanupPlan` → 7/8 (`src/queries/cleanup/cleanup-plan.ts`).
+- `httpExtractor.extract.<callback:visitDescendantsOfType:2>` → 10/8 (`src/analysis/runtime-boundaries/extractors.ts`).
+- `downloadVerifiedBinary` → 8/7 (`src/platform/verified-binary-fetch.ts`).
+- `reachesSameNameTarget` → 6/5 (`src/queries/cleanup/twin-drift.ts`).
+- `finalizeSystemMap` → 10/6 (`src/queries/graph/system-map.ts`).
+- `decodeCliJsonEnvelope` → 7/6 (`src/runtime/cli-json-envelope.ts`).
+- `catalogExplorationRoutes` → 5/4 (`src/queries/internal/exploration-topology.ts`).
+- `selectExplorationTopology` → 10/7 (`src/queries/internal/exploration-topology.ts`).
+- `validPersistedRange` → 6/3 (`src/runtime/source-emission-session.ts`).
+- `parseProcessFileLockRecord` → 9/7 (`src/platform/process-file-lock.ts`).
+- `repositoryContext` → 9/3 (`src/queries/impact/context.ts`).
+- `validateWatchConfig` → 2/1 (`src/runtime/config.ts`).
+- `parseBenchmarkCommand` → 4/3 (`scripts/benchmark-query-service.ts`).
+- `buildRepositoryContextSourcePacket` → 2/1 (`src/queries/impact/context.ts`).
+- `parseOverlayManifest` → 3/3 (`src/reindex/typescript-overlay-store.ts`).
+- `printJsonEnvelope` → 10/10 (`src/runtime/command-kit/command-execution.ts`).
+- `truncateAtImplementationStart` → 5/7 (`src/queries/cleanup/similar-signatures.ts`).
+- `reindex` → 9/8 (`src/reindex/index.ts`).
+- `inflightClaims` → 5/6 (`src/storage/bounded-mailbox.ts`).
+- `orientRecentDuplicate` → 10/6 (`src/queries/cleanup/recent-duplicates.ts`).
+- `isClosureEdge.<callback:(edge.semantics ?? []).some:0>` → 1/0 (`src/queries/internal/causal-corridor.ts`).
+- `prepareIndexerRun` → 7/6 (`src/reindex/index.ts`).
+- `rowIdentity` → 5/1 (`scripts/score-detector-labels.ts`).
+- `isTraversableEdge.<callback:(edge.semantics ?? []).some:0>` → 3/2 (`src/queries/internal/causal-corridor.ts`).
+- `executeRequest` → 2/1 (`src/runtime/query-service-server.ts`).
+- `buildSetupSmokeTests` → 1/0 (`src/runtime/project-setup.ts`).
+- `behaviorForNode` → 7/4 (`src/queries/internal/connected-behavior.ts`).
+- `focusLinesForNode` → 10/11 (`src/queries/internal/connected-behavior.ts`).
+- `factoryCallbackMemberTargets` → 5/5 (`src/symbols/graph/member-call-targets.ts`).
+- `classifySimilarityEvidence` → 10/8 (`src/queries/cleanup/similar.ts`).
+- `parseReindexActivityRecord` → 9/9 (`src/reindex/reindex-activity.ts`).
+- `coChangePairsFromHistory` → 10/12 (`src/analysis/git-history.ts`).
+- `resolveMember` → 1/0 (`src/analysis/runtime-boundaries/object-members.ts`).
+- `collectFileMatches` → 9/7 (`src/queries/navigation/source-search-batch.ts`).
+- `materializeSemanticCalleeCache.<callback:profileSpan:1>` → 1/0 (`src/semantic/symbol-evidence.ts`).
+
+The prepared second parallel wave is next. Artifacts: `/tmp/complexity-wave1-{review,health,impact,metrics}.json`; verification logs use `/tmp/complexity-wave1-*.log`.

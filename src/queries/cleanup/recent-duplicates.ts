@@ -415,46 +415,41 @@ function recentDuplicateFocusFiles(adds: FileAddRecords, windowCommits: number):
   return files;
 }
 
+function recentDuplicateFileAge(adds: FileAddRecords, file: string): number | null {
+  return adds.get(file)?.commitsAgo ?? null;
+}
+
+function isRecentDuplicateAge(age: number | null, windowCommits: number): boolean {
+  return age !== null && age <= windowCommits;
+}
+
 function orientRecentDuplicate(
   candidate: RecentDuplicateCandidate,
   adds: FileAddRecords,
   windowCommits: number,
 ): RecentDuplicateFinding | null {
-  const ageA = adds.get(candidate.fileA)?.commitsAgo ?? null;
-  const ageB = adds.get(candidate.fileB)?.commitsAgo ?? null;
-  const newA = ageA !== null && ageA <= windowCommits;
-  const newB = ageB !== null && ageB <= windowCommits;
+  const ageA = recentDuplicateFileAge(adds, candidate.fileA);
+  const ageB = recentDuplicateFileAge(adds, candidate.fileB);
+  const newA = isRecentDuplicateAge(ageA, windowCommits);
+  const newB = isRecentDuplicateAge(ageB, windowCommits);
   if (!newA && !newB) return null;
 
-  if (newA && newB) {
-    // Twin: orient by recency so output is stable (newer file = echo).
-    const aIsEcho = (ageA ?? 0) <= (ageB ?? 0);
-    return {
-      kind: 'twin',
-      domain: candidate.domain,
-      basis: candidate.basis,
-      echoSymbol: aIsEcho ? candidate.symbolA : candidate.symbolB,
-      echoFile: aIsEcho ? candidate.fileA : candidate.fileB,
-      echoAgeCommits: (aIsEcho ? ageA : ageB) ?? 0,
-      establishedSymbol: aIsEcho ? candidate.symbolB : candidate.symbolA,
-      establishedFile: aIsEcho ? candidate.fileB : candidate.fileA,
-      establishedAgeCommits: aIsEcho ? ageB : ageA,
-      similarity: candidate.similarity,
-      sharedEvidence: candidate.sharedEvidence,
-      sharedCallees: candidate.sharedCallees,
-    };
-  }
-
+  const twin = newA && newB;
+  // When both are recent, the newer file is the echo; equal ages favor A.
+  const aIsEcho = twin ? (ageA ?? 0) <= (ageB ?? 0) : newA;
+  const a = { symbol: candidate.symbolA, file: candidate.fileA, age: ageA };
+  const b = { symbol: candidate.symbolB, file: candidate.fileB, age: ageB };
+  const [echo, established] = aIsEcho ? [a, b] : [b, a];
   return {
-    kind: 'echo',
+    kind: twin ? 'twin' : 'echo',
     domain: candidate.domain,
     basis: candidate.basis,
-    echoSymbol: newA ? candidate.symbolA : candidate.symbolB,
-    echoFile: newA ? candidate.fileA : candidate.fileB,
-    echoAgeCommits: (newA ? ageA : ageB) ?? 0,
-    establishedSymbol: newA ? candidate.symbolB : candidate.symbolA,
-    establishedFile: newA ? candidate.fileB : candidate.fileA,
-    establishedAgeCommits: newA ? ageB : ageA,
+    echoSymbol: echo.symbol,
+    echoFile: echo.file,
+    echoAgeCommits: echo.age ?? 0,
+    establishedSymbol: established.symbol,
+    establishedFile: established.file,
+    establishedAgeCommits: established.age,
     similarity: candidate.similarity,
     sharedEvidence: candidate.sharedEvidence,
     sharedCallees: candidate.sharedCallees,

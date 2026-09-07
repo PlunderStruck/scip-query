@@ -903,6 +903,25 @@ function reachesSameNameTarget(
   visited.add(from.symbol);
 
   const imports = getSourceImports(db, from.file);
+  const sites = sameNameDelegationSites(db, from, to, imports);
+  if (sites.length === 0) return false;
+  if (receiverImportsTarget(db, sites, imports, to.file)) return true;
+  const importedFiles = delegationImportedFiles(db, imports, to.leaf);
+  if ([...importedFiles].some((file) => pathsResolveSame(file, to.file))) return true;
+
+  return clusterMembers.some((mid) => {
+    if (mid.symbol === from.symbol || mid.symbol === to.symbol || !mid.isThinForwarder) return false;
+    if (![...importedFiles].some((file) => pathsResolveSame(file, mid.file))) return false;
+    return reachesSameNameTarget(db, mid, to, clusterMembers, hopsLeft - 1, visited);
+  });
+}
+
+function sameNameDelegationSites(
+  db: ScipDatabase,
+  from: TwinDriftRecord,
+  to: TwinDriftRecord,
+  imports: ReturnType<typeof getSourceImports>,
+) {
   // `import { x as y }` lets the caller reach the target under a local alias;
   // the call-site leaf is then the alias, not the target's own name. Once an
   // alias exists, a bare `x(...)` inside `from` names `from`'s own file (its
@@ -914,10 +933,17 @@ function reachesSameNameTarget(
     }
   }
   if (targetLocalNames.size === 0) targetLocalNames.add(to.leaf);
-  const sites = (getCallSites(db, from.file) ?? []).filter(
+  return (getCallSites(db, from.file) ?? []).filter(
     (site) => site.line >= from.startLine && site.line <= from.endLine && targetLocalNames.has(site.calleeLeaf),
   );
-  if (sites.length === 0) return false;
+}
+
+function receiverImportsTarget(
+  db: ScipDatabase,
+  sites: NonNullable<ReturnType<typeof getCallSites>>,
+  imports: ReturnType<typeof getSourceImports>,
+  targetFile: string,
+): boolean {
   // `issueOrderingService.updateBoardOrder(...)` where the receiver is an
   // imported binding: the receiver's own module imports the target's file
   // (a capabilities hub instantiating services), one hop beyond the barrel.
@@ -925,15 +951,23 @@ function reachesSameNameTarget(
     if (!site.calleeQualifier) continue;
     const receiverImport = imports.find((entry) => entry.localName === site.calleeQualifier && entry.sourcePath);
     if (!receiverImport?.sourcePath) continue;
-    if (pathsResolveSame(receiverImport.sourcePath, to.file)) return true;
+    if (pathsResolveSame(receiverImport.sourcePath, targetFile)) return true;
     for (const hop of getSourceImports(db, receiverImport.sourcePath)) {
-      if (hop.sourcePath && pathsResolveSame(hop.sourcePath, to.file)) return true;
+      if (hop.sourcePath && pathsResolveSame(hop.sourcePath, targetFile)) return true;
     }
   }
 
+  return false;
+}
+
+function delegationImportedFiles(
+  db: ScipDatabase,
+  imports: ReturnType<typeof getSourceImports>,
+  targetLeaf: string,
+): Set<string> {
   const importedFiles = new Set(
     imports
-      .filter((entry) => entry.sourcePath && (entry.kind !== 'namespace' || entry.usedMembers.includes(to.leaf)))
+      .filter((entry) => entry.sourcePath && (entry.kind !== 'namespace' || entry.usedMembers.includes(targetLeaf)))
       .map((entry) => entry.sourcePath!),
   );
   // `import { recorder } from './runtime-settings.js'` where runtime-settings
@@ -943,14 +977,7 @@ function reachesSameNameTarget(
       if (reExport.sourcePath) importedFiles.add(reExport.sourcePath);
     }
   }
-  if ([...importedFiles].some((file) => pathsResolveSame(file, to.file))) return true;
-
-  for (const mid of clusterMembers) {
-    if (mid.symbol === from.symbol || mid.symbol === to.symbol || !mid.isThinForwarder) continue;
-    if (![...importedFiles].some((file) => pathsResolveSame(file, mid.file))) continue;
-    if (reachesSameNameTarget(db, mid, to, clusterMembers, hopsLeft - 1, visited)) return true;
-  }
-  return false;
+  return importedFiles;
 }
 
 /**

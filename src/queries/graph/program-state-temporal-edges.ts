@@ -42,6 +42,186 @@ export function programStateTemporalElementsForTopologyNodes(
   const frontiers = new Map<string, ExplorationFrontierGroup>();
   const blindSpots = new Set<string>();
 
+  const addParsedMutation = (
+    owner: ExplorationTopologyNode,
+    mutation: NonNullable<ReturnType<typeof sourceStateTemporalAnalysis>>['mutations'][number],
+  ): void => {
+    const event = topologySourceNode(owner, mutation.event);
+    const resource = topologyResourceNode(owner, mutation.resource, mutation.durabilityClass);
+    nodes.set(event.id, event);
+    nodes.set(resource.id, resource);
+    addOwnerEdge(edges, owner, event, 'contains-state-effect');
+    addEdge(edges, {
+      kind: 'state-resource',
+      from: event,
+      to: resource,
+      semantics: [
+        {
+          family: 'state',
+          subtype: mutation.operation === 'delete' ? 'deletes-resource' : 'writes-resource',
+          attributes: {
+            operation: mutation.operation,
+            durabilityClass: mutation.durabilityClass,
+            resource: mutation.resource.label,
+            recordIdentity: mutation.recordIdentity,
+            transactionMembership: 'unknown',
+          },
+        },
+      ],
+      method: 'parser-state-mutation',
+      identity: mutation.event.label,
+    });
+    if (mutation.value && mutation.dataSubtype) {
+      const value = topologySourceNode(owner, mutation.value);
+      nodes.set(value.id, value);
+      addEdge(edges, {
+        kind: 'data-to-state',
+        from: value,
+        to: resource,
+        semantics: [
+          {
+            family: 'data',
+            subtype: mutation.dataSubtype,
+            attributes: {
+              operation: mutation.operation,
+              resource: mutation.resource.label,
+              recordIdentity: mutation.recordIdentity,
+              value: mutation.value.label,
+            },
+          },
+        ],
+        method: 'parser-assignment-value',
+        identity: `${mutation.value.label} -> ${mutation.resource.label}`,
+      });
+    }
+  };
+
+  const addParsedTemporalFact = (
+    owner: ExplorationTopologyNode,
+    fact: NonNullable<ReturnType<typeof sourceStateTemporalAnalysis>>['temporal'][number],
+  ): void => {
+    const from = topologySourceNode(owner, fact.from);
+    const to = topologySourceNode(owner, fact.to);
+    nodes.set(from.id, from);
+    nodes.set(to.id, to);
+    addOwnerEdge(edges, owner, from, fact.from.kind === 'lock' ? 'contains-lock-scope' : 'contains-event');
+    addOwnerEdge(edges, owner, to, 'contains-event');
+    addEdge(edges, {
+      kind: 'temporal-order',
+      from,
+      to,
+      semantics: [
+        {
+          family: 'temporal',
+          subtype: fact.subtype,
+          context: fact.synchronizationScope ? { synchronizationScope: fact.synchronizationScope } : undefined,
+          attributes: { ...fact.attributes },
+        },
+      ],
+      method: fact.subtype === 'inside-lock-scope' ? 'parser-synchronized-scope' : 'parser-program-order',
+      identity: `${fact.from.label} -> ${fact.to.label}`,
+    });
+  };
+
+  const addUnsupportedConstruct = (
+    owner: ExplorationTopologyNode,
+    unsupported: NonNullable<ReturnType<typeof sourceStateTemporalAnalysis>>['unsupported'][number],
+    location: NonNullable<ExplorationTopologyNode['location']>,
+  ): void => {
+    const unsupportedNodeId = id(
+      `${unsupported.family}-unsupported`,
+      location.file,
+      String(unsupported.startLine),
+      String(unsupported.endLine),
+      unsupported.reason,
+    );
+    nodes.set(unsupportedNodeId, {
+      id: unsupportedNodeId,
+      kind: `${unsupported.family}-unsupported`,
+      label: unsupported.reason,
+      disposition: 'unsupported',
+      location: {
+        file: location.file,
+        line: unsupported.startLine,
+        endLine: unsupported.endLine,
+      },
+      anchorIds: [],
+      attributes: { ownerNodeId: owner.id },
+    });
+    const edgeId = id('edge', `${unsupported.family}-unsupported`, owner.id, unsupportedNodeId);
+    edges.set(edgeId, {
+      id: edgeId,
+      kind: `${unsupported.family}-unsupported`,
+      fromNodeId: owner.id,
+      toNodeId: unsupportedNodeId,
+      directed: true,
+      disposition: 'unsupported',
+      semantics: [{ family: unsupported.family, subtype: `unresolved-${unsupported.family}-construct` }],
+      evidence: [
+        {
+          method: `parser-${unsupported.family}-construct`,
+          strength: 'exact',
+          identity: unsupported.reason,
+          location: {
+            file: location.file,
+            line: unsupported.startLine,
+            endLine: unsupported.endLine,
+          },
+        },
+      ],
+    });
+    const frontierId = id('frontier', unsupported.family, unsupportedNodeId);
+    frontiers.set(frontierId, {
+      id: frontierId,
+      kind: unsupported.family,
+      direction: 'unresolved',
+      fromNodeIds: [owner.id],
+      edgeIds: [edgeId],
+      memberNodeIds: [unsupportedNodeId],
+      memberCount: 1,
+      disposition: 'unsupported',
+      reason: unsupported.reason,
+      expansion: null,
+    });
+  };
+  const collectRuntimeParticipants = (): void => {
+    for (const participant of topologyNodes.filter((node) => node.kind === 'runtime-boundary-participant')) {
+      const protocol = stringAttribute(participant, 'protocol');
+      const action = stringAttribute(participant, 'action');
+      const address = stringAttribute(participant, 'address') ?? participant.label;
+      if (!protocol || !action || !isStatefulRuntimeAction(protocol, action)) continue;
+      addRuntimeStateObservation(nodes, edges, participant, {
+        observationId: participant.id,
+        action,
+        strength: 'exact',
+        file: participant.location?.file ?? '',
+        line: participant.location?.line ?? 0,
+        address,
+        protocol,
+        role: stringAttribute(participant, 'role') ?? undefined,
+        resolution: 'locally-linked',
+      });
+    }
+  };
+  const collectRuntimeObservations = (): void => {
+    for (const observation of runtimeStateObservations) {
+      if (!observation.protocol || !isStatefulRuntimeAction(observation.protocol, observation.action)) continue;
+      const owner = mostSpecificOwner(
+        topologyNodes,
+        observation.file,
+        observation.line,
+        observation.ownerShortName ?? null,
+      );
+      if (!owner) {
+        blindSpots.add(
+          `State observation ${observation.observationId} at ${observation.file}:${observation.line + 1} has no materialized owner node.`,
+        );
+        continue;
+      }
+      addRuntimeStateObservation(nodes, edges, owner, observation);
+    }
+  };
+
   for (const owner of topologyNodes) {
     if (!owner.location || !['source-construct', 'symbol'].includes(owner.kind)) continue;
     const endLine = owner.location.endLine ?? owner.location.line;
@@ -53,174 +233,12 @@ export function programStateTemporalElementsForTopologyNodes(
       continue;
     }
 
-    for (const mutation of analysis.mutations) {
-      const event = topologySourceNode(owner, mutation.event);
-      const resource = topologyResourceNode(owner, mutation.resource, mutation.durabilityClass);
-      nodes.set(event.id, event);
-      nodes.set(resource.id, resource);
-      addOwnerEdge(edges, owner, event, 'contains-state-effect');
-      addEdge(edges, {
-        kind: 'state-resource',
-        from: event,
-        to: resource,
-        semantics: [
-          {
-            family: 'state',
-            subtype: mutation.operation === 'delete' ? 'deletes-resource' : 'writes-resource',
-            attributes: {
-              operation: mutation.operation,
-              durabilityClass: mutation.durabilityClass,
-              resource: mutation.resource.label,
-              recordIdentity: mutation.recordIdentity,
-              transactionMembership: 'unknown',
-            },
-          },
-        ],
-        method: 'parser-state-mutation',
-        identity: mutation.event.label,
-      });
-      if (mutation.value && mutation.dataSubtype) {
-        const value = topologySourceNode(owner, mutation.value);
-        nodes.set(value.id, value);
-        addEdge(edges, {
-          kind: 'data-to-state',
-          from: value,
-          to: resource,
-          semantics: [
-            {
-              family: 'data',
-              subtype: mutation.dataSubtype,
-              attributes: {
-                operation: mutation.operation,
-                resource: mutation.resource.label,
-                recordIdentity: mutation.recordIdentity,
-                value: mutation.value.label,
-              },
-            },
-          ],
-          method: 'parser-assignment-value',
-          identity: `${mutation.value.label} -> ${mutation.resource.label}`,
-        });
-      }
-    }
-
-    for (const fact of analysis.temporal) {
-      const from = topologySourceNode(owner, fact.from);
-      const to = topologySourceNode(owner, fact.to);
-      nodes.set(from.id, from);
-      nodes.set(to.id, to);
-      addOwnerEdge(edges, owner, from, fact.from.kind === 'lock' ? 'contains-lock-scope' : 'contains-event');
-      addOwnerEdge(edges, owner, to, 'contains-event');
-      addEdge(edges, {
-        kind: 'temporal-order',
-        from,
-        to,
-        semantics: [
-          {
-            family: 'temporal',
-            subtype: fact.subtype,
-            context: fact.synchronizationScope ? { synchronizationScope: fact.synchronizationScope } : undefined,
-            attributes: { ...fact.attributes },
-          },
-        ],
-        method: fact.subtype === 'inside-lock-scope' ? 'parser-synchronized-scope' : 'parser-program-order',
-        identity: `${fact.from.label} -> ${fact.to.label}`,
-      });
-    }
-
-    for (const unsupported of analysis.unsupported) {
-      const unsupportedNodeId = id(
-        `${unsupported.family}-unsupported`,
-        owner.location.file,
-        String(unsupported.startLine),
-        String(unsupported.endLine),
-        unsupported.reason,
-      );
-      nodes.set(unsupportedNodeId, {
-        id: unsupportedNodeId,
-        kind: `${unsupported.family}-unsupported`,
-        label: unsupported.reason,
-        disposition: 'unsupported',
-        location: {
-          file: owner.location.file,
-          line: unsupported.startLine,
-          endLine: unsupported.endLine,
-        },
-        anchorIds: [],
-        attributes: { ownerNodeId: owner.id },
-      });
-      const edgeId = id('edge', `${unsupported.family}-unsupported`, owner.id, unsupportedNodeId);
-      edges.set(edgeId, {
-        id: edgeId,
-        kind: `${unsupported.family}-unsupported`,
-        fromNodeId: owner.id,
-        toNodeId: unsupportedNodeId,
-        directed: true,
-        disposition: 'unsupported',
-        semantics: [{ family: unsupported.family, subtype: `unresolved-${unsupported.family}-construct` }],
-        evidence: [
-          {
-            method: `parser-${unsupported.family}-construct`,
-            strength: 'exact',
-            identity: unsupported.reason,
-            location: {
-              file: owner.location.file,
-              line: unsupported.startLine,
-              endLine: unsupported.endLine,
-            },
-          },
-        ],
-      });
-      const frontierId = id('frontier', unsupported.family, unsupportedNodeId);
-      frontiers.set(frontierId, {
-        id: frontierId,
-        kind: unsupported.family,
-        direction: 'unresolved',
-        fromNodeIds: [owner.id],
-        edgeIds: [edgeId],
-        memberNodeIds: [unsupportedNodeId],
-        memberCount: 1,
-        disposition: 'unsupported',
-        reason: unsupported.reason,
-        expansion: null,
-      });
-    }
+    for (const mutation of analysis.mutations) addParsedMutation(owner, mutation);
+    for (const fact of analysis.temporal) addParsedTemporalFact(owner, fact);
+    for (const unsupported of analysis.unsupported) addUnsupportedConstruct(owner, unsupported, owner.location);
   }
-
-  for (const participant of topologyNodes.filter((node) => node.kind === 'runtime-boundary-participant')) {
-    const protocol = stringAttribute(participant, 'protocol');
-    const action = stringAttribute(participant, 'action');
-    const address = stringAttribute(participant, 'address') ?? participant.label;
-    if (!protocol || !action || !isStatefulRuntimeAction(protocol, action)) continue;
-    addRuntimeStateObservation(nodes, edges, participant, {
-      observationId: participant.id,
-      action,
-      strength: 'exact',
-      file: participant.location?.file ?? '',
-      line: participant.location?.line ?? 0,
-      address,
-      protocol,
-      role: stringAttribute(participant, 'role') ?? undefined,
-      resolution: 'locally-linked',
-    });
-  }
-
-  for (const observation of runtimeStateObservations) {
-    if (!observation.protocol || !isStatefulRuntimeAction(observation.protocol, observation.action)) continue;
-    const owner = mostSpecificOwner(
-      topologyNodes,
-      observation.file,
-      observation.line,
-      observation.ownerShortName ?? null,
-    );
-    if (!owner) {
-      blindSpots.add(
-        `State observation ${observation.observationId} at ${observation.file}:${observation.line + 1} has no materialized owner node.`,
-      );
-      continue;
-    }
-    addRuntimeStateObservation(nodes, edges, owner, observation);
-  }
+  collectRuntimeParticipants();
+  collectRuntimeObservations();
 
   return {
     nodes: [...nodes.values()],

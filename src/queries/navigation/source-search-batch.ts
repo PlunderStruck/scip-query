@@ -98,11 +98,7 @@ function collectFileMatches(
 ): void {
   const matchingLineNumbers: number[] = [];
   for (let line = 0; line < lines.length; line += 1) {
-    const rawText = lines[line] ?? '';
-    const text = rawText.endsWith('\r') ? rawText.slice(0, -1) : rawText;
-    const matched = search.regexp
-      ? search.regexp.test(text)
-      : (opts.ignoreCase ? text.toLocaleLowerCase() : text).includes(search.literal);
+    const matched = sourceSearchLineMatches(search, lines[line] ?? '', opts.ignoreCase);
     if (matched) matchingLineNumbers.push(line);
   }
   if (matchingLineNumbers.length === 0) return;
@@ -115,24 +111,7 @@ function collectFileMatches(
       : [];
   const sourceCallables = getSourceFacts(db, relativePath)?.callables ?? [];
   for (const line of matchingLineNumbers) {
-    const owner = findEnclosingDefinition(definitions, line);
-    const callableOwner = smallestSourceCallableAtLine(sourceCallables, line);
-    const preciseCompilerOwner = owner && !isModuleLikeSymbol(owner.symbol) ? owner : null;
-    const enclosingStartLine = preciseCompilerOwner?.startLine ?? callableOwner?.startLine ?? owner?.startLine ?? line;
-    const enclosingEndLine = preciseCompilerOwner?.endLine ?? callableOwner?.endLine ?? owner?.endLine ?? line;
-    const focusedOwner = focusedSourceConstructRange(db, relativePath, line, enclosingStartLine, enclosingEndLine);
-    search.identities.push({
-      relativePath,
-      focusLine: line,
-      ownerSymbol: preciseCompilerOwner?.symbol ?? null,
-      ownerShort: preciseCompilerOwner
-        ? shortenSymbol(preciseCompilerOwner.symbol)
-        : (callableOwner?.name ?? (owner ? shortenSymbol(owner.symbol) : null)),
-      ownerStartLine: focusedOwner.startLine,
-      ownerEndLine: focusedOwner.endLine,
-      fileKind: classifyFile(relativePath),
-      freshness: file.freshness,
-    });
+    search.identities.push(sourceSearchIdentity(db, file, line, definitions, sourceCallables));
   }
   search.fileCoverage.push({
     relativePath,
@@ -140,6 +119,58 @@ function collectFileMatches(
     returnedMatches: 0,
     freshness: file.freshness,
   });
+}
+
+function sourceSearchLineMatches(
+  search: PreparedSourceSearch,
+  rawText: string,
+  ignoreCase: boolean | undefined,
+): boolean {
+  const text = rawText.endsWith('\r') ? rawText.slice(0, -1) : rawText;
+  if (search.regexp) return search.regexp.test(text);
+  return (ignoreCase ? text.toLocaleLowerCase() : text).includes(search.literal);
+}
+
+function sourceSearchIdentity(
+  db: ScipDatabase,
+  file: RepositoryTextFile,
+  line: number,
+  definitions: ReturnType<typeof getDefinitionsForFile>,
+  sourceCallables: NonNullable<ReturnType<typeof getSourceFacts>>['callables'],
+): SourceSearchIdentity {
+  const relativePath = file.relativePath;
+  const owner = findEnclosingDefinition(definitions, line);
+  const callableOwner = smallestSourceCallableAtLine(sourceCallables, line);
+  const preciseCompilerOwner = owner && !isModuleLikeSymbol(owner.symbol) ? owner : null;
+  const enclosingStartLine = sourceOwnerLine(
+    preciseCompilerOwner?.startLine,
+    callableOwner?.startLine,
+    owner?.startLine,
+    line,
+  );
+  const enclosingEndLine = sourceOwnerLine(preciseCompilerOwner?.endLine, callableOwner?.endLine, owner?.endLine, line);
+  const focusedOwner = focusedSourceConstructRange(db, relativePath, line, enclosingStartLine, enclosingEndLine);
+  return {
+    relativePath,
+    focusLine: line,
+    ownerSymbol: preciseCompilerOwner?.symbol ?? null,
+    ownerShort: preciseCompilerOwner
+      ? shortenSymbol(preciseCompilerOwner.symbol)
+      : (callableOwner?.name ?? (owner ? shortenSymbol(owner.symbol) : null)),
+    ownerStartLine: focusedOwner.startLine,
+    ownerEndLine: focusedOwner.endLine,
+    fileKind: classifyFile(relativePath),
+    freshness: file.freshness,
+  };
+}
+
+function sourceOwnerLine(
+  compilerLine: number | undefined,
+  callableLine: number | undefined,
+  ownerLine: number | undefined,
+  focusLine: number,
+): number {
+  return compilerLine ?? callableLine ?? ownerLine ?? focusLine;
 }
 
 function finalizeSourceSearch(

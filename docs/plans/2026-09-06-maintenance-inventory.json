@@ -1136,9 +1136,9 @@
           "name": "collectNextAnchorGraphRelationCandidates"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 10, cognitive 14.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/source/facts/source-type-containers.ts:buildTypeContainerMap",
@@ -1151,9 +1151,9 @@
           "name": "buildTypeContainerMap"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 4, cognitive 4.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/analysis/framework-patterns.ts:getJsTestExclusions",
@@ -1166,9 +1166,9 @@
           "name": "getJsTestExclusions"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 6, cognitive 5.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/domain/project-input-change-journal.ts:decodeProjectInputChangeJournal",
@@ -1181,9 +1181,9 @@
           "name": "decodeProjectInputChangeJournal"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 5, cognitive 4.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/platform/project-files.ts:probeProjectFileBytesForLiterals",
@@ -1196,9 +1196,9 @@
           "name": "probeProjectFileBytesForLiterals"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 9, cognitive 9.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/graph/program-state-temporal-edges.ts:programStateTemporalElementsForTopologyNodes",
@@ -1211,9 +1211,9 @@
           "name": "programStateTemporalElementsForTopologyNodes"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 9, cognitive 12.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/reindex/shared-generation-store.ts:touchExistingWorktreeLease",
@@ -1226,9 +1226,9 @@
           "name": "touchExistingWorktreeLease"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 4, cognitive 3.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/runtime/cli.ts:mayUseQueryServiceFastPath",
@@ -1241,9 +1241,9 @@
           "name": "mayUseQueryServiceFastPath"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 7, cognitive 1.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/runtime/query-commands/cleanup/handlers.ts:handleDead.<callback:budgetedDbCommand:1>",
@@ -1256,9 +1256,9 @@
           "name": "handleDead.<callback:budgetedDbCommand:1>"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 3, cognitive 2.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/semantic/typescript/ts-morph-provider.ts:TsMorphSemanticProvider.addHierarchyMemberReferences",
@@ -1271,9 +1271,9 @@
           "name": "TsMorphSemanticProvider.addHierarchyMemberReferences"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 5, cognitive 6.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/cleanup/cleanup-plan.ts:cleanupPlan",
@@ -1286,9 +1286,9 @@
           "name": "cleanupPlan"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 7, cognitive 8.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/analysis/runtime-boundaries/extractors.ts:httpExtractor.extract.<callback:visitDescendantsOfType:2>",
@@ -1301,9 +1301,9 @@
           "name": "httpExtractor.extract.<callback:visitDescendantsOfType:2>"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 10, cognitive 8.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/platform/verified-binary-fetch.ts:downloadVerifiedBinary",
@@ -1316,9 +1316,9 @@
           "name": "downloadVerifiedBinary"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 8, cognitive 7.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/cleanup/twin-drift.ts:reachesSameNameTarget",
@@ -1331,9 +1331,9 @@
           "name": "reachesSameNameTarget"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 6, cognitive 5.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/graph/system-map.ts:finalizeSystemMap",
@@ -1346,9 +1346,9 @@
           "name": "finalizeSystemMap"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 10, cognitive 6.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/reindex/shared-generation-store.ts:parseSharedGenerationManifest",
@@ -1376,9 +1376,9 @@
           "name": "decodeCliJsonEnvelope"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 7, cognitive 6.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/runtime/command-kit/command-execution.ts:printJsonEnvelope",
@@ -1391,9 +1391,9 @@
           "name": "printJsonEnvelope"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 10, cognitive 10.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/runtime/project-setup.ts:buildSetupSmokeTests",
@@ -1406,9 +1406,9 @@
           "name": "buildSetupSmokeTests"
         }
       ],
-      "status": "assessed-retained",
-      "assessment": "Reviewed the complete check ledger and human rendering. The conditions select pass/fail/unavailable for distinct setup results and readiness facts. The report explicitly prints each check basis; no CLI execution is claimed for readiness checks. Splitting each row into a separate helper would fragment this small ordered ledger without changing ownership. Retain the signal and the current owner; no suppression or threshold change.",
-      "verification": "Current source inspection plus 24 setup tests including fresh/missing language/index state, opt-out, failures, and explicit operation-result/readiness assertions. Repaired the independent missing-line ordering assertion; that former assertion is not used as evidence."
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 1, cognitive 0.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/internal/exploration-topology.ts:catalogExplorationRoutes",
@@ -1421,9 +1421,9 @@
           "name": "catalogExplorationRoutes"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 5, cognitive 4.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/runtime/query-commands/cleanup/handlers.ts:handleSliceCohesion.<callback:budgetedDbCommand:1>",
@@ -1451,9 +1451,9 @@
           "name": "truncateAtImplementationStart"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 5, cognitive 7.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/internal/connected-behavior.ts:behaviorForNode",
@@ -1466,9 +1466,9 @@
           "name": "behaviorForNode"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 7, cognitive 4.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/internal/connected-behavior.ts:focusLinesForNode",
@@ -1481,9 +1481,9 @@
           "name": "focusLinesForNode"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 10, cognitive 11.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/internal/exploration-topology.ts:selectExplorationTopology",
@@ -1496,9 +1496,9 @@
           "name": "selectExplorationTopology"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 10, cognitive 7.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/reindex/index.ts:reindex",
@@ -1511,9 +1511,9 @@
           "name": "reindex"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 9, cognitive 8.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/runtime/source-emission-session.ts:validPersistedRange",
@@ -1526,9 +1526,9 @@
           "name": "validPersistedRange"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 6, cognitive 3.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/internal/next-anchor-candidates.ts:sourceRangeNextAnchorPacket",
@@ -1556,9 +1556,9 @@
           "name": "inflightClaims"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 5, cognitive 6.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/symbols/graph/member-call-targets.ts:factoryCallbackMemberTargets",
@@ -1571,9 +1571,9 @@
           "name": "factoryCallbackMemberTargets"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 5, cognitive 5.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/platform/process-file-lock.ts:parseProcessFileLockRecord",
@@ -1586,9 +1586,9 @@
           "name": "parseProcessFileLockRecord"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 9, cognitive 7.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/cleanup/recent-duplicates.ts:orientRecentDuplicate",
@@ -1601,9 +1601,9 @@
           "name": "orientRecentDuplicate"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 10, cognitive 6.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/cleanup/similar.ts:classifySimilarityEvidence",
@@ -1616,9 +1616,9 @@
           "name": "classifySimilarityEvidence"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 10, cognitive 8.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/impact/context.ts:repositoryContext",
@@ -1631,9 +1631,9 @@
           "name": "repositoryContext"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 9, cognitive 3.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/internal/causal-corridor.ts:isClosureEdge.<callback:(edge.semantics ?? []).some:0>",
@@ -1646,9 +1646,9 @@
           "name": "isClosureEdge.<callback:(edge.semantics ?? []).some:0>"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 1, cognitive 0.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/reindex/index.ts:prepareIndexerRun",
@@ -1661,9 +1661,9 @@
           "name": "prepareIndexerRun"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 7, cognitive 6.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/reindex/reindex-activity.ts:parseReindexActivityRecord",
@@ -1676,9 +1676,9 @@
           "name": "parseReindexActivityRecord"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 9, cognitive 9.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/runtime/config.ts:validateWatchConfig",
@@ -1691,9 +1691,9 @@
           "name": "validateWatchConfig"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 2, cognitive 1.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/analysis/git-history.ts:coChangePairsFromHistory",
@@ -1706,9 +1706,9 @@
           "name": "coChangePairsFromHistory"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 10, cognitive 12.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:scripts/benchmark-query-service.ts:parseBenchmarkCommand",
@@ -1721,9 +1721,9 @@
           "name": "parseBenchmarkCommand"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 4, cognitive 3.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:scripts/score-detector-labels.ts:rowIdentity",
@@ -1736,9 +1736,9 @@
           "name": "rowIdentity"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 5, cognitive 1.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/analysis/runtime-boundaries/object-members.ts:resolveMember",
@@ -1751,9 +1751,9 @@
           "name": "resolveMember"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 1, cognitive 0.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/graph/system-map.ts:systemMapLiteralMatches",
@@ -1781,9 +1781,9 @@
           "name": "buildRepositoryContextSourcePacket"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 2, cognitive 1.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/internal/causal-corridor.ts:isTraversableEdge.<callback:(edge.semantics ?? []).some:0>",
@@ -1796,9 +1796,9 @@
           "name": "isTraversableEdge.<callback:(edge.semantics ?? []).some:0>"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 3, cognitive 2.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/navigation/source-search-batch.ts:collectFileMatches",
@@ -1811,9 +1811,9 @@
           "name": "collectFileMatches"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 9, cognitive 7.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/reindex/typescript-overlay-store.ts:parseOverlayManifest",
@@ -1826,9 +1826,9 @@
           "name": "parseOverlayManifest"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 3, cognitive 3.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/runtime/config.ts:validateIndexerAndSemanticConfig",
@@ -1856,9 +1856,9 @@
           "name": "executeRequest"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 2, cognitive 1.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/semantic/symbol-evidence.ts:materializeSemanticCalleeCache.<callback:profileSpan:1>",
@@ -1871,9 +1871,9 @@
           "name": "materializeSemanticCalleeCache.<callback:profileSpan:1>"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts. Current target metrics: cyclomatic 1, cognitive 0.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/semantic/typescript/session-protocol.ts:parseTypeScriptSemanticEnvelope",
@@ -3806,9 +3806,9 @@
           "name": "finalizeSystemMap.boundaryFrontiers.<callback:(runtimeBoundaries?.frontiers ?? [])\n    .flatMap:0>"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Separated validation, evidence selection, traversal, rendering or resource lifecycle responsibilities while preserving existing decisions, output ordering, bounds, identity and failure handling. See the ranked cleanup plan and worker checkpoints for target-specific contracts.",
+      "verification": "First parallel complexity wave: 3167 full-suite tests / 353 files passed; build, source types, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), consumer compilation and skill links passed. Accounted source review: 46 resolved findings, no introduced/worsened findings. Fresh source health: 563/563 files, 12,662 functions, 568 complexity findings, no other finding rules. Fresh indexed diff impact: 201 changed symbols across 38 indexed files, 39 affected files. No source-matched test-coverage artifact; no CRAP claim."
     },
     {
       "id": "complexity:src/queries/impact/incomplete-migration.ts:incompleteMigration",

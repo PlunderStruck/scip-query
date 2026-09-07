@@ -81,40 +81,57 @@ export function materializeSemanticCalleeCache(
     );
   }
 
+  function scanFileCache(relativePath: string, fileDefinitions: Array<IndexedDefinition | SymbolMatch>): void {
+    if (!semanticProviderLanguageForPath(relativePath)) {
+      if (profiling) skippedUnsupportedLanguage += fileDefinitions.length;
+      return;
+    }
+    const source = getSourceText(db, relativePath);
+    if (!source) {
+      if (profiling) sourceMissing += fileDefinitions.length;
+      unkeyed.push(...fileDefinitions);
+      return;
+    }
+    const contentHash = fileContentHash(db, relativePath, source);
+    const depsDigest = semanticCalleeDepsDigest(db, relativePath);
+    if (!depsDigest) {
+      unkeyed.push(...fileDefinitions);
+      return;
+    }
+    const cachedBySymbol = readCachedSemanticCalleesForFile(db, relativePath, contentHash, depsDigest);
+    scanCachedDefinitions(fileDefinitions, cachedBySymbol, contentHash, depsDigest);
+  }
+
+  function scanCachedDefinitions(
+    fileDefinitions: Array<IndexedDefinition | SymbolMatch>,
+    cachedBySymbol: ReturnType<typeof readCachedSemanticCalleesForFile>,
+    contentHash: string,
+    depsDigest: string,
+  ): void {
+    for (const def of fileDefinitions) {
+      const cached = cachedBySymbol.get(def.symbol) ?? null;
+      if (useCachedCallees(def, cached)) continue;
+      misses.push({ def, contentHash, depsDigest });
+    }
+  }
+
+  function useCachedCallees(def: IndexedDefinition | SymbolMatch, cached: string | null): boolean {
+    if (cached === null) return false;
+    const callees = parseCachedCallees(cached);
+    if (!callees) {
+      if (profiling) parseFailures += 1;
+      return false;
+    }
+    if (profiling) cacheHits += 1;
+    if (callees.length > 0) result.set(def.symbolId, callees);
+    return true;
+  }
+
   profileSpan(
     'semantic.callees.cache-scan',
     () => {
       for (const [relativePath, fileDefinitions] of semanticDefinitionsByFile(prefetched.misses)) {
-        if (!semanticProviderLanguageForPath(relativePath)) {
-          if (profiling) skippedUnsupportedLanguage += fileDefinitions.length;
-          continue;
-        }
-        const source = getSourceText(db, relativePath);
-        if (!source) {
-          if (profiling) sourceMissing += fileDefinitions.length;
-          unkeyed.push(...fileDefinitions);
-          continue;
-        }
-        const contentHash = fileContentHash(db, relativePath, source);
-        const depsDigest = semanticCalleeDepsDigest(db, relativePath);
-        if (!depsDigest) {
-          unkeyed.push(...fileDefinitions);
-          continue;
-        }
-        const cachedBySymbol = readCachedSemanticCalleesForFile(db, relativePath, contentHash, depsDigest);
-        for (const def of fileDefinitions) {
-          const cached = cachedBySymbol.get(def.symbol) ?? null;
-          if (cached !== null) {
-            const callees = parseCachedCallees(cached);
-            if (callees) {
-              if (profiling) cacheHits += 1;
-              if (callees.length > 0) result.set(def.symbolId, callees);
-              continue;
-            }
-            if (profiling) parseFailures += 1;
-          }
-          misses.push({ def, contentHash, depsDigest });
-        }
+        scanFileCache(relativePath, fileDefinitions);
       }
     },
     () => ({

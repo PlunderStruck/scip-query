@@ -61,35 +61,49 @@ export interface LabelScore {
   unlabeledRows: number;
 }
 
+type RowText = (key: string) => string | null;
+
+function pairRowIdentity(text: RowText): string | null {
+  const left = `${text('fileA') ?? ''}#${text('componentA') ?? text('symbolA') ?? ''}`;
+  const right = `${text('fileB') ?? ''}#${text('componentB') ?? text('symbolB') ?? ''}`;
+  if (left === '#' || right === '#') return null;
+  return [left, right].sort().join('|');
+}
+
+function filePairRowIdentity(text: RowText): string | null {
+  const left = text('fileA');
+  const right = text('fileB');
+  return left && right ? [left, right].sort().join('|') : null;
+}
+
+function symbolRowIdentity(text: RowText): string | null {
+  const file = text('file') ?? text('relativePath');
+  const name = text('shortName') ?? text('symbol') ?? text('component');
+  return file && name ? `${file}#${name}` : null;
+}
+
+function groupRowIdentity(text: RowText, row: Record<string, unknown>): string | null {
+  const leaf = text('leaf') ?? text('hash');
+  const members = (row['members'] ?? row['functions']) as Array<{ file?: string }> | undefined;
+  if (!leaf || !Array.isArray(members)) return null;
+  const files = members
+    .map((member) => member.file)
+    .filter((file): file is string => typeof file === 'string')
+    .sort();
+  return `${leaf}|${files.join(',')}`;
+}
+
 export function rowIdentity(identity: DetectorLabelSet['identity'], row: Record<string, unknown>): string | null {
-  const text = (key: string): string | null => (typeof row[key] === 'string' ? (row[key] as string) : null);
+  const text: RowText = (key) => (typeof row[key] === 'string' ? (row[key] as string) : null);
   switch (identity) {
-    case 'pair': {
-      const left = `${text('fileA') ?? ''}#${text('componentA') ?? text('symbolA') ?? ''}`;
-      const right = `${text('fileB') ?? ''}#${text('componentB') ?? text('symbolB') ?? ''}`;
-      if (left === '#' || right === '#') return null;
-      return [left, right].sort().join('|');
-    }
-    case 'file-pair': {
-      const left = text('fileA');
-      const right = text('fileB');
-      return left && right ? [left, right].sort().join('|') : null;
-    }
-    case 'symbol': {
-      const file = text('file') ?? text('relativePath');
-      const name = text('shortName') ?? text('symbol') ?? text('component');
-      return file && name ? `${file}#${name}` : null;
-    }
-    case 'group': {
-      const leaf = text('leaf') ?? text('hash');
-      const members = (row['members'] ?? row['functions']) as Array<{ file?: string }> | undefined;
-      if (!leaf || !Array.isArray(members)) return null;
-      const files = members
-        .map((member) => member.file)
-        .filter((file): file is string => typeof file === 'string')
-        .sort();
-      return `${leaf}|${files.join(',')}`;
-    }
+    case 'pair':
+      return pairRowIdentity(text);
+    case 'file-pair':
+      return filePairRowIdentity(text);
+    case 'symbol':
+      return symbolRowIdentity(text);
+    case 'group':
+      return groupRowIdentity(text, row);
   }
 }
 

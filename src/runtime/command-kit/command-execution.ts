@@ -416,63 +416,83 @@ function budgetedContextAnalysisBudget(ctx: CommandContext): AnalysisBudgetDiscl
   return budget?.analysisBudget;
 }
 
+interface JsonEnvelopeExtras {
+  analysisBudget?: AnalysisBudgetDisclosure;
+  coverage?: InvocationCoverage;
+  agentResult?: unknown;
+  resultSchemaVersion?: number;
+  resultOnly?: unknown;
+  observationReceipt?: ObservationReceiptV2;
+}
+
+function jsonEnvelopeOperationRole(
+  command: string,
+  contract: ReturnType<typeof commandAgentContractById.get>,
+  args: readonly unknown[],
+  options: CommandOptions,
+): CommandOperationRole | undefined {
+  const declared = contract ? resolveCommandOperationRole(contract.operation, { args, options }) : undefined;
+  const selected = commandOperationStorage.getStore();
+  if (selected !== undefined && declared !== undefined && selected !== declared) {
+    throw new Error(
+      `Command ${command} changed operation role during execution: selected ${selected}, rendered ${declared}.`,
+    );
+  }
+  return selected ?? declared;
+}
+
+function jsonEnvelopeCoverage(
+  contract: ReturnType<typeof commandAgentContractById.get>,
+  result: unknown,
+  extra: JsonEnvelopeExtras,
+): InvocationCoverage | undefined {
+  const resolution = invocationResolutionCoverage(result);
+  const base = extra.coverage ?? defaultInvocationCoverage(contract, result, extra.analysisBudget);
+  const coverage = base && resolution && !base.resolution ? { ...base, resolution } : base;
+  if (coverage) validateInvocationCoverage(coverage);
+  return coverage;
+}
+
+function jsonResultOnly(result: unknown, extra: JsonEnvelopeExtras, agentOutput: boolean): unknown {
+  if (agentOutput && extra.agentResult !== undefined) return extra.agentResult;
+  return Object.hasOwn(extra, 'resultOnly') ? extra.resultOnly : result;
+}
+
+function jsonEnvelopeEvidenceFields(
+  operationRole: CommandOperationRole | undefined,
+  evidence: CommandEvidenceTier | undefined,
+  analysisBudget: AnalysisBudgetDisclosure | undefined,
+) {
+  return {
+    ...(operationRole ? { operationRole } : {}),
+    ...(evidence ? { evidence } : {}),
+    ...(analysisBudget ? { analysisBudget } : {}),
+  };
+}
+
 export function printJsonEnvelope(
   command: string,
   args: readonly unknown[],
   options: CommandOptions,
   result: unknown,
-  extra: {
-    analysisBudget?: AnalysisBudgetDisclosure;
-    coverage?: InvocationCoverage;
-    agentResult?: unknown;
-    resultSchemaVersion?: number;
-    resultOnly?: unknown;
-    observationReceipt?: ObservationReceiptV2;
-  } = {},
+  extra: JsonEnvelopeExtras = {},
 ): void {
   const evidence = commandEvidenceById.get(command);
   const contract = commandAgentContractById.get(command);
   const claimContract = commandClaimContractById.get(command);
-  const declaredOperationRole = contract
-    ? resolveCommandOperationRole(contract.operation, { args, options })
-    : undefined;
-  const selectedOperationRole = commandOperationStorage.getStore();
-  if (
-    selectedOperationRole !== undefined &&
-    declaredOperationRole !== undefined &&
-    selectedOperationRole !== declaredOperationRole
-  ) {
-    throw new Error(
-      `Command ${command} changed operation role during execution: selected ${selectedOperationRole}, rendered ${declaredOperationRole}.`,
-    );
-  }
-  const operationRole = selectedOperationRole ?? declaredOperationRole;
-  const resolution = invocationResolutionCoverage(result);
-  const baseCoverage = extra.coverage ?? defaultInvocationCoverage(contract, result, extra.analysisBudget);
-  const coverage =
-    baseCoverage && resolution && !baseCoverage.resolution ? { ...baseCoverage, resolution } : baseCoverage;
-  if (coverage) validateInvocationCoverage(coverage);
+  const operationRole = jsonEnvelopeOperationRole(command, contract, args, options);
+  const coverage = jsonEnvelopeCoverage(contract, result, extra);
   const agentOutput = booleanOptionValue(options, 'agentOutput');
   const projectedResult = agentOutput && extra.agentResult !== undefined ? extra.agentResult : result;
   if (booleanOptionValue(options, 'resultOnly')) {
-    const resultOnly = agentOutput
-      ? extra.agentResult !== undefined
-        ? extra.agentResult
-        : Object.hasOwn(extra, 'resultOnly')
-          ? extra.resultOnly
-          : result
-      : Object.hasOwn(extra, 'resultOnly')
-        ? extra.resultOnly
-        : result;
+    const resultOnly = jsonResultOnly(result, extra, agentOutput);
     writeSerializedJson(JSON.stringify(resultOnly, null, booleanOptionValue(options, 'compact') ? 0 : 2));
     return;
   }
   const envelope = createCliJsonEnvelope({
     producerVersion: cliVersion,
     command,
-    ...(operationRole ? { operationRole } : {}),
-    ...(evidence ? { evidence } : {}),
-    ...(extra.analysisBudget ? { analysisBudget: extra.analysisBudget } : {}),
+    ...jsonEnvelopeEvidenceFields(operationRole, evidence, extra.analysisBudget),
     args: jsonPositionals(args),
     options,
     result: projectedResult,

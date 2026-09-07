@@ -49,58 +49,52 @@ function resolveMember(
   depth: number,
   seen: Set<string>,
 ): IndexedDefinition[] {
-  const results: IndexedDefinition[] = [];
-  for (const object of resolveObject(db, sourceFile, base, depth + 1, new Set(seen))) {
-    const initializer = unwrapExpression(object.initializer);
-    for (const child of initializer.namedChildren) {
-      if (child.type === 'pair') {
-        const key = child.childForFieldName('key') ?? child.namedChild(0);
-        if (propertyName(key) !== member) continue;
-        const value = child.childForFieldName('value') ?? child.namedChild(1);
-        if (value)
-          results.push(
-            ...resolveExpression(
-              db,
-              object.definition.relativePath,
-              compactExpression(value.text),
-              depth + 1,
-              new Set(seen),
-            ),
-          );
-        continue;
-      }
-      if (/(?:method|function)/u.test(child.type)) {
-        const name = child.childForFieldName('name') ?? child.namedChild(0);
-        if (name?.text !== member) continue;
-        const indexed = definitionsCoveringNode(db, object.definition.relativePath, member, child);
-        results.push(...(indexed.length > 0 ? indexed : [sourceCallableDefinition(object.definition, member, child)]));
-        continue;
-      }
-      if (child.type === 'spread_element') {
-        const spread = child.namedChild(0);
-        if (!spread) continue;
-        for (const spreadObject of resolveObject(
-          db,
-          object.definition.relativePath,
-          compactExpression(spread.text),
-          depth + 1,
-          new Set(seen),
-        )) {
-          results.push(
-            ...resolveMember(
-              db,
-              spreadObject.definition.relativePath,
-              spreadObject.definition.leaf,
-              member,
-              depth + 1,
-              new Set(seen),
-            ),
-          );
-        }
-      }
-    }
-  }
+  const results = resolveObject(db, sourceFile, base, depth + 1, new Set(seen)).flatMap((object) =>
+    unwrapExpression(object.initializer).namedChildren.flatMap((child) =>
+      resolveObjectMemberChild(db, object.definition, child, member, depth, seen),
+    ),
+  );
   return deduplicateDefinitions(results);
+}
+
+function resolveObjectMemberChild(
+  db: ScipDatabase,
+  owner: IndexedDefinition,
+  child: SyntaxNode,
+  member: string,
+  depth: number,
+  seen: Set<string>,
+): IndexedDefinition[] {
+  if (child.type === 'pair') {
+    const key = child.childForFieldName('key') ?? child.namedChild(0);
+    if (propertyName(key) !== member) return [];
+    const value = child.childForFieldName('value') ?? child.namedChild(1);
+    return value
+      ? resolveExpression(db, owner.relativePath, compactExpression(value.text), depth + 1, new Set(seen))
+      : [];
+  }
+  if (/(?:method|function)/u.test(child.type)) {
+    return resolveMethodMember(db, owner, child, member);
+  }
+  if (child.type !== 'spread_element') return [];
+  const spread = child.namedChild(0);
+  if (!spread) return [];
+  return resolveObject(db, owner.relativePath, compactExpression(spread.text), depth + 1, new Set(seen)).flatMap(
+    (object) =>
+      resolveMember(db, object.definition.relativePath, object.definition.leaf, member, depth + 1, new Set(seen)),
+  );
+}
+
+function resolveMethodMember(
+  db: ScipDatabase,
+  owner: IndexedDefinition,
+  child: SyntaxNode,
+  member: string,
+): IndexedDefinition[] {
+  const name = child.childForFieldName('name') ?? child.namedChild(0);
+  if (name?.text !== member) return [];
+  const indexed = definitionsCoveringNode(db, owner.relativePath, member, child);
+  return indexed.length > 0 ? indexed : [sourceCallableDefinition(owner, member, child)];
 }
 
 function sourceCallableDefinition(owner: IndexedDefinition, leaf: string, node: SyntaxNode): IndexedDefinition {

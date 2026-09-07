@@ -205,55 +205,69 @@ async function processRequests(
   return processed;
 }
 
-async function executeRequest(
-  db: ReturnType<typeof openProjectDb>,
-  request: QueryServiceEnvelope['request'],
-): Promise<unknown> {
-  if (request.kind === 'source-search') return searchSource(db, request.pattern, request.options);
-  if (request.kind === 'outline') return outline(db, request.filePattern);
-  if (request.kind === 'entrypoints') {
+type ServiceRequest = QueryServiceEnvelope['request'];
+type ServiceDatabase = ReturnType<typeof openProjectDb>;
+type ServiceRequestHandlers = {
+  [Kind in ServiceRequest['kind']]: (
+    db: ServiceDatabase,
+    request: Extract<ServiceRequest, { kind: Kind }>,
+  ) => Promise<unknown>;
+};
+
+const serviceRequestHandlers = {
+  'source-search': async (db, request) => {
+    return searchSource(db, request.pattern, request.options);
+  },
+  outline: async (db, request) => {
+    return outline(db, request.filePattern);
+  },
+  entrypoints: async (db, request) => {
     const { entryPoints } = await import('../queries/service-queries.js');
     return entryPoints(db, request.options);
-  }
-  if (request.kind === 'files') {
+  },
+  files: async (db, request) => {
     const { files } = await import('../queries/navigation/files.js');
     return files(db, request.pattern);
-  }
-  if (request.kind === 'stats') {
+  },
+  stats: async (db) => {
     const { stats } = await import('../queries/navigation/stats.js');
     return stats(db);
-  }
-  if (request.kind === 'members') {
+  },
+  members: async (db, request) => {
     const [{ members }, { symbolResolutionJson }] = await Promise.all([
       import('../queries/navigation/members.js'),
       import('../queries/navigation/code-result-json.js'),
     ]);
     return { ...symbolResolutionJson(db, request.symbolPattern), members: members(db, request.symbolPattern) };
-  }
-  if (request.kind === 'methods') {
+  },
+  methods: async (db, request) => {
     const { resolveMethods } = await import('../queries/navigation/methods.js');
     return resolveMethods(db, { className: request.className });
-  }
-  if (request.kind === 'file-dependencies') {
+  },
+  'file-dependencies': async (db, request) => {
     const { deps, rdeps } = await import('../queries/navigation/deps.js');
     return request.direction === 'outgoing' ? deps(db, request.filePattern) : rdeps(db, request.filePattern);
-  }
-  if (request.kind === 'imported-by') {
+  },
+  'imported-by': async (db, request) => {
     const { importedBy } = await import('../queries/navigation/imports.js');
     return importedBy(db, request.symbolPattern);
-  }
-  if (request.kind === 'hierarchy') {
+  },
+  hierarchy: async (db, request) => {
     const [{ hierarchy }, { withSymbolResolutionJson }] = await Promise.all([
       import('../queries/navigation/hierarchy.js'),
       import('../queries/navigation/code-result-json.js'),
     ]);
     return withSymbolResolutionJson(db, request.symbolPattern, hierarchy(db, request.symbolPattern), 'hierarchy');
-  }
-  if (request.kind === 'by-kind' || request.kind === 'kind-counts') {
-    const { byKind, kindCounts } = await import('../queries/navigation/by-kind.js');
-    return request.kind === 'by-kind' ? byKind(db, request.kindQuery) : kindCounts(db);
-  }
-  if (request.kind === 'refs') {
+  },
+  'by-kind': async (db, request) => {
+    const { byKind } = await import('../queries/navigation/by-kind.js');
+    return byKind(db, request.kindQuery);
+  },
+  'kind-counts': async (db) => {
+    const { kindCounts } = await import('../queries/navigation/by-kind.js');
+    return kindCounts(db);
+  },
+  refs: async (db, request) => {
     const [{ refs }, { compareReferenceKey }, { withSymbolResolutionJson }] = await Promise.all([
       import('../queries/navigation/refs.js'),
       import('./refs-pagination.js'),
@@ -265,8 +279,8 @@ async function executeRequest(
       ...withSymbolResolutionJson(db, request.symbolPattern, rows, 'references'),
       pagination: { cursorVersion: 2, producer: 'complete-only', semanticEnrichment: semantic },
     };
-  }
-  if (request.kind === 'dependence-slice') {
+  },
+  'dependence-slice': async (db, request) => {
     const cached = cachedSerializedResult(db, request.kind, request.criterion);
     if (cached) return cached;
     const { dependenceSlice } = await import('../queries/service-queries.js');
@@ -277,8 +291,8 @@ async function executeRequest(
     };
     retainSerializedResult(db, request.kind, request.criterion, result);
     return result;
-  }
-  if (request.kind === 'call-graph') {
+  },
+  'call-graph': async (db, request) => {
     const [{ callGraph }, { symbolResolutionJson }] = await Promise.all([
       import('../queries/navigation/call-graph.js'),
       import('../queries/navigation/code-result-json.js'),
@@ -291,16 +305,16 @@ async function executeRequest(
       serializedJson,
       sha256: createHash('sha256').update(serializedJson).digest('hex'),
     };
-  }
-  if (request.kind === 'imports') {
+  },
+  imports: async (db, request) => {
     const { imports } = await import('../queries/navigation/imports.js');
     return imports(db, request.filePattern, { semantic: defaultSemanticEnrichment(db) });
-  }
-  if (request.kind === 'unused-imports') {
+  },
+  'unused-imports': async (db, request) => {
     const { unusedImports } = await import('../queries/navigation/imports.js');
     return unusedImports(db, request.filePattern, { semantic: defaultSemanticEnrichment(db) });
-  }
-  if (request.kind === 'system') {
+  },
+  system: async (db, request) => {
     const cached = cachedSerializedResult(db, request.kind, request.modulePattern);
     if (cached) return cached;
     const { system } = await import('../queries/navigation/system.js');
@@ -311,21 +325,33 @@ async function executeRequest(
     };
     retainSerializedResult(db, request.kind, request.modulePattern, result);
     return result;
-  }
-  if (request.kind === 'surface') {
+  },
+  surface: async (db, request) => {
     const { consumerSurface } = await import('../queries/navigation/surface.js');
     return consumerSurface(db, request.modulePattern);
-  }
-  const [{ codeBatch }, { codeBatchResultOnlyJsonForSelectors }] = await Promise.all([
-    import('../queries/navigation/code.js'),
-    import('../queries/navigation/code-result-json.js'),
-  ]);
-  const result = codeBatch(db, request.selectors, request.options);
-  const serializedJson = JSON.stringify(codeBatchResultOnlyJsonForSelectors(db, request.selectors, result));
-  return {
-    serializedJson,
-    sha256: createHash('sha256').update(serializedJson).digest('hex'),
-  };
+  },
+  code: async (db, request) => {
+    const [{ codeBatch }, { codeBatchResultOnlyJsonForSelectors }] = await Promise.all([
+      import('../queries/navigation/code.js'),
+      import('../queries/navigation/code-result-json.js'),
+    ]);
+    const result = codeBatch(db, request.selectors, request.options);
+    const serializedJson = JSON.stringify(codeBatchResultOnlyJsonForSelectors(db, request.selectors, result));
+    return {
+      serializedJson,
+      sha256: createHash('sha256').update(serializedJson).digest('hex'),
+    };
+  },
+} satisfies ServiceRequestHandlers;
+
+async function executeRequest(db: ServiceDatabase, request: ServiceRequest): Promise<unknown> {
+  // The selected key and request discriminator identify the same handler input.
+  const handler = (
+    Object.hasOwn(serviceRequestHandlers, request.kind)
+      ? serviceRequestHandlers[request.kind]
+      : serviceRequestHandlers.code
+  ) as (db: ServiceDatabase, request: ServiceRequest) => Promise<unknown>;
+  return handler(db, request);
 }
 
 const semanticEnrichmentByDb = new WeakMap<object, boolean>();

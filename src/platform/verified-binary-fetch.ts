@@ -204,22 +204,7 @@ async function downloadVerifiedBinary(
   controller: AbortController,
   maxBytes: number,
 ): Promise<VerifiedBinaryFetchResult> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
-  let response: Response;
-  try {
-    response = await raceWithAbort(fetchImpl(opts.url, { signal: controller.signal }), controller.signal);
-  } catch (error) {
-    if (controller.signal.aborted) throw abortReason(controller.signal, opts.url);
-    throw new VerifiedBinaryFetchError('stream', `failed to download ${opts.url}: ${errorMessage(error)}`, {
-      cause: error,
-    });
-  }
-  if (!response.ok) {
-    const error = new VerifiedBinaryFetchError('http', `failed to download ${opts.url}: HTTP ${response.status}`);
-    controller.abort(error);
-    throw error;
-  }
-
+  const response = await fetchBinaryResponse(opts, controller);
   const declaredBytes = declaredContentLength(response, maxBytes, opts.url);
   if (!response.body) {
     throw new VerifiedBinaryFetchError('stream', `downloaded ${opts.url} response has no readable body`);
@@ -231,41 +216,7 @@ async function downloadVerifiedBinary(
   try {
     fd = openSync(tmpPath, 'wx', 0o600);
     stagingOwned = true;
-    const reader = response.body.getReader();
-    const digest = createHash('sha256');
-    let observedBytes = 0;
-    while (true) {
-      const { done, value } = await raceWithAbort(reader.read(), controller.signal);
-      if (done) break;
-      if (!(value instanceof Uint8Array)) {
-        throw new VerifiedBinaryFetchError('stream', `downloaded ${opts.url} produced a non-byte stream chunk`);
-      }
-      observedBytes += value.byteLength;
-      if (observedBytes > maxBytes || (declaredBytes !== undefined && observedBytes > declaredBytes)) {
-        const error = new VerifiedBinaryFetchError(
-          'length',
-          `downloaded ${opts.url} exceeded its ${declaredBytes ?? maxBytes} byte limit`,
-        );
-        controller.abort(error);
-        throw error;
-      }
-      const chunk = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
-      digest.update(chunk);
-      writeFileCompletely(fd, chunk, { writeFile: opts.writeImpl ?? writeSync }, 'verified binary staging');
-    }
-    if (declaredBytes !== undefined && observedBytes !== declaredBytes) {
-      throw new VerifiedBinaryFetchError(
-        'length',
-        `downloaded ${opts.url} length mismatch: declared ${declaredBytes} bytes, received ${observedBytes}`,
-      );
-    }
-    const actualSha256 = digest.digest('hex');
-    if (actualSha256 !== opts.expectedSha256) {
-      throw new VerifiedBinaryFetchError(
-        'checksum',
-        `downloaded ${opts.url} checksum mismatch: expected ${opts.expectedSha256}, got ${actualSha256}`,
-      );
-    }
+    const actualSha256 = await streamVerifiedBinary(response.body, fd, opts, controller, maxBytes, declaredBytes);
     closeSync(fd);
     fd = undefined;
     try {
@@ -284,20 +235,100 @@ async function downloadVerifiedBinary(
       cause: error,
     });
   } finally {
-    if (fd !== undefined) {
-      try {
-        closeSync(fd);
-      } catch {
-        // The write failure may already have invalidated the descriptor.
-      }
+    cleanupStagedBinary(fd, tmpPath, stagingOwned);
+  }
+}
+
+async function fetchBinaryResponse(opts: VerifiedBinaryFetchOptions, controller: AbortController): Promise<Response> {
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  let response: Response;
+  try {
+    response = await raceWithAbort(fetchImpl(opts.url, { signal: controller.signal }), controller.signal);
+  } catch (error) {
+    if (controller.signal.aborted) throw abortReason(controller.signal, opts.url);
+    throw new VerifiedBinaryFetchError('stream', `failed to download ${opts.url}: ${errorMessage(error)}`, {
+      cause: error,
+    });
+  }
+  if (!response.ok) {
+    const error = new VerifiedBinaryFetchError('http', `failed to download ${opts.url}: HTTP ${response.status}`);
+    controller.abort(error);
+    throw error;
+  }
+
+  return response;
+}
+
+function assertDownloadedByteLimit(
+  observedBytes: number,
+  declaredBytes: number | undefined,
+  maxBytes: number,
+  url: string,
+  controller: AbortController,
+): void {
+  if (observedBytes > maxBytes || (declaredBytes !== undefined && observedBytes > declaredBytes)) {
+    const error = new VerifiedBinaryFetchError(
+      'length',
+      `downloaded ${url} exceeded its ${declaredBytes ?? maxBytes} byte limit`,
+    );
+    controller.abort(error);
+    throw error;
+  }
+}
+
+async function streamVerifiedBinary(
+  body: NonNullable<Response['body']>,
+  fd: number,
+  opts: VerifiedBinaryFetchOptions,
+  controller: AbortController,
+  maxBytes: number,
+  declaredBytes: number | undefined,
+): Promise<string> {
+  const reader = body.getReader();
+  const digest = createHash('sha256');
+  let observedBytes = 0;
+  while (true) {
+    const { done, value } = await raceWithAbort(reader.read(), controller.signal);
+    if (done) break;
+    if (!(value instanceof Uint8Array)) {
+      throw new VerifiedBinaryFetchError('stream', `downloaded ${opts.url} produced a non-byte stream chunk`);
     }
-    if (stagingOwned) {
-      try {
-        unlinkSync(tmpPath);
-      } catch {
-        // Only the random-token owner attempts cleanup; a prior failure may
-        // already have removed the staging file.
-      }
+    observedBytes += value.byteLength;
+    assertDownloadedByteLimit(observedBytes, declaredBytes, maxBytes, opts.url, controller);
+    const chunk = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+    digest.update(chunk);
+    writeFileCompletely(fd, chunk, { writeFile: opts.writeImpl ?? writeSync }, 'verified binary staging');
+  }
+  if (declaredBytes !== undefined && observedBytes !== declaredBytes) {
+    throw new VerifiedBinaryFetchError(
+      'length',
+      `downloaded ${opts.url} length mismatch: declared ${declaredBytes} bytes, received ${observedBytes}`,
+    );
+  }
+  const actualSha256 = digest.digest('hex');
+  if (actualSha256 !== opts.expectedSha256) {
+    throw new VerifiedBinaryFetchError(
+      'checksum',
+      `downloaded ${opts.url} checksum mismatch: expected ${opts.expectedSha256}, got ${actualSha256}`,
+    );
+  }
+  return actualSha256;
+}
+
+function cleanupStagedBinary(fd: number | undefined, tmpPath: string, stagingOwned: boolean): void {
+  if (fd !== undefined) {
+    try {
+      closeSync(fd);
+    } catch {
+      // The write failure may already have invalidated the descriptor.
+    }
+  }
+  if (stagingOwned) {
+    try {
+      unlinkSync(tmpPath);
+    } catch {
+      // Only the random-token owner attempts cleanup; a prior failure may
+      // already have removed the staging file.
     }
   }
 }

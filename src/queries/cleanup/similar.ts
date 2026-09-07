@@ -1238,39 +1238,32 @@ export function classifySimilarityEvidence(
       evidenceTokens.some(isConcreteDomainEvidenceToken)
     );
   }).length;
-  const reasons: string[] = [];
-
-  if (accessHits.length > 0) reasons.push(`access/query scaffolding: ${accessHits.slice(0, 5).join(', ')}`);
-  if (frameworkHits.length > 0) reasons.push(`framework/generic scaffolding: ${frameworkHits.slice(0, 5).join(', ')}`);
-  if (domainHits.length > 0) reasons.push(`domain behavior verbs: ${domainHits.slice(0, 5).join(', ')}`);
-  if (domainHits.length > 0 && concreteDomainTerms.length > 0) {
-    reasons.push(`domain-specific terms: ${concreteDomainTerms.slice(0, 5).join(', ')}`);
-  }
   const genericSourceTokenOverlap =
     basis === 'source-tokens' && tokens.length > 0 && tokens.every((token) => GENERIC_SOURCE_TOKEN_EVIDENCE.has(token));
-  if (genericSourceTokenOverlap) {
-    reasons.push('shared source tokens are generic scaffolding');
-  }
+  const reasons = similarityClassificationReasons(
+    accessHits,
+    frameworkHits,
+    domainHits,
+    concreteDomainTerms,
+    genericSourceTokenOverlap,
+  );
 
   const hasDomainBehavior = domainHits.length > 0 && concreteDomainTerms.length > 0;
   const hasScaffolding = accessHits.length + frameworkHits.length > 0;
-  const strongDomainBehavior =
-    basis === 'callees' &&
-    hasDomainBehavior &&
-    sharedEvidence.length >= 4 &&
-    concreteDomainTerms.length >= 4 &&
-    domainEvidenceCount >= 2;
-  const evidenceClass: SimilarEvidenceClass = strongDomainBehavior
-    ? 'domain-behavior'
-    : hasDomainBehavior
-      ? hasScaffolding
-        ? 'mixed'
-        : 'domain-behavior'
-      : accessHits.length > 0
-        ? 'access-query-scaffolding'
-        : frameworkHits.length > 0 || genericSourceTokenOverlap
-          ? 'framework-scaffolding'
-          : 'structural-overlap';
+  const strongDomainBehavior = isStrongDomainBehavior(
+    basis,
+    hasDomainBehavior,
+    sharedEvidence.length,
+    concreteDomainTerms.length,
+    domainEvidenceCount,
+  );
+  const evidenceClass = selectSimilarityEvidenceClass(
+    strongDomainBehavior,
+    hasDomainBehavior,
+    hasScaffolding,
+    accessHits.length > 0,
+    frameworkHits.length > 0 || genericSourceTokenOverlap,
+  );
   if (evidenceClass === 'structural-overlap' && sharedEvidence.length > 0) {
     reasons.push(`shared ${basis} overlap has no recognized domain or scaffolding category`);
   }
@@ -1282,6 +1275,49 @@ export function classifySimilarityEvidence(
     evidenceClassReasons: reasons,
     recommendation: similarityRecommendation(evidenceClass, actionTier),
   };
+}
+
+function isStrongDomainBehavior(
+  basis: NonNullable<SimilarSymbolResult['similarityBasis']>,
+  hasDomainBehavior: boolean,
+  sharedCount: number,
+  concreteCount: number,
+  domainEvidenceCount: number,
+): boolean {
+  return basis === 'callees' && hasDomainBehavior && sharedCount >= 4 && concreteCount >= 4 && domainEvidenceCount >= 2;
+}
+
+function selectSimilarityEvidenceClass(
+  strongDomainBehavior: boolean,
+  hasDomainBehavior: boolean,
+  hasScaffolding: boolean,
+  hasAccess: boolean,
+  hasFramework: boolean,
+): SimilarEvidenceClass {
+  if (strongDomainBehavior) return 'domain-behavior';
+  if (hasDomainBehavior) return hasScaffolding ? 'mixed' : 'domain-behavior';
+  if (hasAccess) return 'access-query-scaffolding';
+  if (hasFramework) return 'framework-scaffolding';
+  return 'structural-overlap';
+}
+
+function similarityClassificationReasons(
+  accessHits: string[],
+  frameworkHits: string[],
+  domainHits: string[],
+  concreteDomainTerms: string[],
+  genericSourceTokenOverlap: boolean,
+): string[] {
+  const reasons: string[] = [];
+
+  if (accessHits.length > 0) reasons.push(`access/query scaffolding: ${accessHits.slice(0, 5).join(', ')}`);
+  if (frameworkHits.length > 0) reasons.push(`framework/generic scaffolding: ${frameworkHits.slice(0, 5).join(', ')}`);
+  if (domainHits.length > 0) reasons.push(`domain behavior verbs: ${domainHits.slice(0, 5).join(', ')}`);
+  if (domainHits.length > 0 && concreteDomainTerms.length > 0) {
+    reasons.push(`domain-specific terms: ${concreteDomainTerms.slice(0, 5).join(', ')}`);
+  }
+  if (genericSourceTokenOverlap) reasons.push('shared source tokens are generic scaffolding');
+  return reasons;
 }
 
 /** Same-file siblings share at least this much of their callee vocabulary before scaffolding vocabulary stops mattering. */

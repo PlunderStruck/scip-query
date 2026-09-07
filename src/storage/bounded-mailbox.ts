@@ -1100,6 +1100,60 @@ function pendingCandidates(directory: string, legacy: boolean): PendingCandidate
     });
 }
 
+function parseClaimFilename(name: string): { originalFile: string; claimExpiresAtMs: number } | null {
+  const match = /^(.*)\.(\d+)\.claim$/.exec(name);
+  if (!match) return null;
+  const originalFile = decodeSegment(match[1]!);
+  const claimExpiresAtMs = Number(match[2]);
+  if (
+    originalFile === null ||
+    basename(originalFile) !== originalFile ||
+    !originalFile.endsWith('.json') ||
+    !Number.isSafeInteger(claimExpiresAtMs)
+  )
+    return null;
+  return { originalFile, claimExpiresAtMs };
+}
+
+function readInflightClaim(ownerDirectory: string, ownerId: string, name: string): BoundedMailboxClaim | null {
+  const filename = parseClaimFilename(name);
+  if (!filename) return null;
+  const { originalFile, claimExpiresAtMs } = filename;
+  const path = join(ownerDirectory, name);
+  const header = readRequestHeader(path) ?? { id: basename(originalFile, '.json') };
+  let stat;
+  try {
+    stat = lstatSync(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+  return {
+    requestId: header.id,
+    ownerId,
+    path,
+    originalFile,
+    claimedAtMs: stat.mtimeMs,
+    claimExpiresAtMs,
+    byteLength: stat.size,
+    ...(header.operationKey ? { operationKey: header.operationKey } : {}),
+    ...(header.clientId ? { clientId: header.clientId } : {}),
+    ...(header.enqueuedAtMs === undefined ? {} : { enqueuedAtMs: header.enqueuedAtMs }),
+    ...(header.deadlineAtMs === undefined ? {} : { deadlineAtMs: header.deadlineAtMs }),
+    legacy: header.operationKey === undefined,
+  };
+}
+
+function ownerInflightClaims(ownerDirectory: string, ownerId: string): BoundedMailboxClaim[] {
+  const claims: BoundedMailboxClaim[] = [];
+  for (const entry of readdirSync(ownerDirectory, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith('.claim')) continue;
+    const claim = readInflightClaim(ownerDirectory, ownerId, entry.name);
+    if (claim) claims.push(claim);
+  }
+  return claims;
+}
+
 function inflightClaims(directory: string): BoundedMailboxClaim[] {
   if (!existsSync(directory)) return [];
   const claims: BoundedMailboxClaim[] = [];
@@ -1107,45 +1161,7 @@ function inflightClaims(directory: string): BoundedMailboxClaim[] {
     if (!owner.isDirectory()) continue;
     const ownerId = decodeSegment(owner.name);
     if (ownerId === null) continue;
-    const ownerDirectory = join(directory, owner.name);
-    for (const entry of readdirSync(ownerDirectory, { withFileTypes: true })) {
-      if (!entry.isFile() || !entry.name.endsWith('.claim')) continue;
-      const match = /^(.*)\.(\d+)\.claim$/.exec(entry.name);
-      if (!match) continue;
-      const originalFile = decodeSegment(match[1]!);
-      const claimExpiresAtMs = Number(match[2]);
-      if (
-        originalFile === null ||
-        basename(originalFile) !== originalFile ||
-        !originalFile.endsWith('.json') ||
-        !Number.isSafeInteger(claimExpiresAtMs)
-      ) {
-        continue;
-      }
-      const path = join(ownerDirectory, entry.name);
-      const header = readRequestHeader(path) ?? { id: basename(originalFile, '.json') };
-      let stat;
-      try {
-        stat = lstatSync(path);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
-        throw error;
-      }
-      claims.push({
-        requestId: header.id,
-        ownerId,
-        path,
-        originalFile,
-        claimedAtMs: stat.mtimeMs,
-        claimExpiresAtMs,
-        byteLength: stat.size,
-        ...(header.operationKey ? { operationKey: header.operationKey } : {}),
-        ...(header.clientId ? { clientId: header.clientId } : {}),
-        ...(header.enqueuedAtMs === undefined ? {} : { enqueuedAtMs: header.enqueuedAtMs }),
-        ...(header.deadlineAtMs === undefined ? {} : { deadlineAtMs: header.deadlineAtMs }),
-        legacy: header.operationKey === undefined,
-      });
-    }
+    claims.push(...ownerInflightClaims(join(directory, owner.name), ownerId));
   }
   return claims.sort((left, right) => left.claimedAtMs - right.claimedAtMs || left.path.localeCompare(right.path));
 }

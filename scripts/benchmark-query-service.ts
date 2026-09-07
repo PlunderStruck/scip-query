@@ -261,31 +261,30 @@ function defaultOperand(command: BenchmarkCommand): string {
 
 function parseBenchmarkCommand(configured: string | undefined): BenchmarkCommand {
   if (configured === undefined || configured === 'search') return 'search';
-  if (
-    configured === 'outline' ||
-    configured === 'code' ||
-    configured === 'entrypoints' ||
-    configured === 'files' ||
-    configured === 'stats' ||
-    configured === 'members' ||
-    configured === 'methods' ||
-    configured === 'deps' ||
-    configured === 'rdeps' ||
-    configured === 'imported-by' ||
-    configured === 'hierarchy' ||
-    configured === 'by-kind' ||
-    configured === 'kind-counts' ||
-    configured === 'refs' ||
-    configured === 'call-graph' ||
-    configured === 'dependence-slice' ||
-    configured === 'value-flow' ||
-    configured === 'imports' ||
-    configured === 'unused-imports' ||
-    configured === 'system' ||
-    configured === 'surface'
-  ) {
-    return configured;
-  }
+  const commands: readonly BenchmarkCommand[] = [
+    'outline',
+    'code',
+    'entrypoints',
+    'files',
+    'stats',
+    'members',
+    'methods',
+    'deps',
+    'rdeps',
+    'imported-by',
+    'hierarchy',
+    'by-kind',
+    'kind-counts',
+    'refs',
+    'call-graph',
+    'dependence-slice',
+    'value-flow',
+    'imports',
+    'unused-imports',
+    'system',
+    'surface',
+  ];
+  if (commands.includes(configured as BenchmarkCommand)) return configured as BenchmarkCommand;
   throw new Error(
     'SCIP_QUERY_BENCH_COMMAND must be search, outline, code, entrypoints, files, stats, members, methods, deps, rdeps, imported-by, hierarchy, by-kind, kind-counts, refs, call-graph, dependence-slice, imports, unused-imports, system, or surface.',
   );

@@ -1018,7 +1018,7 @@ function renderChangeScope(label: string, entries: readonly string[]): void {
   for (const entry of entries) console.log(`    - ${entry}`);
 }
 
-function buildSetupSmokeTests(opts: {
+type SetupSmokeTestOptions = {
   reindexResult: ReindexResult | null;
   readiness: ProjectReadiness;
   capabilities: ProjectCapabilityReport;
@@ -1030,108 +1030,152 @@ function buildSetupSmokeTests(opts: {
   watchService: WatchServiceEnsureResult | null;
   rustSemanticSession: RustSemanticSessionStatus | null;
   steps: readonly ProjectSetupStep[];
-}): ProjectSetupSmokeTest[] {
-  const reindexStep = opts.steps.find((step) => step.id === 'reindex');
-  const agentStep = opts.steps.find((step) => step.id === 'agent-guidance');
-  const watchStep = opts.steps.find((step) => step.id === 'watch-refresh');
-  const checks: Omit<ProjectSetupSmokeTest, 'basis'>[] = [
-    {
-      id: 'reindex',
-      command: 'scip-query reindex',
-      status: opts.reindexResult ? 'pass' : reindexStep?.status === 'failed' ? 'fail' : 'unavailable',
-      evidence: opts.reindexResult
-        ? `${opts.reindexResult.languages.join(', ')} indexed${opts.reindexResult.reused ? ' from cache' : ''}.`
-        : (reindexStep?.message ?? 'No reindex result was produced.'),
-    },
-    {
-      id: 'status',
-      command: 'scip-query status',
-      status: opts.freshness.state === 'fresh' ? 'pass' : 'fail',
-      evidence: `Index freshness is ${opts.freshness.state}: ${opts.freshness.reason}`,
-    },
-    {
-      id: 'config-validate',
-      command: 'scip-query config-validate',
-      status: configValidationSmokeStatus(opts.steps),
-      evidence: configValidationSmokeEvidence(opts.steps),
-    },
-    {
-      id: 'capabilities',
-      command: 'scip-query capabilities',
-      status: opts.capabilities.matrix.length > 0 ? 'pass' : 'unavailable',
-      evidence:
-        opts.capabilities.matrix.length > 0
-          ? `${opts.capabilities.matrix.length} language capability row(s) available.`
-          : 'No detected languages produced capability rows.',
-    },
-    {
-      id: 'capability-matrix',
-      command: 'scip-query capabilities --matrix',
-      status: opts.capabilities.matrix.length > 0 ? 'pass' : 'unavailable',
-      evidence:
-        opts.capabilities.matrix.length > 0
-          ? capabilityMatrixSmokeEvidence(opts.capabilities)
-          : 'No detected languages produced capability rows.',
-    },
-    {
-      id: 'health',
-      command: 'scip-query health --indexed --full',
-      status: !opts.health.available ? 'unavailable' : 'pass',
-      optional: !opts.healthSelected,
-      evidence: !opts.health.available
-        ? (opts.health.unavailableReason ?? 'Health report was not available.')
-        : `Health report available: ${opts.health.issuesNeedAttention.length} review candidate(s).`,
-    },
-    {
-      id: 'diff-impact',
-      command: 'scip-query diff-impact --json',
-      status: gitBackedSmokeStatus(opts.readiness, opts.freshness),
-      evidence: gitBackedSmokeEvidence(opts.readiness, opts.freshness),
-    },
-    {
-      id: 'cleanup-verification',
-      command: 'scip-query cleanup-plan --verify',
-      status: cleanupVerificationSmokeStatus(opts.capabilities),
-      evidence: cleanupVerificationSmokeEvidence(opts.capabilities),
-    },
-    {
-      id: 'watch-refresh',
-      command: 'scip-query status --json',
-      status:
-        watchStep?.status === 'failed'
-          ? 'fail'
-          : opts.watchConfig.enabled && opts.watchService
-            ? 'pass'
-            : 'unavailable',
-      // A deliberate configuration (demand start, watch disabled) is a valid
-      // state for the smoke test too; only an incidental skip should warn.
-      ...(watchStep?.optional === true ? { optional: true } : {}),
-      evidence: watchStep?.message ?? 'Watch refresh policy was not evaluated.',
-    },
-    {
-      id: 'rust-semantic-session',
-      command: 'scip-query status --json',
-      status: opts.rustSemanticSession === null ? 'unavailable' : opts.rustSemanticSession.valid ? 'pass' : 'fail',
-      ...(opts.rustSemanticSession === null ? { optional: true } : {}),
-      evidence:
-        opts.rustSemanticSession === null
-          ? 'Rust was not detected.'
-          : `${opts.rustSemanticSession.transport}/${opts.rustSemanticSession.state}; ${opts.rustSemanticSession.fallback} fallback; ${opts.rustSemanticSession.optOut}.`,
-    },
-    {
-      id: 'setup-agent',
-      command: 'scip-query setup-agent',
-      status: opts.agentResult ? 'pass' : agentStep?.status === 'failed' ? 'fail' : 'unavailable',
-      evidence: opts.agentResult
-        ? `${opts.agentResult.written.length} written, ${opts.agentResult.unchanged.length} already wired, ${opts.agentResult.skipped.length} skipped.`
-        : (agentStep?.message ?? 'Project agent guidance was not written.'),
-    },
+};
+
+type SetupSmokeCheck = Omit<ProjectSetupSmokeTest, 'basis'>;
+
+function buildSetupSmokeTests(opts: SetupSmokeTestOptions): ProjectSetupSmokeTest[] {
+  const checks: SetupSmokeCheck[] = [
+    buildReindexSmokeCheck(opts),
+    buildStatusSmokeCheck(opts),
+    buildConfigValidateSmokeCheck(opts),
+    buildCapabilitiesSmokeCheck(opts),
+    buildCapabilityMatrixSmokeCheck(opts),
+    buildHealthSmokeCheck(opts),
+    buildDiffImpactSmokeCheck(opts),
+    buildCleanupVerificationSmokeCheck(opts),
+    buildWatchRefreshSmokeCheck(opts),
+    buildRustSemanticSessionSmokeCheck(opts),
+    buildSetupAgentSmokeCheck(opts),
   ];
   const readinessIds = new Set(['capabilities', 'capability-matrix', 'diff-impact', 'cleanup-verification']);
   return checks.map((check) => ({
     ...check,
     basis: readinessIds.has(check.id) ? 'readiness' : 'operation-result',
   }));
+}
+
+function buildReindexSmokeCheck(opts: SetupSmokeTestOptions): SetupSmokeCheck {
+  const reindexStep = opts.steps.find((step) => step.id === 'reindex');
+  return {
+    id: 'reindex',
+    command: 'scip-query reindex',
+    status: opts.reindexResult ? 'pass' : reindexStep?.status === 'failed' ? 'fail' : 'unavailable',
+    evidence: opts.reindexResult
+      ? `${opts.reindexResult.languages.join(', ')} indexed${opts.reindexResult.reused ? ' from cache' : ''}.`
+      : (reindexStep?.message ?? 'No reindex result was produced.'),
+  };
+}
+
+function buildStatusSmokeCheck(opts: SetupSmokeTestOptions): SetupSmokeCheck {
+  return {
+    id: 'status',
+    command: 'scip-query status',
+    status: opts.freshness.state === 'fresh' ? 'pass' : 'fail',
+    evidence: `Index freshness is ${opts.freshness.state}: ${opts.freshness.reason}`,
+  };
+}
+
+function buildConfigValidateSmokeCheck(opts: SetupSmokeTestOptions): SetupSmokeCheck {
+  return {
+    id: 'config-validate',
+    command: 'scip-query config-validate',
+    status: configValidationSmokeStatus(opts.steps),
+    evidence: configValidationSmokeEvidence(opts.steps),
+  };
+}
+
+function buildCapabilitiesSmokeCheck(opts: SetupSmokeTestOptions): SetupSmokeCheck {
+  return {
+    id: 'capabilities',
+    command: 'scip-query capabilities',
+    status: opts.capabilities.matrix.length > 0 ? 'pass' : 'unavailable',
+    evidence:
+      opts.capabilities.matrix.length > 0
+        ? `${opts.capabilities.matrix.length} language capability row(s) available.`
+        : 'No detected languages produced capability rows.',
+  };
+}
+
+function buildCapabilityMatrixSmokeCheck(opts: SetupSmokeTestOptions): SetupSmokeCheck {
+  return {
+    id: 'capability-matrix',
+    command: 'scip-query capabilities --matrix',
+    status: opts.capabilities.matrix.length > 0 ? 'pass' : 'unavailable',
+    evidence:
+      opts.capabilities.matrix.length > 0
+        ? capabilityMatrixSmokeEvidence(opts.capabilities)
+        : 'No detected languages produced capability rows.',
+  };
+}
+
+function buildHealthSmokeCheck(opts: SetupSmokeTestOptions): SetupSmokeCheck {
+  return {
+    id: 'health',
+    command: 'scip-query health --indexed --full',
+    status: !opts.health.available ? 'unavailable' : 'pass',
+    optional: !opts.healthSelected,
+    evidence: !opts.health.available
+      ? (opts.health.unavailableReason ?? 'Health report was not available.')
+      : `Health report available: ${opts.health.issuesNeedAttention.length} review candidate(s).`,
+  };
+}
+
+function buildDiffImpactSmokeCheck(opts: SetupSmokeTestOptions): SetupSmokeCheck {
+  return {
+    id: 'diff-impact',
+    command: 'scip-query diff-impact --json',
+    status: gitBackedSmokeStatus(opts.readiness, opts.freshness),
+    evidence: gitBackedSmokeEvidence(opts.readiness, opts.freshness),
+  };
+}
+
+function buildCleanupVerificationSmokeCheck(opts: SetupSmokeTestOptions): SetupSmokeCheck {
+  return {
+    id: 'cleanup-verification',
+    command: 'scip-query cleanup-plan --verify',
+    status: cleanupVerificationSmokeStatus(opts.capabilities),
+    evidence: cleanupVerificationSmokeEvidence(opts.capabilities),
+  };
+}
+
+function buildWatchRefreshSmokeCheck(opts: SetupSmokeTestOptions): SetupSmokeCheck {
+  const watchStep = opts.steps.find((step) => step.id === 'watch-refresh');
+  return {
+    id: 'watch-refresh',
+    command: 'scip-query status --json',
+    status:
+      watchStep?.status === 'failed' ? 'fail' : opts.watchConfig.enabled && opts.watchService ? 'pass' : 'unavailable',
+    // A deliberate configuration (demand start, watch disabled) is a valid
+    // state for the smoke test too; only an incidental skip should warn.
+    ...(watchStep?.optional === true ? { optional: true } : {}),
+    evidence: watchStep?.message ?? 'Watch refresh policy was not evaluated.',
+  };
+}
+
+function buildRustSemanticSessionSmokeCheck(opts: SetupSmokeTestOptions): SetupSmokeCheck {
+  return {
+    id: 'rust-semantic-session',
+    command: 'scip-query status --json',
+    status: opts.rustSemanticSession === null ? 'unavailable' : opts.rustSemanticSession.valid ? 'pass' : 'fail',
+    ...(opts.rustSemanticSession === null ? { optional: true } : {}),
+    evidence:
+      opts.rustSemanticSession === null
+        ? 'Rust was not detected.'
+        : `${opts.rustSemanticSession.transport}/${opts.rustSemanticSession.state}; ${opts.rustSemanticSession.fallback} fallback; ${opts.rustSemanticSession.optOut}.`,
+  };
+}
+
+function buildSetupAgentSmokeCheck(opts: SetupSmokeTestOptions): SetupSmokeCheck {
+  const agentStep = opts.steps.find((step) => step.id === 'agent-guidance');
+  return {
+    id: 'setup-agent',
+    command: 'scip-query setup-agent',
+    status: opts.agentResult ? 'pass' : agentStep?.status === 'failed' ? 'fail' : 'unavailable',
+    evidence: opts.agentResult
+      ? `${opts.agentResult.written.length} written, ${opts.agentResult.unchanged.length} already wired, ${opts.agentResult.skipped.length} skipped.`
+      : (agentStep?.message ?? 'Project agent guidance was not written.'),
+  };
 }
 
 function smokeStepStatus(smokeTests: readonly ProjectSetupSmokeTest[]): ProjectSetupStepStatus {

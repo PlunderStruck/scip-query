@@ -142,14 +142,7 @@ export function decodeCliJsonEnvelope<Result = unknown>(input: unknown): Decoded
   const hasKind = Object.hasOwn(input, 'kind');
   const hasSchemaVersion = Object.hasOwn(input, 'schemaVersion');
   if (!hasKind && !hasSchemaVersion) {
-    const reason = validateCommonEnvelopeFields(input);
-    return reason
-      ? { kind: 'malformed', reason: `Legacy CLI JSON envelope: ${reason}` }
-      : {
-          kind: 'legacy',
-          schemaVersion: LEGACY_CLI_JSON_ENVELOPE_SCHEMA_VERSION,
-          envelope: input as unknown as LegacyCliJsonEnvelope<Result>,
-        };
+    return decodeLegacyCliJsonEnvelope<Result>(input);
   }
   if (!hasKind || !hasSchemaVersion) {
     return { kind: 'malformed', reason: 'CLI JSON envelope must contain both kind and schemaVersion.' };
@@ -161,6 +154,10 @@ export function decodeCliJsonEnvelope<Result = unknown>(input: unknown): Decoded
     };
   }
 
+  return decodeVersionedCliJsonEnvelope<Result>(input);
+}
+
+function decodeVersionedCliJsonEnvelope<Result>(input: Record<string, unknown>): DecodedCliJsonEnvelope<Result> {
   const schemaVersion = input['schemaVersion'];
   if (!Number.isSafeInteger(schemaVersion) || Number(schemaVersion) < 1) {
     return { kind: 'malformed', reason: 'CLI JSON envelope schemaVersion must be a positive safe integer.' };
@@ -174,6 +171,21 @@ export function decodeCliJsonEnvelope<Result = unknown>(input: unknown): Decoded
     };
   }
 
+  return decodeCliJsonEnvelopeV1<Result>(input);
+}
+
+function decodeLegacyCliJsonEnvelope<Result>(input: Record<string, unknown>): DecodedCliJsonEnvelope<Result> {
+  const reason = validateCommonEnvelopeFields(input);
+  return reason
+    ? { kind: 'malformed', reason: `Legacy CLI JSON envelope: ${reason}` }
+    : {
+        kind: 'legacy',
+        schemaVersion: LEGACY_CLI_JSON_ENVELOPE_SCHEMA_VERSION,
+        envelope: input as unknown as LegacyCliJsonEnvelope<Result>,
+      };
+}
+
+function decodeCliJsonEnvelopeV1<Result>(input: Record<string, unknown>): DecodedCliJsonEnvelope<Result> {
   const commonReason = validateCommonEnvelopeFields(input);
   if (commonReason) return { kind: 'malformed', reason: `CLI JSON envelope v1: ${commonReason}` };
   if (!isProducer(input['producer'])) {
@@ -204,6 +216,19 @@ export function decodeCliJsonEnvelope<Result = unknown>(input: unknown): Decoded
       supportedResultSchemaVersions,
     };
   }
+  const metadataFailure = validateEnvelopeEvidenceMetadata(input);
+  if (metadataFailure) return metadataFailure;
+
+  return {
+    kind: 'supported',
+    schemaVersion: CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION,
+    envelope: input as unknown as CliJsonEnvelopeV1<Result>,
+  };
+}
+
+function validateEnvelopeEvidenceMetadata(
+  input: Record<string, unknown>,
+): Extract<DecodedCliJsonEnvelope, { kind: 'malformed' }> | null {
   if (input['evidenceContext'] !== undefined && !isCliEvidenceContextV1(input['evidenceContext'])) {
     return {
       kind: 'malformed',
@@ -228,11 +253,7 @@ export function decodeCliJsonEnvelope<Result = unknown>(input: unknown): Decoded
     };
   }
 
-  return {
-    kind: 'supported',
-    schemaVersion: CURRENT_CLI_JSON_ENVELOPE_SCHEMA_VERSION,
-    envelope: input as unknown as CliJsonEnvelopeV1<Result>,
-  };
+  return null;
 }
 
 export function requireCompatibleCliJsonEnvelope<Result = unknown>(input: unknown): CompatibleCliJsonEnvelope<Result> {

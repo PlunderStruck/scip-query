@@ -41,31 +41,23 @@ export const handleDead = budgetedDbCommand('dead', ({ db, args, opts, budget })
   };
 
   const result = queries.dead(db, deadOpts);
-  const deadCode = result.symbols.filter((s) => s.kind === 'dead-code');
-  const fileInternal = result.symbols.filter((s) => s.kind === 'file-internal');
-  const implicitUsage = result.symbols.filter((s) => s.kind === 'implicit-usage');
-  const showDead = !booleanOptionValue(opts, 'onlyInternal');
-  const showInternal = !booleanOptionValue(opts, 'onlyDead');
-  const showImplicit = !booleanOptionValue(opts, 'onlyDead') && !booleanOptionValue(opts, 'onlyInternal');
-  const shownDeadCode = showDead ? deadCode : [];
-  const shownFileInternal = showInternal ? fileInternal : [];
-  const shownImplicitUsage = showImplicit ? implicitUsage : [];
-  const deadLoc = shownDeadCode.reduce((sum, s) => sum + s.loc, 0);
-  const fiLoc = shownFileInternal.reduce((sum, s) => sum + s.loc, 0);
-  const implicitLoc = shownImplicitUsage.reduce((sum, s) => sum + s.loc, 0);
   const full = booleanOptionValue(opts, 'full');
-  const displayDeadCode = full ? shownDeadCode : shownDeadCode.slice(0, DEAD_HUMAN_SECTION_LIMIT);
-  const displayFileInternal = full ? shownFileInternal : shownFileInternal.slice(0, DEAD_HUMAN_SECTION_LIMIT);
-  const displayImplicitUsage = full ? shownImplicitUsage : shownImplicitUsage.slice(0, DEAD_HUMAN_SECTION_LIMIT);
-  const displayDeadLoc = displayDeadCode.reduce((sum, s) => sum + s.loc, 0);
-  const displayFileInternalLoc = displayFileInternal.reduce((sum, s) => sum + s.loc, 0);
-  const displayImplicitLoc = displayImplicitUsage.reduce((sum, s) => sum + s.loc, 0);
+  const sections = deadDisplaySections(
+    result.symbols,
+    booleanOptionValue(opts, 'onlyDead'),
+    booleanOptionValue(opts, 'onlyInternal'),
+    full,
+  );
+  const [deadSection, internalSection, implicitSection] = sections;
+  const shownDeadCode = deadSection.shown;
+  const shownFileInternal = internalSection.shown;
+  const shownImplicitUsage = implicitSection.shown;
   const shownCounts = {
     total: shownDeadCode.length + shownFileInternal.length + shownImplicitUsage.length,
     deadCode: shownDeadCode.length,
     fileInternal: shownFileInternal.length,
     implicitUsage: shownImplicitUsage.length,
-    loc: deadLoc + fiLoc + implicitLoc,
+    loc: deadSection.loc + internalSection.loc + implicitSection.loc,
   };
   if (booleanOptionValue(opts, 'json')) {
     printJsonEnvelope(
@@ -93,65 +85,94 @@ export const handleDead = budgetedDbCommand('dead', ({ db, args, opts, budget })
     return;
   }
 
-  if (shownDeadCode.length === 0 && shownFileInternal.length === 0 && shownImplicitUsage.length === 0) {
+  renderDeadSections(sections, full, shownCounts.total);
+});
+
+type DeadSymbols = ReturnType<typeof queries.dead>['symbols'];
+type DeadDisplaySection = ReturnType<typeof deadDisplaySection>;
+
+function deadDisplaySection(
+  symbols: DeadSymbols,
+  enabled: boolean,
+  full: boolean,
+  title: string,
+  description: string,
+  totalLabel: string,
+) {
+  const shown = enabled ? symbols : [];
+  const displayed = full ? shown : shown.slice(0, DEAD_HUMAN_SECTION_LIMIT);
+  return {
+    enabled,
+    title,
+    description,
+    totalLabel,
+    shown,
+    displayed,
+    loc: shown.reduce((sum, symbol) => sum + symbol.loc, 0),
+    displayLoc: displayed.reduce((sum, symbol) => sum + symbol.loc, 0),
+  };
+}
+
+function deadDisplaySections(
+  symbols: DeadSymbols,
+  onlyDead: boolean,
+  onlyInternal: boolean,
+  full: boolean,
+): [DeadDisplaySection, DeadDisplaySection, DeadDisplaySection] {
+  return [
+    deadDisplaySection(
+      symbols.filter((symbol) => symbol.kind === 'dead-code'),
+      !onlyInternal,
+      full,
+      'DEAD CODE',
+      '  Zero references anywhere -- no cross-file callers AND no same-file uses.\n  Deletion candidates -- confirm with cleanup-plan --verify before deleting.',
+      'dead code',
+    ),
+    deadDisplaySection(
+      symbols.filter((symbol) => symbol.kind === 'file-internal'),
+      !onlyDead,
+      full,
+      'FILE-INTERNAL ONLY',
+      '  Used only within the same file (no cross-file callers). Could be a\n  single-use helper, an abstraction-in-progress, or a callback registered\n  through a framework path that static analysis cannot trace (signal\n  handlers, event listeners, dependency injection). NOT necessarily dead —\n  review case by case.',
+      'file-internal',
+    ),
+    deadDisplaySection(
+      symbols.filter((symbol) => symbol.kind === 'implicit-usage'),
+      !onlyDead && !onlyInternal,
+      full,
+      'IMPLICIT USAGE',
+      '  Traits, macros, attributes, ABI exports, or reflection provide a\n  consumer that the static reference graph cannot trace. Investigation\n  signals only — not deletion candidates and not counted as dead code.',
+      'implicit usage',
+    ),
+  ];
+}
+
+function renderDeadSections(sections: DeadDisplaySection[], full: boolean, total: number): void {
+  if (total === 0) {
     render.empty('No matching dead-code symbols found.');
     return;
   }
-
-  if (shownDeadCode.length > 0) {
-    renderDeadGroup(
-      displayDeadCode,
-      'DEAD CODE',
-      '  Zero references anywhere -- no cross-file callers AND no same-file uses.\n  Deletion candidates -- confirm with cleanup-plan --verify before deleting.',
-      displayDeadLoc,
-      { count: shownDeadCode.length, loc: deadLoc },
-    );
-    if (!full && shownDeadCode.length > displayDeadCode.length) {
+  let rendered = false;
+  for (const section of sections) {
+    if (section.shown.length === 0) continue;
+    if (rendered) console.log('');
+    renderDeadGroup(section.displayed, section.title, section.description, section.displayLoc, {
+      count: section.shown.length,
+      loc: section.loc,
+    });
+    if (!full && section.shown.length > section.displayed.length) {
       console.log(
-        `\n  Showing top ${displayDeadCode.length} by LOC. Re-run with --full for the remaining ${shownDeadCode.length - displayDeadCode.length}.`,
+        `\n  Showing top ${section.displayed.length} by LOC. Re-run with --full for the remaining ${section.shown.length - section.displayed.length}.`,
       );
     }
+    rendered = true;
   }
-  if (shownFileInternal.length > 0) {
-    if (shownDeadCode.length > 0) console.log('');
-    renderDeadGroup(
-      displayFileInternal,
-      'FILE-INTERNAL ONLY',
-      '  Used only within the same file (no cross-file callers). Could be a\n  single-use helper, an abstraction-in-progress, or a callback registered\n  through a framework path that static analysis cannot trace (signal\n  handlers, event listeners, dependency injection). NOT necessarily dead —\n  review case by case.',
-      displayFileInternalLoc,
-      { count: shownFileInternal.length, loc: fiLoc },
-    );
-    if (!full && shownFileInternal.length > displayFileInternal.length) {
-      console.log(
-        `\n  Showing top ${displayFileInternal.length} by LOC. Re-run with --full for the remaining ${shownFileInternal.length - displayFileInternal.length}.`,
-      );
-    }
-  }
-  if (shownImplicitUsage.length > 0) {
-    if (shownDeadCode.length > 0 || shownFileInternal.length > 0) console.log('');
-    renderDeadGroup(
-      displayImplicitUsage,
-      'IMPLICIT USAGE',
-      '  Traits, macros, attributes, ABI exports, or reflection provide a\n  consumer that the static reference graph cannot trace. Investigation\n  signals only — not deletion candidates and not counted as dead code.',
-      displayImplicitLoc,
-      { count: shownImplicitUsage.length, loc: implicitLoc },
-    );
-    if (!full && shownImplicitUsage.length > displayImplicitUsage.length) {
-      console.log(
-        `\n  Showing top ${displayImplicitUsage.length} by LOC. Re-run with --full for the remaining ${shownImplicitUsage.length - displayImplicitUsage.length}.`,
-      );
-    }
-  }
-
-  const totalParts: string[] = [];
-  if (showDead) totalParts.push(`${shownDeadCode.length} dead code (${deadLoc} LOC)`);
-  if (showInternal) totalParts.push(`${shownFileInternal.length} file-internal (${fiLoc} LOC)`);
-  if (showImplicit) totalParts.push(`${shownImplicitUsage.length} implicit usage (${implicitLoc} LOC)`);
+  const totalParts = sections
+    .filter((section) => section.enabled)
+    .map((section) => `${section.shown.length} ${section.totalLabel} (${section.loc} LOC)`);
   console.log('\n───────────────────────────');
-  console.log(
-    `Total: ${shownDeadCode.length + shownFileInternal.length + shownImplicitUsage.length} symbols — ${totalParts.join(' + ')}`,
-  );
-});
+  console.log(`Total: ${total} symbols — ${totalParts.join(' + ')}`);
+}
 
 export const handleUnusedImports = budgetedListCommand('unused-imports', {
   query: ({ db, args, budget }) => queries.unusedImports(db, stringArg(args, 0), { semantic: budget.semantic }),
