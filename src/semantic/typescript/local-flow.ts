@@ -1063,13 +1063,19 @@ function isUseNode(
   if (state.ts.isPropertyAccessExpression(node)) return true;
   if (!state.ts.isIdentifier(node)) return false;
   const parent = node.parent;
-  if (state.ts.isPropertyAccessExpression(parent) && parent.name === node) return false;
-  if ('name' in parent && parent.name === node && isDeclarationNameOwner(state.ts, parent)) return false;
-  if (state.ts.isPropertyAssignment(parent) && parent.name === node) return false;
-  if (state.ts.isBindingElement(parent) && parent.propertyName === node) return false;
+  if (isIdentifierNamePosition(state.ts, node)) return false;
   if (state.ts.isLabeledStatement(parent) || state.ts.isBreakOrContinueStatement(parent)) return false;
   if (insideTypeNode(state.ts, node)) return false;
   return true;
+}
+
+function isIdentifierNamePosition(ts: TypeScriptModule, node: TypeScript.Identifier): boolean {
+  const parent = node.parent;
+  if (ts.isPropertyAccessExpression(parent) && parent.name === node) return true;
+  if ('name' in parent && parent.name === node && isDeclarationNameOwner(ts, parent)) return true;
+  if (ts.isPropertyAssignment(parent) && parent.name === node) return true;
+  if (ts.isBindingElement(parent) && parent.propertyName === node) return true;
+  return false;
 }
 
 function isDeclarationNameOwner(ts: TypeScriptModule, node: TypeScript.Node): boolean {
@@ -1485,31 +1491,10 @@ function addReachingDefinitionEdges(state: AnalysisState, analysis: CallableAnal
     const node = nodes[index]!;
     const nextInput = input[index]!;
     nextInput.fill(0);
-    for (const predecessor of node.predecessors) {
-      const from = output[nodeIndex.get(predecessor)!]!;
-      for (let word = 0; word < from.length; word += 1) nextInput[word]! |= from[word]!;
-    }
-    const nextOutput = output[index]!;
-    const genSet = gen[index]!;
-    const killSet = kill[index]!;
-    let changed = false;
-    for (let word = 0; word < nextOutput.length; word += 1) {
-      // Bitwise operators yield signed 32-bit values; normalize before comparing with the stored unsigned word.
-      const value =
-        (node.invalidatesAllDefinitions ? genSet[word]! : (nextInput[word]! & ~killSet[word]!) | genSet[word]!) >>> 0;
-      if (value !== nextOutput[word]) {
-        nextOutput[word] = value;
-        changed = true;
-      }
-    }
+    mergeReachingPredecessors(node, nodeIndex, output, nextInput);
+    const changed = updateReachingOutput(node, nextInput, output[index]!, gen[index]!, kill[index]!);
     if (!changed) continue;
-    for (const successor of node.successors) {
-      const successorIndex = nodeIndex.get(successor)!;
-      if (queued[successorIndex] === 0) {
-        queued[successorIndex] = 1;
-        worklist.push(successorIndex);
-      }
-    }
+    enqueueFlowNeighbors(node.successors, nodeIndex, queued, worklist);
   }
   nodes.forEach((node, index) => {
     const reaching = input[index]!;
@@ -1551,6 +1536,53 @@ function addReachingDefinitionEdges(state: AnalysisState, analysis: CallableAnal
       }
     }
   });
+}
+
+function mergeReachingPredecessors(
+  node: CfgNode,
+  nodeIndex: ReadonlyMap<string, number>,
+  output: readonly BitSet[],
+  nextInput: BitSet,
+): void {
+  for (const predecessor of node.predecessors) {
+    const from = output[nodeIndex.get(predecessor)!]!;
+    for (let word = 0; word < from.length; word += 1) nextInput[word]! |= from[word]!;
+  }
+}
+
+function updateReachingOutput(
+  node: CfgNode,
+  nextInput: BitSet,
+  nextOutput: BitSet,
+  genSet: BitSet,
+  killSet: BitSet,
+): boolean {
+  let changed = false;
+  for (let word = 0; word < nextOutput.length; word += 1) {
+    // Normalize signed bitwise results before comparing with stored unsigned words.
+    const value =
+      (node.invalidatesAllDefinitions ? genSet[word]! : (nextInput[word]! & ~killSet[word]!) | genSet[word]!) >>> 0;
+    if (value !== nextOutput[word]) {
+      nextOutput[word] = value;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function enqueueFlowNeighbors(
+  neighbors: ReadonlySet<string>,
+  nodeIndex: ReadonlyMap<string, number>,
+  queued: Uint8Array,
+  worklist: number[],
+): void {
+  for (const neighbor of neighbors) {
+    const index = nodeIndex.get(neighbor)!;
+    if (queued[index] === 0) {
+      queued[index] = 1;
+      worklist.push(index);
+    }
+  }
 }
 
 function groupDefinitionsBySymbol(definitions: readonly FlowDefinition[]): Map<string, FlowDefinition[]> {
@@ -1650,33 +1682,61 @@ function computePostdominators(analysis: CallableAnalysis): { order: string[]; s
     const node = nodes[index]!;
     if (node.successors.size === 0) continue;
     scratch.fill(0xffffffff);
-    for (const successor of node.successors) {
-      const from = sets[nodeIndex.get(successor)!]!;
-      for (let word = 0; word < scratch.length; word += 1) scratch[word]! &= from[word]!;
-    }
+    intersectSuccessorPostdominators(node, nodeIndex, sets, scratch);
     bitSetAdd(scratch, index);
-    const current = sets[index]!;
-    let changed = false;
-    for (let word = 0; word < current.length; word += 1) {
-      if (scratch[word] !== current[word]) {
-        current[word] = scratch[word]!;
-        changed = true;
-      }
-    }
+    const changed = replaceFlowBitSet(sets[index]!, scratch);
     if (!changed) continue;
-    for (const predecessor of node.predecessors) {
-      const predecessorIndex = nodeIndex.get(predecessor)!;
-      if (queued[predecessorIndex] === 0) {
-        queued[predecessorIndex] = 1;
-        worklist.push(predecessorIndex);
-      }
-    }
+    enqueueFlowNeighbors(node.predecessors, nodeIndex, queued, worklist);
   }
   return { order, sets };
 }
 
+function intersectSuccessorPostdominators(
+  node: CfgNode,
+  nodeIndex: ReadonlyMap<string, number>,
+  sets: readonly BitSet[],
+  scratch: BitSet,
+): void {
+  for (const successor of node.successors) {
+    const from = sets[nodeIndex.get(successor)!]!;
+    for (let word = 0; word < scratch.length; word += 1) scratch[word]! &= from[word]!;
+  }
+}
+
+function replaceFlowBitSet(current: BitSet, next: BitSet): boolean {
+  let changed = false;
+  for (let word = 0; word < current.length; word += 1) {
+    if (next[word] !== current[word]) {
+      current[word] = next[word]!;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 function addCrossCallableCandidates(state: AnalysisState, analyses: readonly CallableAnalysis[]): void {
   const parentById = new Map(analyses.map((analysis) => [analysis.id, analysis.parentId]));
+  const definitionsBySymbol = crossCallableDefinitionsBySymbol(analyses);
+  const reachedUses = new Set(
+    [...state.edges.values()].filter((edge) => edge.kind === 'reaching-definition').map((edge) => edge.toPointId),
+  );
+  for (const analysis of analyses) {
+    for (const use of [...analysis.cfg.values()].flatMap((node) => node.uses)) {
+      if (!use.point.symbolKey || reachedUses.has(use.point.id)) continue;
+      addCrossCallableUseCandidates(state, use, definitionsBySymbol.get(use.point.symbolKey) ?? [], parentById);
+    }
+  }
+  if ([...state.edges.values()].some((edge) => edge.kind === 'closure-capture')) {
+    state.unsupported.add(
+      'Closure capture identity is known, but invocation order and intervening writes remain candidate flow.',
+    );
+  }
+  if ([...state.edges.values()].some((edge) => edge.kind === 'field-definition-to-use')) {
+    state.unsupported.add('Cross-callable field flow lacks receiver points-to and invocation-order analysis.');
+  }
+}
+
+function crossCallableDefinitionsBySymbol(analyses: readonly CallableAnalysis[]): Map<string, MutableFlowPoint[]> {
   const allDefinitions = analyses.flatMap((analysis) =>
     [...analysis.cfg.values()].flatMap((node) => node.definitions.map((definition) => definition.point)),
   );
@@ -1687,43 +1747,35 @@ function addCrossCallableCandidates(state: AnalysisState, analyses: readonly Cal
     rows.push(definition);
     definitionsBySymbol.set(definition.symbolKey, rows);
   }
-  const reachedUses = new Set(
-    [...state.edges.values()].filter((edge) => edge.kind === 'reaching-definition').map((edge) => edge.toPointId),
-  );
-  for (const analysis of analyses) {
-    for (const use of [...analysis.cfg.values()].flatMap((node) => node.uses)) {
-      if (!use.point.symbolKey || reachedUses.has(use.point.id)) continue;
-      const candidates = definitionsBySymbol.get(use.point.symbolKey) ?? [];
-      for (const definition of candidates) {
-        if (isAncestorCallable(definition.callableId, use.point.callableId, parentById)) {
-          addEdge(
-            state,
-            'closure-capture',
-            definition.id,
-            use.point.id,
-            'candidate',
-            'Compiler identity proves the captured binding, but invocation order can select among outer definitions.',
-          );
-        } else if (use.property && definition.callableId !== use.point.callableId) {
-          addEdge(
-            state,
-            'field-definition-to-use',
-            definition.id,
-            use.point.id,
-            'candidate',
-            'Compiler identity matches the field; cross-callable receiver and execution order remain unresolved.',
-          );
-        }
-      }
+  return definitionsBySymbol;
+}
+
+function addCrossCallableUseCandidates(
+  state: AnalysisState,
+  use: FlowUse,
+  candidates: readonly MutableFlowPoint[],
+  parentById: ReadonlyMap<string, string | null>,
+): void {
+  for (const definition of candidates) {
+    if (isAncestorCallable(definition.callableId, use.point.callableId, parentById)) {
+      addEdge(
+        state,
+        'closure-capture',
+        definition.id,
+        use.point.id,
+        'candidate',
+        'Compiler identity proves the captured binding, but invocation order can select among outer definitions.',
+      );
+    } else if (use.property && definition.callableId !== use.point.callableId) {
+      addEdge(
+        state,
+        'field-definition-to-use',
+        definition.id,
+        use.point.id,
+        'candidate',
+        'Compiler identity matches the field; cross-callable receiver and execution order remain unresolved.',
+      );
     }
-  }
-  if ([...state.edges.values()].some((edge) => edge.kind === 'closure-capture')) {
-    state.unsupported.add(
-      'Closure capture identity is known, but invocation order and intervening writes remain candidate flow.',
-    );
-  }
-  if ([...state.edges.values()].some((edge) => edge.kind === 'field-definition-to-use')) {
-    state.unsupported.add('Cross-callable field flow lacks receiver points-to and invocation-order analysis.');
   }
 }
 

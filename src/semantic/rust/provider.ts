@@ -81,23 +81,18 @@ export function createRustSemanticProvider(
   const workerReferenceResolver = createWorkerRustReferenceResolver(projectRoot, status);
   const workerCalleeResolver = createWorkerRustCalleeResolver(projectRoot, status);
   const workerSignatureResolver = createWorkerRustSignatureResolver(projectRoot, status);
-  const sessionResolver =
-    opts.referenceResolver || opts.calleeResolver || opts.signatureResolver || !shouldUsePersistentRustSession(opts)
-      ? null
-      : createRustAnalyzerSessionResolver(projectRoot, status, {
-          fallbackReferenceResolver: workerReferenceResolver,
-          fallbackCalleeResolver: workerCalleeResolver,
-          fallbackSignatureResolver: workerSignatureResolver,
-        });
+  const sessionResolver = selectRustSessionResolver(
+    projectRoot,
+    opts,
+    status,
+    workerReferenceResolver,
+    workerCalleeResolver,
+    workerSignatureResolver,
+  );
   const referenceResolver = opts.referenceResolver ?? sessionResolver ?? workerReferenceResolver;
   const calleeResolver = opts.calleeResolver ?? sessionResolver ?? workerCalleeResolver;
   const signatureResolver = opts.signatureResolver ?? sessionResolver ?? workerSignatureResolver;
-  const importUsageResolver =
-    opts.importUsageResolver ??
-    createRustSemanticImportUsageResolver(
-      opts.sourceImportUsageResolver ?? emptyRustSourceImportUsageResolver(),
-      opts.importDefinitionResolver ?? sessionResolver,
-    );
+  const importUsageResolver = selectRustImportUsageResolver(opts, sessionResolver);
   const calleeSymbolResolver = opts.calleeSymbolResolver;
   const sourceZeroCalleeOracle = opts.sourceZeroCalleeOracle;
   const scipOccurrenceCalleeOracle = opts.scipOccurrenceCalleeOracle;
@@ -777,4 +772,36 @@ function configuredNonNegativeInteger(value: string | undefined, fallback: numbe
   if (!value) return fallback;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function selectRustSessionResolver(
+  projectRoot: string,
+  opts: RustSemanticProviderOptions,
+  status: typeof getRustSemanticStatus,
+  workerReferenceResolver: ReturnType<typeof createWorkerRustReferenceResolver>,
+  workerCalleeResolver: ReturnType<typeof createWorkerRustCalleeResolver>,
+  workerSignatureResolver: ReturnType<typeof createWorkerRustSignatureResolver>,
+) {
+  const sessionResolver =
+    opts.referenceResolver || opts.calleeResolver || opts.signatureResolver || !shouldUsePersistentRustSession(opts)
+      ? null
+      : createRustAnalyzerSessionResolver(projectRoot, status, {
+          fallbackReferenceResolver: workerReferenceResolver,
+          fallbackCalleeResolver: workerCalleeResolver,
+          fallbackSignatureResolver: workerSignatureResolver,
+        });
+  return sessionResolver;
+}
+
+function selectRustImportUsageResolver(
+  opts: RustSemanticProviderOptions,
+  sessionResolver: ReturnType<typeof selectRustSessionResolver>,
+) {
+  const importUsageResolver =
+    opts.importUsageResolver ??
+    createRustSemanticImportUsageResolver(
+      opts.sourceImportUsageResolver ?? emptyRustSourceImportUsageResolver(),
+      opts.importDefinitionResolver ?? sessionResolver,
+    );
+  return importUsageResolver;
 }

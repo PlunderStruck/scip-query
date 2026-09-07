@@ -583,27 +583,15 @@ function materializeSemanticReferenceBatch(
         rows: computedRows,
       }),
     );
-    for (const definition of computeInput) {
-      if (computed.has(definition.symbolId)) {
-        materializedReferences.set(definition.symbolId, computed.get(definition.symbolId) ?? []);
-        incompleteReferences.delete(definition.symbolId);
-      } else {
-        incompleteReferences.add(definition.symbolId);
-      }
-    }
-    for (const { definition, cacheFingerprint } of misses) {
-      if (
-        computed.has(definition.symbolId) &&
-        semanticEvidenceCapability(db, 'semantic-references', definition.relativePath).available
-      ) {
-        cacheWrites.push({
-          relativePath: definition.relativePath,
-          symbol: definition.symbol,
-          projectFingerprint: cacheFingerprint,
-          payload: JSON.stringify(computed.get(definition.symbolId) ?? []),
-        });
-      }
-    }
+    applyComputedSemanticReferences(
+      db,
+      computeInput,
+      computed,
+      materializedReferences,
+      incompleteReferences,
+      misses,
+      cacheWrites,
+    );
   }
 
   if (cacheWrites.length > 0) {
@@ -923,29 +911,16 @@ function buildSemanticCalleeMap(
         if (profiling) providerHits += 1;
         const indexedDefinition = definition as IndexedDefinition;
         if (provider.calleesForDefinitions) {
-          const bucket = bulkGroups.get(provider);
-          if (bucket) bucket.push(indexedDefinition);
-          else bulkGroups.set(provider, [indexedDefinition]);
+          appendBulkCalleeDefinition(bulkGroups, provider, indexedDefinition);
         } else {
           scalarDefinitions.push({ provider, definition: indexedDefinition });
         }
       }
 
-      for (const [provider, groupedDefinitions] of bulkGroups) {
-        // One request per bounded batch: a whole-project pass sent every
-        // definition at once, and the service worker that answers it holds
-        // every touched compiler program until the request completes.
-        for (const batch of calleeRequestBatches(groupedDefinitions)) {
-          const calleeMap = provider.calleesForDefinitions!(batch);
-          for (const definition of batch) {
-            const callees = calleeMap.get(definition.symbolId) ?? [];
-            recordSemanticCallees(result, definition.symbolId, callees, profiling, (count) => {
-              definitionsWithCallees += 1;
-              calleeCount += count;
-            });
-          }
-        }
-      }
+      collectBulkSemanticCallees(bulkGroups, result, profiling, (count) => {
+        definitionsWithCallees += 1;
+        calleeCount += count;
+      });
 
       for (const { provider, definition } of scalarDefinitions) {
         const callees = provider.calleesFor(definition);
@@ -1158,4 +1133,68 @@ function availableSemanticProvider(db: ScipDatabase, relativePath: string): Sema
   if (!semanticProviderLanguageForPath(relativePath)) return null;
   const provider = getSemanticProvider(db, relativePath);
   return provider.availability().available ? provider : null;
+}
+
+function applyComputedSemanticReferences(
+  db: ScipDatabase,
+  computeInput: IndexedDefinition[],
+  computed: Map<number, SemanticReference[]>,
+  materializedReferences: Map<number, SemanticReference[]>,
+  incompleteReferences: Set<number>,
+  misses: Array<{ definition: IndexedDefinition; cacheFingerprint: string }>,
+  cacheWrites: SemanticReferenceCacheEntry[],
+): void {
+  for (const definition of computeInput) {
+    if (computed.has(definition.symbolId)) {
+      materializedReferences.set(definition.symbolId, computed.get(definition.symbolId) ?? []);
+      incompleteReferences.delete(definition.symbolId);
+    } else {
+      incompleteReferences.add(definition.symbolId);
+    }
+  }
+  for (const { definition, cacheFingerprint } of misses) {
+    if (
+      computed.has(definition.symbolId) &&
+      semanticEvidenceCapability(db, 'semantic-references', definition.relativePath).available
+    ) {
+      cacheWrites.push({
+        relativePath: definition.relativePath,
+        symbol: definition.symbol,
+        projectFingerprint: cacheFingerprint,
+        payload: JSON.stringify(computed.get(definition.symbolId) ?? []),
+      });
+    }
+  }
+}
+
+function collectBulkSemanticCallees(
+  bulkGroups: Map<SemanticProvider, IndexedDefinition[]>,
+  result: Map<number, SemanticCallee[]>,
+  profiling: boolean,
+  onCallees: (count: number) => void,
+): void {
+  for (const [provider, groupedDefinitions] of bulkGroups) {
+    // One request per bounded batch: a whole-project pass sent every
+    // definition at once, and the service worker that answers it holds
+    // every touched compiler program until the request completes.
+    for (const batch of calleeRequestBatches(groupedDefinitions)) {
+      const calleeMap = provider.calleesForDefinitions!(batch);
+      for (const definition of batch) {
+        const callees = calleeMap.get(definition.symbolId) ?? [];
+        recordSemanticCallees(result, definition.symbolId, callees, profiling, (count) => {
+          onCallees(count);
+        });
+      }
+    }
+  }
+}
+
+function appendBulkCalleeDefinition(
+  bulkGroups: Map<SemanticProvider, IndexedDefinition[]>,
+  provider: SemanticProvider,
+  indexedDefinition: IndexedDefinition,
+): void {
+  const bucket = bulkGroups.get(provider);
+  if (bucket) bucket.push(indexedDefinition);
+  else bulkGroups.set(provider, [indexedDefinition]);
 }

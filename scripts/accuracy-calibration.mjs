@@ -1911,32 +1911,36 @@ function renderDeadPacket(packet) {
     `| Repository | Commit | Candidates | Sampled | ${languageLabel} semantic | Error |`,
     '| --- | --- | ---: | ---: | --- | --- |',
   ];
-  for (const repo of packet.repositories) {
-    lines.push(
-      `| ${repo.repository} | ${repo.commit ?? '-'} | ${repo.totalDeadCandidates ?? '-'} | ${repo.sampled ?? '-'} | ${repo.capability?.semantic?.status ?? '-'} | ${escapeTable(repo.error ?? '')} |`,
-    );
-  }
+  for (const repo of packet.repositories) appendDeadRepository(lines, repo);
   lines.push('', '## Current Summary', '', '```json', JSON.stringify(packet.summary, null, 2), '```', '');
-  for (const [index, row] of packet.rows.entries()) {
-    lines.push(
-      `## ${index + 1}. ${row.repository}: ${row.shortName}`,
-      '',
-      `- Calibration ID: \`${row.calibrationId}\``,
-      `- Commit: \`${row.commit}\``,
-      `- Location: \`${row.relativePath}:${row.startLine + 1}-${row.endLine + 1}\``,
-      `- Evidence: ${row.evidence}`,
-      `- Implicit usage: ${row.implicitUsageReason ?? '-'}`,
-      `- Verdict: **${row.verdict?.toUpperCase() ?? 'PENDING'}**`,
-      `- Noise archetype: ${row.noiseArchetype ?? '-'}`,
-      `- Evidence note: ${row.evidenceNote ?? '-'}`,
-      '',
-      '````text',
-      row.sourceExcerpt ?? '(source unavailable)',
-      '````',
-      '',
-    );
-  }
+  for (const [index, row] of packet.rows.entries()) appendDeadRow(lines, row, index);
   return `${lines.join('\n')}\n`;
+}
+
+function appendDeadRepository(lines, repo) {
+  lines.push(
+    `| ${repo.repository} | ${repo.commit ?? '-'} | ${repo.totalDeadCandidates ?? '-'} | ${repo.sampled ?? '-'} | ${repo.capability?.semantic?.status ?? '-'} | ${escapeTable(repo.error ?? '')} |`,
+  );
+}
+
+function appendDeadRow(lines, row, index) {
+  lines.push(
+    `## ${index + 1}. ${row.repository}: ${row.shortName}`,
+    '',
+    `- Calibration ID: \`${row.calibrationId}\``,
+    `- Commit: \`${row.commit}\``,
+    `- Location: \`${row.relativePath}:${row.startLine + 1}-${row.endLine + 1}\``,
+    `- Evidence: ${row.evidence}`,
+    `- Implicit usage: ${row.implicitUsageReason ?? '-'}`,
+    `- Verdict: **${row.verdict?.toUpperCase() ?? 'PENDING'}**`,
+    `- Noise archetype: ${row.noiseArchetype ?? '-'}`,
+    `- Evidence note: ${row.evidenceNote ?? '-'}`,
+    '',
+    '````text',
+    row.sourceExcerpt ?? '(source unavailable)',
+    '````',
+    '',
+  );
 }
 
 function escapeTable(value) {

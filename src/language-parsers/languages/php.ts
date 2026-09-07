@@ -70,24 +70,27 @@ function parsePhpImportsAst(db: ScipDatabase, importerPath: string, tree: Tree):
     if (group) {
       // `use Ns\{Foo, Bar as Baz};` — group import with shared prefix.
       const prefix = decl.namedChildren.find((c) => c.type === 'namespace_name')?.text ?? '';
-      for (const clause of group.namedChildren) {
-        if (clause.type !== 'namespace_use_clause') continue;
-        const { importedName, localName, qualified } = phpUseClauseTarget(clause, prefix);
-        if (!importedName) continue;
-        emit(qualified, importedName, localName);
-      }
+      emitPhpUseClauses(group.namedChildren, prefix, emit);
       continue;
     }
 
     // `use App\Foo;` or `use App\Foo as Bar;` — single clause(s) at the top level.
-    for (const clause of decl.namedChildren) {
-      if (clause.type !== 'namespace_use_clause') continue;
-      const { importedName, localName, qualified } = phpUseClauseTarget(clause, '');
-      if (!importedName) continue;
-      emit(qualified, importedName, localName);
-    }
+    emitPhpUseClauses(decl.namedChildren, '', emit);
   }
   return results;
+}
+
+function emitPhpUseClauses(
+  clauses: readonly SyntaxNode[],
+  prefix: string,
+  emit: (qualified: string, importedName: string, localName: string) => void,
+): void {
+  for (const clause of clauses) {
+    if (clause.type !== 'namespace_use_clause') continue;
+    const { importedName, localName, qualified } = phpUseClauseTarget(clause, prefix);
+    if (!importedName) continue;
+    emit(qualified, importedName, localName);
+  }
 }
 
 function phpUseClauseTarget(

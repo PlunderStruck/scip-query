@@ -216,26 +216,7 @@ export function analyzeArchitectureGraph(
     };
   }
 
-  const resolved = new Map<string, string>();
-  const filesByBoundary = new Map(config.boundaries.map((boundary) => [boundary.name, new Set<string>()] as const));
-  const unmappedFiles: string[] = [];
-  const ambiguousFiles: ArchitectureAmbiguousFile[] = [];
-
-  for (const file of allFiles) {
-    const matches = config.boundaries
-      .filter((boundary) => boundary.paths.some((pattern) => matchesPathGlob(pattern, file)))
-      .map((boundary) => boundary.name)
-      .sort();
-    if (matches.length === 0) {
-      unmappedFiles.push(file);
-    } else if (matches.length > 1) {
-      ambiguousFiles.push({ file, boundaries: matches });
-    } else {
-      const boundary = matches[0]!;
-      resolved.set(file, boundary);
-      filesByBoundary.get(boundary)!.add(file);
-    }
-  }
+  const { resolved, filesByBoundary, unmappedFiles, ambiguousFiles } = mapArchitectureFiles(allFiles, config);
 
   const edges = aggregateArchitectureEdges(fileGraph, resolved, config);
   const testGraph = new Map(
@@ -250,18 +231,7 @@ export function analyzeArchitectureGraph(
   const boundaryGraph = new Map(config.boundaries.map((boundary) => [boundary.name, new Set<string>()] as const));
   for (const edge of enforcedEdges) boundaryGraph.get(edge.from)!.add(edge.to);
 
-  const reciprocalPairs: ArchitectureReciprocalPair[] = [];
-  for (const edge of enforcedEdges) {
-    if (edge.from >= edge.to) continue;
-    const reverse = edgeByKey.get(boundaryEdgeKey(edge.to, edge.from));
-    if (reverse) {
-      reciprocalPairs.push({
-        boundaries: [edge.from, edge.to],
-        forward: edge,
-        reverse,
-      });
-    }
-  }
+  const reciprocalPairs = reciprocalArchitecturePairs(enforcedEdges, edgeByKey);
 
   const fileComponents = stronglyConnectedComponents(fileGraph).components.filter(
     (component) =>
@@ -336,6 +306,51 @@ export function analyzeArchitectureGraph(
       requiresMinimalPolicy: config.requireMinimalPolicy === true,
     },
   };
+}
+
+function mapArchitectureFiles(allFiles: readonly string[], config: ArchitectureConfig) {
+  const resolved = new Map<string, string>();
+  const filesByBoundary = new Map(config.boundaries.map((boundary) => [boundary.name, new Set<string>()] as const));
+  const unmappedFiles: string[] = [];
+  const ambiguousFiles: ArchitectureAmbiguousFile[] = [];
+
+  for (const file of allFiles) {
+    const matches = config.boundaries
+      .filter((boundary) => boundary.paths.some((pattern) => matchesPathGlob(pattern, file)))
+      .map((boundary) => boundary.name)
+      .sort();
+    if (matches.length === 0) {
+      unmappedFiles.push(file);
+    } else if (matches.length > 1) {
+      ambiguousFiles.push({ file, boundaries: matches });
+    } else {
+      const boundary = matches[0]!;
+      resolved.set(file, boundary);
+      filesByBoundary.get(boundary)!.add(file);
+    }
+  }
+
+  return { resolved, filesByBoundary, unmappedFiles, ambiguousFiles };
+}
+
+function reciprocalArchitecturePairs(
+  enforcedEdges: ArchitectureReport['edges'],
+  edgeByKey: ReadonlyMap<string, ArchitectureReport['edges'][number]>,
+): ArchitectureReciprocalPair[] {
+  const reciprocalPairs: ArchitectureReciprocalPair[] = [];
+  for (const edge of enforcedEdges) {
+    if (edge.from >= edge.to) continue;
+    const reverse = edgeByKey.get(boundaryEdgeKey(edge.to, edge.from));
+    if (reverse) {
+      reciprocalPairs.push({
+        boundaries: [edge.from, edge.to],
+        forward: edge,
+        reverse,
+      });
+    }
+  }
+
+  return reciprocalPairs;
 }
 
 /** Build and analyze the current project's import dependency graph. */

@@ -218,12 +218,12 @@ function buildBehaviorTokens(
   templateBindingNames: readonly string[],
 ): Set<string> {
   const tokens = new Set<string>();
-  for (const name of scriptFacts.composables) tokens.add(`composable:${name}`);
-  for (const name of scriptFacts.stores) tokens.add(`store:${name}`);
-  for (const name of scriptFacts.reactivity) tokens.add(`reactivity:${name}`);
-  for (const name of scriptFacts.lifecycle) tokens.add(`lifecycle:${name}`);
-  for (const name of scriptFacts.requests) tokens.add(`request:${name}`);
-  for (const name of scriptFacts.macros) tokens.add(`macro:${name}`);
+  addPrefixedBehaviorTokens(tokens, scriptFacts.composables, 'composable');
+  addPrefixedBehaviorTokens(tokens, scriptFacts.stores, 'store');
+  addPrefixedBehaviorTokens(tokens, scriptFacts.reactivity, 'reactivity');
+  addPrefixedBehaviorTokens(tokens, scriptFacts.lifecycle, 'lifecycle');
+  addPrefixedBehaviorTokens(tokens, scriptFacts.requests, 'request');
+  addPrefixedBehaviorTokens(tokens, scriptFacts.macros, 'macro');
   for (const fn of scriptFacts.functions) {
     if (BEHAVIOR_FUNCTION_STOP_WORDS.has(fn.name)) continue;
     tokens.add(`function:${fn.name}`);
@@ -233,6 +233,10 @@ function buildBehaviorTokens(
   for (const event of templateFacts.events) tokens.add(`template-event:${event.name}`);
   for (const binding of templateBindingNames) tokens.add(`template-binding:${binding}`);
   return tokens;
+}
+
+function addPrefixedBehaviorTokens(tokens: Set<string>, names: Iterable<string>, prefix: string): void {
+  for (const name of names) tokens.add(`${prefix}:${name}`);
 }
 
 function templateLocalIdentifiers(facts: VueTemplateFacts): string[] {

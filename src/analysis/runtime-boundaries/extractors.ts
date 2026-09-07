@@ -121,26 +121,22 @@ function nodeChildProcessBindings(source: string): {
   const namespaces = new Set<string>();
   const modulePattern = String.raw`['"](?:node:)?child_process['"]`;
   const namedImport = new RegExp(String.raw`\bimport\s*\{([^}]*)\}\s*from\s*${modulePattern}`, 'gu');
-  for (const match of source.matchAll(namedImport)) {
-    for (const rawSpecifier of (match[1] ?? '').split(',')) {
-      const specifier = /^\s*([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*$/u.exec(rawSpecifier);
-      if (specifier && NODE_CHILD_PROCESS_OPERATIONS.has(specifier[1]!)) {
-        direct.set(specifier[2] ?? specifier[1]!, specifier[1]!);
-      }
-    }
-  }
+  collectDirectProcessBindings(
+    source,
+    namedImport,
+    /^\s*([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*$/u,
+    direct,
+  );
   const destructuredRequire = new RegExp(
     String.raw`\b(?:const|let)\s*\{([^}]*)\}\s*=\s*require\s*\(\s*${modulePattern}\s*\)`,
     'gu',
   );
-  for (const match of source.matchAll(destructuredRequire)) {
-    for (const rawSpecifier of (match[1] ?? '').split(',')) {
-      const specifier = /^\s*([A-Za-z_$][\w$]*)(?:\s*:\s*([A-Za-z_$][\w$]*))?\s*$/u.exec(rawSpecifier);
-      if (specifier && NODE_CHILD_PROCESS_OPERATIONS.has(specifier[1]!)) {
-        direct.set(specifier[2] ?? specifier[1]!, specifier[1]!);
-      }
-    }
-  }
+  collectDirectProcessBindings(
+    source,
+    destructuredRequire,
+    /^\s*([A-Za-z_$][\w$]*)(?:\s*:\s*([A-Za-z_$][\w$]*))?\s*$/u,
+    direct,
+  );
   const namespaceImport = new RegExp(
     String.raw`\bimport\s*\*\s*as\s*([A-Za-z_$][\w$]*)\s*from\s*${modulePattern}`,
     'gu',
@@ -152,6 +148,22 @@ function nodeChildProcessBindings(source: string): {
   );
   for (const match of source.matchAll(namespaceRequire)) namespaces.add(match[1]!);
   return { direct, namespaces };
+}
+
+function collectDirectProcessBindings(
+  source: string,
+  declaration: RegExp,
+  specifierPattern: RegExp,
+  direct: Map<string, string>,
+): void {
+  for (const match of source.matchAll(declaration)) {
+    for (const rawSpecifier of (match[1] ?? '').split(',')) {
+      const specifier = specifierPattern.exec(rawSpecifier);
+      if (specifier && NODE_CHILD_PROCESS_OPERATIONS.has(specifier[1]!)) {
+        direct.set(specifier[2] ?? specifier[1]!, specifier[1]!);
+      }
+    }
+  }
 }
 
 export function boundaryFileContext(
@@ -270,70 +282,91 @@ function effectHttpApiExtractor(): BoundaryExtractor {
         const args = callArguments(node);
 
         if (endpointBindings.has(callee.receiver) && HTTP_METHODS.has(callee.member)) {
-          const operation = addressedArgument(args[0], context);
-          const path = addressedArgument(args[1], context);
-          const group = enclosingFrameworkCallArgument(node, groupBindings, 'make', 0, context);
-          if (!operation || !path || !group) return;
-          const method = callee.member.toUpperCase();
-          observations.push(
-            observation(
-              context,
-              node,
-              'builtin.effect-httpapi',
-              'http.handle',
-              [
-                { name: 'method', value: method, evidence: 'literal' },
-                { name: 'path', ...path },
-              ],
-              resolvedStrength([{ name: 'path', ...path }]),
-              'effect-httpapi-endpoint-declaration',
-            ),
-          );
-          observations.push(
-            observation(
-              context,
-              node,
-              'builtin.effect-httpapi',
-              'framework.declare',
-              effectHttpApiOperationKey(group, operation),
-              resolvedStrength(effectHttpApiOperationKey(group, operation)),
-              'effect-httpapi-operation-declaration',
-            ),
-          );
+          appendEffectEndpoint(observations, context, node, callee.member, args, groupBindings);
           return;
         }
 
-        if (!['handle', 'handleRaw'].includes(callee.member)) return;
-        const group = enclosingFrameworkCallArgument(node, builderBindings, 'group', 1, context);
-        const operation = addressedArgument(args[0], context);
-        const handler = args[1];
-        if (!group || !operation || !handler) return;
-        const keyParts = effectHttpApiOperationKey(group, operation);
-        const targets = resolveCallableExpression(context.db, context.file, handler.text);
-        const registration = observation(
-          context,
-          node,
-          'builtin.effect-httpapi',
-          'framework.handle',
-          keyParts,
-          targets.length === 1 ? resolvedStrength(keyParts) : 'candidate',
-          'effect-httpapi-handler-registration',
-        );
-        const target = targets[0];
-        if (targets.length === 1 && target) {
-          registration.owner = {
-            file: target.relativePath,
-            symbol: target.symbol,
-            name: target.leaf,
-            startLine: target.startLine,
-            endLine: target.endLine,
-          };
-        }
-        observations.push(registration);
+        appendEffectRegistration(observations, context, node, callee.member, args, builderBindings);
       });
       return observations;
     },
   };
+}
+
+function appendEffectEndpoint(
+  observations: BoundaryObservation[],
+  context: BoundaryFileContext,
+  node: SyntaxNode,
+  member: string,
+  args: SyntaxNode[],
+  groupBindings: ReadonlySet<string>,
+): void {
+  const operation = addressedArgument(args[0], context);
+  const path = addressedArgument(args[1], context);
+  const group = enclosingFrameworkCallArgument(node, groupBindings, 'make', 0, context);
+  if (!operation || !path || !group) return;
+  const method = member.toUpperCase();
+  observations.push(
+    observation(
+      context,
+      node,
+      'builtin.effect-httpapi',
+      'http.handle',
+      [
+        { name: 'method', value: method, evidence: 'literal' },
+        { name: 'path', ...path },
+      ],
+      resolvedStrength([{ name: 'path', ...path }]),
+      'effect-httpapi-endpoint-declaration',
+    ),
+  );
+  observations.push(
+    observation(
+      context,
+      node,
+      'builtin.effect-httpapi',
+      'framework.declare',
+      effectHttpApiOperationKey(group, operation),
+      resolvedStrength(effectHttpApiOperationKey(group, operation)),
+      'effect-httpapi-operation-declaration',
+    ),
+  );
+}
+function appendEffectRegistration(
+  observations: BoundaryObservation[],
+  context: BoundaryFileContext,
+  node: SyntaxNode,
+  member: string,
+  args: SyntaxNode[],
+  builderBindings: ReadonlySet<string>,
+): void {
+  if (!['handle', 'handleRaw'].includes(member)) return;
+  const group = enclosingFrameworkCallArgument(node, builderBindings, 'group', 1, context);
+  const operation = addressedArgument(args[0], context);
+  const handler = args[1];
+  if (!group || !operation || !handler) return;
+  const keyParts = effectHttpApiOperationKey(group, operation);
+  const targets = resolveCallableExpression(context.db, context.file, handler.text);
+  const registration = observation(
+    context,
+    node,
+    'builtin.effect-httpapi',
+    'framework.handle',
+    keyParts,
+    targets.length === 1 ? resolvedStrength(keyParts) : 'candidate',
+    'effect-httpapi-handler-registration',
+  );
+  const target = targets[0];
+  if (targets.length === 1 && target) {
+    registration.owner = {
+      file: target.relativePath,
+      symbol: target.symbol,
+      name: target.leaf,
+      startLine: target.startLine,
+      endLine: target.endLine,
+    };
+  }
+  observations.push(registration);
 }
 
 function effectHttpApiOperationKey(
@@ -581,53 +614,70 @@ function capabilityRegistryExtractor(): BoundaryExtractor {
       }
       visitDescendantsOfType(context.root, nodeTypes, (node) => {
         if (node.type === 'pair') {
-          const keyNode = node.childForFieldName('key') ?? node.namedChild(0);
-          const valueNode = node.childForFieldName('value') ?? node.namedChild(1);
-          const field = keyNode?.text.replace(/^['"`]|['"`]$/gu, '');
-          if (field !== 'name' && field !== 'id') return;
-          const key = registryKey(valueNode, context);
-          const handler = capabilityDescriptorHandler(node);
-          if (!key || key.evidence !== 'literal' || !handler) return;
-          const identity = `handle\0${key.value}\0${handler.startPosition.row}`;
-          if (seen.has(identity)) return;
-          seen.add(identity);
-          observations.push(
-            observation(
-              context,
-              handler,
-              'builtin.capability-registry',
-              'registry.handle',
-              [{ name: 'key', ...key }],
-              'exact',
-              'capability-descriptor',
-            ),
-          );
+          appendCapabilityDescriptor(observations, seen, context, node);
           return;
         }
-        if (!['string', 'string_literal', 'template_string'].includes(node.type)) return;
-        const text = node.text.replace(/^['"`]|['"`]$/gu, '');
-        for (const match of text.matchAll(/\b([A-Za-z_$][\w$-]*)\s*\(/gu)) {
-          const key = match[1]!;
-          if (!isCapabilityReference(text, key, match.index)) continue;
-          const identity = `reference\0${key}\0${node.startPosition.row}`;
-          if (seen.has(identity)) continue;
-          seen.add(identity);
-          observations.push(
-            observation(
-              context,
-              node,
-              'builtin.capability-registry',
-              'registry.reference',
-              [{ name: 'key', value: key, evidence: 'literal' }],
-              'exact',
-              'capability-instruction-reference',
-            ),
-          );
-        }
+        appendCapabilityReferences(observations, seen, context, node);
       });
       return observations;
     },
   };
+}
+
+function appendCapabilityDescriptor(
+  observations: BoundaryObservation[],
+  seen: Set<string>,
+  context: BoundaryFileContext,
+  node: SyntaxNode,
+): void {
+  const keyNode = node.childForFieldName('key') ?? node.namedChild(0);
+  const valueNode = node.childForFieldName('value') ?? node.namedChild(1);
+  const field = keyNode?.text.replace(/^['"`]|['"`]$/gu, '');
+  if (field !== 'name' && field !== 'id') return;
+  const key = registryKey(valueNode, context);
+  const handler = capabilityDescriptorHandler(node);
+  if (!key || key.evidence !== 'literal' || !handler) return;
+  const identity = `handle\0${key.value}\0${handler.startPosition.row}`;
+  if (seen.has(identity)) return;
+  seen.add(identity);
+  observations.push(
+    observation(
+      context,
+      handler,
+      'builtin.capability-registry',
+      'registry.handle',
+      [{ name: 'key', ...key }],
+      'exact',
+      'capability-descriptor',
+    ),
+  );
+}
+function appendCapabilityReferences(
+  observations: BoundaryObservation[],
+  seen: Set<string>,
+  context: BoundaryFileContext,
+  node: SyntaxNode,
+): void {
+  if (!['string', 'string_literal', 'template_string'].includes(node.type)) return;
+  const text = node.text.replace(/^['"`]|['"`]$/gu, '');
+  for (const match of text.matchAll(/\b([A-Za-z_$][\w$-]*)\s*\(/gu)) {
+    const key = match[1]!;
+    if (!isCapabilityReference(text, key, match.index)) continue;
+    const identity = `reference\0${key}\0${node.startPosition.row}`;
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    observations.push(
+      observation(
+        context,
+        node,
+        'builtin.capability-registry',
+        'registry.reference',
+        [{ name: 'key', value: key, evidence: 'literal' }],
+        'exact',
+        'capability-instruction-reference',
+      ),
+    );
+  }
 }
 
 function isCapabilityReference(text: string, key: string, offset: number): boolean {

@@ -610,7 +610,7 @@ function parseEntryPointsInvocation(argv: readonly string[]): EntryPointsFastPat
       state.search = remaining[0];
       break;
     }
-    if (applyEntryPointsFlag(state, arg)) continue;
+    if (applyQueryServiceOutputFlag(state, arg)) continue;
     const scopeOption = optionValue(argv, index, arg, '--scope', '-s');
     if (scopeOption) {
       state.scope = scopeOption.value;
@@ -632,7 +632,10 @@ interface EntryPointsInvocationState {
   compact: boolean;
 }
 
-function applyEntryPointsFlag(state: EntryPointsInvocationState, arg: string): boolean {
+function applyQueryServiceOutputFlag(
+  state: Pick<EntryPointsInvocationState, 'json' | 'resultOnly' | 'compact'>,
+  arg: string,
+): boolean {
   switch (arg) {
     case '--json':
       state.json = true;
@@ -853,9 +856,7 @@ function applySourceSearchInteger(
 
 function parseOutlineInvocation(argv: readonly string[]): OutlineFastPathInvocation | null {
   let filePattern: string | undefined;
-  let json = false;
-  let resultOnly = false;
-  let compact = false;
+  const flags = { json: false, resultOnly: false, compact: false };
 
   for (let index = 1; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -865,24 +866,20 @@ function parseOutlineInvocation(argv: readonly string[]): OutlineFastPathInvocat
       filePattern = remaining[0];
       break;
     }
-    if (arg === '--json') {
-      json = true;
-      continue;
-    }
-    if (arg === '--result-only') {
-      resultOnly = true;
-      continue;
-    }
-    if (arg === '--compact') {
-      compact = true;
-      continue;
-    }
+    if (applyQueryServiceOutputFlag(flags, arg)) continue;
     if (arg === '--signatures') continue;
     if (arg.startsWith('-') || filePattern !== undefined) return null;
     filePattern = arg;
   }
 
-  if (!json || !resultOnly || !compact || filePattern === undefined) return null;
+  return outlineInvocationResult(flags, filePattern);
+}
+
+function outlineInvocationResult(
+  flags: Pick<EntryPointsInvocationState, 'json' | 'resultOnly' | 'compact'>,
+  filePattern: string | undefined,
+): OutlineFastPathInvocation | null {
+  if (!flags.json || !flags.resultOnly || !flags.compact || filePattern === undefined) return null;
   return { kind: 'outline', filePattern };
 }
 

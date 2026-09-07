@@ -269,21 +269,12 @@ class TsMorphSemanticProvider implements SemanticProvider {
     const scanDefinitions = opts.exact ? [] : misses.filter((definition) => !needsPreciseReferenceSearch(definition));
     if (scanDefinitions.length >= BULK_REFERENCE_SCAN_MIN_DEFINITIONS) {
       const computed = this.referencesForDefinitionsBySymbolScan(scanDefinitions);
-      for (const definition of scanDefinitions) {
-        const references = computed.get(definition.symbolId) ?? [];
-        this.referencesCache.set(definition.symbolId, references);
-        result.set(definition.symbolId, references);
-      }
+      this.cacheScannedReferenceResults(scanDefinitions, computed, result);
       preciseSearchDefinitions = misses.filter((definition) => needsPreciseReferenceSearch(definition));
       if (preciseSearchDefinitions.length === 0) return result;
     }
 
-    const byFile = new Map<string, IndexedDefinition[]>();
-    for (const definition of preciseSearchDefinitions) {
-      const bucket = byFile.get(definition.relativePath);
-      if (bucket) bucket.push(definition);
-      else byFile.set(definition.relativePath, [definition]);
-    }
+    const byFile = groupPreciseReferenceDefinitions(preciseSearchDefinitions);
 
     const preciseScanFallbacks: IndexedDefinition[] = [];
     for (const [relativePath, fileDefinitions] of byFile) {
@@ -319,14 +310,22 @@ class TsMorphSemanticProvider implements SemanticProvider {
 
     if (preciseScanFallbacks.length > 0) {
       const computed = this.referencesForDefinitionsBySymbolScan(preciseScanFallbacks);
-      for (const definition of preciseScanFallbacks) {
-        const references = computed.get(definition.symbolId) ?? [];
-        this.referencesCache.set(definition.symbolId, references);
-        result.set(definition.symbolId, references);
-      }
+      this.cacheScannedReferenceResults(preciseScanFallbacks, computed, result);
     }
 
     return result;
+  }
+
+  private cacheScannedReferenceResults(
+    definitions: readonly IndexedDefinition[],
+    computed: Map<number, SemanticReference[]>,
+    result: Map<number, SemanticReference[]>,
+  ): void {
+    for (const definition of definitions) {
+      const references = computed.get(definition.symbolId) ?? [];
+      this.referencesCache.set(definition.symbolId, references);
+      result.set(definition.symbolId, references);
+    }
   }
 
   referenceFragmentsForFiles(files: readonly string[]): Map<string, SemanticReferenceFragment[]> {
@@ -933,19 +932,8 @@ class TsMorphSemanticProvider implements SemanticProvider {
       const sourcePath = resolveImportPath(this.db, importer, declaration.getModuleSpecifierValue());
       const typeOnlyDeclaration = declaration.getImportClause()?.isTypeOnly() ?? false;
       for (const entry of importIdentifiers(declaration)) {
-        stats.entries += 1;
-        const bindingSymbol = typeOnlyDeclaration ? null : (entry.identifier?.getSymbol()?.compilerSymbol ?? null);
-        if (!typeOnlyDeclaration && entry.identifier) {
-          if (bindingSymbol) stats.bindingSymbols += 1;
-          else stats.missingBindingSymbols += 1;
-        }
-        const item = {
-          sourcePath,
-          entry,
-          typeOnlyDeclaration,
-          bindingSymbol,
-          references: [],
-        };
+        const item = createImportUsageItem(sourcePath, entry, typeOnlyDeclaration, stats);
+        const { bindingSymbol } = item;
         items.push(item);
         if (typeOnlyDeclaration || !entry.localName || !bindingSymbol) continue;
         const bucket = itemsByName.get(entry.localName);
@@ -1216,15 +1204,7 @@ class TsMorphSemanticProvider implements SemanticProvider {
       if (stats) stats.declarationLocationMs += performance.now() - locationStart;
       if (!file || this.db.isIgnored(file)) continue;
 
-      const lookupStart = stats ? performance.now() : 0;
-      const declarationName = this.compilerDeclarationName(declaration);
-      const match = exactMatch
-        ? (findIndexedDefinitionExact(this.db, file, line, symbolName) ??
-          (declarationName && declarationName !== symbolName
-            ? findIndexedDefinitionExact(this.db, file, line, declarationName)
-            : null))
-        : findIndexedDefinitionNear(this.db, file, line, symbolName);
-      if (stats) stats.indexedLookupMs += performance.now() - lookupStart;
+      const match = this.indexedMatchForCompilerDeclaration(declaration, file, line, symbolName, stats, exactMatch);
       if (match) {
         return {
           symbolId: match.symbolId,
@@ -1235,6 +1215,26 @@ class TsMorphSemanticProvider implements SemanticProvider {
       }
     }
     return null;
+  }
+
+  private indexedMatchForCompilerDeclaration(
+    declaration: ts.Declaration,
+    file: string,
+    line: number,
+    symbolName: string,
+    stats: CalleeMapProfileStats | undefined,
+    exactMatch: boolean,
+  ) {
+    const lookupStart = stats ? performance.now() : 0;
+    const declarationName = this.compilerDeclarationName(declaration);
+    const match = exactMatch
+      ? (findIndexedDefinitionExact(this.db, file, line, symbolName) ??
+        (declarationName && declarationName !== symbolName
+          ? findIndexedDefinitionExact(this.db, file, line, declarationName)
+          : null))
+      : findIndexedDefinitionNear(this.db, file, line, symbolName);
+    if (stats) stats.indexedLookupMs += performance.now() - lookupStart;
+    return match;
   }
 
   private compilerDeclarationName(declaration: ts.Declaration): string | null {
@@ -1716,4 +1716,39 @@ function dedupeCallees(callees: SemanticCallee[]): SemanticCallee[] {
     out.push(callee);
   }
   return out;
+}
+
+function groupPreciseReferenceDefinitions(
+  preciseSearchDefinitions: readonly IndexedDefinition[],
+): Map<string, IndexedDefinition[]> {
+  const byFile = new Map<string, IndexedDefinition[]>();
+  for (const definition of preciseSearchDefinitions) {
+    const bucket = byFile.get(definition.relativePath);
+    if (bucket) bucket.push(definition);
+    else byFile.set(definition.relativePath, [definition]);
+  }
+
+  return byFile;
+}
+
+function createImportUsageItem(
+  sourcePath: string | null,
+  entry: ImportIdentifierEntry,
+  typeOnlyDeclaration: boolean,
+  stats: ImportUsageProfileStats,
+) {
+  stats.entries += 1;
+  const bindingSymbol = typeOnlyDeclaration ? null : (entry.identifier?.getSymbol()?.compilerSymbol ?? null);
+  if (!typeOnlyDeclaration && entry.identifier) {
+    if (bindingSymbol) stats.bindingSymbols += 1;
+    else stats.missingBindingSymbols += 1;
+  }
+  const item = {
+    sourcePath,
+    entry,
+    typeOnlyDeclaration,
+    bindingSymbol,
+    references: [],
+  };
+  return item;
 }

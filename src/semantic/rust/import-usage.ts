@@ -135,48 +135,45 @@ function flattenRustUseTreePositions(node: SyntaxNode, prefix: string): RustImpo
           position: nodeImportPosition(node, node.text),
         },
       ];
-    case 'scoped_identifier': {
-      const importedName = node.text.split('::').pop() ?? node.text;
-      return [
-        {
-          importedName,
-          localName: importedName,
-          position: nodeImportPosition(node, importedName),
-        },
-      ];
-    }
-    case 'scoped_use_list': {
-      const pathNode = node.namedChild(0);
-      const list = node.namedChild(1);
-      if (!pathNode || !list) return [];
-      const newPrefix = joinRustPath(prefix, pathNode.text);
-      return list.namedChildren.flatMap((child) => flattenRustUseTreePositions(child, newPrefix));
-    }
+    case 'scoped_identifier':
+      return scopedRustImportPosition(node);
+    case 'scoped_use_list':
+      return scopedRustUseListPositions(node, prefix);
     case 'use_list':
       return node.namedChildren.flatMap((child) => flattenRustUseTreePositions(child, prefix));
-    case 'use_as_clause': {
-      const path = node.namedChild(0);
-      const alias = node.namedChild(1);
-      if (!path || !alias) return [];
-      return flattenRustUseTreePositions(path, prefix).map((leaf) => ({
-        ...leaf,
-        localName: alias.text,
-      }));
-    }
-    case 'use_wildcard': {
-      const path = node.namedChild(0);
-      const importedName = '*';
-      return [
-        {
-          importedName,
-          localName: importedName,
-          position: nodeImportPosition(path ?? node, importedName),
-        },
-      ];
-    }
+    case 'use_as_clause':
+      return aliasedRustUsePositions(node, prefix);
+    case 'use_wildcard':
+      return wildcardRustImportPosition(node);
     default:
       return [];
   }
+}
+
+function scopedRustImportPosition(node: SyntaxNode): RustImportLeafPosition[] {
+  const importedName = node.text.split('::').pop() ?? node.text;
+  return [{ importedName, localName: importedName, position: nodeImportPosition(node, importedName) }];
+}
+
+function scopedRustUseListPositions(node: SyntaxNode, prefix: string): RustImportLeafPosition[] {
+  const pathNode = node.namedChild(0);
+  const list = node.namedChild(1);
+  if (!pathNode || !list) return [];
+  const newPrefix = joinRustPath(prefix, pathNode.text);
+  return list.namedChildren.flatMap((child) => flattenRustUseTreePositions(child, newPrefix));
+}
+
+function aliasedRustUsePositions(node: SyntaxNode, prefix: string): RustImportLeafPosition[] {
+  const path = node.namedChild(0);
+  const alias = node.namedChild(1);
+  if (!path || !alias) return [];
+  return flattenRustUseTreePositions(path, prefix).map((leaf) => ({ ...leaf, localName: alias.text }));
+}
+
+function wildcardRustImportPosition(node: SyntaxNode): RustImportLeafPosition[] {
+  const path = node.namedChild(0);
+  const importedName = '*';
+  return [{ importedName, localName: importedName, position: nodeImportPosition(path ?? node, importedName) }];
 }
 
 function nodeImportPosition(node: SyntaxNode, importedName: string): RustImportDefinitionPosition {

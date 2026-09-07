@@ -109,11 +109,7 @@ export function partitionTypeScriptCompilerInputsIntoShards(
   }
   const sorted = [...new Set(inputPaths)].sort((left, right) => left.localeCompare(right));
   if (shardCount === 1 || sorted.length <= shardCount) {
-    return sorted.length <= shardCount && shardCount > 1
-      ? sorted.map((path) => [path])
-      : sorted.length > 0
-        ? [sorted]
-        : [];
+    return partitionUnweightedCompilerInputs(sorted, shardCount);
   }
   const weights = sorted.map((path) => Math.max(1, weightOf(path)));
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
@@ -126,9 +122,7 @@ export function partitionTypeScriptCompilerInputsIntoShards(
     const remainingShards = shardCount - shards.length - 1;
     const remainingFiles = sorted.length - index - 1;
     if (
-      remainingShards > 0 &&
-      remainingFiles >= remainingShards &&
-      (cumulative >= (totalWeight * (shards.length + 1)) / shardCount || remainingFiles === remainingShards)
+      shouldFinishCompilerShard(remainingShards, remainingFiles, cumulative, totalWeight, shards.length, shardCount)
     ) {
       shards.push(current);
       current = [];
@@ -329,4 +323,27 @@ export function removeStaleTypeScriptCompilerShardConfigs(projectRoot: string): 
       // runner replaces owned shard configs when it creates them.
     }
   }
+}
+
+function partitionUnweightedCompilerInputs(sorted: string[], shardCount: number): string[][] {
+  return sorted.length <= shardCount && shardCount > 1
+    ? sorted.map((path) => [path])
+    : sorted.length > 0
+      ? [sorted]
+      : [];
+}
+
+function shouldFinishCompilerShard(
+  remainingShards: number,
+  remainingFiles: number,
+  cumulative: number,
+  totalWeight: number,
+  completedShards: number,
+  shardCount: number,
+): boolean {
+  return (
+    remainingShards > 0 &&
+    remainingFiles >= remainingShards &&
+    (cumulative >= (totalWeight * (completedShards + 1)) / shardCount || remainingFiles === remainingShards)
+  );
 }

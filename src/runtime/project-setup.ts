@@ -1259,32 +1259,7 @@ function remediateIndexers(
   for (const status of readiness.indexers) {
     if (status.runnable) continue;
 
-    const config = getIndexerConfig(status.language);
-    const messages: string[] = [];
-    const attempted = !status.installed && Boolean(config.installMethods?.length);
-    let installed = false;
-
-    if (attempted) {
-      installed = tryInstallIndexer(config, (message) => messages.push(message));
-    } else if (status.installed) {
-      messages.push(status.note ?? `${status.binaryLabel} is installed but is not runnable.`);
-    } else if (!config.installMethods?.length) {
-      messages.push(`No auto-install method is configured for ${status.binaryLabel}.`);
-    }
-
-    const after = languageReadinessFromDependencyStatus(getIndexerDependencyStatus(config, projectRoot));
-    remediations.push({
-      language: status.language,
-      binaryLabel: status.binaryLabel,
-      attempted,
-      installed,
-      before: status,
-      after,
-      messages,
-      recovery: after.runnable
-        ? undefined
-        : (after.note ?? after.installUrl ?? `Install ${status.binaryLabel} and put it on PATH.`),
-    });
+    remediations.push(remediateIndexer(projectRoot, status));
   }
 
   if (remediations.length === 0) {
@@ -1433,4 +1408,33 @@ function addStep(steps: ProjectSetupStep[], step: ProjectSetupStep): void {
 // scip-query: ignore-twin — workflow-local error normalization avoids coupling unrelated modules.
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function remediateIndexer(projectRoot: string, status: LanguageReadiness): ProjectSetupIndexerRemediation {
+  const config = getIndexerConfig(status.language);
+  const messages: string[] = [];
+  const attempted = !status.installed && Boolean(config.installMethods?.length);
+  let installed = false;
+
+  if (attempted) {
+    installed = tryInstallIndexer(config, (message) => messages.push(message));
+  } else if (status.installed) {
+    messages.push(status.note ?? `${status.binaryLabel} is installed but is not runnable.`);
+  } else if (!config.installMethods?.length) {
+    messages.push(`No auto-install method is configured for ${status.binaryLabel}.`);
+  }
+
+  const after = languageReadinessFromDependencyStatus(getIndexerDependencyStatus(config, projectRoot));
+  return {
+    language: status.language,
+    binaryLabel: status.binaryLabel,
+    attempted,
+    installed,
+    before: status,
+    after,
+    messages,
+    recovery: after.runnable
+      ? undefined
+      : (after.note ?? after.installUrl ?? `Install ${status.binaryLabel} and put it on PATH.`),
+  };
 }

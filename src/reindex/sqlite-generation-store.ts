@@ -207,7 +207,7 @@ export function ensureImmutableSqliteGeneration(
   if (!existsSync(outputDb)) return null;
   const previous = readSqliteGenerationState(outputDb);
   const statePath = join(sqliteGenerationRoot(outputDb), 'state.json');
-  if (previous?.artifactSet === 'immutable-v1' && readSqliteGenerationManifest(outputDb, previous.currentGeneration)) {
+  if (hasImmutableSqliteManifest(outputDb, previous)) {
     return previous;
   }
 
@@ -224,15 +224,7 @@ export function ensureImmutableSqliteGeneration(
     metadataPath: existsSync(metaPath) ? metaPath : undefined,
     forcedIdentity: previous?.currentGeneration ?? recoveredIdentity,
   });
-  const state: SqliteGenerationState = {
-    version: SQLITE_GENERATION_STORE_VERSION,
-    currentGeneration: retained.identity,
-    artifactSet: 'immutable-v1',
-    stableMirrors: stableMirrorIdentity(outputDb, outputScip),
-    ...(previous?.previousGeneration ? { previousGeneration: previous.previousGeneration } : {}),
-    ...(previous?.publication ? { publication: previous.publication } : {}),
-    publishedAt: previous?.publishedAt ?? now().toISOString(),
-  };
+  const state = retainedSqliteGenerationState(retained.identity, outputDb, outputScip, previous, now);
   writeJsonDurable(join(generationRoot, 'state.json'), state, {
     spacing: 2,
     trailingNewline: true,
@@ -915,4 +907,30 @@ function replaceFile(source: string, target: string): void {
   rmSync(`${target}.tmp-replace`, { force: true });
   renameSync(source, `${target}.tmp-replace`);
   renameSync(`${target}.tmp-replace`, target);
+}
+
+function retainedSqliteGenerationState(
+  identity: string,
+  outputDb: string,
+  outputScip: string,
+  previous: SqliteGenerationState | null,
+  now: () => Date,
+): SqliteGenerationState {
+  const state: SqliteGenerationState = {
+    version: SQLITE_GENERATION_STORE_VERSION,
+    currentGeneration: identity,
+    artifactSet: 'immutable-v1',
+    stableMirrors: stableMirrorIdentity(outputDb, outputScip),
+    ...(previous?.previousGeneration ? { previousGeneration: previous.previousGeneration } : {}),
+    ...(previous?.publication ? { publication: previous.publication } : {}),
+    publishedAt: previous?.publishedAt ?? now().toISOString(),
+  };
+  return state;
+}
+
+function hasImmutableSqliteManifest(outputDb: string, previous: SqliteGenerationState | null): boolean {
+  return (
+    previous?.artifactSet === 'immutable-v1' &&
+    Boolean(readSqliteGenerationManifest(outputDb, previous.currentGeneration))
+  );
 }

@@ -499,6 +499,13 @@ function collectJsxFacts(root: SyntaxNode): JsxFacts {
 
 // scip-query: ignore-extract — reviewed E2 cohesive algorithm; the callee cluster is local mechanics, not an independent responsibility.
 function recordJsxElement(node: SyntaxNode, facts: JsxFacts): void {
+  const componentTag = recordJsxTag(node, facts);
+  for (const child of node.namedChildren) {
+    recordJsxAttribute(child, facts, componentTag);
+  }
+}
+
+function recordJsxTag(node: SyntaxNode, facts: JsxFacts): boolean {
   const tag = jsxTagName(node);
   let componentTag = false;
   if (tag) {
@@ -516,22 +523,24 @@ function recordJsxElement(node: SyntaxNode, facts: JsxFacts): void {
     }
   }
 
-  for (const child of node.namedChildren) {
-    if (child.type === 'jsx_attribute') {
-      const attr = jsxAttributeName(child);
-      if (!attr) continue;
-      const normalized = normalizeJsxName(attr);
-      if (normalized.startsWith('on') && normalized.length > 2) {
-        const event = normalized.slice(2).replace(/^[A-Z]/, (match) => match.toLowerCase());
-        facts.eventNames.add(event);
-        facts.tokens.add(`event:${event}`);
-      } else if (!JSX_PROP_STOP_WORDS.has(normalized)) {
-        facts.propNames.add(normalized);
-        facts.tokens.add(`${componentTag ? 'prop' : 'native-prop'}:${normalized}`);
-      }
-    } else if (child.type === 'jsx_spread_attribute') {
-      facts.tokens.add(spreadToken(child));
+  return componentTag;
+}
+
+function recordJsxAttribute(child: SyntaxNode, facts: JsxFacts, componentTag: boolean): void {
+  if (child.type === 'jsx_attribute') {
+    const attr = jsxAttributeName(child);
+    if (!attr) return;
+    const normalized = normalizeJsxName(attr);
+    if (normalized.startsWith('on') && normalized.length > 2) {
+      const event = normalized.slice(2).replace(/^[A-Z]/, (match) => match.toLowerCase());
+      facts.eventNames.add(event);
+      facts.tokens.add(`event:${event}`);
+    } else if (!JSX_PROP_STOP_WORDS.has(normalized)) {
+      facts.propNames.add(normalized);
+      facts.tokens.add(`${componentTag ? 'prop' : 'native-prop'}:${normalized}`);
     }
+  } else if (child.type === 'jsx_spread_attribute') {
+    facts.tokens.add(spreadToken(child));
   }
 }
 

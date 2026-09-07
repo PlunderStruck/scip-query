@@ -186,15 +186,21 @@ function isFingerprintStatRecord(value: unknown): value is FingerprintStatRecord
   const record = value as Record<string, unknown>;
   return (
     (record['kind'] === 'file' || record['kind'] === 'symlink') &&
+    hasFiniteFingerprintStats(record) &&
+    typeof record['hash'] === 'string' &&
+    record['hash'] !== 'unreadable' &&
+    (record['semanticHash'] === undefined || typeof record['semanticHash'] === 'string')
+  );
+}
+
+function hasFiniteFingerprintStats(record: Record<string, unknown>): boolean {
+  return (
     Number.isFinite(record['dev']) &&
     Number.isFinite(record['ino']) &&
     Number.isFinite(record['mtimeMs']) &&
     Number.isFinite(record['ctimeMs']) &&
     Number.isFinite(record['size']) &&
-    Number.isFinite(record['fingerprintSize']) &&
-    typeof record['hash'] === 'string' &&
-    record['hash'] !== 'unreadable' &&
-    (record['semanticHash'] === undefined || typeof record['semanticHash'] === 'string')
+    Number.isFinite(record['fingerprintSize'])
   );
 }
 

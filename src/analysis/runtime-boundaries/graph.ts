@@ -1024,41 +1024,48 @@ export function buildRelationGroups(observations: readonly BoundaryObservation[]
   for (const rule of GROUP_RULES) {
     const actions = new Set([...rule.producerActions, ...rule.consumerActions, ...(rule.declarationActions ?? [])]);
     for (const observation of observations) {
-      if (!actions.has(observation.action) || observation.strength === 'candidate') continue;
-      const keyParts = resolvedKeys(observation, rule.keyNames);
-      if (!keyParts) continue;
-      const normalizedKey = keyParts
-        .map((part) => `${part.name}=${normalizedKeyPart(part.name, part.value)}`)
-        .join('\0');
-      const scopeKey = observation.sourceScope === 'production' ? 'production' : observation.sourceScope;
-      const identity = `${rule.id}\0${scopeKey}\0${normalizedKey}`;
-      const id = `boundary-group:${createHash('sha256').update(identity).digest('hex').slice(0, 16)}`;
-      const group = groups.get(id) ?? {
-        id,
-        protocol: rule.protocol,
-        joinRule: rule.id,
-        normalizedKey,
-        keyParts,
-        producerIds: [],
-        consumerIds: [],
-        declarationIds: [],
-        derivation: {
-          kind: 'mechanically-derived' as const,
-          rule: rule.id,
-          ruleVersion: '2',
-          inputFactIds: [],
-          sourceSpans: [],
-        },
-      };
-      if (rule.producerActions.includes(observation.action)) group.producerIds.push(observation.id);
-      if (rule.consumerActions.includes(observation.action)) group.consumerIds.push(observation.id);
-      if (rule.declarationActions?.includes(observation.action)) group.declarationIds.push(observation.id);
-      group.derivation.inputFactIds.push(observation.id);
-      group.derivation.sourceSpans.push(observation.source);
-      groups.set(id, group);
+      addRelationGroupObservation(groups, rule, actions, observation);
     }
   }
   return [...groups.values()].map(normalizeGroup).sort(compareGroups);
+}
+
+function addRelationGroupObservation(
+  groups: Map<string, BoundaryRelationGroup>,
+  rule: GroupRule,
+  actions: ReadonlySet<BoundaryObservation['action']>,
+  observation: BoundaryObservation,
+): void {
+  if (!actions.has(observation.action) || observation.strength === 'candidate') return;
+  const keyParts = resolvedKeys(observation, rule.keyNames);
+  if (!keyParts) return;
+  const normalizedKey = keyParts.map((part) => `${part.name}=${normalizedKeyPart(part.name, part.value)}`).join('\0');
+  const scopeKey = observation.sourceScope === 'production' ? 'production' : observation.sourceScope;
+  const identity = `${rule.id}\0${scopeKey}\0${normalizedKey}`;
+  const id = `boundary-group:${createHash('sha256').update(identity).digest('hex').slice(0, 16)}`;
+  const group = groups.get(id) ?? {
+    id,
+    protocol: rule.protocol,
+    joinRule: rule.id,
+    normalizedKey,
+    keyParts,
+    producerIds: [],
+    consumerIds: [],
+    declarationIds: [],
+    derivation: {
+      kind: 'mechanically-derived' as const,
+      rule: rule.id,
+      ruleVersion: '2',
+      inputFactIds: [],
+      sourceSpans: [],
+    },
+  };
+  if (rule.producerActions.includes(observation.action)) group.producerIds.push(observation.id);
+  if (rule.consumerActions.includes(observation.action)) group.consumerIds.push(observation.id);
+  if (rule.declarationActions?.includes(observation.action)) group.declarationIds.push(observation.id);
+  group.derivation.inputFactIds.push(observation.id);
+  group.derivation.sourceSpans.push(observation.source);
+  groups.set(id, group);
 }
 
 function normalizeGroup(group: BoundaryRelationGroup): BoundaryRelationGroup {

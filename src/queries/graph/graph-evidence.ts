@@ -169,11 +169,7 @@ export function graphEvidence(
   selectors: GraphEvidenceSelectors,
   options: GraphEvidenceOptions = {},
 ): GraphEvidenceResult {
-  const symbols = uniqueNonEmpty([...(selectors.symbols ?? []), ...(selectors.locations ?? [])]);
-  const searches = uniqueNonEmpty(selectors.searches ?? []);
-  if (symbols.length === 0 && searches.length === 0) {
-    throw new Error('evidence requires at least one positional symbol, --symbol, --at, or --search selector.');
-  }
+  const { symbols, searches } = graphEvidenceRoots(selectors);
 
   const { view, families, direction, subtypes, connecting, inventoryOnly, foldIds, maxDepth, maxEdges } =
     graphProjectionOptions(options);
@@ -266,6 +262,16 @@ export function graphEvidence(
       }),
     },
   };
+}
+
+function graphEvidenceRoots(selectors: GraphEvidenceSelectors) {
+  const symbols = uniqueNonEmpty([...(selectors.symbols ?? []), ...(selectors.locations ?? [])]);
+  const searches = uniqueNonEmpty(selectors.searches ?? []);
+  if (symbols.length === 0 && searches.length === 0) {
+    throw new Error('evidence requires at least one positional symbol, --symbol, --at, or --search selector.');
+  }
+
+  return { symbols, searches };
 }
 
 function projectionCoverageExplanation(info: {

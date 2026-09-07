@@ -338,31 +338,14 @@ function deadSummary(db: ScipDatabase, rows: readonly DeadRow[]): DeadSummary {
       continue;
     }
 
-    const usageClassification = classifyExclusion(row.relative_path, row.start_line, row.symbol, row.parent_type_name);
-    const implicitUsageReason =
-      usageClassification?.disposition === 'implicit-usage' ? usageClassification.reason : undefined;
-    // dead-code: zero references anywhere (not even in same file); verify before deleting
-    // file-internal: referenced within same file but never cross-file —
-    //   may be a private helper (fine) or a forgotten export (needs review)
-    // implicit-usage: a trait, macro, attribute, ABI, or reflection boundary
-    //   provides a caller that the static reference graph cannot represent.
-    const kind = implicitUsageReason ? 'implicit-usage' : row.same_file_refs === 0 ? 'dead-code' : 'file-internal';
+    const symbol = deadRowSymbol(row, classifyExclusion);
+    const kind = symbol.kind;
     if (kind === 'dead-code') deadCodeCount++;
     else if (kind === 'file-internal') fileInternalCount++;
     else implicitUsageCount++;
     totalLoc += row.loc;
 
-    symbols.push({
-      relativePath: row.relative_path,
-      startLine: row.start_line,
-      endLine: row.end_line,
-      loc: row.loc,
-      symbol: row.symbol,
-      shortName: shortenSymbol(row.symbol),
-      sameFileRefs: row.same_file_refs,
-      kind,
-      ...(implicitUsageReason ? { implicitUsageReason } : {}),
-    });
+    symbols.push(symbol);
   }
 
   return {
@@ -385,6 +368,32 @@ function deadSummary(db: ScipDatabase, rows: readonly DeadRow[]): DeadSummary {
     fileInternalCount,
     implicitUsageCount,
     totalLoc,
+  };
+}
+
+function deadRowSymbol(
+  row: DeadRow,
+  classifyExclusion: ReturnType<typeof buildFileExclusionClassifier>,
+): DeadSymbolResult {
+  const usageClassification = classifyExclusion(row.relative_path, row.start_line, row.symbol, row.parent_type_name);
+  const implicitUsageReason =
+    usageClassification?.disposition === 'implicit-usage' ? usageClassification.reason : undefined;
+  // dead-code: zero references anywhere (not even in same file); verify before deleting
+  // file-internal: referenced within same file but never cross-file —
+  //   may be a private helper (fine) or a forgotten export (needs review)
+  // implicit-usage: a trait, macro, attribute, ABI, or reflection boundary
+  //   provides a caller that the static reference graph cannot represent.
+  const kind = implicitUsageReason ? 'implicit-usage' : row.same_file_refs === 0 ? 'dead-code' : 'file-internal';
+  return {
+    relativePath: row.relative_path,
+    startLine: row.start_line,
+    endLine: row.end_line,
+    loc: row.loc,
+    symbol: row.symbol,
+    shortName: shortenSymbol(row.symbol),
+    sameFileRefs: row.same_file_refs,
+    kind,
+    ...(implicitUsageReason ? { implicitUsageReason } : {}),
   };
 }
 

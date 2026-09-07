@@ -291,6 +291,10 @@ function documentsFromResponse(
   return decoded;
 }
 
+function isDocumentFragmentCount(value: unknown): boolean {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
 function decodeDocumentResponse(value: unknown, producerIdentity: string): RequestedTypeScriptDocuments {
   if (!value || typeof value !== 'object') throw new Error('TypeScript index service wrote an invalid response.');
   const response = value as Partial<TypeScriptIndexDocumentResponse>;
@@ -308,13 +312,9 @@ function decodeDocumentResponse(value: unknown, producerIdentity: string): Reque
     if (
       !fragment ||
       typeof fragment.relativePath !== 'string' ||
-      (fragment.bytesBase64 !== null && typeof fragment.bytesBase64 !== 'string') ||
-      typeof fragment.occurrences !== 'number' ||
-      !Number.isInteger(fragment.occurrences) ||
-      fragment.occurrences < 0 ||
-      typeof fragment.symbols !== 'number' ||
-      !Number.isInteger(fragment.symbols) ||
-      fragment.symbols < 0 ||
+      !isDocumentFragmentBytes(fragment.bytesBase64) ||
+      !isDocumentFragmentCount(fragment.occurrences) ||
+      !isDocumentFragmentCount(fragment.symbols) ||
       !Array.isArray(fragment.referenceFragments) ||
       !fragment.referenceFragments.every(isReferenceFragment) ||
       paths.has(fragment.relativePath)
@@ -375,3 +375,7 @@ const DEFAULT_RUNTIME: TypeScriptIndexRequesterRuntime = {
   isProcessAlive,
   readProcessIdentity,
 };
+
+function isDocumentFragmentBytes(value: unknown): boolean {
+  return value === null || typeof value === 'string';
+}

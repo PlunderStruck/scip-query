@@ -71,16 +71,27 @@ function addAstCallsiteCallers(
     if (!callsites) continue;
     for (const site of callsites) {
       if (targetLeaves && !targetLeaves.has(site.calleeLeaf)) continue;
-      const candidates = sameLanguageCandidates(doc, leafIndex.get(site.calleeLeaf) ?? []);
-      if (!candidates || candidates.length === 0) continue;
-      const pick = pickAstCallCandidate(db, doc, candidates, site.memberAccess, site.calleeQualifier);
-      if (!pick) continue;
-      if (!targetSymbolIds.has(pick.symbolId)) continue;
-      // Cross-file caller only — self-references skipped.
-      if (pick.file === doc) continue;
-      addCallerFile(map, pick.symbolId, doc);
+      addAstCallsiteCaller(db, map, doc, site, leafIndex, targetSymbolIds);
     }
   }
+}
+
+function addAstCallsiteCaller(
+  db: ScipDatabase,
+  map: Map<number, Set<string>>,
+  doc: string,
+  site: NonNullable<ReturnType<typeof getCallSites>>[number],
+  leafIndex: Map<string, GlobalLeafCandidate[]>,
+  targetSymbolIds: ReadonlySet<number>,
+): void {
+  const candidates = sameLanguageCandidates(doc, leafIndex.get(site.calleeLeaf) ?? []);
+  if (!candidates || candidates.length === 0) return;
+  const pick = pickAstCallCandidate(db, doc, candidates, site.memberAccess, site.calleeQualifier);
+  if (!pick) return;
+  if (!targetSymbolIds.has(pick.symbolId)) return;
+  // Cross-file caller only — self-references skipped.
+  if (pick.file === doc) return;
+  addCallerFile(map, pick.symbolId, doc);
 }
 
 function addChunkMentionCallers(

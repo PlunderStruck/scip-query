@@ -132,11 +132,7 @@ export class TypeScriptSemanticServiceHost {
       requests: this.requests,
       ...(this.lastRequestAtMs === null ? {} : { lastRequestAt: new Date(this.lastRequestAtMs).toISOString() }),
       ...(this.lastError ? { lastError: this.lastError } : {}),
-      sessionsCreated: stats?.sessionsCreated ?? 0,
-      sessionsReused: stats?.sessionsReused ?? 0,
-      sessionsRefreshed: stats?.sessionsRefreshed ?? 0,
-      sessionsReplaced: stats?.sessionsReplaced ?? 0,
-      projectsCreated: stats?.projectsCreated ?? 0,
+      ...semanticSessionCounters(stats),
       heapUsedBytes: memory.heapUsedBytes,
       heapLimitBytes: memory.heapLimitBytes,
       ...(this.projectScope ? { projectScope: this.projectScope } : {}),
@@ -317,3 +313,13 @@ const TYPESCRIPT_SEMANTIC_MAILBOX_PROCESS_OWNER = {
   ...(TYPESCRIPT_SEMANTIC_PROCESS_IDENTITY ? { processIdentity: TYPESCRIPT_SEMANTIC_PROCESS_IDENTITY } : {}),
 };
 const TYPESCRIPT_SEMANTIC_MAILBOX_LIVENESS = { isProcessAlive, readProcessIdentity };
+
+function semanticSessionCounters(stats: ReturnType<TypeScriptSemanticHost['snapshotStats']> | undefined) {
+  return {
+    sessionsCreated: stats?.sessionsCreated ?? 0,
+    sessionsReused: stats?.sessionsReused ?? 0,
+    sessionsRefreshed: stats?.sessionsRefreshed ?? 0,
+    sessionsReplaced: stats?.sessionsReplaced ?? 0,
+    projectsCreated: stats?.projectsCreated ?? 0,
+  };
+}

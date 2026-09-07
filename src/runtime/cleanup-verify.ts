@@ -862,23 +862,37 @@ function parseRuffJsonDiagnostics(output: string): CheckerDiagnostic[] {
   if (!Array.isArray(raw)) return [];
   const diagnostics: CheckerDiagnostic[] = [];
   for (const item of raw) {
-    if (!item || typeof item !== 'object') continue;
-    const record = item as Record<string, unknown>;
-    const location = record['location'];
-    const locationRecord = location && typeof location === 'object' ? (location as Record<string, unknown>) : {};
-    const filename = typeof record['filename'] === 'string' ? record['filename'] : '';
-    const message = typeof record['message'] === 'string' ? record['message'] : '';
-    if (!filename && !message) continue;
-    diagnostics.push({
-      file: filename,
-      line: typeof locationRecord['row'] === 'number' ? locationRecord['row'] : undefined,
-      column: typeof locationRecord['column'] === 'number' ? locationRecord['column'] : undefined,
-      code: typeof record['code'] === 'string' ? record['code'] : undefined,
-      message,
-      parseBasis: 'ruff-json',
-    });
+    const diagnostic = ruffJsonDiagnostic(item);
+    if (diagnostic) diagnostics.push(diagnostic);
   }
   return diagnostics;
+}
+
+function ruffJsonDiagnostic(item: unknown): CheckerDiagnostic | null {
+  if (!item || typeof item !== 'object') return null;
+  const record = item as Record<string, unknown>;
+  const location = record['location'];
+  const locationRecord = location && typeof location === 'object' ? (location as Record<string, unknown>) : {};
+  const filename = typeof record['filename'] === 'string' ? record['filename'] : '';
+  const message = typeof record['message'] === 'string' ? record['message'] : '';
+  if (!filename && !message) return null;
+  return formatRuffDiagnostic(record, locationRecord, filename, message);
+}
+
+function formatRuffDiagnostic(
+  record: Record<string, unknown>,
+  locationRecord: Record<string, unknown>,
+  filename: string,
+  message: string,
+): CheckerDiagnostic {
+  return {
+    file: filename,
+    line: typeof locationRecord['row'] === 'number' ? locationRecord['row'] : undefined,
+    column: typeof locationRecord['column'] === 'number' ? locationRecord['column'] : undefined,
+    code: typeof record['code'] === 'string' ? record['code'] : undefined,
+    message,
+    parseBasis: 'ruff-json',
+  };
 }
 
 function parseRuffTextDiagnostics(output: string): CheckerDiagnostic[] {

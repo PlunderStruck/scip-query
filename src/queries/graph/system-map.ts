@@ -2368,6 +2368,22 @@ function causalCorridorFocusLocations(
   const matchedAnchorNodeIds = new Set(
     topology.anchors.filter((anchor) => anchor.status === 'matched').flatMap((anchor) => anchor.nodeIds),
   );
+  addCorridorBehaviorLocations(behavior, matchedAnchorNodeIds, add);
+  const selectedEvidenceLocations = topology.edges
+    .filter((edge) => edge.disposition === 'emitted')
+    .flatMap((edge) => edge.evidence.flatMap((evidence) => (evidence.location ? [evidence.location] : [])));
+  for (const location of selectedEvidenceLocations) {
+    add(location);
+    addCorridorGoverningLocations(db, topology, location, add);
+  }
+  return [...locations.values()].sort((left, right) => left.file.localeCompare(right.file) || left.line - right.line);
+}
+
+function addCorridorBehaviorLocations(
+  behavior: ConnectedBehaviorPacket,
+  matchedAnchorNodeIds: ReadonlySet<string>,
+  add: (location: ExplorationSourceLocation) => void,
+): void {
   for (const step of behavior.steps) {
     if (!step.location || !matchedAnchorNodeIds.has(step.nodeId) || (step.behavior?.rawCharacters ?? Infinity) > 3_000)
       continue;
@@ -2376,37 +2392,37 @@ function causalCorridorFocusLocations(
       add({ file: step.location.file, line: line.line, endLine: line.endLine });
     }
   }
-  const selectedEvidenceLocations = topology.edges
-    .filter((edge) => edge.disposition === 'emitted')
-    .flatMap((edge) => edge.evidence.flatMap((evidence) => (evidence.location ? [evidence.location] : [])));
-  for (const location of selectedEvidenceLocations) {
-    add(location);
-    const owner = topology.nodes
-      .filter(
-        (node) =>
-          node.location?.file === location.file &&
-          ['symbol', 'source-construct', 'runtime-boundary-participant'].includes(node.kind) &&
-          node.location.line <= location.line &&
-          (node.location.endLine ?? node.location.line) >= location.line,
-      )
-      .sort(
-        (left, right) =>
-          (left.location!.endLine ?? left.location!.line) -
-            left.location!.line -
-            ((right.location!.endLine ?? right.location!.line) - right.location!.line) ||
-          left.id.localeCompare(right.id),
-      )[0];
-    if (!owner?.location) continue;
-    const governingLines = governingBehaviorControlLines(
-      db,
-      location.file,
-      owner.location.line,
-      owner.location.endLine ?? owner.location.line,
-      [location.line],
-    );
-    for (const line of governingLines) add({ file: location.file, line: line.line, endLine: line.endLine });
-  }
-  return [...locations.values()].sort((left, right) => left.file.localeCompare(right.file) || left.line - right.line);
+}
+
+function addCorridorGoverningLocations(
+  db: ScipDatabase,
+  topology: ExplorationTopology,
+  location: ExplorationSourceLocation,
+  add: (location: ExplorationSourceLocation) => void,
+): void {
+  const owner = topology.nodes
+    .filter(
+      (node) =>
+        node.location?.file === location.file &&
+        ['symbol', 'source-construct', 'runtime-boundary-participant'].includes(node.kind) &&
+        node.location.line <= location.line &&
+        (node.location.endLine ?? node.location.line) >= location.line,
+    )
+    .sort(
+      (left, right) =>
+        (left.location!.endLine ?? left.location!.line) -
+          left.location!.line -
+          ((right.location!.endLine ?? right.location!.line) - right.location!.line) || left.id.localeCompare(right.id),
+    )[0];
+  if (!owner?.location) return;
+  const governingLines = governingBehaviorControlLines(
+    db,
+    location.file,
+    owner.location.line,
+    owner.location.endLine ?? owner.location.line,
+    [location.line],
+  );
+  for (const line of governingLines) add({ file: location.file, line: line.line, endLine: line.endLine });
 }
 
 interface SystemMapTopologyInput {

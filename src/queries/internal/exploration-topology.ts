@@ -1114,32 +1114,8 @@ function addAdjacentJunctions(
   selectedNodeIds: Set<string>,
   maxSelectedNodes: number,
 ): void {
-  const degree = new Map<string, { incoming: number; outgoing: number }>();
-  for (const edge of topology.edges) {
-    const from = degree.get(edge.fromNodeId) ?? { incoming: 0, outgoing: 0 };
-    const to = degree.get(edge.toNodeId) ?? { incoming: 0, outgoing: 0 };
-    from.outgoing += 1;
-    to.incoming += 1;
-    degree.set(edge.fromNodeId, from);
-    degree.set(edge.toNodeId, to);
-  }
-  const boundaryCandidates = new Set<string>();
-  const selectedNeighborsByCandidate = new Map<string, Set<string>>();
-  for (const edge of topology.edges) {
-    const fromSelected = selectedNodeIds.has(edge.fromNodeId);
-    const toSelected = selectedNodeIds.has(edge.toNodeId);
-    if (fromSelected === toSelected) continue;
-    const candidateId = fromSelected ? edge.toNodeId : edge.fromNodeId;
-    const selectedNeighborId = fromSelected ? edge.fromNodeId : edge.toNodeId;
-    const node = topology.nodes.find((entry) => entry.id === candidateId);
-    if (node?.kind === 'structural-region') continue;
-    const selectedNeighbors = selectedNeighborsByCandidate.get(candidateId) ?? new Set<string>();
-    selectedNeighbors.add(selectedNeighborId);
-    selectedNeighborsByCandidate.set(candidateId, selectedNeighbors);
-    const boundaryJunction =
-      /(?:runtime-boundary|external)/u.test(edge.kind) || Boolean(node && /(?:frontier|external)/u.test(node.kind));
-    if (boundaryJunction) boundaryCandidates.add(candidateId);
-  }
+  const degree = topologyNodeDegrees(topology);
+  const { boundaryCandidates, selectedNeighborsByCandidate } = adjacentJunctionCandidates(topology, selectedNodeIds);
   const candidates = [...selectedNeighborsByCandidate]
     .filter(([candidateId, selectedNeighbors]) => {
       if (boundaryCandidates.has(candidateId)) return true;
@@ -1158,6 +1134,40 @@ function addAdjacentJunctions(
     if (selectedNodeIds.size >= maxSelectedNodes) break;
     selectedNodeIds.add(candidateId);
   }
+}
+
+function topologyNodeDegrees(topology: ExplorationTopology): Map<string, { incoming: number; outgoing: number }> {
+  const degree = new Map<string, { incoming: number; outgoing: number }>();
+  for (const edge of topology.edges) {
+    const from = degree.get(edge.fromNodeId) ?? { incoming: 0, outgoing: 0 };
+    const to = degree.get(edge.toNodeId) ?? { incoming: 0, outgoing: 0 };
+    from.outgoing += 1;
+    to.incoming += 1;
+    degree.set(edge.fromNodeId, from);
+    degree.set(edge.toNodeId, to);
+  }
+  return degree;
+}
+
+function adjacentJunctionCandidates(topology: ExplorationTopology, selectedNodeIds: ReadonlySet<string>) {
+  const boundaryCandidates = new Set<string>();
+  const selectedNeighborsByCandidate = new Map<string, Set<string>>();
+  for (const edge of topology.edges) {
+    const fromSelected = selectedNodeIds.has(edge.fromNodeId);
+    const toSelected = selectedNodeIds.has(edge.toNodeId);
+    if (fromSelected === toSelected) continue;
+    const candidateId = fromSelected ? edge.toNodeId : edge.fromNodeId;
+    const selectedNeighborId = fromSelected ? edge.fromNodeId : edge.toNodeId;
+    const node = topology.nodes.find((entry) => entry.id === candidateId);
+    if (node?.kind === 'structural-region') continue;
+    const selectedNeighbors = selectedNeighborsByCandidate.get(candidateId) ?? new Set<string>();
+    selectedNeighbors.add(selectedNeighborId);
+    selectedNeighborsByCandidate.set(candidateId, selectedNeighbors);
+    const boundaryJunction =
+      /(?:runtime-boundary|external)/u.test(edge.kind) || Boolean(node && /(?:frontier|external)/u.test(node.kind));
+    if (boundaryJunction) boundaryCandidates.add(candidateId);
+  }
+  return { boundaryCandidates, selectedNeighborsByCandidate };
 }
 
 function addAdjacentJunctionsToFixedPoint(

@@ -153,31 +153,42 @@ export function uninstallSkills(opts: { dryRun?: boolean; homeDir?: string } = {
     if (!existsSync(targetDir)) continue;
     const toolName = toolNameForTarget(targetDir);
     for (const entry of readdirSync(targetDir)) {
-      const target = join(targetDir, entry);
-      let resolvedTarget: string;
-      try {
-        const linkTarget = readlinkSync(target);
-        resolvedTarget = resolve(dirname(target), linkTarget);
-      } catch {
-        result.left.push(`${toolName}/${entry} (not a symlink)`);
-        continue;
-      }
-      if (!isPathInside(resolvedTarget, skillsSource)) {
-        result.left.push(`${toolName}/${entry} (symlink outside scip-query package)`);
-        continue;
-      }
-      result.removed.push(`${toolName}/${entry}`);
-      if (!opts.dryRun) {
-        try {
-          unlinkSync(target);
-        } catch (error) {
-          result.skipped.push(`${toolName}/${entry} (${error instanceof Error ? error.message : String(error)})`);
-        }
-      }
+      uninstallSkillEntry(targetDir, entry, skillsSource, toolName, opts, result);
     }
   }
 
   return result;
+}
+
+function uninstallSkillEntry(
+  targetDir: string,
+  entry: string,
+  skillsSource: string,
+  toolName: string,
+  opts: { dryRun?: boolean },
+  result: UninstallSkillsResult,
+): void {
+  const target = join(targetDir, entry);
+  let resolvedTarget: string;
+  try {
+    const linkTarget = readlinkSync(target);
+    resolvedTarget = resolve(dirname(target), linkTarget);
+  } catch {
+    result.left.push(`${toolName}/${entry} (not a symlink)`);
+    return;
+  }
+  if (!isPathInside(resolvedTarget, skillsSource)) {
+    result.left.push(`${toolName}/${entry} (symlink outside scip-query package)`);
+    return;
+  }
+  result.removed.push(`${toolName}/${entry}`);
+  if (!opts.dryRun) {
+    try {
+      unlinkSync(target);
+    } catch (error) {
+      result.skipped.push(`${toolName}/${entry} (${error instanceof Error ? error.message : String(error)})`);
+    }
+  }
 }
 
 function isPathInside(path: string, parent: string): boolean {

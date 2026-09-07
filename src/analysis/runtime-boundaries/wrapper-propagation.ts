@@ -41,26 +41,7 @@ export function propagateCompilerResolvedWrappers(
     if (!definition) continue;
 
     try {
-      for (const site of referenceEvidenceForSymbol(db, definition, { semantic: false })) {
-        const context = boundaryFileContext(db, site.file);
-        if (!context) continue;
-        filesInspected.add(site.file);
-        for (const call of matchingCallsAtLine(context.root, site.line, leafName(definition.symbol))) {
-          const keyParts = substituteParameters(template, call, context);
-          if (!keyParts) continue;
-          derived.push(
-            createBoundaryObservation(
-              context,
-              call,
-              'builtin.wrapper',
-              template.observation.action,
-              keyParts,
-              'exact',
-              'compiler-resolved-wrapper',
-            ),
-          );
-        }
-      }
+      propagateWrapperReferences(db, template, definition, derived, filesInspected);
     } catch (error) {
       errors.push(
         `builtin.wrapper failed for ${owner.file}:${owner.startLine + 1}: ${error instanceof Error ? error.message : String(error)}`,
@@ -74,6 +55,35 @@ export function propagateCompilerResolvedWrappers(
     filesInspected: filesInspected.size,
     errors,
   };
+}
+
+function propagateWrapperReferences(
+  db: ScipDatabase,
+  template: WrapperTemplate,
+  definition: ReturnType<typeof getDefinitionsForFile>[number],
+  derived: BoundaryObservation[],
+  filesInspected: Set<string>,
+): void {
+  for (const site of referenceEvidenceForSymbol(db, definition, { semantic: false })) {
+    const context = boundaryFileContext(db, site.file);
+    if (!context) continue;
+    filesInspected.add(site.file);
+    for (const call of matchingCallsAtLine(context.root, site.line, leafName(definition.symbol))) {
+      const keyParts = substituteParameters(template, call, context);
+      if (!keyParts) continue;
+      derived.push(
+        createBoundaryObservation(
+          context,
+          call,
+          'builtin.wrapper',
+          template.observation.action,
+          keyParts,
+          'exact',
+          'compiler-resolved-wrapper',
+        ),
+      );
+    }
+  }
 }
 
 function wrapperTemplates(db: ScipDatabase, observations: readonly BoundaryObservation[]): WrapperTemplate[] {

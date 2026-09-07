@@ -1133,6 +1133,28 @@ function renderWatchServiceIdentity(report: ReturnType<typeof watchServiceReport
 }
 
 function renderWatchReindexActivity(activity: ReindexActivitySummary): void {
+  renderWatchReindexTotals(activity);
+  if (activity.reflinkedBytes !== undefined || activity.fallbackCopiedBytes !== undefined) {
+    console.log(
+      `Reindex staging: ${formatBytes(activity.reflinkedBytes ?? 0)} reflinked, ` +
+        `${formatBytes(activity.fallbackCopiedBytes ?? 0)} byte-copied`,
+    );
+  }
+  renderWatchReindexLanguages(activity);
+  renderWatchReindexEvidence(activity);
+}
+
+function renderWatchReindexEvidence(activity: ReindexActivitySummary): void {
+  if (activity.confidence && activity.confidence !== 'complete') {
+    console.log(
+      `Reindex evidence: ${activity.recordsRead ?? 0} record(s) read, ` +
+        `${activity.invalidRecords ?? 0} invalid, ${activity.readErrors ?? 0} read error(s), ` +
+        `${activity.ignoredPartialTailBytes ?? 0} incomplete byte(s) ignored`,
+    );
+  }
+}
+
+function renderWatchReindexTotals(activity: ReindexActivitySummary): void {
   console.log(
     `Recorded reindex activity (${activity.windowStartedAt} to ${activity.windowEndedAt}): ${activity.runs} run(s) ` +
       `(${activity.rebuilt} rebuilt, ${activity.reused} reused, ${activity.failed} failed), ` +
@@ -1141,20 +1163,6 @@ function renderWatchReindexActivity(activity: ReindexActivitySummary): void {
       `(${formatBytes(activity.estimatedLogicalOutputBytes)} logical output)` +
       `${activity.confidence && activity.confidence !== 'complete' ? ` [${activity.confidence} evidence]` : ''}`,
   );
-  if (activity.reflinkedBytes !== undefined || activity.fallbackCopiedBytes !== undefined) {
-    console.log(
-      `Reindex staging: ${formatBytes(activity.reflinkedBytes ?? 0)} reflinked, ` +
-        `${formatBytes(activity.fallbackCopiedBytes ?? 0)} byte-copied`,
-    );
-  }
-  renderWatchReindexLanguages(activity);
-  if (activity.confidence && activity.confidence !== 'complete') {
-    console.log(
-      `Reindex evidence: ${activity.recordsRead ?? 0} record(s) read, ` +
-        `${activity.invalidRecords ?? 0} invalid, ${activity.readErrors ?? 0} read error(s), ` +
-        `${activity.ignoredPartialTailBytes ?? 0} incomplete byte(s) ignored`,
-    );
-  }
 }
 
 function renderWatchReindexLanguages(activity: ReindexActivitySummary): void {
@@ -1383,18 +1391,7 @@ function renderSqliteGeneration(inspection: SqliteGenerationInspection): void {
   }
   const publication = inspection.generation.publication;
   const mode = publication?.mode ?? 'unknown';
-  const details = publication
-    ? [
-        publication.affectedDocumentCount === undefined ? null : `${publication.affectedDocumentCount} affected`,
-        publication.changedDocumentCount === undefined ? null : `${publication.changedDocumentCount} changed`,
-        publication.producerDurationMs === undefined ? null : `${publication.producerDurationMs.toFixed(0)}ms producer`,
-        `${publication.converterDurationMs.toFixed(0)}ms convert`,
-        publication.patchDurationMs === undefined ? null : `${publication.patchDurationMs.toFixed(0)}ms patch`,
-        `${publication.scipCompanion ?? 'current'} SCIP companion`,
-      ]
-        .filter((value): value is string => value !== null)
-        .join(', ')
-    : 'no publication metrics';
+  const details = sqlitePublicationDetails(publication);
   console.log(
     `DB gen:   ${inspection.state} ${inspection.generation.currentGeneration.slice(0, 12)} (${mode}; ${details})`,
   );
@@ -1408,6 +1405,23 @@ function renderSqliteGeneration(inspection: SqliteGenerationInspection): void {
   }
   if (publication?.fallbackReason) console.log(`DB fallback: ${publication.fallbackReason}`);
   if (inspection.reason) console.log(`DB note:   ${inspection.reason}`);
+}
+
+function sqlitePublicationDetails(
+  publication: Extract<SqliteGenerationInspection, { generation: unknown }>['generation']['publication'],
+): string {
+  return publication
+    ? [
+        publication.affectedDocumentCount === undefined ? null : `${publication.affectedDocumentCount} affected`,
+        publication.changedDocumentCount === undefined ? null : `${publication.changedDocumentCount} changed`,
+        publication.producerDurationMs === undefined ? null : `${publication.producerDurationMs.toFixed(0)}ms producer`,
+        `${publication.converterDurationMs.toFixed(0)}ms convert`,
+        publication.patchDurationMs === undefined ? null : `${publication.patchDurationMs.toFixed(0)}ms patch`,
+        `${publication.scipCompanion ?? 'current'} SCIP companion`,
+      ]
+        .filter((value): value is string => value !== null)
+        .join(', ')
+    : 'no publication metrics';
 }
 
 function renderLocalSqliteGenerations(status: LocalSqliteGenerationStatus): void {

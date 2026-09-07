@@ -78,19 +78,9 @@ export class TypeScriptIndexServiceHost {
     this.createEmitter = opts.createEmitter ?? createTypeScriptDocumentEmitter;
     this.wallNow = opts.wallNow ?? opts.now ?? Date.now;
     this.monotonicNow = opts.monotonicNow ?? opts.now ?? monotonicNowMs;
-    if (
-      opts.maxActiveSessions !== undefined &&
-      (!Number.isInteger(opts.maxActiveSessions) || opts.maxActiveSessions < 1)
-    ) {
-      throw new Error('TypeScript index maxActiveSessions must be a positive integer.');
-    }
+    validateIndexServiceCapacity(opts.maxActiveSessions, 'maxActiveSessions');
     this.maxActiveSessions = opts.maxActiveSessions ?? 8;
-    if (
-      opts.softMemoryLimitMb !== undefined &&
-      (!Number.isInteger(opts.softMemoryLimitMb) || opts.softMemoryLimitMb < 1)
-    ) {
-      throw new Error('TypeScript index softMemoryLimitMb must be a positive integer.');
-    }
+    validateIndexServiceCapacity(opts.softMemoryLimitMb, 'softMemoryLimitMb');
     this.softMemoryLimitBytes = opts.softMemoryLimitMb === undefined ? null : opts.softMemoryLimitMb * 1024 * 1024;
     this.memoryUsage =
       opts.memoryUsage ??
@@ -294,3 +284,9 @@ const TYPESCRIPT_INDEX_MAILBOX_PROCESS_OWNER = {
   ...(TYPESCRIPT_INDEX_PROCESS_IDENTITY ? { processIdentity: TYPESCRIPT_INDEX_PROCESS_IDENTITY } : {}),
 };
 const TYPESCRIPT_INDEX_MAILBOX_LIVENESS = { isProcessAlive, readProcessIdentity };
+
+function validateIndexServiceCapacity(value: number | undefined, name: string): void {
+  if (value !== undefined && (!Number.isInteger(value) || value < 1)) {
+    throw new Error(`TypeScript index ${name} must be a positive integer.`);
+  }
+}

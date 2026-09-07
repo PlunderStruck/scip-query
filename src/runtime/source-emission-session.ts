@@ -416,44 +416,11 @@ function sourceChunks(
   const active = invocation.enabled ? activateSession(invocation) : null;
   const persisted = active?.ledger.ranges ?? [];
   const lineHashes = sourceLines.map(digest);
-  const exactReceipt =
-    sessionPolicy === 'exact-unit' && !invocation.reemit
-      ? findLastMatching(
-          persisted,
-          (range) =>
-            range.policy === 'exact-unit' &&
-            range.relativePath === relativePath &&
-            range.startLine === startLine &&
-            range.endLine === endLine &&
-            range.ownerSymbol === ownerSymbol &&
-            equalStrings(range.lineHashes, lineHashes),
-        )
-      : undefined;
-  if (exactReceipt) {
-    return [
-      {
-        kind: 'covered',
-        startLine,
-        endLine,
-        ordinal: exactReceipt.ordinal,
-        command: exactReceipt.command,
-      },
-    ];
-  }
-  const containingExactReceipt =
-    sessionPolicy === 'exact-unit' && !invocation.reemit
-      ? coveringExactEmission(persisted, relativePath, startLine, endLine, lineHashes)
-      : undefined;
-  if (containingExactReceipt) {
-    return [
-      {
-        kind: 'covered',
-        startLine,
-        endLine,
-        ordinal: containingExactReceipt.ordinal,
-        command: containingExactReceipt.command,
-      },
-    ];
+  if (sessionPolicy === 'exact-unit' && !invocation.reemit) {
+    const receipt = priorExactSourceReceipt(persisted, relativePath, startLine, endLine, ownerSymbol, lineHashes);
+    if (receipt) {
+      return [{ kind: 'covered', startLine, endLine, ordinal: receipt.ordinal, command: receipt.command }];
+    }
   }
   const coverage = sourceLines.map((_, index) =>
     coveringEmission(persisted, relativePath, startLine + index, lineHashes[index]!),
@@ -464,12 +431,41 @@ function sourceChunks(
     invocation.staged.push({ relativePath, startLine, endLine, ownerSymbol, policy: sessionPolicy, lineHashes });
     return [{ kind: 'source', startLine, endLine, lines: [...sourceLines] }];
   }
+  return coveredPreviewChunks(startLine, sourceLines.length, coverage);
+}
+
+function priorExactSourceReceipt(
+  persisted: readonly PersistedSourceRange[],
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+  ownerSymbol: string | undefined,
+  lineHashes: readonly string[],
+) {
+  const exactReceipt = findLastMatching(
+    persisted,
+    (range) =>
+      range.policy === 'exact-unit' &&
+      range.relativePath === relativePath &&
+      range.startLine === startLine &&
+      range.endLine === endLine &&
+      range.ownerSymbol === ownerSymbol &&
+      equalStrings(range.lineHashes, lineHashes),
+  );
+  return exactReceipt ?? coveringExactEmission(persisted, relativePath, startLine, endLine, lineHashes);
+}
+
+function coveredPreviewChunks(
+  startLine: number,
+  lineCount: number,
+  coverage: readonly ReturnType<typeof coveringEmission>[],
+): SourceChunk[] {
   const chunks: SourceChunk[] = [];
   let offset = 0;
-  while (offset < sourceLines.length) {
+  while (offset < lineCount) {
     const reference = coverage[offset];
     let endOffset = offset;
-    while (endOffset + 1 < sourceLines.length && sameCoverage(reference, coverage[endOffset + 1])) endOffset += 1;
+    while (endOffset + 1 < lineCount && sameCoverage(reference, coverage[endOffset + 1])) endOffset += 1;
     const chunkStart = startLine + offset;
     const chunkEnd = startLine + endOffset;
     chunks.push({

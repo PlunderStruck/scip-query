@@ -48,16 +48,20 @@ export function profileScoreboard(events, opts = {}) {
     };
     group.totalDurationMs += durationMs;
     group.count += 1;
-    for (const [field, value] of Object.entries(event)) {
-      const number = numeric(value);
-      if (number === null || field === 'durationMs' || field === 'pid') continue;
-      group.numericMetadata[field] = (group.numericMetadata[field] ?? 0) + number;
-    }
+    accumulateProfileMetadata(group.numericMetadata, event);
     groups.set(key, group);
   }
   return [...groups.values()]
     .sort((left, right) => right.totalDurationMs - left.totalDurationMs || left.spanName.localeCompare(right.spanName))
     .slice(0, opts.top ?? 20);
+}
+
+function accumulateProfileMetadata(metadata, event) {
+  for (const [field, value] of Object.entries(event)) {
+    const number = numeric(value);
+    if (number === null || field === 'durationMs' || field === 'pid') continue;
+    metadata[field] = (metadata[field] ?? 0) + number;
+  }
 }
 
 export function renderProfileScoreboard(rows) {

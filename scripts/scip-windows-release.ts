@@ -108,48 +108,57 @@ export function runWindowsSidecarRelease(
       return;
     }
 
-    const registry = lookupRegistryDist(sidecar.name, sidecar.version, runtime);
-    if (registry) {
-      verifyExistingRegistryPackage(local, registry, releaseDirectory, runtime);
-      runtime.log(
-        `${sidecar.name}@${sidecar.version} already has identical registry bytes — skipping sidecar publish.`,
-      );
-      return;
-    }
-    if (registryMode === 'verify-only') {
-      runtime.log(
-        `${sidecar.name}@${sidecar.version} is absent from the registry; local identity is ready for a first publish.`,
-      );
-      return;
-    }
-
-    runtime.log(`Publishing ${sidecar.name}@${sidecar.version} from the verified local tarball...`);
-    try {
-      runtime.run('npm', ['publish', local.pack.tarballPath], {
-        stdio: 'inherit',
-        timeoutMs: PUBLISH_TIMEOUT_MS,
-        maxOutputBytes: COMMAND_OUTPUT_LIMIT_BYTES,
-      });
-    } catch (publishError) {
-      const raced = lookupRegistryDist(sidecar.name, sidecar.version, runtime);
-      if (!raced) throw publishError;
-      try {
-        verifyExistingRegistryPackage(local, raced, releaseDirectory, runtime);
-      } catch (identityError) {
-        throw new Error(
-          `Sidecar publish failed and the concurrently published version has different content. ` +
-            `${errorMessage(publishError)} ${errorMessage(identityError)}`,
-          { cause: identityError },
-        );
-      }
-      runtime.log(
-        `Sidecar publish raced with an identical publisher; registry identity matches, so the release may continue.`,
-      );
-    }
+    if (!publishOrVerifySidecar(local, sidecar, registryMode, releaseDirectory, runtime)) return;
   } finally {
     runtime.removeTree(releaseDirectory);
   }
   runtime.log('Windows sidecar ready; continuing with the main package publish.');
+}
+
+function publishOrVerifySidecar(
+  local: VerifiedSidecarPackageIdentity,
+  sidecar: ReturnType<typeof parsePackage>,
+  registryMode: NonNullable<WindowsSidecarReleaseOptions['registryMode']>,
+  releaseDirectory: string,
+  runtime: WindowsSidecarReleaseRuntime,
+): boolean {
+  const registry = lookupRegistryDist(sidecar.name, sidecar.version, runtime);
+  if (registry) {
+    verifyExistingRegistryPackage(local, registry, releaseDirectory, runtime);
+    runtime.log(`${sidecar.name}@${sidecar.version} already has identical registry bytes — skipping sidecar publish.`);
+    return false;
+  }
+  if (registryMode === 'verify-only') {
+    runtime.log(
+      `${sidecar.name}@${sidecar.version} is absent from the registry; local identity is ready for a first publish.`,
+    );
+    return false;
+  }
+
+  runtime.log(`Publishing ${sidecar.name}@${sidecar.version} from the verified local tarball...`);
+  try {
+    runtime.run('npm', ['publish', local.pack.tarballPath], {
+      stdio: 'inherit',
+      timeoutMs: PUBLISH_TIMEOUT_MS,
+      maxOutputBytes: COMMAND_OUTPUT_LIMIT_BYTES,
+    });
+  } catch (publishError) {
+    const raced = lookupRegistryDist(sidecar.name, sidecar.version, runtime);
+    if (!raced) throw publishError;
+    try {
+      verifyExistingRegistryPackage(local, raced, releaseDirectory, runtime);
+    } catch (identityError) {
+      throw new Error(
+        `Sidecar publish failed and the concurrently published version has different content. ` +
+          `${errorMessage(publishError)} ${errorMessage(identityError)}`,
+        { cause: identityError },
+      );
+    }
+    runtime.log(
+      `Sidecar publish raced with an identical publisher; registry identity matches, so the release may continue.`,
+    );
+  }
+  return true;
 }
 
 export function packLocalSidecar(

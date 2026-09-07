@@ -1904,12 +1904,7 @@ async function publishFreshReindexArtifacts(
       analyze: needsFreshSqliteStatistics(incrementalTypeScript, sqliteMaterialization.mode),
     }),
   );
-  if (indexMaintenance.added.length > 0) {
-    opts.onStatus(`Added SQLite query indexes: ${indexMaintenance.added.join(', ')}`);
-  }
-  if (indexMaintenance.removed.length > 0) {
-    opts.onStatus(`Removed redundant SQLite indexes: ${indexMaintenance.removed.join(', ')}`);
-  }
+  reportPublishedIndexMaintenance(indexMaintenance, opts);
   profileSpan('reindex.publish.coverage', () =>
     assertCandidateIndexCoverage(
       opts,
@@ -2041,8 +2036,7 @@ async function publishFreshReindexArtifacts(
     languages: indexedOutputs.map((o) => o.language),
     skipped: [...skippedLanguages],
   });
-  const deferredScipCompanion =
-    sqliteMaterialization.mode === 'incremental' && sqliteMaterialization.scipCompanion === 'deferred';
+  const deferredScipCompanion = hasDeferredSqliteCompanion(sqliteMaterialization);
   const { metadata, pruneProjects } = buildPublishedReindexMetadata({
     run: opts,
     indexedOutputs,
@@ -2093,12 +2087,7 @@ async function publishFreshReindexArtifacts(
             },
     }),
   );
-  if (localGenerationPublication.achievedDurability === 'file-flushed') {
-    opts.onStatus(
-      `Published local generation ${localGenerationPublication.currentGeneration.slice(0, 12)} ` +
-        '(file-flushed; directory sync unsupported)',
-    );
-  }
+  reportLocalGenerationDurability(localGenerationPublication, opts);
   if (sqliteMaterialization.mode === 'incremental' && incrementalTypeScript) {
     profileSpan('reindex.publish.dependency-graph', () => {
       let acceptedDb: ScipDatabase | null = null;
@@ -2988,20 +2977,7 @@ function collectIndexerOutputs(
     }
   }
 
-  const indexedOutputs: { language: SupportedLanguage; scipPath: string }[] = [];
-  for (const group of groups.values()) {
-    if (group.scipPaths.length > 1) {
-      if (group.concatenate) concatenateScipFiles(group.scipPaths, group.outputScipPath);
-      else mergeScipFiles(group.scipPaths, group.outputScipPath);
-      indexedOutputs.push({ language: group.language, scipPath: group.outputScipPath });
-    } else {
-      const scipPath = group.scipPaths[0]!;
-      if (scipPath !== group.outputScipPath) {
-        renameSync(scipPath, group.outputScipPath);
-      }
-      indexedOutputs.push({ language: group.language, scipPath: group.outputScipPath });
-    }
-  }
+  const indexedOutputs = materializeIndexerOutputGroups(groups);
   return { indexedOutputs };
 }
 
@@ -3709,4 +3685,55 @@ function buildLastRefresh(opts: {
 
 function stableJson(value: unknown): string {
   return JSON.stringify(value);
+}
+
+function materializeIndexerOutputGroups(
+  groups: Map<
+    string,
+    { language: SupportedLanguage; outputScipPath: string; scipPaths: string[]; concatenate: boolean }
+  >,
+): { language: SupportedLanguage; scipPath: string }[] {
+  const indexedOutputs: { language: SupportedLanguage; scipPath: string }[] = [];
+  for (const group of groups.values()) {
+    if (group.scipPaths.length > 1) {
+      if (group.concatenate) concatenateScipFiles(group.scipPaths, group.outputScipPath);
+      else mergeScipFiles(group.scipPaths, group.outputScipPath);
+      indexedOutputs.push({ language: group.language, scipPath: group.outputScipPath });
+    } else {
+      const scipPath = group.scipPaths[0]!;
+      if (scipPath !== group.outputScipPath) {
+        renameSync(scipPath, group.outputScipPath);
+      }
+      indexedOutputs.push({ language: group.language, scipPath: group.outputScipPath });
+    }
+  }
+  return indexedOutputs;
+}
+
+function reportPublishedIndexMaintenance(
+  indexMaintenance: { added: string[]; removed: string[] },
+  run: Pick<Parameters<typeof runFreshReindex>[0], 'onStatus'>,
+): void {
+  if (indexMaintenance.added.length > 0) {
+    run.onStatus(`Added SQLite query indexes: ${indexMaintenance.added.join(', ')}`);
+  }
+  if (indexMaintenance.removed.length > 0) {
+    run.onStatus(`Removed redundant SQLite indexes: ${indexMaintenance.removed.join(', ')}`);
+  }
+}
+
+function reportLocalGenerationDurability(
+  localGenerationPublication: ReturnType<typeof promoteReindexArtifacts>,
+  run: Pick<Parameters<typeof runFreshReindex>[0], 'onStatus'>,
+): void {
+  if (localGenerationPublication.achievedDurability === 'file-flushed') {
+    run.onStatus(
+      `Published local generation ${localGenerationPublication.currentGeneration.slice(0, 12)} ` +
+        '(file-flushed; directory sync unsupported)',
+    );
+  }
+}
+
+function hasDeferredSqliteCompanion(materialization: Awaited<ReturnType<typeof materializeSqliteOutput>>): boolean {
+  return materialization.mode === 'incremental' && materialization.scipCompanion === 'deferred';
 }

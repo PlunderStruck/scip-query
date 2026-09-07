@@ -319,22 +319,24 @@ export function extractImplementationBody(source: string): string {
   let depth = 0;
   for (let index = 0; index < source.length; index += 1) {
     const char = source[index]!;
-    if (char === '(' || char === '[') {
-      depth += 1;
-    } else if (char === ')' || char === ']') {
-      depth = Math.max(0, depth - 1);
-    } else if (char === '{') {
-      if (depth === 0 && !opensLiteral(source, index)) return sliceBlockBody(source, index);
-      depth += 1;
-    } else if (char === '}') {
-      depth = Math.max(0, depth - 1);
-    } else if (depth === 0 && char === '=' && source[index + 1] === '>') {
-      const rest = source.slice(index + 2).trimStart();
-      if (rest.startsWith('{')) return sliceBlockBody(rest, 0);
-      return rest.replace(/;+\s*$/, '');
-    }
+    const body = implementationBodyAt(source, index, depth);
+    if (body !== null) return body;
+    if ('([{'.includes(char)) depth += 1;
+    else if (')]}'.includes(char)) depth = Math.max(0, depth - 1);
   }
   return source;
+}
+
+function implementationBodyAt(source: string, index: number, depth: number): string | null {
+  if (depth !== 0) return null;
+  const char = source[index]!;
+  if (char === '{' && !opensLiteral(source, index)) return sliceBlockBody(source, index);
+  if (char === '=' && source[index + 1] === '>') {
+    const rest = source.slice(index + 2).trimStart();
+    if (rest.startsWith('{')) return sliceBlockBody(rest, 0);
+    return rest.replace(/;+\s*$/, '');
+  }
+  return null;
 }
 
 const LITERAL_OPENER_PREDECESSORS = new Set([':', '<', '|', '&', ',', '(', '=']);

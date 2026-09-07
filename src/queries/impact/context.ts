@@ -634,24 +634,14 @@ export function discoverAffectedConsumerReuse(
 
   const byCandidateSymbol = new Map<string, RepositoryContextConsumerReuseCandidate>();
   for (const consumer of analyzedConsumers) {
-    const rows = findSimilar(consumer.symbol).slice(0, perConsumerSearchLimit);
-    let acceptedForConsumer = 0;
-    for (const rawCandidate of rows) {
-      const candidate = normalizeConsumerSimilarity(rawCandidate, consumer.symbol);
-      if (!candidate || excludedSymbols.has(candidate.symbolB)) continue;
-
-      const current = byCandidateSymbol.get(candidate.symbolB);
-      if (!current) {
-        byCandidateSymbol.set(candidate.symbolB, { candidate, consumers: [consumer] });
-      } else {
-        if (!current.consumers.some((item) => item.symbol === consumer.symbol)) {
-          current.consumers.push(consumer);
-        }
-        if (candidate.similarity > current.candidate.similarity) current.candidate = candidate;
-      }
-      acceptedForConsumer += 1;
-      if (acceptedForConsumer >= perConsumerCandidateLimit) break;
-    }
+    collectConsumerReuseCandidates(
+      consumer,
+      findSimilar,
+      excludedSymbols,
+      byCandidateSymbol,
+      perConsumerSearchLimit,
+      perConsumerCandidateLimit,
+    );
   }
 
   const candidates = [...byCandidateSymbol.values()]
@@ -675,6 +665,34 @@ export function discoverAffectedConsumerReuse(
       returnedCandidates: candidates.length,
     },
   };
+}
+
+function collectConsumerReuseCandidates(
+  consumer: ReturnType<typeof affectedConsumers>[number],
+  findSimilar: (consumerSymbol: string) => SimilarSymbolResult[],
+  excludedSymbols: ReadonlySet<string>,
+  byCandidateSymbol: Map<string, RepositoryContextConsumerReuseCandidate>,
+  perConsumerSearchLimit: number,
+  perConsumerCandidateLimit: number,
+): void {
+  const rows = findSimilar(consumer.symbol).slice(0, perConsumerSearchLimit);
+  let acceptedForConsumer = 0;
+  for (const rawCandidate of rows) {
+    const candidate = normalizeConsumerSimilarity(rawCandidate, consumer.symbol);
+    if (!candidate || excludedSymbols.has(candidate.symbolB)) continue;
+
+    const current = byCandidateSymbol.get(candidate.symbolB);
+    if (!current) {
+      byCandidateSymbol.set(candidate.symbolB, { candidate, consumers: [consumer] });
+    } else {
+      if (!current.consumers.some((item) => item.symbol === consumer.symbol)) {
+        current.consumers.push(consumer);
+      }
+      if (candidate.similarity > current.candidate.similarity) current.candidate = candidate;
+    }
+    acceptedForConsumer += 1;
+    if (acceptedForConsumer >= perConsumerCandidateLimit) break;
+  }
 }
 
 function affectedConsumers(traceResult: Pick<TraceResult, 'referencedBy'>): RepositoryContextAffectedConsumer[] {

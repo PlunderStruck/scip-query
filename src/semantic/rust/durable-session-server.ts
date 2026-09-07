@@ -117,35 +117,7 @@ export function processDurableRustSessionRequests(
       );
     } catch (error) {
       const completedAtMs = now();
-      const identity =
-        responseIdentity ??
-        (message
-          ? {
-              id: message.id,
-              sessionIdentity: message.sessionIdentity,
-              deadlineAtMs: message.deadlineAtMs,
-            }
-          : undefined);
-      const reason = error instanceof Error ? error.message : String(error);
-      rejectBoundedMailboxClaim(
-        paths,
-        claim,
-        {
-          ok: false,
-          protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
-          id: identity?.id ?? claim.requestId,
-          ...(identity
-            ? {
-                sessionIdentity: identity.sessionIdentity,
-                deadlineAtMs: identity.deadlineAtMs,
-              }
-            : {}),
-          errorCode,
-          error: reason,
-        },
-        reason,
-        { nowMs: completedAtMs, limits: opts.limits },
-      );
+      rejectRustSessionRequest(paths, claim, responseIdentity, message, errorCode, error, completedAtMs, opts.limits);
     }
     processed += 1;
   }
@@ -285,3 +257,44 @@ const DURABLE_RUST_MAILBOX_PROCESS_OWNER = {
   ...(DURABLE_RUST_PROCESS_IDENTITY ? { processIdentity: DURABLE_RUST_PROCESS_IDENTITY } : {}),
 };
 const DURABLE_RUST_MAILBOX_LIVENESS = { isProcessAlive, readProcessIdentity };
+
+function rejectRustSessionRequest(
+  paths: ReturnType<typeof boundedMailboxPaths>,
+  claim: ReturnType<typeof pollBoundedMailboxRequests>[number],
+  responseIdentity: DurableRustMailboxResponseIdentity | undefined,
+  message: DurableRustMailboxEnvelope | null,
+  errorCode: DurableRustMailboxErrorCode,
+  error: unknown,
+  completedAtMs: number,
+  limits: Partial<BoundedMailboxLimits> | undefined,
+): void {
+  const identity =
+    responseIdentity ??
+    (message
+      ? {
+          id: message.id,
+          sessionIdentity: message.sessionIdentity,
+          deadlineAtMs: message.deadlineAtMs,
+        }
+      : undefined);
+  const reason = error instanceof Error ? error.message : String(error);
+  rejectBoundedMailboxClaim(
+    paths,
+    claim,
+    {
+      ok: false,
+      protocolVersion: DURABLE_RUST_SESSION_PROTOCOL_VERSION,
+      id: identity?.id ?? claim.requestId,
+      ...(identity
+        ? {
+            sessionIdentity: identity.sessionIdentity,
+            deadlineAtMs: identity.deadlineAtMs,
+          }
+        : {}),
+      errorCode,
+      error: reason,
+    },
+    reason,
+    { nowMs: completedAtMs, limits: limits },
+  );
+}

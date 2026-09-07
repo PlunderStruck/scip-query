@@ -87,11 +87,23 @@ function isResultKeysetCursorPayload(value: unknown): value is ResultKeysetCurso
     cursor.version === 2 &&
     typeof cursor.command === 'string' &&
     typeof cursor.target === 'string' &&
+    validResultKeysetPosition(after) &&
+    validResultKeysetProducer(cursor)
+  );
+}
+
+function validResultKeysetPosition(after: Partial<ResultKeyset> | undefined): boolean {
+  return (
     !!after &&
     typeof after.relativePath === 'string' &&
     after.relativePath.length > 0 &&
     Number.isSafeInteger(after.line) &&
-    (after.line ?? -1) >= 0 &&
+    (after.line ?? -1) >= 0
+  );
+}
+
+function validResultKeysetProducer(cursor: Partial<ResultKeysetCursorPayload>): boolean {
+  return (
     (cursor.producer === 'source-keyset' || cursor.producer === 'complete-only') &&
     typeof cursor.semanticEnrichment === 'boolean' &&
     typeof cursor.indexGeneration === 'string' &&

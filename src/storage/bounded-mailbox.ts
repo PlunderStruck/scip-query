@@ -576,6 +576,25 @@ export function completeBoundedMailboxClaim(
 ): void {
   const nowMs = options.nowMs ?? Date.now();
   const limits = resolveBoundedMailboxLimits(options.limits);
+  const value = completedMailboxResponse(claim, response, nowMs, limits);
+  const responseBytes = Buffer.byteLength(`${JSON.stringify(value)}\n`);
+  assertMailboxCompletionCapacity(paths, claim, responseBytes, limits, nowMs);
+  const durability = options.durability ?? 'durable';
+  publishCompletion(paths, claim, value, durability);
+  options.onAfterResponsePublished?.();
+  rmSync(claim.path, { force: true });
+  if (durability === 'durable') {
+    const claimDirectory = dirname(claim.path);
+    syncDirectoryDurable(existsSync(claimDirectory) ? claimDirectory : paths.inflightDir);
+  }
+}
+
+function completedMailboxResponse(
+  claim: BoundedMailboxClaim,
+  response: Record<string, unknown>,
+  nowMs: number,
+  limits: BoundedMailboxLimits,
+): Record<string, unknown> {
   // A requester's poll loop provably stops at its deadline, so a response can
   // only be consumed after that by a deduplicated retry of the same
   // operation; cap retention shortly past the deadline so responses abandoned
@@ -597,8 +616,16 @@ export function completeBoundedMailboxClaim(
     completedAtMs: nowMs,
     expiresAtMs,
   };
-  const value = { ...metadata, ...response, ...metadata };
-  const responseBytes = Buffer.byteLength(`${JSON.stringify(value)}\n`);
+  return { ...metadata, ...response, ...metadata };
+}
+
+function assertMailboxCompletionCapacity(
+  paths: BoundedMailboxPaths,
+  claim: BoundedMailboxClaim,
+  responseBytes: number,
+  limits: BoundedMailboxLimits,
+  nowMs: number,
+): void {
   let status = inspectBoundedMailbox(paths);
   if (responseBytes > limits.maxItemBytes) {
     throw new MailboxBackpressureError('item-too-large', status, limits, responseBytes);
@@ -615,14 +642,6 @@ export function completeBoundedMailboxClaim(
     if (nextTotalBytes > limits.maxBytes && nextTotalBytes > status.totalBytes) {
       throw new MailboxBackpressureError('byte-capacity', status, limits, responseBytes);
     }
-  }
-  const durability = options.durability ?? 'durable';
-  publishCompletion(paths, claim, value, durability);
-  options.onAfterResponsePublished?.();
-  rmSync(claim.path, { force: true });
-  if (durability === 'durable') {
-    const claimDirectory = dirname(claim.path);
-    syncDirectoryDurable(existsSync(claimDirectory) ? claimDirectory : paths.inflightDir);
   }
 }
 

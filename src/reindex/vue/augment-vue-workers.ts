@@ -127,18 +127,7 @@ export async function awaitVueReferenceWorkers(
   } catch (error) {
     operationError = error;
   } finally {
-    const terminationFailures = await terminateOwnedWorkers(workers);
-    if (terminationFailures.length === 0) {
-      try {
-        runtime.removeResultDirectory(resultDir);
-      } catch (error) {
-        terminationFailures.push(error);
-      }
-    }
-    if (terminationFailures.length > 0) {
-      const failures = operationError === undefined ? terminationFailures : [operationError, ...terminationFailures];
-      cleanupError = new AggregateError(failures, `Vue worker cleanup failed: ${errorMessage(failures[0])}`);
-    }
+    cleanupError = await cleanupVueWorkerRun(workers, runtime, resultDir, operationError);
   }
 
   if (cleanupError) throw cleanupError;
@@ -198,18 +187,7 @@ function readWorkerResult(
   maxResultBytes: number,
   runtime: VueWorkerRuntimePort,
 ): VueReferenceComputationResult {
-  const size = runtime.resultSize(worker.resultPath);
-  if (!Number.isSafeInteger(size) || size < 0 || size > maxResultBytes) {
-    throw new Error(
-      `Vue reference worker ${worker.workerId} result is ${size} bytes; limit is ${maxResultBytes} bytes`,
-    );
-  }
-  let raw: unknown;
-  try {
-    raw = JSON.parse(runtime.readResult(worker.resultPath));
-  } catch (error) {
-    throw new Error(`Vue reference worker ${worker.workerId} produced invalid JSON`, { cause: error });
-  }
+  const raw: unknown = readVueWorkerJson(worker, maxResultBytes, runtime);
   if (!isRecord(raw) || raw['version'] !== 1 || raw['runId'] !== runId || raw['workerId'] !== worker.workerId) {
     throw new Error(`Vue reference worker ${worker.workerId} result identity does not match its assignment`);
   }
@@ -382,4 +360,45 @@ function fileWeight(fileName: string): number {
   } catch {
     return 1;
   }
+}
+
+async function cleanupVueWorkerRun(
+  workers: OwnedVueWorker[],
+  runtime: VueWorkerRuntimePort,
+  resultDir: string,
+  operationError: unknown,
+): Promise<AggregateError | undefined> {
+  const terminationFailures = await terminateOwnedWorkers(workers);
+  if (terminationFailures.length === 0) {
+    try {
+      runtime.removeResultDirectory(resultDir);
+    } catch (error) {
+      terminationFailures.push(error);
+    }
+  }
+  if (terminationFailures.length > 0) {
+    const failures = operationError === undefined ? terminationFailures : [operationError, ...terminationFailures];
+    return new AggregateError(failures, `Vue worker cleanup failed: ${errorMessage(failures[0])}`);
+  }
+  return undefined;
+}
+
+function readVueWorkerJson(
+  worker: Pick<OwnedVueWorker, 'workerId' | 'resultPath'>,
+  maxResultBytes: number,
+  runtime: VueWorkerRuntimePort,
+): unknown {
+  const size = runtime.resultSize(worker.resultPath);
+  if (!Number.isSafeInteger(size) || size < 0 || size > maxResultBytes) {
+    throw new Error(
+      `Vue reference worker ${worker.workerId} result is ${size} bytes; limit is ${maxResultBytes} bytes`,
+    );
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(runtime.readResult(worker.resultPath));
+  } catch (error) {
+    throw new Error(`Vue reference worker ${worker.workerId} produced invalid JSON`, { cause: error });
+  }
+  return raw;
 }

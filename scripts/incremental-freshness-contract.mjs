@@ -322,21 +322,13 @@ function parseArgs(argv) {
     burstInterval: 25,
     timeout: 60_000,
   };
+  const options = freshnessContractOptions();
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === '--scenario') parsed.scenario = requiredValue(argv[++index], arg);
-    else if (arg === '--iterations') parsed.iterations = positiveInteger(argv[++index], arg);
-    else if (arg === '--project-root') parsed.projectRoot = requiredValue(argv[++index], arg);
-    else if (arg === '--cli') parsed.cli = requiredValue(argv[++index], arg);
-    else if (arg === '--out') parsed.out = requiredValue(argv[++index], arg);
-    else if (arg === '--edit-file') parsed.editFile = requiredValue(argv[++index], arg);
-    else if (arg === '--debounce') parsed.debounce = nonNegativeInteger(argv[++index], arg);
-    else if (arg === '--cooldown') parsed.cooldown = nonNegativeInteger(argv[++index], arg);
-    else if (arg === '--idle-timeout') parsed.idleTimeout = nonNegativeInteger(argv[++index], arg);
-    else if (arg === '--burst-writes') parsed.burstWrites = positiveInteger(argv[++index], arg);
-    else if (arg === '--burst-interval') parsed.burstInterval = nonNegativeInteger(argv[++index], arg);
-    else if (arg === '--timeout') parsed.timeout = positiveInteger(argv[++index], arg);
-    else throw new Error(`unknown option: ${arg}`);
+    const option = options.get(arg);
+    if (!option) throw new Error(`unknown option: ${arg}`);
+    const { key, parse } = option;
+    parsed[key] = parse(argv[++index], arg);
   }
   const scenarios = new Set([
     'manual-noop-control',
@@ -347,6 +339,23 @@ function parseArgs(argv) {
   ]);
   if (!scenarios.has(parsed.scenario)) throw new Error(`unknown scenario: ${parsed.scenario}`);
   return parsed;
+}
+
+function freshnessContractOptions() {
+  return new Map([
+    ['--scenario', { key: 'scenario', parse: requiredValue }],
+    ['--iterations', { key: 'iterations', parse: positiveInteger }],
+    ['--project-root', { key: 'projectRoot', parse: requiredValue }],
+    ['--cli', { key: 'cli', parse: requiredValue }],
+    ['--out', { key: 'out', parse: requiredValue }],
+    ['--edit-file', { key: 'editFile', parse: requiredValue }],
+    ['--debounce', { key: 'debounce', parse: nonNegativeInteger }],
+    ['--cooldown', { key: 'cooldown', parse: nonNegativeInteger }],
+    ['--idle-timeout', { key: 'idleTimeout', parse: nonNegativeInteger }],
+    ['--burst-writes', { key: 'burstWrites', parse: positiveInteger }],
+    ['--burst-interval', { key: 'burstInterval', parse: nonNegativeInteger }],
+    ['--timeout', { key: 'timeout', parse: positiveInteger }],
+  ]);
 }
 
 function positiveInteger(value, flag) {

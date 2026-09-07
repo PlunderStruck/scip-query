@@ -319,15 +319,7 @@ export function readSharedGeneration(
   } catch {
     return null;
   }
-  if (
-    manifest.generationId !== snapshot.generationId ||
-    manifest.repositoryId !== snapshot.repositoryId ||
-    manifest.treeOid !== snapshot.treeOid ||
-    manifest.producerIdentity !== snapshot.producerIdentity ||
-    !sameProjectInputSnapshotContent(manifest.fingerprint, snapshot.fingerprint)
-  ) {
-    return null;
-  }
+  if (!sharedManifestMatchesSnapshot(manifest, snapshot)) return null;
   if (!sharedGenerationMetadataIsPortable(generationDir)) return null;
   if (!verifyArtifacts) return manifest;
   try {
@@ -1553,13 +1545,7 @@ function validateSourceGeneration(
 ): boolean {
   try {
     const metadata = readPublishableReindexMetadata(cacheDir);
-    if (
-      !metadata ||
-      metadata.scipCompanion === 'deferred' ||
-      !sameProjectInputSnapshotContent(projectInputSnapshotOrNull(metadata.fingerprint), expectedFingerprint) ||
-      JSON.stringify([...(metadata.indexedLanguages ?? [])].sort()) !==
-        JSON.stringify([...expectedFingerprint.languages].sort())
-    ) {
+    if (sourceGenerationMetadataRejected(metadata, expectedFingerprint)) {
       debugSharedCache('source validation rejected metadata');
       return false;
     }
@@ -1573,17 +1559,7 @@ function validateSourceGeneration(
       debugSharedCache(`source validation rejected SQLite generation state ${inspection.state}`);
       return false;
     }
-    const db = new Database(join(cacheDir, 'index.db'), { readonly: true, fileMustExist: true });
-    try {
-      if (deepSqliteIntegrity) {
-        const result = db.pragma('quick_check(1)', { simple: true });
-        if (result !== 'ok') return false;
-      } else {
-        db.pragma('schema_version', { simple: true });
-      }
-    } finally {
-      db.close();
-    }
+    if (!sourceSqliteIntegrityValid(cacheDir, deepSqliteIntegrity)) return false;
     const expectedRoot = canonicalProjectRootUrl(projectRoot);
     const scipArtifacts = deepSqliteIntegrity
       ? artifacts.files.filter((file) => file.endsWith('.scip'))
@@ -1643,4 +1619,45 @@ function isProjectInputFingerprint(value: unknown): value is ProjectInputFingerp
 
 function sha256(value: string | Uint8Array): string {
   return createHash('sha256').update(value).digest('hex');
+}
+
+function sharedManifestMatchesSnapshot(
+  manifest: SharedGenerationManifest,
+  snapshot: SharedGenerationSnapshot,
+): boolean {
+  return !(
+    manifest.generationId !== snapshot.generationId ||
+    manifest.repositoryId !== snapshot.repositoryId ||
+    manifest.treeOid !== snapshot.treeOid ||
+    manifest.producerIdentity !== snapshot.producerIdentity ||
+    !sameProjectInputSnapshotContent(manifest.fingerprint, snapshot.fingerprint)
+  );
+}
+
+function sourceSqliteIntegrityValid(cacheDir: string, deepSqliteIntegrity: boolean): boolean {
+  const db = new Database(join(cacheDir, 'index.db'), { readonly: true, fileMustExist: true });
+  try {
+    if (deepSqliteIntegrity) {
+      const result = db.pragma('quick_check(1)', { simple: true });
+      if (result !== 'ok') return false;
+    } else {
+      db.pragma('schema_version', { simple: true });
+    }
+  } finally {
+    db.close();
+  }
+  return true;
+}
+
+function sourceGenerationMetadataRejected(
+  metadata: ReturnType<typeof readPublishableReindexMetadata>,
+  expectedFingerprint: ProjectInputFingerprint,
+): boolean {
+  return (
+    !metadata ||
+    metadata.scipCompanion === 'deferred' ||
+    !sameProjectInputSnapshotContent(projectInputSnapshotOrNull(metadata.fingerprint), expectedFingerprint) ||
+    JSON.stringify([...(metadata.indexedLanguages ?? [])].sort()) !==
+      JSON.stringify([...expectedFingerprint.languages].sort())
+  );
 }

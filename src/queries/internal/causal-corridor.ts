@@ -157,15 +157,22 @@ function isSelectedCorridorEvidence(
     if (semantic.family === 'data' || semantic.family === 'temporal') {
       return focusedNodeIds.has(edge.fromNodeId) || focusedNodeIds.has(edge.toNodeId);
     }
-    if (semantic.family === 'control') {
-      if (isBranchSemantic(semantic)) return focusedNodeIds.has(edge.fromNodeId);
-      if (['returns', 'throws'].includes(semantic.subtype)) return focusedNodeIds.has(edge.toNodeId);
-      if (semantic.subtype === 'completion-callback') {
-        return focusedNodeIds.has(edge.fromNodeId) || focusedNodeIds.has(edge.toNodeId);
-      }
-    }
+    if (semantic.family === 'control') return selectedControlCorridorEvidence(edge, semantic, focusedNodeIds);
     return false;
   });
+}
+
+function selectedControlCorridorEvidence(
+  edge: ExplorationTopologyEdge,
+  semantic: NonNullable<ExplorationTopologyEdge['semantics']>[number],
+  focusedNodeIds: ReadonlySet<string>,
+): boolean {
+  if (isBranchSemantic(semantic)) return focusedNodeIds.has(edge.fromNodeId);
+  if (['returns', 'throws'].includes(semantic.subtype)) return focusedNodeIds.has(edge.toNodeId);
+  if (semantic.subtype === 'completion-callback') {
+    return focusedNodeIds.has(edge.fromNodeId) || focusedNodeIds.has(edge.toNodeId);
+  }
+  return false;
 }
 
 /** Recompute the required corridor and identify any protected fact omitted by a rendered packet. */

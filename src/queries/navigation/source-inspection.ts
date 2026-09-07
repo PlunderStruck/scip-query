@@ -371,13 +371,7 @@ export function inspectSource(db: ScipDatabase, opts: SourceInspectionOptions): 
   ).length;
   const searches = built.searches.map((search) => searchSelectionCoverage(search, candidates, selectedCandidates));
   const omittedByRole = countRoles(omittedCandidates);
-  const exactSelectorsComplete =
-    built.locations.every((location) => location.matched) &&
-    built.evidence.every((item) => item.kind === 'matched') &&
-    built.searches.every((search) => searchTextCoverageComplete(search.textCoverage)) &&
-    omittedCandidates.every(
-      (candidate) => !candidate.roles.some((role) => role === 'location' || role === 'definition'),
-    );
+  const exactSelectorsComplete = inspectionExactSelectorsComplete(built, omittedCandidates);
   const omittedSearchMatches = searches.reduce((total, search) => total + search.omittedMatches, 0);
   const complete = omittedCandidates.length === 0 && omittedSearchMatches === 0;
   const expansionCommand = complete ? undefined : inspectionCommand(request, true);
@@ -395,21 +389,7 @@ export function inspectSource(db: ScipDatabase, opts: SourceInspectionOptions): 
   // Otherwise a character ceiling can hide both a requested construct and its
   // direct callees, forcing an avoidable extra inspect generation to discover
   // the next causal step.
-  const causalSeeds = candidates
-    .filter(
-      (candidate): candidate is CandidateSourceUnit =>
-        request.view === 'behavior' &&
-        candidate.kind === 'source' &&
-        candidate.roles.some((role) => role === 'location' || role === 'definition' || role === 'search'),
-    )
-    .map((candidate) => ({
-      id: `inspect:${candidate.relativePath}:${candidate.startLine}-${candidate.endLine}`,
-      label: candidate.ownerShort ?? `${candidate.relativePath}:${candidate.startLine + 1}`,
-      file: candidate.relativePath,
-      startLine: candidate.startLine,
-      endLine: candidate.endLine,
-    }));
-  const causalFrontier = causalSeeds.length > 0 ? sourceRangeNextAnchorPacket(db, causalSeeds) : undefined;
+  const causalFrontier = inspectionCausalFrontier(db, candidates, request.view);
 
   return {
     searches,
@@ -447,6 +427,42 @@ export function inspectSource(db: ScipDatabase, opts: SourceInspectionOptions): 
     bindingClosure,
     continuation: null,
   };
+}
+
+function inspectionExactSelectorsComplete(
+  built: BuiltInspection,
+  omittedCandidates: readonly CandidateUnit[],
+): boolean {
+  return (
+    built.locations.every((location) => location.matched) &&
+    built.evidence.every((item) => item.kind === 'matched') &&
+    built.searches.every((search) => searchTextCoverageComplete(search.textCoverage)) &&
+    omittedCandidates.every(
+      (candidate) => !candidate.roles.some((role) => role === 'location' || role === 'definition'),
+    )
+  );
+}
+
+function inspectionCausalFrontier(
+  db: ScipDatabase,
+  candidates: readonly CandidateUnit[],
+  view: InspectionRequest['view'],
+) {
+  const causalSeeds = candidates
+    .filter(
+      (candidate): candidate is CandidateSourceUnit =>
+        view === 'behavior' &&
+        candidate.kind === 'source' &&
+        candidate.roles.some((role) => role === 'location' || role === 'definition' || role === 'search'),
+    )
+    .map((candidate) => ({
+      id: `inspect:${candidate.relativePath}:${candidate.startLine}-${candidate.endLine}`,
+      label: candidate.ownerShort ?? `${candidate.relativePath}:${candidate.startLine + 1}`,
+      file: candidate.relativePath,
+      startLine: candidate.startLine,
+      endLine: candidate.endLine,
+    }));
+  return causalSeeds.length > 0 ? sourceRangeNextAnchorPacket(db, causalSeeds) : undefined;
 }
 
 function stoppingSummaryFor(

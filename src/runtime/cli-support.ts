@@ -117,11 +117,11 @@ function parseHealthSemanticPrewarmMarker(payload: string): HealthSemanticPrewar
     if (!parsed || typeof parsed !== 'object') return null;
     const marker = parsed as Partial<HealthSemanticPrewarmMarker>;
     if (marker.version !== HEALTH_SEMANTIC_PREWARM_MARKER_VERSION) return null;
-    if (typeof marker.definitions !== 'number' || !Number.isFinite(marker.definitions)) return null;
-    if (typeof marker.referenceCacheWrites !== 'number' || !Number.isFinite(marker.referenceCacheWrites)) return null;
-    if (typeof marker.referenceIncomplete !== 'number' || !Number.isFinite(marker.referenceIncomplete)) return null;
-    if (typeof marker.calleeRows !== 'number' || !Number.isFinite(marker.calleeRows)) return null;
-    if (typeof marker.warmedAt !== 'number' || !Number.isFinite(marker.warmedAt)) return null;
+    if (!isFinitePrewarmNumber(marker.definitions)) return null;
+    if (!isFinitePrewarmNumber(marker.referenceCacheWrites)) return null;
+    if (!isFinitePrewarmNumber(marker.referenceIncomplete)) return null;
+    if (!isFinitePrewarmNumber(marker.calleeRows)) return null;
+    if (!isFinitePrewarmNumber(marker.warmedAt)) return null;
     return {
       version: HEALTH_SEMANTIC_PREWARM_MARKER_VERSION,
       definitions: marker.definitions,
@@ -133,6 +133,10 @@ function parseHealthSemanticPrewarmMarker(payload: string): HealthSemanticPrewar
   } catch {
     return null;
   }
+}
+
+function isFinitePrewarmNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 type HealthReport = ReturnType<typeof queries.health>;

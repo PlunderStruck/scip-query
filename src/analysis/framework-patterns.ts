@@ -73,10 +73,7 @@ function parseCachedDefinitionExclusions(payload: string): ExclusionEntry[] | nu
 function normalizeExclusionEntry(value: unknown): ExclusionEntry | null {
   if (!value || typeof value !== 'object') return null;
   const entry = value as Partial<ExclusionEntry>;
-  if (typeof entry.startLine !== 'number' || !Number.isFinite(entry.startLine)) return null;
-  if (typeof entry.endLine !== 'number' || !Number.isFinite(entry.endLine)) return null;
-  if (typeof entry.reason !== 'string') return null;
-  if (entry.containerName !== undefined && typeof entry.containerName !== 'string') return null;
+  if (!validExclusionFields(entry)) return null;
   const disposition = entry.disposition === undefined ? legacyDispositionForReason(entry.reason) : entry.disposition;
   if (disposition !== 'exclude' && disposition !== 'implicit-usage') return null;
   return {
@@ -86,6 +83,16 @@ function normalizeExclusionEntry(value: unknown): ExclusionEntry | null {
     disposition,
     ...(entry.containerName ? { containerName: entry.containerName } : {}),
   };
+}
+
+function validExclusionFields(
+  entry: Partial<ExclusionEntry>,
+): entry is Partial<ExclusionEntry> & Pick<ExclusionEntry, 'startLine' | 'endLine' | 'reason'> {
+  if (typeof entry.startLine !== 'number' || !Number.isFinite(entry.startLine)) return false;
+  if (typeof entry.endLine !== 'number' || !Number.isFinite(entry.endLine)) return false;
+  if (typeof entry.reason !== 'string') return false;
+  if (entry.containerName !== undefined && typeof entry.containerName !== 'string') return false;
+  return true;
 }
 
 const TEST_FRAMEWORK_NAMES = new Set([
@@ -358,7 +365,6 @@ function collectRustAstExclusions(
   inTestMod: boolean,
   inTraitImpl: boolean,
 ): void {
-  let childInTestMod = inTestMod;
   let childInTraitImpl = inTraitImpl;
 
   if (node.type === 'trait_item') {
@@ -380,6 +386,19 @@ function collectRustAstExclusions(
     });
   }
 
+  const childInTestMod = collectRustNodeExclusions(node, out, inTestMod, inTraitImpl);
+
+  for (const child of node.namedChildren) {
+    collectRustAstExclusions(child, out, childInTestMod, childInTraitImpl);
+  }
+}
+
+function collectRustNodeExclusions(
+  node: SyntaxNode,
+  out: ExclusionEntry[],
+  inTestMod: boolean,
+  inTraitImpl: boolean,
+): boolean {
   if (node.type === 'function_item' || node.type === 'function_signature_item') {
     collectRustFunctionExclusion(node, out, inTestMod, inTraitImpl);
   } else if (inTraitImpl && isRustAssociatedTraitItem(node)) {
@@ -392,14 +411,9 @@ function collectRustAstExclusions(
   } else if (node.type === 'struct_item' || node.type === 'enum_item' || node.type === 'union_item') {
     collectRustTypeExclusions(node, out, inTestMod);
   } else if (node.type === 'mod_item') {
-    if (rustAttributeTexts(node).some((a) => /#\[\s*cfg\s*\(\s*test\s*\)/.test(a))) {
-      childInTestMod = true;
-    }
+    if (rustAttributeTexts(node).some((a) => /#\[\s*cfg\s*\(\s*test\s*\)/.test(a))) return true;
   }
-
-  for (const child of node.namedChildren) {
-    collectRustAstExclusions(child, out, childInTestMod, childInTraitImpl);
-  }
+  return inTestMod;
 }
 
 function collectRustFunctionExclusion(

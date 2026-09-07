@@ -50,17 +50,7 @@ export function dependencyDepth(
 
   // 2. Build condensed DAG over SCCs.
   // sccs are emitted in reverse topological order by Tarjan.
-  const dag = new Map<SccId, Set<SccId>>();
-  for (let i = 0; i < sccs.length; i++) {
-    dag.set(i, new Set<SccId>());
-  }
-  for (const [from, neighbors] of graph) {
-    const fromScc = sccOf.get(from)!;
-    for (const to of neighbors) {
-      const toScc = sccOf.get(to)!;
-      if (toScc !== fromScc) dag.get(fromScc)!.add(toScc);
-    }
-  }
+  const dag = condensedDependencyGraph(graph, sccs.length, sccOf);
 
   // 3. Longest path in DAG. Tarjan emits SCCs in REVERSE topological order
   // (sinks first, sources last), so a forward iteration of `sccs` gives us
@@ -68,24 +58,7 @@ export function dependencyDepth(
   // longestSccPath[s] = list of SCC IDs forming the longest chain starting at s.
   // pathLength[s] = number of condensed dependency components. A cycle is
   // one component, so adding its member count would falsely inflate depth.
-  const longestSccPath = new Array<SccId[]>(sccs.length);
-  const pathLength = new Array<number>(sccs.length);
-  for (let s = 0; s < sccs.length; s++) {
-    let bestTail: SccId[] = [];
-    let bestTailLength = 0;
-    for (const next of [...dag.get(s)!].sort((left, right) => left - right)) {
-      const tailLength = pathLength[next]!;
-      if (
-        tailLength > bestTailLength ||
-        (tailLength === bestTailLength && compareComponentPaths(longestSccPath[next]!, bestTail, sccs) < 0)
-      ) {
-        bestTailLength = tailLength;
-        bestTail = longestSccPath[next]!;
-      }
-    }
-    longestSccPath[s] = [s, ...bestTail];
-    pathLength[s] = 1 + bestTailLength;
-  }
+  const longestSccPath = longestComponentPaths(dag, sccs);
   function lp(s: SccId): SccId[] {
     return longestSccPath[s]!;
   }
@@ -110,6 +83,48 @@ export function dependencyDepth(
 
   results.sort((a, b) => b.depth - a.depth || a.chain.join('\0').localeCompare(b.chain.join('\0')));
   return dedupeSuffixChains(results).slice(0, limit);
+}
+
+function condensedDependencyGraph(
+  graph: ReadonlyMap<string, ReadonlySet<string>>,
+  componentCount: number,
+  sccOf: ReadonlyMap<string, number>,
+): Map<number, Set<number>> {
+  const dag = new Map<number, Set<number>>();
+  for (let i = 0; i < componentCount; i++) {
+    dag.set(i, new Set<number>());
+  }
+  for (const [from, neighbors] of graph) {
+    const fromScc = sccOf.get(from)!;
+    for (const to of neighbors) {
+      const toScc = sccOf.get(to)!;
+      if (toScc !== fromScc) dag.get(fromScc)!.add(toScc);
+    }
+  }
+
+  return dag;
+}
+
+function longestComponentPaths(dag: ReadonlyMap<number, ReadonlySet<number>>, sccs: string[][]): number[][] {
+  const longestSccPath = new Array<number[]>(sccs.length);
+  const pathLength = new Array<number>(sccs.length);
+  for (let s = 0; s < sccs.length; s++) {
+    let bestTail: number[] = [];
+    let bestTailLength = 0;
+    for (const next of [...dag.get(s)!].sort((left, right) => left - right)) {
+      const tailLength = pathLength[next]!;
+      if (
+        tailLength > bestTailLength ||
+        (tailLength === bestTailLength && compareComponentPaths(longestSccPath[next]!, bestTail, sccs) < 0)
+      ) {
+        bestTailLength = tailLength;
+        bestTail = longestSccPath[next]!;
+      }
+    }
+    longestSccPath[s] = [s, ...bestTail];
+    pathLength[s] = 1 + bestTailLength;
+  }
+  return longestSccPath;
 }
 
 function compareComponentPaths(

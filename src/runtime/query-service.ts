@@ -966,25 +966,24 @@ function ensureQueryServiceServer(
   throw new Error('Persistent query service did not become ready within 5s.');
 }
 
+type ExpectedQueryServiceResponse = {
+  id: string;
+  operationKey: string;
+  clientId: string;
+  deadlineAtMs: number;
+  generation: string;
+};
+
 function parseQueryServiceResponse<Result>(
   raw: string,
-  expected: { id: string; operationKey: string; clientId: string; deadlineAtMs: number; generation: string },
+  expected: ExpectedQueryServiceResponse,
   isResult: (value: unknown) => value is Result,
   resultName: string,
 ): QueryServiceResponse<Result> {
   const value = JSON.parse(raw) as unknown;
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid query service response.');
   const record = value as Record<string, unknown>;
-  if (
-    record['mailboxVersion'] !== BOUNDED_MAILBOX_VERSION ||
-    record['protocolVersion'] !== QUERY_SERVICE_PROTOCOL_VERSION ||
-    record['id'] !== expected.id ||
-    record['operationKey'] !== expected.operationKey ||
-    record['clientId'] !== expected.clientId ||
-    record['deadlineAtMs'] !== expected.deadlineAtMs
-  ) {
-    throw new Error('Query service response identity does not match the request.');
-  }
+  assertQueryServiceResponseIdentity(record, expected);
   if (record['ok'] !== true) {
     throw new Error(
       typeof record['error'] === 'string' ? record['error'] : 'Persistent query service rejected the request.',
@@ -1005,6 +1004,22 @@ function parseQueryServiceResponse<Result>(
   };
 }
 
+function assertQueryServiceResponseIdentity(
+  record: Record<string, unknown>,
+  expected: ExpectedQueryServiceResponse,
+): void {
+  if (
+    record['mailboxVersion'] !== BOUNDED_MAILBOX_VERSION ||
+    record['protocolVersion'] !== QUERY_SERVICE_PROTOCOL_VERSION ||
+    record['id'] !== expected.id ||
+    record['operationKey'] !== expected.operationKey ||
+    record['clientId'] !== expected.clientId ||
+    record['deadlineAtMs'] !== expected.deadlineAtMs
+  ) {
+    throw new Error('Query service response identity does not match the request.');
+  }
+}
+
 function isOutlineResult(value: unknown): value is OutlineNode[] {
   if (!Array.isArray(value)) return false;
   const pending: unknown[] = [...value];
@@ -1013,12 +1028,7 @@ function isOutlineResult(value: unknown): value is OutlineNode[] {
     if (!node || typeof node !== 'object' || Array.isArray(node)) return false;
     const record = node as Record<string, unknown>;
     if (
-      typeof record['symbol'] !== 'string' ||
-      typeof record['shortName'] !== 'string' ||
-      !Number.isSafeInteger(record['startLine']) ||
-      (record['startLine'] as number) < 0 ||
-      !Number.isSafeInteger(record['endLine']) ||
-      (record['endLine'] as number) < (record['startLine'] as number) ||
+      !validOutlineNodeIdentityAndRange(record) ||
       (record['signature'] !== null && typeof record['signature'] !== 'string') ||
       !Array.isArray(record['children'])
     ) {
@@ -1027,6 +1037,17 @@ function isOutlineResult(value: unknown): value is OutlineNode[] {
     pending.push(...record['children']);
   }
   return true;
+}
+
+function validOutlineNodeIdentityAndRange(record: Record<string, unknown>): boolean {
+  return !(
+    typeof record['symbol'] !== 'string' ||
+    typeof record['shortName'] !== 'string' ||
+    !Number.isSafeInteger(record['startLine']) ||
+    (record['startLine'] as number) < 0 ||
+    !Number.isSafeInteger(record['endLine']) ||
+    (record['endLine'] as number) < (record['startLine'] as number)
+  );
 }
 
 function isEntryPointResult(value: unknown): value is QueryServiceEntryPointResult[] {
@@ -1096,15 +1117,20 @@ function isMembersResult(value: unknown): value is QueryServiceMembersTransportR
 function isSymbolResolutionResult(value: unknown): value is SymbolResolutionJson {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  if (record['matched'] === false) {
-    return (
-      record['resolved'] === undefined &&
-      record['otherMatches'] === undefined &&
-      record['totalMatches'] === undefined &&
-      Array.isArray(record['suggestions']) &&
-      record['suggestions'].every((suggestion) => typeof suggestion === 'string')
-    );
-  }
+  return record['matched'] === false ? validUnmatchedSymbolResolution(record) : validMatchedSymbolResolution(record);
+}
+
+function validUnmatchedSymbolResolution(record: Record<string, unknown>): boolean {
+  return (
+    record['resolved'] === undefined &&
+    record['otherMatches'] === undefined &&
+    record['totalMatches'] === undefined &&
+    Array.isArray(record['suggestions']) &&
+    record['suggestions'].every((suggestion) => typeof suggestion === 'string')
+  );
+}
+
+function validMatchedSymbolResolution(record: Record<string, unknown>): boolean {
   return (
     record['matched'] === true &&
     isResolvedSymbol(record['resolved']) &&

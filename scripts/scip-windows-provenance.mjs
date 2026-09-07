@@ -49,25 +49,7 @@ export function sha256(bytes) {
 }
 
 export function inspectPortableExecutable(bytes, filename = '<binary>') {
-  if (!Buffer.isBuffer(bytes) || bytes.length < 0x40) {
-    throw provenanceError('malformed-binary', `${filename} is too short to be a PE executable.`);
-  }
-  if (bytes[0] !== 0x4d || bytes[1] !== 0x5a) {
-    throw provenanceError('malformed-binary', `${filename} is missing the DOS MZ signature.`);
-  }
-
-  const peOffset = bytes.readUInt32LE(0x3c);
-  if (!Number.isSafeInteger(peOffset) || peOffset < 0x40 || peOffset + 26 > bytes.length) {
-    throw provenanceError('malformed-binary', `${filename} has an invalid PE header offset.`);
-  }
-  if (
-    bytes[peOffset] !== 0x50 ||
-    bytes[peOffset + 1] !== 0x45 ||
-    bytes[peOffset + 2] !== 0 ||
-    bytes[peOffset + 3] !== 0
-  ) {
-    throw provenanceError('malformed-binary', `${filename} is missing the PE signature.`);
-  }
+  const peOffset = portableExecutableHeaderOffset(bytes, filename);
 
   const machineCode = bytes.readUInt16LE(peOffset + 4);
   const target = WINDOWS_SIDECAR_TARGETS.find((candidate) => candidate.peMachineCode === machineCode);
@@ -92,6 +74,34 @@ export function inspectPortableExecutable(bytes, filename = '<binary>') {
     peMachine: target.peMachine,
     peMachineCode: `0x${machineCode.toString(16).padStart(4, '0')}`,
   };
+}
+
+function portableExecutableHeaderOffset(bytes, filename) {
+  if (!Buffer.isBuffer(bytes) || bytes.length < 0x40) {
+    throw provenanceError('malformed-binary', `${filename} is too short to be a PE executable.`);
+  }
+  if (bytes[0] !== 0x4d || bytes[1] !== 0x5a) {
+    throw provenanceError('malformed-binary', `${filename} is missing the DOS MZ signature.`);
+  }
+
+  const peOffset = bytes.readUInt32LE(0x3c);
+  if (!Number.isSafeInteger(peOffset) || peOffset < 0x40 || peOffset + 26 > bytes.length) {
+    throw provenanceError('malformed-binary', `${filename} has an invalid PE header offset.`);
+  }
+  validatePortableExecutableSignature(bytes, peOffset, filename);
+
+  return peOffset;
+}
+
+function validatePortableExecutableSignature(bytes, peOffset, filename) {
+  if (
+    bytes[peOffset] !== 0x50 ||
+    bytes[peOffset + 1] !== 0x45 ||
+    bytes[peOffset + 2] !== 0 ||
+    bytes[peOffset + 3] !== 0
+  ) {
+    throw provenanceError('malformed-binary', `${filename} is missing the PE signature.`);
+  }
 }
 
 export function inspectWindowsSidecarBinary(file, readFile = readFileSync) {

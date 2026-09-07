@@ -223,27 +223,30 @@ function checkStructure(program, root, taskId, phase, suiteRoot) {
     ts.isFunctionExpression(node) ||
     ts.isArrowFunction(node) ||
     ts.isMethodDeclaration(node);
+  function checkModuleBoundary(node, file) {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      if (node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+        const target = ts.resolveModuleName(
+          node.moduleSpecifier.text,
+          file.fileName,
+          program.getCompilerOptions(),
+          ts.sys,
+        ).resolvedModule;
+        if (!target || !localPath(target.resolvedFileName).startsWith('src/'))
+          unsupported.push(`${relative(root, file.fileName)}: ${node.moduleSpecifier.text}`);
+        else {
+          const from = boundary(file.fileName);
+          const to = boundary(target.resolvedFileName);
+          if (from !== to && !allowed[from]?.includes(to)) violations.push(`${from} -> ${to}`);
+        }
+      }
+    }
+  }
   for (const file of sourceFiles) {
     if (!allowed[boundary(file.fileName)]) unsupported.push(`${relative(root, file.fileName)}: undeclared boundary`);
     const visit = (node) => {
       if (isCallable(node) && node.body) functions.set(node, file.fileName);
-      if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
-        if (node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-          const target = ts.resolveModuleName(
-            node.moduleSpecifier.text,
-            file.fileName,
-            program.getCompilerOptions(),
-            ts.sys,
-          ).resolvedModule;
-          if (!target || !localPath(target.resolvedFileName).startsWith('src/'))
-            unsupported.push(`${relative(root, file.fileName)}: ${node.moduleSpecifier.text}`);
-          else {
-            const from = boundary(file.fileName);
-            const to = boundary(target.resolvedFileName);
-            if (from !== to && !allowed[from]?.includes(to)) violations.push(`${from} -> ${to}`);
-          }
-        }
-      }
+      checkModuleBoundary(node, file);
       if (
         ts.isCallExpression(node) &&
         (node.expression.kind === ts.SyntaxKind.ImportKeyword ||

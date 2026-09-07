@@ -66,22 +66,35 @@ export function fileDependencyPaths(
   const graph = buildFileDepGraph(db);
   const related = new Set<string>();
 
-  if (direction === 'forward') {
-    for (const path of selected) {
-      for (const dependency of graph.get(path) ?? []) {
-        if (!selected.has(dependency)) related.add(dependency);
-      }
-    }
-  } else {
-    for (const [source, dependencies] of graph) {
-      if (selected.has(source)) continue;
-      for (const target of selected) {
-        if (dependencies.has(target)) related.add(source);
-      }
-    }
-  }
+  if (direction === 'forward') appendForwardDependencyPaths(graph, selected, related);
+  else appendReverseDependencyPaths(graph, selected, related);
 
   return [...related].sort();
+}
+
+function appendForwardDependencyPaths(
+  graph: ReadonlyMap<string, Set<string>>,
+  selected: ReadonlySet<string>,
+  related: Set<string>,
+): void {
+  for (const path of selected) {
+    for (const dependency of graph.get(path) ?? []) {
+      if (!selected.has(dependency)) related.add(dependency);
+    }
+  }
+}
+
+function appendReverseDependencyPaths(
+  graph: ReadonlyMap<string, Set<string>>,
+  selected: ReadonlySet<string>,
+  related: Set<string>,
+): void {
+  for (const [source, dependencies] of graph) {
+    if (selected.has(source)) continue;
+    for (const target of selected) {
+      if (dependencies.has(target)) related.add(source);
+    }
+  }
 }
 
 // scip-query: ignore-extract — this builds the file dependency graph from
@@ -425,19 +438,32 @@ function deserializeFileDependencyGraphPayload(payload: string): FileDependencyG
 }
 
 function isFileDependencyGraphPayload(value: unknown): value is FileDependencyGraphPayload {
+  if (!isFileDependencyGraphHeader(value)) return false;
+  return Array.isArray(value.graph) && value.graph.every(isGraphPayloadEntry);
+}
+
+type FileDependencyGraphHeader = Omit<FileDependencyGraphPayload, 'graph'> & { graph?: unknown };
+
+function isFileDependencyGraphHeader(value: unknown): value is FileDependencyGraphHeader {
   if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<FileDependencyGraphPayload>;
+  const candidate = value as { [Key in keyof FileDependencyGraphPayload]?: unknown };
   return (
     candidate.version === 2 &&
     (candidate.construction === 'full' || candidate.construction === 'carried') &&
-    (candidate.sourceDependencyFingerprint === null || typeof candidate.sourceDependencyFingerprint === 'string') &&
+    isNullableDependencyFingerprint(candidate.sourceDependencyFingerprint) &&
     typeof candidate.sourceFileCount === 'number' &&
-    (candidate.sourceEdgeCount === null || typeof candidate.sourceEdgeCount === 'number') &&
-    (candidate.scipEdgeCount === null || typeof candidate.scipEdgeCount === 'number') &&
-    typeof candidate.edgeCount === 'number' &&
-    Array.isArray(candidate.graph) &&
-    candidate.graph.every(isGraphPayloadEntry)
+    isNullableDependencyCount(candidate.sourceEdgeCount) &&
+    isNullableDependencyCount(candidate.scipEdgeCount) &&
+    typeof candidate.edgeCount === 'number'
   );
+}
+
+function isNullableDependencyFingerprint(value: unknown): value is string | null {
+  return value === null || typeof value === 'string';
+}
+
+function isNullableDependencyCount(value: unknown): value is number | null {
+  return value === null || typeof value === 'number';
 }
 
 function graphEdgeCount(graph: ReadonlyMap<string, ReadonlySet<string>>): number {

@@ -714,37 +714,48 @@ export function enrichResultCallbackControlSemantics(
   const nodeById = new Map(topology.nodes.map((node) => [node.id, node]));
   for (const step of behavior.steps) {
     if (!step.behavior || !step.location) continue;
-    for (const edge of topology.edges) {
-      if (
-        edge.kind !== 'reference' ||
-        edge.fromNodeId !== step.nodeId ||
-        edge.disposition === 'excluded' ||
-        edge.disposition === 'unsupported'
-      ) {
-        continue;
-      }
-      const target = nodeById.get(edge.toNodeId);
-      if (!target?.location || !callableAlternativeForNode(db, target)) continue;
-      const leaf = nodeLeaf(target);
-      const line = evidenceLocation(edge, step.location.file)?.line;
-      const materialLine = step.behavior.lines.find(
-        (candidate) =>
-          (line === undefined || (line >= candidate.line && line <= candidate.endLine)) &&
-          candidate.text.includes(leaf),
-      );
-      if (!materialLine || callableReferenceCausalRole(materialLine.signals) !== 'result-callback') continue;
-      if (edge.semantics?.some(({ family, subtype }) => family === 'control' && subtype === 'result-callback'))
-        continue;
-      edge.semantics = [
-        ...(edge.semantics ?? []),
-        {
-          family: 'control',
-          subtype: 'result-callback',
-          attributes: { evidenceRole: 'result-producing-callable-reference' },
-        },
-      ];
-    }
+    enrichStepResultCallbacks(db, topology, nodeById, step, step.behavior, step.location);
   }
+}
+
+function enrichStepResultCallbacks(
+  db: ScipDatabase,
+  topology: ExplorationTopology,
+  nodeById: ReadonlyMap<string, ExplorationTopology['nodes'][number]>,
+  step: ConnectedBehaviorPacket['steps'][number],
+  behavior: NonNullable<ConnectedBehaviorPacket['steps'][number]['behavior']>,
+  location: NonNullable<ConnectedBehaviorPacket['steps'][number]['location']>,
+): void {
+  for (const edge of topology.edges) {
+    if (!isResultCallbackReference(edge, step.nodeId)) continue;
+    const target = nodeById.get(edge.toNodeId);
+    if (!target?.location || !callableAlternativeForNode(db, target)) continue;
+    const leaf = nodeLeaf(target);
+    const line = evidenceLocation(edge, location.file)?.line;
+    const materialLine = behavior.lines.find(
+      (candidate) =>
+        (line === undefined || (line >= candidate.line && line <= candidate.endLine)) && candidate.text.includes(leaf),
+    );
+    if (!materialLine || callableReferenceCausalRole(materialLine.signals) !== 'result-callback') continue;
+    if (edge.semantics?.some(({ family, subtype }) => family === 'control' && subtype === 'result-callback')) continue;
+    edge.semantics = [
+      ...(edge.semantics ?? []),
+      {
+        family: 'control',
+        subtype: 'result-callback',
+        attributes: { evidenceRole: 'result-producing-callable-reference' },
+      },
+    ];
+  }
+}
+
+function isResultCallbackReference(edge: ExplorationTopology['edges'][number], nodeId: string): boolean {
+  return (
+    edge.kind === 'reference' &&
+    edge.fromNodeId === nodeId &&
+    edge.disposition !== 'excluded' &&
+    edge.disposition !== 'unsupported'
+  );
 }
 
 export function callableReferenceCausalRole(

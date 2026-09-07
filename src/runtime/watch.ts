@@ -398,19 +398,12 @@ export class Watcher {
   private handleFileChange(event: string, filename: string): void {
     // Filter: skip gitignored files and extra ignore patterns
     const rel = this.relativeWatchPath(filename);
-    if (!rel || rel === '..' || rel.startsWith('../')) return;
+    if (isInvalidChangedWatchPath(rel)) return;
     if (isCheapIgnoredWatchPath(rel, this.localCacheWatchPath)) return;
     if (this.gitignoreFilter.isIgnored(rel)) return;
     if (this.extraIgnore.ignores(rel)) return;
     // Skip the index files themselves
-    if (
-      rel.endsWith('index.db') ||
-      rel.endsWith('index.scip') ||
-      rel.endsWith('index.db.tmp') ||
-      basename(rel).startsWith(REINDEX_ACTIVITY_FILE)
-    ) {
-      return;
-    }
+    if (isWatchOutputPath(rel)) return;
 
     if (rel === '.scipquery.json') refreshWatchInputLanguages(this, this.projectRoot);
     const changeKind = scopedProjectInputChangeKind(this, event, rel);
@@ -1756,4 +1749,17 @@ function gitChangeDetail(fallback: string, changedPaths: readonly string[] | nul
   if (changedPaths.length === 0) return fallback;
   if (changedPaths.length === 1) return changedPaths[0]!;
   return `${changedPaths.length} compiler inputs changed`;
+}
+
+function isInvalidChangedWatchPath(rel: string): boolean {
+  return !rel || rel === '..' || rel.startsWith('../');
+}
+
+function isWatchOutputPath(rel: string): boolean {
+  return (
+    rel.endsWith('index.db') ||
+    rel.endsWith('index.scip') ||
+    rel.endsWith('index.db.tmp') ||
+    basename(rel).startsWith(REINDEX_ACTIVITY_FILE)
+  );
 }

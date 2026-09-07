@@ -429,15 +429,9 @@ export function collectAffectedSetShadowRecord(
   if (!runtime.databaseExists(options.candidateDbPath)) {
     return finishUnavailable('candidate-index-unavailable');
   }
-  if (options.refreshResult === 'rebuilt') {
-    const manifest = buildProjectChangeManifest(options.previousSnapshot, options.currentSnapshot);
-    if (manifest.changes.length === 0) {
-      // A rebuild with no input changes leaves the affected-set predictor with
-      // nothing to predict, so the digest oracle can only measure tool drift
-      // and would misreport it as predictor recall. Skip the paired
-      // whole-index fact digests instead of evaluating an empty prediction.
-      return finishUnavailable('no-input-changes');
-    }
+  if (isUnchangedShadowRebuild(options)) {
+    // An unchanged rebuild measures tool drift rather than predictor recall.
+    return finishUnavailable('no-input-changes');
   }
 
   let previousDb: AffectedShadowDatabase | null = null;
@@ -449,16 +443,7 @@ export function collectAffectedSetShadowRecord(
       ...new Set([...runtime.indexedPaths(previousDb), ...runtime.indexedPaths(candidateDb)]),
     ].sort();
     const manifest = buildProjectChangeManifest(options.previousSnapshot, options.currentSnapshot);
-    const projectFileSet = new Set(projectFiles);
-    const needsGraph =
-      manifest.changes.length > 0 &&
-      !classifyAffectedSetFallback(manifest).fullProject &&
-      manifest.changes.every((change) => projectFileSet.has(change.path));
-    const plan = planAffectedFiles(
-      manifest,
-      needsGraph ? runtime.dependencyGraph(previousDb) : new Map(),
-      projectFiles,
-    );
+    const plan = planShadowManifest(manifest, projectFiles, previousDb, runtime);
     const comparison = compareDocumentFactDigests(runtime.factDigests(previousDb), runtime.factDigests(candidateDb));
     const finishedAt = monotonicNow();
     return {
@@ -810,4 +795,25 @@ function telemetryReadFailureReason(error: unknown): 'telemetry-unreadable' | 't
 
 function isMissingFileError(error: unknown): boolean {
   return error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT';
+}
+
+function planShadowManifest(
+  manifest: ReturnType<typeof buildProjectChangeManifest>,
+  projectFiles: string[],
+  previousDb: AffectedShadowDatabase,
+  runtime: AffectedSetShadowRuntime,
+) {
+  const projectFileSet = new Set(projectFiles);
+  const needsGraph =
+    manifest.changes.length > 0 &&
+    !classifyAffectedSetFallback(manifest).fullProject &&
+    manifest.changes.every((change) => projectFileSet.has(change.path));
+  const plan = planAffectedFiles(manifest, needsGraph ? runtime.dependencyGraph(previousDb) : new Map(), projectFiles);
+  return plan;
+}
+
+function isUnchangedShadowRebuild(options: CollectAffectedSetShadowOptions): boolean {
+  if (options.refreshResult !== 'rebuilt') return false;
+  const manifest = buildProjectChangeManifest(options.previousSnapshot, options.currentSnapshot);
+  return manifest.changes.length === 0;
 }

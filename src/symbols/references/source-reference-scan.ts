@@ -53,73 +53,93 @@ export function scanSourceReferences(
   const resolveIdentifier =
     opts.identifierResolution === 'strict' ? attributeIdentifier : attributeIdentifierPermissive;
   const candidateNameMatcher = opts.candidateNames ? createCandidateNameMatcher(opts.candidateNames) : null;
-  let scannedPaths = 0;
-  let candidateMatchedPaths = 0;
-  let visitedNames = 0;
-  let visitedHits = 0;
-  let currentPath = '';
+  const progress = { scannedPaths: 0, candidateMatchedPaths: 0, visitedNames: 0, visitedHits: 0, currentPath: '' };
 
   for (const sourceFile of opts.paths) {
-    scannedPaths += 1;
-    currentPath = sourceFile;
-    const astLanguage = detectAstLanguage(sourceFile);
-    if (!astLanguage && !(opts.includeVueSfc && isVueSfcPath(sourceFile))) continue;
-    if (db.isIgnored(sourceFile)) continue;
-    if (opts.skipPath?.(sourceFile)) continue;
+    progress.scannedPaths += 1;
+    progress.currentPath = sourceFile;
+    if (!sourceReferencePathEligible(db, sourceFile, opts)) continue;
 
     try {
       if (candidateNameMatcher && !sourceMayContainCandidateName(getSourceText(db, sourceFile), candidateNameMatcher)) {
         continue;
       }
-      candidateMatchedPaths += 1;
+      progress.candidateMatchedPaths += 1;
 
-      const visitName = (
-        name: string,
-        kind: SourceReferenceKind,
-        occurrences: number,
-        defaultTargets: () => readonly DefaultSourceReferenceTarget[],
-      ): void => {
-        if (opts.candidateNames && !opts.candidateNames.has(name)) return;
-        visitedNames += 1;
-        const targets = opts.resolveTargets
-          ? opts.resolveTargets({ sourceFile, name, kind, defaultTargets })
-          : defaultTargets();
-        for (const target of targets) {
-          visitedHits += 1;
-          visit({ sourceFile, name, target, occurrences, kind });
-        }
-      };
-
-      const lineMap = getIdentifierLineMap(db, sourceFile);
-      for (const [name, lines] of lineMap) {
-        visitName(name, 'identifier', lines.length, () => resolveIdentifier(db, sourceFile, name));
-      }
-
-      for (const reference of frameworkSourceReferences(db, sourceFile, {
-        includeCrossLanguageDispatchNames: opts.includeCrossLanguageDispatchNames,
-        includeRustAttributeNames: opts.includeRustAttributeNames,
-      })) {
-        const resolveDefaultTargets =
-          reference.kind === 'cross-language-dispatch'
-            ? () => attributeIdentifier(db, sourceFile, reference.name)
-            : () => resolveIdentifier(db, sourceFile, reference.name);
-        visitName(reference.name, reference.kind, reference.occurrences, resolveDefaultTargets);
-      }
+      visitSourceFileReferences(db, sourceFile, opts, resolveIdentifier, visit, progress);
     } finally {
       opts.afterPath?.(sourceFile);
-      if (scannedPaths % 10 === 0) {
+      if (progress.scannedPaths % 10 === 0) {
         profileSpan(
           'source-reference-scan.progress',
           () => undefined,
           () => ({
-            scannedPaths,
-            currentPath,
-            candidateMatchedPaths,
-            visitedNames,
-            visitedHits,
+            scannedPaths: progress.scannedPaths,
+            currentPath: progress.currentPath,
+            candidateMatchedPaths: progress.candidateMatchedPaths,
+            visitedNames: progress.visitedNames,
+            visitedHits: progress.visitedHits,
           }),
         );
       }
     }
+  }
+}
+
+interface SourceReferenceScanProgress {
+  scannedPaths: number;
+  candidateMatchedPaths: number;
+  visitedNames: number;
+  visitedHits: number;
+  currentPath: string;
+}
+
+function sourceReferencePathEligible(db: ScipDatabase, sourceFile: string, opts: ScanSourceReferencesOptions): boolean {
+  const astLanguage = detectAstLanguage(sourceFile);
+  if (!astLanguage && !(opts.includeVueSfc && isVueSfcPath(sourceFile))) return false;
+  if (db.isIgnored(sourceFile)) return false;
+  if (opts.skipPath?.(sourceFile)) return false;
+  return true;
+}
+
+function visitSourceFileReferences(
+  db: ScipDatabase,
+  sourceFile: string,
+  opts: ScanSourceReferencesOptions,
+  resolveIdentifier: typeof attributeIdentifier,
+  visit: (hit: SourceReferenceHit) => void,
+  progress: SourceReferenceScanProgress,
+): void {
+  const visitName = (
+    name: string,
+    kind: SourceReferenceKind,
+    occurrences: number,
+    defaultTargets: () => readonly DefaultSourceReferenceTarget[],
+  ): void => {
+    if (opts.candidateNames && !opts.candidateNames.has(name)) return;
+    progress.visitedNames += 1;
+    const targets = opts.resolveTargets
+      ? opts.resolveTargets({ sourceFile, name, kind, defaultTargets })
+      : defaultTargets();
+    for (const target of targets) {
+      progress.visitedHits += 1;
+      visit({ sourceFile, name, target, occurrences, kind });
+    }
+  };
+
+  const lineMap = getIdentifierLineMap(db, sourceFile);
+  for (const [name, lines] of lineMap) {
+    visitName(name, 'identifier', lines.length, () => resolveIdentifier(db, sourceFile, name));
+  }
+
+  for (const reference of frameworkSourceReferences(db, sourceFile, {
+    includeCrossLanguageDispatchNames: opts.includeCrossLanguageDispatchNames,
+    includeRustAttributeNames: opts.includeRustAttributeNames,
+  })) {
+    const resolveDefaultTargets =
+      reference.kind === 'cross-language-dispatch'
+        ? () => attributeIdentifier(db, sourceFile, reference.name)
+        : () => resolveIdentifier(db, sourceFile, reference.name);
+    visitName(reference.name, reference.kind, reference.occurrences, resolveDefaultTargets);
   }
 }

@@ -164,29 +164,37 @@ function loadScipOccurrenceCalleeIndex(db: ScipDatabase): RustScipOccurrenceCall
     for (const document of scipIndex.documents ?? []) {
       const relativePath = document.relativePath;
       if (!relativePath || !relativePath.endsWith('.rs') || db.isIgnored(relativePath)) continue;
-      const rows: RustScipOccurrenceCallee[] = [];
-      for (const occurrence of document.occurrences ?? []) {
-        if (!occurrence.symbol || (occurrence.symbolRoles & SymbolRole.Definition) !== 0) continue;
-        const calleeDefinition = definitionBySymbol.get(occurrence.symbol);
-        if (!calleeDefinition) continue;
-        const line = occurrence.range?.[0];
-        if (!Number.isInteger(line)) continue;
-        rows.push({
-          line,
-          leaf: calleeDefinition.leaf,
-          traitImplMember: isRustTraitImplMember(calleeDefinition.symbol),
-          callee: {
-            symbol: calleeDefinition.symbol,
-            file: calleeDefinition.relativePath,
-            line: calleeDefinition.startLine,
-            callsiteLine: line,
-          },
-        });
-      }
+      const rows = calleeRowsForScipDocument(document, definitionBySymbol);
       occurrencesByFile.set(relativePath, rows);
     }
     return { occurrencesByFile };
   } catch {
     return null;
   }
+}
+
+function calleeRowsForScipDocument(
+  document: NonNullable<ReturnType<typeof deserializeSCIP>['documents']>[number],
+  definitionBySymbol: Map<string, ReturnType<typeof getAllDefinitions>[number]>,
+): RustScipOccurrenceCallee[] {
+  const rows: RustScipOccurrenceCallee[] = [];
+  for (const occurrence of document.occurrences ?? []) {
+    if (!occurrence.symbol || (occurrence.symbolRoles & SymbolRole.Definition) !== 0) continue;
+    const calleeDefinition = definitionBySymbol.get(occurrence.symbol);
+    if (!calleeDefinition) continue;
+    const line = occurrence.range?.[0];
+    if (!Number.isInteger(line)) continue;
+    rows.push({
+      line,
+      leaf: calleeDefinition.leaf,
+      traitImplMember: isRustTraitImplMember(calleeDefinition.symbol),
+      callee: {
+        symbol: calleeDefinition.symbol,
+        file: calleeDefinition.relativePath,
+        line: calleeDefinition.startLine,
+        callsiteLine: line,
+      },
+    });
+  }
+  return rows;
 }

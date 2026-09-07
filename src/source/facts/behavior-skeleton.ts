@@ -252,13 +252,14 @@ export function behaviorSkeleton(
   const tree = getAst(db, relativePath);
   if (!tree) return null;
   const sourceLines = getSourceLines(db, relativePath);
-  const constructRange = behaviorConstructRange(db, relativePath, startLine, endLine, focusLines);
-  const callable = smallestCoveringCallable(db, relativePath, constructRange.startLine, constructRange.endLine);
-  const rangeStart = callable?.startLine ?? startLine;
-  const rangeEnd = callable?.endLine ?? endLine;
-  const root =
-    (callable ? findCallableNode(tree.rootNode, constructRange.startLine, constructRange.endLine) : null) ??
-    smallestNodeCoveringLines(tree.rootNode, rangeStart, rangeEnd);
+  const { callable, rangeStart, rangeEnd, root } = resolveBehaviorOutlineRange(
+    db,
+    relativePath,
+    startLine,
+    endLine,
+    focusLines,
+    tree.rootNode,
+  );
   if (!root) return null;
   const outline = buildBehaviorOutline(root, sourceLines, rangeStart, rangeEnd, focusLines);
   if (!outline || outline.lines.length === 0) return null;
@@ -266,7 +267,7 @@ export function behaviorSkeleton(
 
   const rawCharacters = renderedRawCharacterEstimate(sourceLines, rangeStart, rangeEnd);
   const outlineCharacters = renderedOutlineCharacterEstimate(outline);
-  if ((options.requireSavings ?? true) && outlineCharacters >= rawCharacters * OUTLINE_SAVINGS_RATIO) return null;
+  if (outlineSavingsInsufficient(rawCharacters, outlineCharacters, options.requireSavings)) return null;
 
   const signals = SIGNAL_ORDER.filter((signal) => outline.lines.some((line) => line.signals.includes(signal)));
 
@@ -297,6 +298,32 @@ export function behaviorSkeleton(
     candidateLines: outline.sourceStatements,
     omittedLines: 0,
   };
+}
+
+function outlineSavingsInsufficient(
+  rawCharacters: number,
+  outlineCharacters: number,
+  requireSavings: boolean | undefined,
+): boolean {
+  return (requireSavings ?? true) && outlineCharacters >= rawCharacters * OUTLINE_SAVINGS_RATIO;
+}
+
+function resolveBehaviorOutlineRange(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+  focusLines: readonly number[],
+  treeRoot: SyntaxNode,
+) {
+  const constructRange = behaviorConstructRange(db, relativePath, startLine, endLine, focusLines);
+  const callable = smallestCoveringCallable(db, relativePath, constructRange.startLine, constructRange.endLine);
+  const rangeStart = callable?.startLine ?? startLine;
+  const rangeEnd = callable?.endLine ?? endLine;
+  const root =
+    (callable ? findCallableNode(treeRoot, constructRange.startLine, constructRange.endLine) : null) ??
+    smallestNodeCoveringLines(treeRoot, rangeStart, rangeEnd);
+  return { callable, rangeStart, rangeEnd, root };
 }
 
 /**
@@ -737,20 +764,8 @@ function addSwitchControlFacts(
   const controller = controlConstruct(subject, 'predicate', subject.text);
   let hasDefault = false;
   for (const candidate of cases) {
-    const defaultCase = isDefaultCase(candidate);
+    const defaultCase = addSwitchCaseControlFacts(facts, controller, candidate);
     hasDefault ||= defaultCase;
-    const label = headerBeforeChild(
-      candidate,
-      candidate.namedChildren.find((child) => isStatementNode(child)),
-    );
-    addControlFact(
-      facts,
-      controller,
-      controlConstruct(candidate, 'outcome', label || (defaultCase ? 'default' : 'case')),
-      defaultCase ? 'predicate-default' : 'predicate-case',
-      { branchRole: defaultCase ? 'default' : 'case' },
-    );
-    addTerminalControlFacts(facts, controller, candidate, defaultCase ? 'default' : 'case');
   }
   if (!hasDefault) {
     addControlFact(
@@ -761,6 +776,27 @@ function addSwitchControlFacts(
       { branchRole: 'fallthrough' },
     );
   }
+}
+
+function addSwitchCaseControlFacts(
+  facts: BehaviorControlFact[],
+  controller: ReturnType<typeof controlConstruct>,
+  candidate: SyntaxNode,
+): boolean {
+  const defaultCase = isDefaultCase(candidate);
+  const label = headerBeforeChild(
+    candidate,
+    candidate.namedChildren.find((child) => isStatementNode(child)),
+  );
+  addControlFact(
+    facts,
+    controller,
+    controlConstruct(candidate, 'outcome', label || (defaultCase ? 'default' : 'case')),
+    defaultCase ? 'predicate-default' : 'predicate-case',
+    { branchRole: defaultCase ? 'default' : 'case' },
+  );
+  addTerminalControlFacts(facts, controller, candidate, defaultCase ? 'default' : 'case');
+  return defaultCase;
 }
 
 function addTryControlFacts(facts: BehaviorControlFact[], node: SyntaxNode): void {
@@ -1059,6 +1095,38 @@ function buildBehaviorOutline(
     if (nestedBody) emitNode(nestedBody, depth + 1);
   };
 
+  const emitControlNode = (node: SyntaxNode, depth: number): boolean => {
+    if (IF_NODE_TYPES.has(node.type)) {
+      emitIf(node, depth);
+      return true;
+    }
+    if (LOOP_NODE_TYPES.has(node.type)) {
+      emitLoop(node, depth);
+      return true;
+    }
+    if (SWITCH_NODE_TYPES.has(node.type)) {
+      emitSwitch(node, depth);
+      return true;
+    }
+    if (CASE_NODE_TYPES.has(node.type)) {
+      emitCase(node, depth);
+      return true;
+    }
+    if (TRY_NODE_TYPES.has(node.type)) {
+      emitTry(node, depth);
+      return true;
+    }
+    if (CATCH_NODE_TYPES.has(node.type)) {
+      emitHandler(node, depth, 'catch');
+      return true;
+    }
+    if (FINALLY_NODE_TYPES.has(node.type)) {
+      emitHandler(node, depth, 'finally');
+      return true;
+    }
+    return false;
+  };
+
   const emitNode = (node: SyntaxNode, depth: number): void => {
     if (node.startPosition.row > rangeEnd || node.endPosition.row < rangeStart) return;
     if (COMMENT_NODE_TYPES.has(node.type) || node.type === 'empty_statement') return;
@@ -1066,34 +1134,7 @@ function buildBehaviorOutline(
       emitBlock(node, depth);
       return;
     }
-    if (IF_NODE_TYPES.has(node.type)) {
-      emitIf(node, depth);
-      return;
-    }
-    if (LOOP_NODE_TYPES.has(node.type)) {
-      emitLoop(node, depth);
-      return;
-    }
-    if (SWITCH_NODE_TYPES.has(node.type)) {
-      emitSwitch(node, depth);
-      return;
-    }
-    if (CASE_NODE_TYPES.has(node.type)) {
-      emitCase(node, depth);
-      return;
-    }
-    if (TRY_NODE_TYPES.has(node.type)) {
-      emitTry(node, depth);
-      return;
-    }
-    if (CATCH_NODE_TYPES.has(node.type)) {
-      emitHandler(node, depth, 'catch');
-      return;
-    }
-    if (FINALLY_NODE_TYPES.has(node.type)) {
-      emitHandler(node, depth, 'finally');
-      return;
-    }
+    if (emitControlNode(node, depth)) return;
     if (ELSE_NODE_TYPES.has(node.type)) {
       emitAlternative(node, depth);
       return;

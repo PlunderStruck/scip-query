@@ -466,55 +466,53 @@ function normalizeNamedBindings(statement) {
   ) {
     const moduleSpecifier = ts.factory.createStringLiteral(normalizeModuleSpecifier(statement.moduleSpecifier.text));
     if (ts.isExportDeclaration(statement)) {
-      const clause =
-        statement.exportClause && ts.isNamedExports(statement.exportClause)
-          ? ts.factory.updateNamedExports(
-              statement.exportClause,
-              [...statement.exportClause.elements].sort((left, right) => left.name.text.localeCompare(right.name.text)),
-            )
-          : statement.exportClause;
-      return ts.factory.updateExportDeclaration(
-        statement,
-        statement.modifiers,
-        statement.isTypeOnly,
-        clause,
-        moduleSpecifier,
-        statement.attributes,
-      );
+      return normalizeExportBindings(statement, moduleSpecifier);
     }
-    const clause = statement.importClause;
-    const bindings =
-      clause?.namedBindings && ts.isNamedImports(clause.namedBindings)
-        ? ts.factory.updateNamedImports(
-            clause.namedBindings,
-            [...clause.namedBindings.elements].sort((left, right) => left.name.text.localeCompare(right.name.text)),
-          )
-        : clause?.namedBindings;
-    const updatedClause = clause
-      ? ts.factory.updateImportClause(clause, clause.phaseModifier, clause.name, bindings)
-      : undefined;
-    return ts.factory.updateImportDeclaration(
-      statement,
-      statement.modifiers,
-      updatedClause,
-      moduleSpecifier,
-      statement.attributes,
-    );
+    return normalizeImportBindings(statement, moduleSpecifier);
   }
   if (ts.isExportDeclaration(statement) && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
-    return ts.factory.updateExportDeclaration(
-      statement,
-      statement.modifiers,
-      statement.isTypeOnly,
-      ts.factory.updateNamedExports(
-        statement.exportClause,
-        [...statement.exportClause.elements].sort((left, right) => left.name.text.localeCompare(right.name.text)),
-      ),
-      statement.moduleSpecifier,
-      statement.attributes,
-    );
+    return normalizeExportBindings(statement, statement.moduleSpecifier);
   }
   return statement;
+}
+
+function normalizeExportBindings(statement, moduleSpecifier) {
+  const clause =
+    statement.exportClause && ts.isNamedExports(statement.exportClause)
+      ? ts.factory.updateNamedExports(
+          statement.exportClause,
+          [...statement.exportClause.elements].sort((left, right) => left.name.text.localeCompare(right.name.text)),
+        )
+      : statement.exportClause;
+  return ts.factory.updateExportDeclaration(
+    statement,
+    statement.modifiers,
+    statement.isTypeOnly,
+    clause,
+    moduleSpecifier,
+    statement.attributes,
+  );
+}
+
+function normalizeImportBindings(statement, moduleSpecifier) {
+  const clause = statement.importClause;
+  const bindings =
+    clause?.namedBindings && ts.isNamedImports(clause.namedBindings)
+      ? ts.factory.updateNamedImports(
+          clause.namedBindings,
+          [...clause.namedBindings.elements].sort((left, right) => left.name.text.localeCompare(right.name.text)),
+        )
+      : clause?.namedBindings;
+  const updatedClause = clause
+    ? ts.factory.updateImportClause(clause, clause.phaseModifier, clause.name, bindings)
+    : undefined;
+  return ts.factory.updateImportDeclaration(
+    statement,
+    statement.modifiers,
+    updatedClause,
+    moduleSpecifier,
+    statement.attributes,
+  );
 }
 
 function declarationStatementsByName(sourceFile) {

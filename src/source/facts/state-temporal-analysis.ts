@@ -201,18 +201,11 @@ export function sourceStateTemporalAnalysis(
 
 function mutationFact(node: SyntaxNode): SourceStateMutationFact | null {
   const deleting = isDeleteExpression(node);
-  const target =
-    node.childForFieldName('left') ??
-    node.childForFieldName('argument') ??
-    (deleting ? (node.namedChildren.at(-1) ?? null) : (node.namedChildren[0] ?? null));
+  const target = mutationTarget(node, deleting);
   if (!target) return null;
   const resource = resourceIdentity(target);
   if (!resource) return null;
-  const operation: SourceMutationOperation = deleting
-    ? 'delete'
-    : UPDATE_NODE_TYPES.has(node.type) || !assignmentOperator(node, target).startsWith('=')
-      ? 'update'
-      : 'assign';
+  const operation = mutationOperation(node, target, deleting);
   const value = deleting || UPDATE_NODE_TYPES.has(node.type) ? null : node.childForFieldName('right');
   return {
     event: construct('event', compact(node.text), node),
@@ -228,6 +221,22 @@ function mutationFact(node: SyntaxNode): SourceStateMutationFact | null {
     value: value ? construct('value', compact(value.text), value) : null,
     dataSubtype: value ? dataSubtype(value, node) : null,
   };
+}
+
+function mutationTarget(node: SyntaxNode, deleting: boolean): SyntaxNode | null {
+  return (
+    node.childForFieldName('left') ??
+    node.childForFieldName('argument') ??
+    (deleting ? (node.namedChildren.at(-1) ?? null) : (node.namedChildren[0] ?? null))
+  );
+}
+
+function mutationOperation(node: SyntaxNode, target: SyntaxNode, deleting: boolean): SourceMutationOperation {
+  return deleting
+    ? 'delete'
+    : UPDATE_NODE_TYPES.has(node.type) || !assignmentOperator(node, target).startsWith('=')
+      ? 'update'
+      : 'assign';
 }
 
 function resourceIdentity(node: SyntaxNode): { name: string; recordIdentity: string | null } | null {

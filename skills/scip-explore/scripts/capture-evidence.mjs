@@ -598,23 +598,7 @@ function priorSourceCoverage(priorReceipts) {
   const coverage = new Map();
   for (const receipt of priorReceipts) {
     if (receipt.observation === undefined) continue;
-    const ranges = [];
-    if (receipt.request?.args?.[0] === 'code') {
-      const codeRanges = parseCodeRanges(receipt.request.args.slice(1));
-      if (codeRanges !== null) ranges.push(...codeRanges);
-    }
-    if (receipt.observation.result?.kind === 'bounded-inspect-behavior-projection') {
-      for (const slice of receipt.observation.result.slices ?? []) {
-        if (
-          typeof slice.relativePath === 'string' &&
-          Number.isSafeInteger(slice.startLine) &&
-          Number.isSafeInteger(slice.endLine) &&
-          slice.startLine <= slice.endLine
-        ) {
-          ranges.push({ path: slice.relativePath, start: slice.startLine, end: slice.endLine });
-        }
-      }
-    }
+    const ranges = receiptSourceRanges(receipt);
     for (const range of ranges) {
       const intervals = coverage.get(range.path) ?? [];
       intervals.push({ ...range, receipt });
@@ -622,6 +606,27 @@ function priorSourceCoverage(priorReceipts) {
     }
   }
   return coverage;
+}
+
+function receiptSourceRanges(receipt) {
+  const ranges = [];
+  if (receipt.request?.args?.[0] === 'code') {
+    const codeRanges = parseCodeRanges(receipt.request.args.slice(1));
+    if (codeRanges !== null) ranges.push(...codeRanges);
+  }
+  if (receipt.observation.result?.kind === 'bounded-inspect-behavior-projection') {
+    for (const slice of receipt.observation.result.slices ?? []) {
+      if (
+        typeof slice.relativePath === 'string' &&
+        Number.isSafeInteger(slice.startLine) &&
+        Number.isSafeInteger(slice.endLine) &&
+        slice.startLine <= slice.endLine
+      ) {
+        ranges.push({ path: slice.relativePath, start: slice.startLine, end: slice.endLine });
+      }
+    }
+  }
+  return ranges;
 }
 
 function subtractIntervals(range, intervals) {

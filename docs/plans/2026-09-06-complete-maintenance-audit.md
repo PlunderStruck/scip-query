@@ -554,3 +554,113 @@ Target measurements (cyclomatic/cognitive):
 - `sourceInspectionSections.searchRows.<callback:result.searches.map:0>` → 7/4 (`src/runtime/query-commands/navigation.ts`).
 
 Next: the user requested larger parallel batches, so the sixth wave has90 ranked targets with exclusive file ownership (root15; each worker25). Artifacts: `/tmp/complexity-wave5-{review,health,impact,metrics}.json`; verification logs use `/tmp/complexity-wave5-*.log`.
+
+
+### Sixth parallel complexity wave completed
+
+Completed 90 ranked targets across 68 exclusive source-file assignments: root fifteen, each of three Astra-medium workers twenty-five. All selected targets and introduced helpers meet cyclomatic 10 / cognitive 15. No thresholds, source scope, suppressions or dependency policy changed.
+
+Sixth parallel complexity wave: 3240 full-suite tests / 363 files passed; build, source types and contract fixtures, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), public consumer compilation and skill links passed. Accounted source review resolves 90 findings with no introduced/worsened findings. Fresh source health: 563/563 eligible files, 13,283 functions, 295 complexity findings, no other finding rules. Fresh indexed diff impact: 215 changed symbols across 59 changed files; 53 affected files. No source-matched test coverage artifact; no CRAP claim.
+
+Focused validation passed 311 distinct tests in root, 221 in worker 1 plus 134 affected tests rerun, 350 in worker 2 plus 133 affected tests rerun, and 426 in worker 3. Counts overlap across lanes and with the full suite. Thirteen new regression tests cover script parsing, worker configuration, AST visitation and reindex publication reporters. The script fixtures do not execute benchmark entrypoints or launch external agent trials.
+
+Every lane received a second read-only diff review. That review caught two extracted reindex reporters changing a callback receiver. Both now invoke the callback through the original run object; two regressions verify receiver/message ordering and avoid accessing the callback for suppressed reports. The API check also caught a new private Watcher member changing the emitted exported class declaration. The path checks were moved to standalone helpers with the original instance access order. The first full run passed all test assertions but exited unsuccessfully with one Vitest RPC onTaskUpdate timeout; it is not counted as successful validation. The corrected frozen tree passed the final combined checks.
+
+The two checkStructure.visit functions are distinct: the refactored source-file visitor is paired through its exact diff (baseline line 228 to current line 247, 7/6); the unchanged callable visitor remains 5/5. Three preexisting callback finding records remain uncomparable: two file-dependency graph callbacks and one reindex publication callback. They are not counted as resolved.
+
+Fresh health reports no duplication, dependency cycles or configured architecture violations. The 295 remaining complexity findings form the next source queue; the historical maintenance inventory describes a different population. The VM remains on its previously verified installation from `931fe6c1`; these behavior-preserving refactors do not require another reinstall under the user instruction.
+
+Target measurements (cyclomatic/cognitive):
+
+- `isResultKeysetCursorPayload` → 7/3 (`src/runtime/result-pagination.ts`).
+- `sourceChunks` → 10/8 (`src/runtime/source-emission-session.ts`).
+- `isRustReferenceWorkerRequest` → 7/3 (`src/semantic/rust/durable-session-protocol.ts`).
+- `parseArgs` → 4/4 (`scripts/incremental-freshness-contract.mjs`).
+- `parseHealthSemanticPrewarmMarker` → 10/9 (`src/runtime/cli-support.ts`).
+- `isLegacyOutputCursorPayload` → 8/3 (`src/runtime/output-pagination.ts`).
+- `isOutputSnapshotPage` → 5/3 (`src/runtime/output-pagination.ts`).
+- `parseOutlineInvocation` → 9/14 (`src/runtime/query-service-fastpath.ts`).
+- `isOutlineResult` → 10/9 (`src/runtime/query-service.ts`).
+- `isSymbolResolutionResult` → 5/3 (`src/runtime/query-service.ts`).
+- `parseQueryServiceResponse` → 9/8 (`src/runtime/query-service.ts`).
+- `assertWatcherArtifactsBelongToRoot` → 9/8 (`src/runtime/watch-service-prune.ts`).
+- `completeBoundedMailboxClaim` → 5/3 (`src/storage/bounded-mailbox.ts`).
+- `parseTypeScriptWorkerConfig` → 8/6 (`src/reindex/worker.ts`).
+- `parseRuffJsonDiagnostics` → 4/4 (`src/runtime/cleanup-verify.ts`).
+- `flattenRustUseTreePositions` → 10/1 (`src/semantic/rust/import-usage.ts`).
+- `buildBehaviorOutline.emitNode` → 10/9 (`src/source/facts/behavior-skeleton.ts`).
+- `addSwitchControlFacts` → 10/4 (`src/source/facts/behavior-skeleton.ts`).
+- `behaviorSkeleton` → 9/8 (`src/source/facts/behavior-skeleton.ts`).
+- `namedCallableNode` → 6/4 (`src/source/facts/source-callables.ts`).
+- `directForwardedCall` → 8/6 (`src/source/facts/source-callables.ts`).
+- `fileDependencyPaths` → 3/3 (`src/symbols/graph/file-dep-graph.ts`).
+- `isFileDependencyGraphPayload` → 3/2 (`src/symbols/graph/file-dep-graph.ts`).
+- `addAstCallsiteCallers` → 7/11 (`src/symbols/references/reference-callers.ts`).
+- `recordJsxElement` → 2/1 (`src/source/react-profile.ts`).
+- `scanSourceReferences` → 8/10 (`src/symbols/references/source-reference-scan.ts`).
+- `addAdjacentJunctions` → 3/3 (`src/queries/internal/exploration-topology.ts`).
+- `enrichResultCallbackControlSemantics` → 4/4 (`src/queries/internal/next-anchor-candidates.ts`).
+- `sliceCohesionForDefinition` → 10/6 (`src/queries/quality/slice-cohesion.ts`).
+- `projectFlowDependencies` → 3/3 (`src/queries/quality/slice-cohesion.ts`).
+- `addCrossCallableCandidates` → 8/9 (`src/semantic/typescript/local-flow.ts`).
+- `isUseNode` → 7/6 (`src/semantic/typescript/local-flow.ts`).
+- `addReachingDefinitionEdges` → 4/4 (`src/semantic/typescript/local-flow.ts`).
+- `computePostdominators` → 5/7 (`src/semantic/typescript/local-flow.ts`).
+- `mutationFact` → 7/6 (`src/source/facts/state-temporal-analysis.ts`).
+- `buildBehaviorTokens` → 9/8 (`src/source/vue/vue-profile.ts`).
+- `resolveCallableTargetDefinitions` → 9/7 (`src/symbols/graph/member-call-targets.ts`).
+- `serviceDeclarationFilesForImplementation` → 5/4 (`src/symbols/graph/member-call-targets.ts`).
+- `discoverAffectedConsumerReuse` → 3/2 (`src/queries/impact/context.ts`).
+- `isSelectedCorridorEvidence.<callback:(edge.semantics ?? []).some:0>` → 10/9 (`src/queries/internal/causal-corridor.ts`).
+- `uninstallSkills` → 6/5 (`src/runtime/setup.ts`).
+- `validateSourceGeneration` → 10/10 (`src/reindex/shared-generation-store.ts`).
+- `decodeDocumentResponse.fragments.<callback:response.fragments.map:0>` → 10/3 (`src/reindex/typescript-index-requester.ts`).
+- `TypeScriptIndexServiceHost.constructor` → 9/1 (`src/reindex/typescript-index-service.ts`).
+- `remediateIndexers` → 7/7 (`src/runtime/project-setup.ts`).
+- `Watcher.handleFileChange` → 10/9 (`src/runtime/watch.ts`).
+- `TypeScriptSemanticServiceHost.status` → 10/12 (`src/semantic/typescript/session-service.ts`).
+- `collectAffectedSetShadowRecord` → 10/8 (`src/reindex/affected-shadow.ts`).
+- `collectIndexerOutputs` → 6/10 (`src/reindex/index.ts`).
+- `publishFreshReindexArtifacts` → 10/9 (`src/reindex/index.ts`).
+- `readSharedGeneration` → 10/9 (`src/reindex/shared-generation-store.ts`).
+- `ensureImmutableSqliteGeneration` → 10/8 (`src/reindex/sqlite-generation-store.ts`).
+- `partitionTypeScriptCompilerInputsIntoShards` → 8/8 (`src/reindex/typescript-compiler-shards.ts`).
+- `awaitVueReferenceWorkers` → 10/6 (`src/reindex/vue/augment-vue-workers.ts`).
+- `readWorkerResult` → 10/8 (`src/reindex/vue/augment-vue-workers.ts`).
+- `processDurableRustSessionRequests` → 10/10 (`src/semantic/rust/durable-session-server.ts`).
+- `createRustSemanticProvider` → 8/0 (`src/semantic/rust/provider.ts`).
+- `loadScipOccurrenceCalleeIndex` → 9/7 (`src/semantic/rust/scip-occurrence-callees.ts`).
+- `loadScipOccurrenceReferenceIndex` → 9/8 (`src/semantic/rust/scip-occurrence-references.ts`).
+- `materializeSemanticReferenceBatch` → 9/8 (`src/semantic/shared-primitives.ts`).
+- `buildSemanticCalleeMap.<callback:profileSpan:1>` → 7/12 (`src/semantic/shared-primitives.ts`).
+- `TsMorphSemanticProvider.definitionFromCompilerSymbol` → 10/12 (`src/semantic/typescript/ts-morph-provider.ts`).
+- `TsMorphSemanticProvider.importUsageForSourceFile` → 9/12 (`src/semantic/typescript/ts-morph-provider.ts`).
+- `TsMorphSemanticProvider.referencesForDefinitions` → 9/11 (`src/semantic/typescript/ts-morph-provider.ts`).
+- `isFingerprintStatRecord` → 9/5 (`src/platform/fingerprint-stat-cache.ts`).
+- `nodeChildProcessBindings` → 3/2 (`src/analysis/runtime-boundaries/extractors.ts`).
+- `buildRelationGroups` → 4/3 (`src/analysis/runtime-boundaries/graph.ts`).
+- `propagateCompilerResolvedWrappers` → 6/10 (`src/analysis/runtime-boundaries/wrapper-propagation.ts`).
+- `parsePhpImportsAst` → 4/3 (`src/language-parsers/languages/php.ts`).
+- `deadSummary` → 8/13 (`src/queries/cleanup/dead.ts`).
+- `parseDeadCalibrationOptions` → 10/10 (`scripts/accuracy-calibration-core.mjs`).
+- `renderDeadPacket` → 4/3 (`scripts/accuracy-calibration.mjs`).
+- `normalizeNamedBindings` → 9/7 (`scripts/api-surface-contract.mjs`).
+- `profileScoreboard` → 9/12 (`scripts/profile-scoreboard.mjs`).
+- `inspectPortableExecutable` → 3/2 (`scripts/scip-windows-provenance.mjs`).
+- `runWindowsSidecarRelease` → 10/5 (`scripts/scip-windows-release.ts`).
+- `priorSourceCoverage` → 5/5 (`skills/scip-explore/scripts/capture-evidence.mjs`).
+- `collectRustAstExclusions` → 5/4 (`src/analysis/framework-patterns.ts`).
+- `normalizeExclusionEntry` → 8/7 (`src/analysis/framework-patterns.ts`).
+- `capabilityRegistryExtractor.extract.<callback:visitDescendantsOfType:2>` → 2/1 (`src/analysis/runtime-boundaries/extractors.ts`).
+- `effectHttpApiExtractor.extract.<callback:visitDescendantsOfType:2>` → 4/3 (`src/analysis/runtime-boundaries/extractors.ts`).
+- `extractImplementationBody` → 5/6 (`src/queries/cleanup/duplicate-bodies.ts`).
+- `analyzeArchitectureGraph` → 8/5 (`src/queries/graph/architecture.ts`).
+- `dependencyDepth` → 5/6 (`src/queries/graph/deep-chains.ts`).
+- `graphEvidence` → 9/9 (`src/queries/graph/graph-evidence.ts`).
+- `causalCorridorFocusLocations` → 3/2 (`src/queries/graph/system-map.ts`).
+- `inspectSource` → 10/9 (`src/queries/navigation/source-inspection.ts`).
+- `renderSqliteGeneration` → 8/6 (`src/runtime/commands/command-handlers.ts`).
+- `renderWatchReindexActivity` → 5/2 (`src/runtime/commands/command-handlers.ts`).
+- `checkStructure.visit` → 7/6 (`scripts/change-benchmark-core.mjs`).
+
+Next: wave seven contains the next 90 ranked targets plus all 87 other findings in the same exclusively assigned files (177 total); the remaining118 findings are in86 other files. Artifacts: `/tmp/complexity-wave6-{review,health,impact,metrics}.json`; verification logs use `/tmp/complexity-wave6-*.log`.

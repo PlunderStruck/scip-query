@@ -447,16 +447,30 @@ function isRustReferenceWorkerRequest(value: unknown): value is RustReferenceWor
   ) {
     return false;
   }
+  return validRustReferenceDefinitions(value) && validRustReferenceTiming(value) && validRustReferenceSelection(value);
+}
+
+function validRustReferenceDefinitions(value: Record<string, unknown>): boolean {
   return (
     optionalDefinitionArray(value.referenceDefinitions) &&
     optionalDefinitionArray(value.calleeDefinitions) &&
-    optionalDefinitionArray(value.signatureDefinitions) &&
+    optionalDefinitionArray(value.signatureDefinitions)
+  );
+}
+
+function validRustReferenceTiming(value: Record<string, unknown>): boolean {
+  return (
     optionalNonNegativeNumber(value.requestTimeoutMs) &&
     optionalNonNegativeNumber(value.readinessDeadlineMs) &&
     optionalNonNegativeNumber(value.referenceRetryTimeoutMs) &&
     optionalNonNegativeNumber(value.diagnosticsTimeoutMs) &&
     optionalNonNegativeNumber(value.settleDelayMs) &&
-    optionalPositiveInteger(value.concurrency) &&
+    optionalPositiveInteger(value.concurrency)
+  );
+}
+
+function validRustReferenceSelection(value: Record<string, unknown>): boolean {
+  return (
     optionalBoolean(value.includeReferences) &&
     optionalBoolean(value.includeCallees) &&
     optionalBoolean(value.includeSignatures)

@@ -578,17 +578,9 @@ export function sliceCohesionForDefinition(
     minClusterUnits: opts.minClusterUnits ?? DEFAULT_MIN_CLUSTER_UNITS,
   };
   const detail = opts.detail ?? true;
-  if (!isTypeScriptLike(definition.relativePath)) return null;
-  const ts = loadTypeScriptModule();
-  if (!ts) return null;
-  const sourceFile = parsedSourceFile(db, definition.relativePath, cache);
-  if (!sourceFile) return null;
-  const callable = callableForDefinition(ts, sourceFile, definition);
-  if (!callable) return null;
-  // Coverage belongs to the selected callable and its nested functions. A gap
-  // in a sibling must not downgrade this function's extraction evidence.
-  const flow = semanticLocalFlowForRange(db, definition.relativePath, definition.startLine, definition.endLine);
-  if (!flow || flow.coverage.status === 'unsupported') return null;
+  const prepared = prepareSliceCohesionFlow(db, definition, cache);
+  if (!prepared) return null;
+  const { ts, sourceFile, callable, flow } = prepared;
 
   const body = modelBody(ts, sourceFile, callable, definition.relativePath);
   const flowModel = projectFlow(body, flow, definition.relativePath);
@@ -660,6 +652,22 @@ export function sliceCohesionForDefinition(
     recommendation: recommendation(splitCandidate, valueOutputs, metrics, context),
     coverage,
   };
+}
+
+function prepareSliceCohesionFlow(db: ScipDatabase, definition: IndexedDefinition, cache: SourceFileCache) {
+  if (!isTypeScriptLike(definition.relativePath)) return null;
+  const ts = loadTypeScriptModule();
+  if (!ts) return null;
+  const sourceFile = parsedSourceFile(db, definition.relativePath, cache);
+  if (!sourceFile) return null;
+  const callable = callableForDefinition(ts, sourceFile, definition);
+  if (!callable) return null;
+  // Coverage belongs to the selected callable and its nested functions. A gap
+  // in a sibling must not downgrade this function's extraction evidence.
+  const flow = semanticLocalFlowForRange(db, definition.relativePath, definition.startLine, definition.endLine);
+  if (!flow || flow.coverage.status === 'unsupported') return null;
+
+  return { ts, sourceFile, callable, flow };
 }
 
 /** Slice outputs with and without guard predicates; handler dependencies belong to both. */
@@ -1494,39 +1502,61 @@ function projectFlowDependencies(
   points: FlowPointIndex,
 ): FlowDependencies & { reachedUses: Set<string> } {
   const { units } = body;
-  const { pointById, unitOfPoint } = points;
   const dataDeps = units.map(() => new Set<number>());
   const controlDeps = units.map(() => new Set<number>());
   const pointDeps = new Map<string, Set<number>>();
   const paramReads = units.map(() => new Set<string>());
   const reachedUses = new Set<string>();
-  let candidateEdges = 0;
+  const dependencies: FlowDependencies & { reachedUses: Set<string> } = {
+    dataDeps,
+    controlDeps,
+    pointDeps,
+    paramReads,
+    candidateEdges: 0,
+    reachedUses,
+  };
   for (const edge of flow.edges) {
-    const from = pointById.get(edge.fromPointId);
-    const to = pointById.get(edge.toPointId);
-    if (!from || !to) continue;
-    const fromUnit = unitOfPoint.get(from.id);
-    const toUnit = unitOfPoint.get(to.id);
-    if (fromUnit === undefined || toUnit === undefined || toUnit === -1) continue;
-    if (edge.kind !== 'control-dependence') reachedUses.add(to.id);
-    if (fromUnit === -1) {
-      if (edge.kind !== 'control-dependence') paramReads[toUnit]!.add(rootName(from.name));
-      continue;
-    }
-    if (fromUnit === toUnit) continue;
-    if (edge.strength === 'candidate') candidateEdges += 1;
-    if (edge.kind === 'control-dependence') {
-      controlDeps[toUnit]!.add(fromUnit);
-    } else {
-      dataDeps[toUnit]!.add(fromUnit);
-      addFlowPointDependency(pointDeps, to.id, fromUnit);
-    }
+    const endpoints = flowDependencyEndpoints(points, edge);
+    if (endpoints) projectResolvedFlowDependency(edge, endpoints, dependencies);
   }
 
   body.enclosingPredicates.forEach((predicates, unit) => {
     for (const predicate of predicates) if (predicate !== unit) controlDeps[unit]!.add(predicate);
   });
-  return { dataDeps, controlDeps, pointDeps, paramReads, candidateEdges, reachedUses };
+  return dependencies;
+}
+
+function flowDependencyEndpoints(points: FlowPointIndex, edge: TypeScriptLocalFlowResult['edges'][number]) {
+  const { pointById, unitOfPoint } = points;
+  const from = pointById.get(edge.fromPointId);
+  const to = pointById.get(edge.toPointId);
+  if (!from || !to) return null;
+  const fromUnit = unitOfPoint.get(from.id);
+  const toUnit = unitOfPoint.get(to.id);
+  if (fromUnit === undefined || toUnit === undefined || toUnit === -1) return null;
+  return { from, to, fromUnit, toUnit };
+}
+
+function projectResolvedFlowDependency(
+  edge: TypeScriptLocalFlowResult['edges'][number],
+  endpoints: NonNullable<ReturnType<typeof flowDependencyEndpoints>>,
+  dependencies: FlowDependencies & { reachedUses: Set<string> },
+): void {
+  const { from, to, fromUnit, toUnit } = endpoints;
+  const { reachedUses, paramReads, controlDeps, dataDeps, pointDeps } = dependencies;
+  if (edge.kind !== 'control-dependence') reachedUses.add(to.id);
+  if (fromUnit === -1) {
+    if (edge.kind !== 'control-dependence') paramReads[toUnit]!.add(rootName(from.name));
+    return;
+  }
+  if (fromUnit === toUnit) return;
+  if (edge.strength === 'candidate') dependencies.candidateEdges += 1;
+  if (edge.kind === 'control-dependence') {
+    controlDeps[toUnit]!.add(fromUnit);
+  } else {
+    dataDeps[toUnit]!.add(fromUnit);
+    addFlowPointDependency(pointDeps, to.id, fromUnit);
+  }
 }
 
 function classifyFlowBindings(

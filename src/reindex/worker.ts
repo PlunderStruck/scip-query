@@ -95,15 +95,21 @@ function parseTypeScriptWorkerConfig(value: string | undefined): {
     const record = parsed as { projectMode?: unknown; projects?: unknown; maxHeapMb?: unknown };
     const projectMode =
       record.projectMode === 'single' || record.projectMode === 'workspace' ? record.projectMode : undefined;
-    const projects = Array.isArray(record.projects)
-      ? record.projects.filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '')
-      : undefined;
-    const maxHeapMb =
-      typeof record.maxHeapMb === 'number' && Number.isInteger(record.maxHeapMb) && record.maxHeapMb > 0
-        ? record.maxHeapMb
-        : undefined;
-    return { projectMode, projects: projects && projects.length > 0 ? projects : undefined, maxHeapMb };
+    const projects = typeScriptWorkerProjects(record.projects);
+    const maxHeapMb = typeScriptWorkerHeap(record.maxHeapMb);
+    return { projectMode, projects, maxHeapMb };
   } catch {
     return {};
   }
+}
+
+function typeScriptWorkerProjects(value: unknown): string[] | undefined {
+  const projects = Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '')
+    : undefined;
+  return projects && projects.length > 0 ? projects : undefined;
+}
+
+function typeScriptWorkerHeap(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
 }

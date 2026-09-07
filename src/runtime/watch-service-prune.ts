@@ -106,6 +106,13 @@ function assertWatcherArtifactsBelongToRoot(cacheDir: string, projectRoot: strin
   if (existsSync(paths.lockPath) && !lock) throw new Error('watch lock exists but is not a valid ownership record');
   if (state && state.projectRoot !== projectRoot) throw new Error('watch state belongs to a different project root');
   if (lock && lock.projectRoot !== projectRoot) throw new Error('watch lock belongs to a different project root');
+  assertWatcherOwnerAgreement(state, lock);
+}
+
+function assertWatcherOwnerAgreement(
+  state: ReturnType<typeof readWatchServiceState>,
+  lock: ReturnType<typeof readWatchProcessLock>,
+): void {
   if (state && lock && state.pid !== lock.pid) throw new Error('watch state and lock name different process owners');
   if (
     state?.processIdentity &&

@@ -1297,16 +1297,24 @@ function isOutputSnapshotContent(metadata: Partial<OutputSnapshotMetadata>): boo
 function isOutputSnapshotPage(value: unknown): value is OutputSnapshotPage {
   if (!value || typeof value !== 'object') return false;
   const page = value as Partial<OutputSnapshotPage>;
+  return validSnapshotCharacterRange(page) && validSnapshotByteRange(page) && isSha256Hex(page.hash);
+}
+
+function validSnapshotCharacterRange(page: Partial<OutputSnapshotPage>): boolean {
   return (
     Number.isSafeInteger(page.characterOffset) &&
     (page.characterOffset ?? -1) >= 0 &&
     Number.isSafeInteger(page.characterLength) &&
-    (page.characterLength ?? 0) > 0 &&
+    (page.characterLength ?? 0) > 0
+  );
+}
+
+function validSnapshotByteRange(page: Partial<OutputSnapshotPage>): boolean {
+  return (
     Number.isSafeInteger(page.byteOffset) &&
     (page.byteOffset ?? -1) >= 0 &&
     Number.isSafeInteger(page.byteLength) &&
-    (page.byteLength ?? 0) > 0 &&
-    isSha256Hex(page.hash)
+    (page.byteLength ?? 0) > 0
   );
 }
 
@@ -1781,14 +1789,20 @@ function isLegacyOutputCursorPayload(value: unknown): value is LegacyOutputCurso
   return (
     cursor.version === 3 &&
     isSha256Hex(cursor.invocationHash) &&
+    validLegacyCursorPageBounds(cursor) &&
+    isSha256Hex(cursor.outputHash) &&
+    typeof cursor.snapshotId === 'string' &&
+    isOutputSnapshotId(cursor.snapshotId)
+  );
+}
+
+function validLegacyCursorPageBounds(cursor: Partial<LegacyOutputCursorPayload>): boolean {
+  return (
     Number.isSafeInteger(cursor.pageIndex) &&
     (cursor.pageIndex ?? -1) >= 1 &&
     Number.isSafeInteger(cursor.pageSize) &&
     (cursor.pageSize ?? 0) >= MIN_OUTPUT_PAGE_SIZE &&
-    (cursor.pageSize ?? 0) <= MAX_OUTPUT_PAGE_SIZE &&
-    isSha256Hex(cursor.outputHash) &&
-    typeof cursor.snapshotId === 'string' &&
-    isOutputSnapshotId(cursor.snapshotId)
+    (cursor.pageSize ?? 0) <= MAX_OUTPUT_PAGE_SIZE
   );
 }
 

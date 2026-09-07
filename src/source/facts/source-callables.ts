@@ -147,25 +147,21 @@ function namedCallableNode(
 ): { name: string; definitionNode: SyntaxNode; functionNode: SyntaxNode } | null {
   if (language !== 'typescript' && language !== 'tsx' && language !== 'javascript') return null;
 
-  if (node.type === 'variable_declarator') {
-    const name = node.childForFieldName('name') ?? node.namedChild(0);
-    const value = node.childForFieldName('value') ?? node.namedChild(1);
-    if (!name || !value) return null;
-    const functionValue = javascriptFunctionValue(value);
-    if (!functionValue) return null;
-    return { name: name.text, definitionNode: node, functionNode: functionValue };
+  if (node.type === 'variable_declarator' || node.type === 'public_field_definition') {
+    return assignedJavascriptCallable(node);
   }
-
-  if (node.type === 'public_field_definition') {
-    const name = node.childForFieldName('name') ?? node.namedChild(0);
-    const value = node.childForFieldName('value') ?? node.namedChild(1);
-    if (!name || !value) return null;
-    const functionValue = javascriptFunctionValue(value);
-    if (!functionValue) return null;
-    return { name: name.text, definitionNode: node, functionNode: functionValue };
-  }
-
   return null;
+}
+
+function assignedJavascriptCallable(
+  node: SyntaxNode,
+): { name: string; definitionNode: SyntaxNode; functionNode: SyntaxNode } | null {
+  const name = node.childForFieldName('name') ?? node.namedChild(0);
+  const value = node.childForFieldName('value') ?? node.namedChild(1);
+  if (!name || !value) return null;
+  const functionValue = javascriptFunctionValue(value);
+  if (!functionValue) return null;
+  return { name: name.text, definitionNode: node, functionNode: functionValue };
 }
 
 /**
@@ -232,14 +228,7 @@ function isPassthroughBody(fnNode: SyntaxNode, language: AstLanguage): boolean {
 }
 
 function directForwardedCall(only: SyntaxNode, language: AstLanguage): SyntaxNode | null {
-  let callNode: SyntaxNode | null = null;
-  if (only.type === 'return_statement') {
-    callNode = only.namedChild(0) ?? null;
-  } else if (only.type === 'expression_statement') {
-    callNode = only.namedChild(0) ?? null;
-  } else if (language === 'rust' && (only.type === 'call_expression' || only.type === 'macro_invocation')) {
-    callNode = only;
-  }
+  const callNode = forwardedStatementExpression(only, language);
   if (!callNode) return null;
 
   const callType = language === 'python' ? 'call' : 'call_expression';
@@ -250,6 +239,18 @@ function directForwardedCall(only: SyntaxNode, language: AstLanguage): SyntaxNod
   const callee = callNode.childForFieldName('function') ?? callNode.namedChild(0);
   if (callee && (callee.type === callType || callee.type === 'call_expression')) return null;
 
+  return callNode;
+}
+
+function forwardedStatementExpression(only: SyntaxNode, language: AstLanguage): SyntaxNode | null {
+  let callNode: SyntaxNode | null = null;
+  if (only.type === 'return_statement') {
+    callNode = only.namedChild(0) ?? null;
+  } else if (only.type === 'expression_statement') {
+    callNode = only.namedChild(0) ?? null;
+  } else if (language === 'rust' && (only.type === 'call_expression' || only.type === 'macro_invocation')) {
+    callNode = only;
+  }
   return callNode;
 }
 

@@ -143,20 +143,14 @@ export function parseDeadCalibrationOptions(rawArgs, defaultRootsByLanguage, res
     const arg = rawArgs[index];
     if (arg === '--language') {
       const value = rawArgs[index + 1];
-      if (!DEAD_CALIBRATION_LANGUAGES.includes(value)) {
-        throw new Error(`--language must be one of: ${DEAD_CALIBRATION_LANGUAGES.join(', ')}`);
-      }
-      language = value;
+      language = deadCalibrationLanguage(value);
       index += 1;
     } else if (arg === '--sample-size') {
-      const value = Number(rawArgs[index + 1]);
-      if (!Number.isInteger(value) || value < 1) throw new Error('--sample-size must be a positive integer');
-      sampleSize = value;
+      sampleSize = deadCalibrationSampleSize(rawArgs[index + 1]);
       index += 1;
     } else if (arg === '--seed') {
       const value = rawArgs[index + 1];
-      if (!value) throw new Error('--seed requires a value');
-      seed = value;
+      seed = deadCalibrationSeed(value);
       index += 1;
     } else if (arg.startsWith('-')) {
       throw new Error(`unknown health-dead option: ${arg}`);
@@ -175,6 +169,24 @@ export function parseDeadCalibrationOptions(rawArgs, defaultRootsByLanguage, res
     seed: seed ?? `${language}-dead-v1`,
     roots: [...selectedRoots],
   };
+}
+
+function deadCalibrationLanguage(value) {
+  if (!DEAD_CALIBRATION_LANGUAGES.includes(value)) {
+    throw new Error(`--language must be one of: ${DEAD_CALIBRATION_LANGUAGES.join(', ')}`);
+  }
+  return value;
+}
+
+function deadCalibrationSampleSize(raw) {
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) throw new Error('--sample-size must be a positive integer');
+  return value;
+}
+
+function deadCalibrationSeed(value) {
+  if (!value) throw new Error('--seed requires a value');
+  return value;
 }
 
 export function calibrationRowIdentity(row) {

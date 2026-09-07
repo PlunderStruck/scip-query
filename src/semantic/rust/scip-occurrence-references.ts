@@ -100,14 +100,7 @@ function loadScipOccurrenceReferenceIndex(db: ScipDatabase): ScipOccurrenceRefer
     for (const document of scipIndex.documents ?? []) {
       const relativePath = document.relativePath;
       if (!relativePath || db.isIgnored(relativePath)) continue;
-      for (const occurrence of document.occurrences ?? []) {
-        if (!occurrence.symbol || (occurrence.symbolRoles & SymbolRole.Definition) !== 0) continue;
-        const reference = referenceFromOccurrence(relativePath, occurrence.range);
-        if (!reference) continue;
-        const bucket = referencesBySymbol.get(occurrence.symbol) ?? [];
-        bucket.push(reference);
-        referencesBySymbol.set(occurrence.symbol, bucket);
-      }
+      appendScipDocumentReferences(document, relativePath, referencesBySymbol);
     }
     for (const [symbol, references] of referencesBySymbol) {
       referencesBySymbol.set(symbol, dedupeSemanticReferences(references));
@@ -128,4 +121,19 @@ function referenceFromOccurrence(relativePath: string, range: readonly number[])
 
 export function rustScipOccurrenceReferenceMode(): RustScipOccurrenceReferenceMode {
   return process.env[RUST_SCIP_OCCURRENCE_REFERENCE_MODE_ENV] === 'all' ? 'all' : 'safe';
+}
+
+function appendScipDocumentReferences(
+  document: NonNullable<ReturnType<typeof deserializeSCIP>['documents']>[number],
+  relativePath: string,
+  referencesBySymbol: Map<string, SemanticReference[]>,
+): void {
+  for (const occurrence of document.occurrences ?? []) {
+    if (!occurrence.symbol || (occurrence.symbolRoles & SymbolRole.Definition) !== 0) continue;
+    const reference = referenceFromOccurrence(relativePath, occurrence.range);
+    if (!reference) continue;
+    const bucket = referencesBySymbol.get(occurrence.symbol) ?? [];
+    bucket.push(reference);
+    referencesBySymbol.set(occurrence.symbol, bucket);
+  }
 }

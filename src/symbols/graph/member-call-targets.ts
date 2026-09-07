@@ -83,25 +83,33 @@ export function serviceDeclarationFilesForImplementation(db: ScipDatabase, imple
     (entry): entry is ParsedSourceImport & { sourcePath: string } => Boolean(entry.sourcePath),
   );
   const files = new Set<string>();
-  for (const alias of providerAliases) {
-    const namespace = /^([A-Za-z_$][\w$]*)\.Service$/u.exec(alias);
-    if (namespace) {
-      for (const imported of imports) {
-        if (imported.localName === namespace[1]) files.add(imported.sourcePath);
-      }
-      continue;
-    }
-    if (alias !== 'Service') continue;
-    if (getDefinitionsForFile(db, implementationFile).some((definition) => definition.leaf === 'Service')) {
-      files.add(implementationFile);
-    }
-    for (const imported of imports) {
-      if ((imported.localName ?? imported.importedName) === 'Service') files.add(imported.sourcePath);
-    }
-  }
+  for (const alias of providerAliases) appendServiceDeclarationFiles(db, implementationFile, imports, alias, files);
   const result = uniqueResolvedPaths([...files]).sort();
   byImplementation.set(implementationFile, result);
   return result;
+}
+
+function appendServiceDeclarationFiles(
+  db: ScipDatabase,
+  implementationFile: string,
+  imports: ReadonlyArray<ParsedSourceImport & { sourcePath: string }>,
+  alias: string,
+  files: Set<string>,
+): void {
+  const namespace = /^([A-Za-z_$][\w$]*)\.Service$/u.exec(alias);
+  if (namespace) {
+    for (const imported of imports) {
+      if (imported.localName === namespace[1]) files.add(imported.sourcePath);
+    }
+    return;
+  }
+  if (alias !== 'Service') return;
+  if (getDefinitionsForFile(db, implementationFile).some((definition) => definition.leaf === 'Service')) {
+    files.add(implementationFile);
+  }
+  for (const imported of imports) {
+    if ((imported.localName ?? imported.importedName) === 'Service') files.add(imported.sourcePath);
+  }
 }
 
 /**
@@ -907,20 +915,7 @@ function resolveCallableTargetDefinitions(
 ): Array<{ relativePath: string; startLine: number; endLine: number }> {
   const compact = expression.replace(/\s+/gu, '').replace(/<[^<>]*>$/u, '');
   const member = /^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/u.exec(compact);
-  if (member) {
-    const imported = getSourceImports(db, sourceFile).filter(
-      (entry) => entry.localName === member[1] && entry.sourcePath,
-    );
-    if (imported.length !== 1 || !imported[0]!.sourcePath) return [];
-    const targetFile = imported[0]!.sourcePath;
-    const indexed = resolveImportedDefinitions(db, targetFile, member[2]!).filter(
-      (definition) => definition.isFunctionLike,
-    );
-    if (indexed.length > 0) return indexed;
-    return (getCallableSites(db, targetFile) ?? [])
-      .filter((callable) => callable.name === member[2])
-      .map((callable) => ({ ...callable, relativePath: targetFile }));
-  }
+  if (member) return importedMemberCallableDefinitions(db, sourceFile, member[1]!, member[2]!);
   if (!/^[A-Za-z_$][\w$]*$/u.test(compact)) return [];
   const local = getDefinitionsForFile(db, sourceFile).filter(
     (definition) => definition.leaf === compact && definition.isFunctionLike,
@@ -936,6 +931,25 @@ function resolveCallableTargetDefinitions(
   if (imported.length !== 1 || !imported[0]!.sourcePath) return [];
   const targetFile = imported[0]!.sourcePath;
   const importedName = imported[0]!.importedName === 'default' ? compact : imported[0]!.importedName;
+  return importedCallableDefinitionsInFile(db, targetFile, importedName);
+}
+
+function importedMemberCallableDefinitions(
+  db: ScipDatabase,
+  sourceFile: string,
+  receiver: string,
+  name: string,
+): Array<{ relativePath: string; startLine: number; endLine: number }> {
+  const imported = getSourceImports(db, sourceFile).filter((entry) => entry.localName === receiver && entry.sourcePath);
+  if (imported.length !== 1 || !imported[0]!.sourcePath) return [];
+  return importedCallableDefinitionsInFile(db, imported[0]!.sourcePath, name);
+}
+
+function importedCallableDefinitionsInFile(
+  db: ScipDatabase,
+  targetFile: string,
+  importedName: string,
+): Array<{ relativePath: string; startLine: number; endLine: number }> {
   const indexed = resolveImportedDefinitions(db, targetFile, importedName).filter(
     (definition) => definition.isFunctionLike,
   );
