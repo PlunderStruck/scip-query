@@ -1,0 +1,200 @@
+{
+  "scope": "Complete 19-pair health profile after category-isolation repair; similarity is candidate evidence, not an interchangeability verdict.",
+  "pairs": [
+    {
+      "a": "src:filesystem:bounded-file:readFileWithinLimit()",
+      "b": "src:filesystem:bounded-file:hashFileWithinLimit()",
+      "similarity": 1,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "One operation materializes a Buffer, the other streams chunks into a supplied digest update and returns bytes consumed. Both reuse identity/limit validation and close their descriptor in finally; do not merge their materialization contracts.",
+      "priorReviewIds": []
+    },
+    {
+      "a": "src:queries:frontend:react-component-duplicates:reactComponentDuplicateScan()",
+      "b": "src:queries:frontend:react-hook-candidates:reactHookCandidateScan()",
+      "similarity": 0.9999999999999999,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "Component duplication compares JSX tokens and component-only profiles. Hook extraction compares behavior tokens, includes hook profiles, and rejects mixed hook/component pairs. Both already use the shared profile and ranked-pair engine.",
+      "priorReviewIds": []
+    },
+    {
+      "a": "src:analysis:file-classifier:isFrameworkEntrypointPath()",
+      "b": "src:analysis:file-classifier:frameworkPathExportsName()",
+      "similarity": 0.9299088706280677,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "Framework entry-path admission and recognized framework export names are different policies (including Vite export behavior); both reuse the same path predicates.",
+      "priorReviewIds": [
+        "S01"
+      ]
+    },
+    {
+      "a": "src:reindex:index:updateReindexFingerprintMetadata()",
+      "b": "src:reindex:index:updateReindexLastRefresh()",
+      "similarity": 0.8723612048066823,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "Fingerprint metadata update propagates failures and conditionally recomputes language fingerprints; last-refresh update is best effort and cannot mask reindex success.",
+      "priorReviewIds": [
+        "S02"
+      ]
+    },
+    {
+      "a": "src:queries:navigation:imports:unusedImports()",
+      "b": "src:queries:navigation:imports:loadFileImportEntries()",
+      "similarity": 0.8691692290718013,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "Unused import detection is local-binding usage; imports reporting combines compiler provenance with uncovered source bindings. Shared entry extraction/merge helpers already own common mechanics.",
+      "priorReviewIds": [
+        "S04"
+      ]
+    },
+    {
+      "a": "src:platform:project-files:probeSnapshotFileForLiterals()",
+      "b": "src:platform:project-files:readSnapshotProjectFile()",
+      "similarity": 0.8502191665139675,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "Full reads materialize bounded bytes; literal probes scan/hash/check encoding and materialize only matches. Both preserve descriptor identity and close in finally through common file primitives.",
+      "priorReviewIds": [
+        "S13"
+      ]
+    },
+    {
+      "a": "src:queries:cleanup:dead:supplementReferencesFromAst()",
+      "b": "src:queries:cleanup:drift:addSourceScannedSymbolRefEdges()",
+      "similarity": 0.8381290511928194,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "Dead-code augmentation credits symbol reference counts, including auxiliary/Vue/cross-language consumers. Drift augmentation constructs cross-file dependency edges and rejects unused import-only matches. They already share scanSourceReferences.",
+      "priorReviewIds": []
+    },
+    {
+      "a": "src:reindex:shared-generation-store:prepareMissingSharedGeneration()",
+      "b": "src:reindex:shared-generation-store:prepareDirtySharedGeneration()",
+      "similarity": 0.8377330894885666,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "Factor shared baseline hydration plus overlay lease publication in shared-generation-store; retain missing/dirty admission, fingerprints and reason text.",
+      "priorReviewIds": [
+        "S05"
+      ]
+    },
+    {
+      "a": "src:queries:cleanup:dead:supplementReferencesFromAst()",
+      "b": "src:queries:cleanup:dead:supplementDeadCodeOnlySourceReferences()",
+      "similarity": 0.8362479928644128,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "The specialized dead-only scan resolves a bounded candidate-name set and releases per-file caches; the general scan uses project target IDs and its own occurrence filtering. Both share source reference scanning, while preserving their binding/coverage policies.",
+      "priorReviewIds": []
+    },
+    {
+      "a": "src:symbols:graph:static-value-flow:evaluateResolvedMember()",
+      "b": "src:symbols:graph:static-value-flow:evaluateImportedConstant()",
+      "similarity": 0.8357950051621391,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "Object-member resolution traverses property paths and reports property-specific failures; imported-constant evaluation resolves a whole initializer with import-specific provenance. Both share evaluateNode/derivedFrom.",
+      "priorReviewIds": [
+        "S06"
+      ]
+    },
+    {
+      "a": "src:platform:process-file-lock:reclaimProcessFileLock()",
+      "b": "src:platform:process-file-lock:reclaimObservedGuard()",
+      "similarity": 0.8258253280588745,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "Primary lock reclamation holds a separate reclaim guard and rechecks liveness; reclaim-guard reclamation has its own attempt limit to avoid recursive guard acquisition.",
+      "priorReviewIds": [
+        "S03"
+      ]
+    },
+    {
+      "a": "src:reindex:typescript-overlay-store:readTypeScriptOverlay()",
+      "b": "src:reindex:typescript-overlay-store:persistOverlayManifest()",
+      "similarity": 0.8046861044166976,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "Read verifies generation identity; persist verifies immutable content identity or writes atomically. Parsing/bounded read already shared.",
+      "priorReviewIds": [
+        "S07"
+      ]
+    },
+    {
+      "a": "src:queries:frontend:react-component-duplicates:reactComponentDuplicateScan()",
+      "b": "src:queries:frontend:react-large-component-pressure:reactLargeComponentPressureScan()",
+      "similarity": 0.7962170153294129,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "Duplicate scan compares pairs by JSX overlap; pressure scan evaluates one component size/behavior and applies distinct exclusions/thresholds. Both share profiles and role policy.",
+      "priorReviewIds": [
+        "S08"
+      ]
+    },
+    {
+      "a": "src:queries:frontend:react-hook-candidates:reactHookCandidateScan()",
+      "b": "src:queries:frontend:react-large-component-pressure:reactLargeComponentPressureScan()",
+      "similarity": 0.7962170153294129,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "Hook extraction evaluates pairs of behavior profiles; component pressure evaluates one component against line/token thresholds and excludes UI-kit files. Shared profiles do not make these the same detector.",
+      "priorReviewIds": []
+    },
+    {
+      "a": "src:queries:cleanup:dead:supplementDeadCodeOnlySourceReferences()",
+      "b": "src:queries:cleanup:drift:addSourceScannedSymbolRefEdges()",
+      "similarity": 0.70088373682135,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "The dead-only scan uses target-specific resolution and occurrence counts; drift records cross-file dependency edges and filters unused import evidence. Retain these distinct consumers of scanSourceReferences.",
+      "priorReviewIds": []
+    },
+    {
+      "a": "src:semantic:rust:lsp-batch-worker:openDefinitionDocuments()",
+      "b": "src:semantic:rust:lsp-session-worker:openNewSourceDocuments()",
+      "similarity": 0.6960914917877947,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "Batch document opening owns a per-call URI set. The persistent session owns openedPaths, diagnostics, readiness generations and deadlines across requests. Both skip only missing files and rethrow other read failures; do not merge the lifetimes.",
+      "priorReviewIds": []
+    },
+    {
+      "a": "src:queries:internal:next-anchor-candidates:nextAnchorForCallableReference()",
+      "b": "src:queries:internal:next-anchor-candidates:enrichStepResultCallbacks()",
+      "similarity": 0.6905520857721618,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "Next-anchor construction returns a recoverable reference; callback enrichment mutates edge semantics after confirming result-callback behavior. Retain operations; same material-line lookup is a small possible local helper, not competing ownership.",
+      "priorReviewIds": [
+        "S10"
+      ]
+    },
+    {
+      "a": "src:queries:internal:next-anchor-candidates:nextAnchorForCausalEdge()",
+      "b": "src:queries:internal:next-anchor-candidates:nextAnchorForCallableReference()",
+      "similarity": 0.6827859081954494,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "Causal edges can be upstream or downstream; callable references require supporting behavior lines and are downstream reference evidence. Common identity/location helpers already shared.",
+      "priorReviewIds": [
+        "S09"
+      ]
+    },
+    {
+      "a": "src:queries:navigation:code:code()",
+      "b": "src:queries:navigation:code:codeBatchEntry()",
+      "similarity": 0.6085725550204344,
+      "basis": "callees",
+      "disposition": "retain",
+      "reason": "Single-code API throws on ambiguity and returns a full file; batched code reports alternatives, missing/stale source and chosen file surfaces. Both already share source-resolution primitives.",
+      "priorReviewIds": [
+        "S12"
+      ]
+    }
+  ]
+}

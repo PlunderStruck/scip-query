@@ -8,9 +8,7 @@
  * spaces so byte offsets and line numbers stay aligned with the original
  * source.
  */
-import type { ScipDatabase } from '../../storage/db.js';
 import { registerCacheClear } from '../../storage/cache-registry.js';
-import { createPerDbSourceCache } from '../../storage/per-db-cache.js';
 import { escapeRegex } from './regex-utils.js';
 
 /**
@@ -157,13 +155,7 @@ function maskPreservingLines(segment: string): string {
   return segment.replace(/[^\r\n]/g, ' ');
 }
 
-const STRIPPED_LINES_CACHE = createPerDbSourceCache<string[]>('stripped-lines', {
-  clearGroups: ['whole-project', 'source-file'],
-});
-
-// The single-entry strip cache below is keyed by source string identity, so
-// it can serve stale lines after a file changes — register it alongside the
-// per-db cache so both clear together.
+// Release the retained source and result when source evidence is cleared.
 registerCacheClear({
   name: 'stripped-source-singleton',
   groups: ['whole-project', 'source-file'],
@@ -176,18 +168,6 @@ registerCacheClear({
     stripCacheResult = '';
   },
 });
-
-/**
- * Per-(db, file, source) cache of stripCommentsAndStrings(source).split('\n').
- * Used by the regex-fallback path of `findIdentifierLines` (in
- * identifier-index.ts) so repeat lookups in the same file pay the strip cost
- * exactly once.
- */
-// scip-query: ignore-wrapper — owns STRIPPED_LINES_CACHE; the cached read is the
-// abstraction, not the lambda inside.
-export function getStrippedLines(db: ScipDatabase, relativePath: string, source: string): string[] {
-  return STRIPPED_LINES_CACHE.get(db, relativePath, source, () => stripCommentsAndStrings(source).split('\n'));
-}
 
 // Single-entry cache keyed by source string identity. Each parseXImports/Exports
 // loop calls buildUsageBody many times with the same `source` string, but the

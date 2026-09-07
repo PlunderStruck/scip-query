@@ -329,12 +329,6 @@ function percentile(sorted: readonly number[], fraction: number): number {
 
 const trackedFilesCache = headKeyedGitValue<Set<string>>('git-tracked-files');
 
-/** All git-tracked files (including docs, configs — not just indexed sources). */
-// scip-query: ignore-wrapper — legacy git helper kept for source-compatible callers; the product owns access.
-export function getTrackedFiles(db: ScipDatabase): Set<string> | null {
-  return gitEvidenceProduct(db).trackedFiles();
-}
-
 function readTrackedFiles(db: ScipDatabase, head?: string): Set<string> | null {
   return trackedFilesCache(
     db,

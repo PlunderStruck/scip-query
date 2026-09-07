@@ -1,0 +1,836 @@
+{
+  "baseline": "afc52f70",
+  "currentFindingMatches": 0,
+  "removedRecords": [
+    {
+      "path": ".scipquery/suppressions/SQ59B77DF74976.json",
+      "id": "SQ59B77DF74976",
+      "check": "doc-reference",
+      "file": "docs/analyzer-validation-ledger.md",
+      "expiresAt": null,
+      "reason": "Verified after annotation-only source changes: the validation ledger examples still point to the same health and diff-gate implementations.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ5D1EE3FB91AE.json",
+      "id": "SQ5D1EE3FB91AE",
+      "check": "echo",
+      "file": "src/domain/completion-transition-rule.ts",
+      "expiresAt": null,
+      "reason": "The detector matched generic envelope-validation tokens, but each decoder validates a different closed record meaning and canonical identity; sharing the decoder body would couple unrelated schemas without shared policy.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ5DC1C881FD92.json",
+      "id": "SQ5DC1C881FD92",
+      "check": null,
+      "file": null,
+      "expiresAt": null,
+      "reason": "The watcher already resets its existing timer on every event; this slice changes only the resolved default and adds boundary tests for that existing state machine.",
+      "disposition": "remove",
+      "basis": "Historical exact finding ID without a current match; expired or superseded one-change adjudication."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ60F943ECF084.json",
+      "id": "SQ60F943ECF084",
+      "check": "echo",
+      "file": "src/storage/plan-contract.ts",
+      "expiresAt": null,
+      "reason": "Both collections reuse readRecordDirectory. Plan records require one unforked revision chain tied to a goal and change, while transition rules verify embedded predecessor and successor goal meanings.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ651C61F47320.json",
+      "id": "SQ651C61F47320",
+      "check": "echo",
+      "file": "src/domain/project-config.ts",
+      "expiresAt": null,
+      "reason": "Project configuration and reindex metadata are distinct durable formats with different discriminators, supported versions, validation rules, accepted models, and consumer capabilities; only their generic parse-and-classify scaffolding is similar.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ66B4E0B3C034.json",
+      "id": "SQ66B4E0B3C034",
+      "check": "echo",
+      "file": "src/storage/completeness-obligation-admission.ts",
+      "expiresAt": null,
+      "reason": "The repeated storage adapter is the intentional typed boundary that binds the SQCA namespace, directory, decoder, and error text; the established readers target different record schemas and cannot replace it.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ66D5E3B3BB5D.json",
+      "id": "SQ66D5E3B3BB5D",
+      "check": "new-dead",
+      "file": "src/semantic/typescript/tsserver-provider.ts",
+      "expiresAt": null,
+      "reason": "Accepted interface/factory false positive: TsServerSemanticProvider is constructed by createTsServerProvider and exercised through dynamic compare-mode imports in tests. The class is the candidate provider implementation, not an unreferenced public surface.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ680D48C2E363.json",
+      "id": "SQ680D48C2E363",
+      "check": "echo",
+      "file": "src/domain/record-validation.ts",
+      "expiresAt": null,
+      "reason": "Positive integer validation rejects zero while the compared Vue count validator accepts zero; their product contracts differ despite token similarity, and reindex-vue also cannot import domain under the enforced architecture.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ6B5D755FEB7B.json",
+      "id": "SQ6B5D755FEB7B",
+      "check": "co-change-partner",
+      "file": "src/tla/model-contract.ts",
+      "expiresAt": null,
+      "reason": "Accepted import-only architecture move: model-contract now imports the unchanged project-path contract from domain instead of source. Its behavior is unchanged, and tests/tla/model-contract.test.ts passed in the 1,408-test full suite.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ6C143CB6A202.json",
+      "id": "SQ6C143CB6A202",
+      "check": "echo",
+      "file": "src/domain/mission-trials.ts",
+      "expiresAt": null,
+      "reason": "bounded() normalizes non-empty one-line strings through isBoundedRecordString; optionalNonNegativeInteger() parses numeric values. The reported similarity consists only of generic control tokens and the functions do not share a behavior, caller contract, or reusable abstraction.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ6DEFA50B14AB.json",
+      "id": "SQ6DEFA50B14AB",
+      "check": "doc-reference",
+      "file": "docs/REGEX_POLICY.md",
+      "expiresAt": null,
+      "reason": "Verified after an annotation-only source change: the regex-policy claim still names the same similar-signatures behavior.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ766F8D66A935.json",
+      "id": "SQ766F8D66A935",
+      "check": "twin-partner",
+      "file": "src/domain/record-validation.ts",
+      "expiresAt": null,
+      "reason": "The Vue worker wire decoder keeps its equivalent scalar guard locally because the enforced architecture forbids reindex-vue -> domain; the domain predicate serves only boundary-allowed consumers.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ796001ECB4BD.json",
+      "id": "SQ796001ECB4BD",
+      "check": "echo",
+      "file": "src/domain/protected-goal-evidence.ts",
+      "expiresAt": null,
+      "reason": "Protected goal evidence has a protocol-specific SQGE identity predicate; sharing a predicate with unrelated completion identities would collapse distinct wire contracts.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ79E46F7236E8.json",
+      "id": "SQ79E46F7236E8",
+      "check": "echo",
+      "file": "src/domain/completeness-obligation-admission.ts",
+      "expiresAt": null,
+      "reason": "The normalized hash wrappers share mechanics but this function hashes the stable change-policy-rule-finding retry projection, not a graph cache key; a cross-domain extraction would hide the idempotency contract without reducing duplicated policy.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ812CEAB08CC1.json",
+      "id": "SQ812CEAB08CC1",
+      "check": "doc-reference",
+      "file": "docs/architecture/rust-semantic-performance-ledger.md",
+      "expiresAt": null,
+      "reason": "Verified after annotation-only source changes: the performance-ledger examples still point to the intended runtime and semantic implementations.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ814505E3948D.json",
+      "id": "SQ814505E3948D",
+      "check": "doc-reference",
+      "file": "docs/COMMAND_REFERENCE.md",
+      "expiresAt": null,
+      "reason": "Verified after an annotation-only source change: the command guide still points to the same co-change implementation and command surface.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ81D81D636285.json",
+      "id": "SQ81D81D636285",
+      "check": "co-change-partner",
+      "file": "tests/semantic/rust/rust-lsp-session-readiness.test.ts",
+      "expiresAt": null,
+      "reason": "Accepted test-boundary-only change: this test now constructs the worker-owned Rust session registry and verifies joined shutdown after readiness invalidation; src/semantic/rust/lsp-session-readiness.ts sequencing, deadlines, and classification behavior are unchanged.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ8591A117DAD9.json",
+      "id": "SQ8591A117DAD9",
+      "check": "doc-reference",
+      "file": "docs/architecture/scip-query-target-architecture.md",
+      "expiresAt": null,
+      "reason": "Verified after source annotations and a private facade inline: the architecture examples still point to the intended owner files and contracts.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ882F9CCDE85C.json",
+      "id": "SQ882F9CCDE85C",
+      "check": "echo",
+      "file": "src/storage/plan-contract.ts",
+      "expiresAt": null,
+      "reason": "Both readers reuse readRecordFile. Each wrapper selects a different directory, identity predicate, decoder, and record type, so the remaining parallel shape is the required typed boundary.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ8AAEDA832021.json",
+      "id": "SQ8AAEDA832021",
+      "check": "echo",
+      "file": "src/domain/residue.ts",
+      "expiresAt": null,
+      "reason": "The exact-body score is a normalization counterexample: residueObservationId creates a versioned, canonical SQR record identity from a residue referent, while fileDependencyGraphCacheKey creates an unversioned disposable cache selector from graph modes. Sharing either function or a generic wrapper would erase the record namespace and contract-version boundary without consolidating a real policy.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ8EE4E18F0DF6.json",
+      "id": "SQ8EE4E18F0DF6",
+      "check": "new-dead",
+      "file": "src/runtime/output-pagination.ts",
+      "expiresAt": null,
+      "reason": "False positive: OutputSnapshotWriter is instantiated by runWithCliOutputPagination; tests prove the action runs once, private 0700/0600 snapshots are reused across pages, tampering fails closed, and final-page cleanup occurs.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ8FA34B0BBC01.json",
+      "id": "SQ8FA34B0BBC01",
+      "check": "co-change-partner",
+      "file": "src/runtime/commands/command-descriptors.ts",
+      "expiresAt": null,
+      "reason": "The plan descriptor directly imports the dedicated plan-contract handler. Generic command-handlers owns side-effect lifecycles and neither dispatches nor renders plan operations, so editing it would create an unused parallel path.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ93200C500032.json",
+      "id": "SQ93200C500032",
+      "check": null,
+      "file": null,
+      "expiresAt": null,
+      "reason": "These predicates validate unrelated closed vocabularies: observation source kinds and Rust mailbox error codes. Their shared membership-check shape is not shared domain behavior, and coupling the domain receipt decoder to the Rust semantic protocol would violate ownership.",
+      "disposition": "remove",
+      "basis": "Historical exact finding ID without a current match; expired or superseded one-change adjudication."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ9781BE7EE4FE.json",
+      "id": "SQ9781BE7EE4FE",
+      "check": "doc-reference",
+      "file": "docs/analyzer-inventory.md",
+      "expiresAt": null,
+      "reason": "Verified after annotation-only source changes: the analyzer inventory still points to the same health and diff-gate implementations.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ08A788DEC78A.json",
+      "id": "SQ08A788DEC78A",
+      "check": "echo",
+      "file": "src/domain/completion-transition-rule.ts",
+      "expiresAt": null,
+      "reason": "Opaque record identities intentionally use record-owned prefix patterns; keeping this predicate beside the SQTR identity definition preserves its type guard and prevents a generic validator from accepting the wrong record family.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ096CE29FEB6A.json",
+      "id": "SQ096CE29FEB6A",
+      "check": "co-change-partner",
+      "file": "src/semantic/rust/lsp-session-worker.ts",
+      "expiresAt": null,
+      "reason": "Accepted annotation-only change: the session worker lifecycle is unchanged; Rust readiness/session tests passed in the 1,416-test full run.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ0DAFA56EA95B.json",
+      "id": "SQ0DAFA56EA95B",
+      "check": null,
+      "file": null,
+      "expiresAt": null,
+      "reason": "The edited watch-service test proves the pure command auto-start policy and does not exercise command handlers. Complete refs for watchServiceAutoStartEligible show no command-handler consumer, and all reported handler co-edits are broad feature sweeps rather than a focused coordination contract.",
+      "disposition": "remove",
+      "basis": "Historical exact finding ID without a current match; expired or superseded one-change adjudication."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ0FECE422E414.json",
+      "id": "SQ0FECE422E414",
+      "check": "echo",
+      "file": "src/domain/protected-goal-evidence.ts",
+      "expiresAt": null,
+      "reason": "The shared hash primitive is already reused; each protocol retains its own prefix and canonical semantic projection, so the similar wrapper does not represent duplicated domain behavior.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ1306716AFD68.json",
+      "id": "SQ1306716AFD68",
+      "check": "echo",
+      "file": "src/domain/record-validation.ts",
+      "expiresAt": null,
+      "reason": "The identical nonnegative-integer predicate is intentionally local in the Vue worker decoder because the enforced architecture forbids reindex-vue -> domain; all allowed platform, reindex, and semantic consumers reuse the domain predicate.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ13A5DE8C135B.json",
+      "id": "SQ13A5DE8C135B",
+      "check": "co-change-partner",
+      "file": "src/tla/model-contract.ts",
+      "expiresAt": null,
+      "reason": "Accepted cross-test co-change signal for an import-only path-contract relocation. No TLA conformance behavior changed, and both model-contract and conformance suites passed in the 1,408-test full run.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ18EFFC6BA69F.json",
+      "id": "SQ18EFFC6BA69F",
+      "check": null,
+      "file": null,
+      "expiresAt": null,
+      "reason": "The edited watch-service test now proves command auto-start policy owned entirely by watch-service.ts. Complete refs for watchServiceAutoStartEligible show no watch-server consumer, and all reported server co-edits are broad sweeps rather than focused contract changes.",
+      "disposition": "remove",
+      "basis": "Historical exact finding ID without a current match; expired or superseded one-change adjudication."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ1A71A9B06DC6.json",
+      "id": "SQ1A71A9B06DC6",
+      "check": "echo",
+      "file": "src/change-control/plan-contract.ts",
+      "expiresAt": null,
+      "reason": "Both decoders reuse decodeWorkRecordEnvelope. The plan decoder verifies plan source and compiled observation identity, while the completion decoder verifies idempotency, predicates, authority, and decision derivation. Merging those meanings would remove record-specific validation.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ1B4F12926BE7.json",
+      "id": "SQ1B4F12926BE7",
+      "check": null,
+      "file": null,
+      "expiresAt": null,
+      "reason": "Cleanup descriptor operation roles are declarative invocation metadata resolved by command-registry before execution; cleanup handlers retain the same inputs and effects, while CLI contract tests cover cleanup role selection.",
+      "disposition": "remove",
+      "basis": "Historical exact finding ID without a current match; expired or superseded one-change adjudication."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ1F913DC461A8.json",
+      "id": "SQ1F913DC461A8",
+      "check": "echo",
+      "file": "src/analysis/package-surface.ts",
+      "expiresAt": null,
+      "reason": "Accepted false structural match: derivePackageOperationalSurface parses package binaries and scripts into reasoned operational targets, while deriveRustLibrarySurface parses Cargo library roots into source-prefix reachability. Consolidating them would merge unrelated package policies.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ2248E181FC9D.json",
+      "id": "SQ2248E181FC9D",
+      "check": "echo",
+      "file": "src/domain/completion-transition-rule.ts",
+      "expiresAt": null,
+      "reason": "The exact-body match is an accidental shared SHA-256 encoding shape: one function creates an authoritative SQTR record identity and the other creates a disposable graph-cache key, so sharing them would merge different domains and change neither repetition nor behavior.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ232166C633BA.json",
+      "id": "SQ232166C633BA",
+      "check": "echo",
+      "file": "src/change-control/plan-contract.ts",
+      "expiresAt": null,
+      "reason": "Both identity predicates reuse matchesWorkStateIdentity. Separate wrappers preserve different prefixes and TypeScript type guards, so replacing one with the other would accept the wrong record identity.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ23C1BB6D5DF3.json",
+      "id": "SQ23C1BB6D5DF3",
+      "check": "doc-reference",
+      "file": "skills/scip-plan/references/tla-model.md",
+      "expiresAt": null,
+      "reason": "Verified unchanged guide reference: src/runtime/watch.ts still defines the Watcher class and indexed mutable watcher state; this remediation changed scheduling and shutdown behavior, not TLA scaffold discovery semantics. Skill edits are intentionally reserved for the concurrent skill-maintenance work.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ2CFC3C96380B.json",
+      "id": "SQ2CFC3C96380B",
+      "check": "co-change-partner",
+      "file": "src/semantic/rust/lsp-client.ts",
+      "expiresAt": null,
+      "reason": "Accepted annotation-only change: Rust LSP client behavior is unchanged; all 24 client tests passed in the 1,416-test full run.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ2E8C5736A00E.json",
+      "id": "SQ2E8C5736A00E",
+      "check": "echo",
+      "file": "src/storage/bounded-mailbox.ts",
+      "expiresAt": null,
+      "reason": "The similarity is limited to standard sorted regular-file enumeration. The mailbox must enumerate every retained file, including malformed and legacy records, while watch-refresh-requests intentionally filters a suffix; a shared abstraction would erase that storage-contract distinction for six lines of boilerplate.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ356DE5D371D4.json",
+      "id": "SQ356DE5D371D4",
+      "check": "co-change-partner",
+      "file": "src/queries/cleanup/similar.ts",
+      "expiresAt": null,
+      "reason": "Accepted historical benchmark co-change signal for ownership-only import rewrites to ProjectIndex and escapeRegex. Similarity behavior and benchmark claims did not change; the full 1,408-test suite passed.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ3AEA8E92D507.json",
+      "id": "SQ3AEA8E92D507",
+      "check": "echo",
+      "file": "src/domain/completeness-obligation-admission.ts",
+      "expiresAt": null,
+      "reason": "The normalized hash wrappers share mechanics but encode different identity projections and prefixes; keeping the admission identity projection local makes the persisted SQCA schema explicit and independently evolvable.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ3DF3A6F2B38C.json",
+      "id": "SQ3DF3A6F2B38C",
+      "check": "echo",
+      "file": "src/analysis/package-surface.ts",
+      "expiresAt": null,
+      "reason": "Accepted intentional parallel cache boundary: JavaScript operational entrypoints and Rust library reachability have different result contracts and invalidation semantics; both correctly use the shared per-database generation cache without sharing product policy.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ4199FDC65707.json",
+      "id": "SQ4199FDC65707",
+      "check": "echo",
+      "file": "src/storage/autonomous-completion-context.ts",
+      "expiresAt": null,
+      "reason": "The shared readRecordFile mechanism is already extracted; this wrapper intentionally binds the completion-context directory, SQCX identity validation, and decoder into one typed read boundary.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ4286A914EEF0.json",
+      "id": "SQ4286A914EEF0",
+      "check": null,
+      "file": null,
+      "expiresAt": null,
+      "reason": "The watcher-service test changes only boundary values for the existing parameterized idle predicate; production watcher-service logic is unchanged.",
+      "disposition": "remove",
+      "basis": "Historical exact finding ID without a current match; expired or superseded one-change adjudication."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ44EBEE79D290.json",
+      "id": "SQ44EBEE79D290",
+      "check": "co-change-partner",
+      "file": "src/runtime/setup.ts",
+      "expiresAt": null,
+      "reason": "Accepted annotation-only change: setup behavior and generated command/skill surfaces are unchanged; the full suite and skill-link checks passed.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ50B53B7F0833.json",
+      "id": "SQ50B53B7F0833",
+      "check": "echo",
+      "file": "src/runtime/protected-goal-evidence-controller.ts",
+      "expiresAt": null,
+      "reason": "Authorization and goal-evidence leases intentionally share fail-closed environment loading, but goal evidence additionally depends on and must be checked against the exact authorization; their record readers and invariants are not interchangeable.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ52563CAC9F64.json",
+      "id": "SQ52563CAC9F64",
+      "check": "co-change-partner",
+      "file": "src/runtime/setup.ts",
+      "expiresAt": null,
+      "reason": "Accepted annotation-only change: setup and installed shared-skill behavior are unchanged; skill-link and setup tests passed.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ562715D7254A.json",
+      "id": "SQ562715D7254A",
+      "check": "co-change-partner",
+      "file": "tests/runtime/runtime-config.test.ts",
+      "expiresAt": null,
+      "reason": "The edited test covers ArchitectureConfig boolean validation in src/runtime/config.ts. command-handlers delegates project configuration and neither parses requireCompleteCoverage nor participates in the validated code path; the 11/13 broad-sweep co-edits do not establish a current coordination contract.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQE8EA333D75A7.json",
+      "id": "SQE8EA333D75A7",
+      "check": null,
+      "file": null,
+      "expiresAt": null,
+      "reason": "Versioned record decoders intentionally share envelope-validation structure, but each owns a different persisted schema, canonical identity, and field invariants; merging them would erase the protected-authorization boundary.",
+      "disposition": "remove",
+      "basis": "Historical exact finding ID without a current match; expired or superseded one-change adjudication."
+    },
+    {
+      "path": ".scipquery/suppressions/SQEB78F5F81990.json",
+      "id": "SQEB78F5F81990",
+      "check": "echo",
+      "file": "src/domain/autonomous-completion-context.ts",
+      "expiresAt": null,
+      "reason": "The SQCX predicate validates a namespaced completion-context identity, not a raw SHA-256 value; sharing the raw-hash predicate would discard the required SQCX namespace contract.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQED25CCDDE2CA.json",
+      "id": "SQED25CCDDE2CA",
+      "check": "echo",
+      "file": "src/runtime/protected-goal-evidence-controller.ts",
+      "expiresAt": null,
+      "reason": "Both protected leases must be re-read before completion, but each fixes a distinct immutable record with its own identity and storage decoder; the parallel checks are deliberate protocol symmetry.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQED73CEBDE24D.json",
+      "id": "SQED73CEBDE24D",
+      "check": "co-change-partner",
+      "file": "src/semantic/rust/lsp-session-worker.ts",
+      "expiresAt": null,
+      "reason": "Accepted source-boundary-only change: Rust session readiness sequencing, deadlines, and health state are unchanged; the worker now obtains didOpen text through the validated bounded project-file reader. Focused Rust readiness tests, the 204-test Rust/security suite, and the full suite pass.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQEEC0C2376D9B.json",
+      "id": "SQEEC0C2376D9B",
+      "check": "echo",
+      "file": "src/domain/completeness-obligation-admission.ts",
+      "expiresAt": null,
+      "reason": "The similarity is the shared record-envelope protocol: this decoder must retain its admission-specific discriminator, canonical fields, and forward-version failure semantics, all covered by its own schema and tamper tests.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQF1F64A5F7AEE.json",
+      "id": "SQF1F64A5F7AEE",
+      "check": "echo",
+      "file": "src/semantic/typescript/tsserver-provider.ts",
+      "expiresAt": null,
+      "reason": "Accepted optional-dependency loader echo: loadTypeScript intentionally shares the small catch-and-cache shape used by other optional loaders, but the loaded module and provider semantics differ. Extracting a shared loader is not useful until more semantic engines share one policy.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQF3097FC5FF5C.json",
+      "id": "SQF3097FC5FF5C",
+      "check": "co-change-partner",
+      "file": "skills/scip-query/SKILL.md",
+      "expiresAt": null,
+      "reason": "The edited text is hand-authored workflow guidance, while docs/COMMAND_REFERENCE.md is descriptor-owned command syntax; rerunning the descriptor generator produced no command-reference change, so copying the workflow text there would violate that ownership boundary.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQF57A771CD0FC.json",
+      "id": "SQF57A771CD0FC",
+      "check": "doc-reference",
+      "file": "README.md",
+      "expiresAt": null,
+      "reason": "Verified after an annotation-only source change: the README configuration example still points to the same stale-abstractions implementation.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQF67DE4D76350.json",
+      "id": "SQF67DE4D76350",
+      "check": "echo",
+      "file": "src/storage/completion-transition-rule.ts",
+      "expiresAt": null,
+      "reason": "Record-file readers intentionally adapt the shared parser to a record-owned directory, identity prefix, and decoder; the common parsing mechanism is already reused, while merging the adapters would weaken the typed file-to-record boundary.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQF78A9F0FAF56.json",
+      "id": "SQF78A9F0FAF56",
+      "check": "co-change-partner",
+      "file": "src/runtime/watch-server.ts",
+      "expiresAt": null,
+      "reason": "DD-10 changes bounded mailbox processing and publishes its telemetry from the watch server. watch-service.ts owns external process lifecycle and only consumes the versioned state through platform/watch-service-state.ts; its behavior and interface are unchanged, and the complete watch-service suite verifies that boundary.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQFA1298ABEEF4.json",
+      "id": "SQFA1298ABEEF4",
+      "check": "co-change-partner",
+      "file": "src/semantic/rust/lsp-session-readiness.ts",
+      "expiresAt": null,
+      "reason": "Accepted annotation-only change: Rust readiness behavior is unchanged; the 34-case readiness suite passed in the 1,416-test full run.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ97C246B0702F.json",
+      "id": "SQ97C246B0702F",
+      "check": "doc-reference",
+      "file": "docs/architecture/evidence-cache-invalidation.md",
+      "expiresAt": null,
+      "reason": "Verified after annotation-only source changes: the cache-invalidation examples still point to the intended implementation files.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ9854E2819B04.json",
+      "id": "SQ9854E2819B04",
+      "check": "doc-reference",
+      "file": "docs/superpowers/specs/2026-07-09-bulk-rust-scip-reference-materialization-design.md",
+      "expiresAt": null,
+      "reason": "Verified after an annotation-only source change: the intentional engine-identity citation remains accurate.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ9977B532BEA7.json",
+      "id": "SQ9977B532BEA7",
+      "check": "echo",
+      "file": "src/storage/completion-transition-rule.ts",
+      "expiresAt": null,
+      "reason": "Both operations publish immutable work-state records, but transition-rule creation uniquely verifies predecessor goal identity and predecessor artifact bytes before publication; the shared publication primitive is already reused and the remaining policy must stay record-specific.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQ9A7B74C58953.json",
+      "id": "SQ9A7B74C58953",
+      "check": "doc-reference",
+      "file": "docs/superpowers/specs/2026-07-09-semantic-prewarm-definition-bulk-load-design.md",
+      "expiresAt": null,
+      "reason": "Verified after an annotation-only source change: the semantic-prewarm guide still points to the same CLI support implementation.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQA0A51B76177A.json",
+      "id": "SQA0A51B76177A",
+      "check": "echo",
+      "file": "src/domain/completeness-obligation-admission.ts",
+      "expiresAt": null,
+      "reason": "This type guard validates the SQCA record namespace; the similar guards validate different prefixes and therefore cannot substitute without erasing the record-type boundary.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQA23E15345055.json",
+      "id": "SQA23E15345055",
+      "check": null,
+      "file": null,
+      "expiresAt": null,
+      "reason": "Opaque record families require owner-local prefix type guards; this guard already reuses matchesWorkStateIdentity, while its SQWA pattern must not accept a completion-record identity.",
+      "disposition": "remove",
+      "basis": "Historical exact finding ID without a current match; expired or superseded one-change adjudication."
+    },
+    {
+      "path": ".scipquery/suppressions/SQA2CA81849DA0.json",
+      "id": "SQA2CA81849DA0",
+      "check": null,
+      "file": null,
+      "expiresAt": null,
+      "reason": "This slice adds an internal collaboration-domain setup step inside runProjectSetup. command-handlers still delegates the same parsed setup options and renders the same ProjectSetupReport, so the handler contract requires no coordination edit.",
+      "disposition": "remove",
+      "basis": "Historical exact finding ID without a current match; expired or superseded one-change adjudication."
+    },
+    {
+      "path": ".scipquery/suppressions/SQA35BC65AA547.json",
+      "id": "SQA35BC65AA547",
+      "check": "new-dead",
+      "file": "src/runtime/output-pagination.ts",
+      "expiresAt": null,
+      "reason": "False positive: PrefixBuffer is instantiated by runJsonWithOversizeWarning; output-pagination tests exercise oversized raw JSON, split UTF-8 chunks, warning emission, and byte-exact preservation.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQA94DC3F07D49.json",
+      "id": "SQA94DC3F07D49",
+      "check": null,
+      "file": null,
+      "expiresAt": null,
+      "reason": "The generated command reference records option names but not option help text, so regeneration correctly produces no diff for this debounce-description change; README documents the new default.",
+      "disposition": "remove",
+      "basis": "Historical exact finding ID without a current match; expired or superseded one-change adjudication."
+    },
+    {
+      "path": ".scipquery/suppressions/SQAA97E33F3ADC.json",
+      "id": "SQAA97E33F3ADC",
+      "check": "echo",
+      "file": "src/storage/completeness-obligation-admission.ts",
+      "expiresAt": null,
+      "reason": "This one-line adapter intentionally binds generic file parsing to the admission-specific label and decoder used by obligation validate; the similar adapters bind other persisted record types.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQB1554B85DCB4.json",
+      "id": "SQB1554B85DCB4",
+      "check": "co-change-partner",
+      "file": "src/tla/conformance.ts",
+      "expiresAt": null,
+      "reason": "Accepted import-only architecture move: conformance now imports the unchanged regex primitive from its source owner. Its behavior is unchanged, and tests/tla/conformance.test.ts passed in the 1,408-test full suite.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQB26525BAEF6A.json",
+      "id": "SQB26525BAEF6A",
+      "check": "co-change-partner",
+      "file": "src/runtime/agent-hooks.ts",
+      "expiresAt": null,
+      "reason": "Changed-state restoration is derived and cursor-deduplicated inside agent-hooks, agent-session-state, and autonomous-work-restoration. command-handlers has no reader or writer in that delivery path, and all six reported co-edits were broad repository sweeps rather than focused coordination changes.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQB320683E70CC.json",
+      "id": "SQB320683E70CC",
+      "check": "doc-reference",
+      "file": "skills/scip-hyper-optimization/SKILL.md",
+      "expiresAt": null,
+      "reason": "Verified after an annotation-only source change: the optimization skill's profiling claim still points to the same instrumentation implementation.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQB8D3EEB61CF9.json",
+      "id": "SQB8D3EEB61CF9",
+      "check": "echo",
+      "file": "src/storage/completion-transition-rule.ts",
+      "expiresAt": null,
+      "reason": "Path readers are deliberately thin typed adapters over the shared bounded parser; each supplies a distinct decoder and result type, and extracting that one-line dispatch would obscure rather than reduce the record boundary.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQBC04C2B3477B.json",
+      "id": "SQBC04C2B3477B",
+      "check": "co-change-partner",
+      "file": "src/queries/cleanup/twin-drift.ts",
+      "expiresAt": null,
+      "reason": "Accepted import-only architecture move: twin-drift now imports the unchanged path-equivalence contract from domain. tests/queries/cleanup/twin-drift.test.ts passed without a behavioral test update.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQBC670C43066A.json",
+      "id": "SQBC670C43066A",
+      "check": null,
+      "file": null,
+      "expiresAt": "2026-07-21",
+      "reason": "verified: analyzer-validation-ledger's diff-gate.ts citation still points at the intended surfaces; this diff only widened the suppression source list",
+      "disposition": "remove",
+      "basis": "Historical exact finding ID without a current match; expired or superseded one-change adjudication."
+    },
+    {
+      "path": ".scipquery/suppressions/SQC0EF3117E14C.json",
+      "id": "SQC0EF3117E14C",
+      "check": "co-change-partner",
+      "file": "src/semantic/rust/lsp-session-readiness.ts",
+      "expiresAt": null,
+      "reason": "Accepted after explicit consumer review: lsp-session-worker imports and calls the readiness helpers without supplying a clock, so their new monotonic default applies automatically. The worker request already carries a monotonic deadline created in lsp-session.ts; its wire shape and orchestration require no edit. The 34-case readiness suite, 21-case worker/session suite, focused matrix, and full suite exercised this path.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQC604514FA472.json",
+      "id": "SQC604514FA472",
+      "check": "co-change-partner",
+      "file": "src/semantic/rust/lsp-session-worker.ts",
+      "expiresAt": null,
+      "reason": "Accepted session-lifecycle-only change: lsp-batch-worker.ts still supplies the same Cargo manifest and request inputs; canonical identity, finite LRU capacity, and joined eviction are owned entirely by lsp-session-worker.ts and session-registry.ts.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQC680929A368D.json",
+      "id": "SQC680929A368D",
+      "check": null,
+      "file": null,
+      "expiresAt": "2026-07-21",
+      "reason": "formatting-only prettier catch-up in reindex-reliability.test.ts; no behavior change, reindex/index.ts coupling not implicated",
+      "disposition": "remove",
+      "basis": "Historical exact finding ID without a current match; expired or superseded one-change adjudication."
+    },
+    {
+      "path": ".scipquery/suppressions/SQCF8C0454E856.json",
+      "id": "SQCF8C0454E856",
+      "check": "echo",
+      "file": "src/domain/completeness-obligation-admission.ts",
+      "expiresAt": null,
+      "reason": "Both functions are short enum membership guards, but they validate disjoint persisted vocabularies; the admission evidence guard is required at the shared-record decoder boundary.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQD30C0EC25271.json",
+      "id": "SQD30C0EC25271",
+      "check": "twin-partner",
+      "file": "src/analysis/change-risk-metadata.ts",
+      "expiresAt": null,
+      "reason": "Accepted intentional local leaf helper: the two-line unknown-error formatter carries no domain policy, and coupling analysis, metadata decoding, binary installation, and Vue reindex boundaries solely to share it would create a less stable abstraction than the duplication.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQD3DC2A53C210.json",
+      "id": "SQD3DC2A53C210",
+      "check": null,
+      "file": null,
+      "expiresAt": null,
+      "reason": "The source-token match is limited to generic console/error vocabulary; the renderers have different operations, result shapes, and user-visible contracts, so extraction would couple unrelated command semantics.",
+      "disposition": "remove",
+      "basis": "Historical exact finding ID without a current match; expired or superseded one-change adjudication."
+    },
+    {
+      "path": ".scipquery/suppressions/SQE412D36E0960.json",
+      "id": "SQE412D36E0960",
+      "check": "echo",
+      "file": "src/storage/autonomous-completion-context.ts",
+      "expiresAt": null,
+      "reason": "This typed adapter already delegates durable publication to publishWorkStateRecord and must retain completion-context construction, identity, and collision semantics; further extraction would combine distinct record meanings.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    },
+    {
+      "path": ".scipquery/suppressions/SQE648B66B7D21.json",
+      "id": "SQE648B66B7D21",
+      "check": "co-change-partner",
+      "file": "src/runtime/watch-service.ts",
+      "expiresAt": null,
+      "reason": "Accepted annotation-only change: watcher behavior is unchanged; watch-service and linked-worktree integration tests passed in the 1,416-test full suite.",
+      "disposition": "remove",
+      "basis": "Obsolete check name; no corresponding current source-finding rule."
+    }
+  ]
+}

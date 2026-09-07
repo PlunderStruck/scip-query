@@ -1,0 +1,2757 @@
+{
+  "baseline": "afc52f70",
+  "baselineSourceComments": 554,
+  "removedWithDeadCode": 6,
+  "disposition": "retain-existing-review",
+  "basis": "Retain the existing source-local reason, confined to the listed analysis. This inventory does not claim each annotation matches a current finding or provide new accuracy labels.",
+  "consumers": {
+    "wrapper": "passthrough-candidates (legacy alias)",
+    "similar": "similar / duplicate-bodies",
+    "passthrough": "passthrough-candidates",
+    "twin": "twin-drift",
+    "extract": "slice-cohesion",
+    "stale": "dead-code exclusions (legacy alias)"
+  },
+  "annotations": [
+    {
+      "file": "src/domain/path-normalization.ts",
+      "line": 14,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/platform/project-files.ts",
+      "line": 89,
+      "category": "similar"
+    },
+    {
+      "file": "src/queries/internal/project-index.ts",
+      "line": 32,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/queries/internal/project-index.ts",
+      "line": 120,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/queries/internal/project-index.ts",
+      "line": 125,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/queries/internal/project-index.ts",
+      "line": 131,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/queries/internal/project-index.ts",
+      "line": 144,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/reindex/typescript-document-emitter.ts",
+      "line": 275,
+      "category": "twin"
+    },
+    {
+      "file": "src/reindex/typescript-document-emitter.ts",
+      "line": 337,
+      "category": "twin"
+    },
+    {
+      "file": "src/reindex/typescript-index-requester.ts",
+      "line": 90,
+      "category": "twin"
+    },
+    {
+      "file": "src/reindex/typescript-index-service.ts",
+      "line": 92,
+      "category": "twin"
+    },
+    {
+      "file": "src/reindex/typescript-index-service.ts",
+      "line": 133,
+      "category": "twin"
+    },
+    {
+      "file": "src/reindex/typescript-index-service.ts",
+      "line": 163,
+      "category": "twin"
+    },
+    {
+      "file": "src/runtime/revisioned-file.ts",
+      "line": 80,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/runtime/watch.ts",
+      "line": 282,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/watch.ts",
+      "line": 481,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/watch.ts",
+      "line": 1230,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/semantic/rust/durable-session.ts",
+      "line": 163,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/lsp-client.ts",
+      "line": 173,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/semantic/rust/lsp-client.ts",
+      "line": 191,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/semantic/rust/lsp-client.ts",
+      "line": 200,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/semantic/rust/lsp-client.ts",
+      "line": 321,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/lsp-client.ts",
+      "line": 484,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session.ts",
+      "line": 95,
+      "category": "twin"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session.ts",
+      "line": 165,
+      "category": "similar"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session.ts",
+      "line": 283,
+      "category": "twin"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session.ts",
+      "line": 284,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session.ts",
+      "line": 290,
+      "category": "similar"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session.ts",
+      "line": 361,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/session-service.ts",
+      "line": 86,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/session-service.ts",
+      "line": 134,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/ts-morph-provider.ts",
+      "line": 195,
+      "category": "twin"
+    },
+    {
+      "file": "src/semantic/typescript/ts-morph-provider.ts",
+      "line": 240,
+      "category": "twin"
+    },
+    {
+      "file": "src/semantic/typescript/ts-morph-provider.ts",
+      "line": 248,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/ts-morph-provider.ts",
+      "line": 338,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/ts-morph-provider.ts",
+      "line": 421,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/ts-morph-provider.ts",
+      "line": 487,
+      "category": "similar"
+    },
+    {
+      "file": "src/semantic/typescript/ts-morph-provider.ts",
+      "line": 583,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/ts-morph-provider.ts",
+      "line": 913,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/ts-morph-provider.ts",
+      "line": 1074,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/ts-morph-provider.ts",
+      "line": 1115,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/ts-morph-provider.ts",
+      "line": 1152,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/ts-morph-provider.ts",
+      "line": 1234,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/ts-morph-provider.ts",
+      "line": 1320,
+      "category": "extract"
+    },
+    {
+      "file": "src/storage/db.ts",
+      "line": 155,
+      "category": "wrapper"
+    },
+    {
+      "file": "benchmarks/maintenance-results/2026-09-05-sol-medium/untracked-source/src/queries/navigation/reference-reachability.ts",
+      "line": 47,
+      "category": "similar"
+    },
+    {
+      "file": "benchmarks/maintenance-results/2026-09-05-sol-medium/untracked-source/src/queries/navigation/reference-reachability.ts",
+      "line": 103,
+      "category": "similar"
+    },
+    {
+      "file": "src/analysis/change-risk-metadata.ts",
+      "line": 13,
+      "category": "stale"
+    },
+    {
+      "file": "src/analysis/file-classifier.ts",
+      "line": 88,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/analysis/file-classifier.ts",
+      "line": 151,
+      "category": "extract"
+    },
+    {
+      "file": "src/analysis/file-classifier.ts",
+      "line": 218,
+      "category": "extract"
+    },
+    {
+      "file": "src/analysis/file-classifier.ts",
+      "line": 319,
+      "category": "similar"
+    },
+    {
+      "file": "src/analysis/framework-patterns.ts",
+      "line": 23,
+      "category": "stale"
+    },
+    {
+      "file": "src/analysis/framework-patterns.ts",
+      "line": 287,
+      "category": "extract"
+    },
+    {
+      "file": "src/analysis/framework-patterns.ts",
+      "line": 349,
+      "category": "extract"
+    },
+    {
+      "file": "src/analysis/frontend-route-conventions.ts",
+      "line": 51,
+      "category": "extract"
+    },
+    {
+      "file": "src/analysis/git-history.ts",
+      "line": 76,
+      "category": "stale"
+    },
+    {
+      "file": "src/analysis/git-history.ts",
+      "line": 154,
+      "category": "similar"
+    },
+    {
+      "file": "src/analysis/git-history.ts",
+      "line": 200,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/analysis/git-history.ts",
+      "line": 278,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/analysis/git-history.ts",
+      "line": 300,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/analysis/git-history.ts",
+      "line": 365,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/analysis/git-history.ts",
+      "line": 517,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/analysis/git-history.ts",
+      "line": 542,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/analysis/git-history.ts",
+      "line": 551,
+      "category": "similar"
+    },
+    {
+      "file": "src/analysis/git-history.ts",
+      "line": 574,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/analysis/git-history.ts",
+      "line": 621,
+      "category": "extract"
+    },
+    {
+      "file": "src/analysis/git-history.ts",
+      "line": 747,
+      "category": "extract"
+    },
+    {
+      "file": "src/analysis/package-surface.ts",
+      "line": 67,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/analysis/runtime-boundaries/extractors.ts",
+      "line": 905,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/analysis/rust-package-surface.ts",
+      "line": 30,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/analysis/similarity.ts",
+      "line": 14,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/analysis/similarity.ts",
+      "line": 25,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/analysis/similarity.ts",
+      "line": 57,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/analysis/similarity.ts",
+      "line": 70,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/analysis/similarity.ts",
+      "line": 92,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/domain/config-types.ts",
+      "line": 396,
+      "category": "stale"
+    },
+    {
+      "file": "src/domain/observation-receipt.ts",
+      "line": 729,
+      "category": "similar"
+    },
+    {
+      "file": "src/domain/path-normalization.ts",
+      "line": 24,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/domain/path-normalization.ts",
+      "line": 30,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/domain/project-config.ts",
+      "line": 17,
+      "category": "stale"
+    },
+    {
+      "file": "src/domain/project-config.ts",
+      "line": 78,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/domain/project-config.ts",
+      "line": 89,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/domain/reindex-metadata.ts",
+      "line": 51,
+      "category": "stale"
+    },
+    {
+      "file": "src/domain/suppression-adjudication.ts",
+      "line": 8,
+      "category": "stale"
+    },
+    {
+      "file": "src/domain/symbol-types.ts",
+      "line": 75,
+      "category": "stale"
+    },
+    {
+      "file": "src/domain/symbol-types.ts",
+      "line": 146,
+      "category": "stale"
+    },
+    {
+      "file": "src/domain/symbol-types.ts",
+      "line": 179,
+      "category": "stale"
+    },
+    {
+      "file": "src/filesystem/bounded-file.ts",
+      "line": 137,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/filesystem/bounded-file.ts",
+      "line": 204,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/filesystem/file-descriptor.ts",
+      "line": 0,
+      "category": "stale"
+    },
+    {
+      "file": "src/instrumentation/profile.ts",
+      "line": 85,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/instrumentation/profile.ts",
+      "line": 163,
+      "category": "extract"
+    },
+    {
+      "file": "src/language-parsers/languages/clojure.ts",
+      "line": 296,
+      "category": "extract"
+    },
+    {
+      "file": "src/language-parsers/languages/clojure.ts",
+      "line": 401,
+      "category": "twin"
+    },
+    {
+      "file": "src/language-parsers/languages/dotnet.ts",
+      "line": 61,
+      "category": "similar"
+    },
+    {
+      "file": "src/language-parsers/languages/dotnet.ts",
+      "line": 97,
+      "category": "similar"
+    },
+    {
+      "file": "src/language-parsers/languages/javascript-imports.ts",
+      "line": 75,
+      "category": "extract"
+    },
+    {
+      "file": "src/language-parsers/languages/jvm.ts",
+      "line": 20,
+      "category": "extract"
+    },
+    {
+      "file": "src/language-parsers/languages/jvm.ts",
+      "line": 42,
+      "category": "similar"
+    },
+    {
+      "file": "src/language-parsers/languages/jvm.ts",
+      "line": 74,
+      "category": "similar"
+    },
+    {
+      "file": "src/language-parsers/languages/jvm.ts",
+      "line": 103,
+      "category": "similar"
+    },
+    {
+      "file": "src/language-parsers/languages/php.ts",
+      "line": 50,
+      "category": "similar"
+    },
+    {
+      "file": "src/language-parsers/registry.ts",
+      "line": 129,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/platform/bounded-process.ts",
+      "line": 34,
+      "category": "stale"
+    },
+    {
+      "file": "src/platform/git-worktree.ts",
+      "line": 10,
+      "category": "stale"
+    },
+    {
+      "file": "src/platform/git-worktree.ts",
+      "line": 275,
+      "category": "extract"
+    },
+    {
+      "file": "src/platform/indexer-toolchain.ts",
+      "line": 34,
+      "category": "stale"
+    },
+    {
+      "file": "src/platform/process-file-lock.ts",
+      "line": 95,
+      "category": "stale"
+    },
+    {
+      "file": "src/platform/process-tree.ts",
+      "line": 26,
+      "category": "stale"
+    },
+    {
+      "file": "src/platform/process-tree.ts",
+      "line": 39,
+      "category": "stale"
+    },
+    {
+      "file": "src/platform/project-files.ts",
+      "line": 137,
+      "category": "stale"
+    },
+    {
+      "file": "src/platform/project-files.ts",
+      "line": 239,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/platform/project-observation-snapshot.ts",
+      "line": 127,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/platform/scip-cli.ts",
+      "line": 151,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/platform/typescript-semantic-hash.ts",
+      "line": 36,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/platform/typescript-semantic-hash.ts",
+      "line": 46,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/platform/typescript-semantic-hash.ts",
+      "line": 62,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/platform/verified-binary-fetch.ts",
+      "line": 26,
+      "category": "twin"
+    },
+    {
+      "file": "src/platform/watch-service-state.ts",
+      "line": 105,
+      "category": "stale"
+    },
+    {
+      "file": "src/platform/watch-service-state.ts",
+      "line": 160,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/queries/cleanup/cleanup-plan.ts",
+      "line": 53,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/co-change.ts",
+      "line": 132,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/dead-exclusions.ts",
+      "line": 18,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/queries/cleanup/dead.ts",
+      "line": 104,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/dead.ts",
+      "line": 230,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/dead.ts",
+      "line": 417,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/dead.ts",
+      "line": 466,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/decorative-checkers.ts",
+      "line": 115,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/doc-drift.ts",
+      "line": 148,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/doc-drift.ts",
+      "line": 403,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/doc-drift.ts",
+      "line": 453,
+      "category": "similar"
+    },
+    {
+      "file": "src/queries/cleanup/drift.ts",
+      "line": 68,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/drift.ts",
+      "line": 113,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/drift.ts",
+      "line": 201,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/drift.ts",
+      "line": 332,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/duplicate-bodies.ts",
+      "line": 75,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/duplicate-bodies.ts",
+      "line": 230,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/locality-candidates.ts",
+      "line": 165,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/locality-candidates.ts",
+      "line": 191,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/locality-candidates.ts",
+      "line": 238,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/locality-candidates.ts",
+      "line": 846,
+      "category": "twin"
+    },
+    {
+      "file": "src/queries/cleanup/locality-candidates.ts",
+      "line": 851,
+      "category": "twin"
+    },
+    {
+      "file": "src/queries/cleanup/not-implemented.ts",
+      "line": 56,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/not-implemented.ts",
+      "line": 131,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/passthrough-candidates.ts",
+      "line": 45,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/passthrough-candidates.ts",
+      "line": 112,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/recent-duplicates.ts",
+      "line": 135,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/recent-duplicates.ts",
+      "line": 188,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/recent-duplicates.ts",
+      "line": 301,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/redundant-reexports.ts",
+      "line": 55,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/similar-signatures.ts",
+      "line": 71,
+      "category": "similar"
+    },
+    {
+      "file": "src/queries/cleanup/similar-signatures.ts",
+      "line": 96,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/similar-signatures.ts",
+      "line": 166,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/similar.ts",
+      "line": 186,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/similar.ts",
+      "line": 255,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/similar.ts",
+      "line": 334,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/similar.ts",
+      "line": 453,
+      "category": "similar"
+    },
+    {
+      "file": "src/queries/cleanup/similar.ts",
+      "line": 982,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/similar.ts",
+      "line": 1133,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/similar.ts",
+      "line": 1620,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/similar.ts",
+      "line": 1715,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/similar.ts",
+      "line": 1736,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/test-quality.ts",
+      "line": 67,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/twin-drift.ts",
+      "line": 194,
+      "category": "similar"
+    },
+    {
+      "file": "src/queries/cleanup/twin-drift.ts",
+      "line": 337,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/twin-drift.ts",
+      "line": 380,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/cleanup/twin-drift.ts",
+      "line": 412,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/frontend/react-component-duplicates.ts",
+      "line": 138,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/frontend/react-hook-candidates.ts",
+      "line": 85,
+      "category": "similar"
+    },
+    {
+      "file": "src/queries/frontend/react-hook-candidates.ts",
+      "line": 100,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/frontend/react-hook-candidates.ts",
+      "line": 150,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/frontend/react-large-component-pressure.ts",
+      "line": 113,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/frontend/vue-component-duplicates.ts",
+      "line": 100,
+      "category": "similar"
+    },
+    {
+      "file": "src/queries/frontend/vue-component-duplicates.ts",
+      "line": 200,
+      "category": "similar"
+    },
+    {
+      "file": "src/queries/frontend/vue-composable-candidates.ts",
+      "line": 93,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/frontend/vue-composable-candidates.ts",
+      "line": 198,
+      "category": "similar"
+    },
+    {
+      "file": "src/queries/graph/affected.ts",
+      "line": 46,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/queries/graph/affected.ts",
+      "line": 200,
+      "category": "similar"
+    },
+    {
+      "file": "src/queries/graph/architecture.ts",
+      "line": 157,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/graph/bottlenecks.ts",
+      "line": 50,
+      "category": "similar"
+    },
+    {
+      "file": "src/queries/graph/bottlenecks.ts",
+      "line": 90,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/queries/graph/coupling.ts",
+      "line": 39,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/queries/graph/coupling.ts",
+      "line": 47,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/graph/coupling.ts",
+      "line": 91,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/queries/graph/cycles.ts",
+      "line": 58,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/queries/graph/fan.ts",
+      "line": 179,
+      "category": "similar"
+    },
+    {
+      "file": "src/queries/graph/hotspots.ts",
+      "line": 21,
+      "category": "similar"
+    },
+    {
+      "file": "src/queries/graph/hotspots.ts",
+      "line": 83,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/queries/graph/test-boundary-policy.ts",
+      "line": 24,
+      "category": "stale"
+    },
+    {
+      "file": "src/queries/health/health-report.ts",
+      "line": 63,
+      "category": "stale"
+    },
+    {
+      "file": "src/queries/health/health.ts",
+      "line": 609,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/health/health.ts",
+      "line": 868,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/impact/change-surface.ts",
+      "line": 40,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/impact/context.ts",
+      "line": 150,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/impact/diff-impact.ts",
+      "line": 166,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/impact/diff-impact.ts",
+      "line": 211,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/impact/diff-impact.ts",
+      "line": 607,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/queries/impact/diff-impact.ts",
+      "line": 858,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/impact/diff-impact.ts",
+      "line": 909,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/impact/diff-impact.ts",
+      "line": 1009,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/impact/incomplete-migration.ts",
+      "line": 89,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/internal/cache-invalidation.ts",
+      "line": 24,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/queries/internal/candidate-scan.ts",
+      "line": 10,
+      "category": "stale"
+    },
+    {
+      "file": "src/queries/internal/candidate-scan.ts",
+      "line": 56,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/internal/consumer-evidence.ts",
+      "line": 107,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/internal/consumer-evidence.ts",
+      "line": 217,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/internal/consumer-evidence.ts",
+      "line": 354,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/queries/internal/consumer-evidence.ts",
+      "line": 543,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/internal/consumer-evidence.ts",
+      "line": 580,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/internal/dead-candidate-gate.ts",
+      "line": 97,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/internal/dead-candidate-gate.ts",
+      "line": 133,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/queries/internal/dead-candidate-gate.ts",
+      "line": 143,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/queries/internal/file-resolution.ts",
+      "line": 73,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/internal/pairwise-profiles.ts",
+      "line": 13,
+      "category": "stale"
+    },
+    {
+      "file": "src/queries/internal/pairwise-profiles.ts",
+      "line": 29,
+      "category": "stale"
+    },
+    {
+      "file": "src/queries/internal/production-callables.ts",
+      "line": 17,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/internal/reference-counts.ts",
+      "line": 16,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/queries/internal/reference-counts.ts",
+      "line": 22,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/queries/internal/reference-counts.ts",
+      "line": 38,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/queries/internal/reference-counts.ts",
+      "line": 62,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/queries/internal/reference-counts.ts",
+      "line": 73,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/queries/internal/reference-counts.ts",
+      "line": 84,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/queries/internal/reference-counts.ts",
+      "line": 90,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/queries/internal/reference-counts.ts",
+      "line": 105,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/queries/navigation/by-kind.ts",
+      "line": 33,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/navigation/by-kind.ts",
+      "line": 70,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/navigation/hierarchy.ts",
+      "line": 81,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/queries/navigation/imports.ts",
+      "line": 137,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/navigation/imports.ts",
+      "line": 366,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/navigation/members.ts",
+      "line": 22,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/navigation/methods.ts",
+      "line": 75,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/navigation/symbols.ts",
+      "line": 4,
+      "category": "stale"
+    },
+    {
+      "file": "src/queries/navigation/system.ts",
+      "line": 34,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/queries/navigation/trace.ts",
+      "line": 74,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/quality/complexity.ts",
+      "line": 57,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/quality/complexity.ts",
+      "line": 104,
+      "category": "extract"
+    },
+    {
+      "file": "src/queries/quality/slice-cohesion.ts",
+      "line": 448,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/affected-shadow.ts",
+      "line": 19,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/affected-shadow.ts",
+      "line": 61,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/affected-shadow.ts",
+      "line": 116,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/affected-shadow.ts",
+      "line": 144,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/affected-shadow.ts",
+      "line": 149,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/affected-shadow.ts",
+      "line": 403,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/affected-shadow.ts",
+      "line": 484,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/augmentation/augment.ts",
+      "line": 45,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/augmentation/post-index-augmentation.ts",
+      "line": 133,
+      "category": "twin"
+    },
+    {
+      "file": "src/reindex/incremental-sqlite-publication.ts",
+      "line": 113,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/indexer-runner.ts",
+      "line": 24,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/indexer-runner.ts",
+      "line": 56,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/indexer-runner.ts",
+      "line": 285,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/indexer-runner.ts",
+      "line": 428,
+      "category": "twin"
+    },
+    {
+      "file": "src/reindex/shared-generation-store.ts",
+      "line": 144,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/shared-generation-store.ts",
+      "line": 304,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/shared-generation-store.ts",
+      "line": 453,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/shared-generation-store.ts",
+      "line": 605,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/shared-generation-store.ts",
+      "line": 702,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/shared-generation-store.ts",
+      "line": 789,
+      "category": "similar"
+    },
+    {
+      "file": "src/reindex/shared-generation-store.ts",
+      "line": 790,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/shared-generation-store.ts",
+      "line": 887,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/shared-generation-store.ts",
+      "line": 1065,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/shared-generation-store.ts",
+      "line": 1241,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/shared-generation-store.ts",
+      "line": 1515,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/sqlite-generation-store.ts",
+      "line": 74,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/sqlite-generation-store.ts",
+      "line": 120,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/sqlite-generation-store.ts",
+      "line": 138,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/sqlite-generation-store.ts",
+      "line": 235,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/typescript-document-emitter.ts",
+      "line": 104,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/typescript-document-emitter.ts",
+      "line": 127,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/typescript-document-emitter.ts",
+      "line": 543,
+      "category": "twin"
+    },
+    {
+      "file": "src/reindex/typescript-document-emitter.ts",
+      "line": 548,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/reindex/typescript-fragment-store.ts",
+      "line": 540,
+      "category": "twin"
+    },
+    {
+      "file": "src/reindex/typescript-incremental-index.ts",
+      "line": 108,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/typescript-index-protocol.ts",
+      "line": 52,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/typescript-index-protocol.ts",
+      "line": 84,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/typescript-index-protocol.ts",
+      "line": 241,
+      "category": "twin"
+    },
+    {
+      "file": "src/reindex/typescript-index-requester.ts",
+      "line": 211,
+      "category": "twin"
+    },
+    {
+      "file": "src/reindex/typescript-index-requester.ts",
+      "line": 229,
+      "category": "twin"
+    },
+    {
+      "file": "src/reindex/typescript-index-requester.ts",
+      "line": 341,
+      "category": "twin"
+    },
+    {
+      "file": "src/reindex/typescript-index-requester.ts",
+      "line": 360,
+      "category": "twin"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-contracts.ts",
+      "line": 0,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-runtime.ts",
+      "line": 184,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-runtime.ts",
+      "line": 200,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-runtime.ts",
+      "line": 322,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-runtime.ts",
+      "line": 359,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-runtime.ts",
+      "line": 403,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-runtime.ts",
+      "line": 425,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-runtime.ts",
+      "line": 455,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-runtime.ts",
+      "line": 507,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-runtime.ts",
+      "line": 548,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-runtime.ts",
+      "line": 557,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-runtime.ts",
+      "line": 588,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-runtime.ts",
+      "line": 595,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-runtime.ts",
+      "line": 624,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-workers.ts",
+      "line": 27,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-workers.ts",
+      "line": 48,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-workers.ts",
+      "line": 62,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue-workers.ts",
+      "line": 264,
+      "category": "twin"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue.ts",
+      "line": 59,
+      "category": "stale"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue.ts",
+      "line": 152,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue.ts",
+      "line": 222,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue.ts",
+      "line": 383,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/vue/augment-vue.ts",
+      "line": 423,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/ast-parser-setup.ts",
+      "line": 23,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/ast-parser-setup.ts",
+      "line": 58,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/cleanup-verify.ts",
+      "line": 103,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/cleanup-verify.ts",
+      "line": 682,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/cli-context.ts",
+      "line": 259,
+      "category": "twin"
+    },
+    {
+      "file": "src/runtime/cli-support.ts",
+      "line": 219,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/cli-support.ts",
+      "line": 280,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/cli-support.ts",
+      "line": 529,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/cli-support.ts",
+      "line": 743,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/cli-support.ts",
+      "line": 1225,
+      "category": "similar"
+    },
+    {
+      "file": "src/runtime/cli-support.ts",
+      "line": 1439,
+      "category": "similar"
+    },
+    {
+      "file": "src/runtime/command-kit/command-docs.ts",
+      "line": 49,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/runtime/command-kit/command-docs.ts",
+      "line": 93,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/command-kit/command-execution.ts",
+      "line": 369,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/command-kit/command-spec-builders.ts",
+      "line": 73,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/runtime/commands/command-handlers.ts",
+      "line": 128,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/commands/command-handlers.ts",
+      "line": 392,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/commands/command-handlers.ts",
+      "line": 457,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/runtime/commands/command-handlers.ts",
+      "line": 494,
+      "category": "similar"
+    },
+    {
+      "file": "src/runtime/commands/command-handlers.ts",
+      "line": 582,
+      "category": "similar"
+    },
+    {
+      "file": "src/runtime/commands/command-handlers.ts",
+      "line": 697,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/commands/command-handlers.ts",
+      "line": 1186,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/commands/command-handlers.ts",
+      "line": 1247,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/commands/command-handlers.ts",
+      "line": 1392,
+      "category": "twin"
+    },
+    {
+      "file": "src/runtime/commands/command-handlers.ts",
+      "line": 1400,
+      "category": "twin"
+    },
+    {
+      "file": "src/runtime/config.ts",
+      "line": 841,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/health-dossier.ts",
+      "line": 6,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/health-report-cache.ts",
+      "line": 87,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/health-report-cache.ts",
+      "line": 114,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/isolated-analysis-runner.ts",
+      "line": 76,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/runtime/output-pagination.ts",
+      "line": 181,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/output-pagination.ts",
+      "line": 283,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/project-readiness.ts",
+      "line": 43,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/project-readiness.ts",
+      "line": 164,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/project-setup.ts",
+      "line": 113,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/project-setup.ts",
+      "line": 152,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/project-setup.ts",
+      "line": 175,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/project-setup.ts",
+      "line": 181,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/project-setup.ts",
+      "line": 253,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/project-setup.ts",
+      "line": 1203,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/project-setup.ts",
+      "line": 1261,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/project-setup.ts",
+      "line": 1369,
+      "category": "twin"
+    },
+    {
+      "file": "src/runtime/repository-cache-lifecycle.ts",
+      "line": 36,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/repository-cache-lifecycle.ts",
+      "line": 45,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/repository-cache-lifecycle.ts",
+      "line": 100,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/repository-cache-lifecycle.ts",
+      "line": 180,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/repository-cache-lifecycle.ts",
+      "line": 352,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/repository-cache-lifecycle.ts",
+      "line": 441,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/result-pagination.ts",
+      "line": 11,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/revisioned-file.ts",
+      "line": 38,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/setup.ts",
+      "line": 27,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/typescript-mailbox-lanes.ts",
+      "line": 152,
+      "category": "similar"
+    },
+    {
+      "file": "src/runtime/update-notice.ts",
+      "line": 25,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/watch-server.ts",
+      "line": 408,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/watch-service.ts",
+      "line": 158,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/watch-service.ts",
+      "line": 174,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/watch-service.ts",
+      "line": 180,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/watch-service.ts",
+      "line": 185,
+      "category": "stale"
+    },
+    {
+      "file": "src/runtime/watch-service.ts",
+      "line": 321,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/watch-service.ts",
+      "line": 339,
+      "category": "similar"
+    },
+    {
+      "file": "src/runtime/watch-service.ts",
+      "line": 375,
+      "category": "extract"
+    },
+    {
+      "file": "src/runtime/watch-service.ts",
+      "line": 404,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/runtime/watch-service.ts",
+      "line": 465,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/provider-cache.ts",
+      "line": 24,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/semantic/provider-cache.ts",
+      "line": 43,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/semantic/rust/callee-symbol-resolution.ts",
+      "line": 9,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/default-impl-references.ts",
+      "line": 18,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/semantic/rust/default-impl-references.ts",
+      "line": 34,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/durable-session-protocol.ts",
+      "line": 95,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/rust/durable-session-server.ts",
+      "line": 140,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/durable-session-server.ts",
+      "line": 210,
+      "category": "similar"
+    },
+    {
+      "file": "src/semantic/rust/durable-session.ts",
+      "line": 71,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/rust/durable-session.ts",
+      "line": 90,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/rust/durable-session.ts",
+      "line": 123,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/durable-session.ts",
+      "line": 298,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/durable-session.ts",
+      "line": 392,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/durable-session.ts",
+      "line": 459,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/engine-identity.ts",
+      "line": 6,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/rust/import-usage.ts",
+      "line": 14,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/rust/lsp-batch-worker.ts",
+      "line": 24,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/rust/lsp-batch-worker.ts",
+      "line": 44,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/rust/lsp-batch-worker.ts",
+      "line": 211,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/lsp-batch-worker.ts",
+      "line": 438,
+      "category": "similar"
+    },
+    {
+      "file": "src/semantic/rust/lsp-batch-worker.ts",
+      "line": 483,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/lsp-client.ts",
+      "line": 17,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/rust/lsp-client.ts",
+      "line": 32,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session-readiness.ts",
+      "line": 11,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session-readiness.ts",
+      "line": 72,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session-readiness.ts",
+      "line": 121,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session-worker.ts",
+      "line": 69,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session-worker.ts",
+      "line": 123,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session-worker.ts",
+      "line": 166,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session-worker.ts",
+      "line": 242,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session-worker.ts",
+      "line": 493,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session-worker.ts",
+      "line": 575,
+      "category": "similar"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session-worker.ts",
+      "line": 676,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session.ts",
+      "line": 491,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session.ts",
+      "line": 629,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session.ts",
+      "line": 650,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session.ts",
+      "line": 864,
+      "category": "twin"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session.ts",
+      "line": 869,
+      "category": "twin"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session.ts",
+      "line": 874,
+      "category": "twin"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session.ts",
+      "line": 879,
+      "category": "twin"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session.ts",
+      "line": 887,
+      "category": "twin"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session.ts",
+      "line": 920,
+      "category": "twin"
+    },
+    {
+      "file": "src/semantic/rust/lsp-session.ts",
+      "line": 925,
+      "category": "twin"
+    },
+    {
+      "file": "src/semantic/rust/provider.ts",
+      "line": 74,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/provider.ts",
+      "line": 364,
+      "category": "similar"
+    },
+    {
+      "file": "src/semantic/rust/provider.ts",
+      "line": 457,
+      "category": "similar"
+    },
+    {
+      "file": "src/semantic/rust/provider.ts",
+      "line": 540,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/rust/scip-occurrence-references.ts",
+      "line": 37,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/semantic/rust/status.ts",
+      "line": 2,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/shared-primitives.ts",
+      "line": 253,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/semantic/shared-primitives.ts",
+      "line": 258,
+      "category": "similar"
+    },
+    {
+      "file": "src/semantic/shared-primitives.ts",
+      "line": 313,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/semantic/shared-primitives.ts",
+      "line": 328,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/semantic/shared-primitives.ts",
+      "line": 337,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/shared-primitives.ts",
+      "line": 475,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/shared-primitives.ts",
+      "line": 625,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/shared-primitives.ts",
+      "line": 809,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/semantic/shared-primitives.ts",
+      "line": 910,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/semantic/shared-primitives.ts",
+      "line": 915,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/symbol-evidence.ts",
+      "line": 43,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/reference-fragment-shadow.ts",
+      "line": 98,
+      "category": "similar"
+    },
+    {
+      "file": "src/semantic/typescript/reference-fragment-shadow.ts",
+      "line": 177,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/semantic/typescript/remote-provider.ts",
+      "line": 60,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/semantic-identity.ts",
+      "line": 17,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/typescript/semantic-identity.ts",
+      "line": 42,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/typescript/semantic-identity.ts",
+      "line": 51,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/session-protocol.ts",
+      "line": 35,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/typescript/session-protocol.ts",
+      "line": 58,
+      "category": "stale"
+    },
+    {
+      "file": "src/semantic/typescript/session-service.ts",
+      "line": 159,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/ts-morph-provider.ts",
+      "line": 132,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/tsserver-provider.ts",
+      "line": 50,
+      "category": "extract"
+    },
+    {
+      "file": "src/semantic/typescript/tsserver-provider.ts",
+      "line": 69,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/ast/ast-core.ts",
+      "line": 27,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/ast/ast-core.ts",
+      "line": 91,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/ast/ast-language.ts",
+      "line": 2,
+      "category": "stale"
+    },
+    {
+      "file": "src/source/ast/ast-runtime.ts",
+      "line": 148,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/ast/ast-runtime.ts",
+      "line": 179,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/facts/ast-facts.ts",
+      "line": 35,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/facts/clojure-facts.ts",
+      "line": 322,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/facts/source-callables.ts",
+      "line": 25,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/facts/source-callables.ts",
+      "line": 41,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/facts/source-calls.ts",
+      "line": 5,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/facts/source-facts.ts",
+      "line": 28,
+      "category": "stale"
+    },
+    {
+      "file": "src/source/facts/source-identifiers.ts",
+      "line": 19,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/facts/source-identifiers.ts",
+      "line": 25,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/facts/source-identifiers.ts",
+      "line": 31,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/facts/source-identifiers.ts",
+      "line": 54,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/facts/source-node-kinds.ts",
+      "line": 2,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/primitives/gitignore-filter.ts",
+      "line": 13,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/primitives/gitignore-filter.ts",
+      "line": 31,
+      "category": "stale"
+    },
+    {
+      "file": "src/source/primitives/import-path-resolver.ts",
+      "line": 158,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/primitives/import-path-resolver.ts",
+      "line": 209,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/primitives/import-path-resolver.ts",
+      "line": 242,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/primitives/import-path-resolver.ts",
+      "line": 308,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/primitives/import-path-resolver.ts",
+      "line": 382,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/primitives/import-path-resolver.ts",
+      "line": 433,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/primitives/import-path-resolver.ts",
+      "line": 544,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/primitives/repository-text.ts",
+      "line": 69,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/primitives/source-fileset.ts",
+      "line": 139,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/primitives/source-stripper.ts",
+      "line": 19,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/react-profile.ts",
+      "line": 35,
+      "category": "stale"
+    },
+    {
+      "file": "src/source/react-profile.ts",
+      "line": 149,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/react-profile.ts",
+      "line": 177,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/react-profile.ts",
+      "line": 365,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/react-profile.ts",
+      "line": 499,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/react-profile.ts",
+      "line": 603,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/vue/vue-profile.ts",
+      "line": 43,
+      "category": "stale"
+    },
+    {
+      "file": "src/source/vue/vue-profile.ts",
+      "line": 84,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/source/vue/vue-profile.ts",
+      "line": 95,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/vue/vue-script-facts.ts",
+      "line": 33,
+      "category": "stale"
+    },
+    {
+      "file": "src/source/vue/vue-script-facts.ts",
+      "line": 78,
+      "category": "extract"
+    },
+    {
+      "file": "src/source/vue/vue-template.ts",
+      "line": 47,
+      "category": "stale"
+    },
+    {
+      "file": "src/source/vue/vue-template.ts",
+      "line": 325,
+      "category": "extract"
+    },
+    {
+      "file": "src/storage/atomic-file.ts",
+      "line": 107,
+      "category": "similar"
+    },
+    {
+      "file": "src/storage/atomic-json.ts",
+      "line": 2,
+      "category": "stale"
+    },
+    {
+      "file": "src/storage/bounded-mailbox.ts",
+      "line": 77,
+      "category": "stale"
+    },
+    {
+      "file": "src/storage/bounded-mailbox.ts",
+      "line": 98,
+      "category": "stale"
+    },
+    {
+      "file": "src/storage/bounded-mailbox.ts",
+      "line": 179,
+      "category": "stale"
+    },
+    {
+      "file": "src/storage/cache-registry.ts",
+      "line": 26,
+      "category": "stale"
+    },
+    {
+      "file": "src/storage/evidence-cache.ts",
+      "line": 29,
+      "category": "stale"
+    },
+    {
+      "file": "src/storage/evidence-cache.ts",
+      "line": 109,
+      "category": "stale"
+    },
+    {
+      "file": "src/storage/evidence-cache.ts",
+      "line": 118,
+      "category": "stale"
+    },
+    {
+      "file": "src/storage/evidence-cache.ts",
+      "line": 170,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/storage/evidence-cache.ts",
+      "line": 474,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/storage/evidence-cache.ts",
+      "line": 507,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/storage/evidence-cache.ts",
+      "line": 562,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/storage/evidence-cache.ts",
+      "line": 594,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/storage/evidence-cache.ts",
+      "line": 678,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/storage/evidence-cache.ts",
+      "line": 698,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/storage/per-db-cache.ts",
+      "line": 175,
+      "category": "similar"
+    },
+    {
+      "file": "src/storage/scip-documents.ts",
+      "line": 11,
+      "category": "stale"
+    },
+    {
+      "file": "src/storage/scip-rows.ts",
+      "line": 94,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/storage/sqlite-generation.ts",
+      "line": 41,
+      "category": "stale"
+    },
+    {
+      "file": "src/storage/sqlite-generation.ts",
+      "line": 62,
+      "category": "stale"
+    },
+    {
+      "file": "src/storage/sqlite-generation.ts",
+      "line": 76,
+      "category": "stale"
+    },
+    {
+      "file": "src/storage/suppression-store.ts",
+      "line": 44,
+      "category": "stale"
+    },
+    {
+      "file": "src/storage/watch-refresh-requests.ts",
+      "line": 48,
+      "category": "stale"
+    },
+    {
+      "file": "src/storage/watch-refresh-requests.ts",
+      "line": 54,
+      "category": "stale"
+    },
+    {
+      "file": "src/storage/watch-refresh-requests.ts",
+      "line": 64,
+      "category": "stale"
+    },
+    {
+      "file": "src/symbols/definition-catalog.ts",
+      "line": 136,
+      "category": "extract"
+    },
+    {
+      "file": "src/symbols/definition-catalog.ts",
+      "line": 409,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/symbols/definition-catalog.ts",
+      "line": 466,
+      "category": "extract"
+    },
+    {
+      "file": "src/symbols/graph/call-graph-evidence.ts",
+      "line": 34,
+      "category": "stale"
+    },
+    {
+      "file": "src/symbols/graph/call-graph-evidence.ts",
+      "line": 46,
+      "category": "stale"
+    },
+    {
+      "file": "src/symbols/graph/call-graph-evidence.ts",
+      "line": 86,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/symbols/graph/call-graph-evidence.ts",
+      "line": 96,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/symbols/graph/call-graph-evidence.ts",
+      "line": 158,
+      "category": "extract"
+    },
+    {
+      "file": "src/symbols/graph/call-graph-evidence.ts",
+      "line": 317,
+      "category": "extract"
+    },
+    {
+      "file": "src/symbols/graph/call-graph-evidence.ts",
+      "line": 805,
+      "category": "extract"
+    },
+    {
+      "file": "src/symbols/graph/file-dep-graph.ts",
+      "line": 99,
+      "category": "extract"
+    },
+    {
+      "file": "src/symbols/identifier-attribution.ts",
+      "line": 64,
+      "category": "extract"
+    },
+    {
+      "file": "src/symbols/identifier-attribution.ts",
+      "line": 253,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/symbols/identifier-attribution.ts",
+      "line": 315,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/symbols/identifier-index.ts",
+      "line": 77,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/symbols/identifier-index.ts",
+      "line": 117,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/symbols/leaf-symbol-index.ts",
+      "line": 144,
+      "category": "extract"
+    },
+    {
+      "file": "src/symbols/references/caller-evidence.ts",
+      "line": 7,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/symbols/references/caller-evidence.ts",
+      "line": 66,
+      "category": "passthrough"
+    },
+    {
+      "file": "src/symbols/references/caller-evidence.ts",
+      "line": 81,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/symbols/references/reference-callers.ts",
+      "line": 25,
+      "category": "extract"
+    },
+    {
+      "file": "src/symbols/references/reference-callers.ts",
+      "line": 53,
+      "category": "extract"
+    },
+    {
+      "file": "src/symbols/references/reference-sites.ts",
+      "line": 41,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/symbols/references/reference-sites.ts",
+      "line": 91,
+      "category": "extract"
+    },
+    {
+      "file": "src/symbols/references/reference-sites.ts",
+      "line": 175,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/symbols/symbol-kind.ts",
+      "line": 16,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/symbols/symbol-kind.ts",
+      "line": 34,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/symbols/symbol-lookup.ts",
+      "line": 48,
+      "category": "extract"
+    },
+    {
+      "file": "src/symbols/symbol-lookup.ts",
+      "line": 116,
+      "category": "extract"
+    },
+    {
+      "file": "src/symbols/symbol-lookup.ts",
+      "line": 154,
+      "category": "extract"
+    },
+    {
+      "file": "src/symbols/symbol-lookup.ts",
+      "line": 518,
+      "category": "extract"
+    },
+    {
+      "file": "src/language-parsers/index.ts",
+      "line": 70,
+      "category": "similar"
+    },
+    {
+      "file": "src/language-parsers/index.ts",
+      "line": 87,
+      "category": "wrapper"
+    },
+    {
+      "file": "src/reindex/index.ts",
+      "line": 418,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/index.ts",
+      "line": 861,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/index.ts",
+      "line": 999,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/index.ts",
+      "line": 1137,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/index.ts",
+      "line": 1451,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/index.ts",
+      "line": 1806,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/index.ts",
+      "line": 2160,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/index.ts",
+      "line": 3023,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/index.ts",
+      "line": 3190,
+      "category": "extract"
+    },
+    {
+      "file": "src/reindex/index.ts",
+      "line": 3404,
+      "category": "similar"
+    }
+  ]
+}

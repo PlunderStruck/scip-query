@@ -1,10 +1,8 @@
 /**
- * Suppression inventory — the detectors' feedback loop.
- *
- * Every `scip-query: ignore-<category>` comment is a ground-truth label a
- * user attached to a finding: "this was wrong, or accepted by design."
- * Reporting suppressed counts beside active counts turns detector precision
- * from a guess into a measured signal.
+ * Inventory of source directives and unexpired configuration records.
+ * Entries record review decisions, including accepted design tradeoffs.
+ * They are not matched-finding counts or measurements of detector precision:
+ * an annotation may outlive its target or never match a current detector.
  */
 import type { ScipDatabase } from '../storage/db.js';
 import { createPerDbValue } from '../storage/per-db-cache.js';
@@ -30,7 +28,7 @@ export interface SuppressionInventory {
 
 // Derived from source text on disk — drops with the other source evidence.
 const inventoryCache = createPerDbValue<SuppressionInventory>('suppression-inventory', {
-  clearGroups: ['whole-project'],
+  clearGroups: ['whole-project', 'source-file'],
 });
 
 export function getSuppressionInventory(db: ScipDatabase): SuppressionInventory {
@@ -86,14 +84,34 @@ function countSourceSuppressions(
   return total;
 }
 
+const SOURCE_SUPPRESSION_CATEGORIES = [
+  'dead',
+  'stale',
+  'wrapper',
+  'passthrough',
+  'drift',
+  'extract',
+  'similar',
+  'twin',
+] as const;
+const CHECK_CATEGORIES = new Map<string, SuppressionCategory>([
+  ['dead-code', 'dead'],
+  ['new-dead', 'dead'],
+  ['twin-drift', 'twin'],
+  ['similar-files', 'similar'],
+  ['similar-signatures', 'similar'],
+  ['recent-duplicates', 'similar'],
+  ['duplicate-bodies', 'similar'],
+  ['duplication', 'similar'],
+  ['passthrough-candidates', 'passthrough'],
+  ['slice-cohesion', 'extract'],
+]);
+
 function normalizeCategory(raw: string | undefined | null): SuppressionCategory {
-  if (!raw) return 'uncategorized';
-  const lower = raw.toLowerCase();
-  if (lower === 'dead-code' || lower === 'new-dead') return 'dead';
-  if (lower.includes('twin')) return 'twin';
-  if (lower.includes('similar') || lower.includes('duplicate')) return 'similar';
-  for (const category of ['wrapper', 'passthrough', 'drift', 'extract', 'stale'] as const) {
-    if (lower.includes(category)) return category;
-  }
-  return 'uncategorized';
+  const lower = raw?.toLowerCase() ?? '';
+  return (
+    SOURCE_SUPPRESSION_CATEGORIES.find((category) => category === lower) ??
+    CHECK_CATEGORIES.get(lower) ??
+    'uncategorized'
+  );
 }

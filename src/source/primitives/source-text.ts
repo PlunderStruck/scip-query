@@ -55,13 +55,12 @@ export function getSourceLines(db: ScipDatabase, relativePath: string): readonly
   });
 }
 
-const SUPPRESS_COMMENT_RE =
-  /^\s*(?:\/\/|#|\/\*+|\*)\s*scip-query[\s:-]*ignore(?:[\s:-]+(dead(?:-code)?|stale|wrapper|passthrough|drift|extract|similar|twin))?\b/i;
+const SUPPRESS_COMMENT_RE = /^\s*(?:\/\/|#|\/\*+|\*)\s*scip-query[\s:-]*ignore(?:[\s:-]+([a-z][\w-]*))?(?![\w-])/i;
 
 export function suppressionCommentCategory(line: string): string | null {
   const match = SUPPRESS_COMMENT_RE.exec(line);
   if (!match) return null;
-  return match[1] ?? '';
+  return match[1]?.toLowerCase() ?? '';
 }
 
 /**
@@ -80,10 +79,17 @@ export function hasSuppressionCommentCategory(
   startLine: number,
   category: string,
 ): boolean {
-  const expected = category.toLowerCase();
+  const expected = canonicalSuppressionCategory(category);
   return suppressionCommentsBeforeDefinition(db, relativePath, startLine).some(
-    (candidate) => candidate.toLowerCase() === expected,
+    (candidate) => candidate === '' || canonicalSuppressionCategory(candidate) === expected,
   );
+}
+
+function canonicalSuppressionCategory(category: string): string {
+  const lower = category.toLowerCase();
+  if (lower === 'dead-code' || lower === 'stale') return 'dead';
+  if (lower === 'wrapper') return 'passthrough';
+  return lower;
 }
 
 function suppressionCommentsBeforeDefinition(db: ScipDatabase, relativePath: string, startLine: number): string[] {

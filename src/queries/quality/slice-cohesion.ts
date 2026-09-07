@@ -20,6 +20,7 @@ import {
   type CandidateScanProgress,
 } from '../internal/candidate-scan.js';
 import { definitionLoc } from '../../symbols/definition-loc.js';
+import { hasSuppressionCommentCategory } from '../../source/primitives/source-text.js';
 
 type TypeScriptModule = typeof TypeScript;
 
@@ -489,7 +490,9 @@ export function sliceCohesion(
     // each file's flow graph and parse are computed once.
     orderScanned: (left, right) =>
       left.relativePath.localeCompare(right.relativePath) || left.startLine - right.startLine,
-    filterCandidate: (definition) => isTypeScriptLike(definition.relativePath),
+    filterCandidate: (definition) =>
+      isTypeScriptLike(definition.relativePath) &&
+      !hasSuppressionCommentCategory(db, definition.relativePath, definition.startLine, 'extract'),
     profile: { name: 'slice-cohesion' },
     onProgress,
     onProfile: opts.onProfile,

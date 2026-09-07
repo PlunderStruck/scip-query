@@ -3,7 +3,7 @@ import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { getCalleeRowsForSymbol } from '../../symbols/graph/call-graph-evidence.js';
-import { getSourceText } from '../../source/primitives/source-text.js';
+import { getSourceText, hasSuppressionCommentCategory } from '../../source/primitives/source-text.js';
 import { definitionSourceSnippet } from './duplicate-bodies.js';
 import {
   computeIdfFromDocFreq,
@@ -996,11 +996,16 @@ function buildCalleeFingerprints(
     'similar.callee-fingerprints.candidates',
     () => {
       const rows = applyScanLimit(
-        index.productionCallableDefinitions({
-          scope,
-          minLoc: 5,
-          sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
-        }),
+        index
+          .productionCallableDefinitions({
+            scope,
+            minLoc: 5,
+            sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
+          })
+          .filter(
+            (definition) =>
+              !hasSuppressionCommentCategory(db, definition.relativePath, definition.startLine, 'similar'),
+          ),
         scanLimit,
       );
       candidateCount = rows.length;
@@ -1655,10 +1660,15 @@ function targetPrunedSourceCandidatesForTarget(
     'similar.source-shape.target-definitions',
     () => {
       const rows = applyScanLimit(
-        index.productionCallableDefinitions({
-          files,
-          sortByLocDesc: typeof opts.scanLimit === 'number' && opts.scanLimit > 0,
-        }),
+        index
+          .productionCallableDefinitions({
+            files,
+            sortByLocDesc: typeof opts.scanLimit === 'number' && opts.scanLimit > 0,
+          })
+          .filter(
+            (definition) =>
+              !hasSuppressionCommentCategory(db, definition.relativePath, definition.startLine, 'similar'),
+          ),
         opts.scanLimit,
       );
       definitionCount = rows.length;
@@ -1710,11 +1720,15 @@ function buildSourceFingerprints(db: ScipDatabase, opts: { scanLimit?: number } 
   const index = new ProjectIndex(db);
   const { scanLimit } = opts;
   // The shared production gate owns candidate policy (tests, rust test
-  // modules, ignored paths, suppression comments) — no local re-filtering.
+  // modules, ignored paths); this analysis additionally owns ignore-similar.
   const definitions = applyScanLimit(
-    index.productionCallableDefinitions({
-      sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
-    }),
+    index
+      .productionCallableDefinitions({
+        sortByLocDesc: typeof scanLimit === 'number' && scanLimit > 0,
+      })
+      .filter(
+        (definition) => !hasSuppressionCommentCategory(db, definition.relativePath, definition.startLine, 'similar'),
+      ),
     scanLimit,
   );
   return sourceFingerprintsForDefinitions(db, definitions);

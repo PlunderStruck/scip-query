@@ -17,7 +17,7 @@ import type { ScipDatabase } from '../storage/db.js';
 import { fileContentHash } from '../storage/evidence-cache.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
 import { detectAstLanguage, getAst, type SyntaxNode, type Tree } from '../source/ast.js';
-import { getSourceText } from '../source/primitives/source-text.js';
+import { getSourceText, suppressionCommentCategory } from '../source/primitives/source-text.js';
 
 export type ExclusionDisposition = 'exclude' | 'implicit-usage';
 
@@ -225,21 +225,12 @@ function mayContainJsExclusion(source: string): boolean {
   return source.includes('use') && REACT_HOOK_DECLARATION_RE.test(source);
 }
 
-/**
- * Honor `// scip-query: ignore-dead` (or `// scip-query-ignore: dead-code`)
- * comments immediately before a definition. Lets users suppress known
- * false positives without modifying the detector's heuristics.
- *
- * Scoped to this file's own detector categories (dead/stale) only --
- * distinct from source/source-text.ts's SUPPRESS_COMMENT_RE, which
- * recognizes the full category list (wrapper, passthrough, drift, extract,
- * similar, ...) and is anchored to a comment-marker line prefix because it
- * scans raw text lines. This one runs against AST comment-node text the
- * caller has already isolated, so no line-prefix anchor is needed.
- */
-const DEAD_STALE_SUPPRESS_COMMENT_RE = /scip-query[\s:-]*ignore[\s:-]*(?:dead(?:-code)?|stale)?/i;
+/** Dead-code exclusions accept only their own directives, including legacy stale. */
 function isSuppressionComment(text: string): boolean {
-  return DEAD_STALE_SUPPRESS_COMMENT_RE.test(text);
+  return text.split(/\r?\n/).some((line) => {
+    const category = suppressionCommentCategory(line);
+    return category === '' || category === 'dead' || category === 'dead-code' || category === 'stale';
+  });
 }
 
 function collectSuppressionExclusions(

@@ -13,7 +13,7 @@ import {
   isInRustTestModule,
   isRustTraitImplMember,
 } from '../../symbols/symbol-parser.js';
-import { hasSuppressionComment } from '../../source/primitives/source-text.js';
+import { hasSuppressionCommentCategory } from '../../source/primitives/source-text.js';
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; callable eligibility is one shared detector policy.
 export function productionCallableDefinitions(
@@ -135,7 +135,8 @@ function isUnsuppressedProductionCallable(
   const relativePath = definition.relativePath;
   if (getFileKind(relativePath) === 'test') return false;
   if (isInRustTestModule(definition.symbol)) return false;
-  return includeSuppressed || !hasSuppressionComment(db, relativePath, definition.startLine);
+  // Each detector owns its named category; extraction advice must not hide a stub.
+  return includeSuppressed || !hasSuppressionCommentCategory(db, relativePath, definition.startLine, '');
 }
 
 function candidateDefinitions(

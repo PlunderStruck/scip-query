@@ -564,7 +564,7 @@ function collectNextAnchorCallsiteCandidates(
       const selection = selectGraphCallsite(leaf, target.row.callsiteLine, targetCountByLeaf.get(leaf) === 1);
       if (!selection) continue;
       const { callsite } = selection;
-      const strength = calleeRowEvidenceStrength(target.row.source);
+      const strength = staticCallEvidenceStrength(target.row.source);
       appendGraphCandidate(
         leaf,
         selection,
@@ -1196,12 +1196,8 @@ function countResolvedTargetsByLeaf(targets: readonly ResolvedCalleeTarget[]): M
   return counts;
 }
 
-function calleeRowEvidenceStrength(source: CalleeEvidenceSource): ExplorationEvidenceStrength {
-  return staticCallEvidenceStrength(source);
-}
-
 function calleeRowEvidenceRank(source: CalleeEvidenceSource): number {
-  return calleeRowEvidenceStrength(source) === 'exact' ? 2 : 1;
+  return staticCallEvidenceStrength(source) === 'exact' ? 2 : 1;
 }
 
 function materialLineForCallsite(

@@ -6,6 +6,7 @@ import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { getResolvedReferenceSites } from '../../symbols/references/reference-sites.js';
 import { shortenSymbol } from '../../symbols/symbol-parser.js';
 import { dead } from './dead.js';
+import { hasSuppressionCommentCategory } from '../../source/primitives/source-text.js';
 
 export interface CleanupPlanEntry {
   symbol: string;
@@ -161,7 +162,7 @@ function resolveCascadeCandidate(db: ScipDatabase, index: ProjectIndex, name: st
   if (isEntrySurface(db, definition.relativePath)) return undefined;
   if (isRootedSymbol(db, definition.symbol, definition.relativePath)) return undefined;
   if (index.fileKind(definition.relativePath) === 'test') return undefined;
-  if (index.hasSuppressionComment(definition)) return undefined;
+  if (hasSuppressionCommentCategory(db, definition.relativePath, definition.startLine, 'dead')) return undefined;
 
   return definition;
 }

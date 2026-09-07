@@ -1674,7 +1674,7 @@ function expandStructuralCallees(
       toFile: target.relativePath,
       toSymbol: target.symbol,
       line: null,
-      strength: calleeEvidenceStrength(callee.source),
+      strength: staticCallEvidenceStrength(callee.source),
     });
   }
 }
@@ -3327,10 +3327,6 @@ function topologyId(...parts: readonly string[]): string {
 
 function symbolTopologyNodeId(symbol: string): string {
   return topologyId('symbol', symbol);
-}
-
-function calleeEvidenceStrength(source: CalleeEvidenceSource): SystemMapRelationStrength {
-  return staticCallEvidenceStrength(source);
 }
 
 function buildSystemMapExpansion(

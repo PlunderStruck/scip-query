@@ -15,6 +15,7 @@ import { ProjectIndex } from '../internal/project-index.js';
 import { compareDefinitionsBySmallestLoc, definitionLoc } from '../query-utils.js';
 import { runCandidateAnalysis } from '../internal/candidate-scan.js';
 import { boundaryEvidenceForSurfaces } from './boundary-evidence.js';
+import { hasSuppressionCommentCategory } from '../../source/primitives/source-text.js';
 
 export type PassthroughActionTier = 'direct' | 'signal';
 
@@ -236,5 +237,8 @@ function getPassthroughCandidateSymbols(
       // rather than direct inline/delete advice.
       excludeRustTraitImplMembers: true,
     })
-    .filter((definition) => !isClojureMacroDefinition(db, definition));
+    .filter((definition) => !isClojureMacroDefinition(db, definition))
+    .filter(
+      (definition) => !hasSuppressionCommentCategory(db, definition.relativePath, definition.startLine, 'passthrough'),
+    );
 }

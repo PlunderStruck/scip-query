@@ -19,6 +19,7 @@
  * three different skip-dir lists. Vue support touched all three; the next
  * file type would too.
  */
+import { registerCacheClear } from '../../storage/cache-registry.js';
 import { readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { extname, join } from 'node:path';
@@ -174,8 +175,13 @@ export function sourceFrameworkApplicability(db: ScipDatabase, opts: { scope?: s
   return { react, vue };
 }
 
-// Derived from the read-only index — valid for the connection's lifetime.
-const SOURCE_FILES_CACHE = createPerDbCache<string, string[]>('source-files', { clearGroups: [] });
+// Includes live disk membership. Every file change can alter every extension view.
+const SOURCE_FILES_CACHE = createPerDbCache<string, string[]>('source-files', { clearGroups: ['whole-project'] });
+registerCacheClear({
+  name: 'source-files-membership',
+  groups: ['source-file'],
+  clearAll: (db) => SOURCE_FILES_CACHE.invalidateAll(db),
+});
 
 function listProjectSources(absRoot: string, extensions: ReadonlySet<string>): Set<string> {
   return listGitSources(absRoot, extensions) ?? listOnDiskSources(absRoot, extensions);
@@ -183,7 +189,7 @@ function listProjectSources(absRoot: string, extensions: ReadonlySet<string>): S
 
 function listGitSources(absRoot: string, extensions: ReadonlySet<string>): Set<string> | null {
   try {
-    const output = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
+    const output = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
       cwd: absRoot,
       encoding: 'utf-8',
       timeout: 10_000,
@@ -191,8 +197,7 @@ function listGitSources(absRoot: string, extensions: ReadonlySet<string>): Set<s
       stdio: ['ignore', 'pipe', 'ignore'],
     });
     const out = new Set<string>();
-    for (const line of output.split('\n')) {
-      const file = line.trim();
+    for (const file of output.split('\0')) {
       if (!file) continue;
       if (hasSkippedSegment(file)) continue;
       if (!extensions.has(extname(file).toLowerCase())) continue;
@@ -212,12 +217,8 @@ function listOnDiskSources(absRoot: string, extensions: ReadonlySet<string>): Se
   const out = new Set<string>();
   const visit = (relDir: string): void => {
     const absDir = relDir ? join(absRoot, relDir) : absRoot;
-    let entries: { name: string; isDirectory(): boolean }[];
-    try {
-      entries = readdirSync(absDir, { withFileTypes: true });
-    } catch {
-      return;
-    }
+    // A failed directory read cannot establish a complete source inventory.
+    const entries = readdirSync(absDir, { withFileTypes: true });
     for (const entry of entries) {
       if (SKIP_DIRS.has(entry.name)) continue;
       if (entry.isDirectory()) {

@@ -113,24 +113,6 @@ function withReferenceProvenance(
   return sites.map((site) => ({ ...site, provenance }));
 }
 
-// scip-query: ignore-wrapper — named precision stage used by reference
-// reporting; keeps SCIP chunk reads separate from source-line refinement.
-export function resolvedCandidateLines(
-  db: ScipDatabase,
-  match: { symbolId: number; relativePath: string; startLine: number; endLine: number },
-  identifier: string | null,
-): Map<string, number[]> {
-  return resolvedCandidateLinesFromChunks(
-    db,
-    referenceChunksByFile(db, match.symbolId),
-    {
-      ...match,
-      symbol: db.get<{ symbol: string }>('SELECT symbol FROM global_symbols WHERE id = ?', match.symbolId)?.symbol,
-    },
-    identifier,
-  );
-}
-
 function resolvedCandidateLinesFromChunks(
   db: ScipDatabase,
   chunksByFile: ReadonlyMap<string, readonly ReferenceChunk[]>,
@@ -142,10 +124,6 @@ function resolvedCandidateLinesFromChunks(
     fileLines.set(file, resolvedLinesForFile(db, file, chunks, match, identifier));
   }
   return fileLines;
-}
-
-function referenceChunksByFile(db: ScipDatabase, symbolId: number): Map<string, ReferenceChunk[]> {
-  return referenceChunksBySymbol(db, [symbolId]).get(symbolId) ?? new Map();
 }
 
 function referenceChunksBySymbol(

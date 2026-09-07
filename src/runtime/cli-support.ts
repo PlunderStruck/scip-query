@@ -1393,11 +1393,6 @@ function renderHealthAxes(report: HealthReport): void {
   }
 }
 
-// scip-query: ignore-extract — reviewed E1 workflow owner; ordered policy and shared state stay in this named operation.
-export async function runIsolatedDiffImpactReport(opts: DiffImpactCliOptions): Promise<DiffImpactResult> {
-  return (await runIsolatedDiffImpactReportWithEvidence(opts)).result;
-}
-
 export async function runIsolatedDiffImpactReportWithEvidence(
   opts: DiffImpactCliOptions,
 ): Promise<EvidenceBoundAnalysis<DiffImpactResult>> {

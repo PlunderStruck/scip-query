@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { getSuppressionInventory } from '../../src/analysis/suppressions.js';
 import type { ScipQueryConfig } from '../../src/domain/types.js';
+import { clearRegisteredCaches } from '../../src/storage/cache-registry.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 
 function createSuppressionFixtureDb(dbPath: string): void {
@@ -85,6 +86,17 @@ describe('suppression inventory', () => {
       expect(inventory.byCategory.stale).toBe(0);
       expect(inventory.byCategory.twin).toBe(1);
       expect(inventory.byCategory.similar).toBe(1);
+      writeFileSync(
+        join(srcDir, 'suppressions.ts'),
+        '// scip-query: ignore-dead\nexport function removed() {}\n// scip-query: ignore-extract-extra\n',
+      );
+      clearRegisteredCaches(db, { groups: ['source-file'], file: 'src/suppressions.ts' });
+      const refreshed = getSuppressionInventory(db);
+      expect(refreshed.total).toBe(3);
+      expect(refreshed.byCategory.uncategorized).toBe(1);
+      expect(refreshed.byCategory.extract).toBe(0);
+      expect(refreshed.byCategory.dead).toBe(1);
+      expect(refreshed.byCategory.wrapper).toBe(0);
     } finally {
       db?.close();
       rmSync(tempDir, { recursive: true, force: true });

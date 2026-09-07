@@ -118,6 +118,16 @@ describe('framework pattern exclusions', () => {
     );
   });
 
+  it.each(['extract', 'wrapper', 'similar', 'unknown-check', 'deadly'])(
+    'does not turn ignore-%s into a dead-code exclusion',
+    (category) => {
+      withFrameworkFixture(
+        { 'src/ordinary.ts': `// scip-query: ignore-${category}\nexport function ordinary() { return true; }\n` },
+        (db) => expect(getDefinitionExclusions(db, 'src/ordinary.ts')).toEqual([]),
+      );
+    },
+  );
+
   it('marks generated Rust files as hard exclusions', () => {
     withFrameworkFixture(
       {
