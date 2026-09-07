@@ -1,4 +1,4 @@
 interface:
-  display_name: "SCIP Plan"
-  short_description: "Plan concrete changes and verification."
-  default_prompt: "Use $scip-plan to write an executable plan grounded in owners, consumers, preserved behavior, and checks."
+  display_name: 'SCIP Plan'
+  short_description: 'Map existing flows and plan around shared owners.'
+  default_prompt: 'Use $scip-plan to map the existing system end to end, inspect comparable features and conventions, and document the shared path, exact code to reuse or extend, and integration checks before proposing implementation steps.'
