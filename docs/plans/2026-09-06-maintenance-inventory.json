@@ -6731,9 +6731,9 @@
           "name": "runWatchServiceLifecycle"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "assessed-retained",
+      "assessment": "Fixed ownership finalization after failed mailbox worker termination: terminal mailbox failure participates in degraded finalization before records or lock are released. Keep lifecycle ordering and execution/shutdown error aggregation in one owner; remaining 12/12 warning stays visible.",
+      "verification": "Actual WorkerRequestLane termination-failure regression released ownership before the fix; lifecycle cases now cover successful stop, failed termination, and simultaneous startup/termination failures. 24 focused tests pass; source review accounted with no blockers."
     },
     {
       "id": "complexity:src/runtime/watch-service-prune.ts:pruneOrphanWatchServices",

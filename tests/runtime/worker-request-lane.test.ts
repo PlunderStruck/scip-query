@@ -5,7 +5,7 @@ import {
   type RequestWorkerLike,
   type WorkerLaneResponse,
 } from '../../src/runtime/worker-request-lane.js';
-import { runWatchServiceLoopIteration } from '../../src/runtime/watch-server.js';
+import { runWatchServiceLifecycle, runWatchServiceLoopIteration } from '../../src/runtime/watch-server.js';
 
 interface Payload {
   value: string;
@@ -318,6 +318,76 @@ describe('WorkerRequestLane', () => {
     expect(semanticWorker.posts).toHaveLength(1);
     await Promise.all([indexLane.close(), semanticLane.close()]);
   });
+
+  it.each([
+    { fails: false, executionFails: false },
+    { fails: true, executionFails: false },
+    { fails: true, executionFails: true },
+  ])(
+    'finalizes service ownership only after mailbox termination is confirmed (%j)',
+    async ({ fails, executionFails }) => {
+      const executionError = new Error('watcher startup failed');
+      const worker = new FakeWorker();
+      if (fails) worker.termination = Promise.reject(new Error('termination unavailable'));
+      let fatal: Error | undefined;
+      const events: string[] = [];
+      const lane = new WorkerRequestLane<Payload, string, Status>({
+        name: 'test lane',
+        createWorker: () => worker,
+        onComplete: () => {},
+        onReject: () => events.push('request-rejected'),
+        onStatus: () => {},
+        onFatal: (error) => {
+          fatal = error;
+        },
+      });
+      lane.start(request('active'));
+      const lifecycle = runWatchServiceLifecycle({
+        watcher: {
+          start() {
+            if (executionFails) throw executionError;
+          },
+        },
+        shutdown: { begin: async () => ({ state: 'stopped' }) },
+        stopSignal() {},
+        initializeFreshness: () => null,
+        markReady() {},
+        recordActivity() {},
+        persistState() {},
+        requestRefresh() {},
+        stopRequested: () => true,
+        processIndexRequests: () => 0,
+        processSemanticRequests: () => 0,
+        afterMailboxPoll() {},
+        shouldStop: () => true,
+        wait: async () => {},
+        closeLanes: () => lane.close(),
+        mailboxFatalError: () => fatal,
+        finalizeStopped: () => {
+          events.push('ownership-released');
+        },
+        finalizeDegraded: (reasons) => {
+          events.push('degraded');
+          return new Error(reasons.join('; '));
+        },
+      });
+      if (fails) {
+        await expect(lifecycle).rejects.toMatchObject({
+          errors: [
+            executionFails
+              ? executionError
+              : expect.objectContaining({ message: expect.stringContaining('termination failed') }),
+            expect.objectContaining({ message: expect.stringContaining('termination failed') }),
+          ],
+        });
+        expect(fatal?.message).toContain('termination failed');
+        expect(events).toEqual(['degraded']);
+      } else {
+        await expect(lifecycle).resolves.toBeUndefined();
+        expect(events).toEqual(['request-rejected', 'ownership-released']);
+      }
+    },
+  );
 
   it('fails closed without rejecting the claim when Worker termination cannot be joined', async () => {
     const worker = new FakeWorker();

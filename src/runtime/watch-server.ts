@@ -274,8 +274,8 @@ function createWatchServiceMaintenance(input: {
   };
 }
 
-async function runWatchServiceLifecycle(input: {
-  watcher: Watcher;
+export async function runWatchServiceLifecycle(input: {
+  watcher: Pick<Watcher, 'start'>;
   shutdown: WatchServiceShutdown;
   stopSignal(): void;
   initializeFreshness(): RefreshTrigger | null;
@@ -332,8 +332,7 @@ async function runWatchServiceLifecycle(input: {
     const watcherStop = input.shutdown.begin();
     await input.closeLanes();
     const stopResult = await watcherStop;
-    if (stopResult.state === 'stopped') input.finalizeStopped();
-    else shutdownError = input.finalizeDegraded(stopResult.reasons);
+    shutdownError = finalizeWatchServiceShutdown(input, stopResult);
   }
   const mailboxFatalError = input.mailboxFatalError();
   if (!executionFailed && mailboxFatalError) {
@@ -345,6 +344,23 @@ async function runWatchServiceLifecycle(input: {
   }
   if (executionFailed) throw executionError;
   if (shutdownError) throw shutdownError;
+}
+
+function finalizeWatchServiceShutdown(
+  input: Pick<
+    Parameters<typeof runWatchServiceLifecycle>[0],
+    'mailboxFatalError' | 'finalizeStopped' | 'finalizeDegraded'
+  >,
+  stopResult: WatcherStopResult,
+): Error | undefined {
+  const reasons = stopResult.state === 'stopped' ? [] : [...stopResult.reasons];
+  const mailboxError = input.mailboxFatalError();
+  // Lane.close can resolve after a failed Worker termination. The fatal
+  // observation must participate in ownership finalization, not just exit reporting.
+  if (mailboxError) reasons.push(mailboxError.message);
+  if (reasons.length > 0) return input.finalizeDegraded(reasons);
+  input.finalizeStopped();
+  return undefined;
 }
 
 /** Documents in the accepted index, or zero when it cannot be read; sizes the compiler workers. */

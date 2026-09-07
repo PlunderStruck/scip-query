@@ -130,3 +130,21 @@ Cleanup ownership follow-up: execution evidence identifies ensureWatchService an
 - Final source review: accounted, no blocking findings. pollGitState is reduced from 18/16 to 13/13 cyclomatic/cognitive while preserving the recovered baseline. Marked assessed-retained with its remaining warning visible.
 - API verification caught private Watcher declaration changes from the publication-cache batch. Compared constructor and all non-private members with the TypeScript AST: identical. Recorded a compatible correction in docs/api/changes/b74137d6c422ca9c.json rather than silently accepting a failing check.
 - Scope still open: 634 original scanner records pending, plus broader command/skill and external-repository validation. Watcher daemon lifecycle is the next inspection; do not infer complete cleanup coverage from controller tests alone.
+
+### Newly confirmed: daemon finalization after mailbox worker termination failure
+
+- WorkerRequestLane.terminateWorker catches termination failure, reports onFatal, and resolves false. close() resolves void even for that failure. The daemon waits for closeLanes, then finalizes stopped and removes state/activity/releases its lifetime lock solely from watcher.stop(), before it checks mailboxFatalError.
+- Required correction: retain ownership and publish degraded shutdown when mailbox workers cannot be confirmed stopped; preserve execution and shutdown errors. Add a lifecycle-level regression exercising the actual lane termination contract, not only an isolated callback expectation. Do not mark runWatchServiceLifecycle assessed until this is fixed and verified.
+
+#### Daemon finalization correction
+
+- Added a lifecycle-level test using the actual WorkerRequestLane. Before the fix, failed worker termination produced ownership-released; afterward it produces degraded, preserves the fatal reason, and retains any simultaneous startup error in the aggregate. Successful termination still rejects the outstanding request before releasing ownership.
+- The lifecycle now combines the watcher stop result with terminal mailbox observations before choosing its finalization operation. Its complexity is 12/12; the remaining warning is assessed-retained, not suppressed. The lifecycle function is exported only from its internal module for direct orchestration testing; public API verification remains required.
+- 24 focused tests, TypeScript check, lint, and accounted source review pass. Build/full-suite verification pending at this checkpoint. Next: verify this batch, then exercise the current version in the authorized dev-agent / LaunchPoint environment and continue the remaining inventory.
+
+#### Validated daemon checkpoint and VM rollout preparation
+
+- Full suite: 3,058 tests /347 files pass. Build, public API (b74137d6c422ca9c), public consumer compilation, skill links, lint and typecheck pass. No blocking source-review findings; diff-impact artifact /tmp/watch-lifecycle-impact.json retains its stated index coverage limits.
+- VM account: launchpoint-agent through ssh dev-agent. Existing global prefix /home/launchpoint-agent/.local; binary .local/bin/scip-query. Noninteractive SSH does not include this prefix in PATH, so rollout uses its absolute executable path. Interactive profile resolves the existing installation correctly.
+- Current package: /tmp/scip-query-maintenance-20260906.tgz on VM (local npm pack shasum 65d379fd68b0b69919f86ed726ab88433c0137c6). Old installed package saved via npm pack on VM; its filename is recorded in /tmp/scip-before-upgrade-package.json, under /tmp. Preserve that rollback artifact until verification completes.
+- Four previous watcher roots recorded on VM in /tmp/scip-upgrade-watcher-roots.json. All confirmed idle with no pending or claimed refresh requests. Rollout must stop and then restart all four around replacement. Main LaunchPoint index was fresh before rollout; state /tmp/scip-maintenance-launchpoint-status-before.json. Do not leave these services stopped across compaction.
