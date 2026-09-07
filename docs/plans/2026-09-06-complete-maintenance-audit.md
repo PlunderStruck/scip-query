@@ -148,3 +148,15 @@ Cleanup ownership follow-up: execution evidence identifies ensureWatchService an
 - VM account: launchpoint-agent through ssh dev-agent. Existing global prefix /home/launchpoint-agent/.local; binary .local/bin/scip-query. Noninteractive SSH does not include this prefix in PATH, so rollout uses its absolute executable path. Interactive profile resolves the existing installation correctly.
 - Current package: /tmp/scip-query-maintenance-20260906.tgz on VM (local npm pack shasum 65d379fd68b0b69919f86ed726ab88433c0137c6). Old installed package saved via npm pack on VM; its filename is recorded in /tmp/scip-before-upgrade-package.json, under /tmp. Preserve that rollback artifact until verification completes.
 - Four previous watcher roots recorded on VM in /tmp/scip-upgrade-watcher-roots.json. All confirmed idle with no pending or claimed refresh requests. Rollout must stop and then restart all four around replacement. Main LaunchPoint index was fresh before rollout; state /tmp/scip-maintenance-launchpoint-status-before.json. Do not leave these services stopped across compaction.
+
+#### VM replacement completed
+
+- Installed the validated 9ce8a0de runtime package into the existing /home/launchpoint-agent/.local global prefix. Compared all 452 tarball files against installed bytes: zero differences. Executable still resolves to the single existing global package path; verification on VM: /tmp/scip-maintenance-upgrade-verification.json.
+- All four previously running watchers were stopped and successfully restarted: main PID875597, worktree c260706c PID875645, bcff7c10 PID875699, 1c0ac393 PID875777. No stopped service remains from this rollout. Restart records: /tmp/scip-maintenance-watcher-restarts.json.
+- LaunchPoint source health and full module inventory are running with the replacement binary. Outputs /tmp/scip-maintenance-launchpoint-health.json and /tmp/scip-maintenance-launchpoint-modules.json on VM. Post-install status /tmp/scip-maintenance-launchpoint-status-after.json pending. Preserve unrelated docs/benchmarks/2026-09-06-launchpoint-backend-validation.md.
+
+#### LaunchPoint validation complete for this runtime batch
+
+Full results and limitations: docs/benchmarks/2026-09-06-maintenance-vm-revalidation.md. Accounted TS/JS scan: 5,652 files, 58,723 functions; one static import cycle, 77 duplicate candidates, 2,275 complexity candidates. All four cycle imports and two complete duplicate function bodies checked against current source. Full module inventory contains 1,386 groups, including 915 without findings. Existing architecture policy covers only 28 files; no whole-repository architectural quality claim is supported. Main index remains fresh and watcher idle after global replacement. Application source was not changed.
+
+Still open: 633 original maintenance records remain pending; current command/skill contract coverage and a controlled cheaper-model usefulness trial are not complete. A live VM observation also showed activity-window timestamps older than the latest heartbeat; inspect whether rendering clearly qualifies the observation time before treating this as a reporting bug.
