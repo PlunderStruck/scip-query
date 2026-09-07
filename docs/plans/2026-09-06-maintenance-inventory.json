@@ -916,9 +916,14 @@
           "name": "collectRuntimeBoundaryGraph"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Ranked complexity batch eight: 31/25 to 9/6. Separated extraction planning, retained graph materialization and HTTP/carrier phases with reuse and coverage guarantees unchanged.",
+      "verification": [
+        "154 focused tests across seven files passed.",
+        "Full suite: 3133 tests across 350 files passed.",
+        "Build, source types, changed-file lint, format, public API/consumer and skill links passed.",
+        "Fresh index and diff-impact; accounted 563-file source health reports 617 complexity findings with no reported duplication or configured dependency violation."
+      ]
     },
     {
       "id": "complexity:src/queries/navigation/code.ts:supportedLanguageFromPath",
@@ -931,9 +936,14 @@
           "name": "supportedLanguageFromPath"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Ranked complexity batch eight: 31/1 to 2/0. Exact 30-extension canonical lookup replaces repeated switch cases.",
+      "verification": [
+        "154 focused tests across seven files passed.",
+        "Full suite: 3133 tests across 350 files passed.",
+        "Build, source types, changed-file lint, format, public API/consumer and skill links passed.",
+        "Fresh index and diff-impact; accounted 563-file source health reports 617 complexity findings with no reported duplication or configured dependency violation."
+      ]
     },
     {
       "id": "complexity:src/reindex/typescript-incremental-index.ts:tryMaterializeTypeScriptIncrementalIndex",
@@ -946,9 +956,14 @@
           "name": "tryMaterializeTypeScriptIncrementalIndex"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Ranked complexity batch eight: 31/38 to 9/10. Separated graph planning, eligibility, document batches and ordered SCIP/overlay writes, preserving timing and failure handling.",
+      "verification": [
+        "154 focused tests across seven files passed.",
+        "Full suite: 3133 tests across 350 files passed.",
+        "Build, source types, changed-file lint, format, public API/consumer and skill links passed.",
+        "Fresh index and diff-impact; accounted 563-file source health reports 617 complexity findings with no reported duplication or configured dependency violation."
+      ]
     },
     {
       "id": "complexity:src/queries/cleanup/similar.ts:similarAllCount.<callback:profileSpan:1>.<callback:profileSpan:1>",
@@ -981,9 +996,14 @@
           "name": "docDrift"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Ranked complexity batch eight: 28/45 to 6/6. Separated doc selection and per-document reference/co-change evidence while preserving snapshot/detail policies and ranking.",
+      "verification": [
+        "154 focused tests across seven files passed.",
+        "Full suite: 3133 tests across 350 files passed.",
+        "Build, source types, changed-file lint, format, public API/consumer and skill links passed.",
+        "Fresh index and diff-impact; accounted 563-file source health reports 617 complexity findings with no reported duplication or configured dependency violation."
+      ]
     },
     {
       "id": "complexity:src/reindex/typescript-index-protocol.ts:parseTypeScriptIndexEnvelope",
@@ -996,9 +1016,14 @@
           "name": "parseTypeScriptIndexEnvelope"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Ranked complexity batch eight: 30/13 to 10/7. Separated version normalization, common/mailbox fields and operation verification using the unmodified wire request.",
+      "verification": [
+        "154 focused tests across seven files passed.",
+        "Full suite: 3133 tests across 350 files passed.",
+        "Build, source types, changed-file lint, format, public API/consumer and skill links passed.",
+        "Fresh index and diff-impact; accounted 563-file source health reports 617 complexity findings with no reported duplication or configured dependency violation."
+      ]
     },
     {
       "id": "complexity:src/source/primitives/repository-text.ts:scanRepositoryText",

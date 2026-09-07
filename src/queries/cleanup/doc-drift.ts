@@ -164,31 +164,63 @@ export function docDrift(
   const findings: DocDriftFinding[] = [];
   let docsScanned = 0;
   for (const docFile of scan.docFiles) {
-    if (doc !== undefined && !docFile.includes(doc)) continue;
-    // Explicitly requested docs bypass the archival filter (detail mode).
-    if (doc === undefined && !isLivingDoc(db, docFile)) continue;
-    if (doc !== undefined && !projectFileExists(db.config.projectRoot, docFile)) continue;
-    const snapshot = isSnapshotDoc(db, docFile);
-    if (snapshot && !includeSnapshotExcluded) continue;
+    const snapshot = selectedDocSnapshot(db, docFile, doc, includeSnapshotExcluded);
+    if (snapshot === null) continue;
     docsScanned += 1;
-    const { value: docLastChangedAt, estimated: docLastChangedAtEstimated } = docLastChangedAtFor(
-      db,
-      docFile,
-      scan.changeTimes.get(docFile),
-    );
-    const docIntent = classifyDocDriftIntent(db, docFile);
+    const finding = docDriftFinding(db, scan, docFile, snapshot, minCoupling);
+    if (finding) findings.push(finding);
+  }
 
-    const subjects = new Map<string, DocDriftSubject>();
+  findings.sort((left, right) => right.staleness - left.staleness);
+  return {
+    available: true,
+    commitsAnalyzed: scan.historyCommitCount,
+    docsScanned,
+    findings: findings.slice(0, limit),
+  };
+}
 
-    // Evidence 1: content references.
-    const { resolved, broken, citations } = extractFileReferences(
-      db,
-      docFile,
-      scan.tracked,
-      scan.trackedBySuffix,
-      scan.everSeenInHistory,
-    );
-    const citationsByFile = new Map(citations.map((citation) => [citation.file, citation]));
+/** Null excludes a document; false retains an ordinary current document. */
+function selectedDocSnapshot(
+  db: ScipDatabase,
+  docFile: string,
+  doc: string | undefined,
+  includeSnapshotExcluded: boolean,
+): boolean | null {
+  if (doc !== undefined && !docFile.includes(doc)) return null;
+  // Explicitly requested docs bypass the archival filter (detail mode).
+  if (doc === undefined && !isLivingDoc(db, docFile)) return null;
+  if (doc !== undefined && !projectFileExists(db.config.projectRoot, docFile)) return null;
+  const snapshot = isSnapshotDoc(db, docFile);
+  return snapshot && !includeSnapshotExcluded ? null : snapshot;
+}
+
+function docDriftFinding(
+  db: ScipDatabase,
+  scan: DocDriftScanIndex,
+  docFile: string,
+  snapshot: boolean,
+  minCoupling: number,
+): DocDriftFinding | null {
+  const { value: docLastChangedAt, estimated: docLastChangedAtEstimated } = docLastChangedAtFor(
+    db,
+    docFile,
+    scan.changeTimes.get(docFile),
+  );
+  const docIntent = classifyDocDriftIntent(db, docFile);
+
+  const subjects = new Map<string, DocDriftSubject>();
+
+  // Evidence 1: content references.
+  const { resolved, broken, citations } = extractFileReferences(
+    db,
+    docFile,
+    scan.tracked,
+    scan.trackedBySuffix,
+    scan.everSeenInHistory,
+  );
+  const citationsByFile = new Map(citations.map((citation) => [citation.file, citation]));
+  const addReferenceSubjects = (): void => {
     for (const referenced of resolved) {
       if (referenced === docFile || DOC_FILE_PATTERN.test(referenced)) continue;
       const changesSince = (scan.changeTimes.get(referenced) ?? []).filter(
@@ -206,8 +238,8 @@ export function docDrift(
         citedLines: citation?.lineReferences,
       });
     }
-
-    // Evidence 2: historical co-change.
+  };
+  const mergeCoChangeSubjects = (): void => {
     for (const [codeFile, together] of scan.coupling.get(docFile) ?? []) {
       if (together < minCoupling) continue;
       if (!scan.tracked.has(codeFile)) continue;
@@ -230,30 +262,23 @@ export function docDrift(
         });
       }
     }
+  };
+  addReferenceSubjects();
+  mergeCoChangeSubjects();
+  if (subjects.size === 0 && broken.length === 0) return null;
 
-    if (subjects.size === 0 && broken.length === 0) continue;
-
-    const ordered = [...subjects.values()].sort(
-      (left, right) => right.changesSinceDocUpdate - left.changesSinceDocUpdate,
-    );
-    findings.push({
-      doc: docFile,
-      docLastChangedAt,
-      // Broken references weigh heavily — the spec cites deleted code.
-      staleness: ordered.reduce((sum, subject) => sum + subject.changesSinceDocUpdate, 0) + broken.length * 10,
-      subjects: ordered,
-      brokenReferences: broken,
-      ...(snapshot ? { snapshotExcluded: true } : {}),
-      ...(docLastChangedAtEstimated ? { docLastChangedAtEstimated: true } : {}),
-    });
-  }
-
-  findings.sort((left, right) => right.staleness - left.staleness);
+  const ordered = [...subjects.values()].sort(
+    (left, right) => right.changesSinceDocUpdate - left.changesSinceDocUpdate,
+  );
   return {
-    available: true,
-    commitsAnalyzed: scan.historyCommitCount,
-    docsScanned,
-    findings: findings.slice(0, limit),
+    doc: docFile,
+    docLastChangedAt,
+    // Broken references weigh heavily — the spec cites deleted code.
+    staleness: ordered.reduce((sum, subject) => sum + subject.changesSinceDocUpdate, 0) + broken.length * 10,
+    subjects: ordered,
+    brokenReferences: broken,
+    ...(snapshot ? { snapshotExcluded: true } : {}),
+    ...(docLastChangedAtEstimated ? { docLastChangedAtEstimated: true } : {}),
   };
 }
 

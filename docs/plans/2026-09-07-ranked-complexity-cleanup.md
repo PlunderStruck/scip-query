@@ -205,3 +205,23 @@ Batch-eight queue from that full scan: collectRuntimeBoundaryGraph 31/25 (src/an
 ### Batch seven completion
 
 Final shared loop extraction removed the duplicate scan: similarAll and similarAllCount pair-scan callbacks now measure 1/0 each, delegating iteration to scanCalleePairs (3/3). Their distinct comparison/ranking and count behavior remains separate. All 167 focused tests passed; the full 3,133-test suite across 350 files passed before the final loop-sharing extraction, then the 28 affected similarity/command-accuracy tests passed afterward. Final source types, lint, build, formatting and public API/consumer passed; skill-link checks passed. Fresh index/diff-impact maps 25 changed symbols in five source files to 11 affected files. Final source health is accounted across 563 files and 12,415 functions, reporting 622 complexity findings and no duplication, dependency cycles or configured violations; all files mapped, 47/47 dependency rows declared. Historical inventory: 55 fixed, six assessed-retained, 594 pending. No thresholds or suppression policies changed. Continue batch eight as recorded above; no VM reinstall is needed.
+
+### Batch eight implementation checkpoint
+
+Separated runtime-boundary extraction planning, derived-graph reuse proof/materialization, HTTP summaries and carrier derivation. Preserved reuse predicates, phase ordering, coverage metadata and asynchronous extraction. Replaced the canonical extension switch with its exact 30-entry lookup table, preserving lowercase conversion and unknown-to-null behavior. Separated incremental index dependency planning, eligibility, bounded document requests and ordered batch writes/overlay commits. Preserved first-project-batch modifications/deletions, tombstones, generation chaining, base-shard/project-identity flags, status messages and memory-pressure rethrow; graph timing still ends before eligibility checks. Separated document selection from reference/co-change merging and per-document ranking. Separated legacy normalization, common fields, mailbox identity and current-protocol operation verification; operation keys still use the original wire request.
+
+| Target | Before cyclomatic/cognitive | After |
+| --- | --- | --- |
+| collectRuntimeBoundaryGraph | 31/25 | 9/6 |
+| supportedLanguageFromPath | 31/1 | 2/0 |
+| tryMaterializeTypeScriptIncrementalIndex | 31/38 | 9/10 |
+| docDrift | 28/45 | 6/6 |
+| parseTypeScriptIndexEnvelope | 30/13 | 10/7 |
+
+154 distinct focused tests across seven files pass: runtime boundaries, command accuracy, mailbox, incremental-index planning, reindex reliability, documentation drift and Git history. Source types, changed-file lint and diff review pass. No introduced finding in current-source review. Build/full suite/API/index verification is pending. No thresholds or suppressions changed, and no VM reinstall is needed for these behavior-preserving refactors.
+
+Batch-nine queue from the complete 617-finding source scan: scanRepositoryText 21/44 (src/source/primitives/repository-text.ts:104), buildProjectInputFingerprintFromJournal 29/37 (src/platform/project-files.ts:696), modelBody.visitStatement 29/32 (src/queries/quality/slice-cohesion.ts:831), renderHealthReport 29/36 (src/runtime/cli-support.ts:1294), isPassthroughBody 29/29 (src/source/facts/source-callables.ts:207). Exact bodies read. Preserve streaming literal/full-text branches, skipped-file classification and semantic/count accounting before inclusion filtering; journal validation precedence, configured marker semantics, validation-before-mutation and sorted delta publication/cache persistence; predicate/guard stack, branch scope, loop unit order, try-handler region membership, labeled/jump/declaration units; health report text, order, policy/coverage calibration and action suffixes; sole-statement call shape, language-specific call forms, rejecting call-returned handlers and parameter defaults, positional identity forwarding. Start edits after batch-eight verification and commit.
+
+### Batch eight completion
+
+All checks passed: 154 focused tests, full suite 3,133 tests across 350 files, build, source types, changed-file lint, format, public API/consumer and skill links. Fresh index/diff-impact maps 21 changed symbols in five source files to 14 affected files. Source health accounted across 563 files and 12,434 functions, with 617 complexity findings and no reported duplication, dependency cycles or configured violations; all files mapped and 47/47 dependency rows declared. Historical inventory: 60 fixed, six assessed-retained, 589 pending. No new helper warnings, threshold changes or suppression-policy changes. Continue batch nine above; the VM does not need reinstalling for these behavior-preserving changes.

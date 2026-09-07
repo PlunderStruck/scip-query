@@ -103,43 +103,15 @@ export function parseTypeScriptIndexEnvelope(raw: string): TypeScriptIndexEnvelo
   const legacy = protocolVersion === TYPESCRIPT_INDEX_LEGACY_PROTOCOL_VERSION;
   const previous = protocolVersion === TYPESCRIPT_INDEX_PREVIOUS_PROTOCOL_VERSION;
   const rawRequest = parsed.request;
-  const normalizedRequest =
-    (legacy || previous) && rawRequest && typeof rawRequest === 'object' && !Array.isArray(rawRequest)
-      ? ({ ...rawRequest, removedFiles: rawRequest.removedFiles ?? [] } as TypeScriptIndexDocumentRequest)
-      : rawRequest;
-  if (
-    (!legacy && !previous && protocolVersion !== TYPESCRIPT_INDEX_PROTOCOL_VERSION) ||
-    typeof parsed.id !== 'string' ||
-    !parsed.id ||
-    typeof parsed.baseGeneration !== 'string' ||
-    !parsed.baseGeneration ||
-    typeof parsed.deadlineAtMs !== 'number' ||
-    !Number.isFinite(parsed.deadlineAtMs) ||
-    !isTypeScriptIndexRequest(normalizedRequest) ||
-    (!legacy &&
-      (parsed.mailboxVersion !== BOUNDED_MAILBOX_VERSION ||
-        typeof parsed.operationKey !== 'string' ||
-        !/^[a-f0-9]{64}$/.test(parsed.operationKey) ||
-        parsed.id !== boundedMailboxRequestId(parsed.operationKey) ||
-        typeof parsed.clientId !== 'string' ||
-        !parsed.clientId ||
-        typeof parsed.enqueuedAtMs !== 'number' ||
-        !Number.isFinite(parsed.enqueuedAtMs) ||
-        parsed.deadlineAtMs < parsed.enqueuedAtMs))
-  ) {
+  const normalizedRequest = normalizedIndexDocumentRequest(rawRequest, legacy || previous);
+  const supported = legacy || previous || protocolVersion === TYPESCRIPT_INDEX_PROTOCOL_VERSION;
+  if (!supported || !isIndexEnvelopeCommon(parsed) || !isTypeScriptIndexRequest(normalizedRequest)) {
     throw new Error('TypeScript index service received an invalid mailbox request.');
   }
-  if (!legacy) {
-    const current = parsed as TypeScriptIndexEnvelope;
-    const expectedOperationKey = boundedMailboxOperationKey(previous ? 'typescript-index-v4' : 'typescript-index-v5', {
-      baseGeneration: current.baseGeneration,
-      request: rawRequest,
-    });
-    if (current.operationKey !== expectedOperationKey) {
-      throw new Error('TypeScript index service received a mismatched mailbox operation identity.');
-    }
-    return { ...current, protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION, request: normalizedRequest };
+  if (!legacy && !isIndexEnvelopeMailbox(parsed)) {
+    throw new Error('TypeScript index service received an invalid mailbox request.');
   }
+  if (!legacy) return currentIndexEnvelope(parsed as TypeScriptIndexEnvelope, rawRequest, normalizedRequest, previous);
   const operationKey = boundedMailboxOperationKey('typescript-index-v2', {
     id: parsed.id,
     baseGeneration: parsed.baseGeneration,
@@ -156,6 +128,65 @@ export function parseTypeScriptIndexEnvelope(raw: string): TypeScriptIndexEnvelo
     baseGeneration: parsed.baseGeneration,
     request: normalizedRequest,
   };
+}
+
+function currentIndexEnvelope(
+  current: TypeScriptIndexEnvelope,
+  rawRequest: TypeScriptIndexDocumentRequest | undefined,
+  normalizedRequest: TypeScriptIndexDocumentRequest,
+  previous: boolean,
+): TypeScriptIndexEnvelope {
+  const expectedOperationKey = boundedMailboxOperationKey(previous ? 'typescript-index-v4' : 'typescript-index-v5', {
+    baseGeneration: current.baseGeneration,
+    request: rawRequest,
+  });
+  if (current.operationKey !== expectedOperationKey) {
+    throw new Error('TypeScript index service received a mismatched mailbox operation identity.');
+  }
+  return { ...current, protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION, request: normalizedRequest };
+}
+
+function normalizedIndexDocumentRequest(
+  request: TypeScriptIndexDocumentRequest | undefined,
+  upgrade: boolean,
+): TypeScriptIndexDocumentRequest | undefined {
+  return upgrade && request && typeof request === 'object' && !Array.isArray(request)
+    ? { ...request, removedFiles: request.removedFiles ?? [] }
+    : request;
+}
+
+type IndexEnvelopeCommon = Partial<TypeScriptIndexEnvelope> &
+  Pick<TypeScriptIndexEnvelope, 'id' | 'baseGeneration' | 'deadlineAtMs'>;
+
+function isIndexEnvelopeCommon(parsed: Partial<TypeScriptIndexEnvelope>): parsed is IndexEnvelopeCommon {
+  return (
+    typeof parsed.id === 'string' &&
+    Boolean(parsed.id) &&
+    typeof parsed.baseGeneration === 'string' &&
+    Boolean(parsed.baseGeneration) &&
+    typeof parsed.deadlineAtMs === 'number' &&
+    Number.isFinite(parsed.deadlineAtMs)
+  );
+}
+
+function isIndexEnvelopeMailbox(parsed: IndexEnvelopeCommon): boolean {
+  return (
+    parsed.mailboxVersion === BOUNDED_MAILBOX_VERSION &&
+    isIndexEnvelopeOperation(parsed) &&
+    typeof parsed.clientId === 'string' &&
+    Boolean(parsed.clientId) &&
+    typeof parsed.enqueuedAtMs === 'number' &&
+    Number.isFinite(parsed.enqueuedAtMs) &&
+    parsed.deadlineAtMs >= parsed.enqueuedAtMs
+  );
+}
+
+function isIndexEnvelopeOperation(parsed: Partial<TypeScriptIndexEnvelope>): boolean {
+  return (
+    typeof parsed.operationKey === 'string' &&
+    /^[a-f0-9]{64}$/.test(parsed.operationKey) &&
+    parsed.id === boundedMailboxRequestId(parsed.operationKey)
+  );
 }
 
 export function publishedTypeScriptIndexGeneration(dbPath: string): string | null {

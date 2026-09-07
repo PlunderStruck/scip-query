@@ -476,163 +476,19 @@ export function tryMaterializeTypeScriptIncrementalIndex(
     if (!availability.available) throw new Error(availability.reason);
     const runtimeMs = performance.now() - phaseStartedAt;
     phaseStartedAt = performance.now();
-    const db = new ScipDatabase({
-      projectRoot: input.projectRoot,
-      dbPath: input.previousDbPath,
-      indexPath: input.previousIndexPath,
-    });
-    const previousSnapshot = hydrateLegacyTypeScriptPackageHashes(
-      input.projectRoot,
-      input.previousSnapshot,
-      input.currentSnapshot,
-    );
-    const workspaceProjects =
-      input.projectMode === 'workspace'
-        ? discoverTypeScriptProjectRoots(input.projectRoot, input.currentSnapshot.typescriptProjects)
-        : ['.'];
-    const activeTypeScriptConfigs = activeTypeScriptProjectConfigPaths(workspaceProjects);
-    let projectFiles: string[];
-    let graph: FileDependencyGraph;
-    let dependencyGraphSnapshot: FileDependencyGraphSnapshot | undefined;
-    try {
-      projectFiles = indexedDocumentPaths(db, { includeIgnored: false }).filter(isTypeScriptLike).sort();
-      const manifest = previousSnapshot ? buildProjectChangeManifest(previousSnapshot, input.currentSnapshot) : null;
-      const replaceWithoutGraph =
-        manifest &&
-        previousSnapshot &&
-        typeScriptProjectReplacementRequired(
-          manifest,
-          typeScriptCompilerChanges(manifest, activeTypeScriptConfigs),
-          typeScriptFragmentProjectIdentity(
-            input.currentSnapshot,
-            availability.producerIdentity,
-            activeTypeScriptConfigs,
-          ),
-          typeScriptFragmentProjectIdentity(previousSnapshot, availability.producerIdentity, activeTypeScriptConfigs),
-        );
-      const dependencyGraphUnchanged =
-        manifest !== null && !replaceWithoutGraph && typeScriptDependencyGraphUnchanged(manifest);
-      if (replaceWithoutGraph) {
-        dependencyGraphSnapshot = readPersistedFileDependencyGraph(db, 'none') ?? undefined;
-        graph = new Map();
-      } else if (dependencyGraphUnchanged) {
-        graph = new Map();
-      } else {
-        dependencyGraphSnapshot = captureTypeScriptPlanningDependencyGraph(db);
-        graph = dependencyGraphSnapshot.graph;
-      }
-    } finally {
-      db.close();
-    }
-    const graphMs = performance.now() - phaseStartedAt;
-    const eligibility = planTypeScriptIncrementalUpdate({
-      projectMode: input.projectMode,
-      workspaceProjects: input.projectMode === 'workspace' ? workspaceProjects : undefined,
-      previousSnapshot,
-      currentSnapshot: input.currentSnapshot,
-      projectFiles,
-      graph,
-      producerIdentity: availability.producerIdentity,
-      rootTsconfigExists: existsSync(join(input.projectRoot, 'tsconfig.json')),
-      ...(input.previousOverlayGeneration === undefined
-        ? {}
-        : { previousOverlayGeneration: input.previousOverlayGeneration }),
-    });
-    if (!eligibility.eligible) throw new Error(eligibility.reason);
-    const baseGeneration = publishedTypeScriptIndexGeneration(input.previousDbPath);
-    if (!baseGeneration) throw new Error('published TypeScript base generation unavailable');
+    const { eligibility, baseGeneration, projectFiles, dependencyGraphSnapshot, graphMs } =
+      prepareTypeScriptMaterialization(input, availability.producerIdentity, phaseStartedAt);
 
     phaseStartedAt = performance.now();
-    const requester = new TypeScriptIndexRequester(
-      {
-        projectRoot: input.projectRoot,
-        cacheDir: input.cacheDir,
-        baseGeneration,
-      },
-      { requireService: true },
-    );
-    const plannedBatches = eligibility.projects.flatMap((project) => {
-      const affectedChunks = chunked(project.affectedFiles, TYPESCRIPT_DOCUMENT_BATCH_SIZE);
-      const chunks = affectedChunks.length > 0 ? affectedChunks : [[]];
-      return chunks.map((affectedFiles, index) => ({
-        project,
-        affectedFiles,
-        removedFiles: index === 0 ? project.removedFiles : [],
-        firstForProject: index === 0,
-      }));
-    });
-    const affectedBatches: MaterializedTypeScriptIncrementalIndex['affectedBatches'] = [];
-    const referenceFragmentsByFile = new Map<string, SemanticReferenceFragment[]>();
-    const responseDurations: number[] = [];
-    let anyCold = false;
-    let assemblyMs = 0;
-    let fragmentStoreMs = 0;
-    let writeMs = 0;
-    let previousOverlayGeneration = eligibility.previousFragmentGeneration;
-    for (const [batchIndex, batch] of plannedBatches.entries()) {
-      const response = requester.request({
-        kind: 'emit-documents',
-        tsconfigPath: batch.project.tsconfigPath,
-        projectArgument: batch.project.projectArgument,
-        projectIdentity: eligibility.projectIdentity,
-        producerIdentity: availability.producerIdentity,
-        modifiedFiles: batch.firstForProject ? batch.project.modifiedFiles : [],
-        removedFiles: batch.firstForProject ? batch.project.removedFiles : [],
-        affectedFiles: batch.affectedFiles,
-      });
-      anyCold ||= response.cold;
-      responseDurations.push(response.durationMs);
-      const tombstones: TypeScriptDocumentFragment[] = batch.removedFiles.map((relativePath) => ({
-        relativePath,
-        bytes: null,
-        occurrences: 0,
-        symbols: 0,
-        referenceFragments: [],
-      }));
-      const fragments = [...response.fragments, ...tombstones];
-      if (!eligibility.replaceProject) {
-        for (const fragment of fragments) {
-          referenceFragmentsByFile.set(fragment.relativePath, fragment.referenceFragments);
-        }
-      }
-      const assemblyStartedAt = performance.now();
-      const affectedIndexBytes = assembleAffectedTypeScriptFragments(response.fragments);
-      assemblyMs += performance.now() - assemblyStartedAt;
-      const scipPath =
-        batchIndex === 0
-          ? input.candidateAffectedScipPath
-          : `${input.candidateAffectedScipPath}.batch-${batchIndex}.scip`;
-      const writeStartedAt = performance.now();
-      writeFileSync(scipPath, affectedIndexBytes);
-      writeMs += performance.now() - writeStartedAt;
-      const overlayStartedAt = performance.now();
-      const nextOverlayGeneration =
-        batchIndex === plannedBatches.length - 1
-          ? eligibility.nextFragmentGeneration
-          : typeScriptIntermediateOverlayGenerationIdentity({
-              previousGenerationIdentity: previousOverlayGeneration,
-              targetGenerationIdentity: eligibility.nextFragmentGeneration,
-              fragments,
-            });
-      commitTypeScriptOverlay({
-        cacheDir: input.cacheDir,
-        previousGenerationIdentity: previousOverlayGeneration,
-        nextGenerationIdentity: nextOverlayGeneration,
-        producerIdentity: availability.producerIdentity,
-        projectIdentity: eligibility.projectIdentity,
-        baseShardCurrent: batchIndex === 0 ? input.baseShardCurrent : false,
-        fragments,
-        allowProjectIdentityChange: eligibility.replaceProject && batchIndex === 0,
-        allowLegacyProjectIdentityMigration: true,
-      });
-      fragmentStoreMs += performance.now() - overlayStartedAt;
-      previousOverlayGeneration = nextOverlayGeneration;
-      affectedBatches.push({
-        scipPath,
-        affectedFiles: [...batch.affectedFiles, ...batch.removedFiles].sort(),
-        deletedFiles: [...batch.removedFiles].sort(),
-      });
-    }
+    const {
+      affectedBatches,
+      referenceFragmentsByFile,
+      responseDurations,
+      anyCold,
+      assemblyMs,
+      fragmentStoreMs,
+      writeMs,
+    } = emitTypeScriptMaterializationBatches(input, eligibility, availability.producerIdentity, baseGeneration);
     const requestMs = performance.now() - phaseStartedAt;
     const result = {
       scipPath: input.previousShardPath,
@@ -680,6 +536,247 @@ export function tryMaterializeTypeScriptIncrementalIndex(
     input.onStatus(`Incremental TypeScript index unavailable: ${reason}.`);
     return null;
   }
+}
+
+function prepareTypeScriptMaterialization(
+  input: MaterializeTypeScriptIncrementalInput,
+  producerIdentity: string,
+  phaseStartedAt: number,
+) {
+  const db = new ScipDatabase({
+    projectRoot: input.projectRoot,
+    dbPath: input.previousDbPath,
+    indexPath: input.previousIndexPath,
+  });
+  const previousSnapshot = hydrateLegacyTypeScriptPackageHashes(
+    input.projectRoot,
+    input.previousSnapshot,
+    input.currentSnapshot,
+  );
+  const workspaceProjects =
+    input.projectMode === 'workspace'
+      ? discoverTypeScriptProjectRoots(input.projectRoot, input.currentSnapshot.typescriptProjects)
+      : ['.'];
+  const activeTypeScriptConfigs = activeTypeScriptProjectConfigPaths(workspaceProjects);
+  let projectFiles: string[];
+  let graph: FileDependencyGraph;
+  let dependencyGraphSnapshot: FileDependencyGraphSnapshot | undefined;
+  try {
+    projectFiles = indexedDocumentPaths(db, { includeIgnored: false }).filter(isTypeScriptLike).sort();
+    const dependencyPlan = materializationDependencyGraph(
+      db,
+      previousSnapshot,
+      input.currentSnapshot,
+      producerIdentity,
+      activeTypeScriptConfigs,
+    );
+    graph = dependencyPlan.graph;
+    dependencyGraphSnapshot = dependencyPlan.dependencyGraphSnapshot;
+  } finally {
+    db.close();
+  }
+  const graphMs = performance.now() - phaseStartedAt;
+  const eligibility = planTypeScriptIncrementalUpdate({
+    projectMode: input.projectMode,
+    workspaceProjects: input.projectMode === 'workspace' ? workspaceProjects : undefined,
+    previousSnapshot,
+    currentSnapshot: input.currentSnapshot,
+    projectFiles,
+    graph,
+    producerIdentity,
+    rootTsconfigExists: existsSync(join(input.projectRoot, 'tsconfig.json')),
+    ...(input.previousOverlayGeneration === undefined
+      ? {}
+      : { previousOverlayGeneration: input.previousOverlayGeneration }),
+  });
+  if (!eligibility.eligible) throw new Error(eligibility.reason);
+  const baseGeneration = publishedTypeScriptIndexGeneration(input.previousDbPath);
+  if (!baseGeneration) throw new Error('published TypeScript base generation unavailable');
+
+  return { eligibility, baseGeneration, projectFiles, dependencyGraphSnapshot, graphMs };
+}
+
+function materializationDependencyGraph(
+  db: ScipDatabase,
+  previousSnapshot: ProjectInputSnapshot | null,
+  currentSnapshot: ProjectInputSnapshot,
+  producerIdentity: string,
+  activeTypeScriptConfigs: ReadonlySet<string>,
+) {
+  let graph: FileDependencyGraph;
+  let dependencyGraphSnapshot: FileDependencyGraphSnapshot | undefined;
+  const manifest = previousSnapshot ? buildProjectChangeManifest(previousSnapshot, currentSnapshot) : null;
+  const replaceWithoutGraph =
+    manifest &&
+    previousSnapshot &&
+    typeScriptProjectReplacementRequired(
+      manifest,
+      typeScriptCompilerChanges(manifest, activeTypeScriptConfigs),
+      typeScriptFragmentProjectIdentity(currentSnapshot, producerIdentity, activeTypeScriptConfigs),
+      typeScriptFragmentProjectIdentity(previousSnapshot, producerIdentity, activeTypeScriptConfigs),
+    );
+  const dependencyGraphUnchanged =
+    manifest !== null && !replaceWithoutGraph && typeScriptDependencyGraphUnchanged(manifest);
+  if (replaceWithoutGraph) {
+    dependencyGraphSnapshot = readPersistedFileDependencyGraph(db, 'none') ?? undefined;
+    graph = new Map();
+  } else if (dependencyGraphUnchanged) {
+    graph = new Map();
+  } else {
+    dependencyGraphSnapshot = captureTypeScriptPlanningDependencyGraph(db);
+    graph = dependencyGraphSnapshot.graph;
+  }
+  return { graph, dependencyGraphSnapshot };
+}
+
+type EligibleTypeScriptMaterialization = Extract<TypeScriptIncrementalEligibility, { eligible: true }>;
+
+function plannedTypeScriptDocumentBatches(projects: TypeScriptIncrementalProjectPlan[]) {
+  return projects.flatMap((project) => {
+    const affectedChunks = chunked(project.affectedFiles, TYPESCRIPT_DOCUMENT_BATCH_SIZE);
+    const chunks = affectedChunks.length > 0 ? affectedChunks : [[]];
+    return chunks.map((affectedFiles, index) => ({
+      project,
+      affectedFiles,
+      removedFiles: index === 0 ? project.removedFiles : [],
+      firstForProject: index === 0,
+    }));
+  });
+}
+
+function emitTypeScriptMaterializationBatches(
+  input: MaterializeTypeScriptIncrementalInput,
+  eligibility: EligibleTypeScriptMaterialization,
+  producerIdentity: string,
+  baseGeneration: string,
+) {
+  const requester = new TypeScriptIndexRequester(
+    {
+      projectRoot: input.projectRoot,
+      cacheDir: input.cacheDir,
+      baseGeneration,
+    },
+    { requireService: true },
+  );
+  const plannedBatches = plannedTypeScriptDocumentBatches(eligibility.projects);
+  const affectedBatches: MaterializedTypeScriptIncrementalIndex['affectedBatches'] = [];
+  const referenceFragmentsByFile = new Map<string, SemanticReferenceFragment[]>();
+  const responseDurations: number[] = [];
+  let anyCold = false;
+  let assemblyMs = 0;
+  let fragmentStoreMs = 0;
+  let writeMs = 0;
+  let previousOverlayGeneration = eligibility.previousFragmentGeneration;
+  for (const [batchIndex, batch] of plannedBatches.entries()) {
+    const response = requester.request({
+      kind: 'emit-documents',
+      tsconfigPath: batch.project.tsconfigPath,
+      projectArgument: batch.project.projectArgument,
+      projectIdentity: eligibility.projectIdentity,
+      producerIdentity,
+      modifiedFiles: batch.firstForProject ? batch.project.modifiedFiles : [],
+      removedFiles: batch.firstForProject ? batch.project.removedFiles : [],
+      affectedFiles: batch.affectedFiles,
+    });
+    anyCold ||= response.cold;
+    responseDurations.push(response.durationMs);
+    const tombstones: TypeScriptDocumentFragment[] = batch.removedFiles.map((relativePath) => ({
+      relativePath,
+      bytes: null,
+      occurrences: 0,
+      symbols: 0,
+      referenceFragments: [],
+    }));
+    const fragments = [...response.fragments, ...tombstones];
+    if (!eligibility.replaceProject) {
+      for (const fragment of fragments) {
+        referenceFragmentsByFile.set(fragment.relativePath, fragment.referenceFragments);
+      }
+    }
+    const committed = commitMaterializedTypeScriptBatch({
+      input,
+      eligibility,
+      producerIdentity,
+      response,
+      fragments,
+      batch,
+      batchIndex,
+      lastBatch: batchIndex === plannedBatches.length - 1,
+      previousOverlayGeneration,
+    });
+    assemblyMs += committed.assemblyMs;
+    writeMs += committed.writeMs;
+    fragmentStoreMs += committed.fragmentStoreMs;
+    previousOverlayGeneration = committed.nextOverlayGeneration;
+    affectedBatches.push(committed.affectedBatch);
+  }
+  return {
+    affectedBatches,
+    referenceFragmentsByFile,
+    responseDurations,
+    anyCold,
+    assemblyMs,
+    fragmentStoreMs,
+    writeMs,
+  };
+}
+
+function commitMaterializedTypeScriptBatch(context: {
+  input: MaterializeTypeScriptIncrementalInput;
+  eligibility: EligibleTypeScriptMaterialization;
+  producerIdentity: string;
+  response: ReturnType<TypeScriptIndexRequester['request']>;
+  fragments: TypeScriptDocumentFragment[];
+  batch: ReturnType<typeof plannedTypeScriptDocumentBatches>[number];
+  batchIndex: number;
+  lastBatch: boolean;
+  previousOverlayGeneration: string;
+}) {
+  const {
+    input,
+    eligibility,
+    producerIdentity,
+    response,
+    fragments,
+    batch,
+    batchIndex,
+    lastBatch,
+    previousOverlayGeneration,
+  } = context;
+  const assemblyStartedAt = performance.now();
+  const affectedIndexBytes = assembleAffectedTypeScriptFragments(response.fragments);
+  const assemblyMs = performance.now() - assemblyStartedAt;
+  const scipPath =
+    batchIndex === 0 ? input.candidateAffectedScipPath : `${input.candidateAffectedScipPath}.batch-${batchIndex}.scip`;
+  const writeStartedAt = performance.now();
+  writeFileSync(scipPath, affectedIndexBytes);
+  const writeMs = performance.now() - writeStartedAt;
+  const overlayStartedAt = performance.now();
+  const nextOverlayGeneration = lastBatch
+    ? eligibility.nextFragmentGeneration
+    : typeScriptIntermediateOverlayGenerationIdentity({
+        previousGenerationIdentity: previousOverlayGeneration,
+        targetGenerationIdentity: eligibility.nextFragmentGeneration,
+        fragments,
+      });
+  commitTypeScriptOverlay({
+    cacheDir: input.cacheDir,
+    previousGenerationIdentity: previousOverlayGeneration,
+    nextGenerationIdentity: nextOverlayGeneration,
+    producerIdentity,
+    projectIdentity: eligibility.projectIdentity,
+    baseShardCurrent: batchIndex === 0 ? input.baseShardCurrent : false,
+    fragments,
+    allowProjectIdentityChange: eligibility.replaceProject && batchIndex === 0,
+    allowLegacyProjectIdentityMigration: true,
+  });
+  const fragmentStoreMs = performance.now() - overlayStartedAt;
+  const affectedBatch = {
+    scipPath,
+    affectedFiles: [...batch.affectedFiles, ...batch.removedFiles].sort(),
+    deletedFiles: [...batch.removedFiles].sort(),
+  };
+  return { assemblyMs, writeMs, fragmentStoreMs, nextOverlayGeneration, affectedBatch };
 }
 
 function chunked<T>(values: readonly T[], size: number): T[][] {

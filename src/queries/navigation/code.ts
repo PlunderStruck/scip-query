@@ -718,55 +718,39 @@ function semanticFactsUsable(freshness: SourceObservationFreshness | undefined):
 // volarLanguageIdForPath (LSP languageId vocabulary for a TS language
 // service, e.g. 'typescriptreact') -- three different jobs that happened
 // to share a name.
+const SUPPORTED_LANGUAGE_BY_EXTENSION = new Map<string, string>([
+  ['.ts', 'typescript'],
+  ['.tsx', 'typescript'],
+  ['.mts', 'typescript'],
+  ['.cts', 'typescript'],
+  ['.js', 'javascript'],
+  ['.jsx', 'javascript'],
+  ['.mjs', 'javascript'],
+  ['.cjs', 'javascript'],
+  ['.py', 'python'],
+  ['.pyi', 'python'],
+  ['.rs', 'rust'],
+  ['.go', 'go'],
+  ['.java', 'java'],
+  ['.kt', 'kotlin'],
+  ['.kts', 'kotlin'],
+  ['.scala', 'scala'],
+  ['.rb', 'ruby'],
+  ['.php', 'php'],
+  ['.cs', 'csharp'],
+  ['.vb', 'vb'],
+  ['.dart', 'dart'],
+  ['.c', 'c'],
+  ['.h', 'c'],
+  ['.cc', 'cpp'],
+  ['.cpp', 'cpp'],
+  ['.cxx', 'cpp'],
+  ['.hpp', 'cpp'],
+  ['.hh', 'cpp'],
+  ['.hxx', 'cpp'],
+  ['.vue', 'vue'],
+]);
+
 function supportedLanguageFromPath(relativePath: string): string | null {
-  switch (extname(relativePath).toLowerCase()) {
-    case '.ts':
-    case '.tsx':
-    case '.mts':
-    case '.cts':
-      return 'typescript';
-    case '.js':
-    case '.jsx':
-    case '.mjs':
-    case '.cjs':
-      return 'javascript';
-    case '.py':
-    case '.pyi':
-      return 'python';
-    case '.rs':
-      return 'rust';
-    case '.go':
-      return 'go';
-    case '.java':
-      return 'java';
-    case '.kt':
-    case '.kts':
-      return 'kotlin';
-    case '.scala':
-      return 'scala';
-    case '.rb':
-      return 'ruby';
-    case '.php':
-      return 'php';
-    case '.cs':
-      return 'csharp';
-    case '.vb':
-      return 'vb';
-    case '.dart':
-      return 'dart';
-    case '.c':
-    case '.h':
-      return 'c';
-    case '.cc':
-    case '.cpp':
-    case '.cxx':
-    case '.hpp':
-    case '.hh':
-    case '.hxx':
-      return 'cpp';
-    case '.vue':
-      return 'vue';
-    default:
-      return null;
-  }
+  return SUPPORTED_LANGUAGE_BY_EXTENSION.get(extname(relativePath).toLowerCase()) ?? null;
 }
