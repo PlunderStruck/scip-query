@@ -120,6 +120,69 @@ function freshSnapshotRoot(): string {
 }
 
 describe('universal CLI output pagination', () => {
+  const completeEnvelope = {
+    kind: CLI_OUTPUT_PAGE_KIND,
+    schemaVersion: CLI_OUTPUT_PAGE_SCHEMA_VERSION,
+    producer: { name: 'scip-query', version: 'test' },
+    command: 'refs',
+    contentType: 'text/plain',
+    content: 'abc',
+    page: {
+      offset: 0,
+      returnedCharacters: 3,
+      totalCharacters: 3,
+      omittedCharacters: 0,
+      remainingCharacters: 0,
+      outputHash: 'a'.repeat(64),
+      complete: true,
+    },
+  };
+
+  it.each([
+    ['producer', null],
+    ['producer', { name: 'other', version: 'test' }],
+    ['producer', { name: 'scip-query', version: '' }],
+    ['command', ''],
+    ['contentType', 'text/html'],
+    ['agentInstruction', 1],
+    ['content', 3],
+    ['page', null],
+  ])('rejects invalid common output field %s=%j before page validation', (field, value) => {
+    expect(decodeCliOutputPageEnvelope({ ...completeEnvelope, [field as string]: value })).toEqual({
+      kind: 'malformed',
+      reason: 'Output page envelope contains invalid common fields.',
+    });
+  });
+
+  it.each(['offset', 'returnedCharacters', 'totalCharacters', 'omittedCharacters', 'remainingCharacters'])(
+    'rejects an unsafe %s before interpreting page arithmetic',
+    (field) => {
+      expect(
+        decodeCliOutputPageEnvelope({
+          ...completeEnvelope,
+          page: { ...completeEnvelope.page, [field]: Number.MAX_SAFE_INTEGER + 1 },
+        }),
+      ).toEqual({ kind: 'malformed', reason: 'Output page counts or output hash are invalid.' });
+    },
+  );
+
+  it.each([{ returnedCharacters: 2 }, { omittedCharacters: 1 }, { remainingCharacters: 1 }, { offset: 1 }])(
+    'rejects inconsistent page arithmetic %j',
+    (patch) => {
+      expect(
+        decodeCliOutputPageEnvelope({ ...completeEnvelope, page: { ...completeEnvelope.page, ...patch } }),
+      ).toEqual({ kind: 'malformed', reason: 'Output page character counts are inconsistent.' });
+    },
+  );
+
+  it('accepts a final continuation page with an earlier omitted prefix', () => {
+    const envelope = {
+      ...completeEnvelope,
+      page: { ...completeEnvelope.page, offset: 3, totalCharacters: 6, omittedCharacters: 3 },
+    };
+    expect(decodeCliOutputPageEnvelope(envelope)).toEqual({ kind: 'supported', envelope });
+  });
+
   it('rejects contradictory page completion states at the decoder boundary', () => {
     const common = {
       kind: CLI_OUTPUT_PAGE_KIND,

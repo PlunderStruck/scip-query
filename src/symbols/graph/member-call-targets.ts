@@ -642,17 +642,9 @@ function factoryReturnedMemberImplementations(
   sourceFile: string,
   expression: string,
 ): Array<{ name: string; startLine: number; endLine: number; file: string }> {
-  const member = /^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/u.exec(expression.replace(/\s+/gu, ''));
-  if (!member) return [];
-  const root = getAst(db, sourceFile)?.rootNode;
-  if (!root) return [];
-  const initializer = findVariableInitializer(root, member[1]!);
-  const call = initializer ? firstValueCall(initializer) : null;
-  if (!call) return [];
-  const callee = call.childForFieldName('function') ?? call.namedChild(0);
-  const targets = callee ? resolveCallableTargetDefinitions(db, sourceFile, callee.text) : [];
-  if (targets.length !== 1) return [];
-  const target = targets[0]!;
+  const resolved = returnedMemberFactoryCall(db, sourceFile, expression);
+  if (!resolved) return [];
+  const { factory: target, memberName } = resolved;
   const targetRoot = getAst(db, target.relativePath)?.rootNode;
   if (!targetRoot) return [];
   const callable = smallestCoveringCallable(targetRoot, target.startLine, target.endLine);
@@ -664,30 +656,12 @@ function factoryReturnedMemberImplementations(
     const returned = unwrap(argument);
     if (returned.type !== 'object') continue;
     for (const child of returned.namedChildren) {
-      if (child.type === 'shorthand_property_identifier' && child.text === member[2]) {
-        for (const site of getCallableSites(db, target.relativePath) ?? []) {
-          if (site.name === member[2]) candidates.push({ ...site, file: target.relativePath });
-        }
-        continue;
-      }
-      if (child.type !== 'pair') continue;
-      const key = child.childForFieldName('key') ?? child.namedChild(0);
-      const value = child.childForFieldName('value') ?? child.namedChild(1);
-      if (unquotedPropertyName(key?.text) !== member[2] || !value) continue;
-      if (value.type === 'identifier') {
-        for (const site of getCallableSites(db, target.relativePath) ?? []) {
-          if (site.name === value.text) candidates.push({ ...site, file: target.relativePath });
-        }
-      } else if (syntaxContainsCallableValue(value)) {
-        candidates.push({
-          name: member[2]!,
-          startLine: child.startPosition.row,
-          endLine: child.endPosition.row,
-          file: target.relativePath,
-        });
+      for (const site of returnedPropertyCallableSites(db, target.relativePath, memberName, child)) {
+        candidates.push(site);
       }
     }
   }
+
   return candidates.filter(
     (candidate, index, all) =>
       all.findIndex(
@@ -698,6 +672,29 @@ function factoryReturnedMemberImplementations(
           other.endLine === candidate.endLine,
       ) === index,
   );
+}
+
+function namedFactoryCallableSites(db: ScipDatabase, sourceFile: string, name: string) {
+  return (getCallableSites(db, sourceFile) ?? [])
+    .filter((site) => site.name === name)
+    .map((site) => ({ ...site, file: sourceFile }));
+}
+
+function returnedPropertyCallableSites(
+  db: ScipDatabase,
+  sourceFile: string,
+  memberName: string,
+  child: SyntaxNode,
+): Array<{ name: string; startLine: number; endLine: number; file: string }> {
+  if (child.type === 'shorthand_property_identifier' && child.text === memberName)
+    return namedFactoryCallableSites(db, sourceFile, memberName);
+  if (child.type !== 'pair') return [];
+  const key = child.childForFieldName('key') ?? child.namedChild(0);
+  const value = child.childForFieldName('value') ?? child.namedChild(1);
+  if (unquotedPropertyName(key?.text) !== memberName || !value) return [];
+  if (value.type === 'identifier') return namedFactoryCallableSites(db, sourceFile, value.text);
+  if (!syntaxContainsCallableValue(value)) return [];
+  return [{ name: memberName, startLine: child.startPosition.row, endLine: child.endPosition.row, file: sourceFile }];
 }
 
 /**
@@ -740,7 +737,7 @@ function returnedMemberFactoryCall(db: ScipDatabase, sourceFile: string, express
   const factories = callee ? resolveCallableTargetDefinitions(db, sourceFile, callee.text) : [];
   if (factories.length !== 1 || !factoryCall) return null;
   const factory = factories[0]!;
-  return { factory, factoryCall };
+  return { factory, factoryCall, memberName: member[2]! };
 }
 
 function returnedCallbackParameterNames(factoryCallable: SyntaxNode): Set<string> {

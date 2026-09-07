@@ -1106,62 +1106,110 @@ function assignmentTargets(
   rhsUses: FlowUse[],
 ): AssignmentTargetInfo[] | null {
   const ts = state.ts;
-  if (ts.isParenthesizedExpression(expression)) {
-    return assignmentTargets(state, callableIdValue, expression.expression, cfg, rhsUses);
-  }
-  if (ts.isAsExpression(expression) || ts.isTypeAssertionExpression(expression) || ts.isNonNullExpression(expression)) {
-    return assignmentTargets(state, callableIdValue, expression.expression, cfg, rhsUses);
-  }
+  const wrappedValue = wrappedAssignmentValue(ts, expression);
+  if (wrappedValue) return assignmentTargets(state, callableIdValue, wrappedValue, cfg, rhsUses);
   if (ts.isIdentifier(expression) || ts.isPropertyAccessExpression(expression)) {
     const target = accessTarget(state, expression);
     return target ? [{ ...target, partial: false }] : null;
   }
-  if (ts.isElementAccessExpression(expression)) {
-    const base = accessTarget(state, expression.expression);
-    if (!base) return null;
-    rhsUses.push(...collectUses(state, callableIdValue, expression.expression, cfg));
-    rhsUses.push(...collectUses(state, callableIdValue, expression.argumentExpression, cfg));
-    return [{ node: expression, symbolKey: base.symbolKey, name: `${base.name}[…]`, partial: true }];
-  }
-  if (ts.isObjectLiteralExpression(expression)) {
-    const targets: AssignmentTargetInfo[] = [];
-    for (const property of expression.properties) {
-      let nested: AssignmentTargetInfo[] | null = null;
-      if (ts.isShorthandPropertyAssignment(property)) {
-        const symbol = state.checker.getShorthandAssignmentValueSymbol(property);
-        const key = symbol ? symbolKeyFor(state, symbol) : null;
-        nested = key ? [{ node: property.name, symbolKey: key, name: property.name.text, partial: false }] : null;
-        if (property.objectAssignmentInitializer)
-          rhsUses.push(...collectUses(state, callableIdValue, property.objectAssignmentInitializer, cfg));
-      } else if (ts.isPropertyAssignment(property)) {
-        nested = assignmentTargets(state, callableIdValue, property.initializer, cfg, rhsUses);
-      } else if (ts.isSpreadAssignment(property)) {
-        nested = assignmentTargets(state, callableIdValue, property.expression, cfg, rhsUses);
-      }
-      if (!nested) return null;
-      targets.push(...nested);
-    }
-    return targets;
-  }
-  if (ts.isArrayLiteralExpression(expression)) {
-    const targets: AssignmentTargetInfo[] = [];
-    for (const element of expression.elements) {
-      if (ts.isOmittedExpression(element)) continue;
-      let nested: AssignmentTargetInfo[] | null;
-      if (ts.isSpreadElement(element)) {
-        nested = assignmentTargets(state, callableIdValue, element.expression, cfg, rhsUses);
-      } else if (ts.isBinaryExpression(element) && element.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-        rhsUses.push(...collectUses(state, callableIdValue, element.right, cfg));
-        nested = assignmentTargets(state, callableIdValue, element.left, cfg, rhsUses);
-      } else {
-        nested = assignmentTargets(state, callableIdValue, element, cfg, rhsUses);
-      }
-      if (!nested) return null;
-      targets.push(...nested);
-    }
-    return targets;
-  }
+  if (ts.isElementAccessExpression(expression))
+    return elementAssignmentTargets(state, callableIdValue, expression, cfg, rhsUses);
+  if (ts.isObjectLiteralExpression(expression))
+    return objectAssignmentTargets(state, callableIdValue, expression, cfg, rhsUses);
+  if (ts.isArrayLiteralExpression(expression))
+    return arrayAssignmentTargets(state, callableIdValue, expression, cfg, rhsUses);
   return null;
+}
+
+/** Syntax wrappers preserve the storage location named by their value expression. */
+function wrappedAssignmentValue(ts: TypeScriptModule, expression: TypeScript.Expression): TypeScript.Expression | null {
+  if (
+    ts.isParenthesizedExpression(expression) ||
+    ts.isAsExpression(expression) ||
+    ts.isTypeAssertionExpression(expression) ||
+    ts.isNonNullExpression(expression)
+  )
+    return expression.expression;
+  return null;
+}
+
+function elementAssignmentTargets(
+  state: AnalysisState,
+  callableIdValue: string,
+  expression: TypeScript.ElementAccessExpression,
+  cfg: CfgNode,
+  rhsUses: FlowUse[],
+): AssignmentTargetInfo[] | null {
+  const base = accessTarget(state, expression.expression);
+  if (!base) return null;
+  rhsUses.push(...collectUses(state, callableIdValue, expression.expression, cfg));
+  rhsUses.push(...collectUses(state, callableIdValue, expression.argumentExpression, cfg));
+  return [{ node: expression, symbolKey: base.symbolKey, name: `${base.name}[…]`, partial: true }];
+}
+
+function objectAssignmentTargets(
+  state: AnalysisState,
+  callableIdValue: string,
+  expression: TypeScript.ObjectLiteralExpression,
+  cfg: CfgNode,
+  rhsUses: FlowUse[],
+): AssignmentTargetInfo[] | null {
+  const targets: AssignmentTargetInfo[] = [];
+  for (const property of expression.properties) {
+    const nested = objectAssignmentPropertyTargets(state, callableIdValue, property, cfg, rhsUses);
+    if (!nested) return null;
+    targets.push(...nested);
+  }
+  return targets;
+}
+
+function objectAssignmentPropertyTargets(
+  state: AnalysisState,
+  callableIdValue: string,
+  property: TypeScript.ObjectLiteralElementLike,
+  cfg: CfgNode,
+  rhsUses: FlowUse[],
+): AssignmentTargetInfo[] | null {
+  const ts = state.ts;
+  if (ts.isShorthandPropertyAssignment(property)) {
+    const symbol = state.checker.getShorthandAssignmentValueSymbol(property);
+    const key = symbol ? symbolKeyFor(state, symbol) : null;
+    const nested = key ? [{ node: property.name, symbolKey: key, name: property.name.text, partial: false }] : null;
+    if (property.objectAssignmentInitializer)
+      rhsUses.push(...collectUses(state, callableIdValue, property.objectAssignmentInitializer, cfg));
+    return nested;
+  }
+  if (ts.isPropertyAssignment(property))
+    return assignmentTargets(state, callableIdValue, property.initializer, cfg, rhsUses);
+  if (ts.isSpreadAssignment(property))
+    return assignmentTargets(state, callableIdValue, property.expression, cfg, rhsUses);
+  return null;
+}
+
+function arrayAssignmentTargets(
+  state: AnalysisState,
+  callableIdValue: string,
+  expression: TypeScript.ArrayLiteralExpression,
+  cfg: CfgNode,
+  rhsUses: FlowUse[],
+): AssignmentTargetInfo[] | null {
+  const ts = state.ts;
+  const targets: AssignmentTargetInfo[] = [];
+  for (const element of expression.elements) {
+    if (ts.isOmittedExpression(element)) continue;
+    let nested: AssignmentTargetInfo[] | null;
+    if (ts.isSpreadElement(element)) {
+      nested = assignmentTargets(state, callableIdValue, element.expression, cfg, rhsUses);
+    } else if (ts.isBinaryExpression(element) && element.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+      rhsUses.push(...collectUses(state, callableIdValue, element.right, cfg));
+      nested = assignmentTargets(state, callableIdValue, element.left, cfg, rhsUses);
+    } else {
+      nested = assignmentTargets(state, callableIdValue, element, cfg, rhsUses);
+    }
+    if (!nested) return null;
+    targets.push(...nested);
+  }
+  return targets;
 }
 
 /** The iterable a `for...of` or `for...in` loop variable is drawn from, when this declaration is that variable. */

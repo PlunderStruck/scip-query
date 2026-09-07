@@ -200,21 +200,38 @@ export function decodeCliOutputPageEnvelope(input: unknown): DecodedCliOutputPag
   if (input['kind'] !== CLI_OUTPUT_PAGE_KIND || input['schemaVersion'] !== CLI_OUTPUT_PAGE_SCHEMA_VERSION) {
     return { kind: 'malformed', reason: 'Output page envelope kind or schema version is unsupported.' };
   }
-  if (
-    !isRecordObject(input['producer']) ||
-    input['producer']['name'] !== 'scip-query' ||
-    typeof input['producer']['version'] !== 'string' ||
-    input['producer']['version'].length === 0 ||
-    typeof input['command'] !== 'string' ||
-    input['command'].length === 0 ||
-    (input['contentType'] !== 'text/plain' && input['contentType'] !== 'application/json') ||
-    (input['agentInstruction'] !== undefined && typeof input['agentInstruction'] !== 'string') ||
-    typeof input['content'] !== 'string' ||
-    !isRecordObject(input['page'])
-  ) {
+  if (!hasOutputPageCommonFields(input)) {
     return { kind: 'malformed', reason: 'Output page envelope contains invalid common fields.' };
   }
-  const page = input['page'];
+  const reason = outputPageCountError(input.page, input.content) ?? outputPageCompletionError(input.page);
+  if (reason) return { kind: 'malformed', reason };
+  return { kind: 'supported', envelope: input as unknown as CliOutputPageEnvelopeV1 };
+}
+
+function hasOutputPageCommonFields(
+  input: Record<string, unknown>,
+): input is Record<string, unknown> & { content: string; page: Record<string, unknown> } {
+  return (
+    isOutputPageProducer(input['producer']) &&
+    typeof input['command'] === 'string' &&
+    input['command'].length > 0 &&
+    (input['contentType'] === 'text/plain' || input['contentType'] === 'application/json') &&
+    (input['agentInstruction'] === undefined || typeof input['agentInstruction'] === 'string') &&
+    typeof input['content'] === 'string' &&
+    isRecordObject(input['page'])
+  );
+}
+
+function isOutputPageProducer(value: unknown): boolean {
+  return (
+    isRecordObject(value) &&
+    value['name'] === 'scip-query' &&
+    typeof value['version'] === 'string' &&
+    value['version'].length > 0
+  );
+}
+
+function outputPageCountError(page: Record<string, unknown>, content: string): string | null {
   const integerFields = [
     'offset',
     'returnedCharacters',
@@ -223,7 +240,7 @@ export function decodeCliOutputPageEnvelope(input: unknown): DecodedCliOutputPag
     'remainingCharacters',
   ] as const;
   if (integerFields.some((field) => !isNonNegativeInteger(page[field])) || !isSha256Hex(page['outputHash'])) {
-    return { kind: 'malformed', reason: 'Output page counts or output hash are invalid.' };
+    return 'Output page counts or output hash are invalid.';
   }
   const offset = Number(page['offset']);
   const returnedCharacters = Number(page['returnedCharacters']);
@@ -231,33 +248,39 @@ export function decodeCliOutputPageEnvelope(input: unknown): DecodedCliOutputPag
   const omittedCharacters = Number(page['omittedCharacters']);
   const remainingCharacters = Number(page['remainingCharacters']);
   if (
-    returnedCharacters !== input['content'].length ||
+    returnedCharacters !== content.length ||
     omittedCharacters !== totalCharacters - returnedCharacters ||
     remainingCharacters !== totalCharacters - offset - returnedCharacters ||
     remainingCharacters < 0
   ) {
-    return { kind: 'malformed', reason: 'Output page character counts are inconsistent.' };
+    return 'Output page character counts are inconsistent.';
   }
+  return null;
+}
+
+function outputPageCompletionError(page: Record<string, unknown>): string | null {
   if (page['complete'] === true) {
     if (page['remainingCharacters'] !== 0 || page['continuation'] !== undefined) {
-      return { kind: 'malformed', reason: 'A complete output page cannot have remaining content or a continuation.' };
+      return 'A complete output page cannot have remaining content or a continuation.';
     }
   } else if (page['complete'] === false) {
-    const continuation = page['continuation'];
-    if (
-      page['remainingCharacters'] === 0 ||
-      !isRecordObject(continuation) ||
-      typeof continuation['cursor'] !== 'string' ||
-      continuation['cursor'].length === 0 ||
-      typeof continuation['command'] !== 'string' ||
-      continuation['command'].length === 0
-    ) {
-      return { kind: 'malformed', reason: 'An incomplete output page requires a non-empty continuation.' };
+    if (page['remainingCharacters'] === 0 || !isOutputPageContinuation(page['continuation'])) {
+      return 'An incomplete output page requires a non-empty continuation.';
     }
   } else {
-    return { kind: 'malformed', reason: 'Output page complete must be a Boolean.' };
+    return 'Output page complete must be a Boolean.';
   }
-  return { kind: 'supported', envelope: input as unknown as CliOutputPageEnvelopeV1 };
+  return null;
+}
+
+function isOutputPageContinuation(value: unknown): boolean {
+  return (
+    isRecordObject(value) &&
+    typeof value['cursor'] === 'string' &&
+    value['cursor'].length > 0 &&
+    typeof value['command'] === 'string' &&
+    value['command'].length > 0
+  );
 }
 
 export function requireCliOutputPageEnvelope(input: unknown): CliOutputPageEnvelopeV1 {

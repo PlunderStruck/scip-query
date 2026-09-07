@@ -116,6 +116,75 @@ export function allTwinGroups(
   );
 }
 
+type TwinDelegationCheck = NonNullable<Parameters<typeof groupTwins>[1]>['isDelegatePair'];
+
+function parallelTwinMembers(
+  clusterMembers: TwinDriftRecord[],
+  isDelegatePair: TwinDelegationCheck,
+): TwinDriftRecord[] {
+  // A member that calls another member of its cluster is a layer over it
+  // (a facade method, a controller over its service), not a parallel
+  // implementation of anything; it leaves the cluster before pairing so
+  // it cannot pair with the near-name members either.
+  const layered = new Set(
+    clusterMembers
+      .filter((member) =>
+        clusterMembers.some(
+          (other) => other !== member && other.file !== member.file && isDelegatePair?.(member, other, clusterMembers),
+        ),
+      )
+      .map((member) => member.symbol),
+  );
+  return clusterMembers.filter((member) => !layered.has(member.symbol));
+}
+
+function comparableTwinPair(
+  a: TwinDriftRecord,
+  b: TwinDriftRecord,
+  members: readonly TwinDriftRecord[],
+  isDelegatePair: TwinDelegationCheck,
+): boolean {
+  if (a.file === b.file) return false;
+  if (!hasEnoughConceptContext(a, b)) return false;
+  // A thin controller/service/storage-style delegate calling its
+  // same-name implementation (directly, or through a chain of
+  // same-name forwarders) is not a drifted twin — it's the intended
+  // architecture. Skip the pair entirely (as if it didn't exist for
+  // grouping purposes) rather than merely excluding it from
+  // similarity scoring, so a cluster whose *only* cross-file pair is a
+  // delegation chain produces no group at all.
+  if (isDelegatePair?.(a, b, members) || isDelegatePair?.(b, a, members)) return false;
+  if (isStubOverPeer(a, b) || isStubOverPeer(b, a)) return false;
+  return true;
+}
+
+function compareTwinMembers(members: TwinDriftRecord[], isDelegatePair: TwinDelegationCheck) {
+  let bestNonIdentical: { a: TwinDriftRecord; b: TwinDriftRecord; similarity: number } | null = null;
+  let hasCrossFilePair = false;
+  let hasIdenticalPair = false;
+  const participatingSymbols = new Set<string>();
+
+  for (let i = 0; i < members.length; i += 1) {
+    for (let j = i + 1; j < members.length; j += 1) {
+      const a = members[i]!;
+      const b = members[j]!;
+      if (!comparableTwinPair(a, b, members, isDelegatePair)) continue;
+      hasCrossFilePair = true;
+      participatingSymbols.add(a.symbol);
+      participatingSymbols.add(b.symbol);
+      if (a.normalizedBody === b.normalizedBody) {
+        hasIdenticalPair = true;
+        continue;
+      }
+      const similarity = jaccardSimilarity(a.tokens, b.tokens);
+      if (!bestNonIdentical || similarity > bestNonIdentical.similarity) {
+        bestNonIdentical = { a, b, similarity };
+      }
+    }
+  }
+  return { bestNonIdentical, hasCrossFilePair, hasIdenticalPair, participatingSymbols };
+}
+
 /**
  * Pure grouping core: cluster records by (near-)leaf name, then classify
  * each cross-file cluster by its closest pair's body similarity.
@@ -175,90 +244,51 @@ export function groupTwins(
     () => ({ leaves: recordsByLeaf.size }),
   );
 
+  const groupCluster = (cluster: Set<string>): TwinGroup | null => {
+    const clusterMembers = twinMembersForCluster(cluster, recordsByLeaf, recordOrder);
+    const members = parallelTwinMembers(clusterMembers, isDelegatePair);
+    if (members.length < 2) return null;
+    if (new Set(members.map((member) => member.file)).size < 2) return null;
+    const { bestNonIdentical, hasCrossFilePair, hasIdenticalPair, participatingSymbols } = compareTwinMembers(
+      members,
+      isDelegatePair,
+    );
+    if (!hasCrossFilePair) return null;
+
+    const sortedMembers = members
+      .filter((member) => participatingSymbols.has(member.symbol))
+      .sort((left, right) => left.file.localeCompare(right.file) || left.startLine - right.startLine)
+      .map(toTwinMember);
+
+    if (!bestNonIdentical) {
+      // Every cross-file pair in this cluster is byte-identical — duplicate-bodies owns it.
+      return {
+        leaf: representativeLeaf(cluster),
+        relationship: hasIdenticalPair ? 'identical' : 'homonym',
+        maxDivergence: 0,
+        members: sortedMembers,
+      };
+    }
+
+    const relationship: TwinRelationship = bestNonIdentical.similarity >= minSimilarity ? 'divergent' : 'homonym';
+    return {
+      leaf: representativeLeaf(cluster),
+      relationship,
+      maxDivergence: Math.round((1 - bestNonIdentical.similarity) * 1000) / 1000,
+      members: sortedMembers,
+      ...(relationship === 'divergent'
+        ? { firstDivergentTokens: firstDivergentRun(bestNonIdentical.a.tokens, bestNonIdentical.b.tokens) }
+        : {}),
+    };
+  };
+
   const groups = profileSpan(
     'twin-drift.compare-clusters',
     () => {
       const output: TwinGroup[] = [];
       for (const cluster of clusters) {
-        const clusterMembers = twinMembersForCluster(cluster, recordsByLeaf, recordOrder);
-        // A member that calls another member of its cluster is a layer over it
-        // (a facade method, a controller over its service), not a parallel
-        // implementation of anything; it leaves the cluster before pairing so
-        // it cannot pair with the near-name members either.
-        const layered = new Set(
-          clusterMembers
-            .filter((member) =>
-              clusterMembers.some(
-                (other) =>
-                  other !== member && other.file !== member.file && isDelegatePair?.(member, other, clusterMembers),
-              ),
-            )
-            .map((member) => member.symbol),
-        );
-        const members = clusterMembers.filter((member) => !layered.has(member.symbol));
-        if (members.length < 2) continue;
-        if (new Set(members.map((member) => member.file)).size < 2) continue;
-        let bestNonIdentical: { a: TwinDriftRecord; b: TwinDriftRecord; similarity: number } | null = null;
-        let hasCrossFilePair = false;
-        let hasIdenticalPair = false;
-        const participatingSymbols = new Set<string>();
-
-        for (let i = 0; i < members.length; i += 1) {
-          for (let j = i + 1; j < members.length; j += 1) {
-            const a = members[i]!;
-            const b = members[j]!;
-            if (a.file === b.file) continue;
-            if (!hasEnoughConceptContext(a, b)) continue;
-            // A thin controller/service/storage-style delegate calling its
-            // same-name implementation (directly, or through a chain of
-            // same-name forwarders) is not a drifted twin — it's the intended
-            // architecture. Skip the pair entirely (as if it didn't exist for
-            // grouping purposes) rather than merely excluding it from
-            // similarity scoring, so a cluster whose *only* cross-file pair is a
-            // delegation chain produces no group at all.
-            if (isDelegatePair?.(a, b, members) || isDelegatePair?.(b, a, members)) continue;
-            if (isStubOverPeer(a, b) || isStubOverPeer(b, a)) continue;
-            hasCrossFilePair = true;
-            participatingSymbols.add(a.symbol);
-            participatingSymbols.add(b.symbol);
-            if (a.normalizedBody === b.normalizedBody) {
-              hasIdenticalPair = true;
-              continue;
-            }
-            const similarity = jaccardSimilarity(a.tokens, b.tokens);
-            if (!bestNonIdentical || similarity > bestNonIdentical.similarity) {
-              bestNonIdentical = { a, b, similarity };
-            }
-          }
-        }
-        if (!hasCrossFilePair) continue;
-
-        const sortedMembers = members
-          .filter((member) => participatingSymbols.has(member.symbol))
-          .sort((left, right) => left.file.localeCompare(right.file) || left.startLine - right.startLine)
-          .map(toTwinMember);
-
-        if (!bestNonIdentical) {
-          // Every cross-file pair in this cluster is byte-identical — duplicate-bodies owns it.
-          output.push({
-            leaf: representativeLeaf(cluster),
-            relationship: hasIdenticalPair ? 'identical' : 'homonym',
-            maxDivergence: 0,
-            members: sortedMembers,
-          });
-          continue;
-        }
-
-        const relationship: TwinRelationship = bestNonIdentical.similarity >= minSimilarity ? 'divergent' : 'homonym';
-        output.push({
-          leaf: representativeLeaf(cluster),
-          relationship,
-          maxDivergence: Math.round((1 - bestNonIdentical.similarity) * 1000) / 1000,
-          members: sortedMembers,
-          ...(relationship === 'divergent'
-            ? { firstDivergentTokens: firstDivergentRun(bestNonIdentical.a.tokens, bestNonIdentical.b.tokens) }
-            : {}),
-        });
+        const group = groupCluster(cluster);
+        if (group) output.push(group);
       }
       return output;
     },

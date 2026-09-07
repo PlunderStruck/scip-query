@@ -61,6 +61,30 @@ describe('TypeScript local definition-use and control dependence', () => {
     ).toBe(retainsInitial);
   });
 
+  it.each([
+    {
+      assignment: '({ first = fallback, alias: target.value, ...rest } = input);',
+      targets: ['first', 'target.value', 'rest'],
+    },
+    { assignment: '[first = fallback, , ...rest] = input;', targets: ['first', 'rest'] },
+    { assignment: '({ pair: [first = fallback, target.value] } = input);', targets: ['first', 'target.value'] },
+  ])('retains nested assignment targets and default sources for $assignment', ({ assignment, targets }) => {
+    const source = [
+      'function assign(input: any, fallback: number) {',
+      '  let first = 0; let rest: any; const target = { value: 0 };',
+      `  ${assignment}`,
+      '  return first;',
+      '}',
+    ].join('\n');
+    const result = analyzeTypeScriptLocalFlow(source, 'destructure.ts');
+    const definitions = result.points.filter((point) => point.kind === 'definition' && point.line === 2);
+    expect(definitions.map((point) => point.name)).toEqual(targets);
+    const defaultUse = pointAt(result.points, 'fallback', 'use', 2);
+    const first = pointAt(result.points, 'first', 'definition', 2);
+    expectEdge(result.edges, 'value-source', defaultUse, first);
+    expectEdge(result.edges, 'reaching-definition', first, pointAt(result.points, 'first', 'use', 3));
+  });
+
   it('meets the preregistered assignment, alias, argument, and return obligations', () => {
     const result = analyzeTypeScriptLocalFlow(source, fixturePath);
 

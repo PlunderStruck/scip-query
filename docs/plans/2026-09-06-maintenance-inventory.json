@@ -816,9 +816,14 @@
           "name": "similarAll.<callback:profileSpan:1>.<callback:profileSpan:1>"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Ranked complexity batch seven: 21/49 to 1/0; shared scanCalleePairs is 3/3. Stable candidate selection and iteration now have one owner shared with count mode.",
+      "verification": [
+        "167 focused tests across six files passed, including 21 new contract cases.",
+        "Full suite: 3133 tests across 350 files passed before final shared-loop extraction; affected 28 tests passed afterward.",
+        "Final source types, lint, build, format and API/consumer passed; skill links passed.",
+        "Final source health: 622 complexity findings, no reported duplication or configured dependency violation; fresh index and diff-impact."
+      ]
     },
     {
       "id": "complexity:src/queries/cleanup/twin-drift.ts:groupTwins.groups.<callback:profileSpan:1>",
@@ -831,9 +836,14 @@
           "name": "groupTwins.groups.<callback:profileSpan:1>"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Ranked complexity batch seven: 20/48 to 3/3. Separated layer removal, pair eligibility/comparison and cluster rendering.",
+      "verification": [
+        "167 focused tests across six files passed, including 21 new contract cases.",
+        "Full suite: 3133 tests across 350 files passed before final shared-loop extraction; affected 28 tests passed afterward.",
+        "Final source types, lint, build, format and API/consumer passed; skill links passed.",
+        "Final source health: 622 complexity findings, no reported duplication or configured dependency violation; fresh index and diff-impact."
+      ]
     },
     {
       "id": "complexity:src/runtime/output-pagination.ts:decodeCliOutputPageEnvelope",
@@ -846,9 +856,14 @@
           "name": "decodeCliOutputPageEnvelope"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Ranked complexity batch seven: 32/20 to 7/5. Split common fields, counts and completion checks without altering failure precedence.",
+      "verification": [
+        "167 focused tests across six files passed, including 21 new contract cases.",
+        "Full suite: 3133 tests across 350 files passed before final shared-loop extraction; affected 28 tests passed afterward.",
+        "Final source types, lint, build, format and API/consumer passed; skill links passed.",
+        "Final source health: 622 complexity findings, no reported duplication or configured dependency violation; fresh index and diff-impact."
+      ]
     },
     {
       "id": "complexity:src/semantic/typescript/local-flow.ts:assignmentTargets",
@@ -861,9 +876,14 @@
           "name": "assignmentTargets"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Ranked complexity batch seven: 26/48 to 8/8. Separated wrappers, partial element writes and nested object/array targets with use ordering preserved.",
+      "verification": [
+        "167 focused tests across six files passed, including 21 new contract cases.",
+        "Full suite: 3133 tests across 350 files passed before final shared-loop extraction; affected 28 tests passed afterward.",
+        "Final source types, lint, build, format and API/consumer passed; skill links passed.",
+        "Final source health: 622 complexity findings, no reported duplication or configured dependency violation; fresh index and diff-impact."
+      ]
     },
     {
       "id": "complexity:src/symbols/graph/member-call-targets.ts:factoryReturnedMemberImplementations",
@@ -876,9 +896,14 @@
           "name": "factoryReturnedMemberImplementations"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Ranked complexity batch seven: 30/48 to 10/13. Shared unique factory resolution and named returned-property sites, retaining source ranges and iterative collection.",
+      "verification": [
+        "167 focused tests across six files passed, including 21 new contract cases.",
+        "Full suite: 3133 tests across 350 files passed before final shared-loop extraction; affected 28 tests passed afterward.",
+        "Final source types, lint, build, format and API/consumer passed; skill links passed.",
+        "Final source health: 622 complexity findings, no reported duplication or configured dependency violation; fresh index and diff-impact."
+      ]
     },
     {
       "id": "complexity:src/analysis/runtime-boundaries/graph.ts:collectRuntimeBoundaryGraph",
@@ -936,9 +961,14 @@
           "name": "similarAllCount.<callback:profileSpan:1>.<callback:profileSpan:1>"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Ranked complexity batch seven: 20/46 to 1/0 through the same shared scan; profiling retains per-set accounting before comparisons.",
+      "verification": [
+        "167 focused tests across six files passed, including 21 new contract cases.",
+        "Full suite: 3133 tests across 350 files passed before final shared-loop extraction; affected 28 tests passed afterward.",
+        "Final source types, lint, build, format and API/consumer passed; skill links passed.",
+        "Final source health: 622 complexity findings, no reported duplication or configured dependency violation; fresh index and diff-impact."
+      ]
     },
     {
       "id": "complexity:src/queries/cleanup/doc-drift.ts:docDrift",

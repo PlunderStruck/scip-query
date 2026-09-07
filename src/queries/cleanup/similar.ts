@@ -384,57 +384,43 @@ export function similarAll(
       const topResults: RankedSimilarResult[] = [];
       let resultOrder = 0;
 
+      const compareCandidate = (a: SymbolFingerprint, j: number, magnitudeA: number): void => {
+        const b = all[j]!;
+
+        if (crossFileOnly && a.file === b.file) {
+          if (profiling) crossFileSkips += 1;
+          return;
+        }
+
+        if (signaturePairShouldSkip(a, b)) {
+          if (profiling) signatureSkips += 1;
+          return;
+        }
+
+        if (profiling) comparedPairs += 1;
+        const result = comparePair(a, b, index.idfWeights, {
+          minSimilarity,
+          requireSignificantShared: 2,
+          requireSharedCount: 4,
+          medianIdf: index.medianIdf,
+          magnitudeA,
+          magnitudeB: index.weightedMagnitudes[j]!,
+        });
+        if (!result) return;
+        insertTopSimilarResult(topResults, result, limit, resultOrder);
+        if (profiling) insertedResults += 1;
+        resultOrder += 1;
+      };
+
       profileSpan(
         'similar.all.pair-scan',
-        () => {
-          for (let i = 0; i < all.length; i += 1) {
-            const a = all[i]!;
-            const aFocused = focusFiles?.has(a.file) ?? false;
-            const magnitudeA = index.weightedMagnitudes[i]!;
-            const candidates = new Set<number>();
-            for (const callee of a.callees) {
-              const bucket = index.candidateIndexesByCallee.get(callee);
-              if (!bucket) continue;
-              for (const j of bucket) {
-                if (j <= i) continue;
-                if (focusFiles && !aFocused && !focusFiles.has(all[j]!.file)) continue;
-                candidates.add(j);
-              }
-            }
+        () =>
+          scanCalleePairs(index, focusFiles, compareCandidate, (count) => {
             if (profiling) {
-              candidatePairs += candidates.size;
-              if (candidates.size > 0) candidateSets += 1;
+              candidatePairs += count;
+              if (count > 0) candidateSets += 1;
             }
-
-            for (const j of candidates) {
-              const b = all[j]!;
-
-              if (crossFileOnly && a.file === b.file) {
-                if (profiling) crossFileSkips += 1;
-                continue;
-              }
-
-              if (signaturePairShouldSkip(a, b)) {
-                if (profiling) signatureSkips += 1;
-                continue;
-              }
-
-              if (profiling) comparedPairs += 1;
-              const result = comparePair(a, b, index.idfWeights, {
-                minSimilarity,
-                requireSignificantShared: 2,
-                requireSharedCount: 4,
-                medianIdf: index.medianIdf,
-                magnitudeA,
-                magnitudeB: index.weightedMagnitudes[j]!,
-              });
-              if (!result) continue;
-              insertTopSimilarResult(topResults, result, limit, resultOrder);
-              if (profiling) insertedResults += 1;
-              resultOrder += 1;
-            }
-          }
-        },
+          }),
         () => ({
           corpusSize,
           candidateSets,
@@ -513,57 +499,43 @@ export function similarAllCount(
       corpusSize = all.length;
       const focusFiles = opts.focusFiles;
 
+      const compareCandidate = (a: SymbolFingerprint, j: number, magnitudeA: number): void => {
+        const b = all[j]!;
+
+        if (crossFileOnly && a.file === b.file) {
+          if (profiling) crossFileSkips += 1;
+          return;
+        }
+        if (signaturePairShouldSkip(a, b)) {
+          if (profiling) signatureSkips += 1;
+          return;
+        }
+
+        if (profiling) comparedPairs += 1;
+        if (
+          !pairPassesSimilarity(a, b, index.idfWeights, {
+            minSimilarity,
+            requireSignificantShared: 2,
+            requireSharedCount: 4,
+            medianIdf: index.medianIdf,
+            magnitudeA,
+            magnitudeB: index.weightedMagnitudes[j]!,
+          })
+        ) {
+          return;
+        }
+        insertedResults += 1;
+      };
+
       profileSpan(
         'similar.all-count.pair-scan',
-        () => {
-          for (let i = 0; i < all.length; i += 1) {
-            const a = all[i]!;
-            const aFocused = focusFiles?.has(a.file) ?? false;
-            const magnitudeA = index.weightedMagnitudes[i]!;
-            const candidates = new Set<number>();
-            for (const callee of a.callees) {
-              const bucket = index.candidateIndexesByCallee.get(callee);
-              if (!bucket) continue;
-              for (const j of bucket) {
-                if (j <= i) continue;
-                if (focusFiles && !aFocused && !focusFiles.has(all[j]!.file)) continue;
-                candidates.add(j);
-              }
-            }
+        () =>
+          scanCalleePairs(index, focusFiles, compareCandidate, (count) => {
             if (profiling) {
-              candidatePairs += candidates.size;
-              if (candidates.size > 0) candidateSets += 1;
+              candidatePairs += count;
+              if (count > 0) candidateSets += 1;
             }
-
-            for (const j of candidates) {
-              const b = all[j]!;
-
-              if (crossFileOnly && a.file === b.file) {
-                if (profiling) crossFileSkips += 1;
-                continue;
-              }
-              if (signaturePairShouldSkip(a, b)) {
-                if (profiling) signatureSkips += 1;
-                continue;
-              }
-
-              if (profiling) comparedPairs += 1;
-              if (
-                !pairPassesSimilarity(a, b, index.idfWeights, {
-                  minSimilarity,
-                  requireSignificantShared: 2,
-                  requireSharedCount: 4,
-                  medianIdf: index.medianIdf,
-                  magnitudeA,
-                  magnitudeB: index.weightedMagnitudes[j]!,
-                })
-              ) {
-                continue;
-              }
-              insertedResults += 1;
-            }
-          }
-        },
+          }),
         () => ({
           corpusSize,
           candidateSets,
@@ -593,6 +565,44 @@ export function similarAllCount(
       insertedResults,
     }),
   );
+}
+
+function scanCalleePairs(
+  index: CalleeFingerprintIndex,
+  focusFiles: ReadonlySet<string> | undefined,
+  compareCandidate: (a: SymbolFingerprint, position: number, magnitudeA: number) => void,
+  recordCandidateSet: (count: number) => void,
+): void {
+  for (let i = 0; i < index.corpus.length; i += 1) {
+    const a = index.corpus[i]!;
+    const magnitudeA = index.weightedMagnitudes[i]!;
+    const candidates = laterCalleeCandidates(index, i, focusFiles);
+    recordCandidateSet(candidates.size);
+    for (const j of candidates) compareCandidate(a, j, magnitudeA);
+  }
+}
+
+/** Each later corpus entry sharing a callee, in stable first-seen order. */
+function laterCalleeCandidates(
+  index: CalleeFingerprintIndex,
+  position: number,
+  focusFiles: ReadonlySet<string> | undefined,
+): Set<number> {
+  const current = index.corpus[position]!;
+  const currentFocused = focusFiles?.has(current.file) ?? false;
+  const candidates = new Set<number>();
+  const addBucket = (bucket: readonly number[]): void => {
+    for (const candidate of bucket) {
+      if (candidate <= position) continue;
+      if (focusFiles && !currentFocused && !focusFiles.has(index.corpus[candidate]!.file)) continue;
+      candidates.add(candidate);
+    }
+  };
+  for (const callee of current.callees) {
+    const bucket = index.candidateIndexesByCallee.get(callee);
+    if (bucket) addBucket(bucket);
+  }
+  return candidates;
 }
 
 // ── Internal helpers ───────────────────────────────────────
