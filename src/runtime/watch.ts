@@ -212,6 +212,8 @@ export class Watcher {
   private reindexInFlight = false;
   private lastReindexEnd = 0;
   /** Generation identity the watcher last saw; a different published identity means someone else refreshed. */
+  /** Source events invalidate freshness observations even when the published generation is unchanged. */
+  private publicationObservationInvalidated = false;
   private lastObservedGeneration: string | null = null;
   private readonly publishedGeneration: (outputDb: string) => string | null;
   private readonly indexFreshness: (
@@ -437,6 +439,7 @@ export class Watcher {
     changes?: readonly ProjectInputChangeEntry[],
     changesComplete = false,
   ): void {
+    this.publicationObservationInvalidated = true;
     this.pendingTrigger = mergeRefreshTrigger(this.pendingTrigger, trigger);
     if (!changesComplete) this.markPendingChangesIncomplete(`unstructured-trigger:${trigger.kind}`);
     for (const change of changes ?? []) this.recordPendingChange(change);
@@ -494,7 +497,7 @@ export class Watcher {
   // visible together.
   private triggerReindex(): void {
     if (this.reindexInFlight || this.stopped) return;
-    if (this.reconcileExternalPublication()) return;
+    if (this.reconcilePublishedIndex()) return;
 
     const budget = this.inspectBudget();
     const allowExpensiveRebuild = this.watchConfig.allowExpensiveRebuild && budget.state !== 'paused';
@@ -878,7 +881,7 @@ export class Watcher {
     const delay = Math.min(this.watchConfig.gitPollMs, remaining);
     this.reconcileTimer = this.clock.setTimeout(() => {
       this.reconcileTimer = null;
-      if (this.stopped || this.reconcileExternalPublication()) return;
+      if (this.stopped || this.reconcilePublishedIndex()) return;
       if (this.status.state === 'cooldown' || this.status.state === 'budget-paused') {
         this.armReconcileTimer(this.status.until);
       }
@@ -902,15 +905,11 @@ export class Watcher {
   }
 
   /**
-   * A manual `reindex` or `setup` publishes a generation the watcher did not
-   * produce. When one appears while work is pending (dirty, cooldown, budget
-   * pause, or a debounce wait) and the published index matches the working
-   * tree, the pending refresh is already satisfied: drop it and report the
-   * suppression instead of holding "changes pending" until the budget window
-   * or cooldown expires and then re-running a refresh that would only be
-   * suppressed as fresh anyway. Returns true when pending work was cleared.
+   * Clear pending work when an accepted publication already matches the source,
+   * including a publication from another producer or a source edit that restores
+   * indexed bytes. Definitive observations are reused only until the next input event.
    */
-  private reconcileExternalPublication(): boolean {
+  private reconcilePublishedIndex(): boolean {
     if (this.stopped || this.reindexInFlight) return false;
     const pending =
       this.dirty ||
@@ -918,16 +917,7 @@ export class Watcher {
       this.status.state === 'cooldown' ||
       this.status.state === 'waiting';
     if (!pending) return false;
-    const generation = this.readPublishedGeneration();
-    if (generation === null || generation === this.lastObservedGeneration) return false;
-    this.lastObservedGeneration = generation;
-    let freshness: IndexFreshnessState;
-    try {
-      freshness = this.indexFreshness(this.projectRoot, this.config, this.outputDb);
-    } catch {
-      return false;
-    }
-    if (freshness !== 'fresh') return false;
+    if (!this.hasFreshPublishedIndex()) return false;
     const suppressedTrigger = this.pendingTrigger ?? { kind: 'unknown' as const };
     this.clearDebounceTimer();
     this.clearCooldownTimer();
@@ -939,10 +929,28 @@ export class Watcher {
     refreshPublishedTypeScriptInputScope(this);
     this.onRefreshSuppressed({
       ...suppressedTrigger,
-      detail: `a generation published outside the watcher is fresh${suppressedTrigger.detail ? ` (${suppressedTrigger.detail})` : ''}`,
+      detail: `the published index matches current source${suppressedTrigger.detail ? ` (${suppressedTrigger.detail})` : ''}`,
     });
     this.setStatus({ state: 'idle' });
     return true;
+  }
+
+  private hasFreshPublishedIndex(): boolean {
+    const generation = this.readPublishedGeneration();
+    if (generation === null || (generation === this.lastObservedGeneration && !this.publicationObservationInvalidated))
+      return false;
+    let freshness: IndexFreshnessState;
+    try {
+      freshness = this.indexFreshness(this.projectRoot, this.config, this.outputDb);
+    } catch {
+      return false;
+    }
+    // An unavailable observation must remain retryable for the same generation.
+    if (freshness === 'fresh' || freshness === 'stale') {
+      this.lastObservedGeneration = generation;
+      this.publicationObservationInvalidated = false;
+    }
+    return freshness === 'fresh';
   }
 
   private pollGitState(): void {

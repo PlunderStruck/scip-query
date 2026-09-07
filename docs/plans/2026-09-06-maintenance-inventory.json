@@ -153,9 +153,9 @@
           "name": "focusedConnectorSlice"
         }
       ],
-      "status": "pending",
-      "assessment": "Refactored source selection and rendering; regex binding selection replaced by compiler identities. Final assessment remains pending for residual metrics and open coverage/control-closure questions.",
-      "verification": []
+      "status": "fixed",
+      "assessment": "Split source binding selection, selected control bodies, and rendering into named responsibilities. Binding/control selection now reaches a fixed point together; exact-copy counts agree with displayed line evidence.",
+      "verification": "Earlier failing binding/coverage regressions pass. The complete current-source scanner snapshot at 887bd7c2 no longer flags this parent function; the existing function was retained and repaired, not deleted to drop its finding."
     },
     {
       "id": "complexity:src/queries/graph/system-map.ts:expandSourceConstructCallFrontier",
@@ -6791,9 +6791,9 @@
           "name": "Watcher.reconcileExternalPublication"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "fixed",
+      "assessment": "Replaced with reconcilePublishedIndex plus one generation/freshness observation owner. Failed/unknown/missing observations remain retryable; source events invalidate definitive cached observations. Pending work is cleared only after a fresh match, without attributing publication to an unproven producer.",
+      "verification": "Four distinguishing lifecycle regressions failed before fixes; all 52 watcher tests and all 3,049 full-suite tests pass. Source review: accounted and no blocking findings."
     },
     {
       "id": "complexity:src/semantic/rust/durable-session-protocol.ts:decodeDurableRustSessionRequest",

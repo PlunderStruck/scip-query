@@ -336,6 +336,104 @@ describe('Watcher', () => {
     await watcher.stop();
   });
 
+  it.each(['throws', 'unknown', 'missing'] as const)(
+    'retries an external publication after a transient %s freshness observation',
+    async (failure) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-01T18:00:00.000Z'));
+      const projectRoot = createProject();
+      const { Watcher } = await import('../../src/runtime/watch.js');
+      const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+      const suppressed = vi.fn();
+      const statuses: Array<{ state: string }> = [];
+      let generation = 'initial';
+      let recovered = false;
+      const watcher = new Watcher({
+        projectRoot,
+        config: { watch: { gitPollMs: 1_000 } },
+        reindexRunner: { start: run },
+        budgetInspector: (_db, _config, now) => ({
+          state: 'paused',
+          reason: 'estimated-write-bytes',
+          until: now.getTime() + 900_000,
+          rebuilt: 1,
+          estimatedWriteBytes: 1_000,
+          detail: 'budget consumed',
+        }),
+        publishedGeneration: () => generation,
+        indexFreshness: () => {
+          if (recovered) return 'fresh';
+          if (failure === 'throws') throw new Error('transient metadata read');
+          return failure;
+        },
+        onStatus: (status) => statuses.push(status),
+        onRefreshSuppressed: suppressed,
+      });
+      watcher.start();
+      try {
+        watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' }, { immediate: true });
+        generation = 'manual-publication';
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(statuses.at(-1)?.state).toBe('budget-paused');
+        recovered = true;
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(statuses.at(-1)?.state).toBe('idle');
+        expect(suppressed).toHaveBeenCalledOnce();
+        expect(run).not.toHaveBeenCalled();
+      } finally {
+        await watcher.stop();
+      }
+    },
+  );
+
+  it('rechecks a known-stale publication after a new source change without requiring another generation', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-01T18:00:00.000Z'));
+    const projectRoot = createProject();
+    const { Watcher } = await import('../../src/runtime/watch.js');
+    let generation = 'initial';
+    let freshness: 'fresh' | 'stale' = 'stale';
+    const indexFreshness = vi.fn(() => freshness);
+    const run = vi.fn<(request: ReindexRunRequest) => ReindexOperation>(() => completedOperation());
+    const suppressed = vi.fn();
+    const statuses: Array<{ state: string }> = [];
+    const watcher = new Watcher({
+      projectRoot,
+      config: { watch: { gitPollMs: 1_000 } },
+      reindexRunner: { start: run },
+      budgetInspector: (_db, _config, now) => ({
+        state: 'paused',
+        reason: 'estimated-write-bytes',
+        until: now.getTime() + 900_000,
+        rebuilt: 1,
+        estimatedWriteBytes: 1_000,
+        detail: 'budget consumed',
+      }),
+      publishedGeneration: () => generation,
+      indexFreshness,
+      onStatus: (status) => statuses.push(status),
+      onRefreshSuppressed: suppressed,
+    });
+    watcher.start();
+    try {
+      watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' }, { immediate: true });
+      generation = 'manual-publication';
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(statuses.at(-1)?.state).toBe('budget-paused');
+      const observations = indexFreshness.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(indexFreshness).toHaveBeenCalledTimes(observations);
+      freshness = 'fresh';
+      watcher.requestRefresh({ kind: 'watch-source', detail: 'src/a.ts' });
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(statuses.at(-1)?.state).toBe('idle');
+      expect(suppressed).toHaveBeenCalledOnce();
+      expect(run).not.toHaveBeenCalled();
+    } finally {
+      await watcher.stop();
+    }
+  });
+
   it('drops a budget-paused pending refresh once a manual reindex publishes a fresh generation', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-01T18:00:00.000Z'));
@@ -382,7 +480,7 @@ describe('Watcher', () => {
     expect(suppressed).toEqual([
       expect.objectContaining({
         kind: 'watch-source',
-        detail: expect.stringContaining('published outside the watcher'),
+        detail: expect.stringContaining('published index matches current source'),
       }),
     ]);
     expect(run).not.toHaveBeenCalled();
