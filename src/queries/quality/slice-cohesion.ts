@@ -1,5 +1,5 @@
 import type * as TypeScript from 'typescript';
-import { bindingNames } from '../../source/ast/maintenance-bindings.js';
+import { bindingNames } from '../../source/ast/function-metrics.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import {

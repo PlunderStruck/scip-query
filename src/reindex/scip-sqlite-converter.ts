@@ -277,9 +277,257 @@ function chunkOccurrencesBlob(buffer: Uint8Array, records: readonly OccurrenceRe
   return zstdCompressSync(Buffer.concat(frames));
 }
 
+function readDocumentDeclarations(buffer: Uint8Array, start: number, end: number) {
+  let relativePath = '';
+  let language: string | null = null;
+  let text: string | null = null;
+  let positionEncoding: string | null = null;
+  const declaredSymbols: SymbolRecord[] = [];
+  for (const docField of eachWireField(buffer, start, end)) {
+    if (docField.wireType === 2) {
+      if (docField.fieldNumber === DOC_RELATIVE_PATH) {
+        relativePath = textDecoder.decode(buffer.subarray(docField.valueStart, docField.valueEnd));
+      } else if (docField.fieldNumber === DOC_SYMBOLS) {
+        declaredSymbols.push(parseSymbolInformation(buffer, docField.valueStart, docField.valueEnd));
+      } else if (docField.fieldNumber === DOC_LANGUAGE) {
+        language = textDecoder.decode(buffer.subarray(docField.valueStart, docField.valueEnd));
+      } else if (docField.fieldNumber === DOC_TEXT) {
+        text = textDecoder.decode(buffer.subarray(docField.valueStart, docField.valueEnd));
+      }
+    } else if (docField.fieldNumber === DOC_POSITION_ENCODING && docField.wireType === 0) {
+      positionEncoding = positionEncodingName(docField.varint);
+    }
+  }
+  return { relativePath, language, text, positionEncoding, declaredSymbols };
+}
+
+function flattenDeclaredSymbols(declaredSymbols: SymbolRecord[], relativePath: string): SymbolRecord[] {
+  const flattened = new Map<string, SymbolRecord>();
+  for (const symbol of declaredSymbols) {
+    if (symbol.symbol === '') {
+      throw new ScipSqliteConversionError(`empty symbol in SymbolInformation for document ${relativePath}`);
+    }
+    const existing = flattened.get(symbol.symbol);
+    if (!existing) {
+      flattened.set(symbol.symbol, symbol);
+      continue;
+    }
+    for (const doc of symbol.documentation) {
+      if (!existing.documentation.includes(doc)) existing.documentation.push(doc);
+    }
+  }
+  return [...flattened.values()].sort((a, b) => (a.symbol < b.symbol ? -1 : a.symbol > b.symbol ? 1 : 0));
+}
+
+function readDocumentOccurrences(buffer: Uint8Array, start: number, end: number, stats: ScipSqliteConversionStats) {
+  let relativePath = '';
+  const records: OccurrenceRecord[] = [];
+  for (const docField of eachWireField(buffer, start, end)) {
+    if (docField.wireType !== 2) continue;
+    if (docField.fieldNumber === DOC_RELATIVE_PATH) {
+      relativePath = textDecoder.decode(buffer.subarray(docField.valueStart, docField.valueEnd));
+    } else if (docField.fieldNumber === DOC_OCCURRENCES) {
+      const record = parseOccurrence(buffer, docField.fieldStart, docField.valueStart, docField.valueEnd);
+      if (record) records.push(record);
+      else stats.illegalOccurrencesDropped += 1;
+    }
+  }
+  return { relativePath, records };
+}
+
+function flattenOccurrences(records: OccurrenceRecord[], stats: ScipSqliteConversionStats): OccurrenceRecord[] {
+  records.sort(compareOccurrences);
+  const occurrences: OccurrenceRecord[] = [];
+  for (const record of records) {
+    const top = occurrences[occurrences.length - 1];
+    if (
+      top &&
+      top.startLine === record.startLine &&
+      top.startChar === record.startChar &&
+      top.endLine === record.endLine &&
+      top.endChar === record.endChar &&
+      top.symbol === record.symbol
+    ) {
+      top.roles |= record.roles;
+      top.merged = true;
+      stats.mergedOccurrences += 1;
+      continue;
+    }
+    occurrences.push(record);
+  }
+  stats.occurrences += occurrences.length;
+  return occurrences;
+}
+
+function validateEnclosingRange(range: NonNullable<OccurrenceRecord['enclosing']>, symbol: string, file: string): void {
+  const [startLine, startChar, endLine, endChar] = range;
+  if (startLine < 0 || startChar < 0 || endLine < startLine || (endLine === startLine && endChar < startChar)) {
+    throw new ScipSqliteConversionError(`bad enclosing range for symbol ${symbol} in ${file}`);
+  }
+}
+
+class ConversionWriter {
+  private readonly insertDocument: Database.Statement;
+  private readonly insertChunk: Database.Statement;
+  private readonly insertEnclosing: Database.Statement;
+  private readonly insertSymbol: Database.Statement;
+  private readonly insertMention: Database.Statement;
+  constructor(
+    db: Database.Database,
+    private readonly stats: ScipSqliteConversionStats,
+  ) {
+    this.insertDocument = db.prepare(
+      'INSERT INTO documents (id, language, relative_path, position_encoding, text) VALUES (?, ?, ?, ?, ?)',
+    );
+    this.insertChunk = db.prepare(
+      'INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES (?, ?, ?, ?, ?, ?)',
+    );
+    this.insertEnclosing = db.prepare(
+      'INSERT INTO defn_enclosing_ranges (document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES (?, ?, ?, ?, ?, ?)',
+    );
+    this.insertSymbol = db.prepare(
+      'INSERT INTO global_symbols (id, symbol, display_name, kind, documentation, enclosing_symbol) VALUES (?, ?, ?, ?, ?, ?)',
+    );
+    this.insertMention = db.prepare('INSERT INTO mentions (chunk_id, symbol_id, role) VALUES (?, ?, ?)');
+  }
+  readonly documentIds = new Map<string, number>();
+  private readonly symbolIds = new Map<string, number>();
+  // Ids are assigned in insertion order in JS, so no insert needs a
+  // lastInsertRowid round-trip. Rows stay single-statement on purpose:
+  // multi-row VALUES batches into global_symbols measured pathologically
+  // slow here (SQLite spent whole seconds in b-tree scans per batch), while
+  // single-row prepared inserts complete the whole index in a few seconds.
+  private nextDocumentId = 1;
+  private nextChunkId = 1;
+  private nextSymbolId = 1;
+  private addSymbol(
+    symbol: string,
+    displayName: string | null,
+    kind: number | null,
+    documentation: string | null,
+    enclosingSymbol: string | null,
+  ): number {
+    const id = this.nextSymbolId;
+    this.nextSymbolId += 1;
+    this.symbolIds.set(symbol, id);
+    this.insertSymbol.run(id, symbol, displayName, kind, documentation, enclosingSymbol);
+    this.stats.globalSymbols += 1;
+    return id;
+  }
+
+  writeDeclarations(document: ReturnType<typeof readDocumentDeclarations>): void {
+    const { relativePath, language, text, positionEncoding, declaredSymbols } = document;
+    if (relativePath === '') throw new ScipSqliteConversionError('relative path must not be empty');
+    if (this.documentIds.has(relativePath)) {
+      this.stats.duplicateDocumentsSkipped += 1;
+      return;
+    }
+    const documentId = this.nextDocumentId;
+    this.nextDocumentId += 1;
+    this.insertDocument.run(
+      documentId,
+      language === '' ? null : language,
+      relativePath,
+      positionEncoding,
+      text === '' ? null : text,
+    );
+    this.documentIds.set(relativePath, documentId);
+    this.stats.documents += 1;
+
+    this.writeDeclaredSymbols(flattenDeclaredSymbols(declaredSymbols, relativePath));
+  }
+
+  private writeDeclaredSymbols(symbols: SymbolRecord[]): void {
+    for (const symbol of symbols) {
+      if (isLocalSymbol(symbol.symbol) || this.symbolIds.has(symbol.symbol)) continue;
+      this.addSymbol(
+        symbol.symbol,
+        symbol.displayName === '' ? null : symbol.displayName,
+        symbol.kind === 0 ? null : symbol.kind,
+        symbol.documentation.length === 0 ? null : symbol.documentation.join('\n'),
+        symbol.enclosingSymbol === '' ? null : symbol.enclosingSymbol,
+      );
+    }
+  }
+
+  writeEnclosingRanges(documentId: number, relativePath: string, occurrences: OccurrenceRecord[]): void {
+    // Enclosing ranges precede this document's occurrence-discovered
+    // symbols, matching the Go converter's lookup semantics.
+    for (const record of occurrences) {
+      if ((record.roles & SYMBOL_ROLE_DEFINITION) === 0 || isLocalSymbol(record.symbol) || !record.enclosing) {
+        continue;
+      }
+      const [startLine, startChar, endLine, endChar] = record.enclosing;
+      validateEnclosingRange(record.enclosing, record.symbol, relativePath);
+      const symbolId = this.symbolIds.get(record.symbol);
+      if (symbolId === undefined) {
+        throw new ScipSqliteConversionError(
+          `symbol ${record.symbol} has definition occurrence, but no SymbolInformation`,
+        );
+      }
+      this.insertEnclosing.run(documentId, symbolId, startLine, startChar, endLine, endChar);
+      this.stats.enclosingRanges += 1;
+    }
+  }
+
+  writeChunks(buffer: Uint8Array, documentId: number, occurrences: OccurrenceRecord[], chunkSize: number): void {
+    for (const [chunkIndex, chunk] of chunkOccurrenceRecords(occurrences, chunkSize).entries()) {
+      const chunkId = this.nextChunkId;
+      this.nextChunkId += 1;
+      this.insertChunk.run(
+        chunkId,
+        documentId,
+        chunkIndex,
+        chunk[0]!.startLine,
+        chunk[chunk.length - 1]!.startLine,
+        chunkOccurrencesBlob(buffer, chunk),
+      );
+      this.stats.chunks += 1;
+      this.writeMentions(chunkId, chunk);
+    }
+  }
+
+  private writeMentions(chunkId: number, chunk: readonly OccurrenceRecord[]): void {
+    const roleSets = new Map<string, Set<number>>();
+    for (const record of chunk) {
+      if (isLocalSymbol(record.symbol)) continue;
+      let roles = roleSets.get(record.symbol);
+      if (!roles) roleSets.set(record.symbol, (roles = new Set()));
+      roles.add(record.roles);
+      if (!this.symbolIds.has(record.symbol)) this.addSymbol(record.symbol, null, null, null, null);
+    }
+    for (const [symbol, roles] of roleSets) {
+      const symbolId = this.symbolIds.get(symbol)!;
+      for (const role of roles) {
+        this.insertMention.run(chunkId, symbolId, role);
+        this.stats.mentions += 1;
+      }
+    }
+  }
+}
+
+// Both passes visit wire documents in index order and yield at the same boundaries.
+async function visitIndexDocuments(
+  buffer: Uint8Array,
+  signal: AbortSignal | undefined,
+  visit: (start: number, end: number) => void,
+): Promise<void> {
+  let documentsSinceYield = 0;
+  for (const field of eachWireField(buffer)) {
+    if (field.fieldNumber !== INDEX_DOCUMENT_FIELD || field.wireType !== 2) continue;
+    throwIfAborted(signal);
+    documentsSinceYield += 1;
+    if (documentsSinceYield >= CONVERSION_YIELD_INTERVAL_DOCUMENTS) {
+      documentsSinceYield = 0;
+      await yieldToEventLoop();
+    }
+    visit(field.valueStart, field.valueEnd);
+  }
+}
+
 /**
  * Converts one SCIP index file (already read into memory) into a fresh SQLite
- * database at `outputDbPath`, replacing any existing file. Two streaming
+ * database at `outputDbPath`. Two streaming
  * passes mirror the Go converter's phases: documents plus their declared
  * symbols first, then occurrence-derived rows, so symbol ids exist before
  * enclosing-range rows reference them.
@@ -309,223 +557,25 @@ export async function convertScipBufferToSqlite(
     db.pragma('journal_mode = WAL');
     for (const statement of CREATE_STATEMENTS) db.exec(statement);
 
-    const insertDocument = db.prepare(
-      'INSERT INTO documents (id, language, relative_path, position_encoding, text) VALUES (?, ?, ?, ?, ?)',
-    );
-    const insertChunk = db.prepare(
-      'INSERT INTO chunks (id, document_id, chunk_index, start_line, end_line, occurrences) VALUES (?, ?, ?, ?, ?, ?)',
-    );
-    const insertEnclosing = db.prepare(
-      'INSERT INTO defn_enclosing_ranges (document_id, symbol_id, start_line, start_char, end_line, end_char) VALUES (?, ?, ?, ?, ?, ?)',
-    );
-    const insertSymbol = db.prepare(
-      'INSERT INTO global_symbols (id, symbol, display_name, kind, documentation, enclosing_symbol) VALUES (?, ?, ?, ?, ?, ?)',
-    );
-    const insertMention = db.prepare('INSERT INTO mentions (chunk_id, symbol_id, role) VALUES (?, ?, ?)');
-
-    const documentIds = new Map<string, number>();
-    const symbolIds = new Map<string, number>();
-    // Ids are assigned in insertion order in JS, so no insert needs a
-    // lastInsertRowid round-trip. Rows stay single-statement on purpose:
-    // multi-row VALUES batches into global_symbols measured pathologically
-    // slow here (SQLite spent whole seconds in b-tree scans per batch), while
-    // single-row prepared inserts complete the whole index in a few seconds.
-    let nextDocumentId = 1;
-    let nextChunkId = 1;
-    let nextSymbolId = 1;
-    const addSymbol = (
-      symbol: string,
-      displayName: string | null,
-      kind: number | null,
-      documentation: string | null,
-      enclosingSymbol: string | null,
-    ): number => {
-      const id = nextSymbolId;
-      nextSymbolId += 1;
-      symbolIds.set(symbol, id);
-      insertSymbol.run(id, symbol, displayName, kind, documentation, enclosingSymbol);
-      stats.globalSymbols += 1;
-      return id;
-    };
-
+    const writer = new ConversionWriter(db, stats);
     db.exec('BEGIN IMMEDIATE');
     let committed = false;
     try {
-      // Pass 1: document rows and their declared symbols, in index order.
-      let documentsSinceYield = 0;
-      for (const field of eachWireField(buffer)) {
-        if (field.fieldNumber !== INDEX_DOCUMENT_FIELD || field.wireType !== 2) continue;
-        throwIfAborted(opts.signal);
-        documentsSinceYield += 1;
-        if (documentsSinceYield >= CONVERSION_YIELD_INTERVAL_DOCUMENTS) {
-          documentsSinceYield = 0;
-          await yieldToEventLoop();
-        }
-        let relativePath = '';
-        let language: string | null = null;
-        let text: string | null = null;
-        let positionEncoding: string | null = null;
-        const declaredSymbols: SymbolRecord[] = [];
-        for (const docField of eachWireField(buffer, field.valueStart, field.valueEnd)) {
-          if (docField.wireType === 2) {
-            if (docField.fieldNumber === DOC_RELATIVE_PATH) {
-              relativePath = textDecoder.decode(buffer.subarray(docField.valueStart, docField.valueEnd));
-            } else if (docField.fieldNumber === DOC_SYMBOLS) {
-              declaredSymbols.push(parseSymbolInformation(buffer, docField.valueStart, docField.valueEnd));
-            } else if (docField.fieldNumber === DOC_LANGUAGE) {
-              language = textDecoder.decode(buffer.subarray(docField.valueStart, docField.valueEnd));
-            } else if (docField.fieldNumber === DOC_TEXT) {
-              text = textDecoder.decode(buffer.subarray(docField.valueStart, docField.valueEnd));
-            }
-          } else if (docField.fieldNumber === DOC_POSITION_ENCODING && docField.wireType === 0) {
-            positionEncoding = positionEncodingName(docField.varint);
-          }
-        }
-        if (relativePath === '') throw new ScipSqliteConversionError('relative path must not be empty');
-        if (documentIds.has(relativePath)) {
-          stats.duplicateDocumentsSkipped += 1;
-          continue;
-        }
-        const documentId = nextDocumentId;
-        nextDocumentId += 1;
-        insertDocument.run(
-          documentId,
-          language === '' ? null : language,
-          relativePath,
-          positionEncoding,
-          text === '' ? null : text,
-        );
-        documentIds.set(relativePath, documentId);
-        stats.documents += 1;
-
-        // Go canonicalization merges duplicate SymbolInformation entries and
-        // sorts by symbol before insertion.
-        const flattened = new Map<string, SymbolRecord>();
-        for (const symbol of declaredSymbols) {
-          if (symbol.symbol === '') {
-            throw new ScipSqliteConversionError(`empty symbol in SymbolInformation for document ${relativePath}`);
-          }
-          const existing = flattened.get(symbol.symbol);
-          if (!existing) {
-            flattened.set(symbol.symbol, symbol);
-            continue;
-          }
-          for (const doc of symbol.documentation) {
-            if (!existing.documentation.includes(doc)) existing.documentation.push(doc);
-          }
-        }
-        for (const symbol of [...flattened.values()].sort((a, b) =>
-          a.symbol < b.symbol ? -1 : a.symbol > b.symbol ? 1 : 0,
-        )) {
-          if (isLocalSymbol(symbol.symbol) || symbolIds.has(symbol.symbol)) continue;
-          addSymbol(
-            symbol.symbol,
-            symbol.displayName === '' ? null : symbol.displayName,
-            symbol.kind === 0 ? null : symbol.kind,
-            symbol.documentation.length === 0 ? null : symbol.documentation.join('\n'),
-            symbol.enclosingSymbol === '' ? null : symbol.enclosingSymbol,
-          );
-        }
-      }
-
-      // Pass 2: occurrence-derived rows per document, in the same order.
+      // All declarations must exist before occurrence-derived rows are written.
+      await visitIndexDocuments(buffer, opts.signal, (start, end) => {
+        writer.writeDeclarations(readDocumentDeclarations(buffer, start, end));
+      });
       const seenPaths = new Set<string>();
-      documentsSinceYield = 0;
-      for (const field of eachWireField(buffer)) {
-        if (field.fieldNumber !== INDEX_DOCUMENT_FIELD || field.wireType !== 2) continue;
-        throwIfAborted(opts.signal);
-        documentsSinceYield += 1;
-        if (documentsSinceYield >= CONVERSION_YIELD_INTERVAL_DOCUMENTS) {
-          documentsSinceYield = 0;
-          await yieldToEventLoop();
-        }
-        let relativePath = '';
-        const records: OccurrenceRecord[] = [];
-        for (const docField of eachWireField(buffer, field.valueStart, field.valueEnd)) {
-          if (docField.wireType !== 2) continue;
-          if (docField.fieldNumber === DOC_RELATIVE_PATH) {
-            relativePath = textDecoder.decode(buffer.subarray(docField.valueStart, docField.valueEnd));
-          } else if (docField.fieldNumber === DOC_OCCURRENCES) {
-            const record = parseOccurrence(buffer, docField.fieldStart, docField.valueStart, docField.valueEnd);
-            if (record) records.push(record);
-            else stats.illegalOccurrencesDropped += 1;
-          }
-        }
-        if (seenPaths.has(relativePath)) continue;
+      await visitIndexDocuments(buffer, opts.signal, (start, end) => {
+        const { relativePath, records } = readDocumentOccurrences(buffer, start, end, stats);
+        if (seenPaths.has(relativePath)) return;
         seenPaths.add(relativePath);
-        const documentId = documentIds.get(relativePath);
-        if (documentId === undefined) continue;
-
-        records.sort(compareOccurrences);
-        const occurrences: OccurrenceRecord[] = [];
-        for (const record of records) {
-          const top = occurrences[occurrences.length - 1];
-          if (
-            top &&
-            top.startLine === record.startLine &&
-            top.startChar === record.startChar &&
-            top.endLine === record.endLine &&
-            top.endChar === record.endChar &&
-            top.symbol === record.symbol
-          ) {
-            top.roles |= record.roles;
-            top.merged = true;
-            stats.mergedOccurrences += 1;
-            continue;
-          }
-          occurrences.push(record);
-        }
-        stats.occurrences += occurrences.length;
-
-        // Enclosing ranges precede this document's occurrence-discovered
-        // symbols, matching the Go converter's lookup semantics.
-        for (const record of occurrences) {
-          if ((record.roles & SYMBOL_ROLE_DEFINITION) === 0 || isLocalSymbol(record.symbol) || !record.enclosing) {
-            continue;
-          }
-          const [startLine, startChar, endLine, endChar] = record.enclosing;
-          if (startLine < 0 || startChar < 0 || endLine < startLine || (endLine === startLine && endChar < startChar)) {
-            throw new ScipSqliteConversionError(`bad enclosing range for symbol ${record.symbol} in ${relativePath}`);
-          }
-          const symbolId = symbolIds.get(record.symbol);
-          if (symbolId === undefined) {
-            throw new ScipSqliteConversionError(
-              `symbol ${record.symbol} has definition occurrence, but no SymbolInformation`,
-            );
-          }
-          insertEnclosing.run(documentId, symbolId, startLine, startChar, endLine, endChar);
-          stats.enclosingRanges += 1;
-        }
-
-        for (const [chunkIndex, chunk] of chunkOccurrenceRecords(occurrences, chunkSize).entries()) {
-          const chunkId = nextChunkId;
-          nextChunkId += 1;
-          insertChunk.run(
-            chunkId,
-            documentId,
-            chunkIndex,
-            chunk[0]!.startLine,
-            chunk[chunk.length - 1]!.startLine,
-            chunkOccurrencesBlob(buffer, chunk),
-          );
-          stats.chunks += 1;
-          const roleSets = new Map<string, Set<number>>();
-          for (const record of chunk) {
-            if (isLocalSymbol(record.symbol)) continue;
-            let roles = roleSets.get(record.symbol);
-            if (!roles) roleSets.set(record.symbol, (roles = new Set()));
-            roles.add(record.roles);
-            if (!symbolIds.has(record.symbol)) addSymbol(record.symbol, null, null, null, null);
-          }
-          for (const [symbol, roles] of roleSets) {
-            const symbolId = symbolIds.get(symbol)!;
-            for (const role of roles) {
-              insertMention.run(chunkId, symbolId, role);
-              stats.mentions += 1;
-            }
-          }
-        }
-      }
+        const documentId = writer.documentIds.get(relativePath);
+        if (documentId === undefined) return;
+        const occurrences = flattenOccurrences(records, stats);
+        writer.writeEnclosingRanges(documentId, relativePath, occurrences);
+        writer.writeChunks(buffer, documentId, occurrences, chunkSize);
+      });
       db.exec('COMMIT');
       committed = true;
     } finally {

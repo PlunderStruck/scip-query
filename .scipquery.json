@@ -151,6 +151,7 @@
           "src/runtime/project-reindex.ts",
           "src/runtime/project-setup.ts",
           "src/runtime/query-service-fastpath.ts",
+          "src/runtime/query-service-envelope.ts",
           "src/runtime/query-service-server.ts",
           "src/runtime/query-service.ts",
           "src/runtime/refs-pagination.ts",

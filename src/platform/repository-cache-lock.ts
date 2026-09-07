@@ -3,7 +3,7 @@ import { monotonicNowMs } from '../domain/time.js';
 import { abortSignalReason, throwIfSignalAborted } from './abort-signal.js';
 import {
   tryAcquireProcessFileLock,
-  type LegacyProcessLockDecoder,
+  decodeLegacyPidLock,
   type ProcessFileLock,
   type ProcessFileLockDirectoryDurability,
 } from './process-file-lock.js';
@@ -11,12 +11,6 @@ import {
 export interface RepositoryCacheLock {
   release(): void;
 }
-
-const parseLegacyGenericLock: LegacyProcessLockDecoder = (value) => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const pid = (value as { pid?: unknown }).pid;
-  return typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0 ? { pid } : null;
-};
 
 /**
  * Serializes repository-cache reachability changes with garbage collection.
@@ -92,7 +86,7 @@ function tryAcquireGenericLock(
 ): ProcessFileLock | null {
   const result = tryAcquireProcessFileLock(lockPath, {
     kind: 'generic',
-    parseLegacy: parseLegacyGenericLock,
+    parseLegacy: decodeLegacyPidLock,
     ...(directoryDurability ? { directoryDurability } : {}),
   });
   return result.kind === 'acquired' ? result.lock : null;

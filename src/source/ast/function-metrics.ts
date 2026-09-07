@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ts } from '@ts-morph/common';
-import { bindingNames } from './maintenance-bindings.js';
+import type * as TypeScript from 'typescript';
 
 export interface ComplexityContribution {
   line: number;
@@ -42,6 +42,12 @@ export interface SourceExportDeclaration {
   names: string[];
   syntax: string;
   from?: string;
+}
+
+/** Names introduced by either compiler provider's binding pattern, excluding keys, defaults and array holes. */
+export function bindingNames(name: TypeScript.BindingName | ts.BindingName): string[] {
+  if (!('elements' in name)) return [name.text];
+  return name.elements.flatMap((element) => ('name' in element ? bindingNames(element.name) : []));
 }
 
 export const FUNCTION_METRIC_RULES = 'typescript-function-local-v1';

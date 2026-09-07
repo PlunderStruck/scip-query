@@ -10,7 +10,7 @@ import {
   reclaimProcessFileLock,
   releaseOwnedProcessFileLock,
   tryAcquireProcessFileLock,
-  type LegacyProcessLockDecoder,
+  decodeLegacyPidLock,
   type ProcessFileLockRecord,
   type ProcessFileLockRuntime,
 } from '../../src/platform/process-file-lock.js';
@@ -27,17 +27,28 @@ const SUCCESSOR_IDENTITY: ProcessIdentity = {
   ...OWNER_IDENTITY,
   startToken: 'successor-start',
 };
-const parseLegacyPid: LegacyProcessLockDecoder = (value) => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const pid = (value as { pid?: unknown }).pid;
-  return typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0 ? { pid } : null;
-};
 
 afterEach(() => {
   for (const path of tempDirs.splice(0)) rmSync(path, { recursive: true, force: true });
 });
 
 describe('process file lock protocol', () => {
+  it.each([null, [], {}, { pid: '42' }, { pid: 0 }, { pid: -1 }, { pid: 1.5 }, { pid: Number.MAX_SAFE_INTEGER + 1 }])(
+    'does not reclaim malformed legacy ownership %j',
+    (value) => {
+      const lockPath = temporaryLockPath();
+      const raw = JSON.stringify(value);
+      writeFileSync(lockPath, raw);
+      const result = tryAcquireProcessFileLock(lockPath, {
+        kind: 'test',
+        parseLegacy: decodeLegacyPidLock,
+        runtime: lockRuntime(),
+      });
+      expect(result.kind).toBe('contended');
+      expect(readFileSync(lockPath, 'utf8')).toBe(raw);
+    },
+  );
+
   it('publishes a versioned, token-owned record and flushes the file before its directory', () => {
     const lockPath = temporaryLockPath();
     const events: string[] = [];
@@ -290,7 +301,7 @@ describe('process file lock protocol', () => {
       kind: 'test',
       processIdentity: null,
       creationGraceMs: 0,
-      parseLegacy: parseLegacyPid,
+      parseLegacy: decodeLegacyPidLock,
       runtime: lockRuntime({
         wallNow: () => Date.now() + 1_000,
         isProcessAlive: () => true,
@@ -299,7 +310,7 @@ describe('process file lock protocol', () => {
     });
 
     expect(result.kind).toBe('contended');
-    expect(readProcessFileLock(lockPath, { parseLegacy: parseLegacyPid }).state).toBe('legacy');
+    expect(readProcessFileLock(lockPath, { parseLegacy: decodeLegacyPidLock }).state).toBe('legacy');
   });
 
   it('reclaims a live PID slot when the recorded process birth identity no longer matches', () => {

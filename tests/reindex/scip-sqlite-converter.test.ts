@@ -200,6 +200,96 @@ describe('SCIP SQLite converter', () => {
     ).rejects.toThrow(ScipSqliteConversionError);
   });
 
+  it.each([1, 3])('rolls back partial writes when interrupted at document yield %i', async (yieldNumber) => {
+    const controller = new AbortController();
+    const out = dbPath(`interrupted-${yieldNumber}.db`);
+    const buffer = Buffer.from(
+      serializeSCIP(
+        create(IndexSchema, {
+          documents: Array.from({ length: 128 }, (_, i) =>
+            create(DocumentSchema, {
+              relativePath: `src/${i}.ts`,
+              symbols: [create(SymbolInformationSchema, { symbol: SYM(`f${i}()`) })],
+              occurrences: [
+                create(OccurrenceSchema, {
+                  symbol: SYM(`f${i}()`),
+                  symbolRoles: SymbolRole.Definition,
+                  range: [0, 0, 3],
+                  enclosingRange: [0, 0, 1, 0],
+                }),
+              ],
+            }),
+          ),
+        }),
+      ),
+    );
+    let remaining = yieldNumber;
+    const interrupt = (): void => {
+      remaining -= 1;
+      if (remaining === 0) controller.abort();
+      else setImmediate(interrupt);
+    };
+    setImmediate(interrupt);
+    await expect(convertScipBufferToSqlite(buffer, out, { signal: controller.signal })).rejects.toThrow(
+      'conversion aborted',
+    );
+    const db = new Database(out);
+    try {
+      for (const table of ['documents', 'global_symbols', 'chunks', 'mentions', 'defn_enclosing_ranges']) {
+        expect(db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()).toEqual({ count: 0 });
+      }
+      // The failed converter released its connection and transaction.
+      db.exec('BEGIN EXCLUSIVE; ROLLBACK;');
+    } finally {
+      db.close();
+    }
+  });
+
+  it('resolves declarations from later documents before writing enclosing ranges', async () => {
+    const symbol = SYM('later()');
+    const out = dbPath('forward-declaration.db');
+    const bytes = Buffer.from(
+      serializeSCIP(
+        create(IndexSchema, {
+          documents: [
+            create(DocumentSchema, {
+              relativePath: 'first.ts',
+              occurrences: [
+                create(OccurrenceSchema, {
+                  symbol,
+                  symbolRoles: SymbolRole.Definition,
+                  range: [0, 0, 3],
+                  enclosingRange: [0, 0, 1, 0],
+                }),
+              ],
+            }),
+            create(DocumentSchema, {
+              relativePath: 'later.ts',
+              symbols: [create(SymbolInformationSchema, { symbol })],
+            }),
+          ],
+        }),
+      ),
+    );
+    expect(await convertScipBufferToSqlite(bytes, out)).toMatchObject({
+      documents: 2,
+      globalSymbols: 1,
+      enclosingRanges: 1,
+    });
+    const db = new Database(out, { readonly: true });
+    try {
+      expect(
+        db
+          .prepare(
+            'SELECT d.relative_path, s.symbol FROM defn_enclosing_ranges r JOIN documents d ON d.id = r.document_id JOIN global_symbols s ON s.id = r.symbol_id',
+          )
+          .all(),
+      ).toEqual([{ relative_path: 'first.ts', symbol }]);
+    } finally {
+      db.close();
+    }
+  });
+
   const scipBinary = resolveScipBinary();
   it.skipIf(!scipBinary)('matches scip expt-convert row for row on the same index', async () => {
     const scipFile = dbPath('index.scip');

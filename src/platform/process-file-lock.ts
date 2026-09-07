@@ -131,6 +131,13 @@ export const NODE_PROCESS_FILE_LOCK_RUNTIME: ProcessFileLockRuntime = Object.fre
 
 export type LegacyProcessLockDecoder = (value: unknown) => ProcessFileLockOwner | null;
 
+/** Reads the PID-only ownership records written before versioned lock publication. */
+export const decodeLegacyPidLock: LegacyProcessLockDecoder = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const pid = (value as { pid?: unknown }).pid;
+  return typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0 ? { pid } : null;
+};
+
 export interface TryAcquireProcessFileLockOptions {
   kind: string;
   detail?: Record<string, unknown>;

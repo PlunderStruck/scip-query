@@ -1,13 +1,6 @@
 import { ts } from '@ts-morph/common';
-import type * as TypeScript from 'typescript';
 import type { FunctionAnalysis, SourceFunction } from './function-metrics.js';
 import type { SourceImport } from './maintenance-imports.js';
-
-/** Names introduced by either compiler provider's binding pattern, excluding keys, defaults and array holes. */
-export function bindingNames(name: TypeScript.BindingName | ts.BindingName): string[] {
-  if (!('elements' in name)) return [name.text];
-  return name.elements.flatMap((element) => ('name' in element ? bindingNames(element.name) : []));
-}
 
 export interface MaintenanceFunctionBindings {
   fn: SourceFunction;

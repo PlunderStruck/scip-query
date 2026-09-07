@@ -31,7 +31,7 @@ import {
 } from '../storage/atomic-file.js';
 import { cliVersion } from '../platform/cli-version.js';
 import { acquireProcessFileLock, acquireRepositoryCacheLock } from '../platform/repository-cache-lock.js';
-import { tryAcquireProcessFileLock, type LegacyProcessLockDecoder } from '../platform/process-file-lock.js';
+import { tryAcquireProcessFileLock, decodeLegacyPidLock } from '../platform/process-file-lock.js';
 import {
   automaticSharedCacheEnabled,
   canonicalCacheIdentity,
@@ -829,18 +829,13 @@ export async function acquireSharedGenerationBuildLock(
   const deadline = now() + timeoutMs;
   const locksDir = join(snapshot.repositoryCacheDir, 'locks');
   const lockPath = join(locksDir, `${snapshot.generationId}.lock`);
-  const parseLegacyBuildLock: LegacyProcessLockDecoder = (value) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-    const pid = (value as { pid?: unknown }).pid;
-    return typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0 ? { pid } : null;
-  };
 
   while (now() <= deadline) {
     if (readSharedGeneration(snapshot)) return { kind: 'generation-ready' };
     const acquired = tryAcquireProcessFileLock(lockPath, {
       kind: 'shared-generation-build',
       detail: { generationId: snapshot.generationId },
-      parseLegacy: parseLegacyBuildLock,
+      parseLegacy: decodeLegacyPidLock,
     });
     if (acquired.kind === 'acquired') {
       return {
