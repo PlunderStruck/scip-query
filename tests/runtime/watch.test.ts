@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url';
 import { EventEmitter } from 'node:events';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
@@ -601,6 +602,36 @@ describe('Watcher', () => {
     expect(run.mock.calls[1]?.[0].trigger).toEqual({ kind: 'watch-source', detail: 'src/a.ts' });
     expect(onReindexError).not.toHaveBeenCalled();
     await watcher.stop();
+  });
+
+  it('decodes the worker module URL into a filesystem path for encoded installation names', async () => {
+    const projectRoot = createProject();
+    const installRoot = join(projectRoot, 'installation with spaces # and %');
+    const moduleUrl = pathToFileURL(join(installRoot, 'watch.js'));
+    const { resolveReindexWorkerLaunch } = await import('../../src/runtime/watch.js');
+    const NativeURL = globalThis.URL;
+    vi.stubGlobal(
+      'URL',
+      class extends NativeURL {
+        constructor(input: string | URL, base?: string | URL) {
+          super(input, input === './reindex-worker.js' ? moduleUrl : base);
+        }
+      },
+    );
+    try {
+      const launch = resolveReindexWorkerLaunch(
+        {
+          projectRoot,
+          config: {},
+          pnpmWorkspaces: false,
+          trigger: { kind: 'watch-source' },
+        },
+        (pid) => ({ version: 1, pid, platform: process.platform, startToken: 'test-parent' }),
+      );
+      expect(launch.workerPath).toBe(join(installRoot, 'reindex-worker.js'));
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('passes canonical index paths and trigger metadata to the reindex worker', async () => {

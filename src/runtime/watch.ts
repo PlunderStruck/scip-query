@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { existsSync, lstatSync, statSync, watch as watchNative, type FSWatcher } from 'node:fs';
 import { EventEmitter } from 'node:events';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -1146,7 +1147,7 @@ export function resolveReindexWorkerLaunch(
     throw new Error(`Could not establish watcher process identity for reindex worker ownership (pid ${process.pid}).`);
   }
   return {
-    workerPath: new URL('./reindex-worker.js', import.meta.url).pathname,
+    workerPath: fileURLToPath(new URL('./reindex-worker.js', import.meta.url)),
     env: {
       ...process.env,
       SCIP_REINDEX_PROJECT_ROOT: projectRoot,

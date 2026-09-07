@@ -3386,9 +3386,9 @@
           "name": "Watcher.constructor"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "assessed-retained",
+      "assessment": "Read the complete constructor: the metric comes primarily from optional dependency injection and configuration defaults. It initializes one watcher instance, its per-instance input/retirement state, ignore policy, and published-generation observation. Splitting assignment groups would obscure that initialization contract. Keep the owner and numerical signal; no suppression.",
+      "verification": "48 watcher tests cover the injected runner/clock, launch metadata, source/Git changes and lifecycle. A live daemon subsequently indexed the real source edit incrementally and stopped cleanly. This assessment does not close other watcher lifecycle findings."
     },
     {
       "id": "complexity:src/runtime/watch.ts:Watcher.pollGitState",
