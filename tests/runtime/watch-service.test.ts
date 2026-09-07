@@ -20,6 +20,7 @@ import {
   planWatchServiceAction,
   recordWatchServiceActivity,
   readWatchServiceActivityAt,
+  readWatchProcessLock,
   requestWatchServiceRefresh,
   resolveWatchServiceIdentity,
   shouldStopWatchServiceForIdle,
@@ -43,6 +44,28 @@ const WATCH_PROCESS_IDENTITY: ProcessIdentity = {
 };
 
 describe('watch service contract', () => {
+  it.each([
+    { pid: Number.MAX_SAFE_INTEGER + 1 },
+    { pid: 2 ** 60 },
+    { protocol: 'scip-query-process-lock' },
+    { protocol: 'unknown-lock-protocol' },
+  ])('rejects malformed ownership instead of interpreting it as a legacy watch lock: %j', (override) => {
+    withTempCache((cacheDir) => {
+      const paths = watchServicePaths(cacheDir);
+      writeFileSync(
+        paths.lockPath,
+        JSON.stringify({
+          version: 1,
+          pid: 123,
+          projectRoot: IDENTITY.projectRoot,
+          startedAt: new Date(NOW).toISOString(),
+          ...override,
+        }),
+      );
+      expect(readWatchProcessLock(paths.lockPath)).toBeNull();
+    });
+  });
+
   it('flushes authority transitions but keeps heartbeat telemetry visibility-atomic', () => {
     const root = mkdtempSync(join(tmpdir(), 'scip-query-watch-state-durability-'));
     const path = join(root, 'state.json');

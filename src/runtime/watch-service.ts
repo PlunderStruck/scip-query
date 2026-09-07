@@ -14,6 +14,7 @@ import {
 import { isProcessAlive } from '../platform/process-liveness.js';
 import {
   NODE_PROCESS_FILE_LOCK_RUNTIME,
+  decodeLegacyPidLock,
   readProcessFileLock,
   reclaimProcessFileLock,
   tryAcquireProcessFileLock,
@@ -520,22 +521,22 @@ function watchMetadataFromObservation(observation: ProcessFileLockObservation): 
 
 function parseLegacyWatchMetadata(value: unknown): WatchProcessLockMetadata | null {
   try {
+    const owner = decodeLegacyPidLock(value);
     const parsed = value as Partial<WatchProcessLockMetadata>;
     if (
+      !owner ||
+      Object.hasOwn(parsed, 'protocol') ||
       parsed.version !== 1 ||
-      typeof parsed.pid !== 'number' ||
-      !Number.isInteger(parsed.pid) ||
-      parsed.pid <= 0 ||
       typeof parsed.projectRoot !== 'string' ||
       !isValidWatchServiceTimestamp(parsed.startedAt)
     ) {
       return null;
     }
     const processIdentity = parsed.processIdentity === undefined ? null : parseProcessIdentity(parsed.processIdentity);
-    if (parsed.processIdentity !== undefined && (!processIdentity || processIdentity.pid !== parsed.pid)) return null;
+    if (parsed.processIdentity !== undefined && (!processIdentity || processIdentity.pid !== owner.pid)) return null;
     return {
       version: 1,
-      pid: parsed.pid,
+      pid: owner.pid,
       ...(processIdentity ? { processIdentity } : {}),
       projectRoot: parsed.projectRoot,
       startedAt: parsed.startedAt,

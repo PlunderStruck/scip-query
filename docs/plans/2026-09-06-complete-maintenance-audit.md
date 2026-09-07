@@ -180,3 +180,19 @@ Both control and treatment pass 17/17 obligations in each phase. Control188,661m
 #### Final activity-label verification
 
 Build, TypeScript, lint, public API, consumer compilation and accounted source review pass for the one-line label correction. Full suite remains the 3,058-test run from the immediately preceding lifecycle batch; no claim of another full run after a display-only edit. Installed the final tarball on dev-agent and verified all452 packaged files again; all four watchers restarted successfully. Main PID885079; worktree PIDs885127,885181,885276. Built watch --status succeeds; full output is saved in /tmp/scip-maintenance-final-rollout.json and the recorded window label is checked separately. Previous9ce8a0de package remains available for rollback. Other pending maintenance findings remain open.
+
+### Legacy watcher ownership decoder — next confirmed gap
+
+The legacy watcher decoder uses Number.isInteger for PIDs, accepting integers outside JavaScript's exact range, and permits a protocol-bearing malformed modern record to fall back to legacy ownership when it also has legacy fields. The generic process-lock reader trusts the supplied legacy decoder; no downstream validation repairs this. Add regressions through public readWatchProcessLock for unsafe numeric PIDs and malformed protocol-bearing records, then require safe PID integers and an unmarked legacy record. Preserve supported version-one legacy locks and current modern watch records.
+
+#### Legacy ownership corrections verified
+
+- Reject protocol-marked malformed records rather than interpreting them as the unmarked version-one legacy format.
+- Reuse decodeLegacyPidLock for the positive safe-integer PID contract; remove this decoder's differing numeric checks. Preserve matching birth identity, path and timestamp validation.
+- Four new regression cases fail before correction and pass afterward. All61 controller, orphan-pruning and generic process-lock tests pass; TypeScript and lint pass. Source review is accounted with no blocking findings. parseLegacyWatchMetadata now measures12/8; its remaining warning is assessed-retained with the reason recorded. The explicit lifecycle decision table was also reviewed and retained. 631 original records remain pending.
+- User steering: no further agent benchmarks. Focus on fixes and regression checks. The completed prior trial remains a historical artifact; do not launch additional model evaluations.
+- Build/API/diff-impact checks are the remaining pre-commit checks for this batch. This does not claim the broader maintenance audit is complete.
+
+#### Legacy decoder batch ready to commit
+
+Build, public API contract, public consumer compilation, skill links, typecheck, lint, formatting and diff checks pass. The four distinguishing regressions and all61 focused tests pass. Refreshed the local index successfully (12.8s), confirmed fresh status, and reran diff-impact; it identifies the changed legacy decoder. The report still explicitly excludes four non-indexed paths and leaves the import-line edit unattributed; no complete-consumer or absence claim is made from that packet. No additional agent benchmark was run after the user requested focus on fixes.

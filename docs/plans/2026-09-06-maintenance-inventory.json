@@ -5801,9 +5801,9 @@
           "name": "planWatchServiceAction"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "assessed-retained",
+      "assessment": "Reviewed the complete request/state decision table. Status reports without mutation; ensure distinguishes a missing/dead owner from a live owner with an old heartbeat; stop retains its explicit signaling decision. Keeping the exhaustive tagged-state switch makes these ownership decisions visible; no metric-only extraction or suppression.",
+      "verification": "Read every switch branch and assertNever path plus the lifecycle action tests; the 61-test controller/pruning/process-lock run covers reuse, stale cleanup, incompatible replacement and refusal to replace solely on heartbeat age."
     },
     {
       "id": "complexity:src/semantic/rust/lsp-session-worker.ts:runSessionRequest",
@@ -6761,9 +6761,9 @@
           "name": "parseLegacyWatchMetadata"
         }
       ],
-      "status": "pending",
-      "assessment": null,
-      "verification": []
+      "status": "assessed-retained",
+      "assessment": "Fixed unsafe integer PIDs and malformed modern records being accepted as legacy ownership. Reused the existing checked legacy PID decoder so there is one numeric ownership contract. The remaining 12/8 complexity warning reflects version, resource path, timestamp and birth-identity validation and remains visible.",
+      "verification": "All four malformed-record regressions fail on the original decoder and pass after correction. 61 controller/pruning/process-lock tests pass. Source review accounted with no blocking findings."
     },
     {
       "id": "complexity:src/runtime/watch-service.ts:stopLiveWatchProcess",
