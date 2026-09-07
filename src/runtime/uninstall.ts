@@ -18,29 +18,37 @@ export function formatUninstallReport(report: UninstallReport, opts: { verbose?:
   const lines: string[] = [];
   const prefix = report.dryRun ? 'would ' : '';
 
-  if (report.global) {
-    for (const target of report.global.removed) lines.push(`  ${prefix}remove: ${target}`);
-    if (opts.verbose) {
-      for (const target of report.global.left) lines.push(`  left: ${target}`);
-    } else if (report.global.left.length > 0) {
-      const noun = report.global.left.length === 1 ? 'entry' : 'entries';
-      lines.push(`  left: ${report.global.left.length} unrelated global skill ${noun} (use --verbose to list)`);
-    }
-    for (const skip of report.global.skipped) lines.push(`  skip: ${skip}`);
-  }
-
-  if (report.project) {
-    for (const target of report.project.agentSetup.removed) lines.push(`  ${prefix}remove: ${target}`);
-    for (const target of report.project.agentSetup.unchanged) lines.push(`  ok: ${target} (no managed block)`);
-    for (const skip of report.project.agentSetup.skipped) lines.push(`  skip: ${skip.target} — ${skip.reason}`);
-    for (const target of report.project.left) lines.push(`  left: ${target}`);
-  }
+  if (report.global) appendGlobalUninstallReport(lines, report.global, prefix, opts.verbose);
+  if (report.project) appendProjectUninstallReport(lines, report.project, prefix);
 
   const removed = (report.global?.removed.length ?? 0) + (report.project?.agentSetup.removed.length ?? 0);
   if (removed === 0) {
     lines.push(report.dryRun ? 'No scip-query-owned files would be removed.' : 'No scip-query-owned files removed.');
   }
   return lines;
+}
+
+function appendGlobalUninstallReport(
+  lines: string[],
+  report: UninstallSkillsResult,
+  prefix: string,
+  verbose: boolean | undefined,
+): void {
+  for (const target of report.removed) lines.push(`  ${prefix}remove: ${target}`);
+  if (verbose) {
+    for (const target of report.left) lines.push(`  left: ${target}`);
+  } else if (report.left.length > 0) {
+    const noun = report.left.length === 1 ? 'entry' : 'entries';
+    lines.push(`  left: ${report.left.length} unrelated global skill ${noun} (use --verbose to list)`);
+  }
+  for (const skip of report.skipped) lines.push(`  skip: ${skip}`);
+}
+
+function appendProjectUninstallReport(lines: string[], report: ProjectUninstallResult, prefix: string): void {
+  for (const target of report.agentSetup.removed) lines.push(`  ${prefix}remove: ${target}`);
+  for (const target of report.agentSetup.unchanged) lines.push(`  ok: ${target} (no managed block)`);
+  for (const skip of report.agentSetup.skipped) lines.push(`  skip: ${skip.target} — ${skip.reason}`);
+  for (const target of report.left) lines.push(`  left: ${target}`);
 }
 
 export type UninstallScopeSelection = { ok: true; global: boolean; project: boolean } | { ok: false; message: string };

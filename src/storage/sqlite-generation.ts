@@ -519,17 +519,32 @@ function validPublication(value: unknown): boolean {
     publication.patchDurationMs,
   ].filter((entry) => entry !== undefined);
   return (
+    validPublicationTiming(publication, numericValues) &&
+    validPublicationCompanion(publication) &&
+    (publication.fallbackReason === undefined || typeof publication.fallbackReason === 'string')
+  );
+}
+
+function validPublicationTiming(
+  publication: Partial<SqlitePublicationRecord>,
+  numericValues: readonly unknown[],
+): boolean {
+  return (
     (publication.mode === 'incremental' || publication.mode === 'full') &&
     publication.validation === 'passed' &&
     publication.converterDurationMs !== undefined &&
-    numericValues.every((entry) => typeof entry === 'number' && Number.isFinite(entry) && entry >= 0) &&
+    numericValues.every((entry) => typeof entry === 'number' && Number.isFinite(entry) && entry >= 0)
+  );
+}
+
+function validPublicationCompanion(publication: Partial<SqlitePublicationRecord>): boolean {
+  return (
     (publication.scipCompanion === undefined ||
       publication.scipCompanion === 'current' ||
       publication.scipCompanion === 'deferred') &&
     (publication.typescriptOverlayGeneration === undefined ||
       (typeof publication.typescriptOverlayGeneration === 'string' &&
         Boolean(publication.typescriptOverlayGeneration))) &&
-    (publication.scipCompanion !== 'deferred' || Boolean(publication.typescriptOverlayGeneration)) &&
-    (publication.fallbackReason === undefined || typeof publication.fallbackReason === 'string')
+    (publication.scipCompanion !== 'deferred' || Boolean(publication.typescriptOverlayGeneration))
   );
 }

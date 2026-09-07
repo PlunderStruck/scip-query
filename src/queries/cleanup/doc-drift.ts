@@ -460,81 +460,140 @@ export function docsCitingFiles(
 ): Array<{ doc: string; cited: string[]; citations: DocFileCitation[]; citedClaims: string[] }> {
   if (targets.size === 0) return [];
   const profiling = profileEnabled();
-  let trackedCount = 0;
-  let livingDocs = 0;
-  let unreadableDocs = 0;
-  let candidateMisses = 0;
-  let evidenceDocs = 0;
-  let citedDocs = 0;
+  const metrics: DocCitationScanMetrics = {
+    trackedCount: 0,
+    livingDocs: 0,
+    unreadableDocs: 0,
+    candidateMisses: 0,
+    evidenceDocs: 0,
+    citedDocs: 0,
+  };
   return profileSpan(
     'doc-reference.docs-citing-files',
     () => {
       const tracked = gitEvidenceProduct(db).trackedFiles() ?? new Set<string>();
-      trackedCount = tracked.size;
+      metrics.trackedCount = tracked.size;
       const trackedBySuffix = buildSuffixIndex(tracked);
       const targetCandidates = targetPathCandidates(targets, trackedBySuffix);
       const out: Array<{ doc: string; cited: string[]; citations: DocFileCitation[]; citedClaims: string[] }> = [];
       for (const docFile of tracked) {
-        if (!isLivingDoc(db, docFile)) continue;
-        if (profiling) livingDocs += 1;
-        const content = getSourceText(db, docFile);
-        if (!content && !projectFileExists(db.config.projectRoot, docFile)) {
-          if (profiling) unreadableDocs += 1;
-          continue;
-        }
-        if (!containsAnyPathCandidate(content, targetCandidates)) {
-          if (profiling) candidateMisses += 1;
-          continue;
-        }
-        const pathEvidence = docPathEvidence(db, docFile, content);
-        if (!pathEvidence) continue;
-        if (profiling) evidenceDocs += 1;
-        const citedByCandidate = citedTargetsFromCandidates(
-          pathEvidence.candidates,
+        const citation = scanDocFileCitations(
+          db,
+          docFile,
           targets,
           targetCandidates,
           tracked,
           trackedBySuffix,
+          profiling,
+          metrics,
         );
-        if (citedByCandidate.size === 0) continue;
-
-        const contextCandidates = [...new Set([...citedByCandidate.values()].flatMap((cited) => [...cited]))];
-        const contextsByCandidate = citationContextsForCandidates(pathEvidence.contextsByCandidate, contextCandidates);
-        const citations: DocFileCitation[] = [...citedByCandidate]
-          .map(([file, fileCandidates]) => ({
-            file,
-            contexts: uniqueCitationContexts(
-              [...fileCandidates].flatMap((candidate) => contextsByCandidate.get(candidate) ?? []),
-            ).slice(0, 3),
-            lineReferences: uniqueLineReferences(
-              [...fileCandidates].flatMap((candidate) => pathEvidence.lineReferencesByCandidate.get(candidate) ?? []),
-            ),
-          }))
-          .filter((citation) => citation.contexts.length > 0);
-        const cited = [...citedByCandidate.keys()];
-        if (cited.length > 0) {
-          if (profiling) citedDocs += 1;
-          const sortedCited = cited.sort();
-          out.push({
-            doc: docFile,
-            cited: sortedCited,
-            citations,
-            citedClaims: uniqueCitationContexts(citations.flatMap((citation) => citation.contexts)).slice(0, 3),
-          });
-        }
+        if (citation) out.push(citation);
       }
       return out;
     },
     () => ({
       targets: targets.size,
-      trackedFiles: trackedCount,
-      livingDocs,
-      unreadableDocs,
-      candidateMisses,
-      evidenceDocs,
-      citedDocs,
+      trackedFiles: metrics.trackedCount,
+      livingDocs: metrics.livingDocs,
+      unreadableDocs: metrics.unreadableDocs,
+      candidateMisses: metrics.candidateMisses,
+      evidenceDocs: metrics.evidenceDocs,
+      citedDocs: metrics.citedDocs,
     }),
   );
+}
+
+interface DocCitationScanMetrics {
+  trackedCount: number;
+  livingDocs: number;
+  unreadableDocs: number;
+  candidateMisses: number;
+  evidenceDocs: number;
+  citedDocs: number;
+}
+
+type DocFileCitationResult = ReturnType<typeof docsCitingFiles>[number];
+
+function scanDocFileCitations(
+  db: ScipDatabase,
+  docFile: string,
+  targets: ReadonlySet<string>,
+  targetCandidates: ReturnType<typeof targetPathCandidates>,
+  tracked: ReadonlySet<string>,
+  trackedBySuffix: ReturnType<typeof buildSuffixIndex>,
+  profiling: boolean,
+  metrics: DocCitationScanMetrics,
+): DocFileCitationResult | null {
+  const pathEvidence = citationEvidenceForDoc(db, docFile, targetCandidates, profiling, metrics);
+  if (!pathEvidence) return null;
+  const citedByCandidate = citedTargetsFromCandidates(
+    pathEvidence.candidates,
+    targets,
+    targetCandidates,
+    tracked,
+    trackedBySuffix,
+  );
+  if (citedByCandidate.size === 0) return null;
+
+  return buildDocFileCitations(docFile, citedByCandidate, pathEvidence, profiling, metrics);
+}
+
+function citationEvidenceForDoc(
+  db: ScipDatabase,
+  docFile: string,
+  targetCandidates: ReturnType<typeof targetPathCandidates>,
+  profiling: boolean,
+  metrics: DocCitationScanMetrics,
+): ReturnType<typeof docPathEvidence> {
+  if (!isLivingDoc(db, docFile)) return null;
+  if (profiling) metrics.livingDocs += 1;
+  const content = getSourceText(db, docFile);
+  if (!content && !projectFileExists(db.config.projectRoot, docFile)) {
+    if (profiling) metrics.unreadableDocs += 1;
+    return null;
+  }
+  if (!containsAnyPathCandidate(content, targetCandidates)) {
+    if (profiling) metrics.candidateMisses += 1;
+    return null;
+  }
+  const pathEvidence = docPathEvidence(db, docFile, content);
+  if (!pathEvidence) return null;
+  if (profiling) metrics.evidenceDocs += 1;
+  return pathEvidence;
+}
+
+function buildDocFileCitations(
+  docFile: string,
+  citedByCandidate: ReturnType<typeof citedTargetsFromCandidates>,
+  pathEvidence: NonNullable<ReturnType<typeof docPathEvidence>>,
+  profiling: boolean,
+  metrics: DocCitationScanMetrics,
+): DocFileCitationResult | null {
+  const contextCandidates = [...new Set([...citedByCandidate.values()].flatMap((cited) => [...cited]))];
+  const contextsByCandidate = citationContextsForCandidates(pathEvidence.contextsByCandidate, contextCandidates);
+  const citations: DocFileCitation[] = [...citedByCandidate]
+    .map(([file, fileCandidates]) => ({
+      file,
+      contexts: uniqueCitationContexts(
+        [...fileCandidates].flatMap((candidate) => contextsByCandidate.get(candidate) ?? []),
+      ).slice(0, 3),
+      lineReferences: uniqueLineReferences(
+        [...fileCandidates].flatMap((candidate) => pathEvidence.lineReferencesByCandidate.get(candidate) ?? []),
+      ),
+    }))
+    .filter((citation) => citation.contexts.length > 0);
+  const cited = [...citedByCandidate.keys()];
+  if (cited.length > 0) {
+    if (profiling) metrics.citedDocs += 1;
+    const sortedCited = cited.sort();
+    return {
+      doc: docFile,
+      cited: sortedCited,
+      citations,
+      citedClaims: uniqueCitationContexts(citations.flatMap((citation) => citation.contexts)).slice(0, 3),
+    };
+  }
+  return null;
 }
 
 /** A doc that exists, isn't archival, and is eligible for drift tracking. */

@@ -330,37 +330,31 @@ function countBranchesFromRegex(source: string, language: string): number {
     /\|\|/g,
   ];
 
-  for (const pattern of universalPatterns) {
-    const matches = stripped.match(pattern);
-    if (matches) count += matches.length;
-  }
+  count += countRegexMatches(stripped, universalPatterns);
 
   // Language-specific patterns
   if (language === 'python') {
     const pyPatterns = [/\belif\b/g, /\bexcept\b/g, /\bfinally\b/g];
-    for (const p of pyPatterns) {
-      const m = stripped.match(p);
-      if (m) count += m.length;
-    }
+    count += countRegexMatches(stripped, pyPatterns);
   } else if (language === 'rust') {
     const rustPatterns = [/\bmatch\b/g, /=>/g, /\bloop\b/g];
-    for (const p of rustPatterns) {
-      const m = stripped.match(p);
-      if (m) count += m.length;
-    }
+    count += countRegexMatches(stripped, rustPatterns);
   } else if (language === 'ruby') {
     const rubyPatterns = [/\belsif\b/g, /\bunless\b/g, /\brescue\b/g, /\bwhen\b/g];
-    for (const p of rubyPatterns) {
-      const m = stripped.match(p);
-      if (m) count += m.length;
-    }
+    count += countRegexMatches(stripped, rubyPatterns);
   } else if (language === 'go') {
     const goPatterns = [/\bselect\b/g, /\bdefer\b/g];
-    for (const p of goPatterns) {
-      const m = stripped.match(p);
-      if (m) count += m.length;
-    }
+    count += countRegexMatches(stripped, goPatterns);
   }
 
+  return count;
+}
+
+function countRegexMatches(source: string, patterns: readonly RegExp[]): number {
+  let count = 0;
+  for (const pattern of patterns) {
+    const matches = source.match(pattern);
+    if (matches) count += matches.length;
+  }
   return count;
 }

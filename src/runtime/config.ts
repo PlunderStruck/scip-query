@@ -209,6 +209,32 @@ function reportContainedConfigPath(
 }
 
 function validateProjectHeaderConfig(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
+  validateProjectSchemaHeader(config, diagnostics);
+  if (
+    config.collaborationDomainId !== undefined &&
+    !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu.test(config.collaborationDomainId)
+  ) {
+    diagnostics.push({
+      level: 'error',
+      path: 'collaborationDomainId',
+      message: 'Must be a lowercase or uppercase UUID v4 generated for this collaboration domain.',
+    });
+  }
+  validateProjectLanguages(config, diagnostics);
+  validateEntryRootPatterns(config, diagnostics);
+  if (
+    config.indexerConcurrency !== undefined &&
+    (!Number.isInteger(config.indexerConcurrency) || config.indexerConcurrency <= 0)
+  ) {
+    diagnostics.push({
+      level: 'error',
+      path: 'indexerConcurrency',
+      message: 'Must be a positive integer.',
+    });
+  }
+}
+
+function validateProjectSchemaHeader(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
   const configRecord = config as unknown as Record<string, unknown>;
   if (
     configRecord['schemaVersion'] !== undefined &&
@@ -226,16 +252,9 @@ function validateProjectHeaderConfig(config: ProjectConfig, diagnostics: ConfigD
   ) {
     diagnostics.push({ level: 'error', path: '$schema', message: 'Must be a non-empty string.' });
   }
-  if (
-    config.collaborationDomainId !== undefined &&
-    !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu.test(config.collaborationDomainId)
-  ) {
-    diagnostics.push({
-      level: 'error',
-      path: 'collaborationDomainId',
-      message: 'Must be a lowercase or uppercase UUID v4 generated for this collaboration domain.',
-    });
-  }
+}
+
+function validateProjectLanguages(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
   const supported = new Set(SUPPORTED_LANGUAGES);
   for (const [index, language] of (config.languages ?? []).entries()) {
     if (!supported.has(language)) {
@@ -246,6 +265,9 @@ function validateProjectHeaderConfig(config: ProjectConfig, diagnostics: ConfigD
       });
     }
   }
+}
+
+function validateEntryRootPatterns(config: ProjectConfig, diagnostics: ConfigDiagnostic[]): void {
   for (const [index, pattern] of (config.entryRoots?.symbolPatterns ?? []).entries()) {
     try {
       compileBoundedRegExp(pattern, `entryRoots.symbolPatterns[${index}]`);
@@ -256,16 +278,6 @@ function validateProjectHeaderConfig(config: ProjectConfig, diagnostics: ConfigD
         message: error instanceof Error ? error.message : String(error),
       });
     }
-  }
-  if (
-    config.indexerConcurrency !== undefined &&
-    (!Number.isInteger(config.indexerConcurrency) || config.indexerConcurrency <= 0)
-  ) {
-    diagnostics.push({
-      level: 'error',
-      path: 'indexerConcurrency',
-      message: 'Must be a positive integer.',
-    });
   }
 }
 

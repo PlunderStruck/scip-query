@@ -682,12 +682,21 @@ function validPersistedRangeHashes(range: Partial<PersistedSourceRange>): boolea
 function validPersistedEvidenceItem(value: unknown): value is PersistedEvidenceItem {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const item = value as Partial<PersistedEvidenceItem>;
+  return validEvidenceItemContent(item) && validEvidenceItemReceipt(item);
+}
+
+function validEvidenceItemContent(item: Partial<PersistedEvidenceItem>): boolean {
   return (
     (item.kind === 'unit' || item.kind === 'edge') &&
     typeof item.identity === 'string' &&
     item.identity !== '' &&
     typeof item.contentHash === 'string' &&
-    isSha256Hex(item.contentHash) &&
+    isSha256Hex(item.contentHash)
+  );
+}
+
+function validEvidenceItemReceipt(item: Partial<PersistedEvidenceItem>): boolean {
+  return (
     typeof item.receiptId === 'string' &&
     /^ev-[0-9a-f]{12}$/u.test(item.receiptId) &&
     Number.isSafeInteger(item.ordinal) &&

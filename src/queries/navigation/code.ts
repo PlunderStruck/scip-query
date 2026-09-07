@@ -9,7 +9,7 @@ import {
 import { UnsafeProjectPathError } from '../../source/primitives/project-file-boundary.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
-import { buildCalleeMap } from '../../symbols/graph/call-graph-evidence.js';
+import { buildCalleeMap, type CalleeRow } from '../../symbols/graph/call-graph-evidence.js';
 import { nearestSymbolNames, resolveSymbol } from '../../symbols/symbol-lookup.js';
 import { leafName, shortenSymbol } from '../../symbols/symbol-parser.js';
 import { SOURCE_INSPECTION_MAX_SELECTORS } from '../../domain/source-inspection-limits.js';
@@ -292,23 +292,33 @@ function sameFileCallClosureForRange(
     bucket.push(definition);
     definitionsBySymbol.set(definition.symbol, bucket);
   }
+  const directReferences = directCallsInSourceRange(requestedRange, allDefinitions, callees, definitionsBySymbol);
+  return sameFileDefinitionClosure(db, [...directReferences.values()], allDefinitions);
+}
+
+function directCallsInSourceRange(
+  requestedRange: CodeResult,
+  allDefinitions: readonly IndexedDefinition[],
+  callees: ReadonlyMap<number, CalleeRow[]>,
+  definitionsBySymbol: ReadonlyMap<string, IndexedDefinition[]>,
+): Map<number, IndexedDefinition> {
   const directReferences = new Map<number, IndexedDefinition>();
   for (const caller of allDefinitions) {
     if (caller.endLine < requestedRange.startLine || caller.startLine > requestedRange.endLine) continue;
     for (const callee of callees.get(caller.symbolId) ?? []) {
-      if (callee.file !== requestedRange.relativePath) continue;
-      if (
-        (callee.source === 'ast-callsite' || callee.source === 'scip-occurrence') &&
-        (callee.chunkId < requestedRange.startLine || callee.chunkId > requestedRange.endLine)
-      ) {
-        continue;
-      }
+      if (!calleeWithinSourceRange(callee, requestedRange)) continue;
       for (const definition of definitionsBySymbol.get(callee.symbol) ?? []) {
         directReferences.set(definition.symbolId, definition);
       }
     }
   }
-  return sameFileDefinitionClosure(db, [...directReferences.values()], allDefinitions);
+  return directReferences;
+}
+
+function calleeWithinSourceRange(callee: CalleeRow, requestedRange: CodeResult): boolean {
+  if (callee.file !== requestedRange.relativePath) return false;
+  if (callee.source !== 'ast-callsite' && callee.source !== 'scip-occurrence') return true;
+  return !(callee.chunkId < requestedRange.startLine || callee.chunkId > requestedRange.endLine);
 }
 
 function fileSourceEntry(

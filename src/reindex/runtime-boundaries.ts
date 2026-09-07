@@ -48,12 +48,7 @@ export function runtimeBoundaryAugmentationStage(
           graph = stored;
           reused = true;
         } else {
-          graph = await collectRuntimeBoundaryGraph(index, {
-            ...(stored ? { previousGraph: stored } : {}),
-            ...(opts.affectedFiles ? { affectedFiles: opts.affectedFiles } : {}),
-            ...(opts.forceDerivedRebuild ? { forceDerivedRebuild: true } : {}),
-            profileSpan,
-          });
+          graph = await refreshRuntimeBoundaryGraph(index, stored, opts);
           incrementallyUpdated = (graph.coverage.filesReused ?? 0) > 0;
         }
       } finally {
@@ -70,21 +65,42 @@ export function runtimeBoundaryAugmentationStage(
         errors: graph.coverage.extractionErrors.length,
         phases: graph.coverage.phases,
       };
-      onStatus?.(
-        result.reused
-          ? `Reused ${result.observations} cached runtime-boundary observation(s) and ${result.links} link(s).`
-          : result.incrementallyUpdated
-            ? `Incrementally refreshed runtime-boundary observations (${result.filesScanned - (graph.coverage.filesReused ?? 0)} file(s) extracted, ${graph.coverage.filesReused ?? 0} reused) and rebuilt ${result.links} link(s).`
-            : `Extracted ${result.observations} runtime-boundary observation(s), ${result.links} link(s), and ${result.frontiers} unresolved frontier(s).`,
-      );
-      if (!reused && graph.coverage.phases) {
-        onStatus?.(
-          `Runtime-boundary phases: ${graph.coverage.phases
-            .map((phase) => `${phase.id} ${phase.durationMs.toFixed(0)}ms`)
-            .join(', ')}.`,
-        );
-      }
+      reportRuntimeBoundaryResult(result, graph, onStatus);
       return result;
     },
   };
+}
+
+function reportRuntimeBoundaryResult(
+  result: RuntimeBoundaryAugmentationResult,
+  graph: Awaited<ReturnType<typeof collectRuntimeBoundaryGraph>>,
+  onStatus: ((message: string) => void) | undefined,
+): void {
+  onStatus?.(
+    result.reused
+      ? `Reused ${result.observations} cached runtime-boundary observation(s) and ${result.links} link(s).`
+      : result.incrementallyUpdated
+        ? `Incrementally refreshed runtime-boundary observations (${result.filesScanned - (graph.coverage.filesReused ?? 0)} file(s) extracted, ${graph.coverage.filesReused ?? 0} reused) and rebuilt ${result.links} link(s).`
+        : `Extracted ${result.observations} runtime-boundary observation(s), ${result.links} link(s), and ${result.frontiers} unresolved frontier(s).`,
+  );
+  if (!result.reused && graph.coverage.phases) {
+    onStatus?.(
+      `Runtime-boundary phases: ${graph.coverage.phases
+        .map((phase) => `${phase.id} ${phase.durationMs.toFixed(0)}ms`)
+        .join(', ')}.`,
+    );
+  }
+}
+
+function refreshRuntimeBoundaryGraph(
+  index: ScipDatabase,
+  stored: ReturnType<typeof readRuntimeBoundaryGraph>,
+  opts: NonNullable<Parameters<typeof runtimeBoundaryAugmentationStage>[0]>,
+) {
+  return collectRuntimeBoundaryGraph(index, {
+    ...(stored ? { previousGraph: stored } : {}),
+    ...(opts.affectedFiles ? { affectedFiles: opts.affectedFiles } : {}),
+    ...(opts.forceDerivedRebuild ? { forceDerivedRebuild: true } : {}),
+    profileSpan,
+  });
 }

@@ -252,12 +252,13 @@ export class Watcher {
     this.clojureConfigPath = opts.config.indexer?.clojure?.configPath;
     this.indexerConcurrency = opts.config.indexerConcurrency;
 
-    this.onStatus = opts.onStatus ?? (() => {});
-    this.onReindexComplete = opts.onReindexComplete ?? (() => {});
-    this.onReindexError = opts.onReindexError ?? (() => {});
-    this.onRefreshSuppressed = opts.onRefreshSuppressed ?? (() => {});
-    this.onError = opts.onError ?? ((e) => console.error(e.message));
-    this.clock = opts.clock ?? SYSTEM_WATCH_CLOCK;
+    const callbacks = resolveWatcherCallbacks(opts);
+    this.onStatus = callbacks.onStatus;
+    this.onReindexComplete = callbacks.onReindexComplete;
+    this.onReindexError = callbacks.onReindexError;
+    this.onRefreshSuppressed = callbacks.onRefreshSuppressed;
+    this.onError = callbacks.onError;
+    this.clock = callbacks.clock;
     watcherStopTimeouts.set(
       this,
       positiveDuration(opts.stopTimeoutMs ?? WATCHER_STOP_TIMEOUT_MS, 'watcher stop timeout'),
@@ -268,14 +269,7 @@ export class Watcher {
     this.publishedGeneration = opts.publishedGeneration ?? publishedSqliteGenerationIdentity;
     this.indexFreshness = opts.indexFreshness ?? defaultIndexFreshnessState;
     this.lastObservedGeneration = this.readPublishedGeneration();
-    watcherInputStates.set(this, {
-      projectRoot: opts.projectRoot,
-      config: opts.config,
-      gitReader: opts.gitReader ?? DEFAULT_GIT_READER,
-      languages: resolveWatchInputLanguages(opts.languages ?? opts.config.languages),
-      typeScriptInputPaths: null,
-      stagedIndexEntries: null,
-    });
+    initializeWatcherInputState(this, opts);
 
     this.gitignoreFilter = createGitignoreFilter(opts.projectRoot);
     this.extraIgnore = ignore();
@@ -1109,6 +1103,28 @@ function retireWatchSubscription(
   void closure.then(() => retirement.closures.delete(closure));
 }
 
+function initializeWatcherInputState(watcher: Watcher, opts: WatcherOptions): void {
+  watcherInputStates.set(watcher, {
+    projectRoot: opts.projectRoot,
+    config: opts.config,
+    gitReader: opts.gitReader ?? DEFAULT_GIT_READER,
+    languages: resolveWatchInputLanguages(opts.languages ?? opts.config.languages),
+    typeScriptInputPaths: null,
+    stagedIndexEntries: null,
+  });
+}
+
+function resolveWatcherCallbacks(opts: WatcherOptions) {
+  return {
+    onStatus: opts.onStatus ?? (() => {}),
+    onReindexComplete: opts.onReindexComplete ?? (() => {}),
+    onReindexError: opts.onReindexError ?? (() => {}),
+    onRefreshSuppressed: opts.onRefreshSuppressed ?? (() => {}),
+    onError: opts.onError ?? ((e: Error) => console.error(e.message)),
+    clock: opts.clock ?? SYSTEM_WATCH_CLOCK,
+  };
+}
+
 export function resolveReindexWorkerLaunch(
   request: ReindexRunRequest,
   resolveParentIdentity: (pid: number) => ProcessIdentity | null = readProcessIdentity,
@@ -1140,15 +1156,14 @@ export function resolveReindexWorkerLaunch(
       SCIP_REINDEX_PROJECT_ROOT: projectRoot,
       SCIP_REINDEX_OUTPUT_SCIP: latestIndexPaths.indexPath,
       SCIP_REINDEX_OUTPUT_DB: latestIndexPaths.dbPath,
-      SCIP_REINDEX_LANGUAGES: (latestConfig.languages ?? languages)?.join(',') ?? '',
-      SCIP_REINDEX_INDEXER_CONCURRENCY: String(latestConfig.indexerConcurrency ?? indexerConcurrency ?? ''),
-      SCIP_REINDEX_PNPM_WORKSPACES: (latestTypeScript?.pnpmWorkspaces ?? pnpmWorkspaces) ? '1' : '',
-      SCIP_REINDEX_TYPESCRIPT_CONFIG: JSON.stringify({
-        projectMode: latestTypeScript?.projectMode ?? typescriptProjectMode,
-        projects: latestTypeScript?.projects ?? typescriptProjects ?? [],
-        maxHeapMb: latestTypeScript?.maxHeapMb,
+      ...reindexLanguageEnvironment(latestConfig, latestTypeScript, latestClojure, {
+        languages,
+        indexerConcurrency,
+        pnpmWorkspaces,
+        typescriptProjectMode,
+        typescriptProjects,
+        clojureConfigPath,
       }),
-      SCIP_REINDEX_CLOJURE_CONFIG_PATH: latestClojure?.configPath ?? clojureConfigPath ?? '',
       SCIP_REINDEX_TRIGGER_KIND: trigger.kind,
       SCIP_REINDEX_TRIGGER_DETAIL: trigger.detail ?? '',
       SCIP_REINDEX_CHANGE_JOURNAL: request.changeJournal
@@ -1159,6 +1174,53 @@ export function resolveReindexWorkerLaunch(
       SCIP_REINDEX_PARENT_IDENTITY: JSON.stringify(parentIdentity),
     },
   };
+}
+
+function reindexLanguageEnvironment(
+  latestConfig: ProjectConfig,
+  latestTypeScript: NonNullable<ProjectConfig['indexer']>['typescript'],
+  latestClojure: NonNullable<ProjectConfig['indexer']>['clojure'],
+  fallback: Pick<
+    ReindexRunRequest,
+    | 'languages'
+    | 'indexerConcurrency'
+    | 'pnpmWorkspaces'
+    | 'typescriptProjectMode'
+    | 'typescriptProjects'
+    | 'clojureConfigPath'
+  >,
+) {
+  const {
+    languages,
+    indexerConcurrency,
+    pnpmWorkspaces,
+    typescriptProjectMode,
+    typescriptProjects,
+    clojureConfigPath,
+  } = fallback;
+  return {
+    SCIP_REINDEX_LANGUAGES: (latestConfig.languages ?? languages)?.join(',') ?? '',
+    SCIP_REINDEX_INDEXER_CONCURRENCY: String(latestConfig.indexerConcurrency ?? indexerConcurrency ?? ''),
+    SCIP_REINDEX_PNPM_WORKSPACES: (latestTypeScript?.pnpmWorkspaces ?? pnpmWorkspaces) ? '1' : '',
+    SCIP_REINDEX_TYPESCRIPT_CONFIG: reindexTypeScriptConfig(
+      latestTypeScript,
+      typescriptProjectMode,
+      typescriptProjects,
+    ),
+    SCIP_REINDEX_CLOJURE_CONFIG_PATH: latestClojure?.configPath ?? clojureConfigPath ?? '',
+  };
+}
+
+function reindexTypeScriptConfig(
+  latestTypeScript: NonNullable<ProjectConfig['indexer']>['typescript'],
+  typescriptProjectMode: TypeScriptProjectMode | undefined,
+  typescriptProjects: string[] | undefined,
+): string {
+  return JSON.stringify({
+    projectMode: latestTypeScript?.projectMode ?? typescriptProjectMode,
+    projects: latestTypeScript?.projects ?? typescriptProjects ?? [],
+    maxHeapMb: latestTypeScript?.maxHeapMb,
+  });
 }
 
 const SYSTEM_WATCH_CLOCK: WatchClock = {

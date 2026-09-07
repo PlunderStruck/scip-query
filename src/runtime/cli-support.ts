@@ -1213,55 +1213,47 @@ export function deferredHealthPhaseResult(
   phase: HealthPhaseName,
   timeoutMs: number,
   reason: string,
-): HealthPhaseResultWithMeta {
+): HealthPhaseResultWithMeta;
+export function deferredHealthPhaseResult(
+  phase: unknown,
+  timeoutMs: number,
+  reason: string,
+): HealthPhaseResultWithMeta | undefined {
   const meta = { healthPhaseMeta: { status: 'deferred' as const, reason, timeoutMs } };
-  switch (phase) {
-    case 'overview':
-      throw new Error('Overview health phase cannot be deferred.');
-    case 'dead':
-      return { phase, dead: { count: 0, loc: 0, files: [] }, ...meta };
-    case 'cycles':
-      return { phase, realCycleCount: 0, cycleExclusions: [], ...meta };
-    case 'similar':
-      return { phase, similarCount: 0, ...meta };
-    case 'duplicate-bodies':
-      return { phase, duplicateBodies: { count: 0, loc: 0, files: [] }, ...meta };
-    case 'twin-drift':
-      return { phase, twinDrift: { count: 0, loc: 0, files: [] }, ...meta };
-    case 'react-component-duplicates':
-      return { ...skippedHealthPhaseResult(phase), ...meta };
-    case 'react-hook-candidates':
-      return { ...skippedHealthPhaseResult(phase), ...meta };
-    case 'react-large-component-pressure':
-      return { ...skippedHealthPhaseResult(phase), ...meta };
-    case 'vue-component-duplicates':
-      return { ...skippedHealthPhaseResult(phase), ...meta };
-    case 'vue-composable-candidates':
-      return { ...skippedHealthPhaseResult(phase), ...meta };
-    case 'vue-large-view-pressure':
-      return { ...skippedHealthPhaseResult(phase), ...meta };
-    case 'passthrough-candidates':
-      return { phase, passthroughs: { count: 0, loc: 0, files: [] }, ...meta };
-    case 'drift':
-      return {
-        phase,
-        drift: {
-          count: 0,
-          unusedImports: 0,
-          architectureViolations: 0,
-          layerViolations: 0,
-          direct: 0,
-          signal: 0,
-        },
-        ...meta,
-      };
-    case 'git-evidence':
-      return { phase, gitEvidence: null, ...meta };
-    case 'suppressions':
-      return { phase, suppressions: { total: 0, byCategory: {} }, ...meta };
-    case 'coverage-contracts':
-      return { phase, coverageContracts: { count: 0, loc: 0, files: [] }, ...meta };
-  }
+  if (phase === 'overview') throw new Error('Overview health phase cannot be deferred.');
+  if (typeof phase !== 'string') return undefined;
+  const createResult = deferredHealthResultFactories().get(phase);
+  if (createResult) return { ...createResult(), ...meta };
+}
+
+function deferredHealthResultFactories(): ReadonlyMap<string, () => HealthPhaseResult> {
+  // Factories give every deferred phase fresh arrays/records. The catalog type
+  // requires an explicit result for every deferrable phase.
+  const factories = {
+    dead: () => ({ phase: 'dead', dead: { count: 0, loc: 0, files: [] } }),
+    cycles: () => ({ phase: 'cycles', realCycleCount: 0, cycleExclusions: [] }),
+    similar: () => ({ phase: 'similar', similarCount: 0 }),
+    'duplicate-bodies': () => ({ phase: 'duplicate-bodies', duplicateBodies: { count: 0, loc: 0, files: [] } }),
+    'twin-drift': () => ({ phase: 'twin-drift', twinDrift: { count: 0, loc: 0, files: [] } }),
+    'react-component-duplicates': () => skippedHealthPhaseResult('react-component-duplicates'),
+    'react-hook-candidates': () => skippedHealthPhaseResult('react-hook-candidates'),
+    'react-large-component-pressure': () => skippedHealthPhaseResult('react-large-component-pressure'),
+    'vue-component-duplicates': () => skippedHealthPhaseResult('vue-component-duplicates'),
+    'vue-composable-candidates': () => skippedHealthPhaseResult('vue-composable-candidates'),
+    'vue-large-view-pressure': () => skippedHealthPhaseResult('vue-large-view-pressure'),
+    'passthrough-candidates': () => ({
+      phase: 'passthrough-candidates',
+      passthroughs: { count: 0, loc: 0, files: [] },
+    }),
+    drift: () => ({
+      phase: 'drift',
+      drift: { count: 0, unusedImports: 0, architectureViolations: 0, layerViolations: 0, direct: 0, signal: 0 },
+    }),
+    'git-evidence': () => ({ phase: 'git-evidence', gitEvidence: null }),
+    suppressions: () => ({ phase: 'suppressions', suppressions: { total: 0, byCategory: {} } }),
+    'coverage-contracts': () => ({ phase: 'coverage-contracts', coverageContracts: { count: 0, loc: 0, files: [] } }),
+  } satisfies Record<Exclude<HealthPhaseName, 'overview'>, () => HealthPhaseResult>;
+  return new Map<string, () => HealthPhaseResult>(Object.entries(factories));
 }
 
 // scip-query: ignore-similar — public scheduler entrypoints intentionally share

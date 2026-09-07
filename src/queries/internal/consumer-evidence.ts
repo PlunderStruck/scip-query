@@ -382,12 +382,7 @@ function computeFileLeafUsageFromAst(tree: Tree | null | undefined, lang: string
   const usedLeaves = new Set<string>();
   if (!tree) return { importedLeaves, usedLeaves };
 
-  const importTypes =
-    lang === 'rust'
-      ? new Set(['use_declaration'])
-      : lang === 'python'
-        ? new Set(['import_statement', 'import_from_statement'])
-        : new Set(['import_statement']);
+  const importTypes = leafUsageImportTypes(lang);
 
   // Cursor traversal reads types and text without materializing a node object
   // per syntax node; node objects each pin native cache memory that a
@@ -404,16 +399,31 @@ function computeFileLeafUsageFromAst(tree: Tree | null | undefined, lang: string
     }
     if (cursor.gotoFirstChild()) continue;
     if (entersImport) importDepth -= 1;
-    for (;;) {
-      if (cursor.gotoNextSibling()) break;
-      if (!cursor.gotoParent()) {
-        done = true;
-        break;
-      }
-      if (importTypes.has(cursor.nodeType)) importDepth -= 1;
-    }
+    const next = advanceLeafUsageCursor(cursor, importTypes, importDepth);
+    importDepth = next.importDepth;
+    done = next.done;
   }
   return { importedLeaves, usedLeaves };
+}
+
+function leafUsageImportTypes(lang: string): ReadonlySet<string> {
+  return lang === 'rust'
+    ? new Set(['use_declaration'])
+    : lang === 'python'
+      ? new Set(['import_statement', 'import_from_statement'])
+      : new Set(['import_statement']);
+}
+
+function advanceLeafUsageCursor(
+  cursor: ReturnType<Tree['walk']>,
+  importTypes: ReadonlySet<string>,
+  importDepth: number,
+): { importDepth: number; done: boolean } {
+  for (;;) {
+    if (cursor.gotoNextSibling()) return { importDepth, done: false };
+    if (!cursor.gotoParent()) return { importDepth, done: true };
+    if (importTypes.has(cursor.nodeType)) importDepth -= 1;
+  }
 }
 
 function emptyFileLeafUsage(): FileLeafUsage {

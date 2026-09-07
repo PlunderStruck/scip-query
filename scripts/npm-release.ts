@@ -94,86 +94,130 @@ export function runNpmRelease(runtime: NpmReleaseRuntime, options: RunNpmRelease
   let releaseDirectory: string | null = null;
   let result: NpmReleaseResult | undefined;
   let operationError: unknown;
-  let lastReleaseStateWrite: AtomicFileWriteResult | undefined;
-  const recordReleaseStateWrite = (write: AtomicFileWriteResult): void => {
-    lastReleaseStateWrite = write;
-  };
   try {
     releaseDirectory = runtime.makeTempDirectory(join(runtime.tempDirectory(), 'scip-query-npm-release-'));
-    const gitRevision = requireCleanGitRevision(root, runtime);
-    const registry = resolveNpmRegistry(root, runtime);
-    runLocalPreflight(root, runtime);
-    const localSidecar = prepareLocalSidecar(sidecarDir, sidecarPackage, releaseDirectory, runtime);
-    const localMain = packLocalMain(root, mainPackage, sidecarPackage, releaseDirectory, runtime);
-    requireCleanGitRevision(root, runtime, gitRevision);
-    const expectedState = createNpmReleaseState({
-      main: releasePackageIdentity(localMain.pack),
-      sidecar: releasePackageIdentity(localSidecar.pack),
-      gitRevision,
-      registry,
-      now: runtime.now(),
-    });
-    const statePath = npmReleaseStatePath(root, expectedState.packages.main, expectedState.packages.sidecar);
-    let state = loadOrCreateReleaseState(statePath, expectedState, runtime, recordReleaseStateWrite);
-
-    const sidecarObservation = observeSidecarRegistry(
-      localSidecar,
-      registry,
-      releaseDirectory,
-      'initial-sidecar',
-      runtime,
-    );
-    const mainObservation = observeMainRegistry(localMain, registry, releaseDirectory, 'initial-main', runtime);
-    const observedStages: NpmReleaseStage[] = [];
-    if (sidecarObservation.kind === 'verified') observedStages.push('sidecar-registry-verified');
-    if (mainObservation.kind === 'verified') observedStages.push('main-registry-verified');
-    state = persistReleaseStages(statePath, state, observedStages, runtime, recordReleaseStateWrite);
-
-    if (mode === 'dry-run') {
-      logDryRunPlan(mainPackage, sidecarPackage, sidecarObservation, mainObservation, statePath, runtime);
-      result = { mode, statePath, state };
-    } else {
-      if (sidecarObservation.kind === 'absent') {
-        publishAndVerify({
-          local: localSidecar,
-          packageRole: 'Windows sidecar',
-          publishCwd: sidecarDir,
-          registry,
-          verify: (attempt) =>
-            observeSidecarRegistry(localSidecar, registry, releaseDirectory, `published-sidecar-${attempt}`, runtime),
-          runtime,
-        });
-        state = persistReleaseStages(statePath, state, ['sidecar-registry-verified'], runtime, recordReleaseStateWrite);
-      }
-
-      if (mainObservation.kind === 'absent') {
-        publishAndVerify({
-          local: localMain,
-          packageRole: 'main package',
-          publishCwd: root,
-          registry,
-          verify: (attempt) =>
-            observeMainRegistry(localMain, registry, releaseDirectory, `published-main-${attempt}`, runtime),
-          runtime,
-        });
-        state = persistReleaseStages(statePath, state, ['main-registry-verified'], runtime, recordReleaseStateWrite);
-      }
-
-      runtime.log(
-        `Release complete: ${mainPackage.name}@${mainPackage.version} and ` +
-          `${sidecarPackage.name}@${sidecarPackage.version} have verified registry identities.`,
-      );
-      runtime.log(
-        lastReleaseStateWrite
-          ? `Release state (${formatAchievedDurability(lastReleaseStateWrite)}): ${statePath}`
-          : `Existing release state reconciled from disk: ${statePath}`,
-      );
-      result = { mode, statePath, state };
-    }
+    result = executeNpmRelease(root, sidecarDir, mainPackage, sidecarPackage, releaseDirectory, mode, runtime);
   } catch (error) {
     operationError = error;
   }
 
+  const finalizationErrors = finalizeNpmRelease(runtime, releaseDirectory, lock);
+
+  return completedNpmRelease(result, operationError, finalizationErrors);
+}
+
+function completedNpmRelease(
+  result: NpmReleaseResult | undefined,
+  operationError: unknown,
+  finalizationErrors: Error[],
+): NpmReleaseResult {
+  if (operationError !== undefined) {
+    if (finalizationErrors.length > 0) {
+      throw new AggregateError(
+        [operationError, ...finalizationErrors],
+        `npm release failed and resource finalization also failed.`,
+      );
+    }
+    throw operationError;
+  }
+  if (finalizationErrors.length === 1) throw finalizationErrors[0];
+  if (finalizationErrors.length > 1) {
+    throw new AggregateError(finalizationErrors, `npm release resource finalization failed.`);
+  }
+  if (!result) throw new Error(`npm release completed without an outcome.`);
+  return result;
+}
+
+function executeNpmRelease(
+  root: string,
+  sidecarDir: string,
+  mainPackage: PackageRecord,
+  sidecarPackage: PackageRecord,
+  releaseDirectory: string,
+  mode: 'publish' | 'dry-run',
+  runtime: NpmReleaseRuntime,
+): NpmReleaseResult {
+  let lastReleaseStateWrite: AtomicFileWriteResult | undefined;
+  const recordReleaseStateWrite = (write: AtomicFileWriteResult): void => {
+    lastReleaseStateWrite = write;
+  };
+  const gitRevision = requireCleanGitRevision(root, runtime);
+  const registry = resolveNpmRegistry(root, runtime);
+  runLocalPreflight(root, runtime);
+  const localSidecar = prepareLocalSidecar(sidecarDir, sidecarPackage, releaseDirectory, runtime);
+  const localMain = packLocalMain(root, mainPackage, sidecarPackage, releaseDirectory, runtime);
+  requireCleanGitRevision(root, runtime, gitRevision);
+  const expectedState = createNpmReleaseState({
+    main: releasePackageIdentity(localMain.pack),
+    sidecar: releasePackageIdentity(localSidecar.pack),
+    gitRevision,
+    registry,
+    now: runtime.now(),
+  });
+  const statePath = npmReleaseStatePath(root, expectedState.packages.main, expectedState.packages.sidecar);
+  let state = loadOrCreateReleaseState(statePath, expectedState, runtime, recordReleaseStateWrite);
+
+  const sidecarObservation = observeSidecarRegistry(
+    localSidecar,
+    registry,
+    releaseDirectory,
+    'initial-sidecar',
+    runtime,
+  );
+  const mainObservation = observeMainRegistry(localMain, registry, releaseDirectory, 'initial-main', runtime);
+  const observedStages: NpmReleaseStage[] = [];
+  if (sidecarObservation.kind === 'verified') observedStages.push('sidecar-registry-verified');
+  if (mainObservation.kind === 'verified') observedStages.push('main-registry-verified');
+  state = persistReleaseStages(statePath, state, observedStages, runtime, recordReleaseStateWrite);
+
+  if (mode === 'dry-run') {
+    logDryRunPlan(mainPackage, sidecarPackage, sidecarObservation, mainObservation, statePath, runtime);
+    return { mode, statePath, state };
+  } else {
+    if (sidecarObservation.kind === 'absent') {
+      publishAndVerify({
+        local: localSidecar,
+        packageRole: 'Windows sidecar',
+        publishCwd: sidecarDir,
+        registry,
+        verify: (attempt) =>
+          observeSidecarRegistry(localSidecar, registry, releaseDirectory, `published-sidecar-${attempt}`, runtime),
+        runtime,
+      });
+      state = persistReleaseStages(statePath, state, ['sidecar-registry-verified'], runtime, recordReleaseStateWrite);
+    }
+
+    if (mainObservation.kind === 'absent') {
+      publishAndVerify({
+        local: localMain,
+        packageRole: 'main package',
+        publishCwd: root,
+        registry,
+        verify: (attempt) =>
+          observeMainRegistry(localMain, registry, releaseDirectory, `published-main-${attempt}`, runtime),
+        runtime,
+      });
+      state = persistReleaseStages(statePath, state, ['main-registry-verified'], runtime, recordReleaseStateWrite);
+    }
+
+    runtime.log(
+      `Release complete: ${mainPackage.name}@${mainPackage.version} and ` +
+        `${sidecarPackage.name}@${sidecarPackage.version} have verified registry identities.`,
+    );
+    runtime.log(
+      lastReleaseStateWrite
+        ? `Release state (${formatAchievedDurability(lastReleaseStateWrite)}): ${statePath}`
+        : `Existing release state reconciled from disk: ${statePath}`,
+    );
+    return { mode, statePath, state };
+  }
+}
+
+function finalizeNpmRelease(
+  runtime: NpmReleaseRuntime,
+  releaseDirectory: string | null,
+  lock: NpmReleaseLock,
+): Error[] {
   const finalizationErrors: Error[] = [];
   try {
     if (releaseDirectory) runtime.removeTree(releaseDirectory);
@@ -190,21 +234,7 @@ export function runNpmRelease(runtime: NpmReleaseRuntime, options: RunNpmRelease
     finalizationErrors.push(asError(error, 'npm release lock release failed.'));
   }
 
-  if (operationError !== undefined) {
-    if (finalizationErrors.length > 0) {
-      throw new AggregateError(
-        [operationError, ...finalizationErrors],
-        `npm release failed and resource finalization also failed.`,
-      );
-    }
-    throw operationError;
-  }
-  if (finalizationErrors.length === 1) throw finalizationErrors[0];
-  if (finalizationErrors.length > 1) {
-    throw new AggregateError(finalizationErrors, `npm release resource finalization failed.`);
-  }
-  if (!result) throw new Error(`npm release completed without an outcome.`);
-  return result;
+  return finalizationErrors;
 }
 
 export function createNpmReleaseRuntime(): NpmReleaseRuntime {

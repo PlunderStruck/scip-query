@@ -1442,14 +1442,32 @@ function isOutputSnapshotReservation(value: unknown): value is OutputSnapshotRes
   if (!value || typeof value !== 'object') return false;
   const reservation = value as Partial<OutputSnapshotReservation>;
   return (
+    validOutputReservationIdentity(reservation) &&
+    validOutputReservationOwner(reservation) &&
+    validOutputReservationBudget(reservation)
+  );
+}
+
+function validOutputReservationIdentity(reservation: Partial<OutputSnapshotReservation>): boolean {
+  return (
     reservation.version === OUTPUT_RESERVATION_VERSION &&
     typeof reservation.snapshotId === 'string' &&
-    isOutputSnapshotId(reservation.snapshotId) &&
+    isOutputSnapshotId(reservation.snapshotId)
+  );
+}
+
+function validOutputReservationOwner(reservation: Partial<OutputSnapshotReservation>): boolean {
+  return (
     Number.isSafeInteger(reservation.pid) &&
     (reservation.pid ?? 0) > 0 &&
     (reservation.processIdentity === undefined ||
       (parseProcessIdentity(reservation.processIdentity) !== null &&
-        reservation.processIdentity.pid === reservation.pid)) &&
+        reservation.processIdentity.pid === reservation.pid))
+  );
+}
+
+function validOutputReservationBudget(reservation: Partial<OutputSnapshotReservation>): boolean {
+  return (
     Number.isSafeInteger(reservation.reservedBytes) &&
     (reservation.reservedBytes ?? -1) >= 0 &&
     (reservation.state === 'active' || reservation.state === 'complete') &&
@@ -1464,29 +1482,43 @@ function pruneAbandonedOutputSnapshots(snapshotRoot: string): void {
     if (!entry.isFile() || !entry.name.endsWith('.reserve')) continue;
     const snapshotId = entry.name.slice(0, -'.reserve'.length);
     if (!isOutputSnapshotId(snapshotId)) continue;
-    let reservation: OutputSnapshotReservation | null = null;
-    try {
-      const parsed = JSON.parse(
-        readSmallArtifactText(join(snapshotRoot, entry.name), 'output snapshot reservation'),
-      ) as unknown;
-      reservation = isOutputSnapshotReservation(parsed) ? parsed : null;
-    } catch {
-      reservation = null;
-    }
+    const reservation = readSnapshotReservation(join(snapshotRoot, entry.name));
     const metadataExists = fileExists(outputSnapshotPath(snapshotRoot, snapshotId, 'json'));
-    const activeOwner =
-      reservation?.state === 'active' &&
-      isProcessAlive(reservation.pid) &&
-      (reservation.processIdentity === undefined ||
-        (() => {
-          const actual = readProcessIdentity(reservation.pid);
-          return actual !== null && sameProcessIdentity(reservation.processIdentity!, actual);
-        })());
-    const expired = reservation ? nowMs - reservation.updatedAtMs > OUTPUT_SNAPSHOT_TTL_MS : false;
-    if (activeOwner || (metadataExists && !expired)) continue;
-    if (!metadataExists && reservation && !expired && reservation.state === 'complete') continue;
+    if (shouldRetainSnapshotReservation(reservation, metadataExists, nowMs)) continue;
     removeOutputSnapshotFiles(snapshotId, snapshotRoot);
   }
+}
+
+function shouldRetainSnapshotReservation(
+  reservation: OutputSnapshotReservation | null,
+  metadataExists: boolean,
+  nowMs: number,
+): boolean {
+  const activeOwner = hasActiveSnapshotReservationOwner(reservation);
+  const expired = reservation ? nowMs - reservation.updatedAtMs > OUTPUT_SNAPSHOT_TTL_MS : false;
+  if (activeOwner || (metadataExists && !expired)) return true;
+  return !metadataExists && reservation !== null && !expired && reservation.state === 'complete';
+}
+
+function readSnapshotReservation(path: string): OutputSnapshotReservation | null {
+  try {
+    const parsed = JSON.parse(readSmallArtifactText(path, 'output snapshot reservation')) as unknown;
+    return isOutputSnapshotReservation(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function hasActiveSnapshotReservationOwner(reservation: OutputSnapshotReservation | null): boolean {
+  return (
+    reservation?.state === 'active' &&
+    isProcessAlive(reservation.pid) &&
+    (reservation.processIdentity === undefined ||
+      (() => {
+        const actual = readProcessIdentity(reservation.pid);
+        return actual !== null && sameProcessIdentity(reservation.processIdentity!, actual);
+      })())
+  );
 }
 
 function fileExists(path: string): boolean {

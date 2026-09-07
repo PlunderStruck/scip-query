@@ -424,3 +424,68 @@ Target measurements (cyclomatic/cognitive):
 - `materializeSemanticReferenceBatch.<callback:profileSpan:1>` → 2/1 (`src/semantic/shared-primitives.ts`).
 
 Next: prepared fourth wave of 45 ranked targets. Artifacts: `/tmp/complexity-wave3-{review,health,impact,metrics}.json`; verification logs use `/tmp/complexity-wave3-*.log`.
+
+
+### Fourth parallel complexity wave completed
+
+Completed 45 ranked targets across exclusive file assignments: root nine, each of three Astra-medium workers twelve. All selected targets and introduced helpers are at or below cyclomatic 10 / cognitive 15. No thresholds, source scope, suppressions or dependency policy changed.
+
+Fourth parallel complexity wave: 3217 full-suite tests / 358 files passed; build, source types and contract fixtures, changed-file ESLint, formatting, public API b74137d6c422ca9c (66 paths), public consumer compilation and skill links passed. Accounted source review resolves 47 findings with no introduced/worsened findings. Fresh source health: 563/563 eligible files, 13,055 functions, 430 complexity findings, no other finding rules. Fresh indexed diff impact: 149 changed symbols across 37 changed files; 34 affected files. No source-matched test coverage artifact; no CRAP claim.
+
+All 563 source files remain mapped and all 47 dependency rows declared. Fresh health reports no duplication, dependency cycles or configured architecture violations. The 430 remaining complexity findings are the next work queue; the historical maintenance inventory remains a different population.
+
+Validation included 216 focused tests in worker 1 plus 10 rerun after type corrections, 186 in worker 2 (including shared-worktree integration and 10,000 deterministic old/new JSON-comment cases), 194 in worker 3 plus 89 rerun after final splits, and 330 in root plus 101 rerun after final splits; these counts overlap. Eighteen new root tests cover deferred phase payloads, metadata, mutation isolation and invalid-phase behavior. Every lane received a second read-only diff review. A temporary snapshot-liveness return-newline mistake and a co-change helper type narrowed beyond the actual data were corrected before the full suite. No external agent benchmarks or release actions ran.
+
+The HTTP process-call-sites callback shares its anonymous name with a seed callback. Its 2/1 measurement is tied to the exact diff (baseline 166/current 178) and span label. A pre-existing, untouched publishFreshReindexArtifacts callback remains 12/16 and is reported uncomparable because of ambiguous callback identity; this is not counted as resolved. Source review also resolves the nested carrier traversal and body-declaration callback, yielding 47 resolved findings for 45 selected targets. Indexed impact omits seven paths absent/excluded from its symbol index; the current-source scan accounts for eligible scripts.
+
+The VM remains on its previously verified installation from `931fe6c1`; these behavior-preserving refactors do not require another reinstall under the user's instruction.
+
+Target measurements (cyclomatic/cognitive):
+
+- `sanitizeTerminalText` → 9/11 (`src/platform/terminal-output.ts`).
+- `deferredHealthPhaseResult` → 4/3 (`src/runtime/cli-support.ts`).
+- `validateProjectHeaderConfig` → 6/5 (`src/runtime/config.ts`).
+- `isOutputSnapshotReservation` → 5/3 (`src/runtime/output-pagination.ts`).
+- `pruneAbandonedOutputSnapshots` → 6/8 (`src/runtime/output-pagination.ts`).
+- `isEntryPointResult.<callback:value.every:0>` → 6/3 (`src/runtime/query-service.ts`).
+- `validPersistedEvidenceItem` → 5/3 (`src/runtime/source-emission-session.ts`).
+- `validPublication` → 7/5 (`src/storage/sqlite-generation.ts`).
+- `isSuppressionDecision` → 6/3 (`src/domain/suppression-adjudication.ts`).
+- `coChange` → 10/9 (`src/queries/cleanup/co-change.ts`).
+- `docsCitingFiles.<callback:profileSpan:1>` → 4/3 (`src/queries/cleanup/doc-drift.ts`).
+- `computeFileLeafUsageFromAst` → 8/13 (`src/queries/internal/consumer-evidence.ts`).
+- `countBranchesFromRegex` → 5/4 (`src/queries/quality/complexity.ts`).
+- `containerAccesses` → 3/3 (`src/queries/quality/slice-cohesion.ts`).
+- `handleDocDrift.<callback:dbCommand:0>` → 7/6 (`src/runtime/query-commands/cleanup/handlers.ts`).
+- `sourceInspectionSections` → 3/0 (`src/runtime/query-commands/navigation.ts`).
+- `collectBehaviorCandidates` → 5/4 (`src/source/facts/behavior-skeleton.ts`).
+- `indexServiceReceivers.<callback:walk:1>` → 2/1 (`src/symbols/graph/member-call-targets.ts`).
+- `pickAstCallCandidate` → 2/1 (`src/symbols/leaf-symbol-index.ts`).
+- `testQuality` → 5/4 (`src/queries/cleanup/test-quality.ts`).
+- `modelBody` → 10/12 (`src/queries/quality/slice-cohesion.ts`).
+- `prepareSharedGenerationCache` → 9/7 (`src/reindex/index.ts`).
+- `deriveProjectDependencies` → 5/5 (`src/reindex/project-shards.ts`).
+- `stripJsonComments` → 9/14 (`src/reindex/project-shards.ts`).
+- `runtimeBoundaryAugmentationStage.run` → 9/7 (`src/reindex/runtime-boundaries.ts`).
+- `findSharedBaselineGeneration` → 8/8 (`src/reindex/shared-generation-store.ts`).
+- `hydrateSharedGeneration` → 10/8 (`src/reindex/shared-generation-store.ts`).
+- `inspectLocalSqliteGenerationRetention` → 7/7 (`src/reindex/sqlite-generation-store.ts`).
+- `commitTypeScriptOverlay` → 7/4 (`src/reindex/typescript-overlay-store.ts`).
+- `buildSweepInventory` → 1/0 (`src/runtime/repository-cache-lifecycle.ts`).
+- `Watcher.constructor` → 10/1 (`src/runtime/watch.ts`).
+- `resolveReindexWorkerLaunch` → 7/4 (`src/runtime/watch.ts`).
+- `buildFreshReindexShardDiagnostics` → 6/9 (`src/reindex/index.ts`).
+- `runNpmRelease` → 3/1 (`scripts/npm-release.ts`).
+- `deriveConsumerDiscriminators` → 10/15 (`src/analysis/runtime-boundaries/carrier-discriminators.ts`).
+- `deriveParameterRoles.<callback:walk:1>` → 2/1 (`src/analysis/runtime-boundaries/http-summaries.ts`).
+- `formatUninstallReport` → 8/6 (`src/runtime/uninstall.ts`).
+- `isResponseForKind` → 9/8 (`src/semantic/rust/durable-session-protocol.ts`).
+- `collectExtensions` → 5/6 (`src/reindex/detect.ts`).
+- `parseCargoJsonDiagnostics` → 9/13 (`src/runtime/cleanup-verify.ts`).
+- `legacyDispositionForReason` → 3/2 (`src/analysis/framework-patterns.ts`).
+- `loadFileAddRecords` → 7/9 (`src/analysis/git-history.ts`).
+- `incompleteMigration` → 9/7 (`src/queries/impact/incomplete-migration.ts`).
+- `sameFileCallClosureForRange` → 5/3 (`src/queries/navigation/code.ts`).
+- `propagateCompilerResolvedHttpSummaries.<callback:recordSpan:1>` → 2/1 (`src/analysis/runtime-boundaries/http-summaries.ts`).
+
+Next: prepared fifth wave of 45 ranked targets. Artifacts: `/tmp/complexity-wave4-{review,health,impact,metrics}.json`; verification logs use `/tmp/complexity-wave4-*.log`.

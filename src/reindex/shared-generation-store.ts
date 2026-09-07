@@ -370,35 +370,7 @@ export function findSharedBaselineGeneration(
   const candidates: SharedGenerationManifest[] = [];
 
   try {
-    for (const generationId of readdirSync(generationsDir)) {
-      if (!/^[a-f0-9]{64}$/.test(generationId)) continue;
-      const generationDir = join(generationsDir, generationId);
-      let generationStat;
-      try {
-        generationStat = lstatSync(generationDir);
-      } catch {
-        continue;
-      }
-      if (!generationStat.isDirectory() || generationStat.isSymbolicLink()) continue;
-      try {
-        const manifest = parseSharedGenerationManifest(
-          readTextFileWithinLimit(join(generationDir, SHARED_GENERATION_MANIFEST), {
-            inputKind: 'shared-generation baseline manifest',
-            maxBytes: SMALL_ARTIFACT_MAX_BYTES,
-          }),
-        );
-        if (
-          manifest.generationId === generationId &&
-          manifest.repositoryId === context.repositoryId &&
-          manifest.producerIdentity === SHARED_GENERATION_PRODUCER_IDENTITY &&
-          sameFingerprintConfiguration(manifest.fingerprint, requestedConfiguration)
-        ) {
-          candidates.push(manifest);
-        }
-      } catch {
-        continue;
-      }
-    }
+    collectSharedBaselineCandidates(generationsDir, context, requestedConfiguration, candidates);
   } catch {
     return null;
   }
@@ -431,6 +403,52 @@ export function findSharedBaselineGeneration(
     if (manifest) return { snapshot, manifest };
   }
   return null;
+}
+
+function collectSharedBaselineCandidates(
+  generationsDir: string,
+  context: GitWorktreeContext,
+  requestedConfiguration: ReturnType<typeof normalizeProjectInputFingerprintConfiguration>,
+  candidates: SharedGenerationManifest[],
+): void {
+  for (const generationId of readdirSync(generationsDir)) {
+    if (!/^[a-f0-9]{64}$/.test(generationId)) continue;
+    const generationDir = join(generationsDir, generationId);
+    let generationStat;
+    try {
+      generationStat = lstatSync(generationDir);
+    } catch {
+      continue;
+    }
+    if (!generationStat.isDirectory() || generationStat.isSymbolicLink()) continue;
+    try {
+      const manifest = parseSharedGenerationManifest(
+        readTextFileWithinLimit(join(generationDir, SHARED_GENERATION_MANIFEST), {
+          inputKind: 'shared-generation baseline manifest',
+          maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+        }),
+      );
+      if (baselineManifestMatches(manifest, generationId, context, requestedConfiguration)) {
+        candidates.push(manifest);
+      }
+    } catch {
+      continue;
+    }
+  }
+}
+
+function baselineManifestMatches(
+  manifest: SharedGenerationManifest,
+  generationId: string,
+  context: GitWorktreeContext,
+  requestedConfiguration: ReturnType<typeof normalizeProjectInputFingerprintConfiguration>,
+): boolean {
+  return (
+    manifest.generationId === generationId &&
+    manifest.repositoryId === context.repositoryId &&
+    manifest.producerIdentity === SHARED_GENERATION_PRODUCER_IDENTITY &&
+    sameFingerprintConfiguration(manifest.fingerprint, requestedConfiguration)
+  );
 }
 
 // scip-query: ignore-extract — reviewed E1 workflow owner; staging, manifest publication, and lease updates are one transaction.
@@ -580,34 +598,8 @@ export function hydrateSharedGeneration(input: {
   try {
     stagingDir = mkdtempSync(join(input.targetCacheDir, '.shared-hydrate-'));
     assertManifestMatchesSnapshot(input.manifest, input.snapshot);
-    for (const artifact of input.manifest.artifacts) {
-      const source = indexArtifactPath(generationDir, artifact.path);
-      const target = indexArtifactPath(stagingDir, artifact.path);
-      cloneArtifactFile(source, target);
-      const size = statSync(target).size;
-      if (
-        size !== artifact.size ||
-        sha256FileWithinLimit(target, {
-          inputKind: 'hydrated shared-generation artifact',
-          maxBytes: SCIP_ARTIFACT_MAX_BYTES,
-        }) !== artifact.sha256
-      ) {
-        throw new Error(`shared artifact is corrupt: ${artifact.path}`);
-      }
-    }
-
-    const targetScipRoot = canonicalProjectRootUrl(input.targetProjectRoot);
-    if (targetScipRoot !== input.manifest.scipProjectRoot) {
-      for (const artifact of input.manifest.artifacts) {
-        if (artifact.path.endsWith('.scip')) {
-          rebaseScipFileProjectRoot(
-            indexArtifactPath(stagingDir, artifact.path),
-            input.manifest.scipProjectRoot,
-            targetScipRoot,
-          );
-        }
-      }
-    }
+    stageSharedGenerationArtifacts(input.manifest, generationDir, stagingDir);
+    rebaseStagedSharedGeneration(input, stagingDir);
 
     if (!validateSourceGeneration(stagingDir, input.targetProjectRoot, input.snapshot.fingerprint, false)) {
       throw new Error('staged shared generation failed completeness or integrity validation');
@@ -624,13 +616,7 @@ export function hydrateSharedGeneration(input: {
       metaPath: join(input.targetCacheDir, 'meta.json'),
       now: input.now,
     });
-    const inspection = inspectSqliteGeneration(
-      join(input.targetCacheDir, 'index.db'),
-      join(input.targetCacheDir, 'meta.json'),
-    );
-    if (inspection.state === 'invalid' || inspection.state === 'drifted') {
-      throw new Error(`hydrated SQLite generation failed validation: ${inspection.reason}`);
-    }
+    validateHydratedSqliteGeneration(input.targetCacheDir);
     if (input.persistLease !== false) {
       writeWorktreeLease(input.snapshot, input.targetCacheDir, input.action ?? 'attached', input.now);
     }
@@ -640,6 +626,49 @@ export function hydrateSharedGeneration(input: {
   } finally {
     if (stagingDir) rmSync(stagingDir, { recursive: true, force: true });
     hydrationLock.release();
+  }
+}
+
+function validateHydratedSqliteGeneration(targetCacheDir: string): void {
+  const inspection = inspectSqliteGeneration(join(targetCacheDir, 'index.db'), join(targetCacheDir, 'meta.json'));
+  if (inspection.state === 'invalid' || inspection.state === 'drifted') {
+    throw new Error(`hydrated SQLite generation failed validation: ${inspection.reason}`);
+  }
+}
+
+function stageSharedGenerationArtifacts(
+  manifest: SharedGenerationManifest,
+  generationDir: string,
+  stagingDir: string,
+): void {
+  for (const artifact of manifest.artifacts) {
+    const source = indexArtifactPath(generationDir, artifact.path);
+    const target = indexArtifactPath(stagingDir, artifact.path);
+    cloneArtifactFile(source, target);
+    const size = statSync(target).size;
+    if (
+      size !== artifact.size ||
+      sha256FileWithinLimit(target, {
+        inputKind: 'hydrated shared-generation artifact',
+        maxBytes: SCIP_ARTIFACT_MAX_BYTES,
+      }) !== artifact.sha256
+    ) {
+      throw new Error(`shared artifact is corrupt: ${artifact.path}`);
+    }
+  }
+}
+function rebaseStagedSharedGeneration(input: Parameters<typeof hydrateSharedGeneration>[0], stagingDir: string): void {
+  const targetScipRoot = canonicalProjectRootUrl(input.targetProjectRoot);
+  if (targetScipRoot !== input.manifest.scipProjectRoot) {
+    for (const artifact of input.manifest.artifacts) {
+      if (artifact.path.endsWith('.scip')) {
+        rebaseScipFileProjectRoot(
+          indexArtifactPath(stagingDir, artifact.path),
+          input.manifest.scipProjectRoot,
+          targetScipRoot,
+        );
+      }
+    }
   }
 }
 

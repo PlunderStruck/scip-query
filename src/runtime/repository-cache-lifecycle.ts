@@ -448,6 +448,17 @@ function buildSweepInventory(
   repositoryId: string,
   previousUnreferencedSince: Record<string, number>,
 ): Pick<RepositoryCacheSweepInput, 'leases' | 'generations' | 'locks' | 'temporaries'> {
+  const leases = sweepLeaseInventory(projectRoot, repositoryDir, repositoryId);
+  const locks = sweepLockInventory(repositoryDir);
+  const { generations, temporaries } = sweepGenerationInventory(repositoryDir, previousUnreferencedSince);
+  return { leases, generations, locks, temporaries };
+}
+
+function sweepLeaseInventory(
+  projectRoot: string,
+  repositoryDir: string,
+  repositoryId: string,
+): RepositoryCacheLeaseInventory[] {
   const livePaths = new Set(listGitWorktrees(projectRoot).map((record) => resolve(record.path)));
   const leases: RepositoryCacheLeaseInventory[] = [];
   for (const entry of safeReadDirectory(join(repositoryDir, 'worktrees'))) {
@@ -465,6 +476,10 @@ function buildSweepInventory(
     });
   }
 
+  return leases;
+}
+
+function sweepLockInventory(repositoryDir: string): RepositoryCacheLockInventory[] {
   const locks: RepositoryCacheLockInventory[] = [];
   for (const entry of safeReadDirectory(join(repositoryDir, 'locks'))) {
     const match = /^([a-f0-9]{64})\.lock$/.exec(entry);
@@ -476,18 +491,19 @@ function buildSweepInventory(
     locks.push({ generationId, path, live });
   }
 
+  return locks;
+}
+
+function sweepGenerationInventory(
+  repositoryDir: string,
+  previousUnreferencedSince: Record<string, number>,
+): Pick<RepositoryCacheSweepInput, 'generations' | 'temporaries'> {
   const generations: RepositoryCacheGenerationInventory[] = [];
   const temporaries: RepositoryCacheTemporaryInventory[] = [];
   for (const entry of safeReadDirectory(join(repositoryDir, 'generations'))) {
     const temporary = /^\.tmp-(\d+)-/.exec(entry);
     if (temporary) {
-      const path = join(repositoryDir, 'generations', entry);
-      const pid = Number(temporary[1]);
-      try {
-        temporaries.push({ path, size: directorySize(path), live: Number.isSafeInteger(pid) && isProcessAlive(pid) });
-      } catch {
-        // A publisher may have atomically renamed or removed its staging directory.
-      }
+      appendTemporaryGeneration(repositoryDir, entry, temporary[1]!, temporaries);
       continue;
     }
     if (!/^[a-f0-9]{64}$/.test(entry)) continue;
@@ -506,7 +522,22 @@ function buildSweepInventory(
       ...(previousUnreferencedSince[entry] === undefined ? {} : { unreferencedAt: previousUnreferencedSince[entry] }),
     });
   }
-  return { leases, generations, locks, temporaries };
+  return { generations, temporaries };
+}
+
+function appendTemporaryGeneration(
+  repositoryDir: string,
+  entry: string,
+  ownerPid: string,
+  temporaries: RepositoryCacheTemporaryInventory[],
+): void {
+  const path = join(repositoryDir, 'generations', entry);
+  const pid = Number(ownerPid);
+  try {
+    temporaries.push({ path, size: directorySize(path), live: Number.isSafeInteger(pid) && isProcessAlive(pid) });
+  } catch {
+    // A publisher may have atomically renamed or removed its staging directory.
+  }
 }
 
 function validManagedWorktreeLease(lease: WorktreeCacheLease): boolean {

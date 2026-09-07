@@ -1280,19 +1280,9 @@ function collectBehaviorCandidates(
   focusLines: readonly number[],
   expandToCallable: boolean,
 ): BehaviorCandidateSet | null {
-  const tree = getAst(db, relativePath);
-  if (!tree) return null;
-
-  const sourceLines = getSourceLines(db, relativePath);
-  const callable = smallestCoveringCallable(db, relativePath, startLine, endLine);
-  const rangeStart = expandToCallable ? (callable?.startLine ?? startLine) : startLine;
-  const rangeEnd = expandToCallable ? (callable?.endLine ?? endLine) : endLine;
-  const exactCallableRoot =
-    callable?.startLine === rangeStart && callable.endLine === rangeEnd
-      ? findCallableNode(tree.rootNode, rangeStart, rangeEnd)
-      : null;
-  const root = exactCallableRoot ?? smallestNodeCoveringLines(tree.rootNode, rangeStart, rangeEnd);
-  if (!root) return null;
+  const selection = behaviorCandidateSelection(db, relativePath, startLine, endLine, expandToCallable);
+  if (!selection) return null;
+  const { callable, rangeStart, rangeEnd, root, sourceLines } = selection;
 
   const signalsByLine = new Map<number, Set<BehaviorSignal | 'lifecycle'>>();
   const shapesByContainer = new Map<string, BehaviorReceiptShape>();
@@ -1331,12 +1321,7 @@ function collectBehaviorCandidates(
     if (BINDING_NODE_TYPES.has(node.type)) record(node.startPosition.row, 'binding');
   });
 
-  const facts = getSourceFacts(db, relativePath);
-  for (const callSite of facts?.callSites ?? []) {
-    if (callSite.line < rangeStart || callSite.line > rangeEnd) continue;
-    record(callSite.line, 'call');
-    if (callSite.calleeLeaf === 'catch') record(callSite.line, 'catch');
-  }
+  recordBehaviorCallSites(db, relativePath, rangeStart, rangeEnd, record);
 
   const candidates = [...signalsByLine.entries()]
     .sort(([left], [right]) => left - right)
@@ -1354,6 +1339,45 @@ function collectBehaviorCandidates(
     candidates,
     shapes: [...shapesByContainer.values()].sort((left, right) => left.startLine - right.startLine),
   };
+}
+
+function behaviorCandidateSelection(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+  expandToCallable: boolean,
+) {
+  const tree = getAst(db, relativePath);
+  if (!tree) return null;
+
+  const sourceLines = getSourceLines(db, relativePath);
+  const callable = smallestCoveringCallable(db, relativePath, startLine, endLine);
+  const rangeStart = expandToCallable ? (callable?.startLine ?? startLine) : startLine;
+  const rangeEnd = expandToCallable ? (callable?.endLine ?? endLine) : endLine;
+  const exactCallableRoot =
+    callable?.startLine === rangeStart && callable.endLine === rangeEnd
+      ? findCallableNode(tree.rootNode, rangeStart, rangeEnd)
+      : null;
+  const root = exactCallableRoot ?? smallestNodeCoveringLines(tree.rootNode, rangeStart, rangeEnd);
+  if (!root) return null;
+
+  return { callable, rangeStart, rangeEnd, root, sourceLines };
+}
+
+function recordBehaviorCallSites(
+  db: ScipDatabase,
+  relativePath: string,
+  rangeStart: number,
+  rangeEnd: number,
+  record: (line: number, signal: BehaviorSignal | 'lifecycle') => void,
+): void {
+  const facts = getSourceFacts(db, relativePath);
+  for (const callSite of facts?.callSites ?? []) {
+    if (callSite.line < rangeStart || callSite.line > rangeEnd) continue;
+    record(callSite.line, 'call');
+    if (callSite.calleeLeaf === 'catch') record(callSite.line, 'catch');
+  }
 }
 
 function directContainedCallables(

@@ -1034,22 +1034,36 @@ function isEntryPointResult(value: unknown): value is QueryServiceEntryPointResu
   return value.every((entry) => {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
     const record = entry as Record<string, unknown>;
-    return (
-      typeof record['symbol'] === 'string' &&
-      typeof record['shortName'] === 'string' &&
-      typeof record['file'] === 'string' &&
-      Number.isSafeInteger(record['startLine']) &&
-      (record['startLine'] as number) >= 0 &&
-      Number.isSafeInteger(record['endLine']) &&
-      (record['endLine'] as number) >= (record['startLine'] as number) &&
-      (record['documentation'] === null || typeof record['documentation'] === 'string') &&
-      (record['confidence'] === 'root' || record['confidence'] === 'candidate') &&
-      Array.isArray(record['evidence']) &&
-      record['evidence'].every((item) => typeof item === 'string') &&
-      Number.isSafeInteger(record['observedCallerCount']) &&
-      (record['observedCallerCount'] as number) >= 0
-    );
+    return validEntryPointIdentity(record) && validEntryPointRange(record) && validEntryPointEvidence(record);
   });
+}
+
+function validEntryPointIdentity(record: Record<string, unknown>): boolean {
+  return (
+    typeof record['symbol'] === 'string' &&
+    typeof record['shortName'] === 'string' &&
+    typeof record['file'] === 'string'
+  );
+}
+
+function validEntryPointRange(record: Record<string, unknown>): boolean {
+  return (
+    Number.isSafeInteger(record['startLine']) &&
+    (record['startLine'] as number) >= 0 &&
+    Number.isSafeInteger(record['endLine']) &&
+    (record['endLine'] as number) >= (record['startLine'] as number)
+  );
+}
+
+function validEntryPointEvidence(record: Record<string, unknown>): boolean {
+  return (
+    (record['documentation'] === null || typeof record['documentation'] === 'string') &&
+    (record['confidence'] === 'root' || record['confidence'] === 'candidate') &&
+    Array.isArray(record['evidence']) &&
+    record['evidence'].every((item) => typeof item === 'string') &&
+    Number.isSafeInteger(record['observedCallerCount']) &&
+    (record['observedCallerCount'] as number) >= 0
+  );
 }
 
 function isFilesResult(value: unknown): value is QueryServiceFileResult[] {

@@ -323,50 +323,84 @@ export function deriveConsumerDiscriminators(
     for (const handlerExpression of callArguments(routeCall).slice(1)) {
       const handlers = resolveCallableExpression(db, boundary.source.file, handlerExpression.text);
       for (const handler of handlers) {
-        try {
-          const handlerContext = boundaryFileContext(db, handler.relativePath);
-          if (!handlerContext) continue;
-          const callable = smallestCoveringCallable(handlerContext.root, handler.startLine, handler.endLine);
-          if (!callable) continue;
-          walk(callable, (node) => {
-            if (node.type !== 'call_expression') return;
-            const target = callTargetNode(node);
-            if (!target) return;
-            const indexed = /^([A-Za-z_$][\w$]*)\s*\[\s*([A-Za-z_$][\w$]*)\s*\]$/u.exec(target.text.trim());
-            if (!indexed) return;
-            const registry = indexed[1]!;
-            const local = indexed[2]!;
-            const field = bodyFieldForLocal(db, handlerContext, handler, local);
-            if (!field) return;
-            const families = registryFamilyBindings(db, handler.relativePath, registry);
-            for (const registryHandler of registryHandlers) {
-              const container = registryHandler.keyParts.find((part) => part.name === 'registry')?.value;
-              const value = registryHandler.keyParts.find((part) => part.name === 'key')?.value;
-              if (!container || !value) continue;
-              if (
-                !families.some((family) => family.file === registryHandler.source.file && family.binding === container)
-              )
-                continue;
-              const consumerContext = boundaryFileContext(db, registryHandler.source.file);
-              const consumerNode = consumerContext
-                ? smallestNodeCoveringLine(consumerContext.root, registryHandler.source.startLine)
-                : null;
-              if (!consumerContext || !consumerNode) continue;
-              consumers.push(
-                createCarrierObservation(consumerContext, consumerNode, 'carrier.consume', carrier, field, value, [
-                  boundary.id,
-                  registryHandler.id,
-                ]),
-              );
-            }
-          });
-        } catch (error) {
-          errors.push(`builtin.carrier consumer analysis failed for ${handler.relativePath}: ${errorMessage(error)}`);
-        }
+        deriveHandlerConsumers(db, boundary, carrier, handler, registryHandlers, consumers, errors);
       }
     }
   }
   return consumers;
+}
+
+function deriveHandlerConsumers(
+  db: ScipDatabase,
+  boundary: BoundaryObservation,
+  carrier: string,
+  handler: IndexedDefinition,
+  registryHandlers: readonly BoundaryObservation[],
+  consumers: BoundaryObservation[],
+  errors: string[],
+): void {
+  try {
+    const handlerContext = boundaryFileContext(db, handler.relativePath);
+    if (!handlerContext) return;
+    const callable = smallestCoveringCallable(handlerContext.root, handler.startLine, handler.endLine);
+    if (!callable) return;
+    walk(callable, (node) =>
+      deriveRegistryCallConsumers(db, boundary, carrier, handler, handlerContext, node, registryHandlers, consumers),
+    );
+  } catch (error) {
+    errors.push(`builtin.carrier consumer analysis failed for ${handler.relativePath}: ${errorMessage(error)}`);
+  }
+}
+
+function deriveRegistryCallConsumers(
+  db: ScipDatabase,
+  boundary: BoundaryObservation,
+  carrier: string,
+  handler: IndexedDefinition,
+  handlerContext: BoundaryFileContext,
+  node: SyntaxNode,
+  registryHandlers: readonly BoundaryObservation[],
+  consumers: BoundaryObservation[],
+): void {
+  if (node.type !== 'call_expression') return;
+  const target = callTargetNode(node);
+  if (!target) return;
+  const indexed = /^([A-Za-z_$][\w$]*)\s*\[\s*([A-Za-z_$][\w$]*)\s*\]$/u.exec(target.text.trim());
+  if (!indexed) return;
+  const registry = indexed[1]!;
+  const local = indexed[2]!;
+  const field = bodyFieldForLocal(db, handlerContext, handler, local);
+  if (!field) return;
+  const families = registryFamilyBindings(db, handler.relativePath, registry);
+  for (const registryHandler of registryHandlers) {
+    appendRegistryConsumer(db, boundary, carrier, field, families, registryHandler, consumers);
+  }
+}
+
+function appendRegistryConsumer(
+  db: ScipDatabase,
+  boundary: BoundaryObservation,
+  carrier: string,
+  field: string,
+  families: ReturnType<typeof registryFamilyBindings>,
+  registryHandler: BoundaryObservation,
+  consumers: BoundaryObservation[],
+): void {
+  const container = registryHandler.keyParts.find((part) => part.name === 'registry')?.value;
+  const value = registryHandler.keyParts.find((part) => part.name === 'key')?.value;
+  if (!container || !value) return;
+  if (!families.some((family) => family.file === registryHandler.source.file && family.binding === container)) return;
+  const consumerContext = boundaryFileContext(db, registryHandler.source.file);
+  const consumerNode = consumerContext
+    ? smallestNodeCoveringLine(consumerContext.root, registryHandler.source.startLine)
+    : null;
+  if (!consumerContext || !consumerNode) return;
+  consumers.push(
+    createCarrierObservation(consumerContext, consumerNode, 'carrier.consume', carrier, field, value, [
+      boundary.id,
+      registryHandler.id,
+    ]),
+  );
 }
 
 export function serializedBodySummariesForFile(context: BoundaryFileContext): RuntimeBoundaryBodySummary[] {

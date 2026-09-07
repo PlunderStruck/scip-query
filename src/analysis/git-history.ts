@@ -457,24 +457,42 @@ function loadFileAddRecords(projectRoot: string, historyMode: GitHistoryMode): M
     const [, timestampRaw] = header.split('\x00');
     const addedAt = Number(timestampRaw) || 0;
     if (newline < 0) continue;
-    for (const line of block.slice(newline + 1).split('\n')) {
-      const record = parseNameStatusRecord(line);
-      if (!record) continue;
-      if (record.status === 'R' && record.from && record.to) {
-        const currentAliases = currentAliasesByHistoricPath.get(record.to) ?? new Set([record.to]);
-        currentAliasesByHistoricPath.set(record.from, currentAliases);
-        continue;
-      }
-      if (record.status !== 'A' || !record.to) continue;
-      // Newest-first walk: keep the OLDEST add we see (re-adds overwrite).
-      const addRecord = { commitsAgo, addedAt };
-      adds.set(record.to, addRecord);
-      for (const alias of currentAliasesByHistoricPath.get(record.to) ?? []) {
-        adds.set(alias, addRecord);
-      }
-    }
+    applyFileAddBlock(block.slice(newline + 1), { commitsAgo, addedAt }, adds, currentAliasesByHistoricPath);
   }
   return adds;
+}
+
+function applyFileAddBlock(
+  body: string,
+  addRecord: FileAddRecord,
+  adds: Map<string, FileAddRecord>,
+  currentAliasesByHistoricPath: Map<string, Set<string>>,
+): void {
+  for (const line of body.split('\n')) {
+    const record = parseNameStatusRecord(line);
+    if (!record) continue;
+    applyFileAddRecord(record, addRecord, adds, currentAliasesByHistoricPath);
+  }
+}
+
+function applyFileAddRecord(
+  record: NonNullable<ReturnType<typeof parseNameStatusRecord>>,
+  commit: FileAddRecord,
+  adds: Map<string, FileAddRecord>,
+  currentAliasesByHistoricPath: Map<string, Set<string>>,
+): void {
+  if (record.status === 'R' && record.from && record.to) {
+    const currentAliases = currentAliasesByHistoricPath.get(record.to) ?? new Set([record.to]);
+    currentAliasesByHistoricPath.set(record.from, currentAliases);
+    return;
+  }
+  if (record.status !== 'A' || !record.to) return;
+  // Newest-first walk: keep the OLDEST add we see (re-adds overwrite).
+  const addRecord = { commitsAgo: commit.commitsAgo, addedAt: commit.addedAt };
+  adds.set(record.to, addRecord);
+  for (const alias of currentAliasesByHistoricPath.get(record.to) ?? []) {
+    adds.set(alias, addRecord);
+  }
 }
 
 function parseNameStatusRecord(line: string): { status: string; from?: string; to?: string } | null {

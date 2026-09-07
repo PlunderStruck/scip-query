@@ -818,6 +818,52 @@ describe('frontend health phase pruning', () => {
     });
   });
 
+  it.each([
+    ['dead', { dead: { count: 0, loc: 0, files: [] } }],
+    ['cycles', { realCycleCount: 0, cycleExclusions: [] }],
+    ['similar', { similarCount: 0 }],
+    ['duplicate-bodies', { duplicateBodies: { count: 0, loc: 0, files: [] } }],
+    ['twin-drift', { twinDrift: { count: 0, loc: 0, files: [] } }],
+    ['react-component-duplicates', { reactComponentDuplicates: { count: 0, loc: 0, files: [] } }],
+    ['react-hook-candidates', { reactHookCandidates: { count: 0, loc: 0, files: [] } }],
+    ['react-large-component-pressure', { reactLargeComponentPressure: { count: 0, loc: 0, files: [] } }],
+    ['vue-component-duplicates', { vueComponentDuplicates: { count: 0, loc: 0, files: [] } }],
+    ['vue-composable-candidates', { vueComposableCandidates: { count: 0, loc: 0, files: [] } }],
+    ['vue-large-view-pressure', { vueLargeViewPressure: { count: 0, loc: 0, files: [] } }],
+    ['passthrough-candidates', { passthroughs: { count: 0, loc: 0, files: [] } }],
+    [
+      'drift',
+      { drift: { count: 0, unusedImports: 0, architectureViolations: 0, layerViolations: 0, direct: 0, signal: 0 } },
+    ],
+    ['git-evidence', { gitEvidence: null }],
+    ['suppressions', { suppressions: { total: 0, byCategory: {} } }],
+    ['coverage-contracts', { coverageContracts: { count: 0, loc: 0, files: [] } }],
+  ] as const)('preserves the deferred %s payload and timeout provenance', (phase, payload) => {
+    expect(deferredHealthPhaseResult(phase, 12345, 'worker deadline')).toEqual({
+      phase,
+      ...payload,
+      healthPhaseMeta: { status: 'deferred', reason: 'worker deadline', timeoutMs: 12345 },
+    });
+  });
+
+  it('isolates mutable deferred payloads between invocations', () => {
+    const first = deferredHealthPhaseResult('cycles', 1, 'first');
+    const second = deferredHealthPhaseResult('cycles', 2, 'second');
+    expect(first).not.toBe(second);
+    if (first.phase !== 'cycles' || second.phase !== 'cycles') throw new Error('Expected cycle results');
+    first.cycleExclusions.length = 1;
+    expect(second.cycleExclusions).toEqual([]);
+    expect(second.healthPhaseMeta).toEqual({ status: 'deferred', reason: 'second', timeoutMs: 2 });
+  });
+
+  it('rejects overview deferral and preserves unknown phase fallthrough', () => {
+    expect(() => deferredHealthPhaseResult('overview', 1, 'slow')).toThrow('Overview health phase cannot be deferred.');
+    const invoke = deferredHealthPhaseResult as (phase: unknown, timeoutMs: number, reason: string) => unknown;
+    for (const phase of ['unknown', 'constructor', '__proto__', '', null, {}, 0]) {
+      expect(invoke(phase, 1, 'slow')).toBeUndefined();
+    }
+  });
+
   it('summarizes isolated health failures without copying unbounded child stderr', async () => {
     expect(healthIsolatedFailureReason(new Error('worker failed:\nFATAL ERROR: heap out of memory'))).toBe(
       'exceeded its isolated memory limit',

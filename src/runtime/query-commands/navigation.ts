@@ -616,36 +616,8 @@ function sourceInspectionSections(result: queries.SourceInspectionResult): Repor
     const failure = evidenceFailureMessage(item, 'inspect');
     return failure ? [`  ${failure}`] : [];
   });
-  const packet = result.packetCoverage;
-  const packetRows = packet
-    ? [
-        `  ${packet.mode === 'complete' ? 'Complete' : 'Ranked bounded'} semantic packet: ${packet.returnedUnits}/${packet.candidateUnits} materialized unit(s), ${result.returnedLines ?? 0} underlying source line(s), and ${result.returnedViewCharacters ?? result.returnedCharacters ?? 0} displayed evidence character(s).`,
-        `  Selection ceiling: ${packet.maxUnits} unit(s) or ${packet.maxCharacters} displayed evidence character(s); syntax units are never clipped.`,
-        `  Exact symbol/location evidence: ${packet.exactSelectorsComplete ? 'complete within materialized compiler evidence' : 'some lower-ranked units withheld'}.`,
-        ...(packet.channels ? [`  Evidence channels: ${renderInspectionChannelCoverage(packet.channels)}.`] : []),
-        ...(packet.omittedUnits > 0
-          ? [`  Withheld materialized units by role: ${renderInspectionRoleCounts(packet.omittedByRole)}.`]
-          : []),
-        ...(packet.expansionCommand
-          ? [
-              `  Expand the complete selector set only if omitted evidence can change the decision: ${packet.expansionCommand}`,
-            ]
-          : []),
-        '  Universal output transport may still page the rendered bytes; transport pages do not change this selection coverage.',
-      ]
-    : [
-        `  Complete semantic packet: ${units.length} deduplicated unit(s), ${result.returnedLines ?? 0} source line(s), and ${result.returnedCharacters ?? 0} source character(s).`,
-      ];
-  const stoppingRows = result.stoppingSummary
-    ? [
-        `  ${result.stoppingSummary.queryStatus ?? result.stoppingSummary.status}: ${result.stoppingSummary.guidance}`,
-        ...(result.stoppingSummary.openEvidence > 0
-          ? [
-              `  ${result.stoppingSummary.openEvidence} open evidence item(s); ${(result.omissionGroups ?? []).length} recoverable omission group(s).`,
-            ]
-          : []),
-      ]
-    : [];
+  const packetRows = sourceInspectionPacketRows(result, units.length);
+  const stoppingRows = sourceInspectionStoppingRows(result);
   return [
     {
       title: 'REQUEST',
@@ -674,6 +646,49 @@ function sourceInspectionSections(result: queries.SourceInspectionResult): Repor
     },
     { title: 'RECOVERY', rows: [...omissionRows, ...causalFrontierRows], skipIfEmpty: true },
   ];
+}
+
+function sourceInspectionPacketRows(result: queries.SourceInspectionResult, unitCount: number): string[] {
+  const packet = result.packetCoverage;
+  if (!packet)
+    return [
+      `  Complete semantic packet: ${unitCount} deduplicated unit(s), ${result.returnedLines ?? 0} source line(s), and ${result.returnedCharacters ?? 0} source character(s).`,
+    ];
+  return sourceInspectionBoundedPacketRows(result, packet);
+}
+
+function sourceInspectionBoundedPacketRows(
+  result: queries.SourceInspectionResult,
+  packet: NonNullable<queries.SourceInspectionResult['packetCoverage']>,
+): string[] {
+  return [
+    `  ${packet.mode === 'complete' ? 'Complete' : 'Ranked bounded'} semantic packet: ${packet.returnedUnits}/${packet.candidateUnits} materialized unit(s), ${result.returnedLines ?? 0} underlying source line(s), and ${result.returnedViewCharacters ?? result.returnedCharacters ?? 0} displayed evidence character(s).`,
+    `  Selection ceiling: ${packet.maxUnits} unit(s) or ${packet.maxCharacters} displayed evidence character(s); syntax units are never clipped.`,
+    `  Exact symbol/location evidence: ${packet.exactSelectorsComplete ? 'complete within materialized compiler evidence' : 'some lower-ranked units withheld'}.`,
+    ...(packet.channels ? [`  Evidence channels: ${renderInspectionChannelCoverage(packet.channels)}.`] : []),
+    ...(packet.omittedUnits > 0
+      ? [`  Withheld materialized units by role: ${renderInspectionRoleCounts(packet.omittedByRole)}.`]
+      : []),
+    ...(packet.expansionCommand
+      ? [
+          `  Expand the complete selector set only if omitted evidence can change the decision: ${packet.expansionCommand}`,
+        ]
+      : []),
+    '  Universal output transport may still page the rendered bytes; transport pages do not change this selection coverage.',
+  ];
+}
+
+function sourceInspectionStoppingRows(result: queries.SourceInspectionResult): string[] {
+  return result.stoppingSummary
+    ? [
+        `  ${result.stoppingSummary.queryStatus ?? result.stoppingSummary.status}: ${result.stoppingSummary.guidance}`,
+        ...(result.stoppingSummary.openEvidence > 0
+          ? [
+              `  ${result.stoppingSummary.openEvidence} open evidence item(s); ${(result.omissionGroups ?? []).length} recoverable omission group(s).`,
+            ]
+          : []),
+      ]
+    : [];
 }
 
 function sourceInspectionCausalFrontierRows(result: queries.SourceInspectionResult): string[] {

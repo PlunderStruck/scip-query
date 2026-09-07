@@ -548,18 +548,24 @@ function isResponseForKind(
   ) {
     return false;
   }
-  if (kind === 'import-definitions') {
-    return (
-      Array.isArray(value.sourcePaths) &&
-      value.sourcePaths.every(
-        (entry) =>
-          Array.isArray(entry) &&
-          entry.length === 2 &&
-          typeof entry[0] === 'string' &&
-          (entry[1] === null || typeof entry[1] === 'string'),
-      )
-    );
-  }
+  if (kind === 'import-definitions') return validImportDefinitionResponse(value);
+  return validReferenceResponse(value);
+}
+
+function validImportDefinitionResponse(value: Record<string, unknown>): boolean {
+  return (
+    Array.isArray(value.sourcePaths) &&
+    value.sourcePaths.every(
+      (entry) =>
+        Array.isArray(entry) &&
+        entry.length === 2 &&
+        typeof entry[0] === 'string' &&
+        (entry[1] === null || typeof entry[1] === 'string'),
+    )
+  );
+}
+
+function validReferenceResponse(value: Record<string, unknown>): boolean {
   return (
     isNumberTupleArray(value.references, isSemanticReference) &&
     (value.incompleteReferenceSymbolIds === undefined ||

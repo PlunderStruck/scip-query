@@ -592,28 +592,32 @@ function rustAttributePath(attrText: string): string | null {
   return match[1]!.replace(/\s+/g, '');
 }
 
+const LEGACY_IMPLICIT_USAGE_REASONS = new Set([
+  '#[tauri::command]',
+  '#[command]',
+  '#[wasm_bindgen]',
+  '#[no_mangle]',
+  '#[napi]',
+  '#[pyfunction]',
+  '#[pymethod]',
+  '#[pyo3]',
+  '#[doc(hidden)]',
+]);
+const LEGACY_IMPLICIT_USAGE_PREFIXES = [
+  'trait ',
+  '#[derive(<reflective>)]',
+  '#[derive(...)]',
+  'serde `with = "',
+  'attribute `with = "',
+  'Rust attribute macro #[',
+  'Rust ABI/export attribute #[',
+];
+
 function legacyDispositionForReason(reason: string): ExclusionDisposition {
-  if (
-    reason === '#[tauri::command]' ||
-    reason === '#[command]' ||
-    reason === '#[wasm_bindgen]' ||
-    reason === '#[no_mangle]' ||
-    reason === '#[napi]' ||
-    reason === '#[pyfunction]' ||
-    reason === '#[pymethod]' ||
-    reason === '#[pyo3]' ||
-    reason === '#[doc(hidden)]' ||
-    reason.startsWith('trait ') ||
-    reason.startsWith('#[derive(<reflective>)]') ||
-    reason.startsWith('#[derive(...)]') ||
-    reason.startsWith('serde `with = "') ||
-    reason.startsWith('attribute `with = "') ||
-    reason.startsWith('Rust attribute macro #[') ||
-    reason.startsWith('Rust ABI/export attribute #[')
-  ) {
-    return 'implicit-usage';
-  }
-  return 'exclude';
+  return LEGACY_IMPLICIT_USAGE_REASONS.has(reason) ||
+    LEGACY_IMPLICIT_USAGE_PREFIXES.some((prefix) => reason.startsWith(prefix))
+    ? 'implicit-usage'
+    : 'exclude';
 }
 
 /**

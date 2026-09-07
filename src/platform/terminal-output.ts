@@ -45,14 +45,12 @@ export function sanitizeTerminalText(value: string, opts: TerminalSanitizationOp
       index = consumeControlSequence(value, index + 1);
       continue;
     }
-    if (code === 0x90 || code === 0x98 || code === 0x9d || code === 0x9e || code === 0x9f) {
+    if (isTerminalStringIntroducer(code)) {
       index = consumeControlString(value, index + 1);
       continue;
     }
     if (isTerminalControl(code)) {
-      if (code === 0x0a && allowNewlines) output += '\n';
-      else if (code === 0x09 && allowTabs) output += '\t';
-      else output += CONTROL_PICTURES.get(code) ?? REPLACEMENT_CHARACTER;
+      output += renderTerminalControl(code, allowNewlines, allowTabs);
       index += 1;
       continue;
     }
@@ -66,6 +64,16 @@ export function sanitizeTerminalText(value: string, opts: TerminalSanitizationOp
   }
 
   return output;
+}
+
+function isTerminalStringIntroducer(code: number): boolean {
+  return code === 0x90 || code === 0x98 || code === 0x9d || code === 0x9e || code === 0x9f;
+}
+
+function renderTerminalControl(code: number, allowNewlines: boolean, allowTabs: boolean): string {
+  if (code === 0x0a && allowNewlines) return '\n';
+  if (code === 0x09 && allowTabs) return '\t';
+  return CONTROL_PICTURES.get(code) ?? REPLACEMENT_CHARACTER;
 }
 
 /** Render one logical row without allowing embedded line or tab structure. */

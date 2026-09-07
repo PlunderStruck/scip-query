@@ -819,6 +819,59 @@ function modelBody(
   callable: TypeScript.FunctionLikeDeclaration,
   relativePath: string,
 ): BodyModel {
+  const { units, guardPredicates, guardUnits, enclosingPredicates, awaitUnits, handlerDeps } = modelBodyStructure(
+    ts,
+    sourceFile,
+    callable,
+  );
+  const { paramNames, localNames, calleeSpans, closureNodes, containers, aliases, stateSetters } = modelBodyBindings(
+    ts,
+    sourceFile,
+    callable,
+  );
+  const enclosingRanges: SourceRange[] = [];
+  for (let current = callable.parent; current; current = current.parent) {
+    if (ts.isFunctionLike(current))
+      enclosingRanges.push({ start: current.getStart(sourceFile), end: current.getEnd() });
+  }
+  const hookCalls = new Map<number, string[]>();
+  for (const unit of units) {
+    if (!COUNTED_KINDS.has(unit.kind)) continue;
+    const names = topLevelHookCalls(ts, unit.node);
+    if (names.length > 0) hookCalls.set(unit.index, names);
+  }
+  const name = callable.name && 'text' in callable.name ? String(callable.name.text) : '';
+  const react = hookCalls.size > 0 && (/\.[jt]sx$/iu.test(relativePath) || HOOK_NAME.test(name));
+  const model: BodyModel = {
+    ts,
+    sourceFile,
+    callable,
+    units,
+    paramNames,
+    localNames,
+    guardPredicates,
+    guardUnits,
+    enclosingPredicates,
+    awaitUnits,
+    calleeSpans,
+    closures: new Map(),
+    containers,
+    aliases,
+    enclosingRanges,
+    handlerDeps,
+    stateSetters,
+    hookCalls,
+    react,
+  };
+  model.closures = summarizeClosures(model, closureNodes);
+  return model;
+}
+
+function modelBodyStructure(
+  ts: TypeScriptModule,
+  sourceFile: TypeScript.SourceFile,
+  callable: TypeScript.FunctionLikeDeclaration,
+) {
   const units: Unit[] = [];
   const guardNodes = new Set<TypeScript.Node>();
   const guardBranchNodes = new Set<TypeScript.Node>();
@@ -958,6 +1011,15 @@ function modelBody(
     }
   }
 
+  return { units, guardPredicates, guardUnits, enclosingPredicates, awaitUnits, handlerDeps };
+}
+
+function modelBodyBindings(
+  ts: TypeScriptModule,
+  sourceFile: TypeScript.SourceFile,
+  callable: TypeScript.FunctionLikeDeclaration,
+) {
+  const callableBody = callable.body!;
   const paramNames = new Set<string>();
   for (const parameter of callable.parameters) for (const name of bindingNames(parameter.name)) paramNames.add(name);
   const localNames = new Set<string>();
@@ -1024,9 +1086,7 @@ function modelBody(
     if (ts.isParameter(node) && node.parent !== callable) {
       for (const name of bindingNames(node.name)) localNames.add(name);
     } else if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) {
-      if (!node.name) return;
-      localNames.add(node.name.text);
-      if (ts.isFunctionDeclaration(node) && node.body) closureNodes.set(node.name.text, node);
+      recordNamedBodyDeclaration(ts, node, localNames, closureNodes);
     } else if (ts.isCatchClause(node) && node.variableDeclaration) {
       for (const name of bindingNames(node.variableDeclaration.name)) localNames.add(name);
     }
@@ -1048,42 +1108,18 @@ function modelBody(
     node.forEachChild(visit);
   };
   visit(callableBody);
-  const enclosingRanges: SourceRange[] = [];
-  for (let current = callable.parent; current; current = current.parent) {
-    if (ts.isFunctionLike(current))
-      enclosingRanges.push({ start: current.getStart(sourceFile), end: current.getEnd() });
-  }
-  const hookCalls = new Map<number, string[]>();
-  for (const unit of units) {
-    if (!COUNTED_KINDS.has(unit.kind)) continue;
-    const names = topLevelHookCalls(ts, unit.node);
-    if (names.length > 0) hookCalls.set(unit.index, names);
-  }
-  const name = callable.name && 'text' in callable.name ? String(callable.name.text) : '';
-  const react = hookCalls.size > 0 && (/\.[jt]sx$/iu.test(relativePath) || HOOK_NAME.test(name));
-  const model: BodyModel = {
-    ts,
-    sourceFile,
-    callable,
-    units,
-    paramNames,
-    localNames,
-    guardPredicates,
-    guardUnits,
-    enclosingPredicates,
-    awaitUnits,
-    calleeSpans,
-    closures: new Map(),
-    containers,
-    aliases,
-    enclosingRanges,
-    handlerDeps,
-    stateSetters,
-    hookCalls,
-    react,
-  };
-  model.closures = summarizeClosures(model, closureNodes);
-  return model;
+  return { paramNames, localNames, calleeSpans, closureNodes, containers, aliases, stateSetters };
+}
+
+function recordNamedBodyDeclaration(
+  ts: TypeScriptModule,
+  node: TypeScript.FunctionDeclaration | TypeScript.ClassDeclaration,
+  localNames: Set<string>,
+  closureNodes: Map<string, TypeScript.FunctionLikeDeclaration>,
+): void {
+  if (!node.name) return;
+  localNames.add(node.name.text);
+  if (ts.isFunctionDeclaration(node) && node.body) closureNodes.set(node.name.text, node);
 }
 
 /** A function expression bound to a name, directly or through `useCallback(fn, deps)`. */
@@ -1646,7 +1682,6 @@ function containerAccesses(body: BodyModel): {
   byUnit: Map<number, UnitWrites>;
   stateWritesByUnit: Map<number, string[]>;
 } {
-  const { ts } = body;
   const writes: BaseAccess[] = [];
   const reads: BaseAccess[] = [];
   const byUnit = new Map<number, UnitWrites>();
@@ -1674,23 +1709,34 @@ function containerAccesses(body: BodyModel): {
   };
   for (const unit of body.units) {
     if (!COUNTED_KINDS.has(unit.kind)) continue;
-    const expression = statementExpression(ts, unit.node);
-    if (expression) {
-      const written = writtenBase(body, expression);
-      if (written) record(unit.index, written, isContainerWrite(body, expression));
-    }
-    for (const summary of closureCallsIn(body, unit.node)) {
-      for (const base of summary.writes) record(unit.index, base, true);
-      for (const base of summary.reads) if (isLocalBase(body, base)) reads.push({ unit: unit.index, base });
-    }
-    for (const passed of containersPassedIn(body, unit.node)) record(unit.index, passed, true);
-    const stateWrites = renderTimeStateWrites(body, unit.node);
-    if (stateWrites.length > 0) {
-      stateWritesByUnit.set(unit.index, stateWrites);
-      for (const state of stateWrites) record(unit.index, state, true);
-    }
+    collectUnitContainerAccesses(body, unit, record, reads, stateWritesByUnit);
   }
   return { writes, reads, byUnit, stateWritesByUnit };
+}
+
+function collectUnitContainerAccesses(
+  body: BodyModel,
+  unit: Unit,
+  record: (unit: number, rawBase: string, containerWrite: boolean) => void,
+  reads: BaseAccess[],
+  stateWritesByUnit: Map<number, string[]>,
+): void {
+  const { ts } = body;
+  const expression = statementExpression(ts, unit.node);
+  if (expression) {
+    const written = writtenBase(body, expression);
+    if (written) record(unit.index, written, isContainerWrite(body, expression));
+  }
+  for (const summary of closureCallsIn(body, unit.node)) {
+    for (const base of summary.writes) record(unit.index, base, true);
+    for (const base of summary.reads) if (isLocalBase(body, base)) reads.push({ unit: unit.index, base });
+  }
+  for (const passed of containersPassedIn(body, unit.node)) record(unit.index, passed, true);
+  const stateWrites = renderTimeStateWrites(body, unit.node);
+  if (stateWrites.length > 0) {
+    stateWritesByUnit.set(unit.index, stateWrites);
+    for (const state of stateWrites) record(unit.index, state, true);
+  }
 }
 
 /**

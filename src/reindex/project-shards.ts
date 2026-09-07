@@ -107,25 +107,44 @@ export function deriveProjectDependencies(
     const reading = inputs[project];
     const edges = directEdges.get(project)!;
 
-    if (!reading || reading.parseFailed) {
-      for (const other of projects) {
-        if (other !== project) edges.add(other);
-      }
-      continue;
-    }
-
-    for (const depName of reading.dependencyNames) {
-      const depProject = packageNameToProject.get(depName);
-      if (depProject && depProject !== project) edges.add(depProject);
-    }
-
-    for (const target of [...reading.pathsTargets, ...reading.referencesPaths]) {
-      const owner = mostSpecificMatch(target, projects);
-      if (owner && owner !== project) edges.add(owner);
-    }
+    collectProjectDependencyEdges(project, projects, reading, packageNameToProject, edges);
   }
 
   return transitiveClosure(projects, directEdges);
+}
+
+function collectProjectDependencyEdges(
+  project: string,
+  projects: readonly string[],
+  reading: ProjectManifestInputs[string] | undefined,
+  packageNameToProject: ReadonlyMap<string, string>,
+  edges: Set<string>,
+): void {
+  if (!reading || reading.parseFailed) {
+    for (const other of projects) {
+      if (other !== project) edges.add(other);
+    }
+    return;
+  }
+
+  for (const depName of reading.dependencyNames) {
+    const depProject = packageNameToProject.get(depName);
+    if (depProject && depProject !== project) edges.add(depProject);
+  }
+
+  collectProjectPathDependencies(project, projects, reading, edges);
+}
+
+function collectProjectPathDependencies(
+  project: string,
+  projects: readonly string[],
+  reading: ProjectManifestInputs[string],
+  edges: Set<string>,
+): void {
+  for (const target of [...reading.pathsTargets, ...reading.referencesPaths]) {
+    const owner = mostSpecificMatch(target, projects);
+    if (owner && owner !== project) edges.add(owner);
+  }
 }
 
 /**
@@ -391,13 +410,10 @@ function stripJsonComments(input: string): string {
 
     if (inString) {
       output += char;
-      if (char === '\\' && index + 1 < length) {
-        output += input[index + 1];
-        index += 2;
-        continue;
-      }
+      const end = jsonStringChunkEnd(input, index);
+      output += input.slice(index + 1, end);
       if (char === '"') inString = false;
-      index += 1;
+      index = end;
       continue;
     }
 
@@ -409,15 +425,12 @@ function stripJsonComments(input: string): string {
     }
 
     if (char === '/' && input[index + 1] === '/') {
-      index += 2;
-      while (index < length && input[index] !== '\n') index += 1;
+      index = skipJsonLineComment(input, index + 2);
       continue;
     }
 
     if (char === '/' && input[index + 1] === '*') {
-      index += 2;
-      while (index < length && !(input[index] === '*' && input[index + 1] === '/')) index += 1;
-      index += 2;
+      index = skipJsonBlockComment(input, index + 2);
       continue;
     }
 
@@ -426,6 +439,20 @@ function stripJsonComments(input: string): string {
   }
 
   return output;
+}
+
+function jsonStringChunkEnd(input: string, index: number): number {
+  return input[index] === '\\' && index + 1 < input.length ? index + 2 : index + 1;
+}
+
+function skipJsonLineComment(input: string, index: number): number {
+  while (index < input.length && input[index] !== '\n') index += 1;
+  return index;
+}
+
+function skipJsonBlockComment(input: string, index: number): number {
+  while (index < input.length && !(input[index] === '*' && input[index + 1] === '/')) index += 1;
+  return index + 2;
 }
 
 function readJsonc(filePath: string): { ok: true; value: Record<string, unknown> } | { ok: false } {

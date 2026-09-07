@@ -178,29 +178,56 @@ export function coChange(
   const structurallyLinkedPair = coChangeStructuralLinkChecker(db, graph, declaredCouplings);
   const includeLinked = opts.includeLinked === true || partnersMode;
 
-  const findings: CoChangeFinding[] = [];
-  for (const pair of pairs) {
-    if (!isCurrentCoChangePair(db, pair)) continue;
-    if (!partnersMode && isExpectedCoChangePair(pair.fileA, pair.fileB)) continue;
-    const structurallyLinked = structurallyLinkedPair(pair.fileA, pair.fileB);
-    if (!includeLinked && structurallyLinked) continue;
-    const classification = classifyCoChangePartner(pair.fileA, pair.fileB);
-    const declaredCouplingSuggestion = declaredCouplingSuggestionForPair(pair, classification, structurallyLinked);
-    findings.push({
-      ...pair,
-      structurallyLinked,
-      partnerClass: classification.partnerClass,
-      partnerClassReasons: classification.reasons,
-      ...coChangeActionTier(pair, classification.partnerClass),
-      ...(declaredCouplingSuggestion ? { declaredCouplingSuggestion } : {}),
-    });
-    if (findings.length >= limit) break;
-  }
+  const findings = collectCoChangeFindings(db, pairs, partnersMode, includeLinked, structurallyLinkedPair, limit);
 
   return {
     available: true,
     commitsAnalyzed: history.commits.length,
     findings,
+  };
+}
+
+type GitCoChangePair = NonNullable<ReturnType<ReturnType<typeof gitEvidenceProduct>['coChangePairs']>>[number];
+
+function collectCoChangeFindings(
+  db: ScipDatabase,
+  pairs: readonly GitCoChangePair[],
+  partnersMode: boolean,
+  includeLinked: boolean,
+  structurallyLinkedPair: ReturnType<typeof coChangeStructuralLinkChecker>,
+  limit: number,
+): CoChangeFinding[] {
+  const findings: CoChangeFinding[] = [];
+  for (const pair of pairs) {
+    const finding = coChangePairFinding(db, pair, partnersMode, includeLinked, structurallyLinkedPair);
+    if (!finding) continue;
+    findings.push(finding);
+    if (findings.length >= limit) break;
+  }
+
+  return findings;
+}
+
+function coChangePairFinding(
+  db: ScipDatabase,
+  pair: GitCoChangePair,
+  partnersMode: boolean,
+  includeLinked: boolean,
+  structurallyLinkedPair: ReturnType<typeof coChangeStructuralLinkChecker>,
+): CoChangeFinding | null {
+  if (!isCurrentCoChangePair(db, pair)) return null;
+  if (!partnersMode && isExpectedCoChangePair(pair.fileA, pair.fileB)) return null;
+  const structurallyLinked = structurallyLinkedPair(pair.fileA, pair.fileB);
+  if (!includeLinked && structurallyLinked) return null;
+  const classification = classifyCoChangePartner(pair.fileA, pair.fileB);
+  const declaredCouplingSuggestion = declaredCouplingSuggestionForPair(pair, classification, structurallyLinked);
+  return {
+    ...pair,
+    structurallyLinked,
+    partnerClass: classification.partnerClass,
+    partnerClassReasons: classification.reasons,
+    ...coChangeActionTier(pair, classification.partnerClass),
+    ...(declaredCouplingSuggestion ? { declaredCouplingSuggestion } : {}),
   };
 }
 

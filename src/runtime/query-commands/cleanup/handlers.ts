@@ -986,30 +986,40 @@ export const handleDocDrift = dbCommand(({ db, args, opts }) => {
     `Docs whose referenced or co-changed code moved on without them (${result.docsScanned} docs scanned, ${result.commitsAnalyzed} commits analyzed):\n`,
   );
   for (const finding of result.findings) {
-    const snapshotLabel = finding.snapshotExcluded ? '  [snapshot (excluded by policy)]' : '';
-    const estimatedLabel = finding.docLastChangedAtEstimated ? '  [docLastChangedAt estimated from file mtime]' : '';
-    console.log(`  staleness ${finding.staleness}  ${finding.doc}${snapshotLabel}${estimatedLabel}`);
-    for (const broken of finding.brokenReferences.slice(0, 4)) {
-      console.log(`    BROKEN REFERENCE: cites ${broken} — that file no longer exists`);
-    }
-    for (const subject of finding.subjects.slice(0, 4)) {
-      const evidence =
-        subject.evidence === 'both'
-          ? `referenced by doc + coupled ${subject.coChanges}x`
-          : subject.evidence === 'reference'
-            ? 'referenced by doc'
-            : `coupled ${subject.coChanges}x historically`;
-      console.log(
-        `    ${subject.changesSinceDocUpdate} change(s) since doc update  ${subject.file}  (${evidence}; ${subject.actionTier}/${subject.docIntent})`,
-      );
-      const intentReason = subject.docIntentReasons[0];
-      if (intentReason) console.log(`      intent: ${intentReason}`);
-      const citedClaim = subject.citationContexts?.[0];
-      if (citedClaim) console.log(`      cited claim: ${displaySnippet(citedClaim)}`);
-    }
+    renderDocDriftFinding(finding);
   }
   console.log('\nStale standards docs are worse than none — agents implement to a dead spec.');
 });
+
+function renderDocDriftFinding(finding: ReturnType<typeof queries.docDrift>['findings'][number]): void {
+  const snapshotLabel = finding.snapshotExcluded ? '  [snapshot (excluded by policy)]' : '';
+  const estimatedLabel = finding.docLastChangedAtEstimated ? '  [docLastChangedAt estimated from file mtime]' : '';
+  console.log(`  staleness ${finding.staleness}  ${finding.doc}${snapshotLabel}${estimatedLabel}`);
+  for (const broken of finding.brokenReferences.slice(0, 4)) {
+    console.log(`    BROKEN REFERENCE: cites ${broken} — that file no longer exists`);
+  }
+  for (const subject of finding.subjects.slice(0, 4)) {
+    renderDocDriftSubject(subject);
+  }
+}
+
+function renderDocDriftSubject(
+  subject: ReturnType<typeof queries.docDrift>['findings'][number]['subjects'][number],
+): void {
+  const evidence =
+    subject.evidence === 'both'
+      ? `referenced by doc + coupled ${subject.coChanges}x`
+      : subject.evidence === 'reference'
+        ? 'referenced by doc'
+        : `coupled ${subject.coChanges}x historically`;
+  console.log(
+    `    ${subject.changesSinceDocUpdate} change(s) since doc update  ${subject.file}  (${evidence}; ${subject.actionTier}/${subject.docIntent})`,
+  );
+  const intentReason = subject.docIntentReasons[0];
+  if (intentReason) console.log(`      intent: ${intentReason}`);
+  const citedClaim = subject.citationContexts?.[0];
+  if (citedClaim) console.log(`      cited claim: ${displaySnippet(citedClaim)}`);
+}
 
 export const handleUnusedParams = budgetedListCommand('unused-params', {
   query: ({ db, opts, budget }) =>

@@ -250,46 +250,59 @@ function indexServiceReceivers(root: SyntaxNode): ServiceReceiverIndex {
   const index = emptyServiceReceiverIndex();
   walk(root, (node) => {
     if (node.type === 'variable_declarator') {
-      const name = node.childForFieldName('name') ?? node.namedChild(0);
-      const value = node.childForFieldName('value') ?? node.namedChild(1);
-      if (name?.type !== 'identifier' || !value) return;
-      const aliases = new Set<string>();
-      walk(value, (candidate) => {
-        if (candidate.type !== 'member_expression') return;
-        const object = candidate.childForFieldName('object') ?? candidate.namedChild(0);
-        const property = candidate.childForFieldName('property') ?? candidate.namedChild(1);
-        if (object?.type === 'identifier' && property?.text === 'Service') aliases.add(object.text);
-      });
-      if (aliases.size === 1) {
-        const declarations = index.declarations.get(name.text) ?? [];
-        declarations.push({ line: node.startPosition.row, alias: [...aliases][0]! });
-        index.declarations.set(name.text, declarations);
-      }
+      indexServiceDeclaration(node, index);
       return;
     }
-
-    if (!['arrow_function', 'function_expression', 'generator_function'].includes(node.type)) return;
-    const parameters = node.childForFieldName('parameters') ?? node.childForFieldName('parameter');
-    if (!parameters) return;
-    let current: SyntaxNode | null = node.parent;
-    while (current && current.type !== 'call_expression') current = current.parent;
-    if (!current) return;
-    const callee = current.childForFieldName('function') ?? current.namedChild(0);
-    const match = /^([A-Za-z_$][\w$]*)\.Service\.use$/u.exec(callee?.text ?? '');
-    if (!match) return;
-    const receivers = new Set<string>();
-    walk(parameters, (candidate) => {
-      if (candidate.type === 'identifier') receivers.add(candidate.text);
-    });
-    if (receivers.size === 0) return;
-    index.callbacks.push({
-      startLine: node.startPosition.row,
-      endLine: node.endPosition.row,
-      receivers,
-      alias: match[1]!,
-    });
+    indexServiceCallback(node, index);
   });
   return index;
+}
+
+function indexServiceDeclaration(node: SyntaxNode, index: ServiceReceiverIndex): void {
+  const name = node.childForFieldName('name') ?? node.namedChild(0);
+  const value = node.childForFieldName('value') ?? node.namedChild(1);
+  if (name?.type !== 'identifier' || !value) return;
+  const aliases = new Set<string>();
+  walk(value, (candidate) => {
+    if (candidate.type !== 'member_expression') return;
+    const object = candidate.childForFieldName('object') ?? candidate.namedChild(0);
+    const property = candidate.childForFieldName('property') ?? candidate.namedChild(1);
+    if (object?.type === 'identifier' && property?.text === 'Service') aliases.add(object.text);
+  });
+  if (aliases.size === 1) {
+    const declarations = index.declarations.get(name.text) ?? [];
+    declarations.push({ line: node.startPosition.row, alias: [...aliases][0]! });
+    index.declarations.set(name.text, declarations);
+  }
+}
+
+function indexServiceCallback(node: SyntaxNode, index: ServiceReceiverIndex): void {
+  if (!['arrow_function', 'function_expression', 'generator_function'].includes(node.type)) return;
+  const parameters = node.childForFieldName('parameters') ?? node.childForFieldName('parameter');
+  if (!parameters) return;
+  const alias = serviceUseCallbackAlias(node);
+  if (alias === null) return;
+  const receivers = new Set<string>();
+  walk(parameters, (candidate) => {
+    if (candidate.type === 'identifier') receivers.add(candidate.text);
+  });
+  if (receivers.size === 0) return;
+  index.callbacks.push({
+    startLine: node.startPosition.row,
+    endLine: node.endPosition.row,
+    receivers,
+    alias,
+  });
+}
+
+function serviceUseCallbackAlias(node: SyntaxNode): string | null {
+  let current: SyntaxNode | null = node.parent;
+  while (current && current.type !== 'call_expression') current = current.parent;
+  if (!current) return null;
+  const callee = current.childForFieldName('function') ?? current.namedChild(0);
+  const match = /^([A-Za-z_$][\w$]*)\.Service\.use$/u.exec(callee?.text ?? '');
+  if (!match) return null;
+  return match[1]!;
 }
 
 function serviceAliasesForCallsite(

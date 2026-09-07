@@ -21,46 +21,71 @@ export function pickAstCallCandidate<T extends { symbol: string; file: string }>
 ): T | null {
   const sourceImports = getSourceImports(db, sourceFile);
 
-  if (memberAccess) {
-    const receiverRoot = calleeQualifier?.match(/^[A-Za-z_$][\w$]*/u)?.[0];
-    if (!receiverRoot) return null;
-    const importedSourcePaths = new Set(
-      sourceImports
-        .filter((entry) => entry.localName === receiverRoot || entry.importedName === receiverRoot)
-        .map((entry) => entry.sourcePath)
-        .filter((path): path is string => Boolean(path)),
-    );
-    for (const candidate of candidates) {
-      for (const sourcePath of importedSourcePaths) {
-        if (pathsResolveSame(sourcePath, candidate.file)) return candidate;
-      }
-    }
+  if (memberAccess) return pickMemberAstCallCandidate(db, sourceFile, candidates, sourceImports, calleeQualifier);
+  return pickDirectAstCallCandidate(sourceFile, candidates, sourceImports);
+}
 
-    if (receiverRoot === 'this' || receiverRoot === 'self' || receiverRoot === 'cls') {
-      const implicitOwnerMatches = candidates.filter(
-        (candidate) => candidate.file === sourceFile && parentTypeName(candidate.symbol) !== null,
-      );
-      if (implicitOwnerMatches.length === 1) return implicitOwnerMatches[0]!;
+function pickMemberAstCallCandidate<T extends { symbol: string; file: string }>(
+  db: ScipDatabase,
+  sourceFile: string,
+  candidates: T[],
+  sourceImports: ReturnType<typeof getSourceImports>,
+  calleeQualifier?: string,
+): T | null {
+  const receiverRoot = calleeQualifier?.match(/^[A-Za-z_$][\w$]*/u)?.[0];
+  if (!receiverRoot) return null;
+  const importedSourcePaths = new Set(
+    sourceImports
+      .filter((entry) => entry.localName === receiverRoot || entry.importedName === receiverRoot)
+      .map((entry) => entry.sourcePath)
+      .filter((path): path is string => Boolean(path)),
+  );
+  for (const candidate of candidates) {
+    for (const sourcePath of importedSourcePaths) {
+      if (pathsResolveSame(sourcePath, candidate.file)) return candidate;
     }
-
-    const ownerNames = localReceiverOwnerNames(getSourceText(db, sourceFile) ?? '', receiverRoot);
-    if (ownerNames.size === 0) return null;
-    const ownerSourcePaths = new Set(
-      sourceImports
-        .filter((entry) => ownerNames.has(entry.localName ?? entry.importedName))
-        .map((entry) => entry.sourcePath)
-        .filter((path): path is string => Boolean(path)),
-    );
-    const ownerMatches = candidates.filter(
-      (candidate) =>
-        ownerNames.has(parentTypeName(candidate.symbol) ?? '') &&
-        (candidate.file === sourceFile ||
-          [...ownerSourcePaths].some((sourcePath) => pathsResolveSame(sourcePath, candidate.file))),
-    );
-    if (ownerMatches.length === 1) return ownerMatches[0]!;
-    return null;
   }
 
+  if (receiverRoot === 'this' || receiverRoot === 'self' || receiverRoot === 'cls') {
+    const implicitOwnerMatches = candidates.filter(
+      (candidate) => candidate.file === sourceFile && parentTypeName(candidate.symbol) !== null,
+    );
+    if (implicitOwnerMatches.length === 1) return implicitOwnerMatches[0]!;
+  }
+
+  return pickReceiverOwnerCandidate(db, sourceFile, candidates, sourceImports, receiverRoot);
+}
+
+function pickReceiverOwnerCandidate<T extends { symbol: string; file: string }>(
+  db: ScipDatabase,
+  sourceFile: string,
+  candidates: T[],
+  sourceImports: ReturnType<typeof getSourceImports>,
+  receiverRoot: string,
+): T | null {
+  const ownerNames = localReceiverOwnerNames(getSourceText(db, sourceFile) ?? '', receiverRoot);
+  if (ownerNames.size === 0) return null;
+  const ownerSourcePaths = new Set(
+    sourceImports
+      .filter((entry) => ownerNames.has(entry.localName ?? entry.importedName))
+      .map((entry) => entry.sourcePath)
+      .filter((path): path is string => Boolean(path)),
+  );
+  const ownerMatches = candidates.filter(
+    (candidate) =>
+      ownerNames.has(parentTypeName(candidate.symbol) ?? '') &&
+      (candidate.file === sourceFile ||
+        [...ownerSourcePaths].some((sourcePath) => pathsResolveSame(sourcePath, candidate.file))),
+  );
+  if (ownerMatches.length === 1) return ownerMatches[0]!;
+  return null;
+}
+
+function pickDirectAstCallCandidate<T extends { symbol: string; file: string }>(
+  sourceFile: string,
+  candidates: T[],
+  sourceImports: ReturnType<typeof getSourceImports>,
+): T | null {
   const directCandidates = candidates.filter((candidate) => parentTypeName(candidate.symbol) === null);
   const sameFile = directCandidates.find((candidate) => candidate.file === sourceFile);
   if (sameFile) return sameFile;

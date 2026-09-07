@@ -83,53 +83,7 @@ export function testQuality(db: ScipDatabase, opts: TestQualityOptions = {}): Te
   const mockEcho: MockEchoFinding[] = [];
 
   for (const file of testFiles) {
-    const source = getSourceText(db, file);
-    if (!source) continue;
-    const masked = stripCommentsAndStringsTsSafe(source);
-    const vocabulary = assertionVocabulary(source);
-    // One-hop, same-file only: a local helper (`expectValidTypeScript(x)`)
-    // whose own body calls a base-vocabulary assertion inherits that
-    // status, the same "delegating checker" idea D1/D2 resolve through the
-    // call graph — test files have no call graph to resolve through (they
-    // aren't SCIP-indexed), so this does it syntactically, one hop, same
-    // file only. Found dogfooding: this repo's own instrument.test.ts calls
-    // a local `expectValidTypeScript` helper that wraps a real `expect(...)`
-    // — without this, every test using it looked assertion-free.
-    for (const helperName of localAssertionHelperNames(masked, vocabulary)) vocabulary.add(helperName);
-
-    const blocks = findTestBlocks(source, file);
-    for (const block of blocks) {
-      if (block.skip) {
-        skipped.push(skippedFinding(db, file, block, rotDays));
-        continue;
-      }
-      if (block.kind === 'describe') continue; // grouping construct, not itself asserted
-
-      const title = extractTitle(source, block.argsStart);
-      const bodyMasked = masked.slice(block.argsStart, block.callEnd);
-      const bodyRaw = source.slice(block.argsStart, block.callEnd);
-
-      if (!hasAssertionCall(bodyMasked, vocabulary)) {
-        assertionFree.push({
-          file,
-          startLine: lineNumberAt(source, block.callStart),
-          endLine: lineNumberAt(source, block.callEnd),
-          title,
-          severity: /\bawait\b/.test(bodyMasked) ? 'low' : 'high',
-        });
-      }
-
-      const echo = findMockEcho(bodyMasked, bodyRaw);
-      if (echo) {
-        mockEcho.push({
-          file,
-          startLine: lineNumberAt(source, block.callStart),
-          endLine: lineNumberAt(source, block.callEnd),
-          title,
-          echoedValue: echo,
-        });
-      }
-    }
+    collectFileTestQuality(db, file, rotDays, { assertionFree, skipped, mockEcho });
   }
 
   return {
@@ -137,6 +91,57 @@ export function testQuality(db: ScipDatabase, opts: TestQualityOptions = {}): Te
     skipped: limit ? skipped.slice(0, limit) : skipped,
     mockEcho: limit ? mockEcho.slice(0, limit) : mockEcho,
   };
+}
+
+function collectFileTestQuality(db: ScipDatabase, file: string, rotDays: number, report: TestQualityReport): void {
+  const { assertionFree, skipped, mockEcho } = report;
+  const source = getSourceText(db, file);
+  if (!source) return;
+  const masked = stripCommentsAndStringsTsSafe(source);
+  const vocabulary = assertionVocabulary(source);
+  // One-hop, same-file only: a local helper (`expectValidTypeScript(x)`)
+  // whose own body calls a base-vocabulary assertion inherits that
+  // status, the same "delegating checker" idea D1/D2 resolve through the
+  // call graph — test files have no call graph to resolve through (they
+  // aren't SCIP-indexed), so this does it syntactically, one hop, same
+  // file only. Found dogfooding: this repo's own instrument.test.ts calls
+  // a local `expectValidTypeScript` helper that wraps a real `expect(...)`
+  // — without this, every test using it looked assertion-free.
+  for (const helperName of localAssertionHelperNames(masked, vocabulary)) vocabulary.add(helperName);
+
+  const blocks = findTestBlocks(source, file);
+  for (const block of blocks) {
+    if (block.skip) {
+      skipped.push(skippedFinding(db, file, block, rotDays));
+      continue;
+    }
+    if (block.kind === 'describe') continue; // grouping construct, not itself asserted
+
+    const title = extractTitle(source, block.argsStart);
+    const bodyMasked = masked.slice(block.argsStart, block.callEnd);
+    const bodyRaw = source.slice(block.argsStart, block.callEnd);
+
+    if (!hasAssertionCall(bodyMasked, vocabulary)) {
+      assertionFree.push({
+        file,
+        startLine: lineNumberAt(source, block.callStart),
+        endLine: lineNumberAt(source, block.callEnd),
+        title,
+        severity: /\bawait\b/.test(bodyMasked) ? 'low' : 'high',
+      });
+    }
+
+    const echo = findMockEcho(bodyMasked, bodyRaw);
+    if (echo) {
+      mockEcho.push({
+        file,
+        startLine: lineNumberAt(source, block.callStart),
+        endLine: lineNumberAt(source, block.callEnd),
+        title,
+        echoedValue: echo,
+      });
+    }
+  }
 }
 
 // ── Block discovery ──────────────────────────────────────────────

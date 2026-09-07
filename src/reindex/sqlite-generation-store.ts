@@ -430,46 +430,10 @@ export function inspectLocalSqliteGenerationRetention(outputDb: string): LocalSq
   const limits = lastCollection?.limits ?? { ...DEFAULT_LOCAL_SQLITE_GENERATION_RETENTION };
   const lock = acquireProcessFileLock(sqliteGenerationGcLockPath(outputDb), { waitMs: 0 });
   if (!lock) {
-    return {
-      state: 'deferred',
-      generationCount: lastCollection?.generationCount ?? 0,
-      logicalBytes: lastCollection?.logicalBytes ?? 0,
-      protectedGenerations: lastCollection?.protectedGenerations ?? 0,
-      activeReaderLeases: lastCollection?.activeReaderLeases ?? 0,
-      malformedReaderLeases: lastCollection?.malformedReaderLeases ?? 0,
-      limits,
-      ...(lastCollection ? { lastCollection } : {}),
-      reason: 'another process owns local generation retention',
-    };
+    return deferredGenerationRetention(limits, lastCollection);
   }
   try {
-    const generations = localGenerationEntries(outputDb);
-    const state = readSqliteGenerationState(outputDb);
-    const leases = inspectSqliteGenerationReaderLeases(
-      outputDb,
-      generations.map((generation) => generation.identity),
-      { isProcessAlive, readProcessIdentity },
-      { removeStale: false },
-    );
-    const protectedIdentities = new Set(leases.protectedGenerations);
-    if (state?.currentGeneration) protectedIdentities.add(state.currentGeneration);
-    if (state?.previousGeneration?.generationIdentity) {
-      protectedIdentities.add(state.previousGeneration.generationIdentity);
-    }
-    return {
-      state: 'managed',
-      generationCount: generations.length,
-      logicalBytes: generations.reduce((total, generation) => total + generation.logicalBytes, 0),
-      ...(generations[0] ? { oldestGenerationAt: new Date(generations[0].modifiedAtMs).toISOString() } : {}),
-      protectedGenerations: protectedIdentities.size,
-      activeReaderLeases: leases.activeLeases,
-      malformedReaderLeases: leases.malformedLeases,
-      limits,
-      ...(lastCollection ? { lastCollection } : {}),
-      ...(leases.malformedLeases > 0
-        ? { reason: 'malformed reader ownership evidence prevents unsafe collection' }
-        : {}),
-    };
+    return inspectManagedGenerationRetention(outputDb, limits, lastCollection);
   } catch (error) {
     return {
       state: 'error',
@@ -485,6 +449,55 @@ export function inspectLocalSqliteGenerationRetention(outputDb: string): LocalSq
   } finally {
     lock.release();
   }
+}
+
+function deferredGenerationRetention(
+  limits: LocalSqliteGenerationRetentionLimits,
+  lastCollection: ReturnType<typeof readLocalGenerationRetentionResult>,
+): LocalSqliteGenerationStatus {
+  return {
+    state: 'deferred',
+    generationCount: lastCollection?.generationCount ?? 0,
+    logicalBytes: lastCollection?.logicalBytes ?? 0,
+    protectedGenerations: lastCollection?.protectedGenerations ?? 0,
+    activeReaderLeases: lastCollection?.activeReaderLeases ?? 0,
+    malformedReaderLeases: lastCollection?.malformedReaderLeases ?? 0,
+    limits,
+    ...(lastCollection ? { lastCollection } : {}),
+    reason: 'another process owns local generation retention',
+  };
+}
+
+function inspectManagedGenerationRetention(
+  outputDb: string,
+  limits: LocalSqliteGenerationRetentionLimits,
+  lastCollection: ReturnType<typeof readLocalGenerationRetentionResult>,
+): LocalSqliteGenerationStatus {
+  const generations = localGenerationEntries(outputDb);
+  const state = readSqliteGenerationState(outputDb);
+  const leases = inspectSqliteGenerationReaderLeases(
+    outputDb,
+    generations.map((generation) => generation.identity),
+    { isProcessAlive, readProcessIdentity },
+    { removeStale: false },
+  );
+  const protectedIdentities = new Set(leases.protectedGenerations);
+  if (state?.currentGeneration) protectedIdentities.add(state.currentGeneration);
+  if (state?.previousGeneration?.generationIdentity) {
+    protectedIdentities.add(state.previousGeneration.generationIdentity);
+  }
+  return {
+    state: 'managed',
+    generationCount: generations.length,
+    logicalBytes: generations.reduce((total, generation) => total + generation.logicalBytes, 0),
+    ...(generations[0] ? { oldestGenerationAt: new Date(generations[0].modifiedAtMs).toISOString() } : {}),
+    protectedGenerations: protectedIdentities.size,
+    activeReaderLeases: leases.activeLeases,
+    malformedReaderLeases: leases.malformedLeases,
+    limits,
+    ...(lastCollection ? { lastCollection } : {}),
+    ...(leases.malformedLeases > 0 ? { reason: 'malformed reader ownership evidence prevents unsafe collection' } : {}),
+  };
 }
 
 function resolveLocalGenerationRetentionLimits(

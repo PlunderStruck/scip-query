@@ -910,27 +910,31 @@ function parseCargoJsonDiagnostics(output: string): CheckerDiagnostic[] {
     const message = messageRecord as Record<string, unknown>;
     const level = message['level'];
     if (level !== 'error') continue;
-    const spans = Array.isArray(message['spans']) ? message['spans'] : [];
-    const primarySpan = spans.find(
-      (span): span is Record<string, unknown> =>
-        !!span && typeof span === 'object' && (span as Record<string, unknown>)['is_primary'] === true,
-    );
-    const codeRecord = message['code'];
-    diagnostics.push({
-      file: typeof primarySpan?.['file_name'] === 'string' ? primarySpan['file_name'] : '',
-      line: typeof primarySpan?.['line_start'] === 'number' ? primarySpan['line_start'] : undefined,
-      column: typeof primarySpan?.['column_start'] === 'number' ? primarySpan['column_start'] : undefined,
-      code:
-        codeRecord &&
-        typeof codeRecord === 'object' &&
-        typeof (codeRecord as Record<string, unknown>)['code'] === 'string'
-          ? String((codeRecord as Record<string, unknown>)['code'])
-          : undefined,
-      message: typeof message['message'] === 'string' ? message['message'] : '',
-      parseBasis: 'cargo-json',
-    });
+    diagnostics.push(cargoMessageDiagnostic(message));
   }
   return diagnostics;
+}
+
+function cargoMessageDiagnostic(message: Record<string, unknown>): CheckerDiagnostic {
+  const spans = Array.isArray(message['spans']) ? message['spans'] : [];
+  const primarySpan = spans.find(
+    (span): span is Record<string, unknown> =>
+      !!span && typeof span === 'object' && (span as Record<string, unknown>)['is_primary'] === true,
+  );
+  const codeRecord = message['code'];
+  return {
+    file: typeof primarySpan?.['file_name'] === 'string' ? primarySpan['file_name'] : '',
+    line: typeof primarySpan?.['line_start'] === 'number' ? primarySpan['line_start'] : undefined,
+    column: typeof primarySpan?.['column_start'] === 'number' ? primarySpan['column_start'] : undefined,
+    code:
+      codeRecord &&
+      typeof codeRecord === 'object' &&
+      typeof (codeRecord as Record<string, unknown>)['code'] === 'string'
+        ? String((codeRecord as Record<string, unknown>)['code'])
+        : undefined,
+    message: typeof message['message'] === 'string' ? message['message'] : '',
+    parseBasis: 'cargo-json',
+  };
 }
 
 function parseCljKondoJsonDiagnostics(output: string): CheckerDiagnostic[] {

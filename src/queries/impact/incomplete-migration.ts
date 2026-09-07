@@ -131,18 +131,7 @@ export function incompleteMigration(
   const index = new ProjectIndex(db);
   const changed = new Set(plan.changedFiles);
   const renamedFromByFile = new Map(plan.renamedFiles.map((rename) => [rename.to, rename.from]));
-  if (opts.baseContentAt && opts.baseContentResultAt) {
-    throw new Error('Specify only one of baseContentAt or baseContentResultAt.');
-  }
-  const baseContentAt = opts.baseContentResultAt
-    ? opts.baseContentResultAt
-    : opts.baseContentAt
-      ? legacyBaseContentResultReader(opts.baseContentAt)
-      : createBaseContentResultReader({
-          projectRoot: db.config.projectRoot,
-          base,
-          preloadPaths: baseContentPathsForDiffPlan(plan),
-        });
+  const baseContentAt = migrationBaseContentReader(db, opts, plan, base);
 
   const newCallables = newCallablesInDiff(index, changed, renamedFromByFile, baseContentAt);
   if (newCallables.unavailable) {
@@ -168,67 +157,16 @@ export function incompleteMigration(
     return candidateIndex;
   };
 
-  for (const { def, callees } of helperFingerprints) {
-    const shortName = shortenSymbol(def.symbol);
-    if (callees.size < minCallees) {
-      result.skipped.push({
-        helperShortName: shortName,
-        helperFile: def.relativePath,
-        reason: `fewer than ${minCallees} meaningful callees — too small to score`,
-      });
-      continue;
-    }
-    const candidateIndex = getCandidateIndex();
-    const specificHelperCalleeCount = specificCalleeCount(callees, candidateIndex);
-    if (specificHelperCalleeCount === 0) {
-      result.skipped.push({
-        helperShortName: shortName,
-        helperFile: def.relativePath,
-        reason: 'helper callee pattern is all project-wide infrastructure — too generic to score',
-      });
-      continue;
-    }
-    const migratedFiles = referencingFiles(db, def.symbolId);
-    if (migratedFiles.length === 0) {
-      result.skipped.push({
-        helperShortName: shortName,
-        helperFile: def.relativePath,
-        reason: 'no references yet — covered by the new-dead check',
-      });
-      continue;
-    }
-    result.helpersChecked += 1;
-
-    const leftovers = collectLeftoversForHelper({
-      candidateIndex,
-      changed,
-      helperCallees: callees,
-      helperFile: def.relativePath,
-      helperSymbol: def.symbol,
-      minContainment,
-      minSiteCoverage,
-      migratedFiles,
-    });
-    if (leftovers.length === 0) continue;
-
-    leftovers.sort(
-      (a, b) =>
-        migrationScopeRank(b.migrationScope) - migrationScopeRank(a.migrationScope) ||
-        b.containment - a.containment ||
-        b.siteCoverage - a.siteCoverage ||
-        a.file.localeCompare(b.file),
-    );
-    result.findings.push({
-      helperSymbol: def.symbol,
-      helperShortName: shortName,
-      helperFile: def.relativePath,
-      helperShape: 'specific-callee-cluster',
-      helperCalleeCount: callees.size,
-      specificHelperCalleeCount,
-      migratedFiles: migratedFiles.sort(),
-      leftovers,
-    });
-  }
+  const scoring: MigrationHelperScoring = {
+    db,
+    result,
+    changed,
+    minCallees,
+    minContainment,
+    minSiteCoverage,
+    getCandidateIndex,
+  };
+  for (const { def, callees } of helperFingerprints) scoreMigrationHelper(def, callees, scoring);
 
   result.findings.sort(
     (a, b) =>
@@ -237,6 +175,99 @@ export function incompleteMigration(
   );
   result.findings = result.findings.slice(0, limit);
   return result;
+}
+
+function migrationBaseContentReader(
+  db: ScipDatabase,
+  opts: NonNullable<Parameters<typeof incompleteMigration>[1]>,
+  plan: DiffImpactPlan,
+  base: string,
+): BaseContentResultReader {
+  if (opts.baseContentAt && opts.baseContentResultAt) {
+    throw new Error('Specify only one of baseContentAt or baseContentResultAt.');
+  }
+  return opts.baseContentResultAt
+    ? opts.baseContentResultAt
+    : opts.baseContentAt
+      ? legacyBaseContentResultReader(opts.baseContentAt)
+      : createBaseContentResultReader({
+          projectRoot: db.config.projectRoot,
+          base,
+          preloadPaths: baseContentPathsForDiffPlan(plan),
+        });
+}
+
+interface MigrationHelperScoring {
+  db: ScipDatabase;
+  result: IncompleteMigrationResult;
+  changed: ReadonlySet<string>;
+  minCallees: number;
+  minContainment: number;
+  minSiteCoverage: number;
+  getCandidateIndex: () => CalleeFingerprintIndex;
+}
+
+function scoreMigrationHelper(def: IndexedDefinition, callees: Set<string>, scoring: MigrationHelperScoring): void {
+  const { db, result, changed, minCallees, minContainment, minSiteCoverage, getCandidateIndex } = scoring;
+  const shortName = shortenSymbol(def.symbol);
+  if (callees.size < minCallees) {
+    result.skipped.push({
+      helperShortName: shortName,
+      helperFile: def.relativePath,
+      reason: `fewer than ${minCallees} meaningful callees — too small to score`,
+    });
+    return;
+  }
+  const candidateIndex = getCandidateIndex();
+  const specificHelperCalleeCount = specificCalleeCount(callees, candidateIndex);
+  if (specificHelperCalleeCount === 0) {
+    result.skipped.push({
+      helperShortName: shortName,
+      helperFile: def.relativePath,
+      reason: 'helper callee pattern is all project-wide infrastructure — too generic to score',
+    });
+    return;
+  }
+  const migratedFiles = referencingFiles(db, def.symbolId);
+  if (migratedFiles.length === 0) {
+    result.skipped.push({
+      helperShortName: shortName,
+      helperFile: def.relativePath,
+      reason: 'no references yet — covered by the new-dead check',
+    });
+    return;
+  }
+  result.helpersChecked += 1;
+
+  const leftovers = collectLeftoversForHelper({
+    candidateIndex,
+    changed,
+    helperCallees: callees,
+    helperFile: def.relativePath,
+    helperSymbol: def.symbol,
+    minContainment,
+    minSiteCoverage,
+    migratedFiles,
+  });
+  if (leftovers.length === 0) return;
+
+  leftovers.sort(
+    (a, b) =>
+      migrationScopeRank(b.migrationScope) - migrationScopeRank(a.migrationScope) ||
+      b.containment - a.containment ||
+      b.siteCoverage - a.siteCoverage ||
+      a.file.localeCompare(b.file),
+  );
+  result.findings.push({
+    helperSymbol: def.symbol,
+    helperShortName: shortName,
+    helperFile: def.relativePath,
+    helperShape: 'specific-callee-cluster',
+    helperCalleeCount: callees.size,
+    specificHelperCalleeCount,
+    migratedFiles: migratedFiles.sort(),
+    leftovers,
+  });
 }
 
 function collectLeftoversForHelper(opts: {

@@ -56,25 +56,7 @@ export interface MaterializeTypeScriptOverlayInput {
 
 export function commitTypeScriptOverlay(input: CommitTypeScriptOverlayInput): TypeScriptOverlayManifest {
   const previous = readTypeScriptOverlay(input.cacheDir, input.previousGenerationIdentity);
-  if (!previous && !input.baseShardCurrent) {
-    throw new Error('deferred TypeScript SCIP base has no matching overlay generation');
-  }
-  if (previous?.producerIdentity !== undefined && previous.producerIdentity !== input.producerIdentity) {
-    throw new Error('TypeScript overlay producer identity changed');
-  }
-  const legacyIdentityMigration =
-    input.allowLegacyProjectIdentityMigration === true &&
-    previous !== null &&
-    !previous.projectIdentity.startsWith(CURRENT_TYPESCRIPT_PROJECT_IDENTITY_PREFIX) &&
-    input.projectIdentity.startsWith(CURRENT_TYPESCRIPT_PROJECT_IDENTITY_PREFIX);
-  if (
-    previous &&
-    previous.projectIdentity !== input.projectIdentity &&
-    !input.allowProjectIdentityChange &&
-    !legacyIdentityMigration
-  ) {
-    throw new Error('TypeScript overlay project identity changed');
-  }
+  validatePreviousOverlay(input, previous);
   const overlays = new Map((previous?.overlays ?? []).map((record) => [record.relativePath, record]));
   const replaced = new Set<string>();
   for (const fragment of input.fragments) {
@@ -95,6 +77,39 @@ export function commitTypeScriptOverlay(input: CommitTypeScriptOverlayInput): Ty
   };
   persistOverlayManifest(input.cacheDir, manifest);
   return manifest;
+}
+
+function validatePreviousOverlay(
+  input: CommitTypeScriptOverlayInput,
+  previous: TypeScriptOverlayManifest | null,
+): void {
+  if (!previous && !input.baseShardCurrent) {
+    throw new Error('deferred TypeScript SCIP base has no matching overlay generation');
+  }
+  if (previous?.producerIdentity !== undefined && previous.producerIdentity !== input.producerIdentity) {
+    throw new Error('TypeScript overlay producer identity changed');
+  }
+  const legacyIdentityMigration = isLegacyOverlayIdentityMigration(input, previous);
+  if (
+    previous &&
+    previous.projectIdentity !== input.projectIdentity &&
+    !input.allowProjectIdentityChange &&
+    !legacyIdentityMigration
+  ) {
+    throw new Error('TypeScript overlay project identity changed');
+  }
+}
+
+function isLegacyOverlayIdentityMigration(
+  input: CommitTypeScriptOverlayInput,
+  previous: TypeScriptOverlayManifest | null,
+): boolean {
+  return (
+    input.allowLegacyProjectIdentityMigration === true &&
+    previous !== null &&
+    !previous.projectIdentity.startsWith(CURRENT_TYPESCRIPT_PROJECT_IDENTITY_PREFIX) &&
+    input.projectIdentity.startsWith(CURRENT_TYPESCRIPT_PROJECT_IDENTITY_PREFIX)
+  );
 }
 
 export function materializeTypeScriptOverlay(input: MaterializeTypeScriptOverlayInput): Uint8Array {

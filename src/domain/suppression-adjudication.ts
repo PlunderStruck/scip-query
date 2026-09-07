@@ -41,14 +41,32 @@ export function isSuppressionDecision(value: unknown): value is SuppressionDecis
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const decision = value as Partial<SuppressionDecision>;
   return (
+    validSuppressionDecisionPolicy(decision) &&
+    validSuppressionDecisionEvidence(decision) &&
+    validSuppressionInvalidation(decision)
+  );
+}
+
+function validSuppressionDecisionPolicy(decision: Partial<SuppressionDecision>): boolean {
+  return (
     decision.kind === 'automated-adjudication' &&
     decision.policyVersion === 1 &&
     (decision.decidedBy === 'agent' || decision.decidedBy === 'human') &&
-    SUPPRESSION_REASON_CODES.includes(decision.reasonCode as (typeof SUPPRESSION_REASON_CODES)[number]) &&
+    SUPPRESSION_REASON_CODES.includes(decision.reasonCode as (typeof SUPPRESSION_REASON_CODES)[number])
+  );
+}
+
+function validSuppressionDecisionEvidence(decision: Partial<SuppressionDecision>): boolean {
+  return (
     Array.isArray(decision.evidence) &&
     decision.evidence.length > 0 &&
     decision.evidence.every(isSuppressionCounterevidence) &&
-    (decision.observation === undefined || isObservationReceipt(decision.observation)) &&
+    (decision.observation === undefined || isObservationReceipt(decision.observation))
+  );
+}
+
+function validSuppressionInvalidation(decision: Partial<SuppressionDecision>): boolean {
+  return (
     Boolean(decision.invalidateOn) &&
     typeof decision.invalidateOn === 'object' &&
     typeof decision.invalidateOn.targetContentChange === 'boolean' &&

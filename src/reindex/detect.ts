@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, type Dirent } from 'node:fs';
 import { extname, join } from 'node:path';
 import type { SupportedLanguage } from '../domain/types.js';
 import {
@@ -172,29 +172,33 @@ function collectExtensions(projectRoot: string): Set<string> {
       continue;
     }
 
-    for (const entry of entries) {
-      if (entry.name.startsWith('.') && !entry.name.endsWith('proj') && !entry.name.endsWith('sln')) {
-        if (entry.isDirectory()) {
-          continue;
-        }
-      }
-
-      const fullPath = join(current, entry.name);
-      if (entry.isDirectory()) {
-        if (!IGNORED_DIRS.has(entry.name)) {
-          stack.push(fullPath);
-        }
-        continue;
-      }
-
-      const extension = extname(entry.name).toLowerCase();
-      if (extension) {
-        found.add(extension);
-      }
-    }
+    collectDirectoryExtensions(current, entries, stack, found);
   }
 
   return found;
+}
+
+function collectDirectoryExtensions(current: string, entries: Dirent[], stack: string[], found: Set<string>): void {
+  for (const entry of entries) {
+    if (entry.name.startsWith('.') && !entry.name.endsWith('proj') && !entry.name.endsWith('sln')) {
+      if (entry.isDirectory()) {
+        continue;
+      }
+    }
+
+    const fullPath = join(current, entry.name);
+    if (entry.isDirectory()) {
+      if (!IGNORED_DIRS.has(entry.name)) {
+        stack.push(fullPath);
+      }
+      continue;
+    }
+
+    const extension = extname(entry.name).toLowerCase();
+    if (extension) {
+      found.add(extension);
+    }
+  }
 }
 
 function collectGitTrackedExtensions(projectRoot: string): Set<string> | null {

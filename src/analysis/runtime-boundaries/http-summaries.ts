@@ -150,6 +150,18 @@ export function propagateCompilerResolvedHttpSummaries(
     }
   });
 
+  const propagation: HttpPropagationState = {
+    db,
+    summaries,
+    queue,
+    derived,
+    filesInspected,
+    errors,
+    frontiers,
+    contextForFile,
+    rolesForDefinition,
+  };
+
   while (queue.length > 0) {
     const batch = queue.splice(0, queue.length);
     const resolvedCallsBySymbol = recordSpan(
@@ -164,53 +176,7 @@ export function propagateCompilerResolvedHttpSummaries(
     recordSpan(
       'runtime-boundaries.http-summary.process-call-sites',
       () => {
-        for (const summary of batch) {
-          if (summary.depth >= MAX_HTTP_SUMMARY_DEPTH) continue;
-          try {
-            const resolvedCalls = resolvedCallsBySymbol.get(summary.definition.symbolId);
-            if (!resolvedCalls) continue;
-            frontiers.push(...resolvedCalls.unresolved.map((site) => httpCallResolutionFrontier(summary, site)));
-            for (const site of resolvedCalls.sites) {
-              const context = contextForFile(site.file);
-              if (!context) continue;
-              filesInspected.add(site.file);
-              const call = site.callNode;
-              const instantiated = instantiateSummaryAtCall(summary, call, context);
-              if (instantiated) derived.push(instantiated);
-
-              const callerDefinition = site.caller;
-              if (!callerDefinition) continue;
-              const localRoles = rolesForDefinition(context, callerDefinition);
-              const forwardedRoles = forwardedParameterRoles(db, summary, site);
-              const callerSummary: HttpCallableSummary = {
-                definition: callerDefinition,
-                pathParameterIndexes: uniqueSortedNumbers([
-                  ...localRoles.pathParameterIndexes,
-                  ...forwardedRoles.pathParameterIndexes,
-                ]),
-                methodParameterIndexes: uniqueSortedNumbers([
-                  ...localRoles.methodParameterIndexes,
-                  ...forwardedRoles.methodParameterIndexes,
-                ]),
-                constantMethods: uniqueSortedStrings([...summary.constantMethods, ...localRoles.constantMethods]),
-                depth: summary.depth + 1,
-                proofObservationIds: uniqueSortedStrings([
-                  ...summary.proofObservationIds,
-                  ...(instantiated ? [instantiated.id] : []),
-                ]),
-                proofSpans: [
-                  ...summary.proofSpans,
-                  { file: site.file, startLine: site.startLine, endLine: site.endLine },
-                ],
-              };
-              if (mergeSummary(summaries, callerSummary)) queue.push(summaries.get(callerDefinition.symbol)!);
-            }
-          } catch (error) {
-            errors.push(
-              `builtin.http-summary failed for ${summary.definition.relativePath}:${summary.definition.startLine + 1}: ${error instanceof Error ? error.message : String(error)}`,
-            );
-          }
-        }
+        for (const summary of batch) processHttpSummary(summary, resolvedCallsBySymbol, propagation);
       },
       { batchSize: batch.length },
     );
@@ -238,6 +204,75 @@ export function propagateCompilerResolvedHttpSummaries(
     filesInspected: filesInspected.size,
     errors,
   };
+}
+
+interface HttpPropagationState {
+  db: ScipDatabase;
+  summaries: Map<string, HttpCallableSummary>;
+  queue: HttpCallableSummary[];
+  derived: BoundaryObservation[];
+  filesInspected: Set<string>;
+  errors: string[];
+  frontiers: BoundaryFrontier[];
+  contextForFile: (file: string) => BoundaryFileContext | null;
+  rolesForDefinition: (context: BoundaryFileContext, definition: IndexedDefinition) => HttpParameterRoles;
+}
+
+function processHttpSummary(
+  summary: HttpCallableSummary,
+  resolvedCallsBySymbol: ReturnType<typeof resolvedCallSitesForDefinitions>,
+  state: HttpPropagationState,
+): void {
+  const { errors, frontiers } = state;
+  if (summary.depth >= MAX_HTTP_SUMMARY_DEPTH) return;
+  try {
+    const resolvedCalls = resolvedCallsBySymbol.get(summary.definition.symbolId);
+    if (!resolvedCalls) return;
+    frontiers.push(...resolvedCalls.unresolved.map((site) => httpCallResolutionFrontier(summary, site)));
+    for (const site of resolvedCalls.sites) processHttpSummarySite(summary, site, state);
+  } catch (error) {
+    errors.push(
+      `builtin.http-summary failed for ${summary.definition.relativePath}:${summary.definition.startLine + 1}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+function processHttpSummarySite(
+  summary: HttpCallableSummary,
+  site: ResolvedCallSite,
+  state: HttpPropagationState,
+): void {
+  const { db, summaries, queue, derived, filesInspected, contextForFile, rolesForDefinition } = state;
+  const context = contextForFile(site.file);
+  if (!context) return;
+  filesInspected.add(site.file);
+  const call = site.callNode;
+  const instantiated = instantiateSummaryAtCall(summary, call, context);
+  if (instantiated) derived.push(instantiated);
+
+  const callerDefinition = site.caller;
+  if (!callerDefinition) return;
+  const localRoles = rolesForDefinition(context, callerDefinition);
+  const forwardedRoles = forwardedParameterRoles(db, summary, site);
+  const callerSummary: HttpCallableSummary = {
+    definition: callerDefinition,
+    pathParameterIndexes: uniqueSortedNumbers([
+      ...localRoles.pathParameterIndexes,
+      ...forwardedRoles.pathParameterIndexes,
+    ]),
+    methodParameterIndexes: uniqueSortedNumbers([
+      ...localRoles.methodParameterIndexes,
+      ...forwardedRoles.methodParameterIndexes,
+    ]),
+    constantMethods: uniqueSortedStrings([...summary.constantMethods, ...localRoles.constantMethods]),
+    depth: summary.depth + 1,
+    proofObservationIds: uniqueSortedStrings([
+      ...summary.proofObservationIds,
+      ...(instantiated ? [instantiated.id] : []),
+    ]),
+    proofSpans: [...summary.proofSpans, { file: site.file, startLine: site.startLine, endLine: site.endLine }],
+  };
+  if (mergeSummary(summaries, callerSummary)) queue.push(summaries.get(callerDefinition.symbol)!);
 }
 
 function httpCallResolutionFrontier(summary: HttpCallableSummary, site: UnresolvedCallSite): BoundaryFrontier {
@@ -328,35 +363,9 @@ function deriveParameterRoles(context: BoundaryFileContext, definition: IndexedD
   const constantMethods = new Set<string>();
 
   walk(callable, (node) => {
-    if (node.type === 'call_expression') {
-      const target = node.childForFieldName('function') ?? node.namedChild(0);
-      const leaf = target?.text.replace(/\s+/gu, '').split('.').at(-1) ?? '';
-      if (leaf === 'fetch') {
-        const args = callArguments(node);
-        addReferencedParameters(args[0], parameters, pathNames);
-        const methodValue = objectFieldValue(args[1], 'method');
-        if (methodValue) {
-          addReferencedParameters(methodValue, parameters, methodNames);
-          const evaluated = evaluateBoundaryValue(context, methodValue);
-          const method = evaluated?.value.toUpperCase();
-          if (method && evaluated?.evidence !== 'expression' && HTTP_METHODS.has(method)) constantMethods.add(method);
-        } else {
-          // An opaque RequestInit carrier may contain the method. We retain only data dependencies here;
-          // a caller is instantiated only when exactly one dependency evaluates to a real HTTP verb.
-          addReferencedParameters(args[1], parameters, methodNames);
-        }
-      }
-    }
-    if (node.type !== 'pair') return;
-    const key = node.childForFieldName('key') ?? node.namedChild(0);
-    const value = node.childForFieldName('value') ?? node.namedChild(1);
-    const field = key?.text.replace(/^['"`]|['"`]$/gu, '').toLowerCase();
-    if (field === 'url' || field === 'path' || field === 'endpoint') {
-      addReferencedParameters(value, parameters, pathNames);
-    }
-    if (field === 'init' || field === 'requestinit' || field === 'options') {
-      addReferencedParameters(value, parameters, methodNames);
-    }
+    if (node.type === 'call_expression')
+      collectFetchParameterRoles(context, node, parameters, pathNames, methodNames, constantMethods);
+    collectCarrierParameterRoles(node, parameters, pathNames, methodNames);
   });
 
   return {
@@ -364,6 +373,51 @@ function deriveParameterRoles(context: BoundaryFileContext, definition: IndexedD
     methodParameterIndexes: parameters.flatMap((name, index) => (name && methodNames.has(name) ? [index] : [])),
     constantMethods: [...constantMethods].sort(),
   };
+}
+
+function collectCarrierParameterRoles(
+  node: SyntaxNode,
+  parameters: ReturnType<typeof callableParameterNames>,
+  pathNames: Set<string>,
+  methodNames: Set<string>,
+): void {
+  if (node.type !== 'pair') return;
+  const key = node.childForFieldName('key') ?? node.namedChild(0);
+  const value = node.childForFieldName('value') ?? node.namedChild(1);
+  const field = key?.text.replace(/^['"`]|['"`]$/gu, '').toLowerCase();
+  if (field === 'url' || field === 'path' || field === 'endpoint') {
+    addReferencedParameters(value, parameters, pathNames);
+  }
+  if (field === 'init' || field === 'requestinit' || field === 'options') {
+    addReferencedParameters(value, parameters, methodNames);
+  }
+}
+
+function collectFetchParameterRoles(
+  context: BoundaryFileContext,
+  node: SyntaxNode,
+  parameters: ReturnType<typeof callableParameterNames>,
+  pathNames: Set<string>,
+  methodNames: Set<string>,
+  constantMethods: Set<string>,
+): void {
+  const target = node.childForFieldName('function') ?? node.namedChild(0);
+  const leaf = target?.text.replace(/\s+/gu, '').split('.').at(-1) ?? '';
+  if (leaf === 'fetch') {
+    const args = callArguments(node);
+    addReferencedParameters(args[0], parameters, pathNames);
+    const methodValue = objectFieldValue(args[1], 'method');
+    if (methodValue) {
+      addReferencedParameters(methodValue, parameters, methodNames);
+      const evaluated = evaluateBoundaryValue(context, methodValue);
+      const method = evaluated?.value.toUpperCase();
+      if (method && evaluated?.evidence !== 'expression' && HTTP_METHODS.has(method)) constantMethods.add(method);
+    } else {
+      // An opaque RequestInit carrier may contain the method. We retain only data dependencies here;
+      // a caller is instantiated only when exactly one dependency evaluates to a real HTTP verb.
+      addReferencedParameters(args[1], parameters, methodNames);
+    }
+  }
 }
 
 function serializeHttpParameterRoles(roles: readonly CachedHttpParameterRoles[]): string {

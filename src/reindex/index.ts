@@ -577,10 +577,7 @@ async function prepareSharedGenerationCache(input: {
 }): Promise<{ snapshot: SharedGenerationSnapshot | undefined; releaseBuildLock: (() => void) | undefined }> {
   const { opts, paths, languages, fingerprint, onStatus } = input;
   const projectRoot = opts.projectRoot;
-  const sharedCacheEligible =
-    opts.skipIfUnchanged !== false &&
-    !sharedCacheBypassReason(projectRoot, paths.outputDb) &&
-    resolve(paths.outputScip) === resolve(join(dirname(paths.outputDb), 'index.scip'));
+  const sharedCacheEligible = sharedGenerationCacheEligible(opts, paths, projectRoot);
   if (!sharedCacheEligible) return { snapshot: undefined, releaseBuildLock: undefined };
 
   const context = resolveGitWorktreeContext(projectRoot);
@@ -603,22 +600,26 @@ async function prepareSharedGenerationCache(input: {
 
   const shared = readSharedGeneration(snapshot);
   if (shared) {
-    if (!localArtifactsMatchFingerprint(paths, fingerprint)) {
-      try {
-        hydrateSharedGeneration({
-          snapshot,
-          manifest: shared,
-          targetCacheDir: dirname(paths.outputDb),
-          targetProjectRoot: projectRoot,
-        });
-        onStatus(`Attached shared generation ${snapshot.generationId.slice(0, 12)}`);
-      } catch (error) {
-        onStatus(`Shared generation attach failed; continuing locally: ${errorMessage(error)}`);
-      }
-    }
+    attachExistingSharedGeneration(shared, snapshot, paths, fingerprint, projectRoot, onStatus);
     return { snapshot, releaseBuildLock: undefined };
   }
 
+  hydrateColdSharedBaseline(context, languages, opts, paths, fingerprint, projectRoot, onStatus);
+  const sharedLock = await acquireSharedGenerationBuildLock(snapshot);
+  if (sharedLock.kind === 'owner') return { snapshot, releaseBuildLock: sharedLock.release };
+  attachAwaitedSharedGeneration(sharedLock, snapshot, paths, projectRoot, onStatus);
+  return { snapshot, releaseBuildLock: undefined };
+}
+
+function hydrateColdSharedBaseline(
+  context: ReturnType<typeof resolveGitWorktreeContext>,
+  languages: SupportedLanguage[],
+  opts: ReindexOptions,
+  paths: ReindexOutputPaths,
+  fingerprint: ReindexFingerprint,
+  projectRoot: string,
+  onStatus: (message: string) => void,
+): void {
   if (context && !localArtifactsCanSeedIncrementalReindex(paths)) {
     hydrateCompatibleSharedBaseline({
       context,
@@ -633,8 +634,46 @@ async function prepareSharedGenerationCache(input: {
       compatible: true,
     });
   }
-  const sharedLock = await acquireSharedGenerationBuildLock(snapshot);
-  if (sharedLock.kind === 'owner') return { snapshot, releaseBuildLock: sharedLock.release };
+}
+
+function sharedGenerationCacheEligible(opts: ReindexOptions, paths: ReindexOutputPaths, projectRoot: string): boolean {
+  return (
+    opts.skipIfUnchanged !== false &&
+    !sharedCacheBypassReason(projectRoot, paths.outputDb) &&
+    resolve(paths.outputScip) === resolve(join(dirname(paths.outputDb), 'index.scip'))
+  );
+}
+
+function attachExistingSharedGeneration(
+  shared: NonNullable<ReturnType<typeof readSharedGeneration>>,
+  snapshot: SharedGenerationSnapshot,
+  paths: ReindexOutputPaths,
+  fingerprint: ReindexFingerprint,
+  projectRoot: string,
+  onStatus: (message: string) => void,
+): void {
+  if (!localArtifactsMatchFingerprint(paths, fingerprint)) {
+    try {
+      hydrateSharedGeneration({
+        snapshot,
+        manifest: shared,
+        targetCacheDir: dirname(paths.outputDb),
+        targetProjectRoot: projectRoot,
+      });
+      onStatus(`Attached shared generation ${snapshot.generationId.slice(0, 12)}`);
+    } catch (error) {
+      onStatus(`Shared generation attach failed; continuing locally: ${errorMessage(error)}`);
+    }
+  }
+}
+
+function attachAwaitedSharedGeneration(
+  sharedLock: Awaited<ReturnType<typeof acquireSharedGenerationBuildLock>>,
+  snapshot: SharedGenerationSnapshot,
+  paths: ReindexOutputPaths,
+  projectRoot: string,
+  onStatus: (message: string) => void,
+): void {
   if (sharedLock.kind === 'generation-ready') {
     const published = readSharedGeneration(snapshot);
     if (published) {
@@ -654,7 +693,6 @@ async function prepareSharedGenerationCache(input: {
   } else {
     onStatus('Shared generation build lock timed out; continuing with an isolated local reindex');
   }
-  return { snapshot, releaseBuildLock: undefined };
 }
 
 function hydrateCompatibleSharedBaseline(input: {
@@ -1658,28 +1696,13 @@ function buildFreshReindexShardDiagnostics(
       durationMs: 0,
     });
   }
-  for (const run of runResults) {
-    const info = classification.get(run.language);
-    const project = typescriptProjects && run.id.startsWith('typescript:') ? run.id.slice('typescript:'.length) : null;
-    const projectInfo = project ? typescriptProjects!.classification.get(project) : undefined;
-    diagnostics.push({
-      id: run.id,
-      language: run.language,
-      reused: false,
-      strategy: run.command === 'watch-service:typescript-index' ? 'incremental' : 'full',
-      missReason: projectInfo?.reason ?? info?.reason ?? run.skipped?.reason,
-      fallbackReason: run.language === 'typescript' ? typescriptIncrementalUnavailableReason : undefined,
-      fingerprint: projectInfo
-        ? hashFingerprint(projectInfo.fingerprint)
-        : info
-          ? hashFingerprint(info.fingerprint)
-          : 'unknown',
-      outputBytes: run.outputBytes ?? null,
-      producedOutputBytes: run.producedOutputBytes,
-      durationMs: run.durationMs,
-      command: run.command,
-    });
-  }
+  appendRunShardDiagnostics(
+    diagnostics,
+    classification,
+    runResults,
+    typescriptProjects,
+    typescriptIncrementalUnavailableReason,
+  );
   if (typescriptProjects) {
     for (const [project, info] of typescriptProjects.classification) {
       if (!info.reused) continue;
@@ -1695,6 +1718,40 @@ function buildFreshReindexShardDiagnostics(
     }
   }
   return diagnostics;
+}
+
+function appendRunShardDiagnostics(
+  diagnostics: ReindexShardDiagnostic[],
+  classification: ReadonlyMap<SupportedLanguage, LanguageShardClassification>,
+  runResults: readonly IndexerRunResult[],
+  typescriptProjects: TypeScriptProjectShardDiagnosticsContext | undefined,
+  typescriptIncrementalUnavailableReason: string | undefined,
+): void {
+  for (const run of runResults) {
+    const info = classification.get(run.language);
+    const project = typescriptProjects && run.id.startsWith('typescript:') ? run.id.slice('typescript:'.length) : null;
+    const projectInfo = project ? typescriptProjects!.classification.get(project) : undefined;
+    diagnostics.push({
+      id: run.id,
+      language: run.language,
+      reused: false,
+      strategy: run.command === 'watch-service:typescript-index' ? 'incremental' : 'full',
+      missReason: projectInfo?.reason ?? info?.reason ?? run.skipped?.reason,
+      fallbackReason: run.language === 'typescript' ? typescriptIncrementalUnavailableReason : undefined,
+      fingerprint: shardDiagnosticFingerprint(projectInfo, info),
+      outputBytes: run.outputBytes ?? null,
+      producedOutputBytes: run.producedOutputBytes,
+      durationMs: run.durationMs,
+      command: run.command,
+    });
+  }
+}
+
+function shardDiagnosticFingerprint(
+  projectInfo: TypeScriptProjectShardClassification | undefined,
+  info: LanguageShardClassification | undefined,
+): string {
+  return projectInfo ? hashFingerprint(projectInfo.fingerprint) : info ? hashFingerprint(info.fingerprint) : 'unknown';
 }
 
 function hashFingerprint(fingerprint: unknown): string {
