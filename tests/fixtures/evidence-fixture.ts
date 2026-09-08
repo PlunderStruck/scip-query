@@ -61,7 +61,7 @@ export function writeFixtureFiles(projectRoot: string, files: Record<string, rea
   for (const [relativePath, source] of Object.entries(files)) {
     const fullPath = join(projectRoot, relativePath);
     mkdirSync(dirname(fullPath), { recursive: true });
-    writeFileSync(fullPath, Array.isArray(source) ? `${source.join('\n')}\n` : source);
+    writeFileSync(fullPath, typeof source === 'string' ? source : `${source.join('\n')}\n`);
   }
 }
 

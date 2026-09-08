@@ -1,16 +1,13 @@
-import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { createRequire } from 'node:module';
+import { join } from 'node:path';
 import { describe, expect, test } from 'vitest';
 import {
   createTypeScriptDocumentEmitter,
   loadTypeScriptDocumentRuntime,
-  type TypeScriptDocumentRuntime,
 } from '../../src/reindex/typescript-document-emitter.js';
 
-const require = createRequire(import.meta.url);
+import { cleanOracle } from '../fixtures/typescript-oracle.js';
 
 describe('TypeScriptDocumentEmitter', () => {
   test('reports an unavailable optional runtime without constructing compiler state', () => {
@@ -162,18 +159,6 @@ function writeFixture(root: string): void {
     join(root, 'src/b.ts'),
     ["import { origin, type Shape } from './a.js';", 'export const selected: Shape = origin;', ''].join('\n'),
   );
-}
-
-function cleanOracle(root: string, runtime: TypeScriptDocumentRuntime): Map<string, Buffer> {
-  const packagePath = require.resolve('@sourcegraph/scip-typescript/package.json');
-  const mainPath = join(dirname(packagePath), 'dist/src/main.js');
-  const outputPath = join(root, 'oracle.scip');
-  execFileSync(process.execPath, [mainPath, 'index', '--cwd', root, '--output', outputPath, '--no-progress-bar', '.'], {
-    cwd: root,
-    stdio: 'pipe',
-  });
-  const index = runtime.Index.deserializeBinary(readFileSync(outputPath));
-  return new Map(index.documents.map((document) => [document.relative_path, Buffer.from(document.serializeBinary())]));
 }
 
 function expectFragmentsEqual(

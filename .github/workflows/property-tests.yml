@@ -1,0 +1,49 @@
+name: Property tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  properties:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TMPDIR: ${{ runner.temp }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Type-check property tests
+        run: npm run test:properties:types
+      - name: Verify failure reporting and replay
+        run: npx vitest run tests/properties/runner.test.ts --maxWorkers=2
+      - name: Run bounded properties
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
+        run: npm run test:properties
+      - name: Run 200,000 cases per area and integration subsets
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: npm run test:properties:thorough
+      - name: Preserve counts, seeds and counterexamples
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: property-results
+          path: ${{ runner.temp }}/scip-query-properties-*/**/*.json
+          if-no-files-found: warn
+          retention-days: 30

@@ -302,6 +302,7 @@
           "scripts/evidence-product-contract.mjs",
           "scripts/incremental-freshness-contract.mjs",
           "scripts/probe-rust-scip-boundary.mjs",
+          "scripts/test-properties.mjs",
           "scripts/verify-identity-collision-cli.mjs"
         ]
       },
