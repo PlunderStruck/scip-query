@@ -23,7 +23,7 @@ Before each substantive repair, record its exact initiating path, owner, effects
 - [x] 9. Test effectiveness: actual consumers, independent outcomes, failure and interruption paths.
 - [x] 10. Obsolete mechanisms: compatibility paths, registries, options, wrappers and annotations with no current purpose.
 - [x] Final build, API/types/lint/format/skill checks, full tests, source review, architecture and fresh diff impact.
-- [ ] Commit completed work; update and verify dev-agent installation if published behavior or skills change.
+- [x] Commit completed work; update and verify dev-agent installation if published behavior or skills change.
 
 ## Investigation and findings
 
@@ -86,5 +86,11 @@ Stop the checkout watcher around builds; run tests against a frozen build. Recor
 The first implementation commit was `f6281933`; its package hashes and 12 skill links verified on dev-agent and all six watchers restarted. A subsequent local service-state read disclosed one failed refresh: the new bounded reader rejected a mailbox response as changed. The ctime check added by this audit also changes when atomic replacement unlinks an already-open inode, even though its readable bytes remain the complete old version. Three new regressions reproduce this with actual rename operations for artifact reading, project reading and hashing. Keep device/inode/size/byte-count and modification-time checks, but remove ctime equality as a content-validity condition. This preserves the atomic writer's old-or-new complete-file contract without weakening allocation bounds or observed content-mutation checks. Follow-up validation and VM replacement are pending below; the earlier 3,323-test result applies to the first implementation only.
 
 Corrected frozen-build validation: **3,326 tests / 377 files passed** in 188.94 seconds (`/tmp/scip-query-behavior-tests-atomic.log`), including the three atomic-replacement regressions. Build, types, ESLint, formatting, API/consumer and skill-link checks pass. Whole-source health and review remain accounted with **567 files / 13,554 functions / zero findings**. Repository refresh succeeds and the restored watcher is running with **no last error**. Dependency policy is unchanged; fresh impact was rerun. Corrected package deployment is the remaining final step.
+
+### Completed deployment
+
+Corrected implementation commit: **82e86c529c49ffdcda6c2a463f045357bc3aa561**, following the main audit commit `f6281933`. The corrected package replaced the canonical global installation under SSH `dev-agent` (`launchpoint-agent`, UID 1002), `/home/launchpoint-agent/.local/lib/node_modules/scip-query`. All **453 package files** hash-match the local packed build, including **19 skill files**, and all **12 Codex/Claude skill links** point to this package. No unexpected dist/skill files or ownership mismatches. All **six pre-existing watchers** restarted with new PIDs and report running.
+
+An actual fresh-repository VM smoke scan exits 1 with accounted coverage and the independently expected complexity and dependency-cycle findings. This verifies installed command behavior; running watcher state does not establish that every unrelated worktree's index is fresh. Remote backup, install logs, watcher snapshots and verification: `/tmp/scip-query-update-82e86c52/`; local verification: `/tmp/scip-query-behavior-package/vm-verification.json`. Follow-up impact covered 2 changed production files, 2 changed symbols and 9 affected consumers. All work-list items are complete within the investigation scopes stated above.
 
 Artifacts: `/tmp/scip-query-behavior-*` and `/tmp/scip-query-behavior-package/`; fixture summaries `frozen-summary.json` and `frozen-service-summary.json`. No agent benchmarks were run. These checks establish the documented behavior within their stated scope; they do not prove an absence of all future defects.
