@@ -1,0 +1,84 @@
+# Behavior and ownership audit
+
+Baseline: `dbad1c08`. User requested investigation and resolution of all ten remaining smell categories. Work on main; preserve the unrelated LaunchPoint benchmark document. Do not run agent benchmarks. Preserve public API `b74137d6c422ca9c` (66 paths), scanner thresholds and architectural rules.
+
+An audit finding is a demonstrated mismatch between an operation's contract and its implementation, or a demonstrated unnecessary obligation imposed on its consumers. Candidate patterns alone do not authorize restructuring. Each category below requires a recorded scope, evidence, disposition and validation; completion does not imply that every possible input in the repository has been exercised.
+
+## Existing flow and reuse
+
+The CLI selects a fast path or full dispatcher. Query commands use the existing query-service client/protocol and server, which own mailbox execution, a database, a session lock and wake notifications. Source scans use shared source-file membership, source readers and analysis policy. Indexed analyses use ProjectIndex and generation-specific products. Suppression parsing belongs to source/primitives/source-text; detector-specific selection belongs to its consumers. Skills and generated command documentation describe these same paths. The prior cleanup record contains the source evidence and retained ownership decisions.
+
+Before each substantive repair, record its exact initiating path, owner, effects and consumer here. Extend existing owners instead of adding parallel caches, dispatchers, lifecycle managers or policy mechanisms. Compare working sibling operations and preserve their contracts. Add regression checks with independent expected outcomes that fail against the baseline behavior.
+
+## Work list
+
+- [x] 1. Failure reporting: parser/filesystem/provider failure versus successful empty evidence.
+- [x] 2. Evidence validity: edits, deletion, configuration, generation, expiry and incremental/fresh consistency.
+- [x] 3. Resource cleanup: acquisition failures, cancellation, worker/database/lock/listener cleanup.
+- [x] 4. Rule ownership: file admission, suppression, evidence strength and equivalent analysis paths.
+- [x] 5. Caller obligations: repeated setup/invalidation/locking/cleanup and appropriate owner interfaces.
+- [x] 6. State representation: contradictory result/status combinations and construction/consumption.
+- [x] 7. Work and bounds: unnecessary recomputation and limits on reads, queues and caches.
+- [x] 8. Entry-point contracts: CLI/service/library defaults, errors, help and skills.
+- [x] 9. Test effectiveness: actual consumers, independent outcomes, failure and interruption paths.
+- [x] 10. Obsolete mechanisms: compatibility paths, registries, options, wrappers and annotations with no current purpose.
+- [x] Final build, API/types/lint/format/skill checks, full tests, source review, architecture and fresh diff impact.
+- [ ] Commit completed work; update and verify dev-agent installation if published behavior or skills change.
+
+## Investigation and findings
+
+### Confirmed repairs in progress
+
+1. `analysis/suppressions:getSuppressionInventory` cached configured records together with source annotations, although expiry and configuration can change without source invalidation. A real SQLite/source fixture reproduced an expired record remaining counted. Cache only the source inventory; merge current configuration at one observed time per call into a fresh result, preserving prior returned objects.
+2. `runtime/query-service-server:runQueryServiceServer` acquired wake resources outside its cleanup scope, never removed its process signal handlers, and skipped state/lock release when database close threw. Three baseline regressions reproduced these paths. Keep resource ownership at this existing ingress, register releases immediately, attempt every release, preserve combined errors, and remove listeners in the serving loop's finally block. Real temporary mailbox/lock files are used; database/wake failures are injected at the external boundary.
+3. `runtime/cli-context:withDbAsync` entered a file-inventory cache before its protected region and released it after a fallible database close. Nested acquisition/release scopes now restore the enclosing inventory even on failure. The regression reproduced a new inner cache replacing the enclosing observation after an intercepted CLI exit. Production database-open failure exits the process; this test establishes scope restoration when the error unwinds, not survival of process termination.
+4. `filesystem/bounded-file:readFileWithinLimit` admitted a four-byte file and then materialized 1 MiB after growth between stat and read. The post-read check rejected the result but did not bound allocation. Read only the admitted size into a bounded buffer. Real file mutation at the stat boundary reproduced the excess read; truncation is also checked. `hashFileWithinLimit` accepted an observed same-size rewrite; read and hash now share metadata/byte-count validation including modification/change times. This detects observed mutation, not an atomic filesystem snapshot.
+5. `runtime/watch-server:runWatchServiceServer` leaked ownership when refresh initialization failed before lifecycle handoff. Protect the acquisition interval, closing wake resources and releasing the lock on startup failure. `runWatchServiceLifecycle` returned early when lane close rejected, without joining watcher shutdown or finalizing degraded ownership. Two regressions reproduced these paths. Await both outcomes, retain degraded ownership when termination is uncertain, and preserve execution plus shutdown failures. Existing worker-lane tests retain their deliberately conservative failed-termination contract.
+6. `runtime/query-service:queryServiceSessionDirectory` keyed worker reuse by protocol/path/lane but omitted runtime bytes and effective project configuration. A real client-entry probe (intercepted immediately before mailbox admission) reproduced reuse with different builds/configuration. Include existing `cliBuildIdentity()` and stable effective-configuration serialization; preserve same-input reuse and generation rejection. This reuses the same runtime identity already protecting persistent evidence and health products.
+7. The watch lifecycle heartbeat called a fallible state writer directly from a timer; a failure escaped the awaited execution/cleanup path. The regression invokes the registered timer callback outside that path and checks that the lifecycle rejects only after shutdown. Record the failure, request stop, stop admitting loop work, and use existing lifecycle finalization. A stop-request error is retained together with the heartbeat failure.
+8. The first full suite passed 3,320 tests and failed one obsolete structural assertion requiring the old raw read. Following its other permitted owner exposed the same growth and same-size-mutation problems in `platform/project-files:readProjectFile`. Both regular readers now use `filesystem/bounded-file:readFileDescriptorBytes` for allocation/read bounds, while project-path containment and its existing error types remain with the project reader. Two additional baseline-failing real-file regressions prove the project path. The artifact contract now prohibits raw synchronous whole-file reads in production instead of assuming two named owners are safe based on source substrings.
+
+Focused regression logs: `/tmp/scip-query-behavior-{baseline-tests,lifecycle-baseline,context-baseline,bounds-baseline,watch-baseline}.log`. Corrected targeted suites pass; final full validation pending. Initial tests with an incorrect idle-timeout variable and an unintercepted process exit were corrected before using their results as evidence.
+
+### Counterevidence and retained design
+
+- The source snapshot collector retains unreadable paths and records read/freshness errors; coverage loading returns an explicit problem. A catch alone is not evidence of empty-success behavior.
+- Watch polling deliberately tolerates unsupported filesystem event notifications because timed polling remains active. Indexed document count falls back only for worker heap sizing, not repository coverage.
+- The query request decoder validates session/protocol identity, timestamps, operation identity and kind-specific payloads. Existing tests cover every protocol kind, missing/null fields, unsupported kinds and selector bounds. Actual source CLI and persistent-service checks are recorded below.
+- Source caches use source-byte identity and registered invalidation; bounded per-file caches have explicit eviction. Incremental publication tests and the live incremental/full comparison below verify the selected generation paths.
+
+### Category dispositions
+
+| Category | Investigated scope and disposition | Verification |
+| --- | --- | --- |
+| 1. Failure reporting | Source health handler → maintenance report → source snapshot/coverage → rendered/JSON output; query response rejection; watch heartbeat. Source omissions already remain explicit; heartbeat exception routing repaired. | Four actual CLI tests: known import cycle agrees with the library, malformed source exits 2, input-file budget exits 2, missing requested coverage exits 2. Existing source-review negative cases and final suite. |
+| 2. Evidence validity | Source-byte caches and invalidation, suppression inventory time/configuration, service worker identity, SQLite incremental publication. Inventory and service identity repaired. | Expiry/configuration/result-isolation test, service-entry identity test, source-file invalidation regressions; real SQLite publication tests compare independent expected facts, preserve unaffected metadata, insert/delete and roll back failed publication. |
+| 3. Resource cleanup | Query server acquisition/release/listeners, async CLI inventory scope, watch startup/heartbeat/shutdown, failed worker termination. Repairs 2, 3, 5, 7. | Fault-injected lifecycle tests and existing worker-lane cancellation/failed-termination tests; final full suite. |
+| 4. Rule ownership | Bounded regular-file readers, source suppression selector/parser policy, source health/review shared report, service identity versus persistent cache identity. Share changed-file identity checks and existing build identity; preserve detector-specific rules and source/indexed analysis contracts. | Read/hash mutation probes; prior suppression-isolation tests; CLI/library agreement. No duplicated policy dispatcher added. |
+| 5. Caller obligations | Async database/cache wrapper and service-owned startup/shutdown were imposing fallible cleanup coordination. Repairs keep that coordination inside existing owning entry points. | Callers use unchanged signatures; public API check; resource regressions. Keep CLI/client/server roles established by the prior co-change investigation. |
+| 6. State representation | Query envelope/response identity, generation, kind-specific payloads and observation receipts; watcher stopped/degraded finalization; source accounted/incomplete coverage and check exit codes. Preserve current discriminated states; rejected shutdown now cannot skip degraded finalization. | 65 request-decoder cases; existing protocol-state TypeScript contract; worker-lane tests; CLI failure cases. No broad result-type rewrite justified. |
+| 7. Work and bounds | Regular and stream reads, fixed-size hashing, 256-entry source cache default, 1 MiB single serialized-result cache, bounded mailbox admission and worker polling. Repair unbounded regular-file materialization; keep different streaming/hash lifetimes. | Four-byte admission/1 MiB growth regression, truncation and mutation tests; existing mailbox/cache/poll tests. No agent benchmarks or unmeasured speed claims. |
+| 8. Entry-point contracts | CLI health versus library, service versus direct dispatch, generated help/skills, runtime build/configuration identity. No health-output contract mismatch; worker identity repaired. | Actual CLI/library comparison, negative CLI exits, fast-path output/fallback tests, command descriptors/help contracts, skill-link and public-API checks. Live service/direct and incremental/full checks pass as recorded below. |
+| 9. Test effectiveness | Reviewed tests distinguishing real source/SQLite consumers from transport mocks; added real temporary files, lifecycle failure boundaries and actual CLI cases where coverage was missing. | Baseline-failing regressions recorded above; final full suite passed (3,323 tests). No claim that syntax-only test-quality checks establish effectiveness or that CRAP is measured. |
+| 10. Obsolete mechanisms | Rechecked mechanisms touched by these repairs and preceding deletion decisions: duplicated read-identity logic is replaced; whole-inventory caching is narrowed; stale service-key assumptions retired. Polling fallback, streamed/hash readers, per-generation caches, public API methods and detector-specific exceptions still have live obligations. | Consumer/source review and API contract. No additional public commands or justified compatibility paths removed merely to reduce counts. Retained source annotations retain the limits of the preceding review. |
+
+The scope is the ten requested categories across their principal live owners, supported by the whole test suite and source/architecture scans. It is not a claim that every operating-system failure, language provider, possible configuration or execution interleaving has been exercised. Graph evidence explicitly lacks complete interprocedural exception/finally flow; exact code and fault injection supply those checks here.
+
+Prior passing tests and the 567-file source scan remain a baseline. Retained duplication and public-API decisions from the preceding audits should not be reopened without new evidence.
+
+## Validation and limits
+
+Stop the checkout watcher around builds; run tests against a frozen build. Record coverage actually exercised and any unsupported language/provider paths separately. No claim of measured CRAP without source-matched coverage.
+
+## Final verification
+
+- Final frozen build: **3,323 tests / 377 files passed** in 233.18 seconds (`/tmp/scip-query-behavior-full-tests-verified.log`). The initial run's single obsolete artifact-owner assertion led to repair 8 and stronger behavioral coverage; it is not counted as a passing run.
+- Build, typecheck and protocol/invocation compile contracts, ESLint, formatting, skill links, public API check and public-consumer typecheck pass. Public API remains **b74137d6c422ca9c / 66 paths**.
+- Current-source health and change review: **567/567 eligible TS/JS files**, **13,554 functions**, zero findings, no scan problems. No thresholds, exceptions or architecture rules were relaxed. CRAP remains unavailable without source-matched coverage.
+- Architecture: zero forbidden edges, cycles, stale allowances, boundary-limit violations, test-boundary violations or coarse boundaries. Existing fragile-edge candidates remain structural signals, not newly proven design defects.
+- Refreshed index: TypeScript updated incrementally; Rust/Python shards reused. Fresh diff impact: **7 indexed changed files, 17 changed symbols, 35 affected consumers**; **10 unindexed changed paths** include tests/documents. The unrelated untracked LaunchPoint report is preserved; source review and the suite cover changed code beyond indexed impact.
+- Live fixture `/tmp/scip-query-behavior-live-bndhfp_f`: compiler baseline → edited source with added/deleted functions → actual **incremental** update → outline → forced compiler rebuild → identical outline. Both expected symbol addition and removal verified. The stopped-service attempt correctly refused a full rebuild and preserved its accepted index; enabling/starting the fixture watcher restored incremental work. One intermediate comparison overlapped a dist rebuild and was discarded; all claimed results come from the later frozen run.
+- Live query service: one actual server observed, service and direct file results identical, no fallback diagnostic; after idle shutdown both its state and lock were absent. The fixture watcher was stopped; the repository watcher was restored.
+- Packaged artifact: **453 files**, including **19 skill files**. Package API and skill content are preserved. VM replacement/receipt follows after commit.
+
+Artifacts: `/tmp/scip-query-behavior-*` and `/tmp/scip-query-behavior-package/`; fixture summaries `frozen-summary.json` and `frozen-service-summary.json`. No agent benchmarks were run. These checks establish the documented behavior within their stated scope; they do not prove an absence of all future defects.

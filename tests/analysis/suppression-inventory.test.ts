@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -26,6 +26,39 @@ function createSuppressionFixtureDb(dbPath: string): void {
 }
 
 describe('suppression inventory', () => {
+  it('refreshes configured decisions and expiry without rescanning unchanged source', () => {
+    const root = mkdtempSync(join(tmpdir(), 'scip-query-suppression-expiry-'));
+    mkdirSync(join(root, 'src'));
+    writeFileSync(join(root, 'src/suppressions.ts'), '// scip-query: ignore-wrapper\n');
+    const dbPath = join(root, 'index.db');
+    createSuppressionFixtureDb(dbPath);
+    const config: ScipQueryConfig = {
+      projectRoot: root,
+      dbPath,
+      indexPath: join(root, 'index.scip'),
+      suppressions: [{ id: 'expiring', check: 'similar', reason: 'Reviewed', expiresAt: '2030-01-01T00:00:01Z' }],
+    };
+    const db = new ScipDatabase(config);
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2030-01-01T00:00:00Z'));
+    try {
+      const before = getSuppressionInventory(db);
+      expect(before.total).toBe(2);
+      now.mockReturnValue(Date.parse('2030-01-01T00:00:01Z'));
+      expect(getSuppressionInventory(db).total).toBe(1);
+      config.suppressions = [{ id: 'replacement', check: 'dead', file: 'src/suppressions.ts', reason: 'Reviewed' }];
+      const replaced = getSuppressionInventory(db);
+      expect(replaced.byCategory.dead).toBe(1);
+      expect(replaced.byCategory.similar).toBe(0);
+      expect(replaced.byFile.get('src/suppressions.ts')).toBe(2);
+      expect(before.byCategory.similar).toBe(1);
+      expect(before.byFile.get('src/suppressions.ts')).toBe(1);
+    } finally {
+      now.mockRestore();
+      db.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('counts directive comments without counting strings or prose examples', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'scip-query-suppressions-'));
     let db: ScipDatabase | null = null;

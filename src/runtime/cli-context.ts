@@ -205,14 +205,17 @@ export function withDb<T>(run: (db: ScipDatabase) => T): T {
  */
 export async function withDbAsync<T>(run: (db: ScipDatabase) => Promise<T>): Promise<T> {
   const releaseFileListingCache = enterProjectFileListingCache();
-  const db = openDb();
-  const previous = activeCliDatabase;
-  activeCliDatabase = db;
   try {
-    return await run(db);
+    const db = openDb();
+    const previous = activeCliDatabase;
+    activeCliDatabase = db;
+    try {
+      return await run(db);
+    } finally {
+      activeCliDatabase = previous;
+      db.close();
+    }
   } finally {
-    activeCliDatabase = previous;
-    db.close();
     releaseFileListingCache();
   }
 }

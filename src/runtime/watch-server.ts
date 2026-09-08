@@ -311,11 +311,23 @@ export async function runWatchServiceLifecycle(input: {
     input.recordActivity();
     input.markReady();
     input.persistState(true);
-    heartbeatTimer = setInterval(() => input.persistState(), HEARTBEAT_INTERVAL_MS);
+    heartbeatTimer = setInterval(() => {
+      try {
+        input.persistState();
+      } catch (error) {
+        executionFailed = true;
+        executionError = error;
+        try {
+          input.stopSignal();
+        } catch (stopError) {
+          executionError = new AggregateError([error, stopError], 'Watch heartbeat and stop request both failed.');
+        }
+      }
+    }, HEARTBEAT_INTERVAL_MS);
     heartbeatTimer.unref?.();
     if (startupTrigger) input.requestRefresh(startupTrigger);
 
-    while (!input.stopRequested()) {
+    while (!executionFailed && !input.stopRequested()) {
       const iteration = await runWatchServiceLoopIteration(consecutiveIdleMailboxPolls, {
         processIndexRequests: input.processIndexRequests,
         processSemanticRequests: input.processSemanticRequests,
@@ -333,12 +345,33 @@ export async function runWatchServiceLifecycle(input: {
     process.off('SIGINT', input.stopSignal);
     process.off('SIGTERM', input.stopSignal);
     if (heartbeatTimer !== undefined) clearInterval(heartbeatTimer);
-    const watcherStop = input.shutdown.begin();
-    await input.closeLanes();
-    const stopResult = await watcherStop;
-    shutdownError = finalizeWatchServiceShutdown(input, stopResult);
+    shutdownError = await closeWatchServiceResources(input);
   }
   assertSuccessfulWatchServiceExit(input, executionFailed, executionError, shutdownError);
+}
+
+async function closeWatchServiceResources(
+  input: Parameters<typeof runWatchServiceLifecycle>[0],
+): Promise<Error | undefined> {
+  // Observe both outcomes before finalizing ownership, even if either shutdown rejects.
+  const [watcher, lanes] = await Promise.allSettled([
+    Promise.resolve().then(() => input.shutdown.begin()),
+    Promise.resolve().then(() => input.closeLanes()),
+  ]);
+  const failures = [watcher, lanes].flatMap((result) =>
+    result.status === 'rejected'
+      ? [result.reason instanceof Error ? result.reason.message : String(result.reason)]
+      : [],
+  );
+  try {
+    return finalizeWatchServiceShutdown(
+      input,
+      watcher.status === 'fulfilled' ? watcher.value : { state: 'degraded', reasons: [] },
+      failures,
+    );
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
 }
 
 function finalizeWatchServiceShutdown(
@@ -347,8 +380,9 @@ function finalizeWatchServiceShutdown(
     'mailboxFatalError' | 'finalizeStopped' | 'finalizeDegraded'
   >,
   stopResult: WatcherStopResult,
+  failures: readonly string[] = [],
 ): Error | undefined {
-  const reasons = stopResult.state === 'stopped' ? [] : [...stopResult.reasons];
+  const reasons = [...failures, ...(stopResult.state === 'stopped' ? [] : stopResult.reasons)];
   const mailboxError = input.mailboxFatalError();
   // Lane.close can resolve after a failed Worker termination. The fatal
   // observation must participate in ownership finalization, not just exit reporting.
@@ -432,230 +466,251 @@ export async function runWatchServiceServer(
     readProcessIdentity: (pid) => (pid === process.pid ? processIdentity : readProcessIdentity(pid)),
   });
   if (!lock.acquired) return;
-  const refreshCoordinator = new WatchRefreshCoordinator(servicePaths.refreshRequestsPath, {
-    retryDelayMs: Math.max(1_000, watchConfig.cooldownMs),
-  });
-  refreshCoordinator.initializeAfterOwnershipAcquired();
-
-  const startedAtMs = Date.now();
-  const startedAtMonotonicMs = monotonicNowMs();
-  let lastActivityAtMs = startedAtMs;
-  let lastActivityAtMonotonicMs = startedAtMonotonicMs;
-  let watcherStatus: WatcherStatus = { state: 'idle' };
-  let indexGeneration: string | undefined;
-  let lastRefresh: WatchServiceState['lastRefresh'];
-  let lastError: WatchServiceState['lastError'];
-  let mailboxFatalError: Error | undefined;
-  let reindexActivity = readReindexActivitySummary(indexPaths.dbPath);
-  let stopping = false;
-  let ready = false;
-  let lastHeartbeatAtMonotonicMs = Number.NEGATIVE_INFINITY;
-  let semanticBusyUntilMs: number | undefined;
-  let indexBusyUntilMs: number | undefined;
-  const semanticMailboxPaths = typeScriptSemanticMailboxPaths(indexPaths.cacheDir);
-  const indexMailboxPaths = typeScriptIndexMailboxPaths(indexPaths.cacheDir);
-  initializeBoundedMailbox(semanticMailboxPaths);
-  initializeBoundedMailbox(indexMailboxPaths);
-  const mailboxWake = createPathChangeWake([
-    indexMailboxPaths.pendingDir,
-    indexMailboxPaths.legacyRequestDir,
-    semanticMailboxPaths.pendingDir,
-    semanticMailboxPaths.legacyRequestDir,
-    servicePaths.refreshRequestsPath,
-  ]);
-
-  const persistState = (
-    force = false,
-    durability: 'durable' | 'visibility' = force ? 'durable' : 'visibility',
-  ): void => {
-    if (!ready) return;
-    const nowMs = Date.now();
-    const nowMonotonicMs = monotonicNowMs();
-    if (!force && nowMonotonicMs - lastHeartbeatAtMonotonicMs < HEARTBEAT_INTERVAL_MS) return;
-    lastHeartbeatAtMonotonicMs = nowMonotonicMs;
-    writeCurrentWatchServiceState({
-      statePath: servicePaths.statePath,
-      durability,
-      processIdentity,
-      projectRoot,
-      worktreeId: serviceIdentity.worktreeId,
-      cliVersion,
-      startedAtMs,
-      nowMs,
-      lastActivityAtMs,
-      idleTimeoutMs: watchConfig.idleTimeoutMs,
-      watcherStatus,
-      indexGeneration,
-      lastRefresh,
-      lastError,
-      reindexActivity,
-      refreshCoordinator,
-      semanticLane,
-      indexLane,
-      semanticBusyUntilMs,
-      indexBusyUntilMs,
+  let lifecycleOwnsResources = false;
+  let closeStartupWake: (() => void) | undefined;
+  try {
+    const refreshCoordinator = new WatchRefreshCoordinator(servicePaths.refreshRequestsPath, {
+      retryDelayMs: Math.max(1_000, watchConfig.cooldownMs),
     });
-  };
+    refreshCoordinator.initializeAfterOwnershipAcquired();
 
-  const recordActivity = (): void => {
-    lastActivityAtMs = Date.now();
-    lastActivityAtMonotonicMs = monotonicNowMs();
-  };
+    const startedAtMs = Date.now();
+    const startedAtMonotonicMs = monotonicNowMs();
+    let lastActivityAtMs = startedAtMs;
+    let lastActivityAtMonotonicMs = startedAtMonotonicMs;
+    let watcherStatus: WatcherStatus = { state: 'idle' };
+    let indexGeneration: string | undefined;
+    let lastRefresh: WatchServiceState['lastRefresh'];
+    let lastError: WatchServiceState['lastError'];
+    let mailboxFatalError: Error | undefined;
+    let reindexActivity = readReindexActivitySummary(indexPaths.dbPath);
+    let stopping = false;
+    let ready = false;
+    let lastHeartbeatAtMonotonicMs = Number.NEGATIVE_INFINITY;
+    let semanticBusyUntilMs: number | undefined;
+    let indexBusyUntilMs: number | undefined;
+    const semanticMailboxPaths = typeScriptSemanticMailboxPaths(indexPaths.cacheDir);
+    const indexMailboxPaths = typeScriptIndexMailboxPaths(indexPaths.cacheDir);
+    initializeBoundedMailbox(semanticMailboxPaths);
+    initializeBoundedMailbox(indexMailboxPaths);
+    const mailboxWake = createPathChangeWake([
+      indexMailboxPaths.pendingDir,
+      indexMailboxPaths.legacyRequestDir,
+      semanticMailboxPaths.pendingDir,
+      semanticMailboxPaths.legacyRequestDir,
+      servicePaths.refreshRequestsPath,
+    ]);
 
-  const recordMailboxFatal = (error: Error): void => {
-    recordActivity();
-    mailboxFatalError ??= error;
-    lastError = { at: new Date().toISOString(), message: error.message };
-    persistState(true, 'visibility');
-  };
-  const { semanticLane, indexLane } = createWatchServiceMailboxLanes({
-    semanticPaths: semanticMailboxPaths,
-    indexPaths: indexMailboxPaths,
-    projectRoot,
-    dbPath: indexPaths.dbPath,
-    config,
-    onSemanticBusy(deadlineAtMs) {
-      semanticBusyUntilMs = deadlineAtMs === undefined ? undefined : deadlineAtMs + 5_000;
-      persistState(true, 'visibility');
-    },
-    onIndexBusy(deadlineAtMs) {
-      indexBusyUntilMs = deadlineAtMs === undefined ? undefined : deadlineAtMs + 5_000;
-      persistState(true, 'visibility');
-    },
-    onFatal: recordMailboxFatal,
-  });
+    closeStartupWake = () => mailboxWake.close();
 
-  const watcher = new Watcher({
-    projectRoot,
-    config: { ...config, watch: watchConfig },
-    outputDb: indexPaths.dbPath,
-    languages: config.languages,
-    onStatus(status) {
-      watcherStatus = status;
-      if (status.state !== 'idle') indexGeneration = undefined;
-      if (status.state !== 'idle') recordActivity();
-      persistState(true);
-    },
-    onReindexComplete(_durationMs, _trigger, context) {
+    const persistState = (
+      force = false,
+      durability: 'durable' | 'visibility' = force ? 'durable' : 'visibility',
+    ): void => {
+      if (!ready) return;
+      const nowMs = Date.now();
+      const nowMonotonicMs = monotonicNowMs();
+      if (!force && nowMonotonicMs - lastHeartbeatAtMonotonicMs < HEARTBEAT_INTERVAL_MS) return;
+      lastHeartbeatAtMonotonicMs = nowMonotonicMs;
+      writeCurrentWatchServiceState({
+        statePath: servicePaths.statePath,
+        durability,
+        processIdentity,
+        projectRoot,
+        worktreeId: serviceIdentity.worktreeId,
+        cliVersion,
+        startedAtMs,
+        nowMs,
+        lastActivityAtMs,
+        idleTimeoutMs: watchConfig.idleTimeoutMs,
+        watcherStatus,
+        indexGeneration,
+        lastRefresh,
+        lastError,
+        reindexActivity,
+        refreshCoordinator,
+        semanticLane,
+        indexLane,
+        semanticBusyUntilMs,
+        indexBusyUntilMs,
+      });
+    };
+
+    const recordActivity = (): void => {
+      lastActivityAtMs = Date.now();
+      lastActivityAtMonotonicMs = monotonicNowMs();
+    };
+
+    const recordMailboxFatal = (error: Error): void => {
       recordActivity();
-      const freshness =
-        context?.pendingChanges !== false
-          ? getIndexFreshness(projectRoot, config, indexPaths)
-          : getPublishedIndexFreshness(indexPaths);
-      lastRefresh = freshness.lastRefresh;
-      indexGeneration =
-        freshness.state === 'fresh' ? (publishedSqliteGenerationIdentity(indexPaths.dbPath) ?? undefined) : undefined;
-      reindexActivity = readReindexActivitySummary(indexPaths.dbPath);
-      refreshCoordinator.completeActive();
-      lastError = undefined;
-      persistState(true);
-      return freshness.state === 'fresh';
-    },
-    onReindexError() {
-      refreshCoordinator.failActive();
-    },
-    onRefreshSuppressed(trigger) {
-      const activityWrite = recordSuppressedReindexActivity(indexPaths.dbPath, trigger);
-      if (activityWrite.state === 'failed') {
+      mailboxFatalError ??= error;
+      lastError = { at: new Date().toISOString(), message: error.message };
+      persistState(true, 'visibility');
+    };
+    const { semanticLane, indexLane } = createWatchServiceMailboxLanes({
+      semanticPaths: semanticMailboxPaths,
+      indexPaths: indexMailboxPaths,
+      projectRoot,
+      dbPath: indexPaths.dbPath,
+      config,
+      onSemanticBusy(deadlineAtMs) {
+        semanticBusyUntilMs = deadlineAtMs === undefined ? undefined : deadlineAtMs + 5_000;
+        persistState(true, 'visibility');
+      },
+      onIndexBusy(deadlineAtMs) {
+        indexBusyUntilMs = deadlineAtMs === undefined ? undefined : deadlineAtMs + 5_000;
+        persistState(true, 'visibility');
+      },
+      onFatal: recordMailboxFatal,
+    });
+
+    const watcher = new Watcher({
+      projectRoot,
+      config: { ...config, watch: watchConfig },
+      outputDb: indexPaths.dbPath,
+      languages: config.languages,
+      onStatus(status) {
+        watcherStatus = status;
+        if (status.state !== 'idle') indexGeneration = undefined;
+        if (status.state !== 'idle') recordActivity();
+        persistState(true);
+      },
+      onReindexComplete(_durationMs, _trigger, context) {
+        recordActivity();
+        const freshness =
+          context?.pendingChanges !== false
+            ? getIndexFreshness(projectRoot, config, indexPaths)
+            : getPublishedIndexFreshness(indexPaths);
+        lastRefresh = freshness.lastRefresh;
+        indexGeneration =
+          freshness.state === 'fresh' ? (publishedSqliteGenerationIdentity(indexPaths.dbPath) ?? undefined) : undefined;
+        reindexActivity = readReindexActivitySummary(indexPaths.dbPath);
+        refreshCoordinator.completeActive();
+        lastError = undefined;
+        persistState(true);
+        return freshness.state === 'fresh';
+      },
+      onReindexError() {
+        refreshCoordinator.failActive();
+      },
+      onRefreshSuppressed(trigger) {
+        const activityWrite = recordSuppressedReindexActivity(indexPaths.dbPath, trigger);
+        if (activityWrite.state === 'failed') {
+          lastError = {
+            at: new Date().toISOString(),
+            message: `Suppressed-refresh telemetry was not recorded: ${activityWrite.reason}`,
+          };
+          persistState(true, 'visibility');
+        }
+        reindexActivity = readReindexActivitySummary(indexPaths.dbPath);
+      },
+      onError(error) {
+        recordActivity();
+        indexGeneration = undefined;
+        lastError = { at: new Date().toISOString(), message: error.message };
+        persistState(true);
+      },
+    });
+
+    const shutdown = createWatchServiceShutdown(watcher, {
+      requestStop() {
+        stopping = true;
+      },
+      closeWake() {
+        mailboxWake.close();
+      },
+    });
+    const stop = (): void => {
+      void shutdown.begin();
+    };
+    const afterMailboxPoll = createWatchServiceMaintenance({
+      worktreeLiveness,
+      indexMailboxPaths,
+      semanticMailboxPaths,
+      projectRoot,
+      cliVersion,
+      activityPath: servicePaths.activityPath,
+      refreshCoordinator,
+      watcherStatus: () => watcherStatus,
+      requestRefresh: (detail) => watcher.requestRefresh({ kind: 'watch-demand', detail }, { immediate: true }),
+      requestStop: () => {
+        stopping = true;
+      },
+      recordActivity,
+      updateObservedActivity(atMs, monotonicMs) {
+        if (atMs <= lastActivityAtMs) return;
+        lastActivityAtMs = atMs;
+        lastActivityAtMonotonicMs = monotonicMs;
+      },
+      persistState,
+    });
+    lifecycleOwnsResources = true;
+    await runWatchServiceLifecycle({
+      watcher,
+      shutdown,
+      stopSignal: stop,
+      initializeFreshness() {
+        const freshness = getIndexFreshness(projectRoot, config, indexPaths);
+        lastRefresh = freshness.lastRefresh;
+        indexGeneration =
+          freshness.state === 'fresh' ? (publishedSqliteGenerationIdentity(indexPaths.dbPath) ?? undefined) : undefined;
+        return startupRefreshTrigger(freshness.state);
+      },
+      markReady: () => {
+        ready = true;
+      },
+      recordActivity,
+      persistState,
+      requestRefresh: (trigger) => watcher.requestRefresh(trigger, { immediate: true }),
+      stopRequested: () => stopping,
+      processIndexRequests: () => indexLane.poll(),
+      processSemanticRequests: () => semanticLane.poll(),
+      afterMailboxPoll,
+      shouldStop: () =>
+        stopping ||
+        mailboxFatalError !== undefined ||
+        shouldStopWatchServiceForIdle({
+          watcher: watcherStatus,
+          lastActivityAtMs: lastActivityAtMonotonicMs,
+          nowMs: monotonicNowMs(),
+          idleTimeoutMs: watchConfig.idleTimeoutMs,
+        }),
+      wait: (durationMs) => mailboxWake.wait(durationMs),
+      closeLanes: () =>
+        Promise.all([
+          semanticLane.close('TypeScript semantic service stopped before completing the request.'),
+          indexLane.close('TypeScript index service stopped before completing the request.'),
+        ]).then(() => undefined),
+      mailboxFatalError: () => mailboxFatalError,
+      finalizeStopped() {
+        try {
+          rmSync(servicePaths.statePath, { force: true });
+        } finally {
+          try {
+            rmSync(servicePaths.activityPath, { force: true });
+          } finally {
+            lock.release();
+          }
+        }
+      },
+      finalizeDegraded(reasons) {
         lastError = {
           at: new Date().toISOString(),
-          message: `Suppressed-refresh telemetry was not recorded: ${activityWrite.reason}`,
+          message: `Watch service shutdown is degraded: ${reasons.join('; ')}`,
         };
-        persistState(true, 'visibility');
+        persistState(true);
+        return new Error(lastError.message);
+      },
+    });
+  } finally {
+    if (!lifecycleOwnsResources) {
+      try {
+        closeStartupWake?.();
+      } finally {
+        lock.release();
       }
-      reindexActivity = readReindexActivitySummary(indexPaths.dbPath);
-    },
-    onError(error) {
-      recordActivity();
-      indexGeneration = undefined;
-      lastError = { at: new Date().toISOString(), message: error.message };
-      persistState(true);
-    },
-  });
-
-  const shutdown = createWatchServiceShutdown(watcher, {
-    requestStop() {
-      stopping = true;
-    },
-    closeWake() {
-      mailboxWake.close();
-    },
-  });
-  const stop = (): void => {
-    void shutdown.begin();
-  };
-  const afterMailboxPoll = createWatchServiceMaintenance({
-    worktreeLiveness,
-    indexMailboxPaths,
-    semanticMailboxPaths,
-    projectRoot,
-    cliVersion,
-    activityPath: servicePaths.activityPath,
-    refreshCoordinator,
-    watcherStatus: () => watcherStatus,
-    requestRefresh: (detail) => watcher.requestRefresh({ kind: 'watch-demand', detail }, { immediate: true }),
-    requestStop: () => {
-      stopping = true;
-    },
-    recordActivity,
-    updateObservedActivity(atMs, monotonicMs) {
-      if (atMs <= lastActivityAtMs) return;
-      lastActivityAtMs = atMs;
-      lastActivityAtMonotonicMs = monotonicMs;
-    },
-    persistState,
-  });
-  await runWatchServiceLifecycle({
-    watcher,
-    shutdown,
-    stopSignal: stop,
-    initializeFreshness() {
-      const freshness = getIndexFreshness(projectRoot, config, indexPaths);
-      lastRefresh = freshness.lastRefresh;
-      indexGeneration =
-        freshness.state === 'fresh' ? (publishedSqliteGenerationIdentity(indexPaths.dbPath) ?? undefined) : undefined;
-      return startupRefreshTrigger(freshness.state);
-    },
-    markReady: () => {
-      ready = true;
-    },
-    recordActivity,
-    persistState,
-    requestRefresh: (trigger) => watcher.requestRefresh(trigger, { immediate: true }),
-    stopRequested: () => stopping,
-    processIndexRequests: () => indexLane.poll(),
-    processSemanticRequests: () => semanticLane.poll(),
-    afterMailboxPoll,
-    shouldStop: () =>
-      stopping ||
-      mailboxFatalError !== undefined ||
-      shouldStopWatchServiceForIdle({
-        watcher: watcherStatus,
-        lastActivityAtMs: lastActivityAtMonotonicMs,
-        nowMs: monotonicNowMs(),
-        idleTimeoutMs: watchConfig.idleTimeoutMs,
-      }),
-    wait: (durationMs) => mailboxWake.wait(durationMs),
-    closeLanes: () =>
-      Promise.all([
-        semanticLane.close('TypeScript semantic service stopped before completing the request.'),
-        indexLane.close('TypeScript index service stopped before completing the request.'),
-      ]).then(() => undefined),
-    mailboxFatalError: () => mailboxFatalError,
-    finalizeStopped() {
-      rmSync(servicePaths.statePath, { force: true });
-      rmSync(servicePaths.activityPath, { force: true });
-      lock.release();
-    },
-    finalizeDegraded(reasons) {
-      lastError = {
-        at: new Date().toISOString(),
-        message: `Watch service shutdown is degraded: ${reasons.join('; ')}`,
-      };
-      persistState(true);
-      return new Error(lastError.message);
-    },
-  });
+    }
+  }
 }
 
 function resolveCurrentGitControlDirectory(projectRoot: string, expectedWorktreeId: string): string {

@@ -2,17 +2,7 @@ import { readableDirectoryEntries } from '../filesystem/directory-entries.js';
 import { execFileSync } from 'node:child_process';
 import { isUtf8 } from 'node:buffer';
 import { createHash } from 'node:crypto';
-import {
-  closeSync,
-  fstatSync,
-  lstatSync,
-  openSync,
-  readFileSync,
-  readSync,
-  readlinkSync,
-  realpathSync,
-  type Stats,
-} from 'node:fs';
+import { closeSync, fstatSync, lstatSync, openSync, readSync, readlinkSync, realpathSync, type Stats } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
   classifyProjectInputPath,
@@ -27,7 +17,11 @@ import {
   UnsafeProjectPathError,
 } from '../domain/path-normalization.js';
 import type { SupportedLanguage, TypeScriptProjectMode } from '../domain/types.js';
-import { assertNonNegativeByteLimit, hashFileWithinLimit } from '../filesystem/bounded-file.js';
+import {
+  assertNonNegativeByteLimit,
+  hashFileWithinLimit,
+  readFileDescriptorBytes,
+} from '../filesystem/bounded-file.js';
 import {
   projectSnapshotFile,
   projectSnapshotFingerprint,
@@ -220,10 +214,10 @@ export function readProjectFile(projectRoot: string, candidatePath: string, opts
       throw new InputTooLargeError(opts.inputKind ?? 'project file', resolvedFile.relativePath, before.size, maxBytes);
     }
 
-    const content = readFileSync(descriptor);
+    const content = readFileDescriptorBytes(descriptor, before.size);
     const after = fstatSync(descriptor);
     assertResolvedProjectFileIdentity(after, resolvedFile, candidatePath);
-    if (content.byteLength !== before.size) {
+    if (content.byteLength !== before.size || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs) {
       throw new UnsafeProjectPathError(candidatePath, 'changed-during-read');
     }
     return content;

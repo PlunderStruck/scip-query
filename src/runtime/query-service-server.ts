@@ -53,15 +53,37 @@ export async function runQueryServiceServer(sessionDir: string, projectRoot: str
   });
   if (lockResult.kind !== 'acquired') return;
 
-  let db: ReturnType<typeof openProjectDb>;
-  try {
-    db = openProjectDb(projectRoot);
-  } catch (error) {
-    lockResult.lock.release();
-    throw error;
-  }
-  const mailboxWake = createPathChangeWake([paths.pendingDir, paths.legacyRequestDir]);
   const statePath = join(sessionDir, 'server.json');
+  const cleanup = [() => lockResult.lock.release(), () => rmSync(statePath, { force: true })];
+  const errors: unknown[] = [];
+  try {
+    const db = openProjectDb(projectRoot);
+    cleanup.push(() => db.close());
+    const mailboxWake = createPathChangeWake([paths.pendingDir, paths.legacyRequestDir]);
+    cleanup.push(() => mailboxWake.close());
+    await serveQueryRequests(sessionDir, paths, statePath, db, mailboxWake);
+  } catch (error) {
+    errors.push(error);
+  }
+  // Attempt every release, including when acquisition or an earlier release fails.
+  for (const release of cleanup.reverse()) {
+    try {
+      release();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) throw new AggregateError(errors, 'Query service execution and cleanup failed.');
+}
+
+async function serveQueryRequests(
+  sessionDir: string,
+  paths: ReturnType<typeof boundedMailboxPaths>,
+  statePath: string,
+  db: ReturnType<typeof openProjectDb>,
+  mailboxWake: ReturnType<typeof createPathChangeWake>,
+): Promise<void> {
   const sessionIdentity = queryServiceSessionIdentity(sessionDir);
   const processIdentity = readProcessIdentity(process.pid);
   let stopping = false;
@@ -109,10 +131,8 @@ export async function runQueryServiceServer(sessionDir: string, projectRoot: str
       await mailboxWake.wait(loopDelayMs(processed, consecutiveIdlePolls));
     }
   } finally {
-    mailboxWake.close();
-    db.close();
-    rmSync(statePath, { force: true });
-    lockResult.lock.release();
+    process.off('SIGINT', stop);
+    process.off('SIGTERM', stop);
   }
 }
 

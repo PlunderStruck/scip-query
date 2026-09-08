@@ -32,7 +32,17 @@ const inventoryCache = createPerDbValue<SuppressionInventory>('suppression-inven
 });
 
 export function getSuppressionInventory(db: ScipDatabase): SuppressionInventory {
-  return inventoryCache.get(db, () => scanSuppressions(db));
+  const source = inventoryCache.get(db, () => scanSuppressions(db));
+  const inventory = { total: source.total, byCategory: { ...source.byCategory }, byFile: new Map(source.byFile) };
+  const nowMs = Date.now();
+  // Configuration and wall-clock expiry can change without source invalidation.
+  for (const suppression of db.config.suppressions ?? []) {
+    if (suppression.expiresAt && Date.parse(suppression.expiresAt) <= nowMs) continue;
+    inventory.total += 1;
+    if (suppression.file) inventory.byFile.set(suppression.file, (inventory.byFile.get(suppression.file) ?? 0) + 1);
+    inventory.byCategory[normalizeCategory(suppression.check)] += 1;
+  }
+  return inventory;
 }
 
 function scanSuppressions(db: ScipDatabase): SuppressionInventory {
@@ -54,13 +64,6 @@ function scanSuppressions(db: ScipDatabase): SuppressionInventory {
     const source = getSourceText(db, file);
     if (!source || !source.includes('scip-query')) continue;
     total += countSourceSuppressions(source, file, byCategory, byFile);
-  }
-
-  for (const suppression of db.config.suppressions ?? []) {
-    if (suppression.expiresAt && Date.parse(suppression.expiresAt) <= Date.now()) continue;
-    total += 1;
-    if (suppression.file) byFile.set(suppression.file, (byFile.get(suppression.file) ?? 0) + 1);
-    byCategory[normalizeCategory(suppression.check)] += 1;
   }
 
   return { total, byCategory, byFile };

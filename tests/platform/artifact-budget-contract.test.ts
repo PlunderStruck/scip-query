@@ -13,22 +13,13 @@ function typeScriptFiles(root: string): string[] {
 }
 
 describe('production artifact budget contract', () => {
-  it('keeps every raw synchronous file materialization inside a reviewed bounded owner', () => {
+  it('prohibits unbounded synchronous whole-file reads in production', () => {
     const sourceRoot = join(process.cwd(), 'src');
     const owners = typeScriptFiles(sourceRoot)
       .filter((path) => readFileSync(path, 'utf8').includes('readFileSync('))
       .map((path) => relative(process.cwd(), path).replaceAll('\\', '/'))
       .sort();
 
-    expect(owners).toEqual(['src/filesystem/bounded-file.ts', 'src/platform/project-files.ts']);
-
-    const boundedFile = readFileSync(join(sourceRoot, 'filesystem', 'bounded-file.ts'), 'utf8');
-    expect(boundedFile).toContain('assertReadableIdentity(before');
-    expect(boundedFile).toContain('readFileSync(descriptor)');
-
-    const projectFiles = readFileSync(join(sourceRoot, 'platform', 'project-files.ts'), 'utf8');
-    expect(projectFiles).toContain('before.size > maxBytes');
-    expect(projectFiles).toContain("'changed-during-read'");
-    expect(projectFiles).toContain('readFileSync(descriptor)');
+    expect(owners).toEqual([]);
   });
 });

@@ -9,7 +9,7 @@ import { monotonicNowMs } from '../domain/time.js';
 import { codeUnitStableJson } from '../domain/stable-json.js';
 import { decodeObservationReceipt, type ObservationReceiptV2 } from '../domain/observation-receipt.js';
 import { readTextFileWithinLimit } from '../platform/bounded-file.js';
-import { cliVersion } from '../platform/cli-version.js';
+import { cliBuildIdentity, cliVersion } from '../platform/cli-version.js';
 import { resolveGitWorktreeContext } from '../platform/git-worktree.js';
 import { tryAcquireProcessFileLock } from '../platform/process-file-lock.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
@@ -725,6 +725,7 @@ function tryQueryWithService<Result>(
         projectRoot: project.projectRoot,
         dbPath: project.dbPath,
         generationIdentity,
+        configurationIdentity: codeUnitStableJson(project.config),
       },
       requestForGeneration(generationIdentity),
       isResult,
@@ -858,7 +859,7 @@ export function queryServiceResponsePollPlan(attempt: number): {
 }
 
 function requestQuery<Result>(
-  context: { projectRoot: string; dbPath: string; generationIdentity: string },
+  context: { projectRoot: string; dbPath: string; generationIdentity: string; configurationIdentity: string },
   request: QueryServiceRequest,
   isResult: (value: unknown) => value is Result,
   resultName: string,
@@ -1391,7 +1392,7 @@ function isSerializedJsonResult(value: unknown): value is QueryServiceSerialized
 }
 
 function queryServiceSessionDirectory(
-  context: { projectRoot: string; dbPath: string },
+  context: { projectRoot: string; dbPath: string; configurationIdentity: string },
   serverPath: string,
   lane: number,
 ): string {
@@ -1403,6 +1404,8 @@ function queryServiceSessionDirectory(
         projectRoot,
         dbPath: resolve(context.dbPath),
         serverPath: resolve(serverPath),
+        buildIdentity: cliBuildIdentity(),
+        configurationIdentity: context.configurationIdentity,
         lane,
       }),
     )

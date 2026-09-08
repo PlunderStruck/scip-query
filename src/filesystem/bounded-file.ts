@@ -1,4 +1,4 @@
-import { closeSync, fstatSync, openSync, readFileSync, readSync, type PathLike } from 'node:fs';
+import { closeSync, fstatSync, openSync, readSync, type PathLike, type Stats } from 'node:fs';
 import { createHash } from 'node:crypto';
 
 export const SMALL_ARTIFACT_MAX_BYTES = 8 * 1024 * 1024;
@@ -34,8 +34,9 @@ export interface BoundedFileReadOptions {
 
 /**
  * Materialize one regular file only after checking its size through the same
- * open descriptor used for the read. The post-read identity check prevents a
- * concurrent replacement or growth from bypassing the pre-allocation bound.
+ * open descriptor used for the read. Allocate and read only the admitted size;
+ * reject observed metadata changes or truncation afterward. This is not an
+ * atomic snapshot of a concurrently writable file.
  */
 export function readFileWithinLimit(path: PathLike, options: BoundedFileReadOptions): Buffer {
   assertNonNegativeByteLimit(options.maxBytes);
@@ -44,26 +45,25 @@ export function readFileWithinLimit(path: PathLike, options: BoundedFileReadOpti
   try {
     const before = fstatSync(descriptor);
     assertReadableIdentity(before, options, displayPath);
-    const content = readFileSync(descriptor);
-    const after = fstatSync(descriptor);
-    if (
-      after.dev !== before.dev ||
-      after.ino !== before.ino ||
-      after.size !== before.size ||
-      content.byteLength !== before.size
-    ) {
-      throw new BoundedFileReadError(
-        options.inputKind,
-        displayPath,
-        'changed-during-read',
-        after.size,
-        options.maxBytes,
-      );
-    }
+    const content = readFileDescriptorBytes(descriptor, before.size);
+    assertReadUnchanged(before, fstatSync(descriptor), content.byteLength, options, displayPath);
     return content;
   } finally {
     closeSync(descriptor);
   }
+}
+
+/** Read at most an admitted regular-file size from offset zero; the caller retains descriptor ownership. */
+export function readFileDescriptorBytes(descriptor: number, byteLength: number): Buffer {
+  assertNonNegativeByteLimit(byteLength);
+  const content = Buffer.allocUnsafe(byteLength);
+  let offset = 0;
+  while (offset < content.length) {
+    const count = readSync(descriptor, content, offset, content.length - offset, offset);
+    if (count === 0) break;
+    offset += count;
+  }
+  return content.subarray(0, offset);
 }
 
 export function readTextFileWithinLimit(
@@ -167,16 +167,7 @@ export function hashFileWithinLimit(
       update(buffer.subarray(0, bytesRead));
       offset += bytesRead;
     }
-    const after = fstatSync(descriptor);
-    if (after.dev !== before.dev || after.ino !== before.ino || after.size !== before.size || offset !== before.size) {
-      throw new BoundedFileReadError(
-        options.inputKind,
-        displayPath,
-        'changed-during-read',
-        after.size,
-        options.maxBytes,
-      );
-    }
+    assertReadUnchanged(before, fstatSync(descriptor), offset, options, displayPath);
     return offset;
   } finally {
     closeSync(descriptor);
@@ -187,6 +178,25 @@ export function sha256FileWithinLimit(path: PathLike, options: BoundedFileReadOp
   const hash = createHash('sha256');
   hashFileWithinLimit(path, options, (chunk) => hash.update(chunk));
   return hash.digest('hex');
+}
+
+function assertReadUnchanged(
+  before: Stats,
+  after: Stats,
+  bytesRead: number,
+  options: BoundedFileReadOptions,
+  displayPath: string,
+): void {
+  if (
+    after.dev !== before.dev ||
+    after.ino !== before.ino ||
+    after.size !== before.size ||
+    after.mtimeMs !== before.mtimeMs ||
+    after.ctimeMs !== before.ctimeMs ||
+    bytesRead !== before.size
+  ) {
+    throw new BoundedFileReadError(options.inputKind, displayPath, 'changed-during-read', after.size, options.maxBytes);
+  }
 }
 
 function assertReadableIdentity(
