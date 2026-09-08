@@ -566,6 +566,44 @@ describe('affected-set document fact oracle', () => {
     expect(formatAffectedSetShadowStatus(status)).toContain('1 missed');
   });
 
+  it('reads producer telemetry when added files exceed the prior project size', () => {
+    const record = evaluatedRecord({
+      mode: 'full-project',
+      predictedFiles: ['src/a.ts', 'src/b.ts', 'src/new.ts'],
+      actualFiles: ['src/new.ts'],
+      fallbackReasons: ['file-added'],
+    });
+    record.evaluation = evaluateAffectedSetShadow(record.plan, record.comparison, 2);
+
+    const status = readAffectedSetShadowStatus('/cache/index.db', () => JSON.stringify(record));
+
+    expect(status).toMatchObject({
+      state: 'passing',
+      affectedRatio: 1.5,
+      recall: 1,
+      predictedFiles: ['src/a.ts', 'src/b.ts', 'src/new.ts'],
+      actualFiles: ['src/new.ts'],
+      missingFiles: [],
+    });
+  });
+
+  it.each([-0.1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'rejects an invalid affected ratio %s',
+    (affectedRatio) => {
+      const record = evaluatedRecord({ affectedRatio });
+      expect(readAffectedSetShadowStatus('/cache/index.db', () => JSON.stringify(record))).toMatchObject({
+        state: 'unavailable',
+        reason: 'telemetry-malformed',
+      });
+    },
+  );
+
+  it('still rejects recall above one', () => {
+    expect(
+      readAffectedSetShadowStatus('/cache/index.db', () => JSON.stringify(evaluatedRecord({ recall: 1.5 }))),
+    ).toMatchObject({ state: 'unavailable', reason: 'telemetry-malformed' });
+  });
+
   it('reports a conservative fallback without calling it a recall failure', () => {
     const status = readAffectedSetShadowStatus('/cache/index.db', () =>
       JSON.stringify(

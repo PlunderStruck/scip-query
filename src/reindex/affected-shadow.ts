@@ -560,6 +560,7 @@ function shadowEvaluationSummary(evaluation: Record<string, unknown>) {
   const actualFiles = stringArray(evaluation['actualFiles']);
   const missingFiles = stringArray(evaluation['missingFiles']);
   const recall = evaluation['recall'];
+  // Incremental telemetry divides by the prior project size, so additions can exceed one.
   const affectedRatio = evaluation['affectedRatio'];
   const passed = evaluation['passed'];
   if (
@@ -568,7 +569,7 @@ function shadowEvaluationSummary(evaluation: Record<string, unknown>) {
     missingFiles === null ||
     typeof passed !== 'boolean' ||
     !isUnitRatio(recall) ||
-    !isUnitRatio(affectedRatio)
+    !isNonnegativeFiniteNumber(affectedRatio)
   )
     return null;
   return { predictedFiles, actualFiles, missingFiles, recall, affectedRatio, passed };
@@ -774,7 +775,11 @@ function isShadowUnavailableReason(value: unknown): value is AffectedSetShadowUn
 }
 
 function isUnitRatio(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+  return isNonnegativeFiniteNumber(value) && value <= 1;
+}
+
+function isNonnegativeFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
 function sameOrderedStrings(left: readonly string[], right: readonly string[]): boolean {
