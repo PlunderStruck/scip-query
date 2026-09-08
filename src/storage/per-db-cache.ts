@@ -8,7 +8,8 @@ import { registerCacheClear, type CacheClearGroup } from './cache-registry.js';
  * Every factory requires `clearGroups` — the cache's invalidation membership
  * (see cache-registry.ts). Pass an explicit `[]` for caches derived purely
  * from the read-only index, with a comment saying why. Caches in the
- * 'source-file' group MUST be keyed by normalized relative path.
+ * 'source-file' group conservatively clear all entries on a file notification.
+ * Use createPerDbFileCache when each key identifies exactly one file.
  */
 export interface PerDbCacheOptions {
   clearGroups: readonly CacheClearGroup[];
@@ -120,8 +121,28 @@ export function createPerDbCache<K, V>(name: string, opts: PerDbCacheOptions): P
     name,
     groups: opts.clearGroups,
     clearAll: (db) => api.invalidateAll(db),
-    // Sound only for path-keyed caches — the 'source-file' group contract.
-    clearFile: (db, relativePath) => api.invalidate(db, relativePath as unknown as K),
+    // An arbitrary key carries no file ownership. File notifications therefore
+    // use clearAll; only a file-aware factory may register a narrower callback.
+  });
+  return api;
+}
+
+/** File-owned entries: normalized paths support exact file-scoped clearing. */
+export function createPerDbFileCache<V>(name: string, opts: PerDbCacheOptions): PerDbCache<string, V> {
+  const cache = createPerDbCache<string, V>(name, { clearGroups: [], maxEntries: maxEntriesFor(opts) });
+  const normalize = (file: string) => file.replace(/\\/g, '/');
+  const api: PerDbCache<string, V> = {
+    get: (db, file, compute) => cache.get(db, normalize(file), compute),
+    has: (db, file) => cache.has(db, normalize(file)),
+    invalidate: (db, file) => cache.invalidate(db, normalize(file)),
+    invalidateAll: cache.invalidateAll,
+    size: cache.size,
+  };
+  registerCacheClear({
+    name,
+    groups: opts.clearGroups,
+    clearAll: api.invalidateAll,
+    clearFile: api.invalidate,
   });
   return api;
 }
@@ -181,6 +202,7 @@ export function createPerDbSourceCache<V>(name: string, opts: PerDbCacheOptions)
   const maxEntries = maxEntriesFor(opts);
   const api: PerDbSourceCache<V> = {
     get(db, file, source, compute) {
+      file = file.replace(/\\/g, '/');
       const m = ensure(db);
       const cached = m.get(file);
       if (cached && cached.source === source) {
@@ -193,7 +215,7 @@ export function createPerDbSourceCache<V>(name: string, opts: PerDbCacheOptions)
       return value;
     },
     invalidate(db, file) {
-      cache.get(db)?.delete(file);
+      cache.get(db)?.delete(file.replace(/\\/g, '/'));
     },
     invalidateAll(db) {
       cache.delete(db);

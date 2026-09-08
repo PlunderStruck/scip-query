@@ -1,14 +1,13 @@
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import {
+  createFixture,
+  createCandidateArtifacts,
+  readValueFromDatabase,
+  openFixtureDatabase,
+} from '../fixtures/sqlite-generation.js';
+import { chmodSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { describe, expect, test } from 'vitest';
-import {
-  decodeResultCursor,
-  encodeResultCursor,
-  indexGenerationIdentity,
-} from '../../src/runtime/result-pagination.js';
-import { ScipDatabase } from '../../src/storage/db.js';
 import {
   SQLITE_GENERATION_MANIFEST,
   SQLITE_GENERATION_READERS_DIRECTORY,
@@ -68,7 +67,7 @@ describe('SQLite generation handoff', () => {
           try {
             observed = {
               value: readValueFromDatabase(db.db),
-              identity: indexGenerationIdentity(db),
+              identity: db.generation.identity,
               metadata: db.generation.metadataRaw,
               scip: db.generation.indexPath ? readFileSync(db.generation.indexPath, 'utf8') : undefined,
             };
@@ -159,7 +158,7 @@ describe('SQLite generation handoff', () => {
       expect(readValueFromDatabase(retainedReader.db)).toBe('new');
       expect(retainedReader.generation.metadataRaw).toBe('new-meta');
       expect(readFileSync(retainedReader.generation.indexPath!, 'utf8')).toBe('new-scip');
-      expect(indexGenerationIdentity(retainedReader)).toBe(retainedIdentity);
+      expect(retainedReader.generation.identity).toBe(retainedIdentity);
       expect(readValueFromDatabase(currentReader.db)).toBe('next');
       expect(currentReader.generation.metadataRaw).toBe('next-meta');
       expect(currentReader.generation.identity).not.toBe(retainedIdentity);
@@ -167,48 +166,6 @@ describe('SQLite generation handoff', () => {
     } finally {
       retainedReader.close();
       currentReader.close();
-    }
-  });
-
-  test('rejects a continuation cursor before applying an old offset to a new result set', () => {
-    const fixture = createFixture();
-    promoteReindexArtifacts({ ...fixture.paths });
-    const firstPageReader = openFixtureDatabase(fixture);
-    const cursor = encodeResultCursor({
-      command: 'refs',
-      target: 'value',
-      offset: 1,
-      indexGeneration: indexGenerationIdentity(firstPageReader),
-    });
-
-    const changed = createCandidateArtifacts(fixture.root, 'changed-order', 'changed-scip', 'changed-meta');
-    promoteReindexArtifacts({
-      tempOutputScip: changed.scip,
-      tempOutputDb: changed.db,
-      tempMetaPath: changed.meta,
-      outputScip: fixture.paths.outputScip,
-      outputDb: fixture.paths.outputDb,
-      metaPath: fixture.paths.metaPath,
-    });
-    const continuationReader = openFixtureDatabase(fixture);
-    try {
-      expect(
-        decodeResultCursor(cursor, {
-          command: 'refs',
-          target: 'value',
-          indexGeneration: indexGenerationIdentity(firstPageReader),
-        }).offset,
-      ).toBe(1);
-      expect(() =>
-        decodeResultCursor(cursor, {
-          command: 'refs',
-          target: 'value',
-          indexGeneration: indexGenerationIdentity(continuationReader),
-        }),
-      ).toThrow('index changed');
-    } finally {
-      firstPageReader.close();
-      continuationReader.close();
     }
   });
 
@@ -536,66 +493,6 @@ describe('SQLite generation handoff', () => {
   });
 });
 
-function createFixture(opts: { legacyWithoutMeta?: boolean } = {}): {
-  root: string;
-  paths: {
-    tempOutputScip: string;
-    tempOutputDb: string;
-    tempMetaPath: string;
-    outputScip: string;
-    outputDb: string;
-    metaPath: string;
-  };
-} {
-  const root = mkdtempSync(join(tmpdir(), 'scip-query-sqlite-generation-'));
-  const stableDir = join(root, 'cache');
-  mkdirSync(stableDir, { recursive: true });
-  const outputScip = join(stableDir, 'index.scip');
-  const outputDb = join(stableDir, 'index.db');
-  const metaPath = join(stableDir, 'meta.json');
-  writeFileSync(outputScip, 'old-scip');
-  writeDatabase(outputDb, 'old');
-  if (!opts.legacyWithoutMeta) writeFileSync(metaPath, 'old-meta');
-  const candidate = createCandidateArtifacts(root, 'new', 'new-scip', 'new-meta');
-  return {
-    root,
-    paths: {
-      tempOutputScip: candidate.scip,
-      tempOutputDb: candidate.db,
-      tempMetaPath: candidate.meta,
-      outputScip,
-      outputDb,
-      metaPath,
-    },
-  };
-}
-
-function createCandidateArtifacts(
-  root: string,
-  value: string,
-  scip: string,
-  meta: string,
-): { scip: string; db: string; meta: string } {
-  const runDir = join(root, `run-${value}`);
-  mkdirSync(runDir, { recursive: true });
-  const paths = {
-    scip: join(runDir, 'index.scip'),
-    db: join(runDir, 'index.db'),
-    meta: join(runDir, 'meta.json'),
-  };
-  writeFileSync(paths.scip, scip);
-  writeDatabase(paths.db, value);
-  writeFileSync(paths.meta, meta);
-  return paths;
-}
-
-function writeDatabase(path: string, value: string): void {
-  const db = new Database(path);
-  db.exec('CREATE TABLE generation_value (value TEXT NOT NULL)');
-  db.prepare('INSERT INTO generation_value(value) VALUES (?)').run(value);
-  db.close();
-}
-
 function readValue(path: string): string {
   const db = new Database(path, { readonly: true, fileMustExist: true });
   try {
@@ -603,10 +500,6 @@ function readValue(path: string): string {
   } finally {
     db.close();
   }
-}
-
-function readValueFromDatabase(db: Database.Database): string {
-  return db.prepare('SELECT value FROM generation_value').pluck().get() as string;
 }
 
 function publishedDatabasePath(outputDb: string): string {
@@ -620,12 +513,4 @@ function generationDirectories(outputDb: string): string[] {
   return readdirSync(sqliteGenerationRoot(outputDb), { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && /^[a-f0-9]{64}$/.test(entry.name))
     .map((entry) => entry.name);
-}
-
-function openFixtureDatabase(fixture: ReturnType<typeof createFixture>): ScipDatabase {
-  return new ScipDatabase({
-    projectRoot: fixture.root,
-    dbPath: fixture.paths.outputDb,
-    indexPath: fixture.paths.outputScip,
-  });
 }

@@ -9,7 +9,7 @@ import {
   writeCachedSemanticCalleesBatch,
   type SemanticCalleeCacheEntry,
 } from '../storage/evidence-cache.js';
-import { createPerDbCache } from '../storage/per-db-cache.js';
+import { createPerDbFileCache } from '../storage/per-db-cache.js';
 import { buildFileDepGraph } from '../symbols/graph/file-dep-graph.js';
 import type { SymbolSemanticEvidencePort } from '../symbols/semantic-evidence-port.js';
 import { semanticDefinitionsByFile } from './definition-groups.js';
@@ -278,7 +278,7 @@ function parseCachedCallees(payload: string): SemanticCallee[] | null {
   }
 }
 
-const DEPS_DIGEST_CACHE = createPerDbCache<string, string>('semantic-deps-digest', {
+const DEPS_DIGEST_CACHE = createPerDbFileCache<string>('semantic-deps-digest', {
   clearGroups: ['whole-project', 'source-file'],
 });
 

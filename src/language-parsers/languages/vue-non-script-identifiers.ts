@@ -1,8 +1,8 @@
 import type { ScipDatabase } from '../../storage/db.js';
-import { createPerDbCache } from '../../storage/per-db-cache.js';
+import { createPerDbFileCache } from '../../storage/per-db-cache.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
 
-const VUE_NON_SCRIPT_IDENTIFIERS_CACHE = createPerDbCache<string, Set<string>>('vue-non-script-identifiers', {
+const VUE_NON_SCRIPT_IDENTIFIERS_CACHE = createPerDbFileCache<Set<string>>('vue-non-script-identifiers', {
   clearGroups: ['whole-project', 'source-file'],
 });
 

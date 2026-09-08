@@ -90,7 +90,8 @@
       },
       {
         "name": "reindex",
-        "paths": ["src/reindex/*"]
+        "paths": ["src/reindex/*"],
+        "subUnits": "file"
       },
       {
         "name": "reindex-augmentation",
@@ -123,58 +124,104 @@
         "paths": ["src/runtime/query-commands/**"]
       },
       {
-        "name": "runtime-services",
+        "name": "runtime-contracts",
         "paths": [
-          "src/runtime/agent-setup.ts",
-          "src/runtime/ast-parser-setup.ts",
           "src/runtime/claim-qualification.ts",
-          "src/runtime/cleanup-verify.ts",
-          "src/runtime/cli-context.ts",
-          "src/runtime/cli-invocation.ts",
           "src/runtime/cli-json-envelope.ts",
-          "src/runtime/cli-support.ts",
           "src/runtime/command-operation.ts",
-          "src/runtime/config.ts",
           "src/runtime/cursor-codec.ts",
-          "src/runtime/evidence-command-freshness.ts",
-          "src/runtime/file-product-warm.ts",
           "src/runtime/generated-agent-command-catalog.ts",
+          "src/runtime/query-invocation-policy.ts"
+        ],
+        "subUnits": "file"
+      },
+      {
+        "name": "runtime-output",
+        "paths": [
+          "src/runtime/cli-invocation.ts",
+          "src/runtime/output-pagination.ts",
+          "src/runtime/refs-pagination.ts",
+          "src/runtime/render.ts",
+          "src/runtime/result-pagination.ts",
+          "src/runtime/source-emission-session.ts"
+        ],
+        "subUnits": "file"
+      },
+      {
+        "name": "runtime-project",
+        "paths": [
+          "src/runtime/cli-context.ts",
+          "src/runtime/config.ts",
           "src/runtime/git-worktree-context-cache.ts",
+          "src/runtime/index-freshness.ts",
+          "src/runtime/revisioned-file.ts"
+        ],
+        "subUnits": "file"
+      },
+      {
+        "name": "runtime-analysis",
+        "paths": [
+          "src/runtime/cleanup-verify.ts",
+          "src/runtime/cli-support.ts",
+          "src/runtime/file-product-warm.ts",
           "src/runtime/health-capability-disclosure.ts",
           "src/runtime/health-dossier.ts",
           "src/runtime/health-report-cache.ts",
-          "src/runtime/index-freshness.ts",
           "src/runtime/isolated-analysis-runner.ts",
           "src/runtime/observation-receipt.ts",
-          "src/runtime/output-pagination.ts",
           "src/runtime/project-readiness.ts",
-          "src/runtime/project-reindex.ts",
-          "src/runtime/project-setup.ts",
-          "src/runtime/query-service-fastpath.ts",
+          "src/runtime/suppression-writer.ts"
+        ],
+        "subUnits": "file"
+      },
+      {
+        "name": "runtime-query-service",
+        "paths": [
           "src/runtime/query-service-envelope.ts",
+          "src/runtime/query-service-fastpath.ts",
           "src/runtime/query-service-server.ts",
-          "src/runtime/query-service.ts",
-          "src/runtime/refs-pagination.ts",
-          "src/runtime/render.ts",
-          "src/runtime/repository-cache-lifecycle.ts",
-          "src/runtime/result-pagination.ts",
-          "src/runtime/revisioned-file.ts",
-          "src/runtime/setup-wizard.ts",
-          "src/runtime/setup.ts",
-          "src/runtime/source-emission-session.ts",
-          "src/runtime/suppression-writer.ts",
+          "src/runtime/query-service.ts"
+        ],
+        "subUnits": "file"
+      },
+      {
+        "name": "runtime-watch-control",
+        "paths": ["src/runtime/watch-service-prune.ts", "src/runtime/watch-service.ts"],
+        "subUnits": "file"
+      },
+      {
+        "name": "runtime-background",
+        "paths": [
           "src/runtime/typescript-mailbox-lanes.ts",
           "src/runtime/typescript-mailbox-worker.ts",
-          "src/runtime/uninstall.ts",
-          "src/runtime/update-notice.ts",
           "src/runtime/watch-refresh-coordinator.ts",
           "src/runtime/watch-server.ts",
-          "src/runtime/watch-service-prune.ts",
-          "src/runtime/watch-service.ts",
           "src/runtime/watch.ts",
           "src/runtime/worker-request-lane.ts"
         ],
-        "maxFiles": 48
+        "subUnits": "file"
+      },
+      {
+        "name": "runtime-index-maintenance",
+        "paths": [
+          "src/runtime/evidence-command-freshness.ts",
+          "src/runtime/project-reindex.ts",
+          "src/runtime/repository-cache-lifecycle.ts"
+        ],
+        "subUnits": "file"
+      },
+      {
+        "name": "runtime-installation",
+        "paths": [
+          "src/runtime/agent-setup.ts",
+          "src/runtime/ast-parser-setup.ts",
+          "src/runtime/project-setup.ts",
+          "src/runtime/setup-wizard.ts",
+          "src/runtime/setup.ts",
+          "src/runtime/uninstall.ts",
+          "src/runtime/update-notice.ts"
+        ],
+        "subUnits": "file"
       },
       {
         "name": "test-fixtures",
@@ -340,15 +387,53 @@
       {
         "name": "command-audit-tools",
         "paths": ["benchmarks/command-contracts/**", "benchmarks/full-tool-audit/**"]
+      },
+      {
+        "name": "property-verification",
+        "paths": ["tests/properties/**"],
+        "subUnits": "file"
       }
     ],
     "allowedDependencies": {
-      "benchmark-fixture": [],
+      "agent-evaluation-tools": [],
+      "agent-evidence-capture": [],
+      "agent-exploration-evaluation": ["agent-evaluation-tools"],
       "analysis": ["domain", "source", "storage", "symbols-core", "symbols-graph"],
+      "benchmark-fixture": [],
+      "build-configuration": ["queries-facade"],
+      "command-audit-tools": [],
+      "contract-tooling": [],
+      "coverage-recorder": [],
+      "detector-calibration-tools": [],
+      "documentation-tooling": ["queries-health", "runtime-command-kit", "runtime-commands", "runtime-contracts"],
       "domain": [],
       "filesystem": [],
       "instrumentation": [],
+      "performance-tooling": [
+        "domain",
+        "platform",
+        "queries-graph",
+        "queries-navigation",
+        "reindex",
+        "runtime-index-maintenance",
+        "runtime-project",
+        "storage"
+      ],
       "platform": ["domain", "filesystem"],
+      "property-verification": [
+        "analysis",
+        "domain",
+        "filesystem",
+        "platform",
+        "queries-health",
+        "reindex",
+        "runtime-background",
+        "runtime-output",
+        "runtime-query-service",
+        "runtime-watch-control",
+        "source",
+        "storage"
+      ],
       "public-api": ["domain", "queries-internal", "source", "storage", "symbols-core"],
       "queries-cleanup": [
         "analysis",
@@ -453,30 +538,8 @@
       ],
       "reindex-augmentation": ["domain", "filesystem", "source"],
       "reindex-vue": ["platform", "reindex-augmentation"],
-      "runtime-command-kit": ["domain", "runtime-services", "storage"],
-      "runtime-commands": [
-        "domain",
-        "platform",
-        "queries-facade",
-        "queries-health",
-        "reindex",
-        "runtime-command-kit",
-        "runtime-query-commands",
-        "runtime-services",
-        "semantic-rust",
-        "storage"
-      ],
-      "runtime-entry": ["instrumentation", "platform", "runtime-commands", "runtime-services", "storage"],
-      "runtime-query-commands": [
-        "domain",
-        "queries-facade",
-        "queries-navigation",
-        "runtime-command-kit",
-        "runtime-services",
-        "storage",
-        "symbols-core"
-      ],
-      "runtime-services": [
+      "release-tooling": ["platform", "storage"],
+      "runtime-analysis": [
         "domain",
         "instrumentation",
         "platform",
@@ -484,17 +547,131 @@
         "queries-facade",
         "queries-health",
         "queries-internal",
-        "queries-navigation",
         "reindex",
+        "runtime-output",
+        "runtime-project",
         "semantic-contracts",
         "semantic-core",
         "semantic-rust",
         "semantic-typescript",
         "source",
         "storage",
+        "symbols-core"
+      ],
+      "runtime-background": [
+        "domain",
+        "instrumentation",
+        "platform",
+        "reindex",
+        "runtime-index-maintenance",
+        "runtime-project",
+        "runtime-watch-control",
+        "semantic-typescript",
+        "source",
+        "storage"
+      ],
+      "runtime-command-kit": [
+        "domain",
+        "runtime-analysis",
+        "runtime-contracts",
+        "runtime-output",
+        "runtime-project",
+        "storage"
+      ],
+      "runtime-commands": [
+        "domain",
+        "platform",
+        "queries-facade",
+        "queries-health",
+        "reindex",
+        "runtime-analysis",
+        "runtime-background",
+        "runtime-command-kit",
+        "runtime-contracts",
+        "runtime-index-maintenance",
+        "runtime-installation",
+        "runtime-output",
+        "runtime-project",
+        "runtime-query-commands",
+        "runtime-watch-control",
+        "semantic-rust",
+        "storage"
+      ],
+      "runtime-contracts": ["domain"],
+      "runtime-entry": [
+        "instrumentation",
+        "platform",
+        "runtime-analysis",
+        "runtime-background",
+        "runtime-commands",
+        "runtime-contracts",
+        "runtime-index-maintenance",
+        "runtime-installation",
+        "runtime-output",
+        "runtime-project",
+        "runtime-query-service",
+        "runtime-watch-control",
+        "storage"
+      ],
+      "runtime-index-maintenance": [
+        "domain",
+        "platform",
+        "reindex",
+        "runtime-analysis",
+        "runtime-project",
+        "runtime-watch-control",
+        "storage"
+      ],
+      "runtime-installation": [
+        "domain",
+        "platform",
+        "queries-facade",
+        "reindex",
+        "runtime-analysis",
+        "runtime-contracts",
+        "runtime-project",
+        "runtime-watch-control",
+        "semantic-rust",
+        "source",
+        "storage"
+      ],
+      "runtime-output": [
+        "domain",
+        "platform",
+        "queries-navigation",
+        "runtime-contracts",
+        "source",
+        "storage",
         "symbols-core",
         "symbols-references"
       ],
+      "runtime-project": ["domain", "platform", "reindex", "source", "storage"],
+      "runtime-query-commands": [
+        "domain",
+        "queries-facade",
+        "queries-navigation",
+        "runtime-analysis",
+        "runtime-command-kit",
+        "runtime-contracts",
+        "runtime-output",
+        "runtime-project",
+        "runtime-query-service",
+        "storage",
+        "symbols-core"
+      ],
+      "runtime-query-service": [
+        "domain",
+        "platform",
+        "queries-facade",
+        "queries-navigation",
+        "runtime-analysis",
+        "runtime-contracts",
+        "runtime-output",
+        "runtime-project",
+        "runtime-watch-control",
+        "storage"
+      ],
+      "runtime-watch-control": ["domain", "platform", "storage"],
       "rust-kernels": [],
       "semantic-contracts": ["domain"],
       "semantic-core": [
@@ -532,26 +709,14 @@
       "symbols-core": ["domain", "source", "storage"],
       "symbols-graph": ["domain", "instrumentation", "source", "storage", "symbols-core", "symbols-references"],
       "symbols-references": ["domain", "instrumentation", "source", "storage", "symbols-core"],
-      "test-fixtures": ["platform", "runtime-command-kit", "runtime-services", "semantic-contracts"],
-      "agent-evaluation-tools": [],
-      "coverage-recorder": [],
-      "build-configuration": ["queries-facade"],
-      "release-tooling": ["platform", "storage"],
-      "performance-tooling": [
-        "domain",
+      "test-fixtures": [
         "platform",
-        "queries-graph",
-        "queries-navigation",
-        "reindex",
-        "runtime-services",
-        "storage"
-      ],
-      "contract-tooling": [],
-      "detector-calibration-tools": [],
-      "agent-exploration-evaluation": ["agent-evaluation-tools"],
-      "documentation-tooling": ["queries-health", "runtime-command-kit", "runtime-commands", "runtime-services"],
-      "agent-evidence-capture": [],
-      "command-audit-tools": []
+        "runtime-background",
+        "runtime-command-kit",
+        "runtime-output",
+        "runtime-watch-control",
+        "semantic-contracts"
+      ]
     },
     "requireCompletePolicy": true,
     "requireCompleteCoverage": true,

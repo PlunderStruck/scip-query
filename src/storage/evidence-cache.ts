@@ -21,7 +21,7 @@ import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { decodeReindexMetadata } from '../domain/reindex-metadata.js';
 import type { ScipDatabase } from './db.js';
-import { createPerDbCache } from './per-db-cache.js';
+import { createPerDbCache, createPerDbFileCache } from './per-db-cache.js';
 import { cliBuildIdentity } from '../platform/cli-version.js';
 
 export const EVIDENCE_DB_FILENAME = 'evidence.db';
@@ -143,7 +143,7 @@ export interface FileEvidenceCacheRekeyEntry {
 // `null` = permanently disabled for this process.
 const CONNECTIONS = new WeakMap<ScipDatabase, EvidenceConnection | null>();
 
-const CONTENT_HASH_CACHE = createPerDbCache<string, string>('evidence-content-hash', {
+const CONTENT_HASH_CACHE = createPerDbFileCache<string>('evidence-content-hash', {
   clearGroups: ['whole-project', 'source-file'],
 });
 

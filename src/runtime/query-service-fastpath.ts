@@ -5,6 +5,7 @@ import { cliVersion } from '../platform/cli-version.js';
 import { CLIENT_SAFE_OUTPUT_BYTES, writeSerializedJson } from '../platform/terminal-output.js';
 import { resolveProjectRoot } from './cli-context.js';
 import { cliInvocationPrefix } from './cli-invocation.js';
+import { CODE_CLI_DEFAULTS, SEARCH_CLI_DEFAULTS, parseCliInteger as parseInteger } from './query-invocation-policy.js';
 import {
   tryCodeWithQueryService,
   tryByKindWithQueryService,
@@ -684,8 +685,7 @@ function validCodeInvocationState(state: CodeInvocationState): boolean {
 function parseCodeInvocation(argv: readonly string[]): CodeFastPathInvocation | null {
   const state: CodeInvocationState = {
     selectors: [],
-    context: 0,
-    members: 'exported',
+    ...CODE_CLI_DEFAULTS,
     session: true,
     json: false,
     resultOnly: false,
@@ -723,8 +723,7 @@ interface SourceSearchInvocationState {
 
 function parseSourceSearchInvocation(argv: readonly string[]): SourceSearchFastPathInvocation | null {
   const state: SourceSearchInvocationState = {
-    context: 2,
-    limit: 6,
+    ...SEARCH_CLI_DEFAULTS,
     regexp: false,
     ignoreCase: false,
     json: false,
@@ -853,12 +852,6 @@ function optionValue(
   const value = argv[index + 1];
   if (value === undefined) return null;
   return { value, nextIndex: index + 1 };
-}
-
-function parseInteger(value: string, minimum: number): number | null {
-  if (!/^\d+$/.test(value)) return null;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= minimum ? parsed : null;
 }
 
 function hasCompactQueryOutput(output: { json: boolean; resultOnly: boolean; compact: boolean }): boolean {

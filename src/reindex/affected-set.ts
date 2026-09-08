@@ -1,4 +1,4 @@
-import type { FileDependencyGraph, ProjectChangeManifest } from '../domain/project-input.js';
+import type { FileDependencyGraph, ProjectChangeManifest, ProjectFileChange } from '../domain/project-input.js';
 
 export type AffectedSetFallbackReason =
   | 'prior-snapshot-unavailable'
@@ -12,7 +12,8 @@ export type AffectedSetFallbackReason =
   | 'unreadable-input'
   | 'unclassified-input'
   | 'dependency-graph-unavailable'
-  | 'changed-file-outside-project';
+  | 'changed-file-outside-project'
+  | 'change-limit-exceeded';
 
 export interface AffectedSetFallbackDecision {
   fullProject: boolean;
@@ -26,17 +27,29 @@ export interface AffectedFilePlan {
   reasons: AffectedSetFallbackReason[];
 }
 
-export function classifyAffectedSetFallback(manifest: ProjectChangeManifest): AffectedSetFallbackDecision {
+const INPUT_FALLBACK_REASONS: Partial<Record<ProjectFileChange['inputKind'], AffectedSetFallbackReason>> = {
+  config: 'configuration-changed',
+  ambient: 'ambient-declaration-changed',
+  other: 'unclassified-input',
+};
+
+export function classifyAffectedSetFallback(
+  manifest: ProjectChangeManifest,
+  policy: { deletedFiles?: 'closure'; maxChanges?: number } = {},
+): AffectedSetFallbackDecision {
   const reasons = new Set<AffectedSetFallbackReason>();
   for (const uncertainty of manifest.uncertainty) reasons.add(uncertainty);
   if (manifest.projectIdentityChanged) reasons.add('project-identity-changed');
+  if (policy.maxChanges !== undefined && manifest.changes.length > policy.maxChanges)
+    reasons.add('change-limit-exceeded');
 
   for (const change of manifest.changes) {
     if (change.kind === 'added') reasons.add('file-added');
-    if (change.kind === 'deleted') reasons.add('file-deleted');
-    if (change.inputKind === 'config') reasons.add('configuration-changed');
-    if (change.inputKind === 'ambient') reasons.add('ambient-declaration-changed');
-    if (change.inputKind === 'other') reasons.add('unclassified-input');
+    // A compiler adapter may refresh deleted-file consumers using its prior
+    // graph. Additions cannot use that proof: unresolved imports have no edges.
+    if (change.kind === 'deleted' && policy.deletedFiles !== 'closure') reasons.add('file-deleted');
+    const inputReason = INPUT_FALLBACK_REASONS[change.inputKind];
+    if (inputReason) reasons.add(inputReason);
   }
 
   return { fullProject: reasons.size > 0, reasons: [...reasons].sort() };
@@ -74,7 +87,7 @@ export function planAffectedFiles(
   };
 }
 
-function fullProjectPlan(
+export function fullProjectPlan(
   changedFiles: string[],
   projectFiles: ReadonlySet<string>,
   reasons: ReadonlySet<AffectedSetFallbackReason>,

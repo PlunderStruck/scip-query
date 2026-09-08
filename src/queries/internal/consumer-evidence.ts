@@ -12,7 +12,7 @@ import { sourceEvidence } from '../../language-parsers/source-evidence.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { fileContentHash, projectEvidenceFingerprint } from '../../storage/evidence-cache.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
-import { createPerDbCache } from '../../storage/per-db-cache.js';
+import { createPerDbFileCache } from '../../storage/per-db-cache.js';
 import { leafName } from '../../symbols/symbol-parser.js';
 
 export interface DefinitionConsumerEvidenceOptions {
@@ -67,7 +67,7 @@ interface ConsumerClassificationStats {
   nativeReason: string;
 }
 
-const FILE_USAGE_CACHE = createPerDbCache<string, FileLeafUsage>('definition-consumer-file-usage', {
+const FILE_USAGE_CACHE = createPerDbFileCache<FileLeafUsage>('definition-consumer-file-usage', {
   clearGroups: ['whole-project', 'source-file'],
 });
 const FILE_USAGE_PRODUCT = createFileEvidenceProduct<FileLeafUsage>({

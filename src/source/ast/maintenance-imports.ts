@@ -1,9 +1,12 @@
+import { listProjectFiles, readProjectFileText } from '../../platform/project-files.js';
+import { parseSourceBindings } from './function-metrics.js';
 import path from 'node:path';
 import { isBuiltin } from 'node:module';
 import { ts } from '@ts-morph/common';
 import { classifyFile, isManagedOutputPath } from '../primitives/file-kind.js';
 import {
   isInternalSpecifier,
+  maintenanceProject,
   maintenanceFileConfigs,
   packageName,
   type MaintenanceProject,
@@ -156,4 +159,50 @@ function unresolvedSourceImport(
       excludedReason: `Requested managed output ${requested}; build/install existence is not established by the source inventory.`,
     };
   return { resolution: isInternalSpecifier(project, file, specifier) ? 'missing' : 'external' };
+}
+
+export interface IndexedImportEvidence {
+  imports: SourceImport[];
+  unavailable: Array<{ file: string; reason: string }>;
+}
+
+/** Resolve current TS/JS syntax within an explicitly indexed file universe. */
+export function indexedTypeScriptImports(
+  projectRoot: string,
+  indexedFiles: readonly string[],
+  scope?: string,
+): IndexedImportEvidence {
+  const evidence: IndexedImportEvidence = { imports: [], unavailable: [] };
+  const files = readIndexedTypeScriptSources(projectRoot, indexedFiles, evidence);
+  if (files.size === 0) return evidence;
+  const project = maintenanceProject(listProjectFiles(projectRoot), [...files.keys()], (file) =>
+    readProjectFileText(projectRoot, file),
+  );
+  for (const [file, source] of files) {
+    if (scope && !file.includes(scope)) continue;
+    const parsed = parseSourceBindings(file, source);
+    const problems = [...project.problems, ...parsed.errors];
+    if (problems.length) evidence.unavailable.push({ file, reason: problems.join('; ') });
+    else evidence.imports.push(...maintenanceImports(parsed.sourceFile, files, project, parsed.checker));
+  }
+  return evidence;
+}
+
+function readIndexedTypeScriptSources(
+  projectRoot: string,
+  indexedFiles: readonly string[],
+  evidence: IndexedImportEvidence,
+): Map<string, string> {
+  const files = new Map<string, string>();
+  for (const file of indexedFiles.filter((file) => /\.[cm]?[jt]sx?$/.test(file))) {
+    try {
+      files.set(file, readProjectFileText(projectRoot, file));
+    } catch (error) {
+      evidence.unavailable.push({
+        file,
+        reason: `current source unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  }
+  return files;
 }

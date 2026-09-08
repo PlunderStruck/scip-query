@@ -15,15 +15,15 @@ import { importResolutionFingerprint, normalizePath } from '../source/primitives
 import { fileContentHash } from '../storage/evidence-cache.js';
 import { isRecord } from '../storage/evidence-payload.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../storage/evidence-products.js';
-import { createPerDbCache } from '../storage/per-db-cache.js';
+import { createPerDbFileCache } from '../storage/per-db-cache.js';
 import type { ParsedReExport, ParsedSourceExport, ParsedSourceImport } from '../domain/types.js';
 import { getSourceText } from '../source/primitives/source-text.js';
 import { getParserForPath } from './registry.js';
 
 const PARSER_CACHE_GROUPS = { clearGroups: ['whole-project', 'source-file'] } as const;
-const SOURCE_IMPORT_CACHE = createPerDbCache<string, ParsedSourceImport[]>('source-imports', PARSER_CACHE_GROUPS);
-const SOURCE_EXPORT_CACHE = createPerDbCache<string, ParsedSourceExport[]>('source-exports', PARSER_CACHE_GROUPS);
-const SOURCE_REEXPORT_CACHE = createPerDbCache<string, ParsedReExport[]>('source-reexports', PARSER_CACHE_GROUPS);
+const SOURCE_IMPORT_CACHE = createPerDbFileCache<ParsedSourceImport[]>('source-imports', PARSER_CACHE_GROUPS);
+const SOURCE_EXPORT_CACHE = createPerDbFileCache<ParsedSourceExport[]>('source-exports', PARSER_CACHE_GROUPS);
+const SOURCE_REEXPORT_CACHE = createPerDbFileCache<ParsedReExport[]>('source-reexports', PARSER_CACHE_GROUPS);
 
 interface SerializedSourceImports {
   parserVersion: 2;

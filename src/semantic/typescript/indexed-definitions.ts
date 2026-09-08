@@ -1,10 +1,10 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition } from '../../domain/types.js';
-import { createPerDbCache } from '../../storage/per-db-cache.js';
+import { createPerDbFileCache } from '../../storage/per-db-cache.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { leafName } from '../../symbols/symbol-parser.js';
 
-const TS_DEFINITION_LEAF_CANDIDATES = createPerDbCache<string, Map<string, IndexedDefinition[]>>(
+const TS_DEFINITION_LEAF_CANDIDATES = createPerDbFileCache<Map<string, IndexedDefinition[]>>(
   'ts-definition-leaf-candidates',
   { clearGroups: ['definition-catalog'] },
 );

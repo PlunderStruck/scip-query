@@ -38,7 +38,7 @@ import {
   parseSymbol,
   shortenSymbol,
 } from './symbol-parser.js';
-import { createPerDbCache, createPerDbValue } from '../storage/per-db-cache.js';
+import { createPerDbFileCache, createPerDbValue } from '../storage/per-db-cache.js';
 import { cleanSignature, extractSignature, type SymbolQueryRow } from '../storage/scip-rows.js';
 import { indexedDocumentPaths } from '../storage/scip-documents.js';
 import { fileContentHash, projectEvidenceFingerprint } from '../storage/evidence-cache.js';
@@ -69,7 +69,7 @@ export function definitionsGroupedByLeaf(definitions: readonly IndexedDefinition
 
 // Opt-in group: definition rows come from the read-only index, so they only
 // clear per file when a scan explicitly refines definitions from source.
-export const FILE_DEFINITION_CACHE = createPerDbCache<string, IndexedDefinition[]>('file-definitions', {
+export const FILE_DEFINITION_CACHE = createPerDbFileCache<IndexedDefinition[]>('file-definitions', {
   clearGroups: ['definition-catalog'],
 });
 
@@ -82,7 +82,7 @@ const SCOPED_MATCHED_DEFINITION_CACHE = createPerDbValue<
   clearGroups: ['definition-catalog'],
 });
 
-const FILE_FUNCTION_LIKE_DEFINITION_CACHE = createPerDbCache<string, IndexedDefinition[]>(
+const FILE_FUNCTION_LIKE_DEFINITION_CACHE = createPerDbFileCache<IndexedDefinition[]>(
   'file-function-like-definitions',
   {
     clearGroups: ['definition-catalog'],

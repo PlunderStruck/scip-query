@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-07",
+  "baseline": "a21c01de",
+  "status": "complete",
+  "findings": {
+    "A1": "fixed-and-verified",
+    "A2": "fixed-and-verified",
+    "A3": "fixed-and-verified",
+    "A4": "fixed-and-verified",
+    "A5": "fixed-and-verified"
+  },
+  "checks": {
+    "tests": {
+      "passed": 3416,
+      "files": 392,
+      "failed": 0,
+      "seconds": 252.85,
+      "indexingStateTests": 19
+    },
+    "build": "passed",
+    "lint": "passed",
+    "typecheck": "passed",
+    "publicApi": {
+      "status": "unchanged",
+      "identity": "b74137d6c422ca9c",
+      "paths": 66
+    },
+    "diffWhitespace": "passed"
+  },
+  "sourceReview": {
+    "coverage": {
+      "status": "accounted",
+      "analyzedFiles": 569,
+      "eligibleFiles": 569,
+      "excludedFiles": 2605,
+      "exclusions": {
+        "unsupported-language": 2146,
+        "test": 459
+      },
+      "dependencies": {
+        "resolutions": {
+          "internal": 3020,
+          "external": 76,
+          "builtin": 585,
+          "excluded": 2,
+          "missing": 0,
+          "ambiguous": 0,
+          "dynamic": 1
+        },
+        "typeOnly": 794,
+        "test": 0,
+        "deferredOrCommonJs": 33,
+        "unresolved": [
+          {
+            "file": "scripts/bench-native-symbol-leaf.mjs",
+            "line": 19,
+            "specifier": "`file://${distIndex}`",
+            "kind": "value",
+            "role": "production",
+            "syntax": "dynamic-import",
+            "configs": [
+              "tsconfig.json"
+            ],
+            "resolution": "dynamic"
+          }
+        ],
+        "excluded": [
+          {
+            "file": "scripts/accuracy-calibration.mjs",
+            "line": 48,
+            "specifier": "../dist/queries/index.js",
+            "kind": "value",
+            "role": "production",
+            "syntax": "import",
+            "configs": [
+              "tsconfig.json"
+            ],
+            "resolution": "excluded",
+            "excludedReason": "Requested managed output dist/queries/index.js; build/install existence is not established by the source inventory."
+          },
+          {
+            "file": "scripts/accuracy-calibration.mjs",
+            "line": 49,
+            "specifier": "../dist/index.js",
+            "kind": "value",
+            "role": "production",
+            "syntax": "import",
+            "configs": [
+              "tsconfig.json"
+            ],
+            "resolution": "excluded",
+            "excludedReason": "Requested managed output dist/index.js; build/install existence is not established by the source inventory."
+          }
+        ]
+      },
+      "analyzedFunctions": 13581,
+      "unresolvedImports": 0,
+      "testCoverage": {
+        "requested": false,
+        "available": 0,
+        "unavailable": 54,
+        "reasons": [
+          "No source-matched coverage artifact supplied."
+        ]
+      },
+      "problems": [],
+      "limits": [
+        "TS/JS implemented functions; metric rules typescript-function-local-v1. Cognitive counts structural nesting and logical sequences; recursion and interprocedural behavior are not measured.",
+        "Duplication compares whole function body tokens (at least 60 tokens), retaining literals and property names. Renamed local bindings are candidates; similarity does not prove interchangeable behavior or justify deletion.",
+        "Dependencies use compiler resolution over captured source and project configuration, including aliases, repository package exports, literal dynamic imports and unshadowed CommonJS calls. External packages, excluded targets and unresolved imports are distinguished. Production file cycles use static value imports; type/test/deferred relationships remain separate. Runtime handoffs and custom loaders are not inferred.",
+        "Ownership and mixed responsibilities require evidence about callers, state and business rules; this scan does not infer a correct owner or an architectural grade.",
+        "Default exclusions: tests/fixtures/benchmarks, reference/vendor copies, generated files, declarations and build output. Use --include-tests, --include-references or --include-generated for the corresponding source roles.",
+        "Diff is the selected Git commit versus current files, including untracked files; staged-only review and inferred rename/split identity are not claimed.",
+        "Coverage without matching source hashes is unavailable, never zero. Base CRAP is unavailable unless independently measured against that base.",
+        "Affected files are transitive importers in the covered source graph. Use fresh diff-impact/evidence for symbol consumers and runtime effects."
+      ]
+    },
+    "findings": 0,
+    "blockingFindings": 0
+  },
+  "indexedArchitecture": {
+    "coverage": {
+      "totalFiles": 582,
+      "mappedFiles": 582,
+      "unmappedFiles": [],
+      "ambiguousFiles": [],
+      "limitations": [
+        "This graph covers indexed documents and observed import/re-export relationships, supplemented by compiler-resolved current TS/JS imports (including literal dynamic imports, import types and unshadowed CommonJS). Unindexed files, nonliteral imports and unsupported relationships cannot establish repository-wide absence; allowances from boundaries without observed source files are not classified as unused.",
+        "Unused-allowance claims are withheld for owners with unavailable or unresolved current TS/JS imports:",
+        "tests/fixtures/public-api-consumer/index.ts: 1: scip-query (missing)",
+        "tests/fixtures/public-api-consumer/index.ts: 3: scip-query/queries/files (missing)",
+        "tests/fixtures/public-api-consumer/index.ts: 4: scip-query/queries/refs (missing)",
+        "tests/fixtures/public-api-consumer/index.ts: 5: scip-query/queries/methods (missing)",
+        "tests/fixtures/public-api-consumer/index.ts: 11: scip-query/queries/context (missing)",
+        "tests/fixtures/public-api-consumer/index.ts: 20: scip-query/queries/diff-impact (missing)",
+        "tests/fixtures/public-api-consumer/index.ts: 21: scip-query/reindex (missing)",
+        "tests/fixtures/public-api-consumer/index.ts: 28: scip-query/runtime (missing)",
+        "tests/properties/boundaries.property.test.ts: 15: ../fixtures/query-service-requests.js (excluded)",
+        "tests/properties/fixture.ts: 6: ../fixtures/evidence-fixture.js (excluded)",
+        "tests/properties/indexer-history-fixture.ts: 15: ../fixtures/typescript-oracle.js (excluded)",
+        "tests/properties/indexing-compiler.ts: 12: ../fixtures/typescript-oracle.js (excluded)",
+        "tests/properties/indexing-fixtures.ts: 3: ../fixtures/evidence-fixture.js (excluded)"
+      ]
+    },
+    "policy": {
+      "declaredRows": 56,
+      "totalBoundaries": 56,
+      "missingRows": [],
+      "requiresCompletePolicy": true,
+      "requiresCompleteCoverage": true,
+      "requiresMinimalPolicy": true
+    },
+    "counts": {
+      "forbiddenEdges": 0,
+      "testForbiddenEdges": 0,
+      "testBoundaryViolations": 0,
+      "cycles": 0,
+      "coarseBoundaries": 0,
+      "staleAllowances": 0,
+      "boundaryLimits": 0
+    }
+  },
+  "diffImpact": {
+    "totalChangedFiles": 24,
+    "totalChangedSymbols": 52,
+    "totalAffectedFiles": 55,
+    "note": "15 changed path(s) were omitted from symbol analysis because they are absent or excluded from this index. Reindex supported source or use review for current-source analysis."
+  },
+  "thresholdsRaised": false,
+  "suppressionsAdded": false,
+  "committed": false,
+  "deployed": false,
+  "agentBenchmarksRun": false
+}

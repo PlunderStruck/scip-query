@@ -8,6 +8,7 @@ import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { testBoundaryViolations, type TestBoundaryViolation } from './test-boundary-policy.js';
 import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
 import { architectureBoundaryForFile } from '../internal/architecture-policy.js';
+import { indexedTypeScriptImports, type IndexedImportEvidence } from '../../source/ast/maintenance-imports.js';
 
 export type ArchitecturePolicyStatus = 'allowed' | 'forbidden' | 'undeclared';
 
@@ -182,7 +183,7 @@ export function analyzeArchitectureGraph(
     excludedTestEdges: production.excludedTestEdges,
     basis: 'production-imports-including-types',
     cycleMeaning:
-      'Boundary cycles concern declared groups. File cycle members, when present, concern static imports including types; neither establishes a runtime initialization failure.',
+      'Boundary cycles concern declared groups. File cycle members, when present, concern observed imports including types and deferred imports; neither establishes a runtime initialization failure.',
   };
   if (!config || config.boundaries.length === 0) {
     return {
@@ -355,13 +356,9 @@ function reciprocalArchitecturePairs(
 
 /** Build and analyze the current project's import dependency graph. */
 export function architecture(db: ScipDatabase, opts: { scope?: string } = {}): ArchitectureReport {
-  const graph = buildFileDepGraph(db, opts.scope, {
-    scipEdges: 'imports-only',
-    sourceEdges: 'imports-and-reexports',
-  });
-  const files = indexedDocumentPaths(db, { includeIgnored: false }).filter(
-    (file) => !opts.scope || file.includes(opts.scope),
-  );
+  const indexedFiles = indexedDocumentPaths(db, { includeIgnored: false });
+  const { graph, unresolved } = architectureImportGraph(db, indexedFiles, opts.scope);
+  const files = indexedFiles.filter((file) => !opts.scope || file.includes(opts.scope));
   // Hoisted: this is consulted once per import of every test file, so building
   // it per lookup turns the test-boundary pass into an O(files x imports) scan.
   const sourceFiles = new Set(files);
@@ -377,9 +374,47 @@ export function architecture(db: ScipDatabase, opts: { scope?: string } = {}): A
   });
   report.coverage.limitations = [
     ...(report.coverage.limitations ?? []),
-    'This graph covers indexed documents and observed import/re-export relationships. Unindexed files and unsupported relationships cannot establish repository-wide absence; allowances from boundaries without observed source files are not classified as unused.',
+    'This graph covers indexed documents and observed import/re-export relationships, supplemented by compiler-resolved current TS/JS imports (including literal dynamic imports, import types and unshadowed CommonJS). Unindexed files, nonliteral imports and unsupported relationships cannot establish repository-wide absence; allowances from boundaries without observed source files are not classified as unused.',
   ];
+  qualifyUnresolvedArchitectureImports(report, unresolved, db.config.architecture);
   return report;
+}
+
+function architectureImportGraph(db: ScipDatabase, files: readonly string[], scope?: string) {
+  const indexed = buildFileDepGraph(db, scope, {
+    scipEdges: 'imports-only',
+    sourceEdges: 'imports-and-reexports',
+  });
+  // The navigation graph is cached and shared. Supplement an owned copy so
+  // architecture policy does not change other consumers' relationship contract.
+  const graph = new Map([...indexed].map(([file, targets]) => [file, new Set(targets)]));
+  const evidence = indexedTypeScriptImports(db.config.projectRoot, files, scope);
+  const unresolved = evidence.unavailable;
+  for (const edge of evidence.imports) {
+    if (!['internal', 'external', 'builtin'].includes(edge.resolution))
+      unresolved.push({ file: edge.file, reason: `${edge.line}: ${edge.specifier} (${edge.resolution})` });
+    if (edge.resolution !== 'internal' || !edge.target) continue;
+    const targets = graph.get(edge.file) ?? new Set<string>();
+    targets.add(edge.target);
+    graph.set(edge.file, targets);
+  }
+  return { graph, unresolved };
+}
+
+function qualifyUnresolvedArchitectureImports(
+  report: ArchitectureReport,
+  unresolved: IndexedImportEvidence['unavailable'],
+  config?: ArchitectureConfig,
+): void {
+  if (unresolved.length === 0) return;
+  const owners = new Set(unresolved.map((edge) => architectureBoundaryForFile(config, edge.file)));
+  // An unknown target cannot prove an outgoing allowance unused.
+  report.staleAllowances = report.staleAllowances.filter((allowance) => !owners.has(allowance.from));
+  report.coverage.limitations ??= [];
+  report.coverage.limitations.push(
+    'Unused-allowance claims are withheld for owners with unavailable or unresolved current TS/JS imports:',
+    ...unresolved.map((edge) => `${edge.file}: ${edge.reason}`),
+  );
 }
 
 /**

@@ -1,506 +1,187 @@
-# scip-query Target Architecture
-
-Date: 2026-07-23
-
-## Purpose
-
-This document turns the repository's directory graph into an explicit target
-architecture. It is not a claim that every dependency should form one global
-layer stack. scip-query contains delivery code, use cases, evidence engines,
-language adapters, persistence, and compiler integrations; those are different
-kinds of responsibility and should be judged by the direction in which they
-depend on one another.
-
-An ownership boundary is a named group of files that has one stable reason to
-change. The referents here are the configured `src/domain/**`,
-`src/storage/**`, `src/queries/**`, and related directory groups. What
-distinguishes a real boundary from a folder label is that its files own one
-kind of decision and expose contracts that let other responsibilities use it
-without importing its implementation policy.
-
-A dependency direction is an architectural constraint on which responsibility
-may know another. The referents are resolved ordinary imports and
-`export ... from` dependencies summarized by `scip-query architecture`. What
-makes the direction architectural is that it keeps mechanisms from deciding
-higher-level policy: a persistence module may store an outcome record, but it
-must not import the query workflow that decides what the outcome means.
-
-A port is a consumer-owned capability contract through which a higher-level
-decision uses a lower-level mechanism. The `isIgnored(relativePath)` behavior
-needed by `ScipDatabase` is the immediate referent. Its essential trait is that
-the consumer names only the operation it requires, so it does not depend on the
-producer's larger concrete interface or directory.
-
-## Current Evidence
-
-The working-tree architecture command reports:
-
-- 351 of 351 indexed files mapped, with no ambiguous files;
-- 34 enforced boundaries;
-- 205 observed cross-boundary dependency relationships;
-- 34 of 34 closed dependency rows;
-- 0 forbidden relationships;
-- 0 reciprocal boundary pairs;
-- 0 strongly connected multi-boundary groups;
-- 0 unresolved coarse boundaries.
-
-Source: `scip-query architecture --json` on 2026-07-24.
-
-The mapping and policy are complete. `requireCompletePolicy` rejects a missing
-outgoing dependency row, while `requireAcyclic` rejects a multi-boundary
-strongly connected component. The analyzer includes resolved re-exports only
-for architecture; the shared dependency graph retains its import-only default,
-so navigation, incremental indexing, similarity, and semantic consumers keep
-their established work profile.
-
-## Enforced Boundary Responsibilities
-
-| Boundary                 | Stable responsibility                                                                   |
-| ------------------------ | --------------------------------------------------------------------------------------- |
-| `analysis`               | Cross-cutting evidence interpretation, including history and file classification        |
-| `domain`                 | Dependency-free values, configuration shapes, identities, and project-input transitions |
-| `instrumentation`        | Dependency-free profiling primitives                                                    |
-| `platform`               | Host, toolchain, process, cache, and verified-binary mechanisms                         |
-| `public-api`             | Published library exports                                                               |
-| `queries-cleanup`        | Cleanup detectors and candidate production                                              |
-| `queries-compatibility`  | Deprecated type-only contracts retained for bounded source compatibility                |
-| `queries-facade`         | Public query aggregation and export registration                                        |
-| `queries-frontend`       | Framework-specific analysis products                                                    |
-| `queries-graph`          | Architecture and graph reports                                                          |
-| `queries-health`         | Composite health collection and health-baseline orchestration                           |
-| `queries-impact`         | Change-impact and diff-gate workflows                                                   |
-| `queries-internal`       | Shared query evidence, policy, and baseline-file primitives                             |
-| `queries-navigation`     | File and symbol navigation                                                              |
-| `queries-quality`        | Complexity and self-audit queries                                                       |
-| `queries-utils`          | Common query result normalization and formatting                                        |
-| `reindex`                | Index construction and generation orchestration                                         |
-| `reindex-augmentation`   | Post-index source augmentation                                                          |
-| `reindex-vue`            | Vue-specific index augmentation                                                         |
-| `runtime-command-kit`    | Reusable command definition and execution machinery                                     |
-| `runtime-commands`       | Top-level command catalog, registry, and handlers                                       |
-| `runtime-entry`          | CLI and package executable entry points                                                 |
-| `runtime-query-commands` | Query command adapters and renderers                                                    |
-| `runtime-services`       | Watch, setup, diagnostic, and delivery services                                         |
-| `rust-kernels`           | Native package implementation                                                           |
-| `semantic-contracts`     | Provider-neutral semantic contracts                                                     |
-| `semantic-core`          | Provider selection, caching, and shared semantic orchestration                          |
-| `semantic-rust`          | rust-analyzer-backed semantic evidence                                                  |
-| `semantic-typescript`    | TypeScript-compiler-backed semantic evidence                                            |
-| `source`                 | Source text, AST, import parsing, language adapters, and framework facts                |
-| `storage`                | SQLite, cache, and repository-file persistence                                          |
-| `symbols-core`           | Symbol catalog, identity, and attribution                                               |
-| `symbols-graph`          | File and call dependency graph construction                                             |
-| `symbols-references`     | Reference and caller discovery                                                          |
-| `tla`                    | Formal-model use cases and tooling                                                      |
-
-## Target Responsibility Flow
-
-Dependencies should normally move downward through these responsibility bands:
-
-1. **Delivery** — `public-api` and the `runtime-*` boundaries.
-2. **Use cases** — the `queries-*`, `reindex*`, and `tla` boundaries.
-3. **Evidence engines** — `analysis`, `semantic-*`, and `symbols-*`.
-4. **Adapters and persistence** — `source` and `storage`.
-5. **Stable contracts and leaf mechanisms** — `domain`, `instrumentation`,
-   `platform`, and native package boundaries.
-
-This is a default direction, not a license to create forwarding wrappers. When
-two evidence engines genuinely cooperate, they should share a narrowly named
-domain contract or be treated as one subsystem. A reciprocal pair is resolved
-by identifying ownership, not by inserting an interface whose only purpose is
-to hide the import.
-
-## First Cleanup Ledger
-
-The initial review found three forbidden relationships leaving `storage`.
-They were removed in the first refactor slice and their baseline identities
-were deleted only after the rebuilt graph reported zero forbidden
-relationships.
-
-### `storage -> source`
-
-`ScipDatabase` imports the concrete `PathFilter` type but calls only
-`isIgnored(relativePath)`. The storage consumer should own that minimal
-capability. The source-owned Gitignore implementation will satisfy it
-structurally.
-
-Disposition: resolved through the consumer-owned `PathExclusionPolicy` port.
-
-### `storage -> queries`
-
-`outcome-events.ts` imports finding-outcome records and `ledgerKey` from a
-health query module. Those values describe detector-outcome identity and
-transition state independently of either query orchestration or persistence.
-
-Disposition: resolved. The pure model and event transition now live in
-`domain`; the SQLite health ledger shell remains in `queries/health`, and JSON
-persistence remains in `storage`.
-
-### `storage -> analysis`
-
-`outcome-events.ts` invokes `runGit` to resolve HEAD and worktree cleanliness.
-The runtime already owns `resolveGitWorktreeContext()` and `gitOutput()`.
-
-Disposition: resolved. Git inspection now reuses the existing runtime worktree
-capability in the runtime outcome orchestrator.
-
-## Second Cleanup Ledger
-
-The next migration removed the accidental `core` package. Query evidence
-orchestration moved to `queries/internal`, regex escaping moved to `source`,
-and host binary mechanisms moved to the new closed `platform` boundary. That
-removed nine boundary relationships and the `core/source` and `core/symbols`
-reciprocal pairs.
-
-The project-path contract then moved from `source` to `domain`. It defines
-repository path identity for every subsystem rather than extracting source
-facts. That removed the `resolution/source` reciprocal pair and made it safe
-to close the `resolution` dependency row.
-
-## Third Cleanup Ledger
-
-Reusable host mechanisms now live in `platform`: process liveness, Git
-worktree identity, token-owned cache locks, installed CLI identity, SCIP
-binary resolution, deterministic cache layout, and the persisted watch-service
-state contract. A host mechanism is an operation that reports or changes
-operating-system state without choosing a user workflow; this is what
-distinguishes these files from runtime delivery and command policy.
-
-The moves preserve each implementation and reroute existing callers directly,
-so they add no wrapper call, polling loop, filesystem operation, Git process,
-hash calculation, or serialization step. `platform` depends only on stable
-`domain` contracts used by cache layout and persisted watch-state validation.
-
-The persisted watch-service state contract is the versioned JSON record that
-lets runtime, reindex, and semantic processes agree on watcher identity,
-liveness, index generation, and nested TypeScript service status. Its
-essential characteristic is that it validates the complete stored record
-without starting, stopping, or otherwise controlling the process. The schema,
-paths, reader, parser, and all nested validators therefore moved together to
-`platform/watch-service-state.ts`; runtime retains process lifecycle, activity
-and lock mutation, and the existing atomic writer. The stored identity now
-includes the operating-system process start token as well as the reusable PID;
-runtime must verify both before a stop or replacement signal.
-
-Protocol version 5 adds the validated refresh-request status snapshot and the
-checkout-local `watch-refresh-requests/` path. The authoritative request,
-claim, and completion records belong to `storage`; the runtime watch
-coordinator couples those records to watcher transitions, while `platform`
-continues to own only the process-neutral state schema and paths. Persisted
-record decoders share dependency-free object, timestamp, scalar-number,
-non-empty string, bounded one-line string, and string-or-null-record predicates in
-`domain/record-validation.ts` rather than creating cross-dependencies between
-storage, reindex, platform, and semantic protocols.
-
-The nested TypeScript semantic and index snapshots now also expose the
-bounded-mailbox state owned by `storage/bounded-mailbox.ts`: pending,
-owner-specific inflight, retained response, and dead-letter counts plus the
-retained byte total and oldest enqueue time. `platform/watch-service-state.ts`
-validates that passive snapshot without owning admission, claim, expiry, or
-cleanup policy. Runtime remains the service coordinator that asks each
-mailbox host for its current snapshot when it durably publishes watch state.
-This keeps cross-process lifecycle policy in storage/runtime while preserving
-platform as a process-neutral decoder.
-
-Admission also returns the deadline from the authoritative pending, inflight,
-or completed operation, and completion records retain it. Domain protocols
-such as durable Rust can therefore require an exact response deadline without
-putting civil time into the content-derived logical-operation identity or
-breaking first-completion retry convergence.
-
-Each owner-specific inflight directory records a process instance: a PID plus
-the operating-system start token that distinguishes successive processes
-reusing that PID. Storage owns the pure record parser and equality rule;
-service coordinators supply host liveness observations from `platform`.
-Expired civil-clock lease age therefore permits reclamation only when the
-recorded process is proven dead or now has a different start token. A live or
-unverifiable owner fails closed. Admission and claim waits use monotonic time,
-while persisted enqueue, expiry, retention, and diagnostic fields remain civil
-timestamps.
-
-The state union includes `draining`, the live interval in which the owner has
-stopped accepting refreshes but has not yet closed every subscription and
-reaped its active reindex child. Runtime persists the reason and continues to
-reuse that live service rather than starting another owner. Only a successful
-drain removes the service record and releases its process lock; an unproven
-exit remains visible as degraded ownership.
-
-The runtime module directly re-exports the former read-side names for source
-compatibility, but internal consumers now import their owner directly. The
-parser still accepts a numeric protocol version so runtime can classify an
-otherwise valid older record as incompatible rather than erasing that
-diagnostic distinction.
-
-Measured after reindex, the final `reindex -> runtime` and
-`semantic -> runtime` edges are gone. The boundary graph fell from 60 to 58
-relationships and from four to two reciprocal pairs. It maps all 343 files,
-reports zero forbidden relationships, and reduces the only strongly connected
-group from nine boundaries to five.
-
-## Fourth Cleanup Ledger
-
-The project-input and toolchain extraction removed all nine
-`semantic -> reindex` file edges. Stable snapshot records, input
-classification, checked parsing, change manifests, and the file-dependency
-graph type now live in `domain`. A project-input transition is the pure
-comparison that reports changed repository facts and uncertainty; reindex
-still owns the separate decision to widen those facts into a dependency
-closure or full-project rebuild.
-
-Live Git/filesystem enumeration and hashing live in
-`platform/project-files.ts`. Fixed command observations compose that boundary
-with `platform/project-observation-snapshot.ts` and its async-local snapshot
-context, so a producer reads one stable Git-tree-plus-overlay state instead of
-mixing live bytes across its interval. Completion contexts and evaluations are
-derived evidence about that state, so the snapshot boundary excludes those
-output directories while retaining goals, intended changes, obligations,
-suppressions, and configuration as completion-relevant inputs.
-Executable discovery, project-local and bundled indexer resolution,
-dependency status, and .NET runtime probing now live in
-`platform/indexer-toolchain.ts`. Reindex retains indexer invocation and
-installation policy. Rust semantic readiness and Rust SCIP indexing reuse one
-rust-analyzer descriptor and one resolver.
-
-The published reindex entry directly re-exports its established names from the
-new owners, while unused internal compatibility facades were removed. The move
-adds no filesystem operation, Git process, hash, executable probe, availability
-cache, or forwarding function.
-
-Measured after reindex, all 345 files are mapped, cross-boundary relationships
-fell from 58 to 57, reciprocal pairs fell from two to one, and the only
-strongly connected group fell from five boundaries to four. `reindex` is no
-longer in that group, and architecture drift reports zero findings.
-
-## Fifth Cleanup Ledger
-
-The semantic-evidence inversion removed all eight `symbols -> semantic` file
-edges. `symbols/semantic-evidence-port.ts` now names only the compiler-resolved
-reference, caller, and callee facts required by symbol attribution and graph
-construction. A semantic-evidence port is the consumer-owned operation set
-through which symbol logic can request those optional facts without knowing
-which compiler provider, engine identity, or cache produces them.
-
-`semantic/symbol-evidence.ts` implements that contract and now owns the complete
-durable semantic-callee cache operation: in-memory prefetch consumption,
-persistent cache reads, dependency and engine identities, miss computation,
-provider-availability qualification, writes, and runtime prewarm. The move
-preserves cache keys, payloads, profiling spans, and the early return that keeps
-a full cache hit from constructing the provider.
-
-Higher-level query orchestration passes one stateless adapter into symbol fact
-operations. There is no service locator, global registration, new cache, new
-filesystem operation, new dependency-graph pass, or new provider probe.
-`semantic: false` decisions and the existing AST/semantic/SCIP precedence are
-unchanged.
-
-Measured after reindex, all 347 files are mapped, cross-boundary relationships
-fell from 57 to 56, reciprocal pairs fell from one to zero, and the only
-strongly connected group fell from four boundaries to three. The remaining
-group is `resolution`, `source`, and `symbols`; `semantic` is no longer in a
-cycle. `symbols -> semantic` is empty and the intended `semantic -> symbols`
-direction remains.
-
-## Sixth Cleanup Ledger
-
-The final slice decomposed the misleading `resolution` boundary by moving each
-implementation to the responsibility whose decisions it serves:
-
-- language import-specifier resolution moved unchanged to
-  `source/import-path-resolver.ts`;
-- workspace-manifest discovery moved unchanged to
-  `platform/workspace-packages.ts`;
-- user file-pattern lookup moved unchanged to
-  `queries/internal/file-resolution.ts`.
-
-This was an ownership correction, not a new abstraction. Existing callers
-import the implementations from their owners; there is no compatibility
-wrapper, added filesystem pass, added cache, or changed resolution algorithm.
-The file-level graph remained acyclic, and removing the mixed directory
-eliminated the false `resolution/source/symbols` boundary component.
-
-Architecture now opts into the existing resolved re-export evidence. That
-exposes the five dependencies from `src/index.ts` that its public surface had
-always carried but the import-only view could not observe. The opt-in mode has
-separate memory and durable cache identities; every other
-`buildFileDepGraph` caller keeps the import-only default.
-
-The measured graph then supplied the exact outgoing targets for every
-boundary. `.scipquery.json` closes every row, `requireCompletePolicy` prevents
-a future omitted row from silently reopening one boundary, and `requireAcyclic`
-prevents a future multi-boundary cycle.
-
-**Superseded 2026-07-24.** The 14-boundary configuration described above
-reported zero cycles, but that result was an artifact of granularity rather
-than a property of the code: same-boundary dependencies are always allowed, so
-every edge inside a boundary was discarded before the check ran. Six of the 14
-boundaries — holding 295 of 348 files — each contained an internal cycle the
-policy could not express. The configuration is now **34 boundaries over 351
-files with 205 allowed relationships**, and `requireResolvedBoundaries` keeps
-each boundary's own sub-directory quotient acyclic so the guarantee survives
-future growth. Zero forbidden edges, undeclared edges, reciprocal pairs,
-cycles, or coarse boundaries.
-
-## Ownership Decisions for Evidence Direction
-
-In the target direction `A -> B`, code in `A` may import code in `B`; the
-reverse import must be removed before either row is closed. A merge means two
-directories are one enforced subsystem because their files collaborate to
-produce the same kind of result.
-
-| Original pair                 | Target decision                  | Reason                                                                                                                                                               | Migration status                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ----------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `language-parsers <-> source` | Merge into the `source` boundary | Both directories derive syntactic facts from source text. Fourteen parser files use source primitives, while the source evidence facade invokes the parser registry. | Complete, and the merge now holds without a reciprocal dependency. `source-evidence.ts` — the one file importing the parser registry from the source side — moved into `src/language-parsers/`, its true owner. `src/source` was then layered into `primitives/ -> ast/ -> facts/ -> vue/` with the products facade at the root, so the merged boundary is internally acyclic and the directory names still distinguish shared primitives from language-specific strategies. |
-| `semantic <-> symbols`        | Keep `semantic -> symbols`       | Semantic providers translate compiler results into repository symbol identities and graphs; symbol facts need optional compiler evidence without provider knowledge. | Complete: the symbols-owned port is implemented in `semantic` and passed by query orchestration. `symbols -> semantic` is empty, and no reciprocal pair remains.                                                                                                                                                                                                                                                                                                             |
-
-Evidence: `node dist/cli.js architecture --json`;
-`node dist/cli.js imports src/language-parsers/source-evidence.ts --json`;
-`node dist/cli.js imports src/reindex/index.ts --json`;
-`node dist/cli.js imports src/reindex/shared-generation-store.ts --json`;
-`node dist/cli.js imports src/storage/atomic-file.ts --json`;
-`node dist/cli.js imports src/storage/atomic-json.ts --json`;
-`node dist/cli.js system src/semantic --json`;
-`node dist/cli.js imports src/semantic/typescript/remote-provider.ts --json`;
-`node dist/cli.js imports src/symbols/identifier-attribution.ts --json`; and
-`node dist/cli.js imports src/symbols/references/reference-callers.ts --json`.
-The atomic-file and atomic-JSON boundary direction was reverified on
-2026-07-27. Complete-descriptor writes, durable directory-chain creation, and
-final-mode artifact cloning live in the dependency-free
-`src/filesystem/` boundary. `src/storage/atomic-file.ts` exposes those
-filesystem mechanics as the storage publication boundary and owns replacement
-plus exclusive first publication through flushed staging inodes and durable
-names. Reindex consumes that storage boundary rather than importing filesystem
-mechanics directly. The revision-aware coordinator belongs to
-`runtime-services`, where it combines storage publication with the platform
-process-lock protocol.
-
-The storage-to-platform direction was revised on 2026-07-26 for immutable
-SQLite generation reader leases. A reader lease is a process-owned durable
-claim that prevents collection of the exact immutable generation backing an
-open database. Its safety depends on three host facts that storage must not
-reimplement: token-owned interprocess locking, process liveness, and process
-start identity. `storage/sqlite-generation.ts` therefore depends directly on
-those platform primitives while it resolves and leases the generation as one
-atomic storage operation. This is an inward dependency on operating-system
-adapters, not a dependency on runtime orchestration; it avoids both a
-resolve-before-lease race and a second, weaker lock protocol inside storage.
-
-The shared-generation direction was reverified on 2026-07-29. Reindex owns
-generation identity, lease validation, and the liveness-only merge; it depends
-on the platform-owned repository-cache lock and storage-owned durable JSON
-publication. Lease attachment, touch, and cleanup use that same lock, so no
-reverse `platform -> reindex` or `storage -> reindex` dependency is needed to
-prevent a stale touch from restoring an older generation. Dirty worktree cache
-forking preserves the same direction: reindex selects and hydrates an exact
-committed baseline, then records a base-only overlay lease after the private
-publication. Runtime status and cleanup read that lease; they do not participate
-in selecting or mutating index artifacts.
-
-The reindex-metadata direction was reverified on 2026-07-25.
-`src/domain/reindex-metadata.ts` is the dependency-free version, validation,
-and capability boundary. Reindex, runtime services, semantic sessions, and
-storage identity/cache consumers depend inward on it; the domain decoder
-depends only on domain language, record/timestamp, and project-file
-validators. Generic object-record, non-empty string, and bounded one-line
-string predicates now live beside the timestamp predicate in
-`src/domain/record-validation.ts` and are also reused by config and JSON
-protocol decoders. This keeps
-future-version rejection identical without introducing a reverse domain
-dependency.
-
-The immutable SQLite generation handoff was reverified on 2026-07-27.
-`src/reindex/index.ts` coordinates publication, while
-`src/storage/atomic-file.ts` exposes durable path and artifact publication from
-the low-level filesystem boundary. The reindex layer therefore reports exact
-achieved durability without acquiring a direct `reindex -> filesystem`
-dependency. `src/storage/sqlite-generation.ts` authenticates manifest digests
-and resolves the current pointer into one retained database, metadata, and
-SCIP artifact set. `src/semantic/typescript/remote-provider.ts` carries that
-retained generation identity into the semantic mailbox instead of rereading a
-mutable compatibility path. The generation identity is part of the mailbox
-operation key, so retries for one immutable generation join the same logical
-operation while a later published generation is necessarily a distinct
-request.
-
-The untrusted-artifact read direction was reverified on 2026-07-26.
-`src/filesystem/bounded-file.ts` is the dependency-free owner of
-descriptor-bound regular-file reads, byte budgets, changed-during-read checks,
-and streaming hashes. Platform and storage expose boundary-specific facades
-over that primitive; they do not duplicate its safety policy. Repository
-regular-expression budgets are a dependency-free domain rule, so analysis can
-compile configured test patterns without importing host-platform mechanisms.
-Post-index augmentation is the one augmentation layer that owns a file-backed
-fingerprint cache, so its closed dependency row deliberately includes the
-filesystem primitive alongside source facts. This is narrower than allowing
-augmentation to depend on the full platform or storage layers.
-
-The `semantic -> symbols` row is now closed together with the rest of
-semantic's classified outgoing relationships. The intended direction is
-observed without a reverse import.
-
-## No-Move Decisions
-
-- Do not move the entire `outcome-events.ts` file under `queries`. That would
-  make filesystem persistence look like query policy rather than separating
-  the mixed responsibilities.
-- Do not allow `storage -> source`, `storage -> analysis`, or
-  `storage -> queries` merely to produce a clean report. The existing closed
-  storage row expresses the correct mechanism boundary.
-- Do not disable `requireCompletePolicy` or `requireAcyclic` to accommodate a
-  regression. Repair the ownership direction, or deliberately revise the
-  complete contract with evidence.
-- Do not re-split `source` and `language-parsers` merely to force a layer
-  direction. They form one source-fact subsystem; their directory names still
-  usefully distinguish shared primitives from language-specific strategies.
-  This rule was tested on 2026-07-24: the subsystem did contain a real cycle,
-  and the repair was an ownership correction inside the merged boundary
-  (relocating `source-evidence.ts`, then layering `src/source`), not a split.
-  `requireResolvedBoundaries` now enforces the internal structure directly, so
-  a future cycle here surfaces without needing separate boundaries.
-- Do not bulk-move files based only on locality candidates. The current
-  locality report mostly withholds exact destinations because consumers are
-  repository-wide.
-
-## Migration Order
-
-1. **Complete:** remove all three `storage` leaks while preserving behavior,
-   then remove their stable baseline identities.
-2. **Complete:** decompose `core` into `platform`, `queries/internal`, and
-   source-pattern owners.
-3. **Complete:** move the project-path contract into `domain`, remove the
-   `resolution <-> source` reciprocal pair, and close `resolution`.
-4. **Complete:** govern `source` and `language-parsers` as one source-fact
-   boundary, removing a false reciprocal relationship from the policy graph.
-5. **Complete:** move reusable host mechanisms from `runtime` to `platform`.
-   Worktree identity, process liveness, cache locking and layout, CLI identity,
-   SCIP binary resolution, and the complete persisted watch-state contract now
-   live below runtime. Runtime retains delivery and process-lifecycle policy.
-6. **Complete:** extract project-input and toolchain contracts so semantic no
-   longer imports reindex implementation files. Pure transitions live in
-   `domain`; host fingerprinting and executable discovery live in `platform`;
-   reindex retains affected-set, invocation, and installation policy.
-7. **Complete:** introduce the symbols-owned semantic-evidence port, move
-   semantic cache/provider mechanics behind its semantic adapter, wire
-   higher-level orchestration, and remove `symbols -> semantic`.
-8. **Complete:** decompose the mixed `resolution` directory into `source`,
-   `platform`, and `queries/internal`, preserving each implementation.
-9. **Complete:** include resolved re-export edges in architecture's opt-in
-   graph view, derive and close all 14 dependency rows from the rebuilt graph,
-   and enable complete-policy and acyclicity enforcement.
-
-## Completion Criteria
-
-The architecture is now clean enough to govern changes because:
-
-- every mapped boundary has one documented responsibility;
-- every boundary has a closed outgoing row with no forbidden edge;
-- no relationship remains undeclared;
-- stable contracts live below the mechanisms that implement them;
-- delivery code does not supply reusable lower-level infrastructure;
-- the architecture baseline contains accepted debt, not false boundary
-  definitions;
-- `scip-query architecture`, `drift --architecture`, and the default
-  `diff-gate` agree on the same project-owned policy.
-
-Future work may still improve internal cohesion within a boundary, especially
-the broad delivery and query boundaries. That is a refinement of an enforced,
-acyclic dependency contract rather than unresolved cross-boundary debt.
+# scip-query architecture
+
+This is the current ownership guide. [`.scipquery.json`](../../.scipquery.json)
+is the executable file membership and dependency policy. The
+[September audit](../plans/2026-09-07-architecture-audit.md) and
+[fix record](../plans/2026-09-07-architecture-fixes.md) explain the latest changes.
+The [previous guide](history/2026-09-07-target-architecture.md) preserves historical
+migrations and measurements; use this guide and the current reports for new work.
+
+## How to read the structure
+
+An ownership boundary is a named group of source files responsible for one kind
+of decision. For example, the storage files decide how records are retained and
+published; query files decide which evidence answers a request. Files belong
+together because callers can rely on that decision being made in one place.
+A directory is evidence about organization, but its name alone does not establish
+ownership.
+
+A dependency is a source relationship in which one file imports or re-exports
+another file's definitions. In the policy, `A -> B` permits files owned by `A` to
+use definitions owned by `B`. Each boundary has a closed outgoing row: targets
+absent from that row are forbidden. A dependency cycle is a chain of these
+relationships that returns to its starting owner, making the participants rely
+on one another to change or initialize.
+
+An interface is the set of operations and values a caller must understand to use
+an owner. A useful interface hides decisions that callers should not repeat.
+Export counts and argument counts can locate candidates for review; they cannot
+establish that the interface hides the right decisions. Judge that by tracing an
+actual feature and the changes its callers must make.
+
+## Main owners
+
+| Owner | Decision it owns |
+| --- | --- |
+| `domain` | Shared identities, value shapes, validation rules and project-input transitions, without host operations |
+| `filesystem` | Bounded descriptor reads and durable low-level file operations |
+| `instrumentation` | Profiling observations |
+| `platform` | Host process identity, tool discovery, project-file observation, cache layout and locks |
+| `storage` | SQLite access, retained generations, durable records, mailbox storage and cache lifetimes |
+| `source` | Current-text and syntax facts, including the language parser strategies |
+| `symbols-core`, `symbols-references`, `symbols-graph` | Repository symbol identity, references, and indexed dependency/call relationships |
+| `semantic-contracts` | Provider-independent semantic request and result contracts |
+| `semantic-core`, `semantic-typescript`, `semantic-rust` | Provider selection and compiler-backed evidence |
+| `analysis` | Shared interpretation of repository evidence |
+| `queries-*` | Exploration, graph, health, impact and other query products; the exact subdivisions are in the policy |
+| `reindex`, `reindex-augmentation`, `reindex-vue` | Affected-work selection, index construction and publication, and source augmentation |
+| `public-api` | Published library exports |
+| `runtime-entry`, `runtime-commands`, `runtime-query-commands`, `runtime-command-kit` | Command composition, registration and delivery adapters |
+
+The policy also covers shipped tooling, native packages, explicitly selected
+shared test fixtures, and `property-verification` for the generated state and
+input checks under `tests/properties`. That test harness may exercise source,
+storage, indexing, query and runtime protocols; production owners cannot import it. The inventory command below lists every configured group
+and its coverage. The table explains the principal responsibilities rather than
+duplicating the complete dependency matrix.
+
+`source` includes both `src/source` and `src/language-parsers`: they produce syntax
+facts together. Semantic providers supply compiler binding and type evidence, a
+different guarantee. Preserve that distinction when choosing an existing parser
+or provider. Symbol code receives the optional semantic operations it needs
+through a symbols-owned capability contract implemented by the semantic layer;
+it does not import provider orchestration.
+
+Storage may use platform process identity and locking to retain the exact
+immutable database backing a reader. Platform does not choose query workflows.
+Reindex uses storage publication operations; it does not implement a second
+filesystem publication protocol. Shared record decoders live in domain so
+storage, reindex, semantic workers, and runtime can agree without importing one
+another's workflows.
+
+## Runtime responsibilities
+
+The top-level runtime files have exact membership in these groups. They remain
+in their existing locations; enforcement follows the decisions they own.
+
+| Owner | Responsibility | Permitted runtime dependencies |
+| --- | --- | --- |
+| `runtime-contracts` | Command roles, envelope shapes, cursor encoding and invocation defaults | None |
+| `runtime-output` | Rendering, source emission and pagination | Contracts |
+| `runtime-project` | Configuration, project context, revisioned updates and index freshness | None |
+| `runtime-analysis` | Analysis preparation, readiness, capability reporting, receipts and analysis caches | Project, output |
+| `runtime-watch-control` | Watch-service identity, start/stop control and pruning | None |
+| `runtime-index-maintenance` | Refresh coordination, evidence freshness and repository cache collection | Analysis, project, watch control |
+| `runtime-background` | Watch execution and compiler-worker coordination | Index maintenance, project, watch control |
+| `runtime-query-service` | Query transport, server execution and fast CLI parsing | Analysis, contracts, output, project, watch control |
+| `runtime-installation` | Installation, onboarding and removal | Analysis, contracts, project, watch control |
+
+Each group also has explicitly permitted lower-level dependencies in the policy.
+Command entrypoints compose these owners. Configuration and pure command
+contracts cannot import servers. Query delivery cannot import installation.
+These restrictions prevent an ordinary query from acquiring unrelated setup
+behavior and keep configuration reusable outside a running service.
+
+Each runtime group and the flat `reindex` group uses `subUnits: file`. This checks
+cycles between files even when they share one directory. Other groups use their
+configured directory subdivisions. A clean boundary graph therefore needs to be
+read together with its internal-cycle coverage, rather than treated as proof
+that every file graph is acyclic.
+
+## Existing paths to extend
+
+### Cached source evidence
+
+A cache stores a previous result under an identity so later requests can reuse
+it. Reuse is valid only while that identity still represents the same inputs.
+[`per-db-cache.ts`](../../src/storage/per-db-cache.ts) owns bounded storage and
+per-database isolation; the cache registry owns invalidation notifications.
+
+Use `createPerDbFileCache` when the key is one repository-relative file path.
+It normalizes separators and clears that file selectively. Use
+`createPerDbCache` for arbitrary identities such as symbol or source-range keys;
+a file notification conservatively clears that database's cache because a file
+path cannot identify those entries. Use the existing source-aware factory when
+reuse also requires comparing current source content. Local flow keeps its
+bounded range cache and follows the conservative invalidation rule. Do not add
+caller-specific parsing of opaque keys or a second invalidation registry.
+
+### Incremental indexing and publication
+
+Incremental indexing updates a retained index using the changed inputs and their
+affected consumers. The manifest describes observed input changes;
+[`affected-set.ts`](../../src/reindex/affected-set.ts) owns shared reasons that
+require a whole-project update. The TypeScript materializer computes one decision
+for both dependency-graph acquisition and emission. Its explicit refinements
+preserve deletion closure, active configuration selection and semantic edit
+filtering. New compiler source files require project replacement because they
+can change how existing imports resolve. A replacement includes every current
+compiler source document, including unchanged documents.
+
+Publication produces an immutable generation: one retained database, metadata
+and index artifact set with a shared identity. Storage readers retain that
+identity for their lifetime. Reindex validates the candidate and current inputs
+before publication, while the storage generation mechanism protects active
+readers from collection. Extend these owners and the real compiler-history
+checks; preserve failure recovery, old-reader retention and request identity
+across worker handoffs.
+
+### CLI query dispatch
+
+The canonical command descriptors own the complete CLI grammar. The lightweight
+fast parser accepts a tested subset and falls through to canonical dispatch for
+unsupported forms. Its parser map alone selects eligible commands.
+[`query-invocation-policy.ts`](../../src/runtime/query-invocation-policy.ts)
+owns shared search/code defaults and exact integer parsing. CLI defaults remain
+distinct from library defaults where the public contracts differ.
+
+When changing a fast-supported option, update the existing parser and canonical
+descriptor and extend the canonical-versus-fast contract tests. Keep query
+implementations in their existing owners and preserve lightweight startup.
+
+## Checking a change
+
+Use the build from the current checkout when auditing changes to the tool:
+
+```sh
+node dist/cli.js system --source
+node dist/cli.js system --source boundary:runtime-project
+node dist/cli.js architecture
+node dist/cli.js review --base HEAD
+node dist/cli.js diff-impact --base HEAD
+```
+
+`system --source` inventories current TS/JS source, including groups without
+findings; selecting an exact printed group gives its dependency evidence.
+`architecture` checks the configured rules against indexed relationships and
+reports test-boundary checks. Current TS/JS syntax supplements the indexed graph
+through the same compiler-backed import extractor used by source scanning,
+including literal dynamic imports, unshadowed CommonJS and import-type
+expressions. Nonliteral or unresolved targets remain explicit coverage limits;
+they prevent an unused-allowance claim for their owning boundary. Refresh the index with `reindex` when its source
+identity is stale. Read coverage before interpreting a missing edge or claiming
+that every file was checked. Current-source and compiler-indexed views have
+different scopes, and computed imports may remain unresolved.
+
+The policy requires complete ownership and outgoing rows, forbids boundary
+cycles, checks configured internal subdivisions, and rejects unused allowances.
+A new dependency needs a reason grounded in the owning operation and its actual
+consumers. Do not add allowances, raise limits, or suppress findings just to make
+a report clean. Tests under mirrored unit-test paths inherit the corresponding
+production owner's restrictions; cross-owner publication/pagination checks live
+in integration tests and share fixtures without widening production policy.
+
+A clean report establishes the checks it names within its coverage. It does not
+score design quality or prove that a feature has one complete implementation.
+For that judgment, trace the existing entrypoint, reused operations, durable
+changes and returned result, then inspect which decisions callers still repeat.

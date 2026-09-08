@@ -2,32 +2,6 @@ import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runCliWithErrorBoundary } from './cli-error-boundary.js';
 
-const QUERY_SERVICE_FAST_PATH_COMMANDS = new Set([
-  'search',
-  'outline',
-  'code',
-  'entrypoints',
-  'files',
-  'stats',
-  'members',
-  'methods',
-  'deps',
-  'rdeps',
-  'imported-by',
-  'hierarchy',
-  'by-kind',
-  'kind-counts',
-  'refs',
-  'trace',
-  'value-flow',
-  'dependence-slice',
-  'call-graph',
-  'imports',
-  'unused-imports',
-  'system',
-  'surface',
-]);
-
 if (isCliEntrypoint()) {
   await runCliWithErrorBoundary(async () => {
     const argv = process.argv.slice(2);
@@ -54,8 +28,9 @@ function isCliEntrypoint(): boolean {
 }
 
 function mayUseQueryServiceFastPath(argv: readonly string[]): boolean {
+  // The fast parser alone owns command eligibility. This gate only avoids
+  // loading that adapter for invocations outside its machine-output contract.
   return (
-    QUERY_SERVICE_FAST_PATH_COMMANDS.has(argv[0] ?? '') &&
     argv.includes('--json') &&
     argv.includes('--result-only') &&
     argv.includes('--compact') &&

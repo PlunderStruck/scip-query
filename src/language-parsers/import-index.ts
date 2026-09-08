@@ -1,9 +1,9 @@
 import type { ScipDatabase } from '../storage/db.js';
 import { normalizeRelativePath } from '../domain/path-normalization.js';
-import { createPerDbCache } from '../storage/per-db-cache.js';
+import { createPerDbFileCache } from '../storage/per-db-cache.js';
 import { getSourceImports } from './index.js';
 
-const SOURCE_IMPORT_PATHS_BY_LOCAL_NAME_CACHE = createPerDbCache<string, Map<string, Set<string>>>(
+const SOURCE_IMPORT_PATHS_BY_LOCAL_NAME_CACHE = createPerDbFileCache<Map<string, Set<string>>>(
   'source-import-paths-by-local-name',
   { clearGroups: ['whole-project', 'source-file'] },
 );

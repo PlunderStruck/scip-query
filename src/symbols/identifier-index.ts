@@ -18,7 +18,7 @@
  */
 import { getSourceFacts } from '../source/ast.js';
 import type { ScipDatabase } from '../storage/db.js';
-import { createPerDbCache } from '../storage/per-db-cache.js';
+import { createPerDbFileCache } from '../storage/per-db-cache.js';
 import { stripCommentsAndStrings } from '../source/primitives/source-stripper.js';
 import { getSourceText } from '../source/primitives/source-text.js';
 
@@ -72,7 +72,7 @@ function inExcludedRange(line: number, opts: { excludeStartLine?: number; exclud
  * Cached per (db, file) so repeat queries — e.g. health's many subcommands —
  * pay the parse cost exactly once per file per process.
  */
-const FILE_IDENTIFIER_CACHE = createPerDbCache<string, Set<string>>('file-identifiers', {
+const FILE_IDENTIFIER_CACHE = createPerDbFileCache<Set<string>>('file-identifiers', {
   clearGroups: ['whole-project', 'source-file'],
 });
 // scip-query: ignore-wrapper — public read-side of FILE_IDENTIFIER_CACHE, expresses
@@ -95,7 +95,7 @@ export function getFileIdentifiers(db: ScipDatabase, relativePath: string): Set<
  * Powers source-text refinement of SCIP mentions when a chunk's start line
  * is too coarse to identify the precise enclosing function. Cached per file.
  */
-const FILE_IDENT_LINES_CACHE = createPerDbCache<string, Map<string, number[]>>('file-ident-lines', {
+const FILE_IDENT_LINES_CACHE = createPerDbFileCache<Map<string, number[]>>('file-ident-lines', {
   clearGroups: ['whole-project', 'source-file'],
 });
 export function getIdentifierLineMap(db: ScipDatabase, relativePath: string): Map<string, number[]> {
@@ -112,7 +112,7 @@ export function getIdentifierLineMap(db: ScipDatabase, relativePath: string): Ma
  * — avoiding the O(file identifiers) scan that buildCalleeMap would otherwise
  * pay per definition.
  */
-const FILE_IDENTS_BY_LINE_CACHE = createPerDbCache<string, Array<Set<string>>>('file-idents-by-line', {
+const FILE_IDENTS_BY_LINE_CACHE = createPerDbFileCache<Array<Set<string>>>('file-idents-by-line', {
   clearGroups: ['whole-project', 'source-file'],
 });
 // scip-query: ignore-wrapper — line-index view of identifier evidence used by

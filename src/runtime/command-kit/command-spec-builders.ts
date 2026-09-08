@@ -16,9 +16,9 @@ import type { ClaimFamilyContract, ClaimOrigin, CommandClaimContract } from '../
 import { REPOSITORY_OBSERVATION_OPERATION, type CommandOperationSelector } from '../command-operation.js';
 import { InvalidArgumentError } from 'commander';
 import { collect } from '../cli-context.js';
+import { parseCliInteger } from '../query-invocation-policy.js';
 
 export const collectValues = collect as CommandOptionParser;
-const INTEGER_VALUE = /^[+-]?\d+$/u;
 const NUMBER_VALUE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u;
 
 export const parseInteger = ((value: string) => parseExactInteger(value, 'an integer')) as CommandOptionParser;
@@ -42,9 +42,8 @@ export const parseNumber = ((value: string) => {
 export const parseIntegerLoose = parseInteger;
 
 function parseExactInteger(value: string, expected: string): number {
-  if (!INTEGER_VALUE.test(value)) throw new InvalidArgumentError(`Expected ${expected}, got "${value}".`);
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) throw new InvalidArgumentError(`Expected ${expected}, got "${value}".`);
+  const parsed = parseCliInteger(value);
+  if (parsed === null) throw new InvalidArgumentError(`Expected ${expected}, got "${value}".`);
   return parsed;
 }
 

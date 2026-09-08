@@ -7,13 +7,13 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import { recordFileAccess } from '../../domain/file-access-recorder.js';
 import { isMissingProjectFileError, readProjectFileText } from '../../platform/project-files.js';
-import { createPerDbCache } from '../../storage/per-db-cache.js';
+import { createPerDbFileCache } from '../../storage/per-db-cache.js';
 
-const SOURCE_TEXT_CACHE = createPerDbCache<string, string>('source-text', {
+const SOURCE_TEXT_CACHE = createPerDbFileCache<string>('source-text', {
   clearGroups: ['whole-project', 'source-file'],
 });
 
-const SOURCE_LINES_CACHE = createPerDbCache<string, readonly string[]>('source-lines', {
+const SOURCE_LINES_CACHE = createPerDbFileCache<readonly string[]>('source-lines', {
   clearGroups: ['whole-project', 'source-file'],
 });
 

@@ -14,7 +14,8 @@ import type { ScipDatabase } from './db.js';
  * - 'whole-project'      cleared when composite analyses drop all source/
  *                        symbol evidence (e.g. between health phases).
  * - 'source-file'        cleared per file after a source-backed scan; the
- *                        cache key must be the normalized relative path.
+ *                        file-aware caches remove that file; opaque-key caches
+ *                        conservatively drop all entries for the database.
  * - 'semantic-provider'  opt-in: expensive provider instances, cleared only
  *                        when a phase explicitly requests it.
  * - 'definition-catalog' opt-in: definition rows derived from the read-only

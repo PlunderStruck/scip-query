@@ -12,6 +12,8 @@ import {
 } from './typescript/local-flow.js';
 import { isTypeScriptLike } from './typescript/source-kinds.js';
 
+// Ranges are opaque cache keys. File clearing drops all ranges conservatively,
+// keeping one bounded cache rather than unbounded per-file range maps.
 const TYPESCRIPT_LOCAL_FLOW_CACHE = createPerDbCache<string, TypeScriptLocalFlowResult>('typescript-local-flow', {
   clearGroups: ['whole-project', 'source-file', 'semantic-provider'],
 });
@@ -31,6 +33,7 @@ export function semanticLocalFlowForRange(
   startLine: number,
   endLine: number,
 ): TypeScriptLocalFlowResult | null {
+  relativePath = relativePath.replace(/\\/g, '/');
   if (!isTypeScriptLike(relativePath)) return null;
   const cacheKey = `${relativePath}\0${startLine}\0${endLine}`;
   return TYPESCRIPT_LOCAL_FLOW_CACHE.get(db, cacheKey, () => {

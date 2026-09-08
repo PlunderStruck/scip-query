@@ -1,4 +1,5 @@
 import { quoteShellArgument } from '../../domain/shell-arguments.js';
+import { CODE_CLI_DEFAULTS } from '../query-invocation-policy.js';
 import {
   codeBatch,
   type CodeBatchEntry,
@@ -328,7 +329,7 @@ const handleSourceSession = dbCommand(({ opts }) => {
 });
 
 function codeFileMemberMode(opts: Readonly<Record<string, unknown>>): CodeFileMemberMode {
-  const value = stringOptionValue(opts, 'members') ?? 'exported';
+  const value = stringOptionValue(opts, 'members') ?? CODE_CLI_DEFAULTS.members;
   if (value === 'exported' || value === 'all') return value;
   throw new RangeError(`--members must be "exported" or "all", got "${value}".`);
 }
@@ -733,13 +734,18 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
       ],
     },
     options: withJsonOption([
-      option('-C, --context <n>', 'Extra lines of context above/below', parseNonNegativeInteger, 0),
+      option(
+        '-C, --context <n>',
+        'Extra lines of context above/below',
+        parseNonNegativeInteger,
+        CODE_CLI_DEFAULTS.context,
+      ),
       option('--local-calls', 'Also read statically attributed same-file callees of a selected line range'),
       option(
         '--members <exported|all>',
         'For file selectors, return the exported surface or the complete file',
         undefined,
-        'exported',
+        CODE_CLI_DEFAULTS.members,
       ),
     ]),
     renderShape: 'custom',

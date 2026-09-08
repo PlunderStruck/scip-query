@@ -21,7 +21,13 @@ import {
   readPersistedFileDependencyGraph,
   type FileDependencyGraphSnapshot,
 } from '../symbols/graph/file-dep-graph.js';
-import { planAffectedFiles, type AffectedFilePlan } from './affected-set.js';
+import {
+  classifyAffectedSetFallback,
+  fullProjectPlan,
+  planAffectedFiles,
+  type AffectedFilePlan,
+  type AffectedSetFallbackDecision,
+} from './affected-set.js';
 import { inspectTypeScriptDocumentProducer, type TypeScriptDocumentFragment } from './typescript-document-emitter.js';
 import { assembleAffectedTypeScriptFragments } from './typescript-fragment-store.js';
 import { commitTypeScriptOverlay, materializeTypeScriptOverlay } from './typescript-overlay-store.js';
@@ -145,40 +151,47 @@ export function planTypeScriptIncrementalUpdate(
   input: TypeScriptIncrementalEligibilityInput,
 ): TypeScriptIncrementalEligibility {
   const workspaceProjects = input.projectMode === 'workspace' ? (input.workspaceProjects ?? []) : ['.'];
-  const activeTypeScriptConfigs = activeTypeScriptProjectConfigPaths(workspaceProjects);
+  return planTypeScriptUpdateWithDecision(input, workspaceProjects);
+}
+
+interface TypeScriptChangeDecision {
+  manifest: ProjectChangeManifest;
+  compilerManifest: ProjectChangeManifest;
+  sourceChanges: ProjectFileChange[];
+  projectIdentity: string;
+  fallback: AffectedSetFallbackDecision;
+  dependencyGraphUnchanged: boolean;
+}
+
+function planTypeScriptUpdateWithDecision(
+  input: TypeScriptIncrementalEligibilityInput,
+  workspaceProjects: readonly string[],
+  preparedDecision?: TypeScriptChangeDecision,
+): TypeScriptIncrementalEligibility {
   const prerequisites = incrementalPlanningPrerequisites(input, workspaceProjects);
   if (!prerequisites.eligible) return prerequisites;
   const { previousSnapshot, graph } = prerequisites;
-
-  const manifest = buildProjectChangeManifest(previousSnapshot, input.currentSnapshot);
+  const decision =
+    preparedDecision ??
+    typeScriptChangeDecision(
+      previousSnapshot,
+      input.currentSnapshot,
+      input.producerIdentity,
+      activeTypeScriptProjectConfigPaths(workspaceProjects),
+    );
+  const {
+    manifest,
+    compilerManifest,
+    sourceChanges: typescriptSourceChanges,
+    projectIdentity,
+    dependencyGraphUnchanged,
+  } = decision;
   if (manifest.changes.length === 0) return { eligible: false, reason: 'no changed project inputs' };
-  const typescriptSourceChanges = manifest.changes.filter(
-    (change) => change.inputKind === 'source' && isTypeScriptLike(change.path),
-  );
-  const compilerChanges = typeScriptCompilerChanges(manifest, activeTypeScriptConfigs);
-  const compilerManifest = { ...manifest, changes: compilerChanges };
-  const addedPaths = typescriptSourceChanges.filter((change) => change.kind === 'added').map((change) => change.path);
   const deletedPaths = typescriptSourceChanges
     .filter((change) => change.kind === 'deleted')
     .map((change) => change.path);
   const modifiedChanges = typescriptSourceChanges.filter((change) => change.kind === 'modified');
-  const projectIdentity = typeScriptFragmentProjectIdentity(
-    input.currentSnapshot,
-    input.producerIdentity,
-    activeTypeScriptConfigs,
-  );
-  const previousProjectIdentity = typeScriptFragmentProjectIdentity(
-    previousSnapshot,
-    input.producerIdentity,
-    activeTypeScriptConfigs,
-  );
-  const replaceProject = typeScriptProjectReplacementRequired(
-    manifest,
-    compilerChanges,
-    projectIdentity,
-    previousProjectIdentity,
-  );
-  const dependencyGraphUnchanged = !replaceProject && typeScriptDependencyGraphUnchanged(manifest);
+  const replaceProject = decision.fallback.fullProject;
   if (typescriptSourceChanges.length === 0 && !replaceProject) {
     return { eligible: false, reason: 'change does not affect the configured TypeScript project' };
   }
@@ -189,9 +202,8 @@ export function planTypeScriptIncrementalUpdate(
     compilerManifest,
     typescriptSourceChanges,
     modifiedChanges,
-    addedPaths,
     deletedPaths,
-    replaceProject,
+    decision.fallback,
   );
   if (!affected.eligible) return affected;
   const plan = affected.plan;
@@ -267,10 +279,10 @@ function planIncrementalChangedFiles(
   compilerManifest: ProjectChangeManifest,
   typescriptSourceChanges: ProjectFileChange[],
   modifiedChanges: ProjectFileChange[],
-  addedPaths: string[],
   deletedPaths: string[],
-  replaceProject: boolean,
+  fallback: AffectedSetFallbackDecision,
 ) {
+  const replaceProject = fallback.fullProject;
   const currentTypeScriptFiles = input.currentSnapshot.files
     .filter(
       (file) =>
@@ -287,20 +299,13 @@ function planIncrementalChangedFiles(
   const affected = replaceProject
     ? {
         eligible: true as const,
-        plan: {
-          ...planAffectedFiles(compilerManifest, graph, [
-            ...new Set([...currentTypeScriptFiles, ...effectiveDeletedPaths]),
-          ]),
-          mode: 'full-project' as const,
-        },
+        plan: fullProjectPlan(
+          compilerManifest.changes.map((change) => change.path).sort(),
+          new Set([...currentTypeScriptFiles, ...effectiveDeletedPaths]),
+          new Set(fallback.reasons),
+        ),
       }
-    : planTypeScriptIncrementalAffectedSet(
-        modifiedChanges,
-        addedPaths,
-        effectiveDeletedPaths,
-        graph,
-        input.projectFiles,
-      );
+    : planTypeScriptIncrementalAffectedSet(modifiedChanges, effectiveDeletedPaths, graph, input.projectFiles);
   return { effectiveDeletedPaths, incrementalManifest, affected };
 }
 
@@ -327,41 +332,51 @@ function typeScriptConfigurationContentChanged(change: ProjectFileChange): boole
   );
 }
 
-function typeScriptProjectReplacementRequired(
-  manifest: ProjectChangeManifest,
-  compilerChanges: readonly ProjectFileChange[],
-  projectIdentity: string,
-  previousProjectIdentity: string,
-): boolean {
-  return (
-    projectIdentity !== previousProjectIdentity ||
-    manifest.projectIdentityChanged ||
-    manifest.uncertainty.length > 0 ||
-    compilerChanges.length > TYPESCRIPT_INCREMENTAL_CHANGE_LIMIT ||
-    // A new file can resolve previously missing imports or change resolution
-    // precedence. The accepted graph cannot enumerate those new consumers.
-    compilerChanges.some((change) => change.kind === 'added') ||
-    compilerChanges.some((change) => change.inputKind === 'config' || change.inputKind === 'ambient')
+function typeScriptChangeDecision(
+  previousSnapshot: ProjectInputSnapshot,
+  currentSnapshot: ProjectInputSnapshot,
+  producerIdentity: string,
+  activeTypeScriptConfigs: ReadonlySet<string>,
+): TypeScriptChangeDecision {
+  const manifest = buildProjectChangeManifest(previousSnapshot, currentSnapshot);
+  const projectIdentity = typeScriptFragmentProjectIdentity(currentSnapshot, producerIdentity, activeTypeScriptConfigs);
+  const previousProjectIdentity = typeScriptFragmentProjectIdentity(
+    previousSnapshot,
+    producerIdentity,
+    activeTypeScriptConfigs,
   );
+  const compilerManifest = { ...manifest, changes: typeScriptCompilerChanges(manifest, activeTypeScriptConfigs) };
+  const fallback = classifyAffectedSetFallback(
+    {
+      ...compilerManifest,
+      projectIdentityChanged: manifest.projectIdentityChanged || projectIdentity !== previousProjectIdentity,
+    },
+    { deletedFiles: 'closure', maxChanges: TYPESCRIPT_INCREMENTAL_CHANGE_LIMIT },
+  );
+  return {
+    manifest,
+    compilerManifest,
+    sourceChanges: manifest.changes.filter((change) => change.inputKind === 'source' && isTypeScriptLike(change.path)),
+    projectIdentity,
+    fallback,
+    dependencyGraphUnchanged: !fallback.fullProject && typeScriptDependencyGraphUnchanged(manifest),
+  };
 }
 
 function planTypeScriptIncrementalAffectedSet(
   modifiedChanges: readonly ProjectFileChange[],
-  addedPaths: readonly string[],
   deletedPaths: readonly string[],
   graph: FileDependencyGraph,
   projectFiles: readonly string[],
 ): { eligible: true; plan: AffectedFilePlan } | { eligible: false; reason: string } {
   if (modifiedChanges.length === 0) {
-    if (addedPaths.length === 0 && deletedPaths.length === 0) return { eligible: false, reason: 'empty affected set' };
+    if (deletedPaths.length === 0) return { eligible: false, reason: 'empty affected set' };
     return {
       eligible: true,
       plan: {
         mode: 'closure',
-        changedFiles: [...new Set([...addedPaths, ...deletedPaths])].sort(),
-        affectedFiles: [
-          ...new Set([...addedPaths, ...reverseDependencyClosure(deletedPaths, graph, projectFiles)]),
-        ].sort(),
+        changedFiles: [...new Set(deletedPaths)].sort(),
+        affectedFiles: reverseDependencyClosure(deletedPaths, graph, projectFiles),
         reasons: [],
       },
     };
@@ -389,14 +404,11 @@ function planTypeScriptIncrementalAffectedSet(
     eligible: true,
     plan: {
       mode: 'closure',
-      changedFiles: [
-        ...new Set([...modifiedChanges.map((change) => change.path), ...addedPaths, ...deletedPaths]),
-      ].sort(),
+      changedFiles: [...new Set([...modifiedChanges.map((change) => change.path), ...deletedPaths])].sort(),
       affectedFiles: [
         ...new Set([
           ...modifiedPlan.affectedFiles,
           ...modifiedChanges.map((change) => change.path),
-          ...addedPaths,
           ...reverseDependencyClosure(deletedPaths, graph, projectFiles),
         ]),
       ].sort(),
@@ -608,11 +620,6 @@ function prepareTypeScriptMaterialization(
   producerIdentity: string,
   phaseStartedAt: number,
 ) {
-  const db = new ScipDatabase({
-    projectRoot: input.projectRoot,
-    dbPath: input.previousDbPath,
-    indexPath: input.previousIndexPath,
-  });
   const previousSnapshot = hydrateLegacyTypeScriptPackageHashes(
     input.projectRoot,
     input.previousSnapshot,
@@ -623,37 +630,43 @@ function prepareTypeScriptMaterialization(
       ? discoverTypeScriptProjectRoots(input.projectRoot, input.currentSnapshot.typescriptProjects)
       : ['.'];
   const activeTypeScriptConfigs = activeTypeScriptProjectConfigPaths(workspaceProjects);
+  const decision = previousSnapshot
+    ? typeScriptChangeDecision(previousSnapshot, input.currentSnapshot, producerIdentity, activeTypeScriptConfigs)
+    : undefined;
   let projectFiles: string[];
   let graph: FileDependencyGraph;
   let dependencyGraphSnapshot: FileDependencyGraphSnapshot | undefined;
+  const db = new ScipDatabase({
+    projectRoot: input.projectRoot,
+    dbPath: input.previousDbPath,
+    indexPath: input.previousIndexPath,
+  });
   try {
     projectFiles = indexedDocumentPaths(db, { includeIgnored: false }).filter(isTypeScriptLike).sort();
-    const dependencyPlan = materializationDependencyGraph(
-      db,
-      previousSnapshot,
-      input.currentSnapshot,
-      producerIdentity,
-      activeTypeScriptConfigs,
-    );
+    const dependencyPlan = materializationDependencyGraph(db, decision);
     graph = dependencyPlan.graph;
     dependencyGraphSnapshot = dependencyPlan.dependencyGraphSnapshot;
   } finally {
     db.close();
   }
   const graphMs = performance.now() - phaseStartedAt;
-  const eligibility = planTypeScriptIncrementalUpdate({
-    projectMode: input.projectMode,
-    workspaceProjects: input.projectMode === 'workspace' ? workspaceProjects : undefined,
-    previousSnapshot,
-    currentSnapshot: input.currentSnapshot,
-    projectFiles,
-    graph,
-    producerIdentity,
-    rootTsconfigExists: existsSync(join(input.projectRoot, 'tsconfig.json')),
-    ...(input.previousOverlayGeneration === undefined
-      ? {}
-      : { previousOverlayGeneration: input.previousOverlayGeneration }),
-  });
+  const eligibility = planTypeScriptUpdateWithDecision(
+    {
+      projectMode: input.projectMode,
+      workspaceProjects: input.projectMode === 'workspace' ? workspaceProjects : undefined,
+      previousSnapshot,
+      currentSnapshot: input.currentSnapshot,
+      projectFiles,
+      graph,
+      producerIdentity,
+      rootTsconfigExists: existsSync(join(input.projectRoot, 'tsconfig.json')),
+      ...(input.previousOverlayGeneration === undefined
+        ? {}
+        : { previousOverlayGeneration: input.previousOverlayGeneration }),
+    },
+    workspaceProjects,
+    decision,
+  );
   if (!eligibility.eligible) throw new Error(eligibility.reason);
   const baseGeneration = publishedTypeScriptIndexGeneration(input.previousDbPath);
   if (!baseGeneration) throw new Error('published TypeScript base generation unavailable');
@@ -661,31 +674,13 @@ function prepareTypeScriptMaterialization(
   return { eligibility, baseGeneration, projectFiles, dependencyGraphSnapshot, graphMs };
 }
 
-function materializationDependencyGraph(
-  db: ScipDatabase,
-  previousSnapshot: ProjectInputSnapshot | null,
-  currentSnapshot: ProjectInputSnapshot,
-  producerIdentity: string,
-  activeTypeScriptConfigs: ReadonlySet<string>,
-) {
+function materializationDependencyGraph(db: ScipDatabase, decision: TypeScriptChangeDecision | undefined) {
   let graph: FileDependencyGraph;
   let dependencyGraphSnapshot: FileDependencyGraphSnapshot | undefined;
-  const manifest = previousSnapshot ? buildProjectChangeManifest(previousSnapshot, currentSnapshot) : null;
-  const replaceWithoutGraph =
-    manifest &&
-    previousSnapshot &&
-    typeScriptProjectReplacementRequired(
-      manifest,
-      typeScriptCompilerChanges(manifest, activeTypeScriptConfigs),
-      typeScriptFragmentProjectIdentity(currentSnapshot, producerIdentity, activeTypeScriptConfigs),
-      typeScriptFragmentProjectIdentity(previousSnapshot, producerIdentity, activeTypeScriptConfigs),
-    );
-  const dependencyGraphUnchanged =
-    manifest !== null && !replaceWithoutGraph && typeScriptDependencyGraphUnchanged(manifest);
-  if (replaceWithoutGraph) {
+  if (decision?.fallback.fullProject) {
     dependencyGraphSnapshot = readPersistedFileDependencyGraph(db, 'none') ?? undefined;
     graph = new Map();
-  } else if (dependencyGraphUnchanged) {
+  } else if (decision?.dependencyGraphUnchanged) {
     graph = new Map();
   } else {
     dependencyGraphSnapshot = captureTypeScriptPlanningDependencyGraph(db);

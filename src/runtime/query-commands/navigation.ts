@@ -1,3 +1,4 @@
+import { SEARCH_CLI_DEFAULTS } from '../query-invocation-policy.js';
 import { chunked } from '../../domain/array-batches.js';
 import { quoteShellArgument } from '../../domain/shell-arguments.js';
 import * as queries from '../../queries/index.js';
@@ -1316,13 +1317,13 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
         '-C, --context <n>',
         'Source lines before and after each representative match',
         parseNonNegativeInteger,
-        2,
+        SEARCH_CLI_DEFAULTS.context,
       ),
       option(
         '-n, --limit <n>',
         'Representative source windows to materialize; exact identity manifests remain separately accounted',
         parsePositiveInteger,
-        6,
+        SEARCH_CLI_DEFAULTS.limit,
       ),
       option('--full', 'Materialize source for every match after deliberately narrowing broad selectors'),
       option('--regexp', 'Treat the search text as a bounded regular expression'),

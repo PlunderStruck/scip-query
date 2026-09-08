@@ -276,8 +276,8 @@ describe('TypeScript incremental index eligibility', () => {
     );
   });
 
-  test('uses bounded project replacement when a large source delta exceeds the graph-closure limit', () => {
-    const projectFiles = Array.from({ length: 257 }, (_, index) => `src/file-${index}.ts`);
+  test('includes unchanged documents when a large delta requires project replacement', () => {
+    const projectFiles = [...Array.from({ length: 257 }, (_, index) => `src/file-${index}.ts`), 'src/untouched.ts'];
     const base = snapshot({ a: 'unused', b: 'unused', config: 'c1' });
     const previousSnapshot = {
       ...base,
@@ -290,7 +290,11 @@ describe('TypeScript incremental index eligibility', () => {
       ...previousSnapshot,
       files: [
         { path: 'tsconfig.json', size: 1, hash: 'c1' },
-        ...projectFiles.map((path) => ({ path, size: 1, hash: `new-${path}` })),
+        ...projectFiles.map((path) => ({
+          path,
+          size: 1,
+          hash: `${path === 'src/untouched.ts' ? 'old' : 'new'}-${path}`,
+        })),
       ],
     };
 

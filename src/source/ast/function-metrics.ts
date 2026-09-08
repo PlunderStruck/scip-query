@@ -58,15 +58,8 @@ export function sourceHash(source: string): string {
 
 /** Current bytes, independent of the age or availability of a compiler index. */
 export function analyzeSourceFunctions(file: string, source: string): FunctionAnalysis {
-  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
-  const diagnostics =
-    (sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] }).parseDiagnostics ?? [];
-  const errors = diagnostics.map((diagnostic) => {
-    const line = sourceFile.getLineAndCharacterOfPosition(diagnostic.start ?? 0).line + 1;
-    return `${file}:${line}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ')}`;
-  });
+  const { sourceFile, checker, errors } = parseSourceBindings(file, source);
   const functions: SourceFunction[] = [];
-  const checker = sourceBindingChecker(sourceFile);
   function visit(node: ts.Node, owners: readonly string[]): void {
     if (isImplementedFunction(node)) {
       const name = functionName(node, sourceFile);
@@ -327,7 +320,25 @@ function isBindingPropertyName(node: ts.Node, binding: ts.BindingElement): boole
   return binding.name === node && !binding.dotDotDotToken && ts.isObjectBindingPattern(binding.parent);
 }
 
-/** Bind only this source file. No libraries, imports, filesystem, or type-correctness assumptions. */
+/** Parse one source unit and bind its local names without loading a project compiler graph. */
+export function parseSourceBindings(
+  file: string,
+  source: string,
+): {
+  sourceFile: ts.SourceFile;
+  checker: ts.TypeChecker;
+  errors: string[];
+} {
+  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const diagnostics =
+    (sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] }).parseDiagnostics ?? [];
+  const errors = diagnostics.map((diagnostic) => {
+    const line = sourceFile.getLineAndCharacterOfPosition(diagnostic.start ?? 0).line + 1;
+    return `${file}:${line}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ')}`;
+  });
+  return { sourceFile, checker: sourceBindingChecker(sourceFile), errors };
+}
+
 function sourceBindingChecker(file: ts.SourceFile): ts.TypeChecker {
   const owns = (name: string): boolean => name === file.fileName || name === '/' + file.fileName;
   const host: ts.CompilerHost = {
