@@ -187,12 +187,13 @@ function assertReadUnchanged(
   options: BoundedFileReadOptions,
   displayPath: string,
 ): void {
+  // Atomic replacement can change the old inode's ctime/link count without
+  // changing the complete bytes still held by this descriptor.
   if (
     after.dev !== before.dev ||
     after.ino !== before.ino ||
     after.size !== before.size ||
     after.mtimeMs !== before.mtimeMs ||
-    after.ctimeMs !== before.ctimeMs ||
     bytesRead !== before.size
   ) {
     throw new BoundedFileReadError(options.inputKind, displayPath, 'changed-during-read', after.size, options.maxBytes);

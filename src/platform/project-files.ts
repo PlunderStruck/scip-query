@@ -217,7 +217,8 @@ export function readProjectFile(projectRoot: string, candidatePath: string, opts
     const content = readFileDescriptorBytes(descriptor, before.size);
     const after = fstatSync(descriptor);
     assertResolvedProjectFileIdentity(after, resolvedFile, candidatePath);
-    if (content.byteLength !== before.size || after.mtimeMs !== before.mtimeMs || after.ctimeMs !== before.ctimeMs) {
+    // A pathname replacement may unlink this descriptor's inode without changing its bytes.
+    if (content.byteLength !== before.size || after.mtimeMs !== before.mtimeMs) {
       throw new UnsafeProjectPathError(candidatePath, 'changed-during-read');
     }
     return content;

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type * as FileSystem from 'node:fs';
-import { mkdtempSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
+import { mkdtempSync, renameSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { readFileWithinLimit, hashFileWithinLimit } from '../../src/filesystem/bounded-file.js';
@@ -46,6 +46,32 @@ function artifact(): string {
 }
 
 describe('bounded regular file mutation', () => {
+  it.each([
+    { name: 'artifact', read: (path: string) => readFileWithinLimit(path, { inputKind: 'fixture', maxBytes: 4 }) },
+    { name: 'project', read: (path: string) => readProjectFile(dirname(path), 'artifact', { maxBytes: 4 }) },
+  ])('keeps the complete open file readable through atomic replacement in the $name reader', ({ read }) => {
+    const path = artifact();
+    observation.afterStat = () => {
+      writeFileSync(path + '.next', '5678');
+      renameSync(path + '.next', path);
+    };
+    expect(read(path).toString()).toBe('1234');
+    expect(read(path).toString()).toBe('5678');
+  });
+
+  it('hashes the complete open file when its pathname is atomically replaced', () => {
+    const path = artifact();
+    const chunks: Buffer[] = [];
+    expect(
+      hashFileWithinLimit(path, { inputKind: 'fixture', maxBytes: 4 }, (chunk) => {
+        chunks.push(Buffer.from(chunk));
+        writeFileSync(path + '.next', '5678');
+        renameSync(path + '.next', path);
+      }),
+    ).toBe(4);
+    expect(Buffer.concat(chunks).toString()).toBe('1234');
+  });
+
   it.each([
     { name: 'artifact', read: (path: string) => readFileWithinLimit(path, { inputKind: 'fixture', maxBytes: 4 }) },
     { name: 'project', read: (path: string) => readProjectFile(dirname(path), 'artifact', { maxBytes: 4 }) },
