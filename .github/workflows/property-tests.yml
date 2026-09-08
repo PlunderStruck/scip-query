@@ -29,6 +29,8 @@ jobs:
           package-manager-cache: false
       - name: Install locked dependencies
         run: npm ci
+      - name: Build the real daemon and worker entrypoints
+        run: npm run build
       - name: Type-check property tests
         run: npm run test:properties:types
       - name: Verify failure reporting and replay

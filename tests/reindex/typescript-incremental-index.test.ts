@@ -177,7 +177,7 @@ describe('TypeScript incremental index eligibility', () => {
     );
   });
 
-  test('accepts an added TypeScript source without other compiler edits', () => {
+  test('refreshes the project when a new source can resolve previously missing imports', () => {
     const previous = snapshot({ a: 'a1', b: 'b1', config: 'c1' });
     const result = planTypeScriptIncrementalUpdate({
       projectMode: 'single',
@@ -195,9 +195,9 @@ describe('TypeScript incremental index eligibility', () => {
     if (!result.eligible) return;
     expect(result.plan).toEqual(
       expect.objectContaining({
-        mode: 'closure',
+        mode: 'full-project',
         changedFiles: ['src/added.ts'],
-        affectedFiles: ['src/added.ts'],
+        affectedFiles: ['src/a.ts', 'src/added.ts', 'src/b.ts'],
       }),
     );
   });
@@ -215,7 +215,7 @@ describe('TypeScript incremental index eligibility', () => {
     if (!result.eligible) return;
     expect(result.plan).toEqual(
       expect.objectContaining({
-        mode: 'closure',
+        mode: 'full-project',
         changedFiles: ['src/a.ts', 'src/added.ts'],
         affectedFiles: ['src/a.ts', 'src/added.ts', 'src/b.ts'],
       }),

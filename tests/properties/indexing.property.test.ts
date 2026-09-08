@@ -1,3 +1,6 @@
+import './indexing-mutations.js';
+import './indexing-interruptions.js';
+import './indexing-history.js';
 import assert from 'node:assert/strict';
 import fc from 'fast-check';
 import { it } from 'vitest';

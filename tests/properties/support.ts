@@ -12,7 +12,7 @@ export type PropertyArea =
   | 'suppressions'
   | 'boundaries'
   | 'lifecycle';
-export type PropertyTier = 'component' | 'integration' | 'compiler';
+export type PropertyTier = 'component' | 'integration' | 'compiler' | 'system';
 export const PROPERTY_TIMEOUT = 1_800_000;
 
 function positiveInteger(name: string, fallback: number): number {
@@ -29,6 +29,7 @@ function parameters(tier: PropertyTier): fc.Parameters<unknown> {
     component: thorough ? 200_000 : 200,
     integration: thorough ? 200 : 5,
     compiler: thorough ? 30 : 2,
+    system: thorough ? 30 : 2,
   };
   const seedText = process.env['SCIP_PROPERTY_SEED'];
   const seed = seedText === undefined ? undefined : Number(seedText);

@@ -338,6 +338,9 @@ function typeScriptProjectReplacementRequired(
     manifest.projectIdentityChanged ||
     manifest.uncertainty.length > 0 ||
     compilerChanges.length > TYPESCRIPT_INCREMENTAL_CHANGE_LIMIT ||
+    // A new file can resolve previously missing imports or change resolution
+    // precedence. The accepted graph cannot enumerate those new consumers.
+    compilerChanges.some((change) => change.kind === 'added') ||
     compilerChanges.some((change) => change.inputKind === 'config' || change.inputKind === 'ambient')
   );
 }

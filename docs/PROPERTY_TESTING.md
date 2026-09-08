@@ -7,13 +7,14 @@ The suites use the existing Vitest runner and production TypeScript owners. fast
 ## Running and replaying
 
 ```sh
+npm run build # Required for the real daemon and worker entrypoints used by indexing histories.
 npm run test:properties
 npm run test:properties:thorough
 npm run test:properties:thorough -- --area indexing --seed 20260907
 npm run test:properties:types
 ```
 
-Normal runs execute 200 component cases, five integration cases, and two compiler sequences per property. Thorough runs execute 200,000 component cases, 200 integration cases, and 30 compiler sequences per property. All area suites also run at normal budgets under `npm test`. A sequence contains multiple operations; those operations are not added to the case totals. The compiler check launches the independently packaged scip-typescript CLI after each generated edit and compares exact retained document bytes, with separately known file membership and definition checks.
+Normal runs execute 200 component cases, five integration cases, two compiler sequences and two system histories per property. Thorough runs execute 200,000 component cases, 200 integration cases, 30 compiler sequences and 30 system histories per property. All area suites also run at normal budgets under `npm test`. A sequence contains multiple operations; those operations are not added to the case totals. The compiler check launches the independently packaged scip-typescript CLI after each generated edit and compares exact retained document bytes, with separately known file membership and definition checks.
 
 The runner prints a unique temporary result directory. `summary.json` includes actual per-area/tier counts and individual receipts containing the fast-check version, seed, duration, skipped inputs, shrinking count, counterexample and failure message. Failed or interrupted properties cannot contribute passing-case credit; the runner also fails if Vitest reports an error or a full area misses its requested component budget. A raw test pass with a runner/worker error is not accepted.
 
@@ -23,7 +24,7 @@ Replay one failed property with its recorded seed and path, selecting its exact 
 npm run test:properties -- --area scanner --test 'scanner: generated branches' --seed 12345 --path '0:1:2'
 ```
 
-The example seed/path above is illustrative. Use the receipt from the failure. To vary local budgets, set `SCIP_PROPERTY_COMPONENT_RUNS`, `SCIP_PROPERTY_INTEGRATION_RUNS`, or `SCIP_PROPERTY_COMPILER_RUNS`. Values must be positive integers. A full thorough invocation still requires at least 200,000 passing component cases per area. Targeted `--test` invocations report only their selected work and do not claim full-area completion.
+The example seed/path above is illustrative. Use the receipt from the failure. To vary local budgets, set `SCIP_PROPERTY_COMPONENT_RUNS`, `SCIP_PROPERTY_INTEGRATION_RUNS`, `SCIP_PROPERTY_COMPILER_RUNS`, or `SCIP_PROPERTY_SYSTEM_RUNS`. Values must be positive integers. A full thorough invocation still requires at least 200,000 passing component cases per area. Targeted `--test` invocations report only their selected work and do not claim full-area completion.
 
 The GitHub workflow runs normal budgets on pushes and pull requests, and thorough budgets weekly or through manual dispatch. Unspecified seeds vary between invocations and are saved. It uploads the actual receipts even on test failure. The workflow becomes active after the commit reaches GitHub; local execution does not verify hosted CI.
 
@@ -47,8 +48,8 @@ Direct coverage below means a generated test invokes the production consumer use
 | Commands / surfaces | Property coverage | Remaining specificity |
 | --- | --- | --- |
 | `health`, `review`, `system --source` | Direct current-source scanner/module report consumers; current edits, incompleteness, dependency direction and cycle membership | Generated Git-base diff comparisons, every architecture rule and coverage-backed CRAP are not included. |
-| `reindex` | Direct affected-file planning, sharding, SQLite patch publication and compiler document updates | Full daemon admission/publication routing, every project configuration, and non-TypeScript indexers are not generated here. |
-| `watch` | Direct worker-lane and watch lifecycle transitions | Filesystem event delivery, process death and OS-specific locking retain integration/regression coverage. |
+| `reindex` | Direct affected-file planning, sharding, SQLite patch publication and compiler document updates; real reindex/daemon histories, generation readers and interrupted publication | Generated repositories use one small TypeScript project; every configuration and non-TypeScript indexer is not covered. |
+| `watch` | Direct worker-lane/lifecycle transitions; real daemon compiler requests, service restarts and an automatic filesystem refresh | Selected process interruptions and completion schedules do not exhaust OS event delivery or locking behavior. |
 | `continue` | Direct immutable saved-output producer/consumer | Output beyond configured caps and every storage failure retain existing regressions. |
 | `search`, `outline`, `entrypoints`, `inspect`, `code`, `files`, `methods`, `refs`, `imports`, `imported-by`, `members`, `by-kind`, `kind-counts`, `hierarchy`, `stats`, `surface` | Shared indexed identities/source freshness; generated protocol checks for registered request kinds; cursors and output transport | Locator relevance, semantic resolution and exact content selection are not established by envelope validation. |
 | `evidence`, `session`, `deps`, `rdeps`, `system`, `cycles`, `architecture`, `dependency-depth`, `entry-map`, `call-graph`, `affected`, `diff-impact`, `change-surface`, `context`, `hotspots`, `fan-in`, `fan-out`, `coupling`, `bottlenecks`, `dependence-slice` | Shared indexing, graph component/ordering foundations, source module evidence and transport | Symbol-level execution/dataflow/provider completeness and task relevance retain dedicated fixed tests; source-module tests do not prove these relations. |
@@ -58,6 +59,14 @@ Direct coverage below means a generated test invokes the production consumer use
 | `hook-architecture-stop`, `__diff-impact-batch`, `__health-phase`, `__health-semantic-prewarm` | Shared service and analysis foundations | These internal routes retain their existing end-to-end tests. |
 
 ## Scope and results
+
+The indexing system suite (`indexing-history.ts`, `indexing-interruptions.ts`, `indexing-mutations.ts`) runs the actual reindex entrypoint, daemon/worker and SQLite publication. It supplies source edits, never an affected-file list. An initial function-to-constant change must publish incrementally with expensive fallback disabled. Every successful checkpoint compares all fixture-file compiler occurrences (symbols, roles, ranges and enclosing ranges) against the independently packaged compiler, checks exact file membership and database integrity, and checks that an already open reader retains its prior snapshot. The source map supplies independent expected membership and an untouched definition. Compiler semantic bugs shared by both paths can still escape this comparison; it is not a comparison of every analysis provider's output.
+
+Generated histories contain 3–12 actions drawn from function/constant changes, deletion, restoration, rename, import rewiring, invalid syntax, configuration edits, no-op, revert and service restart. A separate fixed history exercises every kind. Short-history enumeration checks every sequence of length 1–2 (12 histories, 21 edit checkpoints) normally and length 1–3 (39 histories, 102 edit checkpoints) in thorough mode, over three owner states: function, constant and absent. Enumeration counts are printed separately, not added to generated-case totals.
+
+Five real process-death checks kill a child indexer before/after its authoritative pointer change and during stable mirror replacement, then recover using retained crash files. Two I/O checks inject ENOSPC. Further checks cover cancellation, competing writers serialized by the lifecycle lock, a moving-input build's rejection, and automatic watcher catch-up. Checkpoints are controlled at real filesystem/status boundaries in an isolated test process. They do not simulate machine power loss or every possible OS schedule. Two temporary production-function mutations deliberately omit dependent files or retain old candidate database rows; both must be caught by the same clean-build assertion. These are negative controls, not production defects found by chance.
+
+The state-verification worklist, confirmed production defects and validation receipts are recorded in [the indexer state plan](plans/2026-09-07-indexer-state-verification.md).
 
 This suite increases the combinations exercised through the tool's shared foundations and selected real consumers. It cannot determine whether business module boundaries are well chosen, infer task intent, validate every language provider, or prove no future defects exist. No agent benchmarks are required. Tests do not alter production thresholds or suppressions.
 

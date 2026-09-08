@@ -1,0 +1,123 @@
+{
+  "date": "2026-09-07",
+  "baseCommit": "76329d66",
+  "status": "complete",
+  "generatedProperties": [
+    {
+      "area": "indexing",
+      "name": "running-indexer-histories",
+      "tier": "system",
+      "fastCheckVersion": "4.9.0",
+      "numRuns": 30,
+      "numSkips": 0,
+      "numShrinks": 0,
+      "failed": false,
+      "interrupted": false,
+      "seed": 20260908,
+      "counterexamplePath": null,
+      "counterexample": null,
+      "durationMs": 166884.585625
+    }
+  ],
+  "enumeration": {
+    "alphabet": [
+      "function",
+      "constant",
+      "delete"
+    ],
+    "maximumLength": 3,
+    "histories": 39,
+    "editCheckpoints": 102,
+    "result": "passed",
+    "log": "/tmp/scip-query-indexer-state-thorough.log"
+  },
+  "processDeath": {
+    "checkpoints": [
+      "before-pointer",
+      "after-pointer",
+      "before-database-mirror",
+      "after-database-mirror",
+      "after-metadata-mirror"
+    ],
+    "signal": "SIGKILL",
+    "result": "passed",
+    "log": "/tmp/scip-query-indexer-interruptions.log"
+  },
+  "ioFailures": {
+    "checkpoints": [
+      "before-pointer",
+      "before-database-mirror"
+    ],
+    "error": "ENOSPC",
+    "result": "passed"
+  },
+  "schedules": [
+    "moving-input rejection and successor publication",
+    "cancellation before conversion",
+    "competing writers serialized by the lifecycle lock",
+    "automatic watcher catch-up",
+    "watcher retry after lock contention"
+  ],
+  "negativeControls": {
+    "mutations": [
+      "omit dependent files from actual affected plan",
+      "retain old candidate database rows"
+    ],
+    "bothDetected": true,
+    "log": "/tmp/scip-query-indexer-mutations.log"
+  },
+  "productionDefects": [
+    {
+      "trigger": "delete and publish an imported owner, then restore it",
+      "observed": "restoration scheduled only the added file; importer and reexport occurrences stayed unresolved",
+      "fix": "new source files require a full project refresh through the incremental compiler service"
+    }
+  ],
+  "limits": [
+    "Generated cases may repeat and are not exhaustive.",
+    "Only the stated three-action alphabet and maximum history length were enumerated.",
+    "Generated fixtures use a small single-project TypeScript repository.",
+    "SIGKILL does not simulate machine power loss.",
+    "External compiler comparisons can share compiler semantic defects.",
+    "No hosted CI or agent benchmark ran."
+  ],
+  "initialFullSuite": {
+    "passed": 3362,
+    "failed": 1,
+    "testFiles": 387,
+    "cause": "The new competing-writer test incorrectly expected immediate rejection from a lifecycle lock that waits. Corrected to run the competing request in a second child process.",
+    "log": "/tmp/scip-query-indexer-full-tests.log"
+  },
+  "correctedCompetingWriters": {
+    "result": "passed",
+    "durationMs": 3016,
+    "log": "/tmp/scip-query-indexer-writers-fixed.log"
+  },
+  "finalFullSuite": {
+    "passed": 3363,
+    "failed": 0,
+    "testFiles": 387,
+    "durationSeconds": 262.68,
+    "log": "/tmp/scip-query-indexer-full-tests-final.log"
+  },
+  "validation": {
+    "typecheck": "passed",
+    "lint": "full lint/build/API passed; final changed test fixtures passed focused lint and types",
+    "apiFingerprint": "b74137d6c422ca9c",
+    "apiPaths": 66,
+    "sourceReview": {
+      "eligibleFiles": 568,
+      "analyzedFiles": 568,
+      "functions": 13568,
+      "findings": 0,
+      "problems": 0,
+      "log": "/tmp/scip-query-indexer-review.json"
+    },
+    "diffImpact": {
+      "changedIndexedSymbols": 1,
+      "unindexedPaths": 15,
+      "limitation": "Excluded tests/docs are not evidence of absent consumers. Current-source review and executed tests cover the change.",
+      "log": "/tmp/scip-query-indexer-impact-final.json"
+    }
+  }
+}

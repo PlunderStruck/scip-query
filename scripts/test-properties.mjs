@@ -45,6 +45,9 @@ const summary = selected.map((area) => ({
   integrationCases: runs
     .filter((run) => run.area === area && run.tier === 'integration' && !run.failed && !run.interrupted)
     .reduce((n, run) => n + run.numRuns, 0),
+  systemCases: runs
+    .filter((run) => run.area === area && run.tier === 'system' && !run.failed && !run.interrupted)
+    .reduce((n, run) => n + run.numRuns, 0),
   compilerCases: runs
     .filter((run) => run.area === area && run.tier === 'compiler' && !run.failed && !run.interrupted)
     .reduce((n, run) => n + run.numRuns, 0),
