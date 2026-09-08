@@ -20,7 +20,7 @@ This is suppression leakage: an exception for one kind of finding changes the re
 - [x] Review the eight production co-change pairs against live ownership; no refactor based only on broad-sweep history.
 - [x] Build and check API/types/lint; refresh the index and rerun health, changed-source review, impact and relevant detectors.
 - [x] Run the complete test suite against the final frozen build; document findings/limits and commit.
-- [ ] Replace the dev-agent VM installation with the final build and updated skills, preserving/restarting its existing services and verifying artifact hashes.
+- [x] Replace the dev-agent VM installation with the final build and updated skills, preserving/restarting its existing services and verifying artifact hashes.
 
 ## Validation boundaries
 
@@ -70,4 +70,12 @@ The baseline 635 inventory entries comprised **554 source annotations plus 81 un
 - Diff impact: 16 indexed changed files, 23 changed symbols, 9 affected consumer files. It explicitly excludes 93 changed paths absent from the current index, including deleted code/suppression records and unindexed tests/docs; source review and build/tests cover those changes.
 - Public TypeScript API remains **b74137d6c422ca9c / 66 paths**; build, typecheck, consumer typecheck, ESLint, formatting and skill-link checks pass.
 
-Final frozen-build test run: **3,304 tests / 371 files passed** (218.33 seconds). No agent benchmarks were run. VM rollout remains the final operational step.
+Final frozen-build test run: **3,304 tests / 371 files passed** (218.33 seconds). No agent benchmarks were run. VM rollout completed and verified below.
+
+## Deployment receipt
+
+Implementation commit: `03a21ba1875c9e8f3f6fc0bd532ee5279369407c`. Replaced the canonical global package under the SSH `dev-agent` profile (`launchpoint-agent`, UID 1002), at `/home/launchpoint-agent/.local/lib/node_modules/scip-query`. All **453 published files** match the packed artifact, including **19 skill files**; all **12 Codex/Claude skill links** point at that package. No unexpected dist/skill files or ownership mismatches. There is one distinct command path, `/home/launchpoint-agent/.local/bin/scip-query`.
+
+Restarted and verified all six pre-existing watchers with new PIDs. This establishes service startup, not complete/fresh indexes in every worktree. In a newly indexed temporary VM repository, the installed build reports both the deliberately complex function and a reachable throw-stub preceded by `ignore-extract`.
+
+Local artifact/verification directory: `/tmp/scip-query-vm-03a21ba1/`. VM backup, status snapshots, package manifest and smoke-test results: `/tmp/scip-query-update-03a21ba1/`. The verification-document follow-up changes no published package files. The unrelated LaunchPoint validation document remains untouched and untracked.
