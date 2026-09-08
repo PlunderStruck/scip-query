@@ -10,6 +10,7 @@ const require = createRequire(import.meta.url);
 /** The installed scip-query package version that produced persistent artifacts. */
 const packageInfo = loadCliPackageInfo();
 export const cliVersion = packageInfo.version;
+export const cliPackageRoot = packageInfo.path ? dirname(packageInfo.path) : null;
 
 let buildIdentity: string | undefined;
 

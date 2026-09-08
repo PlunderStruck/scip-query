@@ -15,6 +15,7 @@ export interface ProjectInputSnapshot {
   typescriptProjectMode: string;
   typescriptProjects: readonly string[];
   clojureConfigPath?: string;
+  typescriptSymbolIdentityVersion?: number;
   files: readonly ProjectFileFingerprint[];
 }
 

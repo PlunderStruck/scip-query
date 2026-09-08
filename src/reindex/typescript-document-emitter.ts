@@ -3,10 +3,15 @@ import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import type * as TypeScript from 'typescript';
 import type { SemanticReferenceFragment } from '../semantic/types.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
+import {
+  installTypeScriptSymbolIdentity,
+  type TypeScriptSymbolIndexer,
+  type TypeScriptSymbolConstructors,
+} from './typescript-symbol-identity.js';
 
 const require = createRequire(import.meta.url);
 
-export const SCIP_TYPESCRIPT_DOCUMENT_EMITTER_ADAPTER_VERSION = 1;
+export const SCIP_TYPESCRIPT_DOCUMENT_EMITTER_ADAPTER_VERSION = 3;
 const SUPPORTED_SCIP_TYPESCRIPT_VERSION = '0.4.0';
 
 type TypeScriptModule = typeof TypeScript;
@@ -41,11 +46,12 @@ interface ScipIndexConstructor {
   deserializeBinary(value: Uint8Array): ScipIndexLike;
 }
 
-interface FileIndexerLike {
+interface FileIndexerLike extends TypeScriptSymbolIndexer {
   index(): void;
 }
 
 interface FileIndexerConstructor {
+  readonly prototype: FileIndexerLike;
   new (
     checker: TypeScript.TypeChecker,
     options: Record<string, unknown>,
@@ -155,6 +161,14 @@ export function loadTypeScriptDocumentRuntime(): TypeScriptDocumentRuntimeAvaila
     if (!FileIndexer || !Input || !Packages || !scipModule.scip?.Document || !scipModule.scip.Index) {
       return { available: false, reason: 'scip-typescript document runtime has an unsupported module shape' };
     }
+    const { ScipSymbol } = require(resolve(packageRoot, 'dist/src/ScipSymbol.js')) as {
+      ScipSymbol: Pick<TypeScriptSymbolConstructors, 'global'>;
+    };
+    const { metaDescriptor } = require(resolve(packageRoot, 'dist/src/Descriptor.js')) as Pick<
+      TypeScriptSymbolConstructors,
+      'metaDescriptor'
+    >;
+    installTypeScriptSymbolIdentity(FileIndexer.prototype, typescript, { global: ScipSymbol.global, metaDescriptor });
     const runtime = {
       packageVersion: producer.packageVersion,
       typescript,
@@ -306,8 +320,6 @@ export class TypeScriptDocumentEmitter {
       const sourceFile = previousProgram.getSourceFile(absolutePath);
       if (sourceFile) {
         previousNodes.set(relativePath, sourceFile);
-        this.stats.symbolEntriesPruned += pruneSourceFileEntries(this.symbolTable, sourceFile);
-        this.stats.symbolEntriesPruned += pruneSourceFileEntries(this.constructorTable, sourceFile);
       }
       this.host.invalidate(absolutePath);
     }
@@ -353,6 +365,8 @@ export class TypeScriptDocumentEmitter {
   }
 
   private initializeProgram(): void {
+    this.symbolTable = new Map();
+    this.constructorTable.clear();
     const config = this.config ?? readTypeScriptConfig(this.runtime.typescript, this.tsconfigPath);
     this.includedFiles = new Set(config.fileNames.map(normalizedAbsolutePath));
     this.program = this.runtime.typescript.createProgram(config.fileNames, config.options, this.host.compilerHost);
@@ -397,6 +411,11 @@ export class TypeScriptDocumentEmitter {
   }
 
   private emitAffectedFiles(affectedFiles: readonly string[]): TypeScriptDocumentFragment[] {
+    // Keep declaration caches scoped to this request. Global synthetic names
+    // derive from source positions; local counters remain document-scoped.
+    this.stats.symbolEntriesPruned += this.symbolTable.size + this.constructorTable.size;
+    this.symbolTable = new Map();
+    this.constructorTable.clear();
     return affectedFiles.map((relativePath) => {
       const sourceFile = this.program!.getSourceFile(resolveWithin(this.workspaceRoot, relativePath));
       if (!sourceFile) throw new Error(`affected TypeScript source is unavailable: ${relativePath}`);
@@ -550,25 +569,6 @@ function normalizeRelativePath(value: string): string {
 // TypeScript source-file map boundary; the name records why resolution occurs.
 function normalizedAbsolutePath(value: string): string {
   return resolve(value);
-}
-
-function pruneSourceFileEntries<T>(map: Map<T, unknown>, sourceFile: TypeScript.SourceFile): number {
-  let removed = 0;
-  for (const key of map.keys()) {
-    if (!isTypeScriptNode(key)) continue;
-    try {
-      if (key.getSourceFile() !== sourceFile) continue;
-    } catch {
-      continue;
-    }
-    map.delete(key);
-    removed += 1;
-  }
-  return removed;
-}
-
-function isTypeScriptNode(value: unknown): value is TypeScript.Node {
-  return Boolean(value && typeof value === 'object' && 'kind' in value && 'getSourceFile' in value);
 }
 
 function normalizedTypeScriptAdvancePaths(input: TypeScriptDocumentAdvanceInput): {

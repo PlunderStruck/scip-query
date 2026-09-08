@@ -1,3 +1,4 @@
+import { TYPESCRIPT_SYMBOL_IDENTITY_VERSION } from '../domain/typescript-index-identity.js';
 import { readableDirectoryEntries } from '../filesystem/directory-entries.js';
 import { execFileSync } from 'node:child_process';
 import { isUtf8 } from 'node:buffer';
@@ -126,6 +127,7 @@ export interface ProjectInputFingerprint {
   typescriptProjectMode: TypeScriptProjectMode;
   typescriptProjects: string[];
   clojureConfigPath?: string;
+  typescriptSymbolIdentityVersion?: number;
   files: ProjectFileFingerprint[];
 }
 
@@ -844,6 +846,7 @@ function sameProjectInputConfiguration(
 ): boolean {
   return (
     previous.version === current.version &&
+    previous.typescriptSymbolIdentityVersion === current.typescriptSymbolIdentityVersion &&
     JSON.stringify([...previous.languages].sort()) === JSON.stringify(current.languages) &&
     previous.pnpmWorkspaces === current.pnpmWorkspaces &&
     previous.typescriptProjectMode === current.typescriptProjectMode &&
@@ -885,6 +888,9 @@ export function normalizeProjectInputFingerprintConfiguration(
 ): ProjectInputFingerprintConfiguration {
   return {
     version: 3,
+    ...(languages.includes('typescript')
+      ? { typescriptSymbolIdentityVersion: TYPESCRIPT_SYMBOL_IDENTITY_VERSION }
+      : {}),
     languages: [...languages].sort(),
     pnpmWorkspaces: opts.typescriptProjectMode !== 'workspace' && opts.pnpmWorkspaces === true,
     typescriptProjectMode: opts.typescriptProjectMode ?? 'single',

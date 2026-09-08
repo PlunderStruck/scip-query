@@ -351,6 +351,7 @@ function fingerprintConfigurationMatches(
   const current = normalizedFingerprintConfiguration(languages, config);
   return (
     fingerprint.version === current.version &&
+    fingerprint.typescriptSymbolIdentityVersion === current.typescriptSymbolIdentityVersion &&
     JSON.stringify([...fingerprint.languages].sort()) === JSON.stringify(current.languages) &&
     fingerprint.pnpmWorkspaces === current.pnpmWorkspaces &&
     fingerprint.typescriptProjectMode === current.typescriptProjectMode &&

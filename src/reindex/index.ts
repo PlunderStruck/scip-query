@@ -1,3 +1,4 @@
+import { TYPESCRIPT_SYMBOL_IDENTITY_VERSION } from '../domain/typescript-index-identity.js';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { basename, dirname, extname, join, resolve } from 'node:path';
@@ -150,16 +151,11 @@ import {
   typeScriptProjectInputPaths,
 } from './typescript-projects.js';
 import {
-  buildTypeScriptShardCostModel,
   createTypeScriptCompilerShards,
-  readTypeScriptShardCostModel,
   removeStaleTypeScriptCompilerShardConfigs,
   shouldShardTypeScriptCompilerInputs,
-  typescriptCompilerShardCount,
   typescriptCompilerShardParallelism,
   typescriptCompilerShardTargetFiles,
-  typescriptShardCostWeightAdjuster,
-  writeTypeScriptShardCostModel,
 } from './typescript-compiler-shards.js';
 import {
   materializeDeferredTypeScriptIndex,
@@ -1176,7 +1172,6 @@ async function runLanguageIndexersForFreshReindex(
     typescriptProjectMode: opts.opts.typescriptProjectMode,
     typescriptProjects: opts.opts.typescriptProjects,
     preDiscoveredTypeScriptProjects: tsProjectShards?.allProjects,
-    typescriptShardCostDir: dirname(opts.paths.outputDb),
     clojureConfigPath: opts.opts.clojureConfigPath,
     onStatus: opts.onStatus,
   });
@@ -1383,7 +1378,6 @@ function recordLanguageIndexerMeasurements(
       });
     }
   }
-  recordTypeScriptCompilerShardCosts(dirname(opts.paths.outputDb), opts.projectRoot, preparedRuns, runResults);
 }
 
 function cachedTypeScriptProjectResults(
@@ -1499,7 +1493,10 @@ function classifyTypeScriptProjectShardReuse(
       continue;
     }
     const cached =
-      meta.version === CURRENT_REINDEX_METADATA_VERSION && reindexMetadataCapabilities(meta).typescriptProjectShardReuse
+      meta.version === CURRENT_REINDEX_METADATA_VERSION &&
+      projectInputSnapshotOrNull(meta.fingerprint)?.typescriptSymbolIdentityVersion ===
+        TYPESCRIPT_SYMBOL_IDENTITY_VERSION &&
+      reindexMetadataCapabilities(meta).typescriptProjectShardReuse
         ? meta.typescriptProjectShards?.[project]
         : undefined;
     if (!cached) {
@@ -2578,8 +2575,6 @@ function prepareIndexerRuns(opts: {
   typescriptProjects?: readonly string[];
   /** Skips re-discovery for the typescript language entry when provided (plan6 2.2 — discover projects once per fresh reindex). */
   preDiscoveredTypeScriptProjects?: readonly string[];
-  /** Cache directory holding the measured shard-cost model from the previous run. */
-  typescriptShardCostDir?: string;
   clojureConfigPath?: string;
   onStatus: (message: string) => void;
 }): PreparedIndexerPlan {
@@ -2619,7 +2614,6 @@ function prepareIndexerRunsForLanguage(opts: {
   typescriptProjectMode?: TypeScriptProjectMode;
   typescriptProjects?: readonly string[];
   preDiscoveredTypeScriptProjects?: readonly string[];
-  typescriptShardCostDir?: string;
   clojureConfigPath?: string;
   onStatus: (message: string) => void;
 }): ({ prepared: PreparedIndexerRun } | { skipped: { language: SupportedLanguage; reason: string } })[] {
@@ -2679,73 +2673,31 @@ function prepareIndexerRunsForLanguage(opts: {
 }
 
 /**
- * Persists measured per-shard costs so the next partition can balance shards
- * by observed duration instead of bytes alone. Recorded only when every
- * planned shard completed — a partial run would attribute one wave's costs to
- * a full partition. Telemetry only: a failed write never fails the reindex.
- */
-function recordTypeScriptCompilerShardCosts(
-  cacheDir: string,
-  projectRoot: string,
-  preparedRuns: readonly PreparedIndexerRun[],
-  runResults: readonly IndexerRunResult[],
-): void {
-  const shardRuns = preparedRuns.filter((run) => run.shardInputPaths !== undefined);
-  if (shardRuns.length === 0) return;
-  const durationById = new Map(
-    runResults.filter((result) => !result.skipped).map((result) => [result.id, result.durationMs]),
-  );
-  const measuredShards: { inputPaths: readonly string[]; durationMs: number }[] = [];
-  for (const run of shardRuns) {
-    const durationMs = durationById.get(run.id);
-    if (durationMs === undefined || !(durationMs > 0)) return;
-    measuredShards.push({ inputPaths: run.shardInputPaths!, durationMs });
-  }
-  try {
-    const model = buildTypeScriptShardCostModel(measuredShards, (relativePath) => {
-      try {
-        return statSync(join(projectRoot, relativePath)).size;
-      } catch {
-        return 1;
-      }
-    });
-    if (model) writeTypeScriptShardCostModel(cacheDir, model);
-  } catch {
-    // Cost feedback is an optimization signal; losing one sample only means
-    // the next partition balances by bytes.
-  }
-}
-
-/**
  * A single-project TypeScript repository above the shard threshold is indexed
- * as several bounded compiler programs instead of one monolithic program
- * whose checker state can exceed the child heap. Shards are disjoint by
- * construction (each shard config overrides the inherited include contract),
- * so their streamed outputs concatenate into one complete index.
+ * as disjoint document-emission subsets. Each process retains the complete
+ * compiler project so ambient declarations and cross-file bindings survive.
+ * Streamed outputs concatenate into one complete index.
  */
 function prepareBoundedTypeScriptCompilerShardRuns(
   opts: Parameters<typeof prepareIndexerRunsForLanguage>[0],
   common: Omit<Parameters<typeof prepareIndexerRun>[0], 'projectPath'>,
 ): ({ prepared: PreparedIndexerRun } | { skipped: { language: SupportedLanguage; reason: string } })[] | null {
+  // Explicit repository tools do not implement the bundled emission manifest.
+  if (opts.trustProjectTools && resolveProjectLocalIndexerBinary(getIndexerConfig('typescript'), opts.projectRoot)) {
+    return null;
+  }
   const targetFiles = typescriptCompilerShardTargetFiles();
   const inputPaths = typeScriptProjectInputPaths(opts.projectRoot, 'single');
   if (!inputPaths || !shouldShardTypeScriptCompilerInputs(inputPaths.size, targetFiles)) return null;
 
   removeStaleTypeScriptCompilerShardConfigs(opts.projectRoot);
   const parallelism = typescriptCompilerShardParallelism();
-  const shardCount = typescriptCompilerShardCount(inputPaths.size, targetFiles, parallelism);
-  const costModel = opts.typescriptShardCostDir ? readTypeScriptShardCostModel(opts.typescriptShardCostDir) : null;
-  const costAdjustedWeight = typescriptShardCostWeightAdjuster(costModel);
   const compilerShards = createTypeScriptCompilerShards({
     projectRoot: opts.projectRoot,
     rootConfigPath: 'tsconfig.json',
     inputPaths: [...inputPaths],
     targetFiles,
-    shardCount,
-    // Balance shards by source bytes, scaled by the previous run's measured
-    // ms-per-byte for the range that held each file: shard wall time is the
-    // slowest shard of a wave, and compile cost tracks type-check density
-    // more than bytes.
+    // Stable source-byte weights never depend on prior timings or concurrency.
     weightOf: (relativePath) => {
       let bytes = 1;
       try {
@@ -2753,13 +2705,13 @@ function prepareBoundedTypeScriptCompilerShardRuns(
       } catch {
         // A vanished file weighs one byte; the compiler run resolves it.
       }
-      return costAdjustedWeight(relativePath, bytes);
+      return bytes;
     },
   });
   const boundedConcurrency = Math.min(parallelism, compilerShards.length);
   opts.onStatus(
     `Indexing ${inputPaths.size} TypeScript inputs as ${compilerShards.length} ` +
-      `${costModel ? 'cost-balanced' : 'byte-balanced'} compiler shard(s), ${boundedConcurrency} at a time.`,
+      `byte-balanced compiler shard(s), ${boundedConcurrency} at a time.`,
   );
   return compilerShards.map((shard, shardIndex) =>
     prepareIndexerRun({
@@ -2771,7 +2723,6 @@ function prepareBoundedTypeScriptCompilerShardRuns(
       temporaryProjectConfigs: [{ path: shard.configPath, content: shard.content }],
       boundedConcurrency,
       outputComposition: 'protobuf-concatenate',
-      shardInputPaths: shard.inputPaths,
     }),
   );
 }
@@ -2791,7 +2742,6 @@ type PrepareIndexerRunOptions = {
   temporaryProjectConfigs?: readonly { path: string; content: string }[];
   boundedConcurrency?: number;
   outputComposition?: 'protobuf-concatenate';
-  shardInputPaths?: readonly string[];
   clojureConfigPath?: string;
   onStatus: (message: string) => void;
 };
@@ -2864,7 +2814,6 @@ function preparedIndexerOptionalFields(opts: PrepareIndexerRunOptions, rootConfi
     ...(opts.temporaryProjectConfigs === undefined ? {} : { temporaryProjectConfigs: opts.temporaryProjectConfigs }),
     ...(opts.boundedConcurrency === undefined ? {} : { boundedConcurrency: opts.boundedConcurrency }),
     ...(opts.outputComposition ? { outputComposition: opts.outputComposition } : {}),
-    ...(opts.shardInputPaths === undefined ? {} : { shardInputPaths: opts.shardInputPaths }),
   };
 }
 
@@ -3426,6 +3375,7 @@ function computeLanguageFingerprints(
       const typeScriptOptions =
         language === 'typescript'
           ? {
+              typescriptSymbolIdentityVersion: TYPESCRIPT_SYMBOL_IDENTITY_VERSION,
               typescriptProjectMode: opts.typescriptProjectMode ?? 'single',
               typescriptProjects: normalizedTypeScriptProjects,
             }

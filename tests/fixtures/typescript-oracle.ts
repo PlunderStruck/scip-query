@@ -1,13 +1,14 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { TypeScriptDocumentRuntime } from '../../src/reindex/typescript-document-emitter.js';
-const require = createRequire(import.meta.url);
 
 export function cleanOracle(root: string, runtime: TypeScriptDocumentRuntime): Map<string, Buffer> {
-  const packagePath = require.resolve('@sourcegraph/scip-typescript/package.json');
-  const mainPath = join(dirname(packagePath), 'dist/src/main.js');
+  // A fresh standalone compiler process, independent of retained state and the
+  // affected-set planner. Literal identity/binding expectations live in the
+  // document-numbering tests; this oracle checks state-history equivalence.
+  const mainPath = fileURLToPath(new URL('../../dist/typescript-indexer.js', import.meta.url));
   const outputPath = join(root, 'oracle.scip');
   execFileSync(process.execPath, [mainPath, 'index', '--cwd', root, '--output', outputPath, '--no-progress-bar', '.'], {
     cwd: root,

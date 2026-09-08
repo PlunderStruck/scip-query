@@ -8,6 +8,7 @@ import type { IndexerConfig } from '../domain/types.js';
 import { isBinaryAvailable, resolveSpawnableExecutable } from './binary.js';
 import { readProjectFile, resolveProjectFile } from './project-files.js';
 import { readSmallArtifactText } from './bounded-file.js';
+import { cliPackageRoot } from './cli-version.js';
 
 const requireFromHere = createRequire(import.meta.url);
 
@@ -65,6 +66,12 @@ export function describeIndexerBinary(toolchain: IndexerToolchain): string {
  * even when the target project is not itself an npm project.
  */
 export function resolveIndexerBinary(toolchain: IndexerToolchain): string | null {
+  // The bundled TypeScript producer shares its identity adapter with subset
+  // emission. Prefer that pinned producer over an unrelated PATH installation.
+  if (toolchain.bundledNpmPackage === '@sourcegraph/scip-typescript') {
+    const bundled = resolveBundledNpmBinary(toolchain);
+    if (bundled) return bundled;
+  }
   for (const candidate of getBinaryCandidates(toolchain)) {
     // `where` can report npm's .cmd/extensionless shim scripts, which a
     // shell-less spawn rejects with EFTYPE. On every platform, retain the
@@ -93,6 +100,12 @@ function isBundledNpmPackageInstalled(toolchain: IndexerToolchain): boolean {
 function resolveBundledNpmBinary(toolchain: IndexerToolchain): string | null {
   const packageJsonPath = resolveBundledNpmPackageJson(toolchain);
   if (!packageJsonPath) return null;
+
+  if (toolchain.bundledNpmPackage === '@sourcegraph/scip-typescript') {
+    if (!cliPackageRoot) return null;
+    const adapter = join(cliPackageRoot, 'dist', 'typescript-indexer.js');
+    return existsSync(adapter) ? adapter : null;
+  }
 
   const pkg = JSON.parse(readSmallArtifactText(packageJsonPath, 'indexer package manifest')) as {
     bin?: string | Record<string, string>;

@@ -1,3 +1,4 @@
+import { typeScriptIndexVersion } from '../domain/typescript-index-identity.js';
 import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf';
@@ -527,7 +528,7 @@ function assertProducerMetadata(metadata: unknown, packageVersion: string): void
     throw new Error('TypeScript SCIP shard has no producer tool identity');
   }
   const identity = tool as { name?: unknown; version?: unknown };
-  if (identity.name !== 'scip-typescript' || identity.version !== packageVersion) {
+  if (identity.name !== 'scip-typescript' || identity.version !== typeScriptIndexVersion(packageVersion)) {
     throw new Error('TypeScript SCIP shard producer identity changed');
   }
 }

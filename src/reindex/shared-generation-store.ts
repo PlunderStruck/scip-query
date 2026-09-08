@@ -1,3 +1,4 @@
+import { TYPESCRIPT_SYMBOL_IDENTITY_VERSION } from '../domain/typescript-index-identity.js';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   existsSync,
@@ -84,6 +85,7 @@ export const SHARED_GENERATION_ENV = 'SCIP_QUERY_SHARED_CACHE';
 export const POST_INDEX_AUGMENTATION_SCHEMA_VERSION = 2;
 export const SHARED_GENERATION_PRODUCER_IDENTITY = JSON.stringify({
   cliVersion,
+  typescriptSymbolIdentityVersion: TYPESCRIPT_SYMBOL_IDENTITY_VERSION,
   artifactCatalogVersion: INDEX_ARTIFACT_CATALOG_VERSION,
   postIndexAugmentationSchemaVersion: POST_INDEX_AUGMENTATION_SCHEMA_VERSION,
   sqliteGenerationStoreVersion: SQLITE_GENERATION_STORE_VERSION,
@@ -1334,6 +1336,7 @@ function sameFingerprintConfiguration(
   fingerprint: ProjectInputFingerprint,
   expected: ProjectInputFingerprintConfiguration,
 ): boolean {
+  if (fingerprint.typescriptSymbolIdentityVersion !== expected.typescriptSymbolIdentityVersion) return false;
   const actual = normalizeProjectInputFingerprintConfiguration(fingerprint.languages, fingerprint);
   return JSON.stringify(actual) === JSON.stringify(expected);
 }

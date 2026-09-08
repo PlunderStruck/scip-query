@@ -1,16 +1,14 @@
 import { readdirSync, rmSync } from 'node:fs';
 import { cpus, totalmem } from 'node:os';
 import { join } from 'node:path';
-import { readSourceArtifactText } from '../platform/bounded-file.js';
 import {
   isTypeScriptCompilerShardConfigPath,
   typescriptCompilerShardConfigFileName,
 } from '../platform/typescript-projects.js';
-import { writeJsonAtomic } from '../storage/atomic-json.js';
 
 /**
- * A compiler shard is one ordinary TypeScript project config whose explicit
- * input list is small enough to keep one scip-typescript Program bounded.
+ * A compiler shard is a document-emission subset of one complete TypeScript
+ * compiler project. Each child retains all roots for type resolution.
  *
  * Shard configs are written inside the project root (not the cache directory)
  * because TypeScript resolves automatic `@types` inclusion by walking up from
@@ -24,9 +22,8 @@ export interface TypeScriptCompilerShard {
 }
 
 /**
- * Target declared inputs per shard. Measured on a 7.7k-file Next.js repo, a
- * 2,048-file shard peaks near 5 GB RSS inside the default 8 GB child heap,
- * while the monolithic program exceeds the heap entirely.
+ * Target emitted documents per shard. Compiler context remains complete;
+ * the existing child heap limit applies independently of this work bound.
  */
 export const TYPESCRIPT_COMPILER_SHARD_TARGET_FILES = 2048;
 
@@ -53,48 +50,10 @@ export function shouldShardTypeScriptCompilerInputs(inputCount: number, targetFi
 }
 
 /**
- * A shard may exceed the target by this factor when doing so saves a whole
- * execution wave; the measured per-file memory slope leaves that much
- * headroom inside the default child heap.
- */
-const SHARD_HARD_MAX_FACTOR = 1.25;
-
-/**
- * Wave-optimal shard count: shard wall time is the slowest wave, so a count
- * that divides evenly into the machine's parallelism beats one that leaves a
- * ragged final wave. A count below the target-derived base is allowed only
- * while per-shard inputs stay under the hard cap.
- */
-export function typescriptCompilerShardCount(inputCount: number, targetFiles: number, parallelism: number): number {
-  assertTypeScriptCompilerShardTarget(targetFiles);
-  const base = Math.max(1, Math.ceil(inputCount / targetFiles));
-  if (base <= 1 || parallelism <= 1) return base;
-  const hardMax = Math.floor(targetFiles * SHARD_HARD_MAX_FACTOR);
-  const candidates = new Set([
-    base,
-    parallelism * Math.floor(base / parallelism),
-    parallelism * Math.ceil(base / parallelism),
-  ]);
-  // Wall time ≈ waves × per-shard duration, and per-shard duration grows with
-  // per-shard inputs, so rank by waves × per-shard size; fewer shards win
-  // ties because every extra shard re-parses the shared dependency closure.
-  const makespan = (count: number): number => Math.ceil(count / parallelism) * Math.ceil(inputCount / count);
-  let best = base;
-  for (const candidate of candidates) {
-    if (candidate < 1 || Math.ceil(inputCount / candidate) > hardMax) continue;
-    if (makespan(candidate) < makespan(best) || (makespan(candidate) === makespan(best) && candidate < best)) {
-      best = candidate;
-    }
-  }
-  return best;
-}
-
-/**
  * Deterministic partition of the sorted unique input list into `shardCount`
  * contiguous shards of near-equal cumulative weight. Sorting by path keeps
- * each shard directory-coherent, which keeps its parsed dependency closure
- * (and therefore its memory floor) well below the whole program's; weighting
- * by source bytes keeps shard durations balanced, since wall time is the
+ * each emission subset directory-coherent; weighting by source bytes
+ * approximates document-emission work, since wall time is the
  * slowest shard of a wave.
  */
 export function partitionTypeScriptCompilerInputsIntoShards(
@@ -153,17 +112,13 @@ export function createTypeScriptCompilerShards(opts: {
   return partitionTypeScriptCompilerInputsIntoShards(opts.inputPaths, shardCount, opts.weightOf).map(
     (inputPaths, index) => {
       const configPath = join(opts.projectRoot, typescriptCompilerShardConfigFileName(index));
-      // `files` alone does not bound the program: `include` inherited through
-      // `extends` is unioned with `files`, so both `include` and `exclude` must
-      // be overridden explicitly or every shard silently compiles (and emits)
-      // the whole repository again.
+      // Preserve the entire compiler project, including ambient declarations.
+      // The shared compiler adapter limits emission after constructing the program.
       const content = `${JSON.stringify(
         {
           extends: `./${opts.rootConfigPath}`,
           compilerOptions: { incremental: false },
-          files: inputPaths.map((relativePath) => `./${relativePath}`),
-          include: [],
-          exclude: [],
+          scipQueryEmissionFiles: inputPaths,
         },
         null,
         2,
@@ -171,108 +126,6 @@ export function createTypeScriptCompilerShards(opts: {
       return { configPath, content, inputPaths };
     },
   );
-}
-
-/**
- * One measured shard from a previous run: the contiguous path range it
- * covered, its raw source-byte weight at partition time, and its wall time.
- * Ranges follow the same locale sort the partitioner uses, so a later run can
- * map any input path to the range that contained it.
- */
-export interface TypeScriptShardCostSample {
-  firstPath: string;
-  lastPath: string;
-  totalBytes: number;
-  durationMs: number;
-}
-
-export interface TypeScriptShardCostModel {
-  version: 1;
-  samples: TypeScriptShardCostSample[];
-}
-
-export const TYPESCRIPT_SHARD_COST_MODEL_FILE = 'typescript-shard-costs.json';
-
-/**
- * A measured rate may only move a file's weight this far from the median
- * rate, so one contended or mismeasured run cannot capsize the partition.
- */
-const SHARD_COST_RATE_CLAMP = 4;
-
-export function readTypeScriptShardCostModel(cacheDir: string): TypeScriptShardCostModel | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(readSourceArtifactText(join(cacheDir, TYPESCRIPT_SHARD_COST_MODEL_FILE), 'shard cost model'));
-  } catch {
-    return null;
-  }
-  if (typeof raw !== 'object' || raw === null || (raw as { version?: unknown }).version !== 1) return null;
-  const samples = (raw as { samples?: unknown }).samples;
-  if (!Array.isArray(samples)) return null;
-  const valid = samples.every(
-    (sample: unknown) =>
-      typeof sample === 'object' &&
-      sample !== null &&
-      typeof (sample as TypeScriptShardCostSample).firstPath === 'string' &&
-      typeof (sample as TypeScriptShardCostSample).lastPath === 'string' &&
-      Number.isFinite((sample as TypeScriptShardCostSample).totalBytes) &&
-      (sample as TypeScriptShardCostSample).totalBytes > 0 &&
-      Number.isFinite((sample as TypeScriptShardCostSample).durationMs) &&
-      (sample as TypeScriptShardCostSample).durationMs > 0,
-  );
-  return valid ? { version: 1, samples: samples as TypeScriptShardCostSample[] } : null;
-}
-
-export function writeTypeScriptShardCostModel(cacheDir: string, model: TypeScriptShardCostModel): void {
-  writeJsonAtomic(join(cacheDir, TYPESCRIPT_SHARD_COST_MODEL_FILE), model);
-}
-
-/**
- * Turns measured shard costs into a byte-weight adjuster for the next
- * partition. Byte-balanced shards still finish up to ~40% apart because
- * compile cost tracks type-check density, not bytes; scaling each file's byte
- * weight by its previous range's measured ms/byte moves the boundaries toward
- * equal duration instead of equal bytes. Files outside every measured range
- * (new files, or a reshaped repository) keep their plain byte weight.
- */
-export function typescriptShardCostWeightAdjuster(
-  model: TypeScriptShardCostModel | null,
-): (path: string, byteWeight: number) => number {
-  const measured = (model?.samples ?? []).filter((sample) => sample.totalBytes > 0 && sample.durationMs > 0);
-  if (measured.length < 2) return (_path, byteWeight) => byteWeight;
-  const rates = measured.map((sample) => sample.durationMs / sample.totalBytes).sort((left, right) => left - right);
-  const median = rates[Math.floor(rates.length / 2)]!;
-  if (!(median > 0)) return (_path, byteWeight) => byteWeight;
-  const samples = [...measured].sort((left, right) => left.firstPath.localeCompare(right.firstPath));
-  return (path, byteWeight) => {
-    for (const sample of samples) {
-      if (path.localeCompare(sample.firstPath) < 0) break;
-      if (path.localeCompare(sample.lastPath) > 0) continue;
-      const relative = sample.durationMs / sample.totalBytes / median;
-      return byteWeight * Math.min(SHARD_COST_RATE_CLAMP, Math.max(1 / SHARD_COST_RATE_CLAMP, relative));
-    }
-    return byteWeight;
-  };
-}
-
-/**
- * Builds the cost model for the shards that just ran. Weights are the shards'
- * raw byte weights (not the cost-adjusted partition weights), so recorded
- * rates stay in ms per source byte across runs.
- */
-export function buildTypeScriptShardCostModel(
-  shards: readonly { inputPaths: readonly string[]; durationMs: number }[],
-  byteWeightOf: (path: string) => number,
-): TypeScriptShardCostModel | null {
-  const samples: TypeScriptShardCostSample[] = [];
-  for (const shard of shards) {
-    const firstPath = shard.inputPaths[0];
-    const lastPath = shard.inputPaths[shard.inputPaths.length - 1];
-    if (firstPath === undefined || lastPath === undefined || !(shard.durationMs > 0)) return null;
-    const totalBytes = shard.inputPaths.reduce((sum, path) => sum + Math.max(1, byteWeightOf(path)), 0);
-    samples.push({ firstPath, lastPath, totalBytes, durationMs: shard.durationMs });
-  }
-  return samples.length > 0 ? { version: 1, samples } : null;
 }
 
 /**
@@ -344,10 +197,4 @@ function shouldFinishCompilerShard(
     remainingFiles >= remainingShards &&
     (cumulative >= (totalWeight * (completedShards + 1)) / shardCount || remainingFiles === remainingShards)
   );
-}
-
-function assertTypeScriptCompilerShardTarget(targetFiles: number): void {
-  if (!Number.isSafeInteger(targetFiles) || targetFiles < 1) {
-    throw new Error(`TypeScript compiler shard targetFiles must be a positive safe integer; received ${targetFiles}.`);
-  }
 }

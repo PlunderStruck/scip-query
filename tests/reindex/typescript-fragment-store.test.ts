@@ -10,8 +10,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { readDocumentFactDigests } from '../../src/reindex/affected-shadow.js';
 import { patchIncrementalSqliteGeneration } from '../../src/reindex/incremental-sqlite-publication.js';
@@ -40,8 +40,6 @@ import {
 import { resolveScipBinary } from '../../src/platform/scip-cli.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 
-const require = createRequire(import.meta.url);
-
 describe('TypeScript fragment store', () => {
   test('persists, validates, assembles, and prunes exact document generations', () => {
     const availability = loadTypeScriptDocumentRuntime();
@@ -62,6 +60,25 @@ describe('TypeScript fragment store', () => {
 
     const initial = created.emitter.initialize();
     const baseline = cleanOracle(root);
+    const legacy = availability.runtime.Index.deserializeBinary(baseline);
+    const metadata = legacy.metadata as { tool_info: { version: string } };
+    expect(metadata.tool_info.version).toBe('0.4.0+scip-query-symbols.1');
+    metadata.tool_info.version = '0.4.0';
+    expect(() =>
+      seedTypeScriptFragmentGeneration({
+        cacheDir,
+        runtime: availability.runtime,
+        indexBytes: legacy.serializeBinary(),
+        producerIdentity: initial.producerIdentity,
+        projectIdentity: 'fixture-project-v1',
+        generationIdentity: 'legacy-must-not-publish',
+        documentIdentities: new Map(),
+      }),
+    ).toThrow('producer identity changed');
+    expect(() => readTypeScriptFragmentGeneration({ cacheDir, generationIdentity: 'legacy-must-not-publish' })).toThrow(
+      'ENOENT',
+    );
+
     const initialIdentities = new Map(
       initial.fragments.map((fragment) => [fragment.relativePath, `g1:${fragment.relativePath}`]),
     );
@@ -487,8 +504,7 @@ function writeFixture(root: string): void {
 }
 
 function cleanOracle(root: string): Buffer {
-  const packagePath = require.resolve('@sourcegraph/scip-typescript/package.json');
-  const mainPath = join(dirname(packagePath), 'dist/src/main.js');
+  const mainPath = fileURLToPath(new URL('../../dist/typescript-indexer.js', import.meta.url));
   const outputPath = join(root, 'oracle.scip');
   execFileSync(process.execPath, [mainPath, 'index', '--cwd', root, '--output', outputPath, '--no-progress-bar', '.'], {
     cwd: root,

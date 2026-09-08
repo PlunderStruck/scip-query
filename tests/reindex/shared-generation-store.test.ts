@@ -67,6 +67,7 @@ describe('shared generation store', () => {
       }),
     ).toEqual({
       version: 3,
+      typescriptSymbolIdentityVersion: 1,
       languages: ['typescript'],
       pnpmWorkspaces: false,
       typescriptProjectMode: 'workspace',
@@ -466,6 +467,17 @@ describe('shared generation store', () => {
     );
     expect(() =>
       parseSharedGenerationManifest(JSON.stringify({ ...manifest, producerIdentity: 'older-producer' })),
+    ).toThrow('invalid shared generation manifest');
+    const legacyProducer = JSON.parse(SHARED_GENERATION_PRODUCER_IDENTITY);
+    expect(legacyProducer.typescriptSymbolIdentityVersion).toBe(1);
+    delete legacyProducer.typescriptSymbolIdentityVersion;
+    expect(() =>
+      parseSharedGenerationManifest(
+        JSON.stringify({
+          ...manifest,
+          producerIdentity: JSON.stringify(legacyProducer),
+        }),
+      ),
     ).toThrow('invalid shared generation manifest');
   });
 
