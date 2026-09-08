@@ -1,0 +1,352 @@
+{
+  "head": "3989b65ab95c4684e288ae5bb4e1525570650c5f",
+  "source": {
+    "eligible": 5949,
+    "analyzed": 5949,
+    "functions": 60474,
+    "excluded": {
+      "unsupported-language": 4983,
+      "reference": 17,
+      "test": 2863
+    },
+    "problems": [],
+    "import_resolutions": {
+      "internal": 27796,
+      "external": 6589,
+      "builtin": 537,
+      "excluded": 9,
+      "missing": 0,
+      "ambiguous": 0,
+      "dynamic": 0
+    },
+    "findings_by_rule": {
+      "dependency-cycle": 1,
+      "duplication": 63,
+      "complexity": 2341
+    },
+    "findings_by_evidence": {
+      "derived": 2342,
+      "candidate": 63
+    },
+    "suppression_decisions": 231,
+    "crap_available": 0
+  },
+  "inventory": {
+    "groups": 1469,
+    "groups_without_findings": 993,
+    "edges": 7628
+  },
+  "architecture": {
+    "boundaries": [
+      "campaign-editor-composition",
+      "campaign-editor-features",
+      "campaign-form-contract",
+      "campaign-shape-policy"
+    ],
+    "indexed_total": 8761,
+    "indexed_mapped": 32,
+    "production_total": 5949,
+    "production_mapped": 28,
+    "forbidden_edges": 0,
+    "cycles": 0,
+    "stale_allowances": 0,
+    "fragile_edges": 3,
+    "limits": [
+      "This graph covers indexed documents and observed import/re-export relationships, supplemented by compiler-resolved current TS/JS imports (including literal dynamic imports, import types and unshadowed CommonJS). Unindexed files, nonliteral imports and unsupported relationships cannot establish repository-wide absence; allowances from boundaries without observed source files are not classified as unused.",
+      "Unused-allowance claims are withheld for owners with unavailable or unresolved current TS/JS imports:",
+      "e2e/support/dashboard.ts: 97: firebaseAppModuleUrl (dynamic)",
+      "e2e/support/dashboard.ts: 100: firebaseAuthModuleUrl (dynamic)",
+      "scripts/run-oxlint.test.ts: 4: ../package.json (excluded)",
+      "src/app/(authenticated)/(dashboard)/settings/components/sections/setting-row.tsx: 4: ./settings-alignment.module.css (excluded)",
+      "src/app/layout.tsx: 13: ./globals.css (excluded)",
+      "src/lib/code-health/data.ts: 8: ./data/snapshot.json (excluded)",
+      "src/lib/code-health/symbol-sources.ts: 9: ./data/symbol-sources.json (excluded)",
+      "src/lib/discord/message-fixtures.test.ts: 12: ./message-fixtures.json (excluded)",
+      "src/lib/media/image-proxy-url.ts: 1: ./image-proxy-routes.json (excluded)",
+      "src/lib/taxes/reference/state-tax-2026.ts: 1: @/lib/taxes/reference/state-tax-2026.json (excluded)"
+    ]
+  },
+  "review": {
+    "base": "86dbc1aa1a336d31f216d0c2d9b6e5c715c5a5df",
+    "changed_files": [
+      "src/lib/statsbot/table-notes.ts",
+      "src/lib/support-agents/agents/prompt.ts"
+    ],
+    "functions": [
+      {
+        "name": "supportAgentPromptForEvent",
+        "cyclomatic": 4,
+        "cognitive": 4,
+        "delta": {
+          "cyclomatic": 0,
+          "cognitive": 0
+        }
+      },
+      {
+        "name": "supportAgentPromptForKind",
+        "cyclomatic": 2,
+        "cognitive": 1,
+        "delta": {
+          "cyclomatic": 0,
+          "cognitive": 0
+        }
+      }
+    ],
+    "findings": 0,
+    "blocking": 0
+  },
+  "cycle": {
+    "id": "dependency-cycle:2a8725b8f2ca352ef17264595cb86ea7d47e114d20df17949ebef5efc17c5e65",
+    "rule": "dependency-cycle",
+    "evidence": "derived",
+    "summary": "4 production files form a circular component of static value imports.",
+    "score": 4,
+    "sites": [
+      {
+        "file": "src/lib/client-access/index.ts",
+        "line": 52
+      },
+      {
+        "file": "src/lib/client-access/operations/campaign-workspace-location.ts",
+        "line": 6
+      },
+      {
+        "file": "src/lib/clients/index.ts",
+        "line": 1
+      },
+      {
+        "file": "src/lib/clients/queries.ts",
+        "line": 14
+      }
+    ],
+    "details": [
+      "src/lib/client-access/index.ts:52 \u2192 src/lib/client-access/operations/campaign-workspace-location.ts (reexport, value)",
+      "src/lib/client-access/operations/campaign-workspace-location.ts:6 \u2192 src/lib/clients/index.ts (import, value)",
+      "src/lib/clients/index.ts:1 \u2192 src/lib/clients/queries.ts (reexport, value)",
+      "src/lib/clients/queries.ts:14 \u2192 src/lib/client-access/index.ts (import, value)"
+    ]
+  },
+  "highest_complexity": [
+    {
+      "summary": "RunAdScreen: cyclomatic 329, cognitive 323.",
+      "sites": [
+        {
+          "file": "src/app/(authenticated)/(dashboard)/media/components/RunAdScreen.tsx",
+          "line": 347,
+          "name": "RunAdScreen"
+        }
+      ],
+      "score": 32.9
+    },
+    {
+      "summary": "ManagedAdPublicationSettings: cyclomatic 188, cognitive 161.",
+      "sites": [
+        {
+          "file": "src/app/(authenticated)/(dashboard)/media/components/ManagedAdPublicationSettings.tsx",
+          "line": 1636,
+          "name": "ManagedAdPublicationSettings"
+        }
+      ],
+      "score": 18.8
+    },
+    {
+      "summary": "validatePostTrigger.run: cyclomatic 146, cognitive 217.",
+      "sites": [
+        {
+          "file": "src/trigger/validate/validate-post.trigger.ts",
+          "line": 688,
+          "name": "validatePostTrigger.run"
+        }
+      ],
+      "score": 14.6
+    },
+    {
+      "summary": "refreshApifyMetricsTask.run: cyclomatic 139, cognitive 178.",
+      "sites": [
+        {
+          "file": "src/trigger/social/apify-metrics.trigger.ts",
+          "line": 362,
+          "name": "refreshApifyMetricsTask.run"
+        }
+      ],
+      "score": 13.9
+    },
+    {
+      "summary": "transformCampaignToV2.campaignResponses.<callback:campaigns.map:0>: cyclomatic 120, cognitive 80.",
+      "sites": [
+        {
+          "file": "src/lib/campaigns/creator-read/http/mobile-campaign-response.ts",
+          "line": 4517,
+          "name": "transformCampaignToV2.campaignResponses.<callback:campaigns.map:0>"
+        }
+      ],
+      "score": 12
+    }
+  ],
+  "artifact_hashes": {
+    "backend-health.json": "2579bbeb609f862e4c374dcd339fa966a502996b7a3bd6c3f59c400bae1b8705",
+    "backend-review.json": "c6a2bbed891b4b8cc7f0d097c044973563bb6aeb408179ef3178795fae57eac4",
+    "backend-system.json": "1a52ea29b2e181beee18ebd87946f299d5489a04189b2a1f159d6be39b0e69a6",
+    "backend-architecture.json": "a81379aad7208025c0421dabc541f679f7fa1c883bf8a80f56ccf87dfc8fc61f"
+  },
+  "diff_impact": {
+    "changed_files": 3,
+    "changed_symbols": 4,
+    "affected_consumers": 3,
+    "unindexed_changed_files": [
+      "agent_docs/papercuts/2026-09-08T01-18-11-693Z--Claude-Fable-5.1--plunderstruck--testing.md",
+      "docs/plans/2026-09-06-system-latency-assessment.md",
+      "docs/plans/2026-09-06-system-latency-evidence.json",
+      "agent_docs/history/2026-09-05-next-action-parity-audit.md",
+      "agent_docs/scip-query/next-action-audit-2026-09-05.cjs",
+      "agent_docs/scip-query/next-action-audit-2026-09-05.json",
+      "agent_docs/scip-query/tech-debt-evidence-2026-09-05.json",
+      "docs/plans/2026-09-05-tech-debt-second-pass.md"
+    ],
+    "summary": {
+      "totalChangedFiles": 3,
+      "totalChangedSymbols": 4,
+      "totalAffectedFiles": 3,
+      "note": "8 changed path(s) were omitted from symbol analysis because they are absent or excluded from this index. Reindex supported source or use review for current-source analysis."
+    }
+  },
+  "installation": {
+    "sourceCommit": "d4e1813842eb2abd82a1644a3cec0358bad0ea3c",
+    "archiveSha256": "a4d0d952f16db7eeed0c8c907f7658f7c963db3bfc1b758dd47159e97d3f9b36",
+    "profile": "launchpoint-agent",
+    "sshAlias": "dev-agent",
+    "uid": 1002,
+    "prefix": "/home/launchpoint-agent/.local",
+    "packageFilesVerified": 455,
+    "skillFilesVerified": 19,
+    "skillLinksVerified": 12,
+    "stalePackagedFiles": 0,
+    "hashMismatches": 0,
+    "ownershipMismatches": 0,
+    "originalWatchersRestored": 6
+  },
+  "scipQueryValidation": {
+    "repairBaselineFullSuite": {
+      "tests": 3416,
+      "files": 392
+    },
+    "telemetryFixFocusedSuite": {
+      "tests": 92,
+      "files": 2
+    },
+    "growthRegressionFailedBeforeFix": true,
+    "growthRegressionPassedAfterFix": true,
+    "lintPassed": true,
+    "typecheckPassed": true,
+    "buildPassed": true,
+    "scopedReviewFindings": 0,
+    "originalVmTelemetryNowPassing": true
+  },
+  "incrementalValidation": {
+    "status": "publication-verified-strict-equivalence-unresolved",
+    "source_commit": "d4e1813842eb2abd82a1644a3cec0358bad0ea3c",
+    "launchpoint_head": "3989b65ab95c4684e288ae5bb4e1525570650c5f",
+    "documents": 8763,
+    "baseline_symbols": 465269,
+    "restored_symbols": 465342,
+    "strict_baseline_equivalence": false,
+    "symbol_delta": {
+      "baseline_count": 465269,
+      "restored_count": 465342,
+      "addition_count": 465343,
+      "restored_hash_matches_baseline": false,
+      "missing_during_addition": [
+        {
+          "symbol": "scip-typescript npm launchpoint-backend 0.1.0 src/lib/statsbot/`table-notes.ts`/TableNote#typeLiteral24:details.",
+          "mentions": 3,
+          "definitions": 0
+        },
+        {
+          "symbol": "scip-typescript npm launchpoint-backend 0.1.0 src/lib/statsbot/`table-notes.ts`/TableNote#typeLiteral24:oneLiner.",
+          "mentions": 4,
+          "definitions": 0
+        }
+      ],
+      "extra_during_addition": [
+        "scip-typescript npm launchpoint-backend 0.1.0 src/lib/statsbot/`table-notes.ts`/TableNote#typeLiteral29:details.",
+        "scip-typescript npm launchpoint-backend 0.1.0 src/lib/statsbot/`table-notes.ts`/TableNote#typeLiteral29:oneLiner.",
+        "scip-typescript npm launchpoint-backend 0.1.0 src/lib/statsbot/`table-notes.ts`/scipQueryIncrementalValidation."
+      ]
+    },
+    "affected_files": [
+      "src/lib/statsbot/pi/statsbot-extension.ts",
+      "src/lib/statsbot/table-notes.ts",
+      "src/lib/support-agents/runtime/pi/extension.test.ts",
+      "src/lib/support-agents/runtime/pi/extension.ts",
+      "src/lib/support-agents/runtime/pi/tool-registry.ts"
+    ],
+    "changed_document_chunk_hashes": [
+      "src/lib/statsbot/pi/statsbot-extension.ts",
+      "src/lib/statsbot/table-notes.ts",
+      "src/lib/support-agents/runtime/pi/tool-registry.ts"
+    ],
+    "unaffected_document_chunk_hashes_preserved": 8758,
+    "dangling_mentions": 0,
+    "dangling_definitions": 0,
+    "probe_added_and_removed": true,
+    "source_restored": true,
+    "temporary_checkout_clean": true,
+    "addition_reindex_seconds": 41.927400586000005,
+    "removal_publication": {
+      "mode": "incremental",
+      "validation": "passed",
+      "converterDurationMs": 14.225708999999824,
+      "affectedDocumentCount": 5,
+      "changedDocumentCount": 3,
+      "producerDurationMs": 1735.801647999906,
+      "materializationDurationMs": 2332.012996,
+      "patchDurationMs": 497.0631309999999,
+      "scipCompanion": "deferred",
+      "typescriptOverlayGeneration": "a2ca099a37bd9ad10718834ee668caf355d2b1b54f2df09c6e02f0d6a7517ee5"
+    },
+    "automatic_refresh_limit": "The initial ~2.4 GB refresh exceeded the 1 GiB automatic write allowance; addition required explicit reindex. The watcher later refreshed the restoration automatically.",
+    "checker_limits": [
+      "SCIP document text and symbol display_name are optional; the initial checker was corrected to inspect immutable published generations, stored occurrence chunks and full SCIP symbol identities.",
+      "The cold baseline retained hashes and counts, but its database generation was collected; it cannot supply a full symbol-by-symbol delta for the net increase of 73. Addition/restoration database snapshots are retained for follow-up.",
+      "A raw symbol identity difference does not by itself prove a missing or incorrect source binding. Do not normalize it away without verifying those bindings."
+    ]
+  },
+  "finalVerification": {
+    "source_commit": "d4e1813842eb2abd82a1644a3cec0358bad0ea3c",
+    "archive_sha256": "a4d0d952f16db7eeed0c8c907f7658f7c963db3bfc1b758dd47159e97d3f9b36",
+    "package_hashes_verified": 455,
+    "skill_links_verified": 12,
+    "watchers": [
+      {
+        "pid": 2006464,
+        "root": "/home/launchpoint-agent/projects/launchpoint-backend"
+      },
+      {
+        "pid": 2006514,
+        "root": "/home/launchpoint-agent/.t3/worktrees/launchpoint-backend/t3code-c260706c"
+      },
+      {
+        "pid": 2006563,
+        "root": "/home/launchpoint-agent/.t3/worktrees/launchpoint-backend/t3code-bcff7c10"
+      },
+      {
+        "pid": 2006618,
+        "root": "/home/launchpoint-agent/.t3/worktrees/launchpoint-backend/t3code-1c0ac393"
+      },
+      {
+        "pid": 2006682,
+        "root": "/home/launchpoint-agent/.t3/worktrees/launchpoint-backend/t3code-14279813"
+      },
+      {
+        "pid": 2006752,
+        "root": "/home/launchpoint-agent/projects/launchpoint-next-read-latency"
+      }
+    ],
+    "temporary_worktree_removed": true,
+    "temporary_cache_removed": true,
+    "diagnostic_database_copies_retained": true,
+    "backend_head_preserved": true,
+    "backend_status_preserved": true,
+    "preexisting_dirty_file_bytes_preserved": true
+  }
+}
