@@ -1,5 +1,11 @@
 import { getAst } from '../ast/ast-core.js';
+import {
+  sourceAnalysisRoot,
+  type SourceRangeColumns,
+  ANALYSIS_CALLABLE_NODE_TYPES as CALLABLE_NODE_TYPES,
+} from '../ast/ast-callables.js';
 import type { SyntaxNode } from '../ast/ast-types.js';
+import { sourceBindingResolver, type SourceBindingResolver } from '../ast/source-binding-identity.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import type {
   ParserStateValueRelationSubtype,
@@ -15,6 +21,10 @@ export interface SourceProgramConstruct {
   label: string;
   startLine: number;
   endLine: number;
+  startColumn?: number;
+  endColumn?: number;
+  resourceKey?: string;
+  identityBasis?: 'compiler-binding-access-path' | 'source-access-occurrence';
 }
 
 export interface SourceStateMutationFact {
@@ -47,22 +57,6 @@ export interface SourceStateTemporalAnalysis {
     reason: string;
   }>;
 }
-
-const CALLABLE_NODE_TYPES = new Set([
-  'arrow_function',
-  'constructor_declaration',
-  'function_declaration',
-  'function_definition',
-  'function_expression',
-  'generator_function',
-  'generator_function_declaration',
-  'function_item',
-  'lambda',
-  'lambda_expression',
-  'method',
-  'method_declaration',
-  'method_definition',
-]);
 
 const BLOCK_NODE_TYPES = new Set(['block', 'body', 'compound_statement', 'declaration_list', 'statement_block']);
 
@@ -101,19 +95,21 @@ export function sourceStateTemporalAnalysis(
   relativePath: string,
   startLine: number,
   endLine: number,
+  columns: SourceRangeColumns = {},
 ): SourceStateTemporalAnalysis | null {
   const tree = getAst(db, relativePath);
   if (!tree) return null;
-  const root = findAnalysisRoot(tree.rootNode, startLine, endLine);
+  const root = sourceAnalysisRoot(tree.rootNode, startLine, endLine, CALLABLE_NODE_TYPES, columns);
   if (!root) return null;
 
   const mutations: SourceStateMutationFact[] = [];
   const temporal: SourceTemporalFact[] = [];
   const unsupported: SourceStateTemporalAnalysis['unsupported'] = [];
+  const bindings = sourceBindingResolver(relativePath, tree.rootNode);
 
   walk(root, (node) => {
     if (ASSIGNMENT_NODE_TYPES.has(node.type) || UPDATE_NODE_TYPES.has(node.type) || isDeleteExpression(node)) {
-      const mutation = mutationFact(node);
+      const mutation = mutationFact(node, bindings);
       if (mutation) mutations.push(mutation);
       else {
         unsupported.push({
@@ -148,10 +144,10 @@ export function sourceStateTemporalAnalysis(
           to: awaitConstruct,
           subtype: 'awaits-completion',
           synchronizationScope: null,
-          attributes: { completionRequired: true },
+          attributes: { completionRequired: true, executionConditional: true },
         });
         const successor = statements[index + 1];
-        if (successor) {
+        if (successor && awaitHasLocalContinuation(awaited, statement)) {
           temporal.push({
             from: awaitConstruct,
             to: eventConstruct(successor),
@@ -199,7 +195,7 @@ export function sourceStateTemporalAnalysis(
   return { mutations, temporal, unsupported };
 }
 
-function mutationFact(node: SyntaxNode): SourceStateMutationFact | null {
+function mutationFact(node: SyntaxNode, bindings: SourceBindingResolver): SourceStateMutationFact | null {
   const deleting = isDeleteExpression(node);
   const target = mutationTarget(node, deleting);
   if (!target) return null;
@@ -210,16 +206,14 @@ function mutationFact(node: SyntaxNode): SourceStateMutationFact | null {
   return {
     event: construct('event', compact(node.text), node),
     resource: {
-      kind: 'resource',
-      label: resource.name,
-      startLine: target.startPosition.row,
-      endLine: target.endPosition.row,
+      ...construct('resource', resource.name, target),
+      ...bindings.resource(target),
     },
     operation,
     durabilityClass: 'in-memory',
     recordIdentity: resource.recordIdentity,
     value: value ? construct('value', compact(value.text), value) : null,
-    dataSubtype: value ? dataSubtype(value, node) : null,
+    dataSubtype: value ? dataSubtype(value, bindings) : null,
   };
 }
 
@@ -250,73 +244,41 @@ function resourceIdentity(node: SyntaxNode): { name: string; recordIdentity: str
   return null;
 }
 
-function dataSubtype(node: SyntaxNode, mutation: SyntaxNode): SourceStateDataSubtype {
+function dataSubtype(node: SyntaxNode, bindings: SourceBindingResolver): SourceStateDataSubtype {
+  if (node.type === 'template_string' && node.namedChildren.some((child) => child.type === 'template_substitution'))
+    return 'expression-to-state';
   if (LITERAL_NODE_TYPES.has(node.type) || /(?:integer|float|decimal|boolean|character)_literal$/u.test(node.type)) {
     return 'constant-to-state';
   }
   if (CALL_NODE_TYPES.has(node.type)) return 'return-to-state';
   if (MEMBER_NODE_TYPES.has(node.type) || SUBSCRIPT_NODE_TYPES.has(node.type)) return 'property-to-state';
   if (/identifier$/u.test(node.type)) {
-    return isCapturedIdentifier(node.text, mutation) ? 'captured-value-to-state' : 'value-to-state';
+    return bindings.isCaptured(node) ? 'captured-value-to-state' : 'value-to-state';
   }
   return 'expression-to-state';
 }
 
-function isCapturedIdentifier(name: string, use: SyntaxNode): boolean {
-  const currentCallable = nearestCallable(use.parent);
-  if (!currentCallable || callableDeclares(currentCallable, name)) return false;
-  let ancestor = nearestCallable(currentCallable.parent);
-  while (ancestor) {
-    if (callableDeclares(ancestor, name)) return true;
-    ancestor = nearestCallable(ancestor.parent);
+/** Only a statement's own expression evaluation establishes its immediate continuation.
+ * Nested branches and abrupt completions require control-flow analysis, not source order.
+ */
+function awaitHasLocalContinuation(awaited: SyntaxNode, statement: SyntaxNode): boolean {
+  if (
+    !['expression_statement', 'lexical_declaration', 'variable_declaration', 'local_variable_declaration'].includes(
+      statement.type,
+    )
+  )
+    return false;
+  for (
+    let parent = awaited.parent;
+    parent &&
+    (parent.startIndex !== statement.startIndex ||
+      parent.endIndex !== statement.endIndex ||
+      parent.type !== statement.type);
+    parent = parent.parent
+  ) {
+    if (BLOCK_NODE_TYPES.has(parent.type) || /(?:statement|clause)$/u.test(parent.type)) return false;
   }
-  return false;
-}
-
-function nearestCallable(node: SyntaxNode | null): SyntaxNode | null {
-  let current = node;
-  while (current) {
-    if (CALLABLE_NODE_TYPES.has(current.type)) return current;
-    current = current.parent;
-  }
-  return null;
-}
-
-function callableDeclares(callable: SyntaxNode, name: string): boolean {
-  const parameters =
-    callable.childForFieldName('parameters') ??
-    callable.namedChildren.find((child) => ['formal_parameters', 'parameters'].includes(child.type));
-  if (parameters && containsIdentifier(parameters, name)) return true;
-  const body =
-    callable.childForFieldName('body') ?? callable.namedChildren.find((child) => BLOCK_NODE_TYPES.has(child.type));
-  if (!body) return false;
-  let declared = false;
-  walkWithoutNestedCallables(body, callable, (node) => {
-    if (declared || !/(?:declarator|declaration|parameter)$/u.test(node.type)) return;
-    const binding = node.childForFieldName('name') ?? node.childForFieldName('pattern') ?? node.namedChildren[0];
-    if (binding && containsIdentifier(binding, name)) declared = true;
-  });
-  return declared;
-}
-
-function containsIdentifier(node: SyntaxNode, name: string): boolean {
-  let found = false;
-  walk(node, (candidate) => {
-    if (/identifier$/u.test(candidate.type) && candidate.text === name) found = true;
-  });
-  return found;
-}
-
-function walkWithoutNestedCallables(
-  node: SyntaxNode,
-  rootCallable: SyntaxNode,
-  visit: (node: SyntaxNode) => void,
-): void {
-  visit(node);
-  for (const child of node.namedChildren) {
-    if (child !== rootCallable && CALLABLE_NODE_TYPES.has(child.type)) continue;
-    walkWithoutNestedCallables(child, rootCallable, visit);
-  }
+  return true;
 }
 
 function assignmentOperator(node: SyntaxNode, target: SyntaxNode): string {
@@ -360,20 +322,14 @@ function eventConstruct(node: SyntaxNode): SourceProgramConstruct {
 }
 
 function construct(kind: SourceProgramConstruct['kind'], label: string, node: SyntaxNode): SourceProgramConstruct {
-  return { kind, label, startLine: node.startPosition.row, endLine: node.endPosition.row };
-}
-
-function findAnalysisRoot(root: SyntaxNode, startLine: number, endLine: number): SyntaxNode | null {
-  const covering: SyntaxNode[] = [];
-  walk(root, (node) => {
-    if (node.startPosition.row <= startLine && node.endPosition.row >= endLine) covering.push(node);
-  });
-  const callable = covering.filter((node) => CALLABLE_NODE_TYPES.has(node.type)).sort(compareSpan)[0];
-  return callable ?? covering.sort(compareSpan)[0] ?? null;
-}
-
-function compareSpan(left: SyntaxNode, right: SyntaxNode): number {
-  return left.endIndex - left.startIndex - (right.endIndex - right.startIndex) || left.startIndex - right.startIndex;
+  return {
+    kind,
+    label,
+    startLine: node.startPosition.row,
+    endLine: node.endPosition.row,
+    startColumn: node.startPosition.column,
+    endColumn: node.endPosition.column,
+  };
 }
 
 function descendantsIncludingSelf(node: SyntaxNode): SyntaxNode[] {
@@ -397,7 +353,9 @@ function descendantsWithinStatement(node: SyntaxNode): SyntaxNode[] {
 
 function walk(node: SyntaxNode, visit: (node: SyntaxNode) => void): void {
   visit(node);
-  for (const child of node.namedChildren) walk(child, visit);
+  for (const child of node.namedChildren) {
+    if (!CALLABLE_NODE_TYPES.has(child.type)) walk(child, visit);
+  }
 }
 
 function compact(text: string): string {

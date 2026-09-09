@@ -150,7 +150,7 @@ describe('cli context', () => {
           updatedAt: '2026-07-29T00:00:00.000Z',
           fingerprint: {
             version: 3,
-            typescriptSymbolIdentityVersion: 1,
+            typescriptSymbolIdentityVersion: 4,
             languages: ['typescript'],
             pnpmWorkspaces: false,
             typescriptProjectMode: 'single',

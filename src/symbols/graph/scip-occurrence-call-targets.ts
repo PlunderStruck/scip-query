@@ -1,12 +1,18 @@
+import { sourceBindingResolver } from '../../source/ast/source-binding-identity.js';
+import { lexicalCallOwners, sourceCallableOwnerKey } from './callable-owner-identity.js';
 import { readRepositoryTextFile } from '../../source/primitives/repository-text.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
 import { existsSync } from 'node:fs';
 import { SymbolRole } from '@c4312/scip';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
+import type { SourceCallableOwner, SourceFacts } from '../../source/facts/source-fact-types.js';
+import { callSiteOwner } from '../../source/facts/source-callables.js';
+import { getAst } from '../../source/ast/ast-core.js';
+import { sourceAnalysisRoot, ANALYSIS_CALLABLE_NODE_TYPES } from '../../source/ast/ast-callables.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { readScipArtifact } from '../../storage/scip-artifact.js';
-import { getAllDefinitions } from '../definition-catalog.js';
+import { getAllDefinitions, getDefinitionsForFile } from '../definition-catalog.js';
 import {
   chunkOccurrenceTargetsForFile,
   normalizeOccurrenceRange,
@@ -18,6 +24,9 @@ import {
 
 export interface ScipOccurrenceCallTarget {
   sourceLine: number;
+  sourceRange?: OccurrenceSourceRange;
+  sourceOwner?: SourceCallableOwner | null;
+  sourceDefinition?: IndexedDefinition | null;
   calleeLeaf: string;
   definition: IndexedDefinition;
 }
@@ -106,12 +115,13 @@ export function scipOccurrenceCallTargetsForRange(
   const targets: ScipOccurrenceCallTarget[] = [];
   let resolvedCallsites = 0;
   for (const site of callsites) {
+    if (sourceCallTargetWasWritten(db, relativePath, site)) continue;
     const matches = fileTargets.targets.filter((target) => sameOccurrenceRange(target.sourceRange, site.targetRange));
     const unique = new Map(matches.map((target) => [target.definition.symbol, target]));
     if (unique.size !== 1) continue;
     const match = [...unique.values()][0]!;
     resolvedCallsites++;
-    targets.push({ ...match, sourceLine: site.line, calleeLeaf: match.definition.leaf });
+    targets.push({ ...match, sourceLine: site.line, sourceOwner: site.owner, calleeLeaf: match.definition.leaf });
   }
   return {
     available: true,
@@ -119,6 +129,19 @@ export function scipOccurrenceCallTargetsForRange(
     resolvedCallsites,
     unresolvedCallsites: callsites.length - resolvedCallsites,
   };
+}
+
+/** A compiler reference identifies a declaration, but an observed reassignment invalidates its initial callable value. */
+export function sourceCallTargetWasWritten(
+  db: ScipDatabase,
+  file: string,
+  site: SourceFacts['callSites'][number],
+): boolean {
+  const range = site.targetExpressionRange ?? site.targetRange;
+  const root = getAst(db, file)?.rootNode;
+  if (!range || !root) return false;
+  const target = sourceAnalysisRoot(root, range.startLine, range.endLine, ANALYSIS_CALLABLE_NODE_TYPES, range);
+  return target ? sourceBindingResolver(file, root).hasObservedWrite(target, true) : false;
 }
 
 /** Return compiler-resolved repository definitions referenced by one exact source range. */
@@ -160,7 +183,70 @@ export function scipOccurrenceCallableReferencesForRange(
           target.sourceLine <= endLine &&
           scipDefinitionSourceConfirmsCallable(db, target.definition),
       )
-      .map((target): ScipOccurrenceCallTarget => ({ ...target, calleeLeaf: target.definition.leaf })),
+      .map((target): ScipOccurrenceCallTarget => occurrenceWithSourceOwner(db, relativePath, target)),
+  };
+}
+
+/** Explicit compiler references to type declarations; this does not prove behavioral conformance. */
+export function scipOccurrenceTypeReferencesForRange(
+  db: ScipDatabase,
+  relativePath: string,
+  startLine: number,
+  endLine: number,
+): ScipOccurrenceCallableReferencesResult {
+  const resolved = scipOccurrenceDefinitionTargetsForRange(db, relativePath, startLine, endLine);
+  return {
+    available: resolved.available,
+    targets: resolved.targets
+      .filter((target) => target.definition.isTypeLike)
+      .map((target) => occurrenceWithSourceOwner(db, relativePath, target)),
+  };
+}
+
+export function occurrenceWithSourceOwner(
+  db: ScipDatabase,
+  file: string,
+  target: ScipOccurrenceDefinitionTarget,
+): ScipOccurrenceCallTarget {
+  const ast = getAst(db, file);
+  const language = getSourceFacts(db, file)?.language;
+  const range = target.sourceRange;
+  const node =
+    ast &&
+    range &&
+    sourceAnalysisRoot(ast.rootNode, range.startLine, range.endLine, ANALYSIS_CALLABLE_NODE_TYPES, range);
+  const sourceOwner = node && language ? callSiteOwner(node, language) : undefined;
+  if (sourceOwner) {
+    const owner = lexicalCallOwners(db, file, getDefinitionsForFile(db, file)).get(sourceCallableOwnerKey(sourceOwner));
+    return { ...target, calleeLeaf: target.definition.leaf, sourceOwner, sourceDefinition: owner ?? null };
+  }
+  const definitions = range
+    ? getDefinitionsForFile(db, file).filter(
+        (definition) =>
+          definition.startLine <= range.startLine &&
+          definition.endLine >= range.endLine &&
+          (definition.startLine !== range.startLine || (definition.startChar ?? 0) <= range.startColumn) &&
+          (definition.endLine !== range.endLine ||
+            definition.endChar === undefined ||
+            definition.endChar >= range.endColumn),
+      )
+    : [];
+  const innermost = definitions.filter(
+    (definition) =>
+      !definitions.some(
+        (other) =>
+          other !== definition &&
+          other.startLine >= definition.startLine &&
+          other.endLine <= definition.endLine &&
+          (other.startLine !== definition.startLine || (other.startChar ?? 0) >= (definition.startChar ?? 0)) &&
+          (other.endLine !== definition.endLine || (other.endChar ?? Infinity) <= (definition.endChar ?? Infinity)),
+      ),
+  );
+  return {
+    ...target,
+    calleeLeaf: target.definition.leaf,
+    sourceOwner: sourceOwner ?? undefined,
+    sourceDefinition: innermost.length === 1 ? innermost[0]! : null,
   };
 }
 

@@ -79,6 +79,64 @@ export function smallestNodeCoveringLines(node: SyntaxNode, startLine: number, e
   return node;
 }
 
+export interface SourceRangeColumns {
+  startColumn?: number;
+  endColumn?: number;
+}
+
+/** Syntax units whose bodies execute in their own invocation. */
+export const ANALYSIS_CALLABLE_NODE_TYPES: ReadonlySet<string> = new Set([
+  'arrow_function',
+  'closure_expression',
+  'constructor_declaration',
+  'function_declaration',
+  'function_definition',
+  'function_expression',
+  'generator_function',
+  'generator_function_declaration',
+  'function_item',
+  'lambda',
+  'lambda_expression',
+  'method',
+  'method_declaration',
+  'method_definition',
+]);
+
+/** Select one analysis owner; line overlap alone cannot distinguish same-line functions. */
+export function sourceAnalysisRoot(
+  tree: SyntaxNode,
+  startLine: number,
+  endLine: number,
+  callableTypes: ReadonlySet<string>,
+  columns: SourceRangeColumns = {},
+): SyntaxNode | null {
+  const precise = columns.startColumn !== undefined && columns.endColumn !== undefined;
+  const covering: SyntaxNode[] = [];
+  const visit = (node: SyntaxNode): void => {
+    if (node.startPosition.row > startLine || node.endPosition.row < endLine) return;
+    if (
+      precise &&
+      ((node.startPosition.row === startLine && node.startPosition.column > columns.startColumn!) ||
+        (node.endPosition.row === endLine && node.endPosition.column < columns.endColumn!))
+    )
+      return;
+    covering.push(node);
+    for (const child of node.namedChildren) visit(child);
+  };
+  visit(tree);
+  if (precise) {
+    const node = covering.sort((a, b) => a.endIndex - a.startIndex - (b.endIndex - b.startIndex))[0];
+    if (!node) return null;
+    const value = node.childForFieldName('value');
+    return value ? (javascriptFunctionValue(value) ?? node) : node;
+  }
+  const callables = covering.filter((node) => callableTypes.has(node.type));
+  if (callables.length === 0) return smallestNodeCoveringLines(tree, startLine, endLine);
+  const shortest = Math.min(...callables.map((node) => node.endPosition.row - node.startPosition.row));
+  const matches = callables.filter((node) => node.endPosition.row - node.startPosition.row === shortest);
+  return matches.length === 1 ? matches[0]! : null;
+}
+
 export function unwrapExpression(input: SyntaxNode): SyntaxNode {
   let node = input;
   while (
@@ -115,4 +173,28 @@ export function addReferencedParameters(
     if (candidate.type !== 'identifier' && candidate.type !== 'shorthand_property_identifier') return;
     if (names.has(candidate.text)) output.add(candidate.text);
   });
+}
+
+export const JAVASCRIPT_FUNCTION_VALUE_TYPES = new Set(['arrow_function', 'function_expression', 'generator_function']);
+
+/**
+ * Recognize a function value directly assigned to a binding, plus the common
+ * curried-wrapper form `const work = wrapper(metadata)(function* () { ... })`.
+ *
+ * The curried-call restriction is deliberate. A callback passed to an
+ * ordinary operation usually does not make the receiving binding callable;
+ * a second invocation layer is concrete syntax evidence that the first call
+ * is configuring a function-producing wrapper. The result remains a
+ * source-derived callable rather than a compiler-identity claim.
+ */
+export function javascriptFunctionValue(value: SyntaxNode): SyntaxNode | null {
+  if (JAVASCRIPT_FUNCTION_VALUE_TYPES.has(value.type)) return value;
+  if (value.type !== 'call_expression') return null;
+  const callee = value.childForFieldName('function') ?? value.namedChild(0);
+  if (callee?.type !== 'call_expression') return null;
+  const args = value.childForFieldName('arguments') ?? value.namedChildren.find((child) => child.type === 'arguments');
+  const functionArguments = (args?.namedChildren ?? []).filter((child) =>
+    JAVASCRIPT_FUNCTION_VALUE_TYPES.has(child.type),
+  );
+  return functionArguments.length === 1 ? functionArguments[0]! : null;
 }

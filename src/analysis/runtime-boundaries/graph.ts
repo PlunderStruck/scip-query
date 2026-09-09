@@ -32,7 +32,7 @@ import type {
 
 // Increment whenever direct facts or any derived propagation rule changes so an
 // older persisted graph can never be incrementally mixed with newer semantics.
-export const RUNTIME_BOUNDARY_EXTRACTOR_VERSION = 'runtime-boundaries-v20';
+export const RUNTIME_BOUNDARY_EXTRACTOR_VERSION = 'runtime-boundaries-v24';
 
 const require = createRequire(import.meta.url);
 const typescript = require('typescript') as typeof TypeScript;
@@ -60,11 +60,14 @@ interface GroupRule {
   linkFrom?: 'producer' | 'declaration';
   requireUniquePair?: boolean;
   requireUniqueConsumer?: boolean;
+  unresolvedIdentity?: string;
 }
 
 const GROUP_RULES: readonly GroupRule[] = [
   {
     id: 'http.method-path',
+    unresolvedIdentity:
+      'HTTP deployment and server instance identity are not established by a matching method and path.',
     protocol: 'http',
     producerActions: ['http.request'],
     consumerActions: ['http.handle'],
@@ -81,6 +84,8 @@ const GROUP_RULES: readonly GroupRule[] = [
   },
   {
     id: 'registry.capability-key',
+    unresolvedIdentity:
+      'A named capability in instruction text does not prove registration in the active tool registry or execution of that capability.',
     protocol: 'registry',
     producerActions: ['registry.reference'],
     consumerActions: ['registry.handle'],
@@ -90,6 +95,7 @@ const GROUP_RULES: readonly GroupRule[] = [
   },
   {
     id: 'queue.address',
+    unresolvedIdentity: 'Queue broker and namespace identity are not established by a matching address.',
     protocol: 'queue',
     producerActions: ['queue.send'],
     consumerActions: ['queue.consume'],
@@ -114,6 +120,8 @@ const GROUP_RULES: readonly GroupRule[] = [
   },
   {
     id: 'framework.effect-httpapi-operation',
+    unresolvedIdentity:
+      'Effect API instance identity and builder receiver flow are not established by matching group and operation names.',
     protocol: 'framework',
     producerActions: [],
     consumerActions: ['framework.handle'],
@@ -339,6 +347,7 @@ export async function collectRuntimeBoundaryGraph(
   const frontiers = deduplicateFrontiers([
     ...unresolvedFrontiers(deduplicated, relationGroups),
     ...propagated.frontiers,
+    ...mountComposition.frontiers,
   ]);
   recordPhase(phases, 'frontiers', phaseStartedAt, deduplicated.length, frontiers.length);
   return {
@@ -1079,7 +1088,10 @@ function normalizeGroup(group: BoundaryRelationGroup): BoundaryRelationGroup {
       inputFactIds: uniqueSorted(group.derivation.inputFactIds),
       sourceSpans: [
         ...new Map(
-          group.derivation.sourceSpans.map((span) => [`${span.file}:${span.startLine}:${span.endLine}`, span]),
+          group.derivation.sourceSpans.map((span) => [
+            `${span.file}:${span.startLine}:${span.startColumn}:${span.endLine}:${span.endColumn}`,
+            span,
+          ]),
         ).values(),
       ],
     },
@@ -1113,8 +1125,11 @@ function materializeBoundaryLink(
   const left = byId.get(from);
   const right = byId.get(to);
   if (!left || !right || sameSite(left, right)) return null;
-  const strength: BoundaryEvidenceStrength =
-    left.strength === 'derived' || right.strength === 'derived' ? 'derived' : 'exact';
+  const strength: BoundaryEvidenceStrength = GROUP_RULES.find((rule) => rule.id === group.joinRule)?.unresolvedIdentity
+    ? 'candidate'
+    : left.strength === 'derived' || right.strength === 'derived'
+      ? 'derived'
+      : 'exact';
   const identity = `${group.joinRule}\0${from}\0${to}`;
   const link: BoundaryLink = {
     id: `boundary-link:${createHash('sha256').update(identity).digest('hex').slice(0, 16)}`,
@@ -1177,7 +1192,7 @@ function unresolvedFrontiers(
       .filter((observation) => observation.strength !== 'candidate')
       .map(
         (observation) =>
-          `${observation.action}\0${observation.source.file}\0${observation.source.startLine}\0${observation.source.endLine}`,
+          `${observation.action}\0${observation.source.file}\0${observation.source.startLine}:${observation.source.startColumn}\0${observation.source.endLine}:${observation.source.endColumn}`,
       ),
   );
   const grouped = new Set(groups.flatMap(groupParticipants));
@@ -1188,7 +1203,7 @@ function unresolvedFrontiers(
       (observation) =>
         observation.strength !== 'candidate' ||
         !provedSites.has(
-          `${observation.action}\0${observation.source.file}\0${observation.source.startLine}\0${observation.source.endLine}`,
+          `${observation.action}\0${observation.source.file}\0${observation.source.startLine}:${observation.source.startColumn}\0${observation.source.endLine}:${observation.source.endColumn}`,
         ),
     )
     .filter((observation) => !paired.has(observation.id))
@@ -1196,14 +1211,19 @@ function unresolvedFrontiers(
       const missingKeyParts = observation.keyParts
         .filter((part) => part.evidence === 'expression' || part.value.length === 0)
         .map((part) => part.name);
+      const identityGap = groups
+        .filter((group) => groupParticipants(group).includes(observation.id))
+        .map((group) => GROUP_RULES.find((rule) => rule.id === group.joinRule)?.unresolvedIdentity)
+        .find(Boolean);
       const reason =
-        missingKeyParts.length > 0
+        identityGap ??
+        (missingKeyParts.length > 0
           ? `${observation.extractor} observed ${observation.action}, but ${missingKeyParts.join(', ')} remained symbolic or unknown.`
           : observation.resolution === 'ambiguous'
             ? `${observation.extractor} established the address for ${observation.action}, but more than one indexed peer has the same runtime key.`
             : grouped.has(observation.id)
               ? `${observation.extractor} established the address for ${observation.action}, but the indexed production scope contains no counterpart role in that relation group.`
-              : `${observation.extractor} observed ${observation.action}, but no supported factorization rule could establish its addressed relation.`;
+              : `${observation.extractor} observed ${observation.action}, but no supported factorization rule could establish its addressed relation.`);
       return {
         observationId: observation.id,
         reason,
@@ -1220,7 +1240,8 @@ function groupParticipants(group: BoundaryRelationGroup): string[] {
 
 function groupHasProvenCounterpart(group: BoundaryRelationGroup): boolean {
   const rule = GROUP_RULES.find((candidate) => candidate.id === group.joinRule);
-  if (!rule) return false;
+  if (!rule || rule.unresolvedIdentity) return false;
+  if (rule.requireUniqueConsumer && group.consumerIds.length !== 1) return false;
   const fromIds = rule.linkFrom === 'declaration' ? group.declarationIds : group.producerIds;
   if (fromIds.length === 0 || group.consumerIds.length === 0) return false;
   return !rule.requireUniquePair || (fromIds.length === 1 && group.consumerIds.length === 1);
@@ -1228,9 +1249,13 @@ function groupHasProvenCounterpart(group: BoundaryRelationGroup): boolean {
 
 function groupHasAmbiguousCounterpart(group: BoundaryRelationGroup): boolean {
   const rule = GROUP_RULES.find((candidate) => candidate.id === group.joinRule);
-  if (!rule?.requireUniquePair) return false;
+  if (!rule?.requireUniquePair && !rule?.requireUniqueConsumer) return false;
   const fromIds = rule.linkFrom === 'declaration' ? group.declarationIds : group.producerIds;
-  return fromIds.length > 0 && group.consumerIds.length > 0 && (fromIds.length !== 1 || group.consumerIds.length !== 1);
+  return (
+    fromIds.length > 0 &&
+    group.consumerIds.length > 0 &&
+    (group.consumerIds.length !== 1 || (rule.requireUniquePair === true && fromIds.length !== 1))
+  );
 }
 
 function resolvedKeys(observation: BoundaryObservation, keyNames: readonly string[]): BoundaryKeyPart[] | null {
@@ -1238,7 +1263,8 @@ function resolvedKeys(observation: BoundaryObservation, keyNames: readonly strin
   for (const name of keyNames) {
     const part = observation.keyParts.find((candidate) => candidate.name === name);
     if (!part || part.evidence === 'expression' || part.value.length === 0) return null;
-    keys.push({ ...part, value: normalizedKeyPart(name, part.value) });
+    const value = name === 'registry' && part.term?.kind === 'symbol' ? part.term.symbol : part.value;
+    keys.push({ ...part, value: normalizedKeyPart(name, value) });
   }
   return keys;
 }
@@ -1246,12 +1272,19 @@ function resolvedKeys(observation: BoundaryObservation, keyNames: readonly strin
 function normalizedKeyPart(name: string, value: string): string {
   if (name === 'method') return value.toUpperCase();
   if (name !== 'path') return value;
-  const normalized = value.startsWith('/') ? value : `/${value}`;
-  return normalized.length > 1 ? normalized.replace(/\/+$/u, '') : normalized;
+  return value;
 }
 
 function sameSite(left: BoundaryObservation, right: BoundaryObservation): boolean {
-  return left.source.file === right.source.file && left.source.startLine === right.source.startLine;
+  return (
+    left.id === right.id ||
+    (left.source.file === right.source.file &&
+      left.source.startLine === right.source.startLine &&
+      left.source.startColumn !== undefined &&
+      left.source.startColumn === right.source.startColumn &&
+      left.source.endLine === right.source.endLine &&
+      left.source.endColumn === right.source.endColumn)
+  );
 }
 
 function deduplicateObservations(observations: readonly BoundaryObservation[]): BoundaryObservation[] {

@@ -3,15 +3,17 @@ import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import type * as TypeScript from 'typescript';
 import type { SemanticReferenceFragment } from '../semantic/types.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
+import { installTypeScriptDocumentEncoding } from './typescript-document-encoding.js';
 import {
-  installTypeScriptSymbolIdentity,
-  type TypeScriptSymbolIndexer,
-  type TypeScriptSymbolConstructors,
-} from './typescript-symbol-identity.js';
+  installTypeScriptSuperCalls,
+  type TypeScriptCallIndexer,
+  type TypeScriptCallOccurrenceConstructor,
+} from './typescript-super-calls.js';
+import { installTypeScriptSymbolIdentity, type TypeScriptSymbolConstructors } from './typescript-symbol-identity.js';
 
 const require = createRequire(import.meta.url);
 
-export const SCIP_TYPESCRIPT_DOCUMENT_EMITTER_ADAPTER_VERSION = 3;
+export const SCIP_TYPESCRIPT_DOCUMENT_EMITTER_ADAPTER_VERSION = 6;
 const SUPPORTED_SCIP_TYPESCRIPT_VERSION = '0.4.0';
 
 type TypeScriptModule = typeof TypeScript;
@@ -37,6 +39,7 @@ interface ScipIndexLike {
 }
 
 interface ScipDocumentConstructor {
+  readonly prototype: Parameters<typeof installTypeScriptDocumentEncoding>[0];
   new (value: { relative_path: string; occurrences: unknown[] }): ScipDocumentLike;
   deserializeBinary(value: Uint8Array): ScipDocumentLike;
 }
@@ -46,7 +49,8 @@ interface ScipIndexConstructor {
   deserializeBinary(value: Uint8Array): ScipIndexLike;
 }
 
-interface FileIndexerLike extends TypeScriptSymbolIndexer {
+interface FileIndexerLike extends TypeScriptCallIndexer {
+  sourceFile: TypeScript.SourceFile;
   index(): void;
 }
 
@@ -156,9 +160,20 @@ export function loadTypeScriptDocumentRuntime(): TypeScriptDocumentRuntimeAvaila
       Packages?: PackagesConstructor;
     };
     const scipModule = require(resolve(packageRoot, 'dist/src/scip.js')) as {
-      scip?: { Document?: ScipDocumentConstructor; Index?: ScipIndexConstructor };
+      scip?: {
+        Document?: ScipDocumentConstructor;
+        Index?: ScipIndexConstructor;
+        Occurrence?: TypeScriptCallOccurrenceConstructor;
+      };
     };
-    if (!FileIndexer || !Input || !Packages || !scipModule.scip?.Document || !scipModule.scip.Index) {
+    if (
+      !FileIndexer ||
+      !Input ||
+      !Packages ||
+      !scipModule.scip?.Document ||
+      !scipModule.scip.Index ||
+      !scipModule.scip.Occurrence
+    ) {
       return { available: false, reason: 'scip-typescript document runtime has an unsupported module shape' };
     }
     const { ScipSymbol } = require(resolve(packageRoot, 'dist/src/ScipSymbol.js')) as {
@@ -169,6 +184,8 @@ export function loadTypeScriptDocumentRuntime(): TypeScriptDocumentRuntimeAvaila
       'metaDescriptor'
     >;
     installTypeScriptSymbolIdentity(FileIndexer.prototype, typescript, { global: ScipSymbol.global, metaDescriptor });
+    installTypeScriptDocumentEncoding(scipModule.scip.Document.prototype);
+    installTypeScriptSuperCalls(FileIndexer.prototype, typescript, scipModule.scip.Occurrence);
     const runtime = {
       packageVersion: producer.packageVersion,
       typescript,

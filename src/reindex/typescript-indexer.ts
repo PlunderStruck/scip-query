@@ -17,4 +17,22 @@ const { ProjectIndexer } = require(resolve(root, 'dist/src/ProjectIndexer.js')) 
 };
 installTypeScriptProjectEmission(ProjectIndexer.prototype);
 const { main } = require(resolve(root, 'dist/src/main.js')) as { main(): void };
+
+// Upstream catches file visitor exceptions and can still write that file's
+// partial document. Keep the first failure for this one synchronous CLI run
+// and reject outside that catch so the runner cannot publish its output.
+const prototype = loaded.runtime.FileIndexer.prototype;
+const indexFile = prototype.index;
+let fileFailure: Error | undefined;
+prototype.index = function () {
+  try {
+    return indexFile.call(this);
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    const failure = new Error(`TypeScript indexing failed for ${this.sourceFile.fileName}: ${detail}`, { cause });
+    fileFailure ??= failure;
+    throw failure;
+  }
+};
 main();
+if (fileFailure) throw fileFailure;

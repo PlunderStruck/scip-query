@@ -47,106 +47,106 @@ describe('runtime-boundary evidence', () => {
     const db = createBoundaryDb();
     try {
       const graph = await collectRuntimeBoundaryGraph(db);
-      expect(graph.extractorVersion).toBe('runtime-boundaries-v20');
+      expect(graph.extractorVersion).toBe('runtime-boundaries-v24');
 
-      expect(graph.observations).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            action: 'http.request',
-            strength: expect.stringMatching(/^(?:exact|derived)$/u),
-            source: expect.objectContaining({ file: 'src/client.ts' }),
-          }),
-          expect.objectContaining({
-            action: 'http.request',
-            source: expect.objectContaining({ file: 'src/client.ts' }),
-            keyParts: expect.arrayContaining([expect.objectContaining({ name: 'path', value: '/api/returned' })]),
-          }),
-          expect.objectContaining({
-            action: 'http.handle',
-            strength: expect.stringMatching(/^(?:exact|derived)$/u),
-            source: expect.objectContaining({ file: 'src/server.ts' }),
-          }),
-          expect.objectContaining({ action: 'registry.dispatch', strength: 'exact' }),
-          expect.objectContaining({ action: 'registry.handle', strength: 'exact' }),
-          expect.objectContaining({ action: 'database.write', strength: 'exact' }),
-          expect.objectContaining({ action: 'database.read', strength: 'exact' }),
-          expect.objectContaining({
-            action: 'database.read',
-            source: expect.objectContaining({ file: 'src/persistence.ts' }),
-            keyParts: expect.arrayContaining([expect.objectContaining({ name: 'resource', value: 'session_events' })]),
-          }),
-          expect.objectContaining({ action: 'queue.send', strength: 'exact' }),
-          expect.objectContaining({ action: 'queue.consume', strength: 'exact' }),
-          expect.objectContaining({
-            action: 'queue.send',
-            extractor: 'builtin.database-queue',
-            keyParts: expect.arrayContaining([
-              expect.objectContaining({ name: 'address', value: 'database:deliveryQueue' }),
-            ]),
-          }),
-          expect.objectContaining({
-            action: 'queue.consume',
-            extractor: 'builtin.database-queue',
-            keyParts: expect.arrayContaining([
-              expect.objectContaining({ name: 'address', value: 'database:deliveryQueue' }),
-            ]),
-          }),
-          expect.objectContaining({
-            action: 'http.handle',
-            strength: 'exact',
-            evidence: 'framework-decorator',
-            source: expect.objectContaining({ file: 'src/python_server.py' }),
-          }),
-          expect.objectContaining({
-            action: 'http.handle',
-            strength: 'exact',
-            evidence: 'framework-adapter',
-            source: expect.objectContaining({ file: 'src/rust_server.rs' }),
-          }),
-          expect.objectContaining({
-            action: 'http.handle',
-            strength: 'derived',
-            source: expect.objectContaining({ file: 'src/imported-server.ts' }),
-          }),
-          expect.objectContaining({
-            action: 'http.handle',
-            strength: 'derived',
-            source: expect.objectContaining({ file: 'src/mounted-routes.ts' }),
-            keyParts: expect.arrayContaining([expect.objectContaining({ name: 'path', value: '/api/mounted' })]),
-          }),
-          expect.objectContaining({
-            action: 'http.request',
-            strength: 'derived',
-            source: expect.objectContaining({ file: 'src/wrapper-client.ts' }),
-            keyParts: expect.arrayContaining([
-              expect.objectContaining({ name: 'method', value: 'POST' }),
-              expect.objectContaining({ name: 'path', value: '/api/wrapped' }),
-            ]),
-          }),
-          expect.objectContaining({
-            action: 'carrier.publish',
-            strength: 'derived',
-            source: expect.objectContaining({ file: 'src/carrier-client.ts' }),
-            keyParts: expect.arrayContaining([expect.objectContaining({ name: 'value', value: 'sync' })]),
-          }),
-          expect.objectContaining({
-            action: 'carrier.consume',
-            strength: 'derived',
-            source: expect.objectContaining({ file: 'src/carrier-server.ts' }),
-            keyParts: expect.arrayContaining([expect.objectContaining({ name: 'value', value: 'sync' })]),
-          }),
-        ]),
-      );
+      for (const expected of [
+        expect.objectContaining({
+          action: 'http.request',
+          strength: expect.stringMatching(/^(?:exact|derived)$/u),
+          source: expect.objectContaining({ file: 'src/client.ts' }),
+        }),
+        expect.objectContaining({
+          action: 'http.request',
+          source: expect.objectContaining({ file: 'src/client.ts' }),
+          keyParts: expect.arrayContaining([expect.objectContaining({ name: 'path', value: '/api/returned' })]),
+        }),
+        expect.objectContaining({
+          action: 'http.handle',
+          strength: expect.stringMatching(/^(?:exact|derived)$/u),
+          source: expect.objectContaining({ file: 'src/server.ts' }),
+        }),
+        expect.objectContaining({ action: 'registry.dispatch', strength: 'exact' }),
+        expect.objectContaining({ action: 'registry.handle', strength: 'exact' }),
+        expect.objectContaining({ action: 'database.write', strength: 'candidate' }),
+        expect.objectContaining({ action: 'database.read', strength: 'candidate' }),
+        expect.objectContaining({
+          action: 'database.read',
+          source: expect.objectContaining({ file: 'src/persistence.ts' }),
+          keyParts: expect.arrayContaining([expect.objectContaining({ name: 'resource', value: 'session_events' })]),
+        }),
+        expect.objectContaining({ action: 'queue.send', strength: 'candidate' }),
+        expect.objectContaining({ action: 'queue.consume', strength: 'candidate' }),
+        expect.objectContaining({
+          action: 'queue.send',
+          extractor: 'builtin.database-queue',
+          keyParts: expect.arrayContaining([
+            expect.objectContaining({ name: 'address', value: 'database:deliveryQueue' }),
+          ]),
+        }),
+        expect.objectContaining({
+          action: 'queue.consume',
+          extractor: 'builtin.database-queue',
+          keyParts: expect.arrayContaining([
+            expect.objectContaining({ name: 'address', value: 'database:deliveryQueue' }),
+          ]),
+        }),
+        expect.objectContaining({
+          action: 'http.handle',
+          strength: 'candidate',
+          evidence: 'framework-decorator-receiver-unverified',
+          source: expect.objectContaining({ file: 'src/python_server.py' }),
+        }),
+        expect.objectContaining({
+          action: 'http.handle',
+          strength: 'candidate',
+          evidence: 'framework-route-receiver-unverified',
+          source: expect.objectContaining({ file: 'src/rust_server.rs' }),
+        }),
+        expect.objectContaining({
+          action: 'http.handle',
+          strength: 'derived',
+          source: expect.objectContaining({ file: 'src/imported-server.ts' }),
+        }),
+        expect.objectContaining({
+          action: 'http.handle',
+          strength: 'derived',
+          source: expect.objectContaining({ file: 'src/mounted-routes.ts' }),
+          keyParts: expect.arrayContaining([expect.objectContaining({ name: 'path', value: '/api/mounted' })]),
+        }),
+        expect.objectContaining({
+          action: 'http.request',
+          strength: 'derived',
+          source: expect.objectContaining({ file: 'src/wrapper-client.ts' }),
+          keyParts: expect.arrayContaining([
+            expect.objectContaining({ name: 'method', value: 'POST' }),
+            expect.objectContaining({ name: 'path', value: '/api/wrapped' }),
+          ]),
+        }),
+        expect.objectContaining({
+          action: 'carrier.publish',
+          strength: 'candidate',
+          source: expect.objectContaining({ file: 'src/carrier-client.ts' }),
+          keyParts: expect.arrayContaining([expect.objectContaining({ name: 'value', value: 'sync' })]),
+        }),
+        expect.objectContaining({
+          action: 'carrier.consume',
+          strength: 'candidate',
+          source: expect.objectContaining({ file: 'src/carrier-server.ts' }),
+          keyParts: expect.arrayContaining([expect.objectContaining({ name: 'value', value: 'sync' })]),
+        }),
+      ]) {
+        expect(
+          graph.observations.some((item) => expected.asymmetricMatch(item)),
+          JSON.stringify(expected.sample),
+        ).toBe(true);
+      }
       expect(graph.links).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             joinRule: 'http.method-path',
-            strength: expect.stringMatching(/^(?:exact|derived)$/u),
+            strength: 'candidate',
           }),
           expect.objectContaining({ joinRule: 'registry.identity-key', strength: 'exact' }),
-          expect.objectContaining({ joinRule: 'queue.address', strength: 'exact' }),
-          expect.objectContaining({ joinRule: 'queue.address', strength: 'derived' }),
-          expect.objectContaining({ joinRule: 'carrier.discriminator', strength: 'derived' }),
         ]),
       );
       const databaseQueueObservations = graph.observations.filter(
@@ -165,22 +165,19 @@ describe('runtime-boundary evidence', () => {
             observation.derivation?.inputFactIds.length === 2 && observation.derivation.sourceSpans.length === 2,
         ),
       ).toBe(true);
-      expect(graph.links.some((link) => link.joinRule === 'database.resource' || link.strength === 'candidate')).toBe(
-        false,
-      );
-      expect(graph.relationGroups).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            joinRule: 'resource.identity',
-            producerIds: expect.arrayContaining([expect.any(String)]),
-            consumerIds: expect.arrayContaining([expect.any(String)]),
-          }),
-        ]),
-      );
+      expect(
+        graph.links.some(
+          (link) =>
+            link.joinRule === 'database.resource' ||
+            link.joinRule === 'queue.address' ||
+            link.joinRule === 'carrier.discriminator',
+        ),
+      ).toBe(false);
+      expect(graph.relationGroups.filter((group) => group.joinRule === 'resource.identity')).toEqual([]);
       expect(graph.coverage).toMatchObject({ filesScanned: 26, filesWithAst: 26, extractionErrors: [] });
       expect(graph.coverage.extractors).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ id: 'builtin.wrapper', observations: 2, errors: 0 }),
+          expect.objectContaining({ id: 'builtin.wrapper', observations: 4, errors: 0 }),
           expect.objectContaining({ id: 'builtin.carrier', observations: 2, errors: 0 }),
         ]),
       );
@@ -213,24 +210,17 @@ describe('runtime-boundary evidence', () => {
           (observation) => observation.source.file === 'src/mutated-client.ts' && observation.strength !== 'candidate',
         ),
       ).toBe(false);
+      const repeated = graph.observations.filter(
+        (observation) =>
+          observation.source.file === 'src/ambiguous-client.ts' && observation.extractor === 'builtin.http-summary',
+      );
+      expect(repeated).toHaveLength(2);
+      expect(new Set(repeated.map((observation) => observation.id)).size).toBe(2);
       expect(
-        graph.observations.some(
-          (observation) =>
-            observation.source.file === 'src/ambiguous-client.ts' &&
-            (observation.extractor === 'builtin.http-summary' || observation.extractor === 'builtin.carrier'),
+        graph.frontiers.some(
+          (frontier) => frontier.kind === 'call-resolution' && frontier.source?.file === 'src/ambiguous-client.ts',
         ),
       ).toBe(false);
-      expect(graph.frontiers).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            kind: 'call-resolution',
-            action: 'http.request',
-            strength: 'candidate',
-            source: expect.objectContaining({ file: 'src/ambiguous-client.ts' }),
-            reason: expect.stringContaining('ambiguous-call'),
-          }),
-        ]),
-      );
 
       writeRuntimeBoundaryGraph(db.config.dbPath, graph);
     } finally {
@@ -347,7 +337,7 @@ describe('runtime-boundary evidence', () => {
         expect.arrayContaining([
           expect.objectContaining({
             joinRule: 'registry.capability-key',
-            strength: 'exact',
+            strength: 'candidate',
           }),
         ]),
       );
@@ -399,7 +389,7 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('recovers call syntax from compiler identity and preserves same-line ambiguity', async () => {
+  it('recovers call syntax from compiler identity and preserves distinct same-line calls', async () => {
     const db = createBoundaryDb();
     try {
       const postJson = getDefinitionsForFile(db, 'src/http-wrapper.ts').find(
@@ -434,16 +424,8 @@ describe('runtime-boundary evidence', () => {
       );
 
       const carrierCalls = resolvedCallSitesForDefinition(db, postEnvelope!);
-      expect(carrierCalls.sites.some((site) => site.file === 'src/ambiguous-client.ts')).toBe(false);
-      expect(carrierCalls.unresolved).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            file: 'src/ambiguous-client.ts',
-            reason: 'ambiguous-call',
-            candidates: 2,
-          }),
-        ]),
-      );
+      expect(carrierCalls.sites.filter((site) => site.file === 'src/ambiguous-client.ts')).toHaveLength(2);
+      expect(carrierCalls.unresolved).toEqual([]);
     } finally {
       db.close();
     }
@@ -462,6 +444,7 @@ describe('runtime-boundary evidence', () => {
       .symbol(1, 'scip-typescript npm fixture 1.0.0 src/`request.ts`/sendRequest().', 'sendRequest', 12)
       .definition(1, 1, 1, 0, 0, 0, 75)
       .chunk(1, 2, 1, 1)
+      .occurrence(1, 'scip-typescript npm fixture 1.0.0 src/`request.ts`/sendRequest().', 1, 0, 0, 11)
       .mention(1, 1, 2)
       .write();
     const db = new ScipDatabase({
@@ -933,9 +916,7 @@ describe('runtime-boundary evidence', () => {
           sourceScopes: ['production'],
         }),
       ).toEqual(expect.arrayContaining([expect.objectContaining({ action: 'carrier.publish' })]));
-      expect(readRuntimeBoundaryRelationGroups(reopened, { joinRules: ['carrier.discriminator'] })).toEqual(
-        expect.arrayContaining([expect.objectContaining({ joinRule: 'carrier.discriminator' })]),
-      );
+      expect(readRuntimeBoundaryRelationGroups(reopened, { joinRules: ['carrier.discriminator'] })).toEqual([]);
     } finally {
       reopened.close();
     }
@@ -1021,7 +1002,7 @@ describe('runtime-boundary evidence', () => {
       expect(graph.links).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ joinRule: 'http.method-path' }),
-          expect.objectContaining({ joinRule: 'framework.effect-httpapi-operation', strength: 'exact' }),
+          expect.objectContaining({ joinRule: 'framework.effect-httpapi-operation', strength: 'candidate' }),
         ]),
       );
     } finally {
@@ -1231,6 +1212,26 @@ describe('runtime-boundary evidence', () => {
       .definition(12, 10, 12, 4, 0, 6, 1)
       .symbol(13, 'scip-typescript npm fixture 1.0.0 src/`client.ts`/returnedPath().', 'returnedPath', 12)
       .definition(13, 1, 13, 4, 0, 4, 51);
+    const preciseCalls = [
+      [10, 1, 'src/wrapper-client.ts', 'postJson', 'src/`http-wrapper.ts`/postJson().'],
+      [23, 5, 'src/carrier-client.ts', 'postEnvelope', 'src/`carrier-runtime.ts`/postEnvelope().'],
+      [23, 6, 'src/carrier-client.ts', 'publishCarrier', 'src/`carrier-client.ts`/publishCarrier().'],
+      [26, 5, 'src/ambiguous-client.ts', 'postEnvelope', 'src/`carrier-runtime.ts`/postEnvelope().'],
+    ] as const;
+    for (const doc of [10, 23, 26]) builder.chunk(doc, doc, 0, 10);
+    for (const [doc, target, file, name, suffix] of preciseCalls) {
+      builder.mention(doc, target, 0);
+      for (const [line, text] of files[file].entries()) {
+        if (text.includes('function ')) continue;
+        let from = 0;
+        while (true) {
+          const column = text.indexOf(name + '(', from);
+          if (column < 0) break;
+          builder.occurrence(doc, 'scip-typescript npm fixture 1.0.0 ' + suffix, line, 0, column, column + name.length);
+          from = column + name.length;
+        }
+      }
+    }
     builder.write();
     return new ScipDatabase({
       projectRoot: tempDir,

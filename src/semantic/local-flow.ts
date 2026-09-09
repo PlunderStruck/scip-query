@@ -1,3 +1,4 @@
+import type { SourceRangeColumns } from '../source/ast/ast-callables.js';
 import { join } from 'node:path';
 import type { IndexedDefinition } from '../domain/types.js';
 import { getSourceText } from '../source/primitives/source-text.js';
@@ -23,7 +24,10 @@ export function semanticLocalFlowForDefinition(
   db: ScipDatabase,
   definition: IndexedDefinition,
 ): TypeScriptLocalFlowResult | null {
-  return semanticLocalFlowForRange(db, definition.relativePath, definition.startLine, definition.endLine);
+  return semanticLocalFlowForRange(db, definition.relativePath, definition.startLine, definition.endLine, {
+    startColumn: definition.startChar,
+    endColumn: definition.endChar,
+  });
 }
 
 /** Compiler-owned local definition-use evidence for an exact TypeScript source range. */
@@ -32,10 +36,11 @@ export function semanticLocalFlowForRange(
   relativePath: string,
   startLine: number,
   endLine: number,
+  columns: SourceRangeColumns = {},
 ): TypeScriptLocalFlowResult | null {
   relativePath = relativePath.replace(/\\/g, '/');
   if (!isTypeScriptLike(relativePath)) return null;
-  const cacheKey = `${relativePath}\0${startLine}\0${endLine}`;
+  const cacheKey = `${relativePath}\0${startLine}\0${endLine}\0${columns.startColumn ?? ''}\0${columns.endColumn ?? ''}`;
   return TYPESCRIPT_LOCAL_FLOW_CACHE.get(db, cacheKey, () => {
     const source = getSourceText(db, relativePath);
     if (!source) {
@@ -52,6 +57,7 @@ export function semanticLocalFlowForRange(
     return analyzeTypeScriptLocalFlow(source, join(db.config.projectRoot, relativePath), {
       startLine,
       endLine,
+      ...columns,
     });
   });
 }

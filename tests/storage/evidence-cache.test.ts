@@ -577,11 +577,13 @@ describe('evidence cache', () => {
 
   it('rebuilds source facts when the persisted payload version is old', () => {
     const db = openDb();
+    expect(getSourceFacts(db, FILE)).not.toBeNull();
     const hash = fileContentHash(db, FILE, getSourceText(db, FILE));
     db.close();
 
     const evidence = new Database(join(tempDir, EVIDENCE_DB_FILENAME));
     const oldPayload = JSON.stringify({
+      version: SOURCE_FACTS_PAYLOAD_VERSION - 1,
       language: 'typescript',
       callables: [
         {

@@ -10,6 +10,8 @@ export interface ExplorationSourceLocation {
   file: string;
   line: number;
   endLine?: number;
+  startColumn?: number;
+  endColumn?: number;
 }
 
 export type ExplorationEvidenceStrength = 'exact' | 'derived' | 'candidate' | 'mixed' | 'unknown';

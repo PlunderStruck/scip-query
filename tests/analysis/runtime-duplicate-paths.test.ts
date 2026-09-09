@@ -53,6 +53,19 @@ describe('shared runtime value and parameter analysis', () => {
     expect(evaluateStaticValue(context, node)).toMatchObject({ value: expected, precision: 'literal' });
   });
 
+  it.each([
+    ['src/value.py', 'value = "plain"', 'literal'],
+    ['src/value.py', String.raw`value = "escaped\nvalue"`, 'unknown'],
+    ['src/value.py', 'value = """triple"""', 'unknown'],
+    ['src/value.rs', String.raw`const VALUE: &str = "escaped\nvalue";`, 'unknown'],
+  ])('does not claim decoded values without a language-specific decoder: %s %s', (file, source, precision) => {
+    const db = fixture({ [file]: source }).open();
+    const context = boundaryFileContext(db, file)!;
+    const node = context.root.descendantsOfType(['string', 'string_literal'])[0]!;
+    expect(node).toBeDefined();
+    expect(evaluateStaticValue(context, node)).toMatchObject({ precision });
+  });
+
   it('uses JavaScript string semantics inside a Vue script block', () => {
     const db = fixture({ 'src/value.vue': '<script setup>const value = "/api/\\x65vents";</script>' }).open();
     const context = boundaryFileContext(db, 'src/value.vue')!;

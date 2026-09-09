@@ -81,6 +81,14 @@ export const GRAPH_RELATION_UNAVAILABLE_FRONTIERS: readonly GraphRelationUnavail
     recoverWith: ['dependence-slice', 'inspect', 'code'],
   },
   {
+    id: 'dynamic-callable-dispatch',
+    families: ['execution', 'dataflow'],
+    capability: 'General virtual dispatch and interprocedural replacement of callable values are unavailable.',
+    consequence:
+      'A static declaration target does not establish a unique runtime implementation or all possible overrides.',
+    recoverWith: ['hierarchy', 'inspect', 'code'],
+  },
+  {
     id: 'reflection',
     families: ['execution', 'runtime', 'identity', 'dependencies'],
     capability:
@@ -193,7 +201,10 @@ export const GRAPH_RELATION_PROVIDER_CONTRACTS: readonly GraphRelationProviderCo
     relations: [
       relation('execution', 'call', 'The source construct may call the resolved target.', {
         strengths: ['exact', 'derived', 'candidate', 'mixed'],
-        nonClaims: ['Static may-call reachability does not prove that an invocation occurred at runtime.'],
+        nonClaims: [
+          'Static may-call reachability does not prove that an invocation occurred at runtime.',
+          'Compiler declaration identity does not resolve virtual dispatch, cross-file callable replacement, or runtime receiver identity.',
+        ],
         recoverWith: ['call-graph', 'inspect', 'code'],
       }),
       relation(

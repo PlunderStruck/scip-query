@@ -1,3 +1,4 @@
+import { resolveImportPath } from '../../../src/source/primitives/import-path-resolver.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -453,7 +454,13 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
 
       const loopNodes = result.topology?.nodes.filter((node) => node.label === 'loop') ?? [];
       expect(loopNodes).toHaveLength(1);
-      expect(loopNodes[0]?.location).toEqual({ file: 'src/service.ts', line: 1, endLine: 4 });
+      expect(loopNodes[0]?.location).toEqual({
+        file: 'src/service.ts',
+        line: 1,
+        endLine: 4,
+        startColumn: 13,
+        endColumn: 2,
+      });
       const callEdges = result.topology?.edges.filter((edge) => edge.kind === 'call') ?? [];
       expect(callEdges.length).toBeGreaterThan(0);
       expect(
@@ -471,7 +478,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
   });
 
   it('joins compiler-resolved argument and return flow to call edges in the first system map', async () => {
-    const db = await createSystemMapDb();
+    const db = await createSystemMapDb({ exactCallOccurrences: true });
     try {
       const result = systemMap(db, {
         symbols: [symbols.companionCommand, symbols.companionAppend, symbols.dispatch],
@@ -539,7 +546,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
   });
 
   it('keeps an explicit dataflow projection distinct from reference and call neighborhoods', async () => {
-    const db = await createSystemMapDb();
+    const db = await createSystemMapDb({ exactCallOccurrences: true });
     try {
       const flow = graphEvidence(
         db,
@@ -906,6 +913,9 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
   it('connects command, API, persistence, shared contract, and web regions through typed evidence', async () => {
     const db = await createSystemMapDb();
     try {
+      expect(resolveImportPath(db, 'apps/api/src/modules/sessions/events.ts', 'shared/contracts')).toBe(
+        'packages/shared/src/contracts/sessions.ts',
+      );
       const result = systemMap(db, {
         searches: ['work_session_stream_events'],
         symbols: ['appendStreamEvents'],
@@ -937,7 +947,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       expect(result.coverage.referenceExpansionSkippedSymbols).toBeGreaterThan(0);
       expect(result.coverage.dynamicDispatchRepresented).toBe(false);
       expect(result.coverage.runtimeBoundaryEvidenceAvailable).toBe(true);
-      expect(result.coverage.runtimeBoundaryExactLinks).toBeGreaterThan(0);
+      expect(result.coverage.runtimeBoundaryExactLinks).toBe(0);
+      expect(result.coverage.runtimeBoundaryCandidateLinks).toBeGreaterThan(0);
       expect(result.coverage.runtimeBoundaryTraversedLinks).toBeGreaterThan(0);
       expect(result.behavior?.steps).toEqual(
         expect.arrayContaining([
@@ -986,9 +997,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       );
       expect(result.coverage.runtimeBoundaryTraversedLinks).toBe(1);
       expect(result.coverage.blindSpots).toEqual(
-        expect.arrayContaining([
-          expect.stringContaining('Built-in runtime-boundary extractors traverse direct and replayably derived links'),
-        ]),
+        expect.arrayContaining([expect.stringContaining('Runtime observations retain their own proof strength')]),
       );
     } finally {
       db.close();
@@ -1176,14 +1185,13 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           }),
         ]),
       );
-      expect(result.topology?.routeCatalog?.routes).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            endpointKind: 'runtime-boundary',
-            endpointLocation: expect.objectContaining({ file: 'src/groups.ts', line: 2 }),
-          }),
-        ]),
-      );
+      // The handler is bound, but matching group/operation names do not prove the API instance.
+      expect(result.topology?.routeCatalog?.routes).toEqual([]);
+      expect(
+        result.topology?.edges
+          .filter((edge) => edge.kind === 'runtime-boundary')
+          .every((edge) => edge.evidence.every((proof) => proof.strength === 'candidate')),
+      ).toBe(true);
     } finally {
       db.close();
     }
@@ -1523,7 +1531,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
             evidence: expect.arrayContaining([
               expect.objectContaining({
                 method: 'runtime-boundary:http.method-path',
-                strength: 'exact',
+                strength: 'candidate',
                 identity: expect.stringContaining('path=/api/agent-dispatch'),
               }),
             ]),
@@ -1598,7 +1606,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
             kind: 'runtime-boundary',
             directed: true,
             evidence: expect.arrayContaining([
-              expect.objectContaining({ method: 'runtime-boundary:http.method-path', strength: 'exact' }),
+              expect.objectContaining({ method: 'runtime-boundary:http.method-path', strength: 'candidate' }),
             ]),
           }),
         ]),
@@ -1606,7 +1614,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       expect(result.behavior!.paths).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            status: 'connected',
+            status: 'candidate',
             stepIds: expect.arrayContaining([
               expect.stringContaining('dispatchCommand'),
               expect.stringContaining('dispatchStreamEvents'),
@@ -1722,7 +1730,12 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           .flatMap((edge) => edge.semantics ?? [])
           .filter((semantic) => semantic.family === 'control')
           .map((semantic) => semantic.subtype) ?? [];
-      expect(result.topology?.corridor?.status).toBe('complete');
+      expect(result.topology?.corridor?.status).toBe('incomplete');
+      expect(
+        result.topology?.frontiers.some(
+          (frontier) => frontier.disposition === 'unsupported' && frontier.reason.includes('target'),
+        ),
+      ).toBe(true);
       expect(corridorControlSubtypes).toEqual(
         expect.arrayContaining([
           'predicate-consequence',
@@ -1797,7 +1810,12 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
         result.topology?.edges
           .filter((edge) => result.topology?.corridor?.edgeIds.includes(edge.id))
           .flatMap((edge) => edge.semantics ?? []) ?? [];
-      expect(result.topology?.corridor?.status).toBe('complete');
+      expect(result.topology?.corridor?.status).toBe('incomplete');
+      expect(
+        result.topology?.frontiers.some(
+          (frontier) => frontier.disposition === 'unsupported' && frontier.reason.includes('target'),
+        ),
+      ).toBe(true);
       expect(corridorSemantics).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ family: 'state', subtype: 'writes-resource' }),
@@ -1827,7 +1845,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(root, 'index.scip') });
     try {
       const result = systemMap(db, {
-        symbols: ['src/captured.ts:0-4'],
+        symbols: ['src/captured.ts:2-4'],
         maxDepth: 1,
         relations: ['call'],
       });
@@ -1895,6 +1913,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     writeFixtureFiles(projectRoot, {
       'src/unproved.ts': [
         'export function update(state: State) {',
+        '  state.direct = 0;',
         '  lock(() => { state.value = 1; });',
         '  transaction(() => { state.value = 2; });',
         '}',
@@ -1904,7 +1923,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(root, 'index.scip') });
     try {
       const result = systemMap(db, {
-        symbols: ['src/unproved.ts:0-3'],
+        symbols: ['src/unproved.ts:1-5'],
         maxDepth: 1,
         relations: ['call'],
       });
@@ -2569,7 +2588,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
     }
   });
 
-  it('traverses exact named-capability references to their unique handlers', async () => {
+  it('retains named-capability references as candidates for their uniquely named handlers', async () => {
     const db = await createSystemMapDb({ capabilityRegistry: true });
     try {
       const result = systemMap(db, {
@@ -2578,7 +2597,8 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
         relations: ['runtime-boundary'],
       });
 
-      expect(result.coverage.runtimeBoundaryExactLinks).toBeGreaterThan(0);
+      expect(result.coverage.runtimeBoundaryExactLinks).toBe(0);
+      expect(result.coverage.runtimeBoundaryCandidateLinks).toBeGreaterThan(0);
       expect(result.coverage.runtimeBoundaryTraversedLinks).toBeGreaterThan(0);
       expect(
         result.behavior?.transitions,
@@ -2596,7 +2616,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
           expect.objectContaining({
             kind: 'runtime-boundary',
             evidence: expect.arrayContaining([
-              expect.objectContaining({ method: 'runtime-boundary:registry.capability-key' }),
+              expect.objectContaining({ method: 'runtime-boundary:registry.capability-key', strength: 'candidate' }),
             ]),
           }),
         ]),
@@ -3047,6 +3067,7 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       unindexedRuntimeParticipant?: boolean;
       unindexedSourceAnchor?: boolean;
       indexedAliasedCaller?: boolean;
+      exactCallOccurrences?: boolean;
     } = {},
   ): Promise<ScipDatabase> {
     root = mkdtempSync(join(tmpdir(), 'scip-system-map-'));
@@ -3126,7 +3147,10 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       'apps/api/package.json': JSON.stringify({ name: 'api' }),
       'apps/web/package.json': JSON.stringify({ name: 'web' }),
       'packages/companion/package.json': JSON.stringify({ name: 'companion' }),
-      'packages/shared/package.json': JSON.stringify({ name: 'shared' }),
+      'packages/shared/package.json': JSON.stringify({
+        name: 'shared',
+        exports: { './contracts': './src/contracts/sessions.ts' },
+      }),
       ...source,
     });
 
@@ -3220,6 +3244,21 @@ describe('explicit-anchor system maps', { timeout: 15_000 }, () => {
       const objectCommandsDocumentId = paths.indexOf('packages/companion/src/object-commands.ts') + 1;
       mention(objectCommandsDocumentId, 1, 2);
       mention(objectCommandsDocumentId, 1, 0);
+    }
+    if (options.exactCallOccurrences) {
+      for (const [documentId, symbolId] of [
+        [1, 3],
+        [2, 1],
+        [26, 2],
+      ] as const) {
+        const owner = definitions[documentId - 1]!;
+        const callee = definitions[symbolId - 1]!;
+        for (const [line, text] of source[owner.file]!.entries()) {
+          const column = text.indexOf(callee.displayName + '(');
+          if (column >= 0)
+            builder.occurrence(documentId, callee.symbol, line, 0, column, column + callee.displayName.length);
+        }
+      }
     }
     builder.write();
 

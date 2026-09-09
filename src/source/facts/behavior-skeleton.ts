@@ -2,7 +2,12 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { createSourceFileCache } from '../../storage/per-db-cache.js';
 import type { ParserControlRelationSubtype } from '../../domain/graph-relation-providers.js';
 import { getAst } from '../ast/ast-core.js';
-import { smallestNodeCoveringLines } from '../ast/ast-callables.js';
+import {
+  smallestNodeCoveringLines,
+  sourceAnalysisRoot,
+  type SourceRangeColumns,
+  ANALYSIS_CALLABLE_NODE_TYPES as CALLABLE_NODE_TYPES,
+} from '../ast/ast-callables.js';
 import type { SyntaxNode } from '../ast/ast-types.js';
 import { classifyFile } from '../primitives/file-kind.js';
 import { getSourceLines, getSourceText } from '../primitives/source-text.js';
@@ -80,6 +85,8 @@ export interface BehaviorControlConstruct {
   label: string;
   startLine: number;
   endLine: number;
+  startColumn?: number;
+  endColumn?: number;
   implicit: boolean;
 }
 
@@ -371,11 +378,11 @@ export function behaviorControlAnalysis(
   relativePath: string,
   startLine: number,
   endLine: number,
+  columns: SourceRangeColumns = {},
 ): BehaviorControlAnalysis | null {
   const tree = getAst(db, relativePath);
   if (!tree) return null;
-  const root =
-    findCallableNode(tree.rootNode, startLine, endLine) ?? smallestNodeCoveringLines(tree.rootNode, startLine, endLine);
+  const root = sourceAnalysisRoot(tree.rootNode, startLine, endLine, CALLABLE_NODE_TYPES, columns);
   if (!root) return null;
 
   const facts: BehaviorControlFact[] = [];
@@ -660,22 +667,6 @@ export function behaviorReceipts(
   return receipt ? [receipt] : [];
 }
 
-const CALLABLE_NODE_TYPES = new Set([
-  'arrow_function',
-  'constructor_declaration',
-  'function_declaration',
-  'function_definition',
-  'function_expression',
-  'generator_function',
-  'generator_function_declaration',
-  'function_item',
-  'lambda',
-  'lambda_expression',
-  'method',
-  'method_declaration',
-  'method_definition',
-]);
-
 const BLOCK_NODE_TYPES = new Set(['block', 'body', 'compound_statement', 'declaration_list', 'statement_block']);
 
 const IF_NODE_TYPES = new Set(['if_expression', 'if_statement', 'unless', 'unless_statement']);
@@ -876,6 +867,8 @@ function controlConstruct(
     label: normalizeClauseText(label).slice(0, MAX_OUTLINE_LINE_CHARACTERS),
     startLine: node.startPosition.row,
     endLine: node.endPosition.row,
+    startColumn: node.startPosition.column,
+    endColumn: node.endPosition.column,
     implicit: false,
   };
 }
@@ -946,7 +939,7 @@ function uniqueControlFacts(facts: readonly BehaviorControlFact[]): BehaviorCont
   const keyed = new Map<string, BehaviorControlFact>();
   for (const fact of facts) {
     keyed.set(
-      `${fact.controller.startLine}\u0000${fact.controller.endLine}\u0000${fact.outcome.startLine}\u0000${fact.outcome.endLine}\u0000${fact.subtype}\u0000${fact.outcome.label}`,
+      `${controlConstructKey(fact.controller)}\u0000${controlConstructKey(fact.outcome)}\u0000${fact.subtype}`,
       fact,
     );
   }
@@ -956,12 +949,13 @@ function uniqueControlFacts(facts: readonly BehaviorControlFact[]): BehaviorCont
 function uniqueControlConstructs(constructs: readonly BehaviorControlConstruct[]): BehaviorControlConstruct[] {
   const keyed = new Map<string, BehaviorControlConstruct>();
   for (const construct of constructs) {
-    keyed.set(
-      `${construct.startLine}\u0000${construct.endLine}\u0000${construct.kind}\u0000${construct.label}`,
-      construct,
-    );
+    keyed.set(controlConstructKey(construct), construct);
   }
   return [...keyed.values()];
+}
+
+function controlConstructKey(construct: BehaviorControlConstruct): string {
+  return `${construct.startLine}:${construct.startColumn ?? ''}:${construct.endLine}:${construct.endColumn ?? ''}:${construct.kind}:${construct.label}`;
 }
 
 function isBehaviorFocusNode(node: SyntaxNode): boolean {

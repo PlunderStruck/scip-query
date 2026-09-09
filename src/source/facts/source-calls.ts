@@ -19,6 +19,12 @@ export function callSiteForNode(node: SyntaxNode, language: AstLanguage) {
     calleeText: target.text,
     memberAccess,
     line: node.startPosition.row,
+    targetExpressionRange: {
+      startLine: target.startPosition.row,
+      startColumn: target.startPosition.column,
+      endLine: target.endPosition.row,
+      endColumn: target.endPosition.column,
+    },
     targetRange: {
       startLine: leafNode.startPosition.row,
       startColumn: leafNode.startPosition.column,
@@ -138,6 +144,7 @@ export function extractCallLeaf(node: SyntaxNode): string | null {
 }
 
 const CALL_IDENTIFIER_KINDS = new Set([
+  'super',
   'identifier',
   'type_identifier',
   'field_identifier',

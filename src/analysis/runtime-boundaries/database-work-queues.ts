@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import type { BoundaryObservation } from './types.js';
 
 /**
- * Promote only a proved insert/skip-locked-claim pair on the same resource to
- * a traversable queue. Ordinary database reads and writes remain structural
+ * Report insert/skip-locked-claim pairs as possible database work queues.
+ * Database identity, SQL semantics and the queue protocol remain unproved. Ordinary database reads and writes remain structural
  * persistence facts and never imply runtime control flow.
  */
 export function deriveDatabaseWorkQueueObservations(
@@ -12,23 +12,23 @@ export function deriveDatabaseWorkQueueObservations(
   const claimsByResource = observationsByResource(
     observations.filter(
       (observation) =>
-        observation.action === 'database.read' && observation.evidence === 'persistence-skip-locked-claim',
+        observation.action === 'database.read' && observation.evidence.startsWith('persistence-skip-locked-claim'),
     ),
   );
   const insertsByResource = observationsByResource(
     observations.filter(
-      (observation) => observation.action === 'database.write' && observation.evidence === 'persistence-insert',
+      (observation) => observation.action === 'database.write' && observation.evidence.startsWith('persistence-insert'),
     ),
   );
 
   return observations.flatMap((observation) => {
-    if (observation.action === 'database.write' && observation.evidence === 'persistence-insert') {
+    if (observation.action === 'database.write' && observation.evidence.startsWith('persistence-insert')) {
       return resourceValues(observation).flatMap((resource) => {
         const counterpart = claimsByResource.get(resource)?.[0];
         return counterpart ? [databaseQueueObservation(observation, counterpart, resource, 'queue.send')] : [];
       });
     }
-    if (observation.action === 'database.read' && observation.evidence === 'persistence-skip-locked-claim') {
+    if (observation.action === 'database.read' && observation.evidence.startsWith('persistence-skip-locked-claim')) {
       return resourceValues(observation).flatMap((resource) => {
         const counterpart = insertsByResource.get(resource)?.[0];
         return counterpart ? [databaseQueueObservation(observation, counterpart, resource, 'queue.consume')] : [];
@@ -87,7 +87,8 @@ function databaseQueueObservation(
       },
     ],
     evidence,
-    strength: 'derived',
+    // Table spelling and a skip-locked query do not prove a shared database or queue protocol.
+    strength: 'candidate',
     protocol: 'queue',
     role: action === 'queue.send' ? 'producer' : 'consumer',
     derivation: {

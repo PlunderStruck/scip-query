@@ -57,6 +57,7 @@ export function programDataElementsForParameterFlow(
     const edgeId = id(
       'edge',
       'data-transfer',
+      callIdentity(flow),
       transfer.proof.file,
       String(transfer.proof.startLine),
       String(transfer.callerPosition),
@@ -96,19 +97,38 @@ export function programDataElementsForParameterFlow(
   }
 
   flow.unknown.forEach((unknown, index) => {
-    const calleeParameter = parameterNode(flow.callee, unknown.calleePosition);
+    const mapped = ![
+      'callee-parameter-unavailable',
+      'argument-without-parameter',
+      'callee-parameter-transform',
+    ].includes(unknown.reason);
+    const calleeParameter = mapped
+      ? parameterNode(flow.callee, unknown.calleePosition)
+      : {
+          ...argumentExpressionNode(flow, unknown.calleePosition, unknown.argumentText),
+          id: id('argument-mapping', callIdentity(flow), String(unknown.calleePosition)),
+          kind: 'unresolved-argument-mapping',
+          label: `Unresolved argument ${unknown.calleePosition + 1}: ${unknown.reason}`,
+          attributes: {
+            calleeSymbol: flow.callee.symbol,
+            argumentPosition: unknown.calleePosition,
+            reason: unknown.reason,
+          },
+        };
     addNode(nodes, calleeParameter);
-    addParameterOwnerEdge(edges, flow.callee, calleeParameter);
+    if (mapped) addParameterOwnerEdge(edges, flow.callee, calleeParameter);
     const staticValue = staticArguments.get(unknown.calleePosition);
-    if (staticValue && isProvedStaticValue(staticValue)) {
+    if (mapped && staticValue && isProvedStaticValue(staticValue)) {
       addStaticValueTransfer(edges, nodes, flow, unknown.calleePosition, unknown.argumentText, staticValue);
       return;
     }
     const expression = argumentExpressionNode(flow, unknown.calleePosition, unknown.argumentText);
     addNode(nodes, expression);
+    addCallArgumentOwnerEdge(edges, flow, expression);
     const edgeId = id(
       'edge',
       'data-transfer-unsupported',
+      callIdentity(flow),
       unknown.proof.file,
       String(unknown.proof.startLine),
       String(unknown.calleePosition),
@@ -148,10 +168,10 @@ export function programDataElementsForParameterFlow(
       id: id('frontier', 'data-transfer', edgeId),
       kind: 'data-transfer',
       direction: 'unresolved',
-      fromNodeIds: [expression.id],
+      fromNodeIds: [expression.id, ...(flow.caller ? [symbolNodeId(flow.caller.symbol)] : [])],
       edgeIds: [edgeId],
-      memberNodeIds: [calleeParameter.id],
-      memberCount: 1,
+      memberNodeIds: [calleeParameter.id, symbolNodeId(flow.callee.symbol)],
+      memberCount: 2,
       disposition: 'unsupported',
       reason: staticValue?.derivation.rule ?? unknown.reason,
       expansion: null,
@@ -192,10 +212,10 @@ function resolveSystemMapRelationCallsite(
   relation: SystemMapCallRelation,
   definitionCache: Map<string, IndexedDefinition | null>,
   result: ProgramDataElements,
-): { site: ResolvedSystemMapCallsite; callee: IndexedDefinition } | null {
-  if (relation.kind !== 'call' || !relation.fromSymbol || !relation.toSymbol || relation.line === null) return null;
+): { site: ResolvedSystemMapCallsite; callee: IndexedDefinition }[] {
+  if (relation.kind !== 'call' || !relation.fromSymbol || !relation.toSymbol || relation.line === null) return [];
   const callee = definitionCacheEntry(definitionCache, db, relation.toFile, relation.toSymbol);
-  if (!callee) return null;
+  if (!callee) return [];
   const resolved = resolvedCallSitesForDefinition(db, callee);
   const sites = resolved.sites.filter(
     (site) =>
@@ -204,7 +224,7 @@ function resolveSystemMapRelationCallsite(
       site.endLine >= relation.line! &&
       site.caller?.symbol === relation.fromSymbol,
   );
-  if (sites.length !== 1) {
+  if (sites.length === 0) {
     const unresolved = resolved.unresolved.find(
       (site) => site.file === relation.fromFile && site.line === relation.line,
     );
@@ -213,9 +233,9 @@ function resolveSystemMapRelationCallsite(
         `Parameter flow unresolved at ${relation.fromFile}:${relation.line + 1}: ${unresolved.reason}.`,
       );
     }
-    return null;
+    return [];
   }
-  return { site: sites[0]!, callee };
+  return sites.map((site) => ({ site, callee }));
 }
 
 function enrichSystemMapCallRelation(
@@ -226,15 +246,15 @@ function enrichSystemMapCallRelation(
   result: ProgramDataElements,
 ): void {
   const resolved = resolveSystemMapRelationCallsite(db, relation, definitionCache, result);
-  if (!resolved) return;
-  const { site, callee } = resolved;
-  const callsiteKey = `${site.file}\0${site.callNode.startIndex}\0${site.callNode.endIndex}\0${callee.symbol}`;
-  if (seenCallsites.has(callsiteKey)) return;
-  seenCallsites.add(callsiteKey);
-  const flow = parameterValueFlowAtCall(db, site);
-  const staticArguments = staticArgumentsForCall(db, site, flow);
-  mergeElements(result, programDataElementsForParameterFlow(flow, staticArguments));
-  if (flow.caller && callResultIsUsed(site.callNode)) addCallResultTransfer(result, flow, site.callNode);
+  for (const { site, callee } of resolved) {
+    const callsiteKey = `${site.file}\0${site.callNode.startIndex}\0${site.callNode.endIndex}\0${callee.symbol}`;
+    if (seenCallsites.has(callsiteKey)) continue;
+    seenCallsites.add(callsiteKey);
+    const flow = parameterValueFlowAtCall(db, site);
+    const staticArguments = staticArgumentsForCall(db, site, flow);
+    mergeElements(result, programDataElementsForParameterFlow(flow, staticArguments));
+    if (flow.caller && callResultIsUsed(site.callNode)) addCallResultTransfer(result, flow, site.callNode);
+  }
 }
 
 function staticArgumentsForCall(
@@ -256,7 +276,7 @@ function staticArgumentsForCall(
 function enrichTopologyLocalFlow(db: ScipDatabase, owner: ExplorationTopologyNode, result: ProgramDataElements): void {
   if (!owner.location || !['source-construct', 'symbol'].includes(owner.kind)) return;
   const endLine = owner.location.endLine ?? owner.location.line;
-  const analysis = semanticLocalFlowForRange(db, owner.location.file, owner.location.line, endLine);
+  const analysis = semanticLocalFlowForRange(db, owner.location.file, owner.location.line, endLine, owner.location);
   if (!analysis) return;
   mergeElements(result, programDataElementsForLocalFlow(owner, analysis.points, analysis.edges));
   for (const reason of analysis.coverage.unsupported) {
@@ -503,6 +523,7 @@ function argumentExpressionNode(
   return {
     id: id(
       'argument-expression',
+      callIdentity(flow),
       flow.call.file,
       String(flow.call.startLine),
       String(flow.call.endLine),
@@ -525,6 +546,7 @@ function staticValueNode(
   return {
     id: id(
       'static-value',
+      callIdentity(flow),
       flow.call.file,
       String(flow.call.startLine),
       String(flow.call.endLine),
@@ -556,9 +578,11 @@ function addStaticValueTransfer(
   const source = staticValueNode(flow, calleePosition, value);
   const target = parameterNode(flow.callee, calleePosition);
   addNode(nodes, source);
+  addCallArgumentOwnerEdge(edges, flow, source);
   const edgeId = id(
     'edge',
     'static-value-transfer',
+    callIdentity(flow),
     flow.call.file,
     String(flow.call.startLine),
     String(calleePosition),
@@ -614,6 +638,33 @@ function addNode(nodes: Map<string, ExplorationTopologyNode>, node: ExplorationT
   if (!nodes.has(node.id)) nodes.set(node.id, node);
 }
 
+/** The argument expression belongs to the invocation's lexical caller, even when its value is unresolved. */
+function addCallArgumentOwnerEdge(
+  edges: Map<string, ExplorationTopologyEdge>,
+  flow: CallParameterValueFlow,
+  argument: ExplorationTopologyNode,
+): void {
+  if (!flow.caller) return;
+  const edgeId = id('edge', 'argument-owner', flow.caller.symbol, argument.id);
+  edges.set(edgeId, {
+    id: edgeId,
+    kind: 'argument-owner',
+    fromNodeId: symbolNodeId(flow.caller.symbol),
+    toNodeId: argument.id,
+    directed: true,
+    disposition: 'folded',
+    semantics: [{ family: 'identity', subtype: 'contains' }],
+    evidence: [
+      {
+        method: 'compiler-callsite-argument-owner',
+        strength: 'exact',
+        identity: flow.caller.symbol,
+        location: argument.location,
+      },
+    ],
+  });
+}
+
 function addParameterOwnerEdge(
   edges: Map<string, ExplorationTopologyEdge>,
   owner: IndexedDefinition,
@@ -646,6 +697,17 @@ function parameterNodeId(symbol: string, position: number): string {
 
 function symbolNodeId(symbol: string): string {
   return id('symbol', symbol);
+}
+
+function callIdentity(flow: CallParameterValueFlow): string {
+  return id(
+    flow.callee.symbol,
+    flow.call.file,
+    String(flow.call.startLine),
+    String(flow.call.startColumn ?? ''),
+    String(flow.call.endLine),
+    String(flow.call.endColumn ?? ''),
+  );
 }
 
 function id(...parts: readonly string[]): string {

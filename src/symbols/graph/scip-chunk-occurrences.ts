@@ -154,7 +154,7 @@ function appendChunkOccurrence(
   const sourceRange = normalizeOccurrenceRange(occurrence.range, encoding, sourceLines);
   if (occurrence.symbol.startsWith('local ')) {
     if (sourceRange) result.externalRanges.push(sourceRange);
-    result.locals.push(localOccurrence(occurrence.symbol, occurrence.range, occurrence.symbolRoles));
+    if (sourceRange) result.locals.push(localOccurrence(occurrence.symbol, sourceRange, occurrence.symbolRoles));
     return;
   }
   if ((occurrence.symbolRoles & SymbolRole.Definition) !== 0) return;
@@ -169,14 +169,13 @@ function appendChunkOccurrence(
 }
 
 /** SCIP ranges are `[line, start, end]` on one line or `[startLine, start, endLine, end]` across lines. */
-function localOccurrence(symbol: string, range: readonly number[], roles: number): LocalOccurrence {
-  const multiLine = range.length === 4;
+function localOccurrence(symbol: string, range: OccurrenceSourceRange, roles: number): LocalOccurrence {
   return {
     symbol,
-    line: range[0]!,
-    startChar: range[1] ?? 0,
-    endLine: multiLine ? range[2]! : range[0]!,
-    endChar: multiLine ? (range[3] ?? 0) : (range[2] ?? 0),
+    line: range.startLine,
+    startChar: range.startColumn,
+    endLine: range.endLine,
+    endChar: range.endColumn,
     definition: (roles & SymbolRole.Definition) !== 0,
     write: (roles & SymbolRole.WriteAccess) !== 0,
   };

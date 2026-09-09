@@ -5,7 +5,10 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
-import { scipOccurrenceCallTargetsForRange } from '../../src/symbols/graph/scip-occurrence-call-targets.js';
+import {
+  scipOccurrenceTargetsForFile,
+  scipOccurrenceCallTargetsForRange,
+} from '../../src/symbols/graph/scip-occurrence-call-targets.js';
 import { buildAstCalleeMap } from '../../src/symbols/graph/call-graph-evidence.js';
 import { getDefinitionsForFile } from '../../src/symbols/definition-catalog.js';
 import { callGraph } from '../../src/queries/navigation/call-graph.js';
@@ -122,6 +125,21 @@ describe('call occurrence identity', () => {
       );
     },
   );
+
+  it.each(['UTF-8', 'UTF-16', 'UTF-32'])('normalizes local binding occurrence coordinates in %s', (encoding) => {
+    const source = 'export function start() { const emoji = "😀"; let value = 1; value++; }';
+    const column = source.lastIndexOf('value');
+    fixture(
+      source,
+      [['local 0', column, column + 5]],
+      (db) => {
+        expect(scipOccurrenceTargetsForFile(db, 'src/main.ts')?.locals).toEqual([
+          expect.objectContaining({ symbol: 'local 0', line: 0, startChar: column, endLine: 0, endChar: column + 5 }),
+        ]);
+      },
+      encoding,
+    );
+  });
 
   it('retains a direct recursive call as an exact self edge', () => {
     const source = 'export function start() { start(); }';

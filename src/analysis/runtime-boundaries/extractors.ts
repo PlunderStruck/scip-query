@@ -1,3 +1,8 @@
+import { runtimeBindingIdentity, runtimeCallableDefinition } from './binding-identity.js';
+import { isPlatformFetch, fetchRequestMethod, effectiveObjectField } from './http-call-semantics.js';
+import { sourceBindingResolver } from '../../source/ast/source-binding-identity.js';
+import { callSiteOwner } from '../../source/facts/source-callables.js';
+import { lexicalCallOwners, sourceCallableOwnerKey } from '../../symbols/graph/call-graph-evidence.js';
 import { createHash } from 'node:crypto';
 import type { ScipDatabase } from '../../storage/db.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
@@ -8,18 +13,12 @@ import { detectAstLanguage } from '../../source/ast/ast-language.js';
 import type { SyntaxNode, Tree } from '../../source/ast/ast-types.js';
 import { callableSitesFromRoot, getCallableSites, type CallableSite } from '../../source/facts/ast-facts.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
-import { resolveCallableExpression } from './object-members.js';
 import { runtimeBoundarySourceScope } from './source-scope.js';
 import { evaluateStaticValue as evaluateBoundaryValue } from '../../symbols/graph/static-value-flow.js';
-import type { BoundaryEvidenceStrength, BoundaryKeyPart, BoundaryObservation, BoundaryOwner } from './types.js';
+import type { BoundaryEvidenceStrength, BoundaryKeyPart, BoundaryObservation } from './types.js';
 
-export interface BoundaryFileContext {
-  db: ScipDatabase;
-  file: string;
-  source: string;
-  root: SyntaxNode;
-  ownerAt(line: number): BoundaryOwner;
-}
+export type { BoundaryFileContext } from './types.js';
+import type { BoundaryFileContext } from './types.js';
 
 /** Keeps an uncached native tree alive only while its root node is reachable. */
 const BOUNDARY_CONTEXT_TREES = new WeakMap<object, Tree>();
@@ -35,7 +34,13 @@ export interface RuntimeBoundaryProfileSpan {
 }
 
 const HTTP_METHODS = new Set(['delete', 'get', 'head', 'options', 'patch', 'post', 'put']);
-const HTTP_RECEIVER_PATTERN = /(?:^|\.)(?:app|router|server)$/u;
+const HTTP_ROUTER_FACTORIES = new Map<string, ReadonlySet<string | null>>([
+  ['express', new Set(['default', 'Router', null])],
+  ['fastify', new Set(['default', 'fastify', null])],
+  ['hono', new Set(['Hono'])],
+  ['koa-router', new Set(['default', null])],
+  ['@koa/router', new Set(['default', 'Router', null])],
+]);
 const READ_METHODS = new Set(['findFirst', 'findMany', 'findUnique', 'from', 'get', 'select']);
 const WRITE_METHODS = new Set(['create', 'delete', 'insert', 'remove', 'update', 'upsert']);
 const SQL_EXECUTE_METHODS = new Set(['execute', 'query', 'raw']);
@@ -69,19 +74,15 @@ const NODE_CHILD_PROCESS_OPERATIONS = new Set([
 function nodeChildProcessExtractor(): BoundaryExtractor {
   return {
     id: 'builtin.node-child-process',
-    supports: (source) =>
-      /(?:from\s*|require\s*\(\s*)['"](?:node:)?child_process['"]/u.test(source) &&
-      /\b(?:exec|execFile|execFileSync|execSync|fork|spawn|spawnSync)\s*\(/u.test(source),
+    supports: (source) => source.includes('child_process'),
     extract: (context) => {
-      const bindings = nodeChildProcessBindings(context.source);
+      const bindings = sourceBindingResolver(context.file, context.root);
       const observations: BoundaryObservation[] = [];
       visitDescendantsOfType(context.root, 'call_expression', (node) => {
-        const callee = callTarget(node);
-        if (!callee) return;
-        const directOperation = bindings.direct.get(callee);
-        const member = /^(.*?)\.([A-Za-z_$][\w$]*)$/u.exec(callee);
-        const memberOperation = member && bindings.namespaces.has(member[1]!) ? member[2]! : null;
-        const operation = directOperation ?? memberOperation;
+        const target = node.childForFieldName('function');
+        const imported = target && bindings.importedValue(target);
+        const operation =
+          imported && ['node:child_process', 'child_process'].includes(imported.module) ? imported.member : null;
         if (!operation || !NODE_CHILD_PROCESS_OPERATIONS.has(operation)) return;
 
         const args = callArguments(node);
@@ -110,59 +111,6 @@ function nodeChildProcessExtractor(): BoundaryExtractor {
       return observations;
     },
   };
-}
-
-function nodeChildProcessBindings(source: string): {
-  direct: Map<string, string>;
-  namespaces: Set<string>;
-} {
-  const direct = new Map<string, string>();
-  const namespaces = new Set<string>();
-  const modulePattern = String.raw`['"](?:node:)?child_process['"]`;
-  const namedImport = new RegExp(String.raw`\bimport\s*\{([^}]*)\}\s*from\s*${modulePattern}`, 'gu');
-  collectDirectProcessBindings(
-    source,
-    namedImport,
-    /^\s*([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*$/u,
-    direct,
-  );
-  const destructuredRequire = new RegExp(
-    String.raw`\b(?:const|let)\s*\{([^}]*)\}\s*=\s*require\s*\(\s*${modulePattern}\s*\)`,
-    'gu',
-  );
-  collectDirectProcessBindings(
-    source,
-    destructuredRequire,
-    /^\s*([A-Za-z_$][\w$]*)(?:\s*:\s*([A-Za-z_$][\w$]*))?\s*$/u,
-    direct,
-  );
-  const namespaceImport = new RegExp(
-    String.raw`\bimport\s*\*\s*as\s*([A-Za-z_$][\w$]*)\s*from\s*${modulePattern}`,
-    'gu',
-  );
-  for (const match of source.matchAll(namespaceImport)) namespaces.add(match[1]!);
-  const namespaceRequire = new RegExp(
-    String.raw`\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*require\s*\(\s*${modulePattern}\s*\)`,
-    'gu',
-  );
-  for (const match of source.matchAll(namespaceRequire)) namespaces.add(match[1]!);
-  return { direct, namespaces };
-}
-
-function collectDirectProcessBindings(
-  source: string,
-  declaration: RegExp,
-  specifierPattern: RegExp,
-  direct: Map<string, string>,
-): void {
-  for (const match of source.matchAll(declaration)) {
-    for (const rawSpecifier of (match[1] ?? '').split(',')) {
-      const specifier = specifierPattern.exec(rawSpecifier);
-      if (specifier && NODE_CHILD_PROCESS_OPERATIONS.has(specifier[1]!)) {
-        direct.set(specifier[2] ?? specifier[1]!, specifier[1]!);
-      }
-    }
-  }
 }
 
 export function boundaryFileContext(
@@ -194,7 +142,7 @@ export function boundaryFileContext(
     file,
     source,
     root,
-    ownerAt: (line) => {
+    ownerAt: (node) => {
       const definitionsForFile = (definitions ??= profileBoundaryWork(
         profileSpan,
         'runtime-boundaries.context.definitions',
@@ -208,34 +156,28 @@ export function boundaryFileContext(
               profileBoundaryWork(profileSpan, `runtime-boundaries.context.definitions.${phase}`, file, run),
           ),
       ));
-      const definition = definitionsForFile
-        .filter((candidate) => candidate.startLine <= line && candidate.endLine >= line)
-        .sort(
-          (left, right) =>
-            left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
-        )[0];
-      if (definition) {
-        return {
-          file,
-          symbol: definition.symbol,
-          name: definition.leaf,
-          startLine: definition.startLine,
-          endLine: definition.endLine,
-        };
-      }
-      const callablesForFile = callableSites() ?? [];
-      const callable = callablesForFile
-        .filter((candidate) => candidate.startLine <= line && candidate.endLine >= line)
-        .sort(
-          (left, right) =>
-            left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
-        )[0];
+      const language = detectAstLanguage(file);
+      const sourceOwner = language ? callSiteOwner(node, language) : null;
+      const owners = lexicalCallOwners(db, file, definitionsForFile);
+      const containing = definitionsForFile.filter(
+        (definition) =>
+          !definition.isFunctionLike &&
+          definition.startLine <= node.startPosition.row &&
+          definition.endLine >= node.endPosition.row,
+      );
+      const definition = sourceOwner
+        ? owners.get(sourceCallableOwnerKey(sourceOwner))
+        : containing.length === 1
+          ? containing[0]
+          : null;
       return {
         file,
-        symbol: null,
-        name: callable?.name ?? null,
-        startLine: callable?.startLine ?? line,
-        endLine: callable?.endLine ?? line,
+        symbol: definition?.symbol ?? null,
+        name: sourceOwner?.name ?? definition?.leaf ?? null,
+        startLine: sourceOwner?.startLine ?? definition?.startLine ?? node.startPosition.row,
+        endLine: sourceOwner?.endLine ?? definition?.endLine ?? node.endPosition.row,
+        startColumn: sourceOwner?.startColumn ?? definition?.startChar ?? node.startPosition.column,
+        endColumn: sourceOwner?.endColumn ?? definition?.endChar ?? node.endPosition.column,
       };
     },
   };
@@ -259,21 +201,18 @@ function profileBoundaryWork<T>(
 function effectHttpApiExtractor(): BoundaryExtractor {
   return {
     id: 'builtin.effect-httpapi',
-    supports: (source) =>
-      effectHttpApiImportedBindings(source, 'HttpApiEndpoint').size > 0 ||
-      effectHttpApiImportedBindings(source, 'HttpApiBuilder').size > 0,
+    supports: (source) => source.includes('effect/unstable/httpapi') || source.includes('@effect/platform'),
     extract: (context) => {
       const observations: BoundaryObservation[] = [];
-      const endpointBindings = effectHttpApiImportedBindings(context.source, 'HttpApiEndpoint');
-      const groupBindings = effectHttpApiImportedBindings(context.source, 'HttpApiGroup');
-      const builderBindings = effectHttpApiImportedBindings(context.source, 'HttpApiBuilder');
+      const groupBindings = 'HttpApiGroup';
+      const builderBindings = 'HttpApiBuilder';
 
       visitDescendantsOfType(context.root, 'call_expression', (node) => {
         const callee = callMember(node);
         if (!callee) return;
         const args = callArguments(node);
 
-        if (endpointBindings.has(callee.receiver) && HTTP_METHODS.has(callee.member)) {
+        if (effectImportedReceiver(context, callee.receiver, 'HttpApiEndpoint') && HTTP_METHODS.has(callee.member)) {
           appendEffectEndpoint(observations, context, node, callee.member, args, groupBindings);
           return;
         }
@@ -291,7 +230,7 @@ function appendEffectEndpoint(
   node: SyntaxNode,
   member: string,
   args: SyntaxNode[],
-  groupBindings: ReadonlySet<string>,
+  groupBindings: string,
 ): void {
   const operation = addressedArgument(args[0], context);
   const path = addressedArgument(args[1], context);
@@ -330,7 +269,7 @@ function appendEffectRegistration(
   node: SyntaxNode,
   member: string,
   args: SyntaxNode[],
-  builderBindings: ReadonlySet<string>,
+  builderBindings: string,
 ): void {
   if (!['handle', 'handleRaw'].includes(member)) return;
   const group = enclosingFrameworkCallArgument(node, builderBindings, 'group', 1, context);
@@ -338,24 +277,25 @@ function appendEffectRegistration(
   const handler = args[1];
   if (!group || !operation || !handler) return;
   const keyParts = effectHttpApiOperationKey(group, operation);
-  const targets = resolveCallableExpression(context.db, context.file, handler.text);
+  const target = runtimeCallableDefinition(context, handler);
   const registration = observation(
     context,
     node,
     'builtin.effect-httpapi',
     'framework.handle',
     keyParts,
-    targets.length === 1 ? resolvedStrength(keyParts) : 'candidate',
+    target ? resolvedStrength(keyParts) : 'candidate',
     'effect-httpapi-handler-registration',
   );
-  const target = targets[0];
-  if (targets.length === 1 && target) {
+  if (target) {
     registration.owner = {
       file: target.relativePath,
       symbol: target.symbol,
       name: target.leaf,
       startLine: target.startLine,
       endLine: target.endLine,
+      startColumn: target.startChar,
+      endColumn: target.endChar,
     };
   }
   observations.push(registration);
@@ -372,33 +312,19 @@ function effectHttpApiOperationKey(
   ];
 }
 
-function effectHttpApiImportedBindings(source: string, importedName: string): Set<string> {
-  const bindings = new Set<string>();
-  const namedImport = /\bimport\s*\{([\s\S]*?)\}\s*from\s*['"]([^'"]+)['"]/gu;
-  for (const match of source.matchAll(namedImport)) {
-    const moduleName = match[2] ?? '';
-    if (!effectHttpApiModule(moduleName)) continue;
-    collectEffectNamedBindings(match[1] ?? '', importedName, bindings);
-  }
-  const namespaceImport = /\bimport\s*\*\s*as\s*([A-Za-z_$][\w$]*)\s*from\s*['"]([^'"]+)['"]/gu;
-  for (const match of source.matchAll(namespaceImport)) {
-    const moduleName = match[2] ?? '';
-    if (moduleName.endsWith(`/${importedName}`) && effectHttpApiModule(moduleName)) bindings.add(match[1]!);
-  }
-  return bindings;
-}
-
-function effectHttpApiModule(moduleName: string): boolean {
+function effectImportedReceiver(context: BoundaryFileContext, receiver: SyntaxNode, importedName: string): boolean {
+  const imported = sourceBindingResolver(context.file, context.root).importedValue(receiver);
+  if (!imported) return false;
   return (
-    moduleName === 'effect/unstable/httpapi' ||
-    moduleName === '@effect/platform' ||
-    moduleName.startsWith('@effect/platform/HttpApi')
+    ((imported.module === 'effect/unstable/httpapi' || imported.module === '@effect/platform') &&
+      imported.member === importedName) ||
+    (imported.module === `@effect/platform/${importedName}` && imported.member === null)
   );
 }
 
 function enclosingFrameworkCallArgument(
   node: SyntaxNode,
-  bindings: ReadonlySet<string>,
+  bindings: string,
   member: string,
   argumentIndex: number,
   context: BoundaryFileContext,
@@ -426,24 +352,24 @@ function enclosingFrameworkCallArgument(
 
 function frameworkCallArgument(
   node: SyntaxNode,
-  bindings: ReadonlySet<string>,
+  bindings: string,
   member: string,
   argumentIndex: number,
   context: BoundaryFileContext,
 ): Omit<BoundaryKeyPart, 'name'> | null {
   const callee = callMember(node);
-  if (!callee || callee.member !== member || !bindings.has(callee.receiver)) return null;
+  if (!callee || callee.member !== member || !effectImportedReceiver(context, callee.receiver, bindings)) return null;
   return addressedArgument(callArguments(node)[argumentIndex], context);
 }
 
-function callMember(node: SyntaxNode): { receiver: string; member: string } | null {
+function callMember(node: SyntaxNode): { receiver: SyntaxNode; member: string } | null {
   const target = node.childForFieldName('function') ?? node.namedChild(0);
   if (!target || !['member_expression', 'subscript_expression'].includes(target.type)) return null;
   const object = target.childForFieldName('object') ?? target.namedChild(0);
   const property = target.childForFieldName('property') ?? target.childForFieldName('index') ?? target.namedChild(1);
   if (!object || !property) return null;
   return {
-    receiver: object.text.replace(/\s+/gu, ''),
+    receiver: object,
     member: property.text.replace(/^['"`]|['"`]$/gu, ''),
   };
 }
@@ -455,7 +381,7 @@ function httpExtractor(): BoundaryExtractor {
       /\bfetch\s*\(|\baxios\b|\b(?:app|router|server)\s*\.\s*(?:get|post|put|patch|delete|options|head)\s*\(/u.test(
         source,
       ) ||
-      hasPackageImport(source, ['axios']) ||
+      hasPackageImport(source, ['axios', ...HTTP_ROUTER_FACTORIES.keys()]) ||
       /\b(?:FastAPI|Flask|APIRouter|axum|Router::new)\b/u.test(source),
     extract: (context) => {
       const observations: BoundaryObservation[] = [];
@@ -474,8 +400,8 @@ function httpExtractor(): BoundaryExtractor {
               { name: 'method', value: match[1]!.toUpperCase(), evidence: 'literal' },
               { name: 'path', value: match[3]!, evidence: 'literal' },
             ],
-            'exact',
-            'framework-decorator',
+            'candidate',
+            'framework-decorator-receiver-unverified',
           ),
         );
       };
@@ -493,16 +419,15 @@ function httpExtractor(): BoundaryExtractor {
               { name: 'method', value: method.toUpperCase(), evidence: 'literal' },
               { name: 'path', ...path },
             ],
-            resolvedStrength([{ name: 'path', ...path }]),
-            'framework-adapter',
+            'candidate',
+            'framework-route-receiver-unverified',
           ),
         );
       };
       const collectFetchRequest = (node: SyntaxNode, args: SyntaxNode[]): void => {
         const path = addressedArgument(args[0], context);
         if (!path) return;
-        const explicitMethod = /\bmethod\s*:\s*['"`]([A-Za-z]+)['"`]/u.exec(args[1]?.text ?? '')?.[1]?.toUpperCase();
-        const method = explicitMethod ?? (args[1] ? null : 'GET');
+        const method = fetchRequestMethod(args[1], context);
         const keyParts: BoundaryKeyPart[] = [
           ...(method ? [{ name: 'method', value: method, evidence: 'literal' as const }] : []),
           { name: 'path', ...path },
@@ -519,14 +444,16 @@ function httpExtractor(): BoundaryExtractor {
           ),
         );
       };
-      const collectMethodCall = (node: SyntaxNode, args: SyntaxNode[], leaf: string, receiver: string): void => {
+      const collectMethodCall = (node: SyntaxNode, args: SyntaxNode[], leaf: string): void => {
         if (!HTTP_METHODS.has(leaf)) return;
         const path = addressedArgument(args[0], context);
         if (!path) return;
         const method = leaf.toUpperCase();
-        const frameworkHandler =
-          HTTP_RECEIVER_PATTERN.test(receiver) &&
-          hasPackageImport(context.source, ['express', 'fastify', 'hono', 'koa-router', '@koa/router']);
+        const functionNode = node.childForFieldName('function');
+        const receiverNode = functionNode?.childForFieldName('object');
+        const factory =
+          receiverNode && sourceBindingResolver(context.file, context.root).constructedValue(receiverNode);
+        const frameworkHandler = factory && HTTP_ROUTER_FACTORIES.get(factory.module)?.has(factory.member);
         if (frameworkHandler) {
           observations.push(
             observation(
@@ -537,6 +464,7 @@ function httpExtractor(): BoundaryExtractor {
               [
                 { name: 'method', value: method, evidence: 'literal' },
                 { name: 'path', ...path },
+                { name: 'router', ...runtimeBindingIdentity(context, receiverNode!) },
               ],
               resolvedStrength([{ name: 'path', ...path }]),
               'framework-adapter',
@@ -544,9 +472,9 @@ function httpExtractor(): BoundaryExtractor {
           );
           return;
         }
-        const axiosBindings = importedBindings(context.source, ['axios']);
-        const clientRoot = receiver.split('.')[0] ?? '';
-        if (axiosBindings.has(clientRoot)) {
+        const target = node.childForFieldName('function');
+        const imported = target && sourceBindingResolver(context.file, context.root).importedValue(target);
+        if (imported?.module === 'axios' && imported.member === leaf) {
           observations.push(
             observation(
               context,
@@ -568,12 +496,11 @@ function httpExtractor(): BoundaryExtractor {
         if (node.type !== 'call_expression') return;
         const callee = callTarget(node);
         if (!callee) return;
-        const leaf = callee.split('.').at(-1)?.toLowerCase() ?? '';
-        const receiver = callee.includes('.') ? callee.slice(0, callee.lastIndexOf('.')) : '';
+        const leaf = callee.split('.').at(-1) ?? '';
         const args = callArguments(node);
         if (leaf === 'route' && hasPackageImport(context.source, ['axum'])) return collectAxumRoute(node, args);
-        if (callee === 'fetch' || callee.endsWith('.fetch')) return collectFetchRequest(node, args);
-        collectMethodCall(node, args, leaf, receiver);
+        if (isPlatformFetch(context, node)) return collectFetchRequest(node, args);
+        collectMethodCall(node, args, leaf);
       });
       return observations;
     },
@@ -690,8 +617,11 @@ function registryExtractor(): BoundaryExtractor {
         if (node.type !== 'call_expression') return;
         const calleeNode = node.childForFieldName('function') ?? node.namedChild(0);
         if (!calleeNode) return;
-        const match = /^([A-Za-z_$][\w$]*)\s*\[\s*(['"`])([^'"`]+)\2\s*\]$/u.exec(calleeNode.text.trim());
-        if (!match) return;
+        if (calleeNode.type !== 'subscript_expression') return;
+        const receiver = calleeNode.childForFieldName('object');
+        const key = addressedArgument(calleeNode.childForFieldName('index'), context);
+        if (!receiver || !key) return;
+        const registry = runtimeBindingIdentity(context, receiver);
         observations.push(
           observation(
             context,
@@ -699,10 +629,13 @@ function registryExtractor(): BoundaryExtractor {
             'builtin.registry',
             'registry.dispatch',
             [
-              { name: 'registry', value: match[1]!, evidence: 'identifier' },
-              { name: 'key', value: match[3]!, evidence: 'literal' },
+              { name: 'registry', ...registry },
+              { name: 'key', ...key },
             ],
-            'exact',
+            resolvedStrength([
+              { name: 'registry', ...registry },
+              { name: 'key', ...key },
+            ]),
             'indexed-access-call',
           ),
         );
@@ -744,8 +677,8 @@ function persistenceExtractor(): BoundaryExtractor {
             'builtin.persistence',
             action,
             [{ name: 'resource', ...resource }],
-            resolvedStrength([{ name: 'resource', ...resource }]),
-            evidence,
+            'candidate',
+            `${evidence}-receiver-and-resource-identity-unverified`,
           ),
         );
       });
@@ -798,8 +731,8 @@ function queueExtractor(): BoundaryExtractor {
             'builtin.queue',
             action,
             [{ name: 'address', ...address }],
-            resolvedStrength([{ name: 'address', ...address }]),
-            'framework-adapter',
+            'candidate',
+            'queue-receiver-and-broker-identity-unverified',
           ),
         );
       });
@@ -817,12 +750,15 @@ function observation(
   strength: BoundaryEvidenceStrength,
   evidence: string,
 ): BoundaryObservation {
-  const owner = context.ownerAt(node.startPosition.row);
+  const owner = context.ownerAt(node);
   const identity = JSON.stringify({
     extractor,
     action,
     file: context.file,
     line: node.startPosition.row,
+    startColumn: node.startPosition.column,
+    endLine: node.endPosition.row,
+    endColumn: node.endPosition.column,
     keyParts,
   });
   return {
@@ -834,6 +770,8 @@ function observation(
       file: context.file,
       startLine: node.startPosition.row,
       endLine: node.endPosition.row,
+      startColumn: node.startPosition.column,
+      endColumn: node.endPosition.column,
     },
     keyParts,
     evidence,
@@ -887,22 +825,6 @@ function hasPackageImport(source: string, packages: readonly string[]): boolean 
   });
 }
 
-function importedBindings(source: string, packages: readonly string[]): Set<string> {
-  const bindings = new Set<string>();
-  for (const packageName of packages) {
-    const escaped = packageName.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-    const pattern = new RegExp(
-      `(?:import\\s+([A-Za-z_$][\\w$]*)[^;]*?\\sfrom\\s*|(?:const|let)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*require\\s*\\(\\s*)['"]${escaped}(?:[/']|")`,
-      'gu',
-    );
-    for (const match of source.matchAll(pattern)) {
-      const binding = match[1] ?? match[2];
-      if (binding) bindings.add(binding);
-    }
-  }
-  return bindings;
-}
-
 // scip-query: ignore-passthrough — exported construction boundary keeps extractors off the private observation primitive.
 export function createBoundaryObservation(
   context: BoundaryFileContext,
@@ -946,14 +868,8 @@ function objectFieldArgument(
   field: string,
   context: BoundaryFileContext,
 ): Omit<BoundaryKeyPart, 'name'> | null {
-  if (!node) return null;
-  const pair = node.namedChildren.find((child) => {
-    if (child.type !== 'pair') return false;
-    const key = child.childForFieldName('key') ?? child.namedChild(0);
-    return key?.text.replace(/^['"`]|['"`]$/gu, '') === field;
-  });
-  const value = pair?.childForFieldName('value') ?? pair?.namedChild(1);
-  return addressedArgument(value, context);
+  const fieldValue = effectiveObjectField(context, node ?? undefined, field);
+  return fieldValue.kind === 'value' ? addressedArgument(fieldValue.node, context) : null;
 }
 
 function registryKey(
@@ -983,7 +899,7 @@ function resolvedStrength(
   return 'exact';
 }
 
-function registryContainerName(node: SyntaxNode): string | null {
+function registryContainerName(node: SyntaxNode): SyntaxNode | null {
   const object = node.parent;
   let declarator = object?.parent ?? null;
   while (
@@ -995,7 +911,7 @@ function registryContainerName(node: SyntaxNode): string | null {
   if (!object || !declarator || declarator.type !== 'variable_declarator') return null;
   const name = declarator.childForFieldName('name') ?? declarator.namedChild(0);
   const value = name?.text ?? '';
-  return /(?:handlers?|registry|routes?)$/iu.test(value) ? value : null;
+  return /(?:handlers?|registry|routes?)$/iu.test(value) ? name : null;
 }
 
 function directlyCallable(node: SyntaxNode): boolean {
@@ -1137,7 +1053,11 @@ function collectRegistryMemberObservation(
   const valueNode = node.childForFieldName('value') ?? node.namedChild(1);
   const key = registryKey(keyNode, context);
   if (!key || !valueNode || !registryValueLike(valueNode)) return;
-  const valueStrength = directlyCallable(valueNode) ? 'exact' : 'candidate';
+  const registry = runtimeBindingIdentity(context, container);
+  const effective = effectiveObjectField(context, node.parent ?? undefined, key.value);
+  if (effective.kind === 'value' && effective.node.startIndex !== valueNode.startIndex) return;
+  const stable = !sourceBindingResolver(context.file, context.root).hasObservedWrite(container, true);
+  const valueStrength = stable && effective.kind === 'value' && directlyCallable(valueNode) ? 'exact' : 'candidate';
   observations.push(
     observation(
       context,
@@ -1145,10 +1065,16 @@ function collectRegistryMemberObservation(
       'builtin.registry',
       'registry.handle',
       [
-        { name: 'registry', value: container, evidence: 'identifier' },
+        { name: 'registry', ...registry },
         { name: 'key', ...key },
       ],
-      resolvedStrength([{ name: 'key', ...key }], valueStrength),
+      resolvedStrength(
+        [
+          { name: 'registry', ...registry },
+          { name: 'key', ...key },
+        ],
+        valueStrength,
+      ),
       'object-member',
     ),
   );
@@ -1168,12 +1094,4 @@ function queueCallAction(leaf: string): 'queue.send' | 'queue.consume' | null {
     : leaf === 'consume' || leaf === 'subscribe'
       ? 'queue.consume'
       : null;
-}
-
-function collectEffectNamedBindings(specifiers: string, importedName: string, bindings: Set<string>): void {
-  for (const rawSpecifier of specifiers.split(',')) {
-    const specifier = rawSpecifier.trim().replace(/^type\s+/u, '');
-    const imported = /^([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?$/u.exec(specifier);
-    if (imported?.[1] === importedName) bindings.add(imported[2] ?? imported[1]);
-  }
 }

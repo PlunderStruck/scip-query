@@ -1,3 +1,4 @@
+import { sourceModuleReferences } from './module-references.js';
 import { listProjectFiles, readProjectFileText } from '../../platform/project-files.js';
 import { parseSourceBindings } from './function-metrics.js';
 import path from 'node:path';
@@ -37,73 +38,20 @@ export function maintenanceImports(
 ): SourceImport[] {
   const imports: SourceImport[] = [];
   const configs = maintenanceFileConfigs(project, source.fileName);
-  const add = (literal: ts.Node | undefined, kind: SourceImport['kind'], syntax: SourceImport['syntax']): void => {
-    if (!literal) return;
-    const specifier = ts.isStringLiteralLike(literal) ? literal.text : literal.getText(source);
-    const resolved = ts.isStringLiteralLike(literal)
-      ? resolveSourceImport(project, files, source.fileName, specifier, configs)
+  for (const reference of sourceModuleReferences(source, checker)) {
+    const { literal, ...fields } = reference;
+    const resolved = literal
+      ? resolveSourceImport(project, files, source.fileName, reference.specifier, configs)
       : { resolution: 'dynamic' as const };
     imports.push({
+      ...fields,
       file: source.fileName,
-      line: source.getLineAndCharacterOfPosition(literal.getStart(source)).line + 1,
-      specifier,
-      kind,
       role: classifyFile(source.fileName) === 'test' ? 'test' : 'production',
-      syntax,
       configs: configs.map((config) => config.file).filter(Boolean),
       ...resolved,
     });
-  };
-  const visit = (node: ts.Node): void => {
-    if (ts.isImportDeclaration(node)) add(node.moduleSpecifier, importKind(node), 'import');
-    else if (ts.isExportDeclaration(node)) add(node.moduleSpecifier, exportKind(node), 'reexport');
-    else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference))
-      add(node.moduleReference.expression, node.isTypeOnly ? 'type' : 'value', 'require');
-    else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument))
-      add(node.argument.literal, 'type', 'type-import');
-    else if (ts.isCallExpression(node)) {
-      const syntax = callImportSyntax(node, checker);
-      if (syntax) add(node.arguments[0], 'value', syntax);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+  }
   return imports;
-}
-
-function callImportSyntax(node: ts.CallExpression, checker: ts.TypeChecker): 'dynamic-import' | 'require' | undefined {
-  if (node.expression.kind === ts.SyntaxKind.ImportKeyword) return 'dynamic-import';
-  if (
-    ts.isIdentifier(node.expression) &&
-    node.expression.text === 'require' &&
-    !checker.getSymbolAtLocation(node.expression)
-  )
-    return 'require';
-  return undefined;
-}
-
-function importKind(node: ts.ImportDeclaration): SourceImport['kind'] {
-  const clause = node.importClause;
-  if (clause?.isTypeOnly) return 'type';
-  const named = clause?.namedBindings;
-  return !clause?.name &&
-    named &&
-    ts.isNamedImports(named) &&
-    named.elements.length > 0 &&
-    named.elements.every((item) => item.isTypeOnly)
-    ? 'type'
-    : 'value';
-}
-
-function exportKind(node: ts.ExportDeclaration): SourceImport['kind'] {
-  const clause = node.exportClause;
-  return node.isTypeOnly ||
-    (clause &&
-      ts.isNamedExports(clause) &&
-      clause.elements.length > 0 &&
-      clause.elements.every((item) => item.isTypeOnly))
-    ? 'type'
-    : 'value';
 }
 
 function resolveSourceImport(

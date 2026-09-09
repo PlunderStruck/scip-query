@@ -3121,9 +3121,14 @@ function sanitizeScipForSqlite(scipPath: string, onStatus: (message: string) => 
 }
 
 function reportSanitizedScip(
-  sanitized: { removedDefinitionOccurrences: number; touchedDocuments: number },
+  sanitized: { removedDefinitionOccurrences: number; touchedDocuments: number; recoveredDefinitionSymbols?: number },
   onStatus: (message: string) => void,
 ): void {
+  if (sanitized.recoveredDefinitionSymbols) {
+    onStatus(
+      `Preserved definition occurrences and recovered ${sanitized.recoveredDefinitionSymbols} missing symbol metadata record(s); kind and documentation remain unknown.`,
+    );
+  }
   if (sanitized.removedDefinitionOccurrences === 0) return;
   onStatus(
     `Sanitized ${sanitized.removedDefinitionOccurrences} invalid definition occurrences ` +

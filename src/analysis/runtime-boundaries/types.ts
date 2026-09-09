@@ -1,3 +1,5 @@
+import type { ScipDatabase } from '../../storage/db.js';
+import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type {
   StaticValueDerivation,
@@ -26,6 +28,8 @@ export interface BoundaryOwner {
   name: string | null;
   startLine: number;
   endLine: number;
+  startColumn?: number;
+  endColumn?: number;
 }
 
 export interface BoundaryKeyPart {
@@ -162,4 +166,12 @@ export interface RuntimeBoundaryGraph {
   coverage: RuntimeBoundaryCoverage;
   /** Optional for backward compatibility with runtime-boundaries-v5 graphs. */
   fileCoverage?: RuntimeBoundaryFileCoverage[];
+}
+
+export interface BoundaryFileContext {
+  db: ScipDatabase;
+  file: string;
+  source: string;
+  root: SyntaxNode;
+  ownerAt(node: SyntaxNode): BoundaryOwner;
 }

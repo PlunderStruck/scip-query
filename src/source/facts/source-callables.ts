@@ -1,3 +1,4 @@
+import { JAVASCRIPT_FUNCTION_VALUE_TYPES, javascriptFunctionValue } from '../ast/ast-callables.js';
 import type { AstLanguage } from '../ast/ast-language.js';
 import type { SyntaxNode } from '../ast/ast-types.js';
 import { isCommentNode } from './source-node-kinds.js';
@@ -20,7 +21,6 @@ const RUST_CALLABLE_FACT_NODE_TYPES = ['function_item', 'function_signature_item
 const PYTHON_CALLABLE_FACT_NODE_TYPES = ['function_definition'] as const;
 const NO_CALLABLE_FACT_NODE_TYPES: readonly string[] = [];
 
-const JAVASCRIPT_FUNCTION_VALUE_TYPES = new Set(['arrow_function', 'function_expression', 'generator_function']);
 const ANONYMOUS_CALLABLE_TYPES = new Set([...JAVASCRIPT_FUNCTION_VALUE_TYPES, 'closure_expression', 'lambda']);
 
 // scip-query: ignore-wrapper — this is the authoritative language-to-callable-node compatibility mapping.
@@ -86,7 +86,7 @@ export function callSiteOwner(node: SyntaxNode, language: AstLanguage): SourceCa
     const named = isNamedCallableType(parent.type, language);
     const functionValue = JAVASCRIPT_FUNCTION_VALUE_TYPES.has(parent.type);
     if (!named && !ANONYMOUS_CALLABLE_TYPES.has(parent.type)) continue;
-    const binding = functionValue && parent.parent ? namedCallableNode(parent.parent, language) : null;
+    const binding = functionValue ? assignedCallableOwner(parent, language) : null;
     const declaration = binding?.functionNode.startIndex === parent.startIndex ? binding.definitionNode : parent;
     return {
       name: declaration !== parent ? binding!.name : named ? (parent.childForFieldName('name')?.text ?? null) : null,
@@ -95,6 +95,15 @@ export function callSiteOwner(node: SyntaxNode, language: AstLanguage): SourceCa
       endLine: declaration.endPosition.row,
       endColumn: declaration.endPosition.column,
     };
+  }
+  return null;
+}
+
+function assignedCallableOwner(node: SyntaxNode, language: AstLanguage): ReturnType<typeof namedCallableNode> {
+  for (let parent = node.parent; parent; parent = parent.parent) {
+    const binding = namedCallableNode(parent, language);
+    if (binding?.functionNode.startIndex === node.startIndex) return binding;
+    if (!['arguments', 'call_expression', 'parenthesized_expression'].includes(parent.type)) break;
   }
   return null;
 }
@@ -150,28 +159,6 @@ function assignedJavascriptCallable(
   const functionValue = javascriptFunctionValue(value);
   if (!functionValue) return null;
   return { name: name.text, definitionNode: node, functionNode: functionValue };
-}
-
-/**
- * Recognize a function value directly assigned to a binding, plus the common
- * curried-wrapper form `const work = wrapper(metadata)(function* () { ... })`.
- *
- * The curried-call restriction is deliberate. A callback passed to an
- * ordinary operation usually does not make the receiving binding callable;
- * a second invocation layer is concrete syntax evidence that the first call
- * is configuring a function-producing wrapper. The result remains a
- * source-derived callable rather than a compiler-identity claim.
- */
-function javascriptFunctionValue(value: SyntaxNode): SyntaxNode | null {
-  if (JAVASCRIPT_FUNCTION_VALUE_TYPES.has(value.type)) return value;
-  if (value.type !== 'call_expression') return null;
-  const callee = value.childForFieldName('function') ?? value.namedChild(0);
-  if (callee?.type !== 'call_expression') return null;
-  const args = value.childForFieldName('arguments') ?? value.namedChildren.find((child) => child.type === 'arguments');
-  const functionArguments = (args?.namedChildren ?? []).filter((child) =>
-    JAVASCRIPT_FUNCTION_VALUE_TYPES.has(child.type),
-  );
-  return functionArguments.length === 1 ? functionArguments[0]! : null;
 }
 
 function parameterCount(fnNode: SyntaxNode): number {
@@ -271,14 +258,10 @@ export function smallestSourceCallableAtLine<T extends { startLine: number; endL
   callables: readonly T[],
   line: number,
 ): T | null {
-  return (
-    callables
-      .filter((callable) => callable.startLine <= line && callable.endLine >= line)
-      .sort(
-        (left, right) =>
-          left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
-      )[0] ?? null
-  );
+  const covering = callables.filter((callable) => callable.startLine <= line && callable.endLine >= line);
+  const shortest = Math.min(...covering.map((callable) => callable.endLine - callable.startLine));
+  const matches = covering.filter((callable) => callable.endLine - callable.startLine === shortest);
+  return matches.length === 1 ? matches[0]! : null;
 }
 
 function wrappedCallableParameterFact(param: SyntaxNode): CallableParamFact {

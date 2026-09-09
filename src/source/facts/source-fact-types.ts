@@ -43,6 +43,8 @@ export interface SourceFacts {
     memberAccess: boolean;
     line: number;
     targetRange?: { startLine: number; startColumn: number; endLine: number; endColumn: number };
+    /** Full callee expression for binding and receiver-mutation checks. */
+    targetExpressionRange?: { startLine: number; startColumn: number; endLine: number; endColumn: number };
     /** Null is file scope; absent means this provider does not report lexical ownership. */
     owner?: SourceCallableOwner | null;
   }>;

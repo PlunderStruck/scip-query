@@ -84,10 +84,10 @@ describe('SCIP merge support', () => {
       createFixtureIndex({
         documents: [
           createDocument({
-            language: 'python',
+            language: 'typescript',
             relativePath: 'shared/file.ts',
-            symbol: 'scip-python python fixture 1.0.0 shared/file.py/process().',
-            text: 'def process():\n    return 1\n',
+            symbol: 'scip-typescript npm fixture 1.0.0 shared/`file.ts`/second().',
+            text: 'export const first = 1;\n',
           }),
           createDocument({
             language: 'python',
@@ -113,11 +113,82 @@ describe('SCIP merge support', () => {
     expect(sharedFile).toBeDefined();
     expect(sharedFile?.occurrences).toHaveLength(2);
     expect(sharedFile?.symbols).toHaveLength(2);
-    expect(sharedFile?.text).toContain('def process');
+    expect(sharedFile?.text).toBe('export const first = 1;\n');
 
     expect(merged.externalSymbols).toHaveLength(1);
     expect(merged.externalSymbols[0]?.documentation).toEqual(['first docs', 'second docs']);
     expect(merged.externalSymbols[0]?.displayName).toBe('dep');
+  });
+
+  it.each([
+    ['source text', { text: 'different source' }],
+    ['language', { language: 'python' }],
+    ['column encoding', { positionEncoding: 1 }],
+    ['unspecified column encoding', { positionEncoding: 0 }],
+  ])('rejects incompatible overlapping %s rather than publishing mixed coordinates', (_reason, change) => {
+    const original = create(DocumentSchema, {
+      relativePath: 'shared.ts',
+      language: 'typescript',
+      text: 'const value = 1;',
+      positionEncoding: 2,
+      occurrences: [
+        create(OccurrenceSchema, { symbol: 'local 0', symbolRoles: SymbolRole.Definition, range: [0, 6, 11] }),
+      ],
+    });
+    const changed = create(DocumentSchema, { ...original, ...change });
+    expect(() =>
+      mergeScipIndexes([createFixtureIndex({ documents: [original] }), createFixtureIndex({ documents: [changed] })]),
+    ).toThrow('Cannot merge');
+  });
+
+  it('recognizes equivalent short and expanded ranges for the same document-local declaration', () => {
+    const original = create(DocumentSchema, {
+      relativePath: 'shared.ts',
+      language: 'typescript',
+      positionEncoding: 2,
+      occurrences: [
+        create(OccurrenceSchema, { symbol: 'local 0', symbolRoles: SymbolRole.Definition, range: [0, 6, 7] }),
+      ],
+    });
+    const expanded = create(DocumentSchema, {
+      ...original,
+      occurrences: [
+        create(OccurrenceSchema, {
+          symbol: 'local 0',
+          symbolRoles: SymbolRole.Definition,
+          range: [0, 6, 0, 7],
+        }),
+      ],
+    });
+    const merged = mergeScipIndexes([
+      createFixtureIndex({ documents: [original] }),
+      createFixtureIndex({ documents: [expanded] }),
+    ]);
+    expect(merged.documents[0]?.occurrences).toEqual(original.occurrences);
+  });
+
+  it('rejects colliding document-local identities for different declarations', () => {
+    const original = create(DocumentSchema, {
+      relativePath: 'shared.ts',
+      language: 'typescript',
+      positionEncoding: 2,
+      occurrences: [
+        create(OccurrenceSchema, { symbol: 'local 0', symbolRoles: SymbolRole.Definition, range: [0, 6, 7] }),
+      ],
+    });
+    const changed = create(DocumentSchema, {
+      ...original,
+      occurrences: [
+        create(OccurrenceSchema, {
+          symbol: 'local 0',
+          symbolRoles: SymbolRole.Definition,
+          range: [0, 18, 19],
+        }),
+      ],
+    });
+    expect(() =>
+      mergeScipIndexes([createFixtureIndex({ documents: [original] }), createFixtureIndex({ documents: [changed] })]),
+    ).toThrow('Cannot merge');
   });
 
   it('writes a merged SCIP file that round-trips cleanly', () => {
@@ -243,9 +314,12 @@ describe('SCIP merge support', () => {
     const result = mergeAndSanitizeScipFiles([firstPath, secondPath], mergedPath);
     const merged = deserializeSCIP(readFileSync(mergedPath));
 
-    expect(result.removedDefinitionOccurrences).toBe(1);
+    expect(result.removedDefinitionOccurrences).toBe(0);
+    expect(result.recoveredDefinitionSymbols).toBe(1);
     expect(result.touchedDocuments).toBe(1);
-    expect(merged.documents.find((document) => document.relativePath === 'src/a.ts')?.occurrences).toHaveLength(1);
+    const repaired = merged.documents.find((document) => document.relativePath === 'src/a.ts');
+    expect(repaired?.occurrences).toEqual(first.documents[0]!.occurrences);
+    expect(repaired?.symbols.map((symbol) => symbol.symbol)).toContain(invalid);
   });
 });
 

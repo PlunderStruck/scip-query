@@ -26,7 +26,7 @@ export function programControlElementsForTopologyNodes(
   for (const owner of topologyNodes) {
     if (!owner.location || !['source-construct', 'symbol'].includes(owner.kind)) continue;
     const endLine = owner.location.endLine ?? owner.location.line;
-    const analysis = behaviorControlAnalysis(db, owner.location.file, owner.location.line, endLine);
+    const analysis = behaviorControlAnalysis(db, owner.location.file, owner.location.line, endLine, owner.location);
     if (!analysis) {
       blindSpots.add(
         `Control dependence unavailable for ${owner.location.file}:${owner.location.line + 1}-${endLine + 1}: no supported syntax tree or covering construct.`,
@@ -139,11 +139,26 @@ function topologyControlNode(
 ): ExplorationTopologyNode {
   const file = owner.location!.file;
   return {
-    id: id(`control-${construct.kind}`, file, String(construct.startLine), String(construct.endLine), construct.label),
+    id: id(
+      `control-${construct.kind}`,
+      file,
+      String(construct.startLine),
+      String(construct.endLine),
+      construct.label,
+      owner.id,
+      String(construct.startColumn ?? ''),
+      String(construct.endColumn ?? ''),
+    ),
     kind: `control-${construct.kind}`,
     label: construct.label,
     disposition: 'folded',
-    location: { file, line: construct.startLine, endLine: construct.endLine },
+    location: {
+      file,
+      line: construct.startLine,
+      endLine: construct.endLine,
+      startColumn: construct.startColumn,
+      endColumn: construct.endColumn,
+    },
     anchorIds: [],
     attributes: {
       ownerNodeId: owner.id,

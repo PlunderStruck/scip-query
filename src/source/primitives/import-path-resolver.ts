@@ -351,6 +351,7 @@ function workspacePackageImportCandidates(match: WorkspacePackageMatch): string[
   const candidates: string[] = [];
   const exportsTarget = exportsTargetForSubpath(match.pkg.exports, match.subpath);
   if (exportsTarget) {
+    candidates.push(exportsTarget.replace(/^\.\//u, ''));
     const srcCandidate = distTargetToSrcCandidate(exportsTarget);
     if (srcCandidate) candidates.push(srcCandidate);
   }
@@ -359,6 +360,7 @@ function workspacePackageImportCandidates(match: WorkspacePackageMatch): string[
 }
 
 function exportsTargetForSubpath(exportsField: unknown, subpath: string): string | null {
+  if (typeof exportsField === 'string') return subpath === '' ? exportsField : null;
   if (!exportsField || typeof exportsField !== 'object') return null;
   const key = subpath === '' ? '.' : `./${subpath}`;
   return firstStringConditionTarget((exportsField as Record<string, unknown>)[key]);

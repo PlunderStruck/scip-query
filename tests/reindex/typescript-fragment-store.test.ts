@@ -62,19 +62,26 @@ describe('TypeScript fragment store', () => {
     const baseline = cleanOracle(root);
     const legacy = availability.runtime.Index.deserializeBinary(baseline);
     const metadata = legacy.metadata as { tool_info: { version: string } };
-    expect(metadata.tool_info.version).toBe('0.4.0+scip-query-symbols.1');
-    metadata.tool_info.version = '0.4.0';
-    expect(() =>
-      seedTypeScriptFragmentGeneration({
-        cacheDir,
-        runtime: availability.runtime,
-        indexBytes: legacy.serializeBinary(),
-        producerIdentity: initial.producerIdentity,
-        projectIdentity: 'fixture-project-v1',
-        generationIdentity: 'legacy-must-not-publish',
-        documentIdentities: new Map(),
-      }),
-    ).toThrow('producer identity changed');
+    expect(metadata.tool_info.version).toBe('0.4.0+scip-query-symbols.4');
+    for (const version of [
+      '0.4.0',
+      '0.4.0+scip-query-symbols.1',
+      '0.4.0+scip-query-symbols.2',
+      '0.4.0+scip-query-symbols.3',
+    ]) {
+      metadata.tool_info.version = version;
+      expect(() =>
+        seedTypeScriptFragmentGeneration({
+          cacheDir,
+          runtime: availability.runtime,
+          indexBytes: legacy.serializeBinary(),
+          producerIdentity: initial.producerIdentity,
+          projectIdentity: 'fixture-project-v1',
+          generationIdentity: 'legacy-must-not-publish',
+          documentIdentities: new Map(),
+        }),
+      ).toThrow('producer identity changed');
+    }
     expect(() => readTypeScriptFragmentGeneration({ cacheDir, generationIdentity: 'legacy-must-not-publish' })).toThrow(
       'ENOENT',
     );

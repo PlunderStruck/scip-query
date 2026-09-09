@@ -18,6 +18,7 @@ export function normalizeOccurrenceRange(
   const startColumn = occurrenceStringColumn(lines[startLine], range[1]!, encoding);
   const endColumn = occurrenceStringColumn(lines[endLine], range[range.length - 1]!, encoding);
   if (startColumn === undefined || endColumn === undefined) return undefined;
+  if (endLine < startLine || (endLine === startLine && endColumn < startColumn)) return undefined;
   return { startLine, startColumn, endLine, endColumn };
 }
 

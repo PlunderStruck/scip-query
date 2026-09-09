@@ -8,6 +8,7 @@ import {
   IndexSchema,
   MetadataSchema,
   SymbolInformationSchema,
+  SymbolRole,
 } from '@c4312/scip';
 import type { Document, Index, Occurrence, Relationship, SymbolInformation } from '@c4312/scip';
 import { profileSpan } from '../instrumentation/profile.js';
@@ -19,7 +20,7 @@ import {
   type WireField,
 } from './scip-wire.js';
 import { readFileWithinLimit, SCIP_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
-import { sanitizeScipIndex } from './sanitize.js';
+import { normalizeScipDocumentEncoding, sanitizeScipIndex } from './sanitize.js';
 
 export interface MergeScipResult {
   documentCount: number;
@@ -29,6 +30,7 @@ export interface MergeScipResult {
 
 export interface MergeAndSanitizeScipResult extends MergeScipResult {
   removedDefinitionOccurrences: number;
+  recoveredDefinitionSymbols?: number;
   touchedDocuments: number;
 }
 
@@ -46,11 +48,17 @@ export function mergeScipIndexes(indexes: readonly Index[]): Index {
   }
 
   if (indexes.length === 1) {
-    return indexes[0]!;
+    const index = indexes[0]!;
+    return create(IndexSchema, {
+      ...index,
+      documents: index.documents.map((doc) => normalizeScipDocumentEncoding(doc, index.metadata)),
+    });
   }
 
   const metadata = mergeMetadata(indexes);
-  const documents = mergeDocuments(indexes.flatMap((index) => index.documents ?? []));
+  const documents = mergeDocuments(
+    indexes.flatMap((index) => index.documents.map((doc) => normalizeScipDocumentEncoding(doc, index.metadata))),
+  );
   const externalSymbols = mergeSymbolInfos(indexes.flatMap((index) => index.externalSymbols ?? []));
 
   return create(IndexSchema, {
@@ -139,6 +147,9 @@ export function mergeAndSanitizeScipFiles(
     externalSymbolCount: sanitized.index.externalSymbols.length,
     inputCount: inputPaths.length,
     removedDefinitionOccurrences: sanitized.removedDefinitionOccurrences,
+    ...(sanitized.recoveredDefinitionSymbols
+      ? { recoveredDefinitionSymbols: sanitized.recoveredDefinitionSymbols }
+      : {}),
     touchedDocuments: sanitized.touchedDocuments,
   };
 }
@@ -220,7 +231,10 @@ function mergeMetadata(indexes: readonly Index[]): Index['metadata'] {
     }
   }
 
-  return first;
+  const sameProducer = indexes.every(
+    (index) => JSON.stringify(index.metadata?.toolInfo) === JSON.stringify(first.toolInfo),
+  );
+  return sameProducer ? first : create(MetadataSchema, { ...first, toolInfo: undefined });
 }
 
 function mergeDocuments(documents: readonly Document[]): Document[] {
@@ -233,6 +247,7 @@ function mergeDocuments(documents: readonly Document[]): Document[] {
       continue;
     }
 
+    assertCompatibleDocuments(existing, document);
     byPath.set(
       document.relativePath,
       create(DocumentSchema, {
@@ -240,8 +255,8 @@ function mergeDocuments(documents: readonly Document[]): Document[] {
         relativePath: existing.relativePath || document.relativePath,
         occurrences: mergeOccurrences([...existing.occurrences, ...document.occurrences]),
         symbols: mergeSymbolInfos([...existing.symbols, ...document.symbols]),
-        text: chooseText(existing.text, document.text),
-        positionEncoding: existing.positionEncoding || document.positionEncoding,
+        text: existing.text || document.text,
+        positionEncoding: existing.occurrences.length ? existing.positionEncoding : document.positionEncoding,
       }),
     );
   }
@@ -249,12 +264,52 @@ function mergeDocuments(documents: readonly Document[]): Document[] {
   return [...byPath.values()];
 }
 
+/** An overlapping document must describe the same source snapshot and coordinate system. */
+function assertCompatibleDocuments(left: Document, right: Document): void {
+  for (const key of ['language', 'text'] as const) {
+    if (left[key] && right[key] && left[key] !== right[key]) {
+      throw new Error(`Cannot merge ${left.relativePath}: conflicting ${key}. Reindex one consistent source snapshot.`);
+    }
+  }
+  if (left.occurrences.length && right.occurrences.length && left.positionEncoding !== right.positionEncoding) {
+    throw new Error(`Cannot merge ${left.relativePath}: incompatible column encodings.`);
+  }
+  const leftLocals = localDefinitionRanges(left),
+    rightLocals = localDefinitionRanges(right);
+  for (const [symbol, ranges] of rightLocals) {
+    const existing = leftLocals.get(symbol);
+    if (existing !== undefined && (ranges.length === 0 || JSON.stringify(existing) !== JSON.stringify(ranges))) {
+      throw new Error(`Cannot merge ${left.relativePath}: conflicting document-local identity ${symbol}.`);
+    }
+  }
+}
+
+function localDefinitionRanges(document: Document): Map<string, string[]> {
+  const locals = new Map<string, Set<string>>();
+  for (const occurrence of document.occurrences) {
+    if (!occurrence.symbol.startsWith('local ')) continue;
+    const ranges = locals.get(occurrence.symbol) ?? new Set<string>();
+    if ((occurrence.symbolRoles & SymbolRole.Definition) !== 0)
+      ranges.add(JSON.stringify(canonicalOccurrenceRange(occurrence.range)));
+    locals.set(occurrence.symbol, ranges);
+  }
+  return new Map([...locals].map(([symbol, ranges]) => [symbol, [...ranges].sort()]));
+}
+
+function canonicalOccurrenceRange(range: readonly number[]): readonly number[] {
+  return range.length === 3 ? [range[0]!, range[1]!, range[0]!, range[2]!] : range;
+}
+
 function mergeOccurrences(occurrences: readonly Occurrence[]): Occurrence[] {
   const seen = new Set<string>();
   const merged: Occurrence[] = [];
 
   for (const occurrence of occurrences) {
-    const key = JSON.stringify(occurrence);
+    const key = JSON.stringify({
+      ...occurrence,
+      range: canonicalOccurrenceRange(occurrence.range),
+      enclosingRange: canonicalOccurrenceRange(occurrence.enclosingRange),
+    });
     if (seen.has(key)) {
       continue;
     }
@@ -314,12 +369,6 @@ function mergeRelationships(relationships: readonly Relationship[]): Relationshi
   }
 
   return merged;
-}
-
-function chooseText(left: string, right: string): string {
-  if (!left) return right;
-  if (!right) return left;
-  return left.length >= right.length ? left : right;
 }
 
 function uniqueStrings(values: readonly string[]): string[] {

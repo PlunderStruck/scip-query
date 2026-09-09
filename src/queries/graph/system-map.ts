@@ -1,5 +1,14 @@
+import { readRepositoryTextFile } from '../../source/primitives/repository-text.js';
+import { sourceBindingResolver } from '../../source/ast/source-binding-identity.js';
+import { resolveImportPath } from '../../source/primitives/import-path-resolver.js';
+import { sameOccurrenceRange } from '../../symbols/graph/scip-chunk-occurrences.js';
 import { quoteShellArgument } from '../../domain/shell-arguments.js';
-import { calleeEvidenceStrength as staticCallEvidenceStrength } from '../../symbols/graph/call-graph-evidence.js';
+import {
+  calleeEvidenceStrength as staticCallEvidenceStrength,
+  lexicalCallOwners,
+  sourceCallableOwnerKey,
+  sourceCallableForDefinition,
+} from '../../symbols/graph/call-graph-evidence.js';
 import {
   classifyFile,
   isExplicitPackageSurfaceSymbol,
@@ -19,11 +28,14 @@ import { findNamedSourceImportBinding, getSourceImports } from '../../language-p
 import { getSourceLines } from '../../source/primitives/source-text.js';
 import { getAst, type SyntaxNode } from '../../source/ast.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
-import { smallestSourceCallableAtLine } from '../../source/facts/source-callables.js';
+import type { SourceCallableOwner } from '../../source/facts/source-fact-types.js';
+import { smallestSourceCallableAtLine, callSiteOwner } from '../../source/facts/source-callables.js';
+import { sourceAnalysisRoot, ANALYSIS_CALLABLE_NODE_TYPES } from '../../source/ast/ast-callables.js';
 import { behaviorConstructRange, governingBehaviorControlLines } from '../../source/facts/behavior-skeleton.js';
 import { focusedSourceConstructRange, readableSourceUnitRange } from '../../source/facts/source-construct.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { indexedDocumentPaths, resolveIndexedDocumentCandidates } from '../../storage/scip-documents.js';
+import { referenceOccurrenceLines } from '../../storage/scip-rows.js';
 import { findEnclosingDefinition, getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import type { CalleeRow, CalleeEvidenceSource } from '../../symbols/graph/call-graph-evidence.js';
 import {
@@ -32,7 +44,11 @@ import {
 } from '../../symbols/graph/member-call-targets.js';
 import {
   scipOccurrenceCallableReferencesForRange,
+  occurrenceWithSourceOwner,
+  scipOccurrenceTypeReferencesForRange,
   scipOccurrenceCallTargetsForRange,
+  scipOccurrenceTargetsForFile,
+  type ScipOccurrenceCallTarget,
 } from '../../symbols/graph/scip-occurrence-call-targets.js';
 import { resolveImportedDefinitions } from '../../symbols/imported-definitions.js';
 import { findIdentifierLines } from '../../symbols/identifier-index.js';
@@ -55,6 +71,7 @@ import {
   type SystemMapRelationKind,
 } from './system-map-edge-semantics.js';
 import { programDataElementsForSystemMapRelations } from './program-data-edges.js';
+import { programExecutionFrontiers } from './program-execution-frontiers.js';
 import { programControlElementsForTopologyNodes } from './program-control-edges.js';
 import { programStateTemporalElementsForTopologyNodes } from './program-state-temporal-edges.js';
 import { buildCausalCorridor } from '../internal/causal-corridor.js';
@@ -112,7 +129,7 @@ export type SystemMapRelationEvidence =
   | 'ast-member-import-candidate'
   | 'scip-occurrence-callsite'
   | 'scip-occurrence-reference'
-  | 'compiler-cross-workspace-symbol'
+  | 'scip-occurrence-type-reference'
   | 'indexed-or-source-reference'
   | 'indexed-or-source-import'
   | `runtime-boundary:${string}`;
@@ -188,6 +205,8 @@ export interface SystemMapLiteralHit {
   ownerShortName: string | null;
   ownerStartLine?: number | null;
   ownerEndLine?: number | null;
+  ownerStartColumn?: number;
+  ownerEndColumn?: number;
   sourceLine: string;
   matchKind?: 'exact-value' | 'boundary' | 'embedded';
   traversalSeed?: boolean;
@@ -243,6 +262,8 @@ export interface SystemMapSourceConstruct {
   name: string;
   startLine: number;
   endLine: number;
+  startColumn?: number;
+  endColumn?: number;
 }
 
 /** One exact producer or consumer observation at a runtime crossing. */
@@ -275,7 +296,7 @@ export interface SystemMapRegionRelation {
 }
 
 export interface SystemMapExternalBoundary {
-  kind: 'external-import';
+  kind: 'external-import' | 'unresolved-import';
   name: string;
   fromRegionIds: string[];
   fromFiles: string[];
@@ -521,9 +542,16 @@ interface SystemMapTraversalContext {
   symbols: Map<string, SymbolState>;
   sourceConstructs: Map<string, SourceConstructState>;
   pendingRelations: Map<string, PendingRelation>;
-  externalImports: Map<string, { name: string; fromFiles: Set<string> }>;
+  externalImports: Map<string, { name: string; fromFiles: Set<string>; unresolved?: boolean }>;
   reverseExpandedSourceConstructs: Set<string>;
   serviceCallerFilesBySourceConstruct: Map<string, Set<string>>;
+  referenceCallFiles: Map<
+    string,
+    {
+      calls: ReturnType<typeof scipOccurrenceCallTargetsForRange>;
+      owners: Map<string, IndexedDefinition>;
+    }
+  >;
   traversalMetrics: {
     filteredUnverifiedCallEdges: number;
     memberCallCandidateEdges: number;
@@ -884,6 +912,8 @@ function materializeLiteralAnchorMatch(
     ownerShortName: match.ownerShortName,
     ownerStartLine: match.ownerStartLine,
     ownerEndLine: match.ownerEndLine,
+    ownerStartColumn: match.ownerStartColumn,
+    ownerEndColumn: match.ownerEndColumn,
     sourceLine: match.sourceLine.trim(),
     matchKind: match.matchKind,
     traversalSeed,
@@ -900,12 +930,16 @@ function describeLiteralAnchor(
     query,
     status: matches.length > 0 ? 'matched' : 'missing',
     matchedRegionIds: [],
-    matchingLines: matches.length,
-    seedMatchingLines: broad ? 0 : activeTraversalSeeds.size,
-    matchOnlyLines: matches.length - activeTraversalSeeds.size,
-    eligibleSeedMatchingLines: traversalEligible.length,
-    materializedMatchingLines: materializedMatches.length,
-    withheldMatchingLines: broad ? matches.length : 0,
+    matchingLines: literalMatchingLineCount(matches),
+    seedMatchingLines: broad
+      ? 0
+      : literalMatchingLineCount(matches.filter((match) => activeTraversalSeeds.has(literalMatchIdentity(match)))),
+    matchOnlyLines: literalMatchingLineCount(
+      matches.filter((match) => !activeTraversalSeeds.has(literalMatchIdentity(match))),
+    ),
+    eligibleSeedMatchingLines: literalMatchingLineCount(traversalEligible),
+    materializedMatchingLines: literalMatchingLineCount(materializedMatches),
+    withheldMatchingLines: broad ? literalMatchingLineCount(matches) : 0,
     literalTraversal: broad ? 'withheld-broad' : 'materialized',
     representativeMatches: broad ? selectLiteralRepresentatives(query, matches) : undefined,
     narrowingCommands: broad ? literalNarrowingCommands(query, matches) : undefined,
@@ -960,7 +994,7 @@ function finalizeSystemMap(input: {
   sourceConstructs: Map<string, SourceConstructState>;
   literalHits: SystemMapLiteralHit[];
   pendingRelations: Map<string, PendingRelation>;
-  externalImports: Map<string, { name: string; fromFiles: Set<string> }>;
+  externalImports: Map<string, { name: string; fromFiles: Set<string>; unresolved?: boolean }>;
   anchors: SystemMapAnchor[];
   omittedSymbolCandidates: number;
   broadLiteralAnchors: number;
@@ -1158,7 +1192,7 @@ function finalizeSystemMap(input: {
       : []),
     `Literal matches outside the included source scopes (${includedSourceScopes.join(', ')}) remain visible as match-only evidence and do not seed traversal.`,
     runtimeBoundaries
-      ? 'Built-in runtime-boundary extractors traverse direct and replayably derived links; heuristic candidates, unsupported frameworks, reflection, generated names, and dependency wiring not recoverable from compiler occurrences or constructor assignments remain disclosed frontiers.'
+      ? 'Runtime observations retain their own proof strength; possible peers remain candidate links when deployment, broker, receiver, or dataflow identity is unproved. Unsupported frameworks, reflection, generated names, and unresolved dependency wiring remain coverage limits.'
       : 'Runtime-boundary evidence is unavailable for this index; run scip-query reindex with this build to extract supported HTTP, event, registry, and persistence observations.',
     'Reverse references do not recursively expand from discovered callers or callees.',
     'Member calls use compiler occurrences, exact constructor-assigned fields, bounded unique service providers, direct factory-return members, and compiler-resolved object-literal callbacks when available. Ambiguous providers remain candidate frontiers; callback values routed through mutation, reflection, or unsupported dependency containers remain unrepresented.',
@@ -1344,7 +1378,7 @@ function finalizeSystemMap(input: {
           },
           'contract-symbol': {
             evidence: 'compiler-graph',
-            scope: 'compiler-resolved symbol identities referenced across inferred workspace boundaries',
+            scope: 'explicit compiler references to type declarations; behavioral conformance is not inferred',
             completeWithinScope: true,
           },
           import: {
@@ -1383,8 +1417,18 @@ function addReverseSourceCallOwner(
 ) {
   const { db, addSymbol, addSourceConstruct } = context;
   const callable = sourceOwnerConstructAtLine(db, file, line);
-  if (kind === 'local' && callable && sourceConstructKey(callable) === sourceConstructKey(target)) return null;
-  const definition = findEnclosingDefinition(getDefinitionsForFile(db, file), line);
+  if (
+    kind === 'local' &&
+    callable &&
+    sourceConstructKey(callable) === sourceConstructKey(canonicalSourceConstruct(db, target))
+  )
+    return null;
+  const definition =
+    callable && callable.startColumn !== undefined && callable.endColumn !== undefined
+      ? lexicalCallOwners(db, file, getDefinitionsForFile(db, file)).get(
+          sourceCallableOwnerKey({ ...callable, startColumn: callable.startColumn, endColumn: callable.endColumn }),
+        )
+      : undefined;
   if (definition && !isModuleLikeSymbol(definition.symbol)) {
     addSymbol(
       definition,
@@ -1511,27 +1555,104 @@ function expandSourceConstructCallFrontier(context: SystemMapTraversalContext, d
 
 type SymbolReferenceSite = ReturnType<typeof systemMapReferenceSites>[number];
 interface SymbolReferenceEvidence {
+  sourceRange?: ScipOccurrenceCallTarget['sourceRange'];
   site: SymbolReferenceSite;
-  isCallsite: boolean;
+  callEvidence: {
+    evidence: 'scip-occurrence-callsite' | 'ast-callsite';
+    strength: 'exact' | 'candidate';
+  } | null;
   owner: IndexedDefinition | undefined;
+  sourceOwner?: SourceCallableOwner | null;
 }
 
 function symbolReferenceEvidence(context: SystemMapTraversalContext, state: SymbolState): SymbolReferenceEvidence[] {
   const { db, index, sourceAllowed, files, workspaces, relationPolicy } = context;
   return systemMapReferenceSites(db, index, state.definition)
     .filter((site) => sourceAllowed(site.file) && referenceSiteIsInScope(state, site.file, files, workspaces))
-    .map((site) => {
-      const isCallsite =
-        relationPolicy.has('call') &&
-        getSourceFacts(db, site.file)?.callSites.some(
-          (callsite) =>
-            callsite.line === site.line && sourceCallsiteTargetsDefinition(db, site.file, callsite, state.definition),
-        ) === true;
+    .flatMap((site) => {
       const resolved = site.enclosingSymbol
         ? resolveIndexedDefinitions(db, index, site.enclosingSymbol).matches[0]
         : undefined;
-      return { site, isCallsite, owner: resolved && !isModuleLikeSymbol(resolved.symbol) ? resolved : undefined };
+      const reference: SymbolReferenceEvidence = {
+        site,
+        callEvidence: null,
+        owner: resolved && !isModuleLikeSymbol(resolved.symbol) ? resolved : undefined,
+      };
+      const occurrences = site.compilerBound ? scipOccurrenceTargetsForFile(db, site.file) : null;
+      const exact = occurrences?.targets.filter(
+        (target) => target.sourceLine === site.line && target.definition.symbol === state.definition.symbol,
+      );
+      const references = exact
+        ? exact.map((target): SymbolReferenceEvidence => {
+            const observed = occurrenceWithSourceOwner(db, site.file, target);
+            return {
+              ...reference,
+              sourceRange: observed.sourceRange,
+              owner: observed.sourceDefinition ?? undefined,
+              sourceOwner: observed.sourceOwner ?? null,
+            };
+          })
+        : [reference];
+      return references.flatMap((item) =>
+        relationPolicy.has('call') ? referenceCallEvidence(context, item, state.definition) : [item],
+      );
     });
+}
+
+function referenceCallEvidence(
+  context: SystemMapTraversalContext,
+  reference: SymbolReferenceEvidence,
+  definition: IndexedDefinition,
+): SymbolReferenceEvidence[] {
+  const { db, index, referenceCallFiles } = context;
+  const { site } = reference;
+  if (site.line === null) return [reference];
+  let file = referenceCallFiles.get(site.file);
+  if (!file) {
+    file = {
+      calls: scipOccurrenceCallTargetsForRange(db, site.file, 0, Number.MAX_SAFE_INTEGER),
+      owners: lexicalCallOwners(db, site.file, index.definitionsForFile(site.file)),
+    };
+    referenceCallFiles.set(site.file, file);
+  }
+  const { calls, owners } = file;
+  if (calls.available) {
+    const matches = calls.targets.filter(
+      (target) =>
+        target.sourceLine === site.line &&
+        target.definition.symbol === definition.symbol &&
+        (!reference.sourceRange || sameOccurrenceRange(target.sourceRange, reference.sourceRange)),
+    );
+    return matches.length > 0
+      ? matches.map((target) => symbolReferenceCall(reference, 'scip-occurrence-callsite', target.sourceOwner, owners))
+      : [reference];
+  }
+  // Only occurrence-less indexes may use name-based candidates. A compiler
+  // reference beside an unrelated invocation is not itself a call.
+  if (site.compilerBound) return [reference];
+  const matches = (getSourceFacts(db, site.file)?.callSites ?? []).filter(
+    (callsite) => callsite.line === site.line && sourceCallsiteTargetsDefinition(db, site.file, callsite, definition),
+  );
+  return matches.length > 0
+    ? matches.map((callsite) => symbolReferenceCall(reference, 'ast-callsite', callsite.owner, owners))
+    : [reference];
+}
+
+function symbolReferenceCall(
+  reference: SymbolReferenceEvidence,
+  evidence: NonNullable<SymbolReferenceEvidence['callEvidence']>['evidence'],
+  sourceOwner: SourceCallableOwner | null | undefined,
+  owners: ReadonlyMap<string, IndexedDefinition>,
+): SymbolReferenceEvidence {
+  return {
+    ...reference,
+    callEvidence: {
+      evidence,
+      strength: evidence === 'scip-occurrence-callsite' && sourceOwner !== undefined ? 'exact' : 'candidate',
+    },
+    sourceOwner,
+    owner: sourceOwner === undefined ? reference.owner : owners.get(sourceCallableOwnerKey(sourceOwner)),
+  };
 }
 
 function selectRecursiveCallerSymbols(
@@ -1542,8 +1663,8 @@ function selectRecursiveCallerSymbols(
   const { db, workspaces } = context;
   const targetWorkspace = workspaceForFile(definition.relativePath, workspaces).relativeDir;
   const candidates = references
-    .flatMap(({ isCallsite, owner }) => {
-      if (!isCallsite || !owner) return [];
+    .flatMap(({ callEvidence, owner }) => {
+      if (!callEvidence || !owner) return [];
       const workspace = workspaceForFile(owner.relativePath, workspaces).relativeDir;
       return [
         {
@@ -1581,7 +1702,7 @@ function addSymbolReferenceOwner(
   depth: number,
 ) {
   const { db, addSymbol, addSourceConstruct } = context;
-  const { site, owner, isCallsite } = reference;
+  const { site, owner, callEvidence, sourceOwner } = reference;
   if (owner) {
     // Only selected callers inherit reverse expansion. Non-call references remain one-hop evidence.
     addSymbol(
@@ -1589,25 +1710,39 @@ function addSymbolReferenceOwner(
       depth + 1,
       'reference-owner',
       undefined,
-      isCallsite && recursiveCallerSymbols.has(owner.symbol) ? state.referenceScope : 'none',
+      callEvidence && recursiveCallerSymbols.has(owner.symbol) ? state.referenceScope : 'none',
     );
     return { fromSymbol: owner.symbol, fromSourceConstruct: undefined };
   }
-  const callable = site.line === null ? null : sourceOwnerConstructAtLine(db, site.file, site.line);
+  const callable =
+    sourceOwner === undefined
+      ? site.line === null
+        ? null
+        : sourceOwnerConstructAtLine(db, site.file, site.line)
+      : sourceOwner
+        ? {
+            file: site.file,
+            name: sourceOwner.name ?? '<anonymous>',
+            startLine: sourceOwner.startLine,
+            endLine: sourceOwner.endLine,
+            startColumn: sourceOwner.startColumn,
+            endColumn: sourceOwner.endColumn,
+          }
+        : null;
   const construct = callable
-    ? addSourceConstruct(callable, depth + 1, 'reference-source-owner', undefined, isCallsite)
+    ? addSourceConstruct(callable, depth + 1, 'reference-source-owner', undefined, callEvidence !== null)
     : null;
   return { fromSymbol: null, fromSourceConstruct: construct ? sourceConstructIdentity(construct) : undefined };
 }
 
 function expandSymbolReferences(context: SystemMapTraversalContext, state: SymbolState, depth: number): void {
-  const { relationPolicy, workspaces, addFile, pendingRelations } = context;
+  const { relationPolicy, addFile, pendingRelations } = context;
   if (state.referenceScope === 'none') return;
   if (!relationPolicy.has('call') && !relationPolicy.has('reference') && !relationPolicy.has('contract-symbol')) return;
   const references = symbolReferenceEvidence(context, state);
   const recursiveCallers = selectRecursiveCallerSymbols(context, state.definition, references);
   for (const reference of references) {
-    const { site, isCallsite } = reference;
+    const { site, callEvidence } = reference;
     addFile(site.file, depth + 1, `reference:${shortenSymbol(state.definition.symbol)}`, true);
     const relation = {
       fromFile: site.file,
@@ -1623,23 +1758,41 @@ function expandSymbolReferences(context: SystemMapTraversalContext, state: Symbo
         evidence: 'indexed-or-source-reference',
         strength: 'mixed',
       });
-    if (isCallsite)
+    if (callEvidence)
       addRelation(pendingRelations, {
         ...relation,
         kind: 'call',
-        evidence: 'ast-callsite',
-        strength: 'candidate',
+        ...callEvidence,
       });
-    if (
-      relationPolicy.has('contract-symbol') &&
-      workspaceForFile(site.file, workspaces).relativeDir !==
-        workspaceForFile(state.definition.relativePath, workspaces).relativeDir
-    ) {
+  }
+}
+
+function expandSymbolTypeReferences(context: SystemMapTraversalContext, state: SymbolState, depth: number): void {
+  if (state.referenceScope === 'none' || !state.definition.isTypeLike || !context.relationPolicy.has('contract-symbol'))
+    return;
+  const { db, index, sourceAllowed, files, workspaces, addSymbol, addFile, pendingRelations } = context;
+  const sites = systemMapReferenceSites(db, index, state.definition).filter(
+    (site) => sourceAllowed(site.file) && referenceSiteIsInScope(state, site.file, files, workspaces),
+  );
+  for (const file of new Set(sites.map((site) => site.file))) {
+    const owners = lexicalCallOwners(db, file, index.definitionsForFile(file));
+    const resolved = scipOccurrenceTypeReferencesForRange(db, file, 0, Number.MAX_SAFE_INTEGER);
+    for (const target of resolved.targets) {
+      if (target.definition.symbol !== state.definition.symbol) continue;
+      const owner = target.sourceOwner
+        ? owners.get(sourceCallableOwnerKey(target.sourceOwner))
+        : (target.sourceDefinition ?? undefined);
+      if (owner) addSymbol(owner, depth + 1, 'type-reference-owner', undefined, 'none', true);
+      addFile(file, depth + 1, 'type-reference', true);
       addRelation(pendingRelations, {
-        ...relation,
         kind: 'contract-symbol',
-        evidence: 'compiler-cross-workspace-symbol',
+        evidence: 'scip-occurrence-type-reference',
         strength: 'exact',
+        fromFile: file,
+        fromSymbol: owner?.symbol ?? null,
+        toFile: state.definition.relativePath,
+        toSymbol: state.definition.symbol,
+        line: target.sourceLine,
       });
     }
   }
@@ -1691,6 +1844,7 @@ function expandSystemMapSymbolFrontier(context: SystemMapTraversalContext, depth
   for (const state of frontier) {
     state.processed = true;
     expandSymbolReferences(context, state, depth);
+    expandSymbolTypeReferences(context, state, depth);
     expandStructuralCallees(context, state.definition, structuralCallees.get(state.definition.symbolId) ?? [], depth);
   }
 }
@@ -1724,6 +1878,13 @@ function prepareFileTraversal(context: SystemMapTraversalContext, state: FileSta
             (right.definition.endLine - right.definition.startLine) ||
           left.definition.startLine - right.definition.startLine,
       )[0];
+  const lexicalOwners = lexicalCallOwners(
+    db,
+    state.file,
+    [...symbols.values()]
+      .filter((symbol) => symbol.definition.relativePath === state.file)
+      .map((symbol) => symbol.definition),
+  );
   const boundaryRanges = [...boundaryObservations.values()].filter(
     (observation) => observation.source.file === state.file && boundaryObservationDepths.has(observation.id),
   );
@@ -1740,10 +1901,20 @@ function prepareFileTraversal(context: SystemMapTraversalContext, state: FileSta
   const sourceOwnedCallsites = (getSourceFacts(db, state.file)?.callSites ?? []).filter((callsite) =>
     traversalRanges.some((range) => callsite.line >= range.startLine && callsite.line <= range.endLine),
   );
-  const sourceRelationAtLine = (line: number) => {
-    const sourceSymbol = sourceSymbolAtLine(line);
+  const sourceRelationAtLine = (line: number, owner?: SourceCallableOwner | null) => {
+    const definition = owner === undefined ? undefined : lexicalOwners.get(sourceCallableOwnerKey(owner));
+    const sourceSymbol =
+      owner === undefined ? sourceSymbolAtLine(line) : definition ? symbols.get(definition.symbol) : undefined;
     const sourceConstruct = sourceOwnedRanges.find(
-      (construct) => construct.startLine <= line && construct.endLine >= line,
+      (construct) =>
+        construct.startLine <= line &&
+        construct.endLine >= line &&
+        (owner === undefined ||
+          (owner !== null &&
+            construct.startLine === owner.startLine &&
+            construct.endLine === owner.endLine &&
+            construct.startColumn === owner.startColumn &&
+            construct.endColumn === owner.endColumn)),
     );
     const boundaryObservation = boundaryRanges.find((observation) => {
       const range = runtimeObservationTraversalRange(db, observation);
@@ -1771,7 +1942,7 @@ function expandCompilerFileRelations(
   context: SystemMapTraversalContext,
   frontier: FileTraversal,
   depth: number,
-  kind: 'call' | 'reference',
+  kind: 'call' | 'reference' | 'contract-symbol',
 ): void {
   const { db, relationPolicy } = context;
   if (!relationPolicy.has(kind)) return;
@@ -1780,7 +1951,9 @@ function expandCompilerFileRelations(
     const resolved =
       kind === 'call'
         ? scipOccurrenceCallTargetsForRange(db, state.file, range.startLine, range.endLine)
-        : scipOccurrenceCallableReferencesForRange(db, state.file, range.startLine, range.endLine);
+        : kind === 'contract-symbol'
+          ? scipOccurrenceTypeReferencesForRange(db, state.file, range.startLine, range.endLine)
+          : scipOccurrenceCallableReferencesForRange(db, state.file, range.startLine, range.endLine);
     for (const target of resolved.targets) addCompilerFileTarget(context, frontier, depth, kind, target);
   }
 }
@@ -1789,8 +1962,8 @@ function addCompilerFileTarget(
   context: SystemMapTraversalContext,
   frontier: FileTraversal,
   depth: number,
-  kind: 'call' | 'reference',
-  target: { definition: IndexedDefinition; sourceLine: number; calleeLeaf: string },
+  kind: 'call' | 'reference' | 'contract-symbol',
+  target: ScipOccurrenceCallTarget,
 ): void {
   const { sourceAllowed, addSymbol, pendingRelations } = context;
   const { state, sourceRelationAtLine, compilerResolvedCallsiteKeys } = frontier;
@@ -1798,7 +1971,12 @@ function addCompilerFileTarget(
   if (!sourceAllowed(target.definition.relativePath)) return;
   const key = `${target.sourceLine}\u0000${target.calleeLeaf}`;
   if (kind === 'reference' && compilerResolvedCallsiteKeys.has(key)) return;
-  const source = sourceRelationAtLine(target.sourceLine);
+  const source = sourceRelationAtLine(target.sourceLine, target.sourceOwner);
+  if (target.sourceDefinition !== undefined) {
+    if (target.sourceDefinition && !context.symbols.has(target.sourceDefinition.symbol) && !source.fromSourceConstruct)
+      return;
+    source.fromSymbol = target.sourceDefinition?.symbol ?? null;
+  }
   if (kind === 'reference' && source.fromSymbol === target.definition.symbol) return;
   addSymbol(
     target.definition,
@@ -1810,12 +1988,17 @@ function addCompilerFileTarget(
   );
   addRelation(pendingRelations, {
     kind,
-    evidence: kind === 'call' ? 'scip-occurrence-callsite' : 'scip-occurrence-reference',
+    evidence:
+      kind === 'call'
+        ? 'scip-occurrence-callsite'
+        : kind === 'contract-symbol'
+          ? 'scip-occurrence-type-reference'
+          : 'scip-occurrence-reference',
     ...source,
     toFile: target.definition.relativePath,
     toSymbol: target.definition.symbol,
     line: target.sourceLine,
-    strength: 'exact',
+    strength: kind === 'call' && target.sourceOwner === undefined ? 'candidate' : 'exact',
   });
   if (kind === 'call') compilerResolvedCallsiteKeys.add(key);
 }
@@ -1917,6 +2100,23 @@ function addMemberFileTarget(
 function expandFileImports(context: SystemMapTraversalContext, frontier: FileTraversal, depth: number): void {
   const { db, relationPolicy, externalImports, sourceAllowed, addFile, pendingRelations } = context;
   const { state } = frontier;
+  if (relationPolicy.has('import')) {
+    for (const importer of context.reverseFileGraph.get(state.file) ?? []) {
+      if (!sourceAllowed(importer) || !systemMapImports(db, importer).some((entry) => entry.fromFile === state.file))
+        continue;
+      addFile(importer, depth + 1, `reverse-import:${state.file}`, false);
+      addRelation(pendingRelations, {
+        kind: 'import',
+        evidence: 'indexed-or-source-import',
+        fromFile: importer,
+        fromSymbol: null,
+        toFile: state.file,
+        toSymbol: null,
+        line: null,
+        strength: 'mixed',
+      });
+    }
+  }
   for (const imported of relationPolicy.has('import') || relationPolicy.has('call')
     ? systemMapImports(db, state.file)
     : []) {
@@ -1925,6 +2125,7 @@ function expandFileImports(context: SystemMapTraversalContext, frontier: FileTra
         const boundary = externalImports.get(imported.shortName) ?? {
           name: imported.shortName,
           fromFiles: new Set<string>(),
+          unresolved: imported.resolution === 'unresolved',
         };
         boundary.fromFiles.add(state.file);
         externalImports.set(imported.shortName, boundary);
@@ -1960,7 +2161,10 @@ function expandImportedFileCalls(
   imported: ResolvedFileImport,
 ): void {
   const { db, index, relationPolicy, addSymbol, pendingRelations } = context;
-  const { state, sourceOwnedCallsites } = frontier;
+  const { state, sourceOwnedCallsites, sourceRelationAtLine } = frontier;
+  // Compiler-bound invocations were already expanded above. A name-only
+  // import fallback must not add duplicates or override a different binding.
+  if (scipOccurrenceTargetsForFile(db, state.file) !== null) return;
   if (relationPolicy.has('call') && sourceOwnedCallsites.length > 0) {
     const importedDefinitions = (
       imported.source === 'compiler'
@@ -1977,8 +2181,7 @@ function expandImportedFileCalls(
         addRelation(pendingRelations, {
           kind: 'call',
           evidence: 'ast-callsite',
-          fromFile: state.file,
-          fromSymbol: null,
+          ...sourceRelationAtLine(line),
           toFile: importedDefinition.relativePath,
           toSymbol: importedDefinition.symbol,
           line,
@@ -1998,8 +2201,11 @@ function expandBoundaryFileImport(
   const { db, index, addSymbol, workspaces } = context;
   const { state } = frontier;
   if (!state.promoteBoundaryImports || !isBoundaryImport(state.file, imported.fromFile, workspaces)) return;
-  const boundaryResolution = resolveIndexedDefinitions(db, index, imported.symbol);
-  for (const boundarySymbol of boundaryResolution.matches) {
+  const boundaryDefinitions =
+    imported.source === 'compiler'
+      ? resolveIndexedDefinitions(db, index, imported.symbol).matches
+      : resolveImportedDefinitions(db, imported.fromFile, imported.importedName);
+  for (const boundarySymbol of boundaryDefinitions) {
     if (
       sameBoundaryRegion(boundarySymbol.relativePath, imported.fromFile, workspaces) &&
       !isModuleLikeSymbol(boundarySymbol.symbol)
@@ -2028,6 +2234,7 @@ function expandSystemMapFileFrontier(context: SystemMapTraversalContext, depth: 
     // Exact calls establish the keys used to exclude duplicate reference/member edges.
     expandCompilerFileRelations(context, frontier, depth, 'call');
     expandCompilerFileRelations(context, frontier, depth, 'reference');
+    expandCompilerFileRelations(context, frontier, depth, 'contract-symbol');
     expandMemberFileCalls(context, frontier, depth);
     expandFileImports(context, frontier, depth);
   }
@@ -2062,7 +2269,6 @@ function expandRuntimeBoundaryLink(
 
 function traversableRuntimeBoundaryLink(context: SystemMapTraversalContext, link: TraversalBoundaryLink): boolean {
   return (
-    link.strength !== 'candidate' &&
     !(context.evidenceFloor === 'exact' && link.strength !== 'exact') &&
     !context.representedBoundaryLinkIds.has(link.id)
   );
@@ -2145,7 +2351,7 @@ function executeSystemMap(
   const sourceConstructs = new Map<string, SourceConstructState>();
   const literalHits: SystemMapLiteralHit[] = [];
   const pendingRelations = new Map<string, PendingRelation>();
-  const externalImports = new Map<string, { name: string; fromFiles: Set<string> }>();
+  const externalImports = new Map<string, { name: string; fromFiles: Set<string>; unresolved?: boolean }>();
   const anchors: SystemMapAnchor[] = [];
   const traversalMetrics = {
     filteredUnverifiedCallEdges: 0,
@@ -2257,6 +2463,7 @@ function executeSystemMap(
     externalImports,
     reverseExpandedSourceConstructs,
     serviceCallerFilesBySourceConstruct,
+    referenceCallFiles: new Map(),
     traversalMetrics,
     memberCallTargetsForWholeFile,
     addFile,
@@ -2464,11 +2671,13 @@ function sourceConstructHit(hit: SystemMapLiteralHit): SourceConstructHit {
     name: hit.ownerShortName ?? `${hit.file}:${hit.ownerStartLine + 1}`,
     startLine: hit.ownerStartLine,
     endLine: hit.ownerEndLine,
+    startColumn: hit.ownerStartColumn,
+    endColumn: hit.ownerEndColumn,
   };
 }
 
 function sourceConstructKey(construct: SystemMapSourceConstruct): string {
-  return `${construct.file}\u0000${construct.startLine}\u0000${construct.endLine}\u0000${construct.name}`;
+  return `${construct.file}\u0000${construct.startLine}\u0000${construct.endLine}\u0000${construct.name}\u0000${construct.startColumn ?? ''}\u0000${construct.endColumn ?? ''}`;
 }
 
 function sourceConstructIdentity(construct: SystemMapSourceConstruct): SystemMapSourceConstruct {
@@ -2477,6 +2686,9 @@ function sourceConstructIdentity(construct: SystemMapSourceConstruct): SystemMap
     name: construct.name,
     startLine: construct.startLine,
     endLine: construct.endLine,
+    ...(construct.startColumn === undefined
+      ? {}
+      : { startColumn: construct.startColumn, endColumn: construct.endColumn }),
   };
 }
 
@@ -2503,10 +2715,15 @@ function sourceCallsiteTargetsDefinition(
  * slice instead of repeating the enclosing function for every callsite.
  */
 function canonicalSourceConstruct(db: ScipDatabase, construct: SystemMapSourceConstruct): SystemMapSourceConstruct {
-  const callable = smallestSourceCallableAtLine(
-    getSourceFacts(db, construct.file)?.callables ?? [],
-    construct.startLine,
+  if (construct.startColumn !== undefined && construct.endColumn !== undefined)
+    return sourceConstructIdentity(construct);
+  const candidates = (getSourceFacts(db, construct.file)?.callables ?? []).filter(
+    (candidate) => candidate.startLine <= construct.startLine && candidate.endLine >= construct.endLine,
   );
+  const named = candidates.filter((candidate) => candidate.name === construct.name);
+  const matches = named.length > 0 ? named : candidates;
+  if (matches.length > 1) return sourceConstructIdentity(construct);
+  const callable = matches.length === 1 ? matches[0] : undefined;
   if (callable && callable.endLine >= construct.endLine) {
     return {
       file: construct.file,
@@ -2514,6 +2731,8 @@ function canonicalSourceConstruct(db: ScipDatabase, construct: SystemMapSourceCo
         /^source@\d+$/u.test(callable.name) && !/^source@\d+$/u.test(construct.name) ? construct.name : callable.name,
       startLine: callable.startLine,
       endLine: callable.endLine,
+      startColumn: callable.startColumn,
+      endColumn: callable.endColumn,
     };
   }
   const binding = sourceBindingOwnerAtLine(db, construct.file, construct.startLine);
@@ -2529,7 +2748,14 @@ function canonicalSourceConstruct(db: ScipDatabase, construct: SystemMapSourceCo
 }
 
 function sourceConstructTopologyNodeId(hit: SourceConstructHit): string {
-  return topologyId('source-construct', hit.file, String(hit.startLine), String(hit.endLine), hit.name);
+  return topologyId(
+    'source-construct',
+    hit.file,
+    String(hit.startLine),
+    String(hit.endLine),
+    hit.name,
+    ...(hit.startColumn === undefined ? [] : [String(hit.startColumn), String(hit.endColumn)]),
+  );
 }
 
 function publicEntryEvidenceForDefinition(
@@ -2608,6 +2834,10 @@ function syntaxDeclarationOwnersAtLine(
   const root = getAst(db, relativePath)?.rootNode;
   if (!root || root.startPosition.row > line || root.endPosition.row < line) return [];
   const owners: Array<{ name: string; startLine: number }> = [];
+  const callables = (getSourceFacts(db, relativePath)?.callables ?? []).filter(
+    (candidate) => candidate.startLine <= line && candidate.endLine >= line,
+  );
+  if (callables.length > 0 && !smallestSourceCallableAtLine(callables, line)) return [];
   let current: SyntaxNode | null = deepestSyntaxNodeAtLine(root, line);
   while (current) {
     if (SYNTAX_DECLARATION_OWNER_TYPES.has(current.type)) {
@@ -2647,7 +2877,7 @@ function systemMapTopologyAnchors(
         const containedSourceNodes = sourceConstructHits
           .filter((hit) => hit.file === state.definition.relativePath)
           .map((hit) => sourceConstructTopologyNodeId(hit));
-        return containedSourceNodes.length > 0 ? containedSourceNodes : [symbolTopologyNodeId(state.definition.symbol)];
+        return [symbolTopologyNodeId(state.definition.symbol), ...containedSourceNodes];
       });
     const explicitSourceNodeIds = [...input.sourceConstructStates.values()]
       .filter((state) => state.anchorQueries.has(anchor.query))
@@ -2735,6 +2965,20 @@ function systemMapTopologyOwnerNodes(
   for (const hit of sourceConstructHits) {
     nodes.push(systemMapConstructOwnerNode(input, hit, anchorIdsByNode, boundaryOwnerNames));
   }
+  const known = new Set(nodes.map((node) => node.id));
+  for (const file of dependencyFiles(input)) {
+    const id = dependencyNodeId(input, file);
+    if (known.has(id)) continue;
+    nodes.push({
+      id,
+      kind: 'file',
+      label: file,
+      disposition: 'folded',
+      location: { file, line: 0 },
+      anchorIds: [],
+      attributes: { regionId: input.regionForFile.get(file)?.id ?? '' },
+    });
+  }
   const boundaryParticipants = new Map<string, SystemMapBoundaryParticipant>();
   for (const relation of input.relations) {
     if (relation.fromBoundaryParticipant) {
@@ -2752,6 +2996,20 @@ function systemMapTopologyOwnerNodes(
   return nodes;
 }
 
+function dependencyFiles(input: SystemMapTopologyInput): string[] {
+  return uniqueSorted([
+    ...input.relations
+      .filter((relation) => relation.kind === 'import')
+      .flatMap((relation) => [relation.fromFile, relation.toFile]),
+    ...input.externalBoundaries.flatMap((boundary) => boundary.fromFiles),
+  ]);
+}
+
+function dependencyNodeId(input: SystemMapTopologyInput, file: string): string {
+  const modules = getDefinitionsForFile(input.db, file).filter((definition) => isModuleLikeSymbol(definition.symbol));
+  return modules.length === 1 ? symbolTopologyNodeId(modules[0]!.symbol) : topologyId('file', file);
+}
+
 function systemMapSymbolOwnerNode(
   input: SystemMapTopologyInput,
   state: SymbolState,
@@ -2761,6 +3019,7 @@ function systemMapSymbolOwnerNode(
   if (!regionId) throw new Error(`System-map symbol ${state.definition.symbol} has no structural region.`);
   const id = symbolTopologyNodeId(state.definition.symbol);
   const publicEntry = publicEntryEvidenceForDefinition(input.db, state.definition);
+  const callable = sourceCallableForDefinition(input.db, state.definition.relativePath, state.definition);
   return {
     id,
     kind: 'symbol',
@@ -2768,8 +3027,11 @@ function systemMapSymbolOwnerNode(
     disposition: (anchorIdsByNode.get(id)?.length ?? 0) > 0 ? 'emitted' : 'folded',
     location: {
       file: state.definition.relativePath,
-      line: state.definition.startLine,
-      endLine: state.definition.endLine,
+      line: callable?.startLine ?? state.definition.startLine,
+      endLine: callable?.endLine ?? state.definition.endLine,
+      ...(callable?.startColumn === undefined
+        ? {}
+        : { startColumn: callable.startColumn, endColumn: callable.endColumn }),
     },
     anchorIds: uniqueSorted(anchorIdsByNode.get(id) ?? []),
     attributes: {
@@ -2808,7 +3070,12 @@ function systemMapConstructOwnerNode(
     kind: 'source-construct',
     label,
     disposition: (anchorIdsByNode.get(id)?.length ?? 0) > 0 ? 'emitted' : 'folded',
-    location: { file: hit.file, line: hit.startLine, endLine: hit.endLine },
+    location: {
+      file: hit.file,
+      line: hit.startLine,
+      endLine: hit.endLine,
+      ...(hit.startColumn === undefined ? {} : { startColumn: hit.startColumn, endColumn: hit.endColumn }),
+    },
     anchorIds: uniqueSorted(anchorIdsByNode.get(id) ?? []),
     attributes: {
       regionId,
@@ -2942,7 +3209,7 @@ function systemMapTopologyRelationEdges(
   const groupedRelations = groupBy(
     input.relations,
     (relation) =>
-      `${relationEndpoint(relation.fromSymbol, relation.fromBoundaryParticipant, relation.fromSourceConstruct, relation.fromRegionId, relation.fromFile, relation.line, relation.kind === 'runtime-boundary')}\u0000${relationEndpoint(relation.toSymbol, relation.toBoundaryParticipant, relation.toSourceConstruct, relation.toRegionId, relation.toFile, null)}\u0000${relation.kind}`,
+      `${relation.kind === 'import' ? dependencyNodeId(input, relation.fromFile) : relationEndpoint(relation.fromSymbol, relation.fromBoundaryParticipant, relation.fromSourceConstruct, relation.fromRegionId, relation.fromFile, relation.line, relation.kind === 'runtime-boundary')}\u0000${relation.kind === 'import' ? dependencyNodeId(input, relation.toFile) : relationEndpoint(relation.toSymbol, relation.toBoundaryParticipant, relation.toSourceConstruct, relation.toRegionId, relation.toFile, null)}\u0000${relation.kind}`,
   );
   const attachedBoundaryObservations = new Set<string>();
   const attachBoundaryObservation = (first: SystemMapRelation): void => {
@@ -2984,23 +3251,29 @@ function systemMapTopologyRelationEdges(
   };
   for (const bucket of groupedRelations.values()) {
     const first = bucket[0]!;
-    const fromNodeId = relationEndpoint(
-      first.fromSymbol,
-      first.fromBoundaryParticipant,
-      first.fromSourceConstruct,
-      first.fromRegionId,
-      first.fromFile,
-      first.line,
-      first.kind === 'runtime-boundary',
-    );
-    const toNodeId = relationEndpoint(
-      first.toSymbol,
-      first.toBoundaryParticipant,
-      first.toSourceConstruct,
-      first.toRegionId,
-      first.toFile,
-      null,
-    );
+    const fromNodeId =
+      first.kind === 'import'
+        ? dependencyNodeId(input, first.fromFile)
+        : relationEndpoint(
+            first.fromSymbol,
+            first.fromBoundaryParticipant,
+            first.fromSourceConstruct,
+            first.fromRegionId,
+            first.fromFile,
+            first.line,
+            first.kind === 'runtime-boundary',
+          );
+    const toNodeId =
+      first.kind === 'import'
+        ? dependencyNodeId(input, first.toFile)
+        : relationEndpoint(
+            first.toSymbol,
+            first.toBoundaryParticipant,
+            first.toSourceConstruct,
+            first.toRegionId,
+            first.toFile,
+            null,
+          );
     attachBoundaryObservation(first);
     const selfNode = fromNodeId === toNodeId ? nodes.find((node) => node.id === fromNodeId) : null;
     if (selfNode?.kind === 'structural-region') continue;
@@ -3033,18 +3306,32 @@ function appendSystemMapExternalBoundariesAndFrontiers(
   nodes: ExplorationTopologyNode[],
   edges: ExplorationTopologyEdge[],
 ): ExplorationFrontierGroup[] {
+  const frontiers: ExplorationFrontierGroup[] = [];
   for (const boundary of input.externalBoundaries) {
     const nodeId = topologyId('external', boundary.kind, boundary.name);
-    const fromNodeIds = uniqueSorted(boundary.fromRegionIds);
+    const fromNodeIds = uniqueSorted(boundary.fromFiles.map((file) => dependencyNodeId(input, file)));
     nodes.push({
       id: nodeId,
       kind: boundary.kind,
       label: boundary.name,
-      disposition: 'folded',
+      disposition: boundary.kind === 'unresolved-import' ? 'unsupported' : 'folded',
       location: null,
       anchorIds: [],
       attributes: {},
     });
+    if (boundary.kind === 'unresolved-import')
+      frontiers.push({
+        id: topologyId('frontier', boundary.kind, boundary.name, ...fromNodeIds),
+        kind: 'import',
+        direction: 'outgoing',
+        fromNodeIds,
+        edgeIds: fromNodeIds.map((fromNodeId) => topologyId('edge', boundary.kind, fromNodeId, nodeId)),
+        memberNodeIds: [nodeId],
+        memberCount: 1,
+        disposition: 'unsupported',
+        reason: `Module reference ${boundary.name} has no resolved repository target; missing or dynamic imports cannot establish dependency completeness.`,
+        expansion: null,
+      });
     for (const fromNodeId of fromNodeIds) {
       edges.push({
         id: topologyId('edge', boundary.kind, fromNodeId, nodeId),
@@ -3052,8 +3339,11 @@ function appendSystemMapExternalBoundariesAndFrontiers(
         fromNodeId,
         toNodeId: nodeId,
         directed: true,
-        disposition: 'folded',
-        semantics: systemMapSyntheticEdgeProgramSemantics('external-import'),
+        disposition: boundary.kind === 'unresolved-import' ? 'unsupported' : 'folded',
+        semantics:
+          boundary.kind === 'unresolved-import'
+            ? [{ family: 'identity', subtype: 'imports-unresolved' }]
+            : systemMapSyntheticEdgeProgramSemantics('external-import'),
         evidence: [
           {
             method: 'indexed-or-source-import',
@@ -3066,7 +3356,6 @@ function appendSystemMapExternalBoundariesAndFrontiers(
     }
   }
 
-  const frontiers: ExplorationFrontierGroup[] = [];
   input.boundaryFrontiers.forEach((frontier, index) => {
     const fromNodeId = input.regionForFile.get(frontier.file)?.id;
     if (!fromNodeId) {
@@ -3141,15 +3430,26 @@ function selectAndAugmentSystemMapTopology(
   );
   const programData = programDataElementsForSystemMapRelations(input.db, selectedRelations, selectedOwnerNodes);
   const programControl = programControlElementsForTopologyNodes(input.db, selectedOwnerNodes);
+  const executionGaps = programExecutionFrontiers(input.db, selectedOwnerNodes);
   const programStateTemporal = programStateTemporalElementsForTopologyNodes(
     input.db,
     selectedOwnerNodes,
     selectedRuntimeObservations,
   );
-  const programNodes = [...programData.nodes, ...programControl.nodes, ...programStateTemporal.nodes].map((node) =>
+  const programNodes = [
+    ...programData.nodes,
+    ...programControl.nodes,
+    ...executionGaps.nodes,
+    ...programStateTemporal.nodes,
+  ].map((node) =>
     expandProgramFacts && node.disposition === 'folded' ? { ...node, disposition: 'emitted' as const } : node,
   );
-  const programEdges = [...programData.edges, ...programControl.edges, ...programStateTemporal.edges].map((edge) =>
+  const programEdges = [
+    ...programData.edges,
+    ...programControl.edges,
+    ...executionGaps.edges,
+    ...programStateTemporal.edges,
+  ].map((edge) =>
     expandProgramFacts && edge.disposition === 'folded' ? { ...edge, disposition: 'emitted' as const } : edge,
   );
   const programFrontier = expandProgramFacts
@@ -3164,6 +3464,7 @@ function selectAndAugmentSystemMapTopology(
       ...selectedTopology.frontiers,
       ...programData.frontiers,
       ...programControl.frontiers,
+      ...executionGaps.frontiers,
       ...programStateTemporal.frontiers,
       ...(programFrontier ? [programFrontier] : []),
     ],
@@ -3566,6 +3867,8 @@ interface LiteralMatch {
   ownerShortName: string | null;
   ownerStartLine: number | null;
   ownerEndLine: number | null;
+  ownerStartColumn?: number;
+  ownerEndColumn?: number;
   matchKind: 'exact-value' | 'boundary' | 'embedded';
   seedPriority: number;
 }
@@ -3589,6 +3892,7 @@ interface SystemMapLiteralMatchContext {
   definitions: ReturnType<ProjectIndex['definitionsForFile']>;
   callables: NonNullable<ReturnType<typeof getSourceFacts>>['callables'];
   boundaryObservationLocations: ReadonlySet<string>;
+  lexicalOwners: ReadonlyMap<string, IndexedDefinition>;
 }
 
 function appendSystemMapLiteralFileMatches(
@@ -3609,9 +3913,25 @@ function appendSystemMapLiteralFileMatches(
   if (literalLines.length === 0) return;
   const definitions = index.definitionsForFile(relativePath);
   const callables = getSourceFacts(db, relativePath)?.callables ?? [];
-  const context = { db, relativePath, definitions, callables, boundaryObservationLocations };
+  const context = {
+    db,
+    relativePath,
+    definitions,
+    callables,
+    boundaryObservationLocations,
+    lexicalOwners: lexicalCallOwners(db, relativePath, definitions),
+  };
   for (const { line, sourceLine } of literalLines) {
-    matches.push(systemMapLiteralLineMatch(context, line, sourceLine, pattern));
+    const lineMatches = new Map<string, LiteralMatch>();
+    for (
+      let column = sourceLine.indexOf(pattern);
+      column >= 0;
+      column = sourceLine.indexOf(pattern, column + Math.max(1, pattern.length))
+    ) {
+      const match = systemMapLiteralLineMatch(context, line, sourceLine, pattern, column);
+      lineMatches.set(literalMatchIdentity(match), match);
+    }
+    matches.push(...lineMatches.values());
   }
 }
 
@@ -3620,12 +3940,34 @@ function systemMapLiteralLineMatch(
   line: number,
   sourceLine: string,
   pattern: string,
+  column: number,
 ): LiteralMatch {
-  const { definitions, callables, boundaryObservationLocations, relativePath } = context;
-  const owner = findEnclosingDefinition(definitions, line);
-  const callableOwner = smallestSourceCallableAtLine(callables, line);
+  const { definitions, boundaryObservationLocations, relativePath } = context;
+  const tree = getAst(context.db, relativePath);
+  const language = getSourceFacts(context.db, relativePath)?.language;
+  const node =
+    tree &&
+    sourceAnalysisRoot(tree.rootNode, line, line, ANALYSIS_CALLABLE_NODE_TYPES, {
+      startColumn: column,
+      endColumn: column + pattern.length,
+    });
+  const callableOwner = node && language ? callSiteOwner(node, language) : null;
+  const containing = definitions.filter(
+    (definition) =>
+      definition.startLine <= line &&
+      definition.endLine >= line &&
+      (definition.startLine !== line || (definition.startChar ?? 0) <= column) &&
+      (definition.endLine !== line ||
+        definition.endChar === undefined ||
+        definition.endChar >= column + pattern.length),
+  );
+  const owner = callableOwner
+    ? (context.lexicalOwners.get(sourceCallableOwnerKey(callableOwner)) ?? null)
+    : containing.length === 1
+      ? containing[0]!
+      : null;
   const preciseCompilerOwner = owner && !isModuleLikeSymbol(owner.symbol) ? owner : null;
-  const focusedOwner = focusedLiteralOwnerRange(context, line, preciseCompilerOwner, callableOwner, owner);
+  const focusedOwner = callableOwner ?? focusedLiteralOwnerRange(context, line, preciseCompilerOwner, null, owner);
   const runtimeObservation = boundaryObservationLocations.has(`${relativePath}\0${line}`);
   const executableOwner = Boolean(preciseCompilerOwner?.isFunctionLike || callableOwner);
   return {
@@ -3636,6 +3978,8 @@ function systemMapLiteralLineMatch(
     ownerShortName: literalOwnerShortName(preciseCompilerOwner, callableOwner, owner),
     ownerStartLine: focusedOwner.startLine,
     ownerEndLine: focusedOwner.endLine,
+    ownerStartColumn: callableOwner?.startColumn,
+    ownerEndColumn: callableOwner?.endColumn,
     matchKind: literalMatchKind(sourceLine, pattern),
     seedPriority: runtimeObservation ? 0 : executableOwner ? 1 : 2,
   };
@@ -3645,7 +3989,7 @@ function focusedLiteralOwnerRange(
   context: SystemMapLiteralMatchContext,
   line: number,
   preciseCompilerOwner: IndexedDefinition | null,
-  callableOwner: SystemMapLiteralMatchContext['callables'][number] | null,
+  callableOwner: Pick<SourceCallableOwner, 'name' | 'startLine' | 'endLine'> | null,
   owner: ReturnType<typeof findEnclosingDefinition>,
 ): ReturnType<typeof focusedSourceConstructRange> {
   const { db, relativePath } = context;
@@ -3657,7 +4001,7 @@ function focusedLiteralOwnerRange(
 
 function literalOwnerShortName(
   preciseCompilerOwner: IndexedDefinition | null,
-  callableOwner: SystemMapLiteralMatchContext['callables'][number] | null,
+  callableOwner: Pick<SourceCallableOwner, 'name' | 'startLine' | 'endLine'> | null,
   owner: ReturnType<typeof findEnclosingDefinition>,
 ): string | null {
   return preciseCompilerOwner
@@ -3675,8 +4019,12 @@ function compareLiteralTraversalSeedCandidates(left: LiteralMatch, right: Litera
   );
 }
 
+function literalMatchingLineCount(matches: readonly LiteralMatch[]): number {
+  return new Set(matches.map((match) => `${match.relativePath}:${match.line}`)).size;
+}
+
 function literalMatchIdentity(match: LiteralMatch): string {
-  return `${match.relativePath}\0${match.line}`;
+  return `${match.relativePath}\0${match.line}\0${match.ownerSymbol ?? match.ownerShortName}\0${match.ownerStartColumn ?? ''}\0${match.ownerEndColumn ?? ''}`;
 }
 
 function sourceOwnerConstructAtLine(
@@ -3684,8 +4032,19 @@ function sourceOwnerConstructAtLine(
   relativePath: string,
   line: number,
 ): SystemMapSourceConstruct | null {
-  const callable = smallestSourceCallableAtLine(getSourceFacts(db, relativePath)?.callables ?? [], line);
-  const owner = callable ?? sourceBindingOwnerAtLine(db, relativePath, line);
+  const callables = getSourceFacts(db, relativePath)?.callables ?? [];
+  const callable = smallestSourceCallableAtLine(callables, line);
+  if (callable)
+    return {
+      file: relativePath,
+      name: callable.name,
+      startLine: callable.startLine,
+      endLine: callable.endLine,
+      startColumn: callable.startColumn,
+      endColumn: callable.endColumn,
+    };
+  if (callables.some((candidate) => candidate.startLine <= line && candidate.endLine >= line)) return null;
+  const owner = sourceBindingOwnerAtLine(db, relativePath, line);
   if (!owner) return null;
   const range = focusedSourceConstructRange(db, relativePath, line, owner.startLine, owner.endLine);
   return {
@@ -3778,19 +4137,14 @@ function sourceConstructForLocationQuery(db: ScipDatabase, query: string): Syste
   if (!relativePath) return null;
   const startLine = Math.max(0, Number.parseInt(match[2]!, 10) - 1);
   const endLine = match[3] ? Math.max(startLine, Number.parseInt(match[3], 10) - 1) : startLine;
-  const callable = (getSourceFacts(db, relativePath)?.callables ?? [])
-    .filter((candidate) => candidate.startLine <= startLine && candidate.endLine >= endLine)
-    .sort(
-      (left, right) =>
-        left.endLine - left.startLine - (right.endLine - right.startLine) || left.startLine - right.startLine,
-    )[0];
-  if (!callable) return null;
-  return {
-    file: relativePath,
-    name: callable.name,
-    startLine: callable.startLine,
-    endLine: callable.endLine,
-  };
+  const facts = getSourceFacts(db, relativePath);
+  const tree = getAst(db, relativePath);
+  if (!facts || !tree) return null;
+  const node = sourceAnalysisRoot(tree.rootNode, startLine, endLine, ANALYSIS_CALLABLE_NODE_TYPES);
+  if (!node || !ANALYSIS_CALLABLE_NODE_TYPES.has(node.type)) return null;
+  const child = node.namedChild(0);
+  const owner = child ? callSiteOwner(child, facts.language) : null;
+  return owner ? { file: relativePath, ...owner, name: owner.name ?? '<anonymous>' } : null;
 }
 
 function sourceConstructAnchorCandidate(construct: SystemMapSourceConstruct): SystemMapAnchorCandidate {
@@ -3852,6 +4206,8 @@ function selectLiteralRepresentatives(query: string, matches: readonly LiteralMa
     ownerShortName: match.ownerShortName,
     ownerStartLine: match.ownerStartLine,
     ownerEndLine: match.ownerEndLine,
+    ownerStartColumn: match.ownerStartColumn,
+    ownerEndColumn: match.ownerEndColumn,
     sourceLine: match.sourceLine.trim(),
     matchKind: match.matchKind,
     traversalSeed: false,
@@ -3897,6 +4253,7 @@ interface ReferenceSite {
   file: string;
   line: number | null;
   enclosingSymbol: string | null;
+  compilerBound: boolean;
 }
 
 function systemMapReferenceSites(
@@ -3904,24 +4261,17 @@ function systemMapReferenceSites(
   index: ProjectIndex,
   definition: IndexedDefinition,
 ): ReferenceSite[] {
-  const files = index.callerFileMap([definition], { semantic: false }).get(definition.symbolId) ?? new Set<string>();
+  const files = new Set(index.callerFileMap([definition], { semantic: false }).get(definition.symbolId));
+  // The indexed caller map is cross-file; local callers must not depend on
+  // whether a source-name fallback happens to recognize this declaration.
+  files.add(definition.relativePath);
   const sites: ReferenceSite[] = [];
   for (const file of [...files].sort()) {
-    const targetBindings = getSourceImports(db, file).filter(
-      (entry) =>
-        entry.importedName === definition.leaf &&
-        entry.sourcePath !== null &&
-        pathsResolveSame(entry.sourcePath, definition.relativePath),
-    );
-    const names = new Set<string>();
-    if (targetBindings.length > 0) {
-      for (const entry of targetBindings) names.add(entry.localName ?? entry.importedName);
-    } else if (definition.leaf) {
-      names.add(definition.leaf);
-    }
-    const lines = [...new Set([...names].flatMap((name) => findIdentifierLines(db, file, name)))].sort((a, b) => a - b);
+    const indexedLines = referenceOccurrenceLines(db, file, definition.symbol);
+    const compilerBound = indexedLines !== null;
+    const lines = indexedLines ?? sourceReferenceCandidateLines(db, file, definition);
     if (lines.length === 0) {
-      sites.push({ file, line: null, enclosingSymbol: null });
+      if (!compilerBound) sites.push({ file, line: null, enclosingSymbol: null, compilerBound });
       continue;
     }
     const definitions = index.definitionsForFile(file);
@@ -3930,13 +4280,31 @@ function systemMapReferenceSites(
         file,
         line,
         enclosingSymbol: findEnclosingDefinition(definitions, line)?.symbol ?? null,
+        compilerBound,
       });
     }
   }
   return sites;
 }
 
+function sourceReferenceCandidateLines(db: ScipDatabase, file: string, definition: IndexedDefinition): number[] {
+  const targetBindings = getSourceImports(db, file).filter(
+    (entry) =>
+      entry.importedName === definition.leaf &&
+      entry.sourcePath !== null &&
+      pathsResolveSame(entry.sourcePath, definition.relativePath),
+  );
+  const names =
+    targetBindings.length > 0
+      ? targetBindings.map((entry) => entry.localName ?? entry.importedName)
+      : [definition.leaf];
+  return [...new Set(names.filter(Boolean).flatMap((name) => findIdentifierLines(db, file, name)))].sort(
+    (a, b) => a - b,
+  );
+}
+
 interface ImportEvidence {
+  resolution?: 'internal' | 'external' | 'unresolved';
   symbol: string;
   shortName: string;
   importedName: string;
@@ -3946,6 +4314,35 @@ interface ImportEvidence {
 }
 
 function systemMapImports(db: ScipDatabase, importer: string): ImportEvidence[] {
+  const root = getAst(db, importer)?.rootNode;
+  const bindings = root && sourceBindingResolver(importer, root);
+  if (bindings?.available) {
+    const imports = getSourceImports(db, importer);
+    return bindings.moduleReferences().flatMap((reference): ImportEvidence[] => {
+      const resolved = reference.literal ? resolveImportPath(db, importer, reference.specifier) : null;
+      const fromFile = resolved && readRepositoryTextFile(db, resolved) ? resolved : null;
+      const resolution = fromFile
+        ? 'internal'
+        : !reference.literal || reference.specifier.startsWith('.') || reference.specifier.startsWith('/')
+          ? 'unresolved'
+          : 'external';
+      const matched = imports.filter((entry) => fromFile && entry.sourcePath === fromFile);
+      const base = {
+        symbol: reference.specifier,
+        shortName: reference.specifier,
+        fromFile,
+        source: 'parsed-source' as const,
+        resolution,
+      } as const;
+      return matched.length > 0
+        ? matched.map((entry) => ({
+            ...base,
+            importedName: entry.importedName,
+            localName: entry.localName ?? entry.importedName,
+          }))
+        : [{ ...base, importedName: '*', localName: '*' }];
+    });
+  }
   const rows = db.all<{ symbol: string; from_file: string | null }>(
     `SELECT DISTINCT gs.symbol, def_d.relative_path AS from_file
      FROM mentions m
@@ -4393,13 +4790,13 @@ function collapseRegionRelations(relations: readonly SystemMapRelation[]): Syste
 }
 
 function buildExternalBoundaries(
-  externalImports: ReadonlyMap<string, { name: string; fromFiles: ReadonlySet<string> }>,
+  externalImports: ReadonlyMap<string, { name: string; fromFiles: ReadonlySet<string>; unresolved?: boolean }>,
   regionForFile: ReadonlyMap<string, RegionIdentity>,
 ): SystemMapExternalBoundary[] {
   return [...externalImports.values()]
     .map(
       (boundary): SystemMapExternalBoundary => ({
-        kind: 'external-import',
+        kind: boundary.unresolved ? 'unresolved-import' : 'external-import',
         name: boundary.name,
         fromRegionIds: uniqueSorted(
           [...boundary.fromFiles].flatMap((file) => {

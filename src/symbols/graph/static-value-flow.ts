@@ -1,11 +1,12 @@
-import { getSourceImports } from '../../language-parsers/index.js';
+import { sourceBindingResolver } from '../../source/ast/source-binding-identity.js';
+import { selectEffectiveObjectField } from '../../source/ast/effective-object-field.js';
+import { resolveImportPath } from '../../source/primitives/import-path-resolver.js';
 import { getAst } from '../../source/ast/ast-core.js';
 import { detectAstLanguage, isVueSfcPath } from '../../source/ast/ast-language.js';
 import { javaScriptStringValue } from './javascript-string-value.js';
-import { smallestCoveringCallable, unwrapExpression, walkNamedSyntax as walk } from '../../source/ast/ast-callables.js';
+import { unwrapExpression, walkNamedSyntax as walk } from '../../source/ast/ast-callables.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { resolveImportedDefinitions } from '../../symbols/imported-definitions.js';
 import type {
   EvaluatedStaticValue,
@@ -48,7 +49,7 @@ function evaluateNode(
   }
 
   const text = node.text.trim();
-  if (/^[A-Za-z_$][\w$]*$/u.test(text)) {
+  if (['identifier', 'shorthand_property_identifier'].includes(node.type)) {
     return resolveIdentifier(context, text, node, depth, seen);
   }
 
@@ -70,77 +71,97 @@ function resolveBoundedCallReturn(
   depth: number,
   seen: Set<string>,
 ): EvaluatedStaticValue | null {
-  const targetNode = call.childForFieldName('function') ?? call.namedChild(0);
-  const targetText = targetNode?.text.replace(/\s+/gu, '').replace(/<.*>$/u, '') ?? '';
-  const targets = resolveCallableTargets(context, targetText);
-  if (targets.length !== 1) {
-    return unknownValue(call, targets.length === 0 ? 'call-target-unresolved' : 'call-target-ambiguous');
-  }
-  const target = targets[0]!;
-  const identity = `${target.relativePath}\0${target.symbol}`;
+  const targetNode = call.childForFieldName('function');
+  if (!targetNode) return unknownValue(call, 'call-target-unresolved');
+  const bindings = sourceBindingResolver(context.file, context.root);
+  if (bindings.hasObservedWrite(targetNode)) return unknownValue(call, 'call-target-written');
+  const target = boundedCallTarget(context, targetNode);
+  if (!target) return unknownValue(call, 'call-target-unresolved');
+  const { context: targetContext, callable } = target;
+  const identity = `${targetContext.file}:${callable.startIndex}:${callable.endIndex}`;
   if (seen.has(identity)) return unknownValue(call, 'call-return-cycle');
-  const root = getAst(context.db, target.relativePath)?.rootNode;
-  if (!root) return unknownValue(call, 'call-target-unparsed');
-  const callable = smallestCoveringCallable(root, target.startLine, target.endLine);
-  if (!callable) return unknownValue(call, 'call-target-syntax-unavailable');
   const returned = singleReturnedExpression(callable);
-  if (!returned) return unknownValue(call, 'call-return-not-single-expression');
-  const nextSeen = new Set(seen);
-  nextSeen.add(identity);
-  const value = evaluateNode({ db: context.db, file: target.relativePath, root }, returned, depth + 1, nextSeen);
-  return value
-    ? derivedFrom(call, 'bounded-call-return', value, target.symbol)
-    : unknownValue(call, 'call-return-unresolved');
+  if (!returned) return unknownValue(call, 'call-return-not-unconditional-synchronous-expression');
+  const nextSeen = new Set(seen).add(identity);
+  const value = evaluateNode(targetContext, returned, depth + 1, nextSeen);
+  return value ? derivedFrom(call, 'bounded-call-return', value) : unknownValue(call, 'call-return-unresolved');
 }
 
-function resolveCallableTargets(
+function boundedCallTarget(
   context: BoundaryValueContext,
-  targetText: string,
-): ReturnType<typeof getDefinitionsForFile> {
-  if (/^[A-Za-z_$][\w$]*$/u.test(targetText)) {
-    const local = getDefinitionsForFile(context.db, context.file).filter(
-      (definition) => definition.isFunctionLike && definition.leaf === targetText,
-    );
-    if (local.length > 0) return local;
-    const imported = getSourceImports(context.db, context.file).find(
-      (item) => item.localName === targetText && item.sourcePath && item.kind !== 'namespace',
-    );
-    if (!imported?.sourcePath) return [];
-    return resolveImportedDefinitions(
-      context.db,
-      imported.sourcePath,
-      imported.importedName === 'default' ? targetText : imported.importedName,
-    ).filter((definition) => definition.isFunctionLike);
-  }
-
-  const member = /^([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/u.exec(targetText);
-  if (!member) return [];
-  const imported = getSourceImports(context.db, context.file).find(
-    (item) => item.kind === 'namespace' && item.localName === member[1] && item.sourcePath,
+  targetNode: SyntaxNode,
+): { context: BoundaryValueContext; callable: SyntaxNode } | null {
+  const callable = sourceBindingResolver(context.file, context.root).callableValue(targetNode);
+  if (callable) return { context, callable };
+  const target = importedTarget(context, targetNode);
+  const resolved = target && importedDefinitionContext(context, target);
+  if (!resolved) return null;
+  const imported = sourceBindingResolver(resolved.context.file, resolved.context.root).callableValue(
+    resolved.declaration,
   );
-  return imported?.sourcePath
-    ? resolveImportedDefinitions(context.db, imported.sourcePath, member[2]!).filter(
-        (definition) => definition.isFunctionLike,
-      )
-    : [];
+  return imported ? { context: resolved.context, callable: imported } : null;
 }
 
+function importedDefinitionContext(
+  context: BoundaryValueContext,
+  target: NonNullable<ReturnType<typeof importedTarget>>,
+) {
+  const root = getAst(context.db, target.relativePath)?.rootNode;
+  const declaration = root && definitionBinding(root, target);
+  return root && declaration ? { context: { ...context, file: target.relativePath, root }, declaration } : null;
+}
+
+/** A single nested return does not prove either fallthrough or finally behavior. */
 function singleReturnedExpression(callable: SyntaxNode): SyntaxNode | null {
+  if (
+    callable.children.some((child) => child.type === 'async' || child.type === '*') ||
+    callable.type.includes('generator')
+  )
+    return null;
   const body = callable.childForFieldName('body');
-  if (callable.type === 'arrow_function' && body && body.type !== 'statement_block') return body;
-  const returns: SyntaxNode[] = [];
-  collectReturns(body ?? callable, body ?? callable, returns);
-  if (returns.length !== 1) return null;
-  return returns[0]!.childForFieldName('argument') ?? returns[0]!.namedChild(0);
+  if (!body) return null;
+  if (callable.type === 'arrow_function' && body.type !== 'statement_block') return body;
+  const statements = body.namedChildren.filter((child) => child.type !== 'comment');
+  const last = statements.at(-1);
+  if (!last || last.type !== 'return_statement') return null;
+  // Only straight-line declarations before the return are evaluated here.
+  if (
+    statements
+      .slice(0, -1)
+      .some((child) => !['lexical_declaration', 'variable_declaration', 'function_declaration'].includes(child.type))
+  )
+    return null;
+  return last.childForFieldName('argument') ?? last.namedChild(0);
 }
 
-function collectReturns(root: SyntaxNode, node: SyntaxNode, returns: SyntaxNode[]): void {
-  if (node !== root && (/(?:function|method|lambda)/u.test(node.type) || node.type === 'arrow_function')) return;
-  if (node.type === 'return_statement') {
-    returns.push(node);
-    return;
-  }
-  for (const child of node.namedChildren) collectReturns(root, child, returns);
+function importedTarget(context: BoundaryValueContext, node: SyntaxNode, namespaceMember?: string) {
+  const imported = sourceBindingResolver(context.file, context.root).importedValue(node);
+  const member = imported?.member ?? namespaceMember;
+  if (!imported || !member) return null;
+  const file = resolveImportPath(context.db, context.file, imported.module);
+  const targets = file ? resolveImportedDefinitions(context.db, file, member) : [];
+  return targets.length === 1 ? targets[0]! : null;
+}
+
+function definitionBinding(
+  root: SyntaxNode,
+  target: ReturnType<typeof resolveImportedDefinitions>[number],
+): SyntaxNode | null {
+  const candidates: SyntaxNode[] = [];
+  walk(root, (node) => {
+    if (!['variable_declarator', 'function_declaration', 'generator_function_declaration'].includes(node.type)) return;
+    const name = node.childForFieldName('name');
+    if (
+      name?.text !== target.leaf ||
+      node.startPosition.row !== target.startLine ||
+      node.endPosition.row > target.endLine
+    )
+      return;
+    if (node.startPosition.column < (target.startChar ?? 0)) return;
+    if (node.endPosition.row === target.endLine && target.endChar && node.endPosition.column > target.endChar) return;
+    candidates.push(name);
+  });
+  return candidates.length === 1 ? candidates[0]! : null;
 }
 
 function resolveIdentifier(
@@ -150,111 +171,85 @@ function resolveIdentifier(
   depth: number,
   seen: Set<string>,
 ): EvaluatedStaticValue | null {
-  const identity = `${context.file}\0${name}`;
+  const bindings = sourceBindingResolver(context.file, context.root);
+  const identity = `${context.file}:${bindings.resource(site).resourceKey}`;
   if (seen.has(identity)) return unknownValue(site, 'value-cycle');
-  seen.add(identity);
-
-  const local = findVariableInitializer(context.root, name);
+  const nextSeen = new Set(seen).add(identity);
+  const local = bindings.constantInitializer(site);
   if (local) {
-    const value = evaluateNode(context, local, depth + 1, seen);
+    const value = evaluateNode(context, local, depth + 1, nextSeen);
     return value ? derivedFrom(site, 'local-constant', value) : unknownValue(site, 'non-foldable-local');
   }
-
-  const imported = getSourceImports(context.db, context.file).find(
-    (item) => item.localName === name && item.sourcePath,
-  );
-  if (!imported?.sourcePath) return symbolicValue(site, name, 'unresolved-identifier');
-  if (imported.kind === 'namespace') {
-    return symbolicValue(site, name, 'namespace-import-requires-property');
-  }
-  const importedName = imported.importedName === 'default' ? name : imported.importedName;
-  const targets = resolveImportedDefinitions(context.db, imported.sourcePath, importedName);
-  if (targets.length !== 1)
-    return symbolicValue(
-      site,
-      name,
-      targets.length === 0 ? 'import-definition-missing' : 'import-definition-ambiguous',
-    );
-  return evaluateImportedConstant(context, targets[0]!, site, depth, seen);
+  const target = importedTarget(context, site);
+  return target
+    ? evaluateImportedConstant(context, target, site, depth, nextSeen)
+    : symbolicValue(site, name, 'unresolved-or-nonconstant-binding');
 }
 
 function resolveMember(
   context: BoundaryValueContext,
-  base: string,
+  base: SyntaxNode,
   properties: readonly string[],
   site: SyntaxNode,
   depth: number,
   seen: Set<string>,
 ): EvaluatedStaticValue | null {
-  const imported = getSourceImports(context.db, context.file).find(
-    (item) => item.localName === base && item.sourcePath,
-  );
-  let targetFile = context.file;
-  let targetName = base;
-  let proofSymbol: string | undefined;
-
-  if (imported?.sourcePath) {
-    if (imported.kind === 'namespace') {
-      targetName = properties[0] ?? '';
-      properties = properties.slice(1);
-    } else {
-      targetName = imported.importedName === 'default' ? base : imported.importedName;
-    }
-    const targets = resolveImportedDefinitions(context.db, imported.sourcePath, targetName);
-    if (targets.length !== 1) {
-      return symbolicValue(
-        site,
-        `${base}.${properties.join('.')}`,
-        targets.length === 0 ? 'member-definition-missing' : 'member-definition-ambiguous',
-      );
-    }
-    targetFile = targets[0]!.relativePath;
-    targetName = targets[0]!.leaf;
-    proofSymbol = targets[0]!.symbol;
+  const resolved = memberBase(context, base, properties);
+  if (typeof resolved === 'string') return unknownValue(site, resolved);
+  const { context: targetContext } = resolved;
+  let current = resolved.node;
+  for (const property of resolved.properties) {
+    current = objectAliasInitializer(targetContext, current);
+    const field = selectEffectiveObjectField(current, property, (key) => {
+      const value = evaluateNode(targetContext, unwrapComputedKey(key), depth + 1, new Set(seen));
+      return value?.precision === 'literal' && ['literal', 'constant'].includes(value.evidence) ? value.value : null;
+    });
+    if (field.kind !== 'value') return unknownValue(site, `member-property-${field.kind}:${property}`);
+    current = field.node;
   }
-
-  return evaluateResolvedMember(context, { targetFile, targetName, proofSymbol }, base, properties, site, depth, seen);
+  const value = evaluateNode(targetContext, current, depth + 1, new Set(seen));
+  return value ? derivedFrom(site, 'member-constant', value) : unknownValue(site, 'member-value-unresolved');
 }
 
-function evaluateResolvedMember(
+function memberBase(
   context: BoundaryValueContext,
-  target: { targetFile: string; targetName: string; proofSymbol: string | undefined },
-  base: string,
+  base: SyntaxNode,
   properties: readonly string[],
-  site: SyntaxNode,
-  depth: number,
-  seen: Set<string>,
-): EvaluatedStaticValue | null {
-  const { targetFile, targetName, proofSymbol } = target;
-  const targetRoot = targetFile === context.file ? context.root : getAst(context.db, targetFile)?.rootNode;
-  if (!targetRoot) return symbolicValue(site, proofSymbol ?? base, 'member-definition-unparsed');
-  const current = findVariableInitializer(targetRoot, targetName);
-  if (!current) return symbolicValue(site, proofSymbol ?? base, 'member-base-non-value');
-  const member = resolveObjectPropertyPath(current, properties);
-  if ('missingProperty' in member) {
-    return symbolicValue(
-      site,
-      proofSymbol ?? `${base}.${properties.join('.')}`,
-      `member-property-missing:${member.missingProperty}`,
-    );
-  }
-  const value = evaluateNode({ db: context.db, file: targetFile, root: targetRoot }, member.node, depth + 1, seen);
-  return value
-    ? derivedFrom(site, 'member-constant', value, proofSymbol)
-    : symbolicValue(site, proofSymbol ?? base, 'member-value-unresolved');
+): { context: BoundaryValueContext; node: SyntaxNode; properties: readonly string[] } | string {
+  const bindings = sourceBindingResolver(context.file, context.root);
+  if (bindings.hasObservedWrite(base, true)) return 'member-base-observed-write';
+  const local = bindings.constantInitializer(base);
+  if (local) return { context, node: local, properties };
+  const target = importedTarget(context, base, properties[0]);
+  if (!target) return 'member-binding-unresolved';
+  const resolved = importedDefinitionContext(context, target);
+  if (!resolved) return 'member-definition-unparsed';
+  const imported = sourceBindingResolver(resolved.context.file, resolved.context.root);
+  if (imported.hasObservedWrite(resolved.declaration, true)) return 'member-base-observed-write';
+  const node = imported.constantInitializer(resolved.declaration);
+  if (!node) return 'member-base-nonconstant';
+  return {
+    context: resolved.context,
+    node,
+    properties: bindings.importedValue(base)?.member === null ? properties.slice(1) : properties,
+  };
 }
 
-function resolveObjectPropertyPath(
-  current: SyntaxNode,
-  properties: readonly string[],
-): { node: SyntaxNode } | { missingProperty: string } {
-  for (const property of properties) {
-    const object = unwrapExpression(current);
-    const value = objectMemberValue(object, property);
-    if (!value) return { missingProperty: property };
-    current = value;
+function objectAliasInitializer(context: BoundaryValueContext, node: SyntaxNode): SyntaxNode {
+  let current = unwrapExpression(node);
+  const seen = new Set<number>();
+  const bindings = sourceBindingResolver(context.file, context.root);
+  while (current.type === 'identifier' && !seen.has(current.startIndex)) {
+    seen.add(current.startIndex);
+    const initializer = bindings.constantInitializer(current);
+    if (!initializer) break;
+    current = unwrapExpression(initializer);
   }
-  return { node: current };
+  return current;
+}
+
+function unwrapComputedKey(node: SyntaxNode): SyntaxNode {
+  return node.type === 'computed_property_name' ? (node.namedChild(0) ?? node) : node;
 }
 
 function stringTerm(
@@ -285,10 +280,10 @@ function otherLanguageStringTerm(node: SyntaxNode): ReturnType<typeof stringTerm
   const quote = text[0];
   if ((quote !== "'" && quote !== '"' && quote !== '`') || text.at(-1) !== quote) return null;
   const raw = text.slice(1, -1);
-  if (quote !== '`' || !raw.includes('${')) {
-    return { term: { kind: 'literal', value: raw }, value: raw, precision: 'literal' };
-  }
-  return templateStringTerm(raw);
+  // Generic quote stripping cannot decode escapes, multiline delimiters or language-specific interpolation.
+  if (text.startsWith(quote.repeat(3)) || ['\\', '$', '#', '\n', '\r'].some((marker) => raw.includes(marker)))
+    return null;
+  return { term: { kind: 'literal', value: raw }, value: raw, precision: 'literal' };
 }
 
 function directValue(
@@ -394,59 +389,14 @@ function derivation(
   };
 }
 
-function memberParts(node: SyntaxNode): { base: string; properties: string[] } | null {
-  const compact = node.text.replace(/\s+/gu, '');
-  if (!/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+$/u.test(compact)) return null;
-  const [base, ...properties] = compact.split('.');
-  return base ? { base, properties } : null;
-}
-
-/**
- * One evaluation can resolve many identifiers, and imported-constant
- * resolution re-enters with other files' roots, so per-lookup tree walks made
- * whole-repository boundary extraction quadratic (single files cost over a
- * second). Index every const initializer in one walk per root and answer
- * lookups from the map; the first declarator that satisfies the const
- * predicate wins, matching the original first-match scan.
- */
-const CONST_INITIALIZERS_BY_ROOT = new WeakMap<SyntaxNode, ReadonlyMap<string, SyntaxNode>>();
-
-function constInitializers(root: SyntaxNode): ReadonlyMap<string, SyntaxNode> {
-  const cached = CONST_INITIALIZERS_BY_ROOT.get(root);
-  if (cached) return cached;
-  const initializers = new Map<string, SyntaxNode>();
-  walk(root, (node) => {
-    if (node.type !== 'variable_declarator') return;
-    const declared = node.childForFieldName('name') ?? node.namedChild(0);
-    const name = declared?.text.trim();
-    if (!name || initializers.has(name)) return;
-    const declaration = node.parent;
-    if (
-      !declaration ||
-      declaration.type !== 'lexical_declaration' ||
-      !/^\s*(?:export\s+)?const\b/u.test(declaration.text)
-    ) {
-      return;
-    }
-    const value = node.childForFieldName('value') ?? node.namedChild(1);
-    if (value) initializers.set(name, value);
-  });
-  CONST_INITIALIZERS_BY_ROOT.set(root, initializers);
-  return initializers;
-}
-
-function findVariableInitializer(root: SyntaxNode, name: string): SyntaxNode | null {
-  return constInitializers(root).get(name) ?? null;
-}
-
-function objectMemberValue(object: SyntaxNode, property: string): SyntaxNode | null {
-  for (const pair of object.namedChildren) {
-    if (pair.type !== 'pair') continue;
-    const key = pair.childForFieldName('key') ?? pair.namedChild(0);
-    if (key?.text.replace(/^['"`]|['"`]$/gu, '') !== property) continue;
-    return pair.childForFieldName('value') ?? pair.namedChild(1);
-  }
-  return null;
+function memberParts(node: SyntaxNode): { base: SyntaxNode; properties: string[] } | null {
+  if (node.type !== 'member_expression') return null;
+  const object = node.childForFieldName('object');
+  const property = node.childForFieldName('property');
+  if (!object || property?.type !== 'property_identifier') return null;
+  const parent = memberParts(object);
+  if (parent) return { base: parent.base, properties: [...parent.properties, property.text] };
+  return object.type === 'identifier' ? { base: object, properties: [property.text] } : null;
 }
 
 function evaluateStaticConcatenation(
@@ -480,7 +430,8 @@ function evaluateImportedConstant(
 ): EvaluatedStaticValue | null {
   const targetRoot = getAst(context.db, target.relativePath)?.rootNode;
   if (!targetRoot) return symbolicValue(site, target.symbol, 'import-definition-unparsed');
-  const initializer = findVariableInitializer(targetRoot, target.leaf);
+  const binding = definitionBinding(targetRoot, target);
+  const initializer = binding && sourceBindingResolver(target.relativePath, targetRoot).constantInitializer(binding);
   if (!initializer) return symbolicValue(site, target.symbol, 'import-definition-non-value');
   const value = evaluateNode(
     { db: context.db, file: target.relativePath, root: targetRoot },
@@ -491,22 +442,4 @@ function evaluateImportedConstant(
   return value
     ? derivedFrom(site, 'imported-constant', value, target.symbol)
     : symbolicValue(site, target.symbol, 'import-value-unresolved');
-}
-
-function templateStringTerm(raw: string): NonNullable<ReturnType<typeof stringTerm>> {
-  const parts: StaticValueTerm[] = [];
-  let cursor = 0;
-  const interpolation = /\$\{([^}]*)\}/gu;
-  for (const match of raw.matchAll(interpolation)) {
-    const index = match.index ?? 0;
-    if (index > cursor) parts.push({ kind: 'literal', value: raw.slice(cursor, index) });
-    parts.push({ kind: 'unknown', reason: `template-hole:${match[1]?.trim() || 'expression'}` });
-    cursor = index + match[0].length;
-  }
-  if (cursor < raw.length) parts.push({ kind: 'literal', value: raw.slice(cursor) });
-  return {
-    term: { kind: 'pattern', language: 'template', value: raw.replace(interpolation, '{}') },
-    value: raw.replace(interpolation, '{}'),
-    precision: 'constrained-pattern',
-  };
 }

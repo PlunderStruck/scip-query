@@ -225,7 +225,7 @@ export function programStateTemporalElementsForTopologyNodes(
   for (const owner of topologyNodes) {
     if (!owner.location || !['source-construct', 'symbol'].includes(owner.kind)) continue;
     const endLine = owner.location.endLine ?? owner.location.line;
-    const analysis = sourceStateTemporalAnalysis(db, owner.location.file, owner.location.line, endLine);
+    const analysis = sourceStateTemporalAnalysis(db, owner.location.file, owner.location.line, endLine, owner.location);
     if (!analysis) {
       blindSpots.add(
         `State and temporal analysis unavailable for ${owner.location.file}:${owner.location.line + 1}-${endLine + 1}: no supported syntax tree or covering construct.`,
@@ -376,11 +376,26 @@ function topologySourceNode(
 ): ExplorationTopologyNode {
   const file = owner.location!.file;
   return {
-    id: id(`program-${construct.kind}`, file, String(construct.startLine), String(construct.endLine), construct.label),
+    id: id(
+      `program-${construct.kind}`,
+      file,
+      String(construct.startLine),
+      String(construct.endLine),
+      construct.label,
+      owner.id,
+      String(construct.startColumn ?? ''),
+      String(construct.endColumn ?? ''),
+    ),
     kind: `program-${construct.kind}`,
     label: construct.label,
     disposition: 'folded',
-    location: { file, line: construct.startLine, endLine: construct.endLine },
+    location: {
+      file,
+      line: construct.startLine,
+      endLine: construct.endLine,
+      startColumn: construct.startColumn,
+      endColumn: construct.endColumn,
+    },
     anchorIds: [],
     attributes: { ownerNodeId: owner.id, constructKind: construct.kind },
   };
@@ -393,13 +408,18 @@ function topologyResourceNode(
 ): ExplorationTopologyNode {
   const file = owner.location!.file;
   return {
-    id: id('program-resource', file, owner.id, construct.label, durabilityClass),
+    id: id('program-resource', file, owner.id, construct.resourceKey ?? construct.label, durabilityClass),
     kind: 'program-resource',
     label: construct.label,
     disposition: 'folded',
     location: { file, line: construct.startLine, endLine: construct.endLine },
     anchorIds: [],
-    attributes: { ownerNodeId: owner.id, durabilityClass },
+    attributes: {
+      ownerNodeId: owner.id,
+      durabilityClass,
+      identityBasis: construct.identityBasis ?? 'runtime-observation',
+      heapIdentity: 'unknown',
+    },
   };
 }
 

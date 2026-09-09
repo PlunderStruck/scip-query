@@ -50,6 +50,8 @@ export interface TypeScriptLocalFlowResult {
 export interface TypeScriptLocalFlowRange {
   startLine: number;
   endLine: number;
+  startColumn?: number;
+  endColumn?: number;
 }
 
 interface MutableFlowPoint extends TypeScriptLocalFlowPoint {
@@ -374,12 +376,26 @@ function callableDeclarations(
     if (isAnalyzableCallable(ts, node)) {
       const startLine = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line;
       const endLine = sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line;
-      if (!range || (startLine <= range.endLine && endLine >= range.startLine)) result.push(node);
+      if (!range || callableIntersectsRange(sourceFile, node, startLine, endLine, range)) result.push(node);
     }
     node.forEachChild(visit);
   };
   sourceFile.forEachChild(visit);
   return result.sort((left, right) => left.getStart(sourceFile) - right.getStart(sourceFile));
+}
+
+function callableIntersectsRange(
+  source: TypeScript.SourceFile,
+  node: AnalyzableCallable,
+  startLine: number,
+  endLine: number,
+  range: TypeScriptLocalFlowRange,
+): boolean {
+  if (range.startColumn === undefined || range.endColumn === undefined)
+    return startLine <= range.endLine && endLine >= range.startLine;
+  const start = source.getPositionOfLineAndCharacter(range.startLine, range.startColumn);
+  const end = source.getPositionOfLineAndCharacter(range.endLine, range.endColumn);
+  return (node.name ?? node).getStart(source) >= start && node.end <= end;
 }
 
 function isAnalyzableCallable(ts: TypeScriptModule, node: TypeScript.Node): node is AnalyzableCallable {

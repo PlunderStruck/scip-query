@@ -1,5 +1,5 @@
-/** Version of declaration identities and complete-program emission semantics. */
-export const TYPESCRIPT_SYMBOL_IDENTITY_VERSION = 1;
+/** Version of declaration identities, complete emission, and declared source coordinates. */
+export const TYPESCRIPT_SYMBOL_IDENTITY_VERSION = 4;
 
 export function typeScriptIndexVersion(packageVersion: string): string {
   return `${packageVersion}+scip-query-symbols.${TYPESCRIPT_SYMBOL_IDENTITY_VERSION}`;

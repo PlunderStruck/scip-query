@@ -74,6 +74,7 @@ describe('graph relation provider contracts', () => {
       'general-interprocedural-value-flow',
       'heap-aliasing',
       'exceptional-flow',
+      'dynamic-callable-dispatch',
       'reflection',
       'generated-dispatch',
       'unsupported-framework-adapters',

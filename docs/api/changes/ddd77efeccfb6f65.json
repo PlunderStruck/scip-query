@@ -1,0 +1,31 @@
+{
+  "acceptedAt": "2026-09-09T04:04:12.207Z",
+  "automaticClassification": "additive",
+  "baselineDigest": "ddd77efeccfb6f6515cc1aef8c08ddbdefa8c4323de2d063831794312f7ae987",
+  "changes": [
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ExplorationSourceLocation changed from interface ExplorationSourceLocation { file: string; line: number; endLine?: number; } to interface ExplorationSourceLocation { file: string; line: number; endLine?: number; startColumn?: number; endColumn?: number; }.",
+      "target": "./queries:ExplorationSourceLocation"
+    },
+    {
+      "classification": "additive",
+      "kind": "signature-changed",
+      "message": "ExplorationSourceLocation changed from interface ExplorationSourceLocation { file: string; line: number; endLine?: number; } to interface ExplorationSourceLocation { file: string; line: number; endLine?: number; startColumn?: number; endColumn?: number; }.",
+      "target": "./queries/index:ExplorationSourceLocation"
+    },
+    {
+      "classification": "additive",
+      "kind": "referenced-signature-changed",
+      "message": "E changed from interface ExplorationSourceLocation { file: string; line: number; endLine?: number; } to interface ExplorationSourceLocation { file: string; line: number; endLine?: number; startColumn?: number; endColumn?: number; }.",
+      "target": "exploration-topology-<hash>.d.ts:E"
+    }
+  ],
+  "classification": "additive",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.25.0",
+  "previousDigest": "b74137d6c422ca9c23c8d234556c8bc1b4682b20a310624e3d4dd528247173fa",
+  "reason": "Preserve exact source columns in graph evidence locations so same-line owners remain distinct.",
+  "schemaVersion": 1
+}

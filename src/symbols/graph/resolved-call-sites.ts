@@ -2,11 +2,15 @@ import type { IndexedDefinition } from '../../domain/types.js';
 import { getAst } from '../../source/ast/ast-core.js';
 import { nodesOfTypes } from '../../source/ast/ast-node-index.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
-import { extractCallLeaf } from '../../source/facts/source-calls.js';
+import { callSiteForNode } from '../../source/facts/source-calls.js';
+import { detectAstLanguage } from '../../source/ast/ast-language.js';
+import { scipOccurrenceCallTargetsForRange } from './scip-occurrence-call-targets.js';
+import { sameOccurrenceRange, type OccurrenceSourceRange } from './scip-chunk-occurrences.js';
+import { lexicalCallOwners, sourceCallableOwnerKey } from './call-graph-evidence.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { createPerDbCache } from '../../storage/per-db-cache.js';
 import { mentionReferenceChunkRows } from '../../storage/scip-mentions.js';
-import { findEnclosingDefinition, getDefinitionsForFile } from '../definition-catalog.js';
+import { getDefinitionsForFile } from '../definition-catalog.js';
 import { referenceEvidenceForSymbol, type ReferenceEvidenceProvenance } from '../references/reference-sites.js';
 
 export interface ResolvedCallSite {
@@ -23,7 +27,11 @@ export interface ResolvedCallSite {
   referenceProvenance: ReferenceEvidenceProvenance;
 }
 
-export type UnresolvedCallSiteReason = 'ast-unavailable' | 'call-not-found' | 'ambiguous-call';
+export type UnresolvedCallSiteReason =
+  | 'ast-unavailable'
+  | 'call-not-found'
+  | 'ambiguous-call'
+  | 'compiler-binding-unavailable';
 
 export interface UnresolvedCallSite {
   callee: IndexedDefinition;
@@ -47,7 +55,7 @@ interface IndexedCallSyntax {
 }
 
 interface FileCallSyntaxIndex {
-  byLeaf: ReadonlyMap<string, readonly IndexedCallSyntax[]>;
+  calls: readonly (IndexedCallSyntax & { targetRange: OccurrenceSourceRange })[];
 }
 
 interface CompilerReferenceRange {
@@ -73,7 +81,7 @@ const HAS_SCIP_REFERENCE_EVIDENCE = createPerDbCache<string, boolean>('resolved-
  * Locate calls to one compiler-resolved definition while retaining the source
  * syntax needed by higher-level analyses. SCIP identity chooses the candidate
  * files and lines; the AST only recovers the exact call and its arguments.
- * A line with multiple matching calls remains explicitly unresolved.
+ * Exact invocation token ranges preserve aliases, shadowing, and multiple calls on one line. Missing compiler bindings remain unresolved.
  */
 export function resolvedCallSitesForDefinition(db: ScipDatabase, callee: IndexedDefinition): ResolvedCallSitesResult {
   return RESOLVED_CALL_SITES.get(db, callee.symbolId, () =>
@@ -122,39 +130,50 @@ function resolveCallSites(
       continue;
     }
 
-    const candidates = (syntax.byLeaf.get(callee.leaf) ?? []).filter(
-      ({ callNode }) =>
-        callNode.startPosition.row <= reference.endLine && callNode.endPosition.row >= reference.startLine,
-    );
-    if (candidates.length !== 1) {
+    const resolved = scipOccurrenceCallTargetsForRange(db, reference.file, reference.startLine, reference.endLine);
+    if (!resolved.available) {
       unresolved.push({
         callee,
         file: reference.file,
         line: reference.startLine,
-        reason: candidates.length === 0 ? 'call-not-found' : 'ambiguous-call',
-        candidates: candidates.length,
+        reason: 'compiler-binding-unavailable',
+        candidates: 0,
         referenceProvenance: reference.provenance,
       });
       continue;
     }
-
-    const candidate = candidates[0]!;
-    const callKey = `${reference.file}\0${candidate.callNode.startIndex}\0${candidate.callNode.endIndex}`;
-    if (seenCalls.has(callKey)) continue;
-    seenCalls.add(callKey);
-    sites.push({
-      callee,
-      caller: findEnclosingDefinition(getDefinitionsForFile(db, reference.file), candidate.callNode.startPosition.row),
-      file: reference.file,
-      line: candidate.callNode.startPosition.row,
-      startLine: candidate.callNode.startPosition.row,
-      endLine: candidate.callNode.endPosition.row,
-      targetText: candidate.targetNode.text,
-      callNode: candidate.callNode,
-      targetNode: candidate.targetNode,
-      arguments: candidate.arguments,
-      referenceProvenance: reference.provenance,
-    });
+    const owners = lexicalCallOwners(db, reference.file, getDefinitionsForFile(db, reference.file));
+    for (const target of resolved.targets.filter((target) => target.definition.symbol === callee.symbol)) {
+      const candidates = syntax.calls.filter((call) => sameOccurrenceRange(call.targetRange, target.sourceRange));
+      if (candidates.length !== 1) {
+        unresolved.push({
+          callee,
+          file: reference.file,
+          line: target.sourceLine,
+          reason: candidates.length ? 'ambiguous-call' : 'call-not-found',
+          candidates: candidates.length,
+          referenceProvenance: reference.provenance,
+        });
+        continue;
+      }
+      const candidate = candidates[0]!;
+      const callKey = `${reference.file}\0${candidate.callNode.startIndex}\0${candidate.callNode.endIndex}`;
+      if (seenCalls.has(callKey)) continue;
+      seenCalls.add(callKey);
+      sites.push({
+        callee,
+        caller: owners.get(sourceCallableOwnerKey(target.sourceOwner ?? null)) ?? null,
+        file: reference.file,
+        line: candidate.callNode.startPosition.row,
+        startLine: candidate.callNode.startPosition.row,
+        endLine: candidate.callNode.endPosition.row,
+        targetText: candidate.targetNode.text,
+        callNode: candidate.callNode,
+        targetNode: candidate.targetNode,
+        arguments: candidate.arguments,
+        referenceProvenance: reference.provenance,
+      });
+    }
   }
 
   return { sites, unresolved, filesVisited: filesVisited.size };
@@ -206,23 +225,22 @@ function hasScipReferenceEvidence(db: ScipDatabase): boolean {
 
 function buildFileCallSyntaxIndex(db: ScipDatabase, file: string): FileCallSyntaxIndex | null {
   const root = getAst(db, file)?.rootNode;
-  if (!root) return null;
-  const byLeaf = new Map<string, IndexedCallSyntax[]>();
-  for (const node of nodesOfTypes(root, ['call_expression', 'call'])) {
-    const targetNode = node.childForFieldName('function') ?? node.namedChild(0);
-    if (!targetNode) continue;
-    const leaf = extractCallLeaf(targetNode);
-    if (!leaf) continue;
+  const language = detectAstLanguage(file);
+  if (!root || !language) return null;
+  const calls: FileCallSyntaxIndex['calls'][number][] = [];
+  for (const node of nodesOfTypes(root, ['call_expression', 'call', 'new_expression'])) {
+    const fact = callSiteForNode(node, language);
+    const targetNode =
+      node.childForFieldName('function') ?? node.childForFieldName('constructor') ?? node.namedChild(0);
+    if (!fact || !targetNode) continue;
     const argsNode =
       node.childForFieldName('arguments') ?? node.namedChildren.find((child) => child.type === 'arguments');
-    const call: IndexedCallSyntax = {
+    calls.push({
       callNode: node,
       targetNode,
-      arguments: argsNode?.namedChildren ?? [],
-    };
-    const existing = byLeaf.get(leaf);
-    if (existing) existing.push(call);
-    else byLeaf.set(leaf, [call]);
+      targetRange: fact.targetRange,
+      arguments: argsNode?.namedChildren.filter((child) => child.type !== 'comment') ?? [],
+    });
   }
-  return { byLeaf };
+  return { calls };
 }

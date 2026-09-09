@@ -1,8 +1,10 @@
+import { sourceCallableForDefinition } from '../../symbols/graph/callable-owner-identity.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import {
   addReferencedParameters,
   callableParameterNames as callableParameterNamesFromNode,
-  smallestCoveringCallable,
+  sourceAnalysisRoot,
+  ANALYSIS_CALLABLE_NODE_TYPES,
   unwrapExpression,
   walkNamedSyntax as walk,
 } from '../../source/ast/ast-callables.js';
@@ -58,7 +60,8 @@ interface BodySummaryCollectionResult {
 /**
  * Bind scalar request-body discriminators to variable-key registries through a proved HTTP carrier.
  * The analysis derives body roles from serialization, follows compiler-resolved calls, and emits
- * only concrete discriminator values; unresolved or ambiguous flows remain absent.
+ * possible discriminator values. Body transformations, handler binding and deployment
+ * identity require confirmation; these observations never establish executable handoffs.
  */
 export function deriveCarrierDiscriminators(
   db: ScipDatabase,
@@ -372,7 +375,7 @@ function deriveHandlerConsumers(
   try {
     const handlerContext = boundaryFileContext(db, handler.relativePath);
     if (!handlerContext) return;
-    const callable = smallestCoveringCallable(handlerContext.root, handler.startLine, handler.endLine);
+    const callable = callableNodeForDefinition(handlerContext, handler);
     if (!callable) return;
     walk(callable, (node) =>
       deriveRegistryCallConsumers(db, boundary, carrier, handler, handlerContext, node, registryHandlers, consumers),
@@ -422,7 +425,13 @@ function appendRegistryConsumer(
   if (!families.some((family) => family.file === registryHandler.source.file && family.binding === container)) return;
   const consumerContext = boundaryFileContext(db, registryHandler.source.file);
   const consumerNode = consumerContext
-    ? smallestNodeCoveringLine(consumerContext.root, registryHandler.source.startLine)
+    ? sourceAnalysisRoot(
+        consumerContext.root,
+        registryHandler.source.startLine,
+        registryHandler.source.endLine,
+        ANALYSIS_CALLABLE_NODE_TYPES,
+        registryHandler.source,
+      )
     : null;
   if (!consumerContext || !consumerNode) return;
   consumers.push(
@@ -473,7 +482,7 @@ export function bodyFieldForLocal(
   definition: IndexedDefinition,
   local: string,
 ): string | null {
-  const callable = smallestCoveringCallable(context.root, definition.startLine, definition.endLine);
+  const callable = callableNodeForDefinition(context, definition);
   if (!callable) return null;
   const direct = new RegExp(`\\.body\\??\\.${escapeRegex(local)}\\b`, 'u');
   if (direct.test(callable.text)) return local;
@@ -491,9 +500,7 @@ export function bodyFieldForLocal(
   const helpers = resolveCallableExpression(db, definition.relativePath, helperExpression);
   if (helpers.length !== 1) return null;
   const helperContext = boundaryFileContext(db, helpers[0]!.relativePath);
-  const helperCallable = helperContext
-    ? smallestCoveringCallable(helperContext.root, helpers[0]!.startLine, helpers[0]!.endLine)
-    : null;
+  const helperCallable = helperContext ? callableNodeForDefinition(helperContext, helpers[0]!) : null;
   return helperCallable &&
     direct.test(helperCallable.text) &&
     new RegExp(`\\b${escapeRegex(local)}\\s*[,}]`, 'u').test(helperCallable.text)
@@ -541,8 +548,8 @@ function createCarrierObservation(
     'builtin.carrier',
     action,
     keyParts,
-    'derived',
-    'http-body-registry-discriminator',
+    'candidate',
+    'http-body-registry-discriminator-unverified-flow',
   );
   observation.derivation = {
     kind: 'mechanically-derived',
@@ -582,17 +589,8 @@ function discriminatorSummaryKey(summary: DiscriminatorCallableSummary): string 
 }
 
 function callableParameterNames(context: BoundaryFileContext, definition: IndexedDefinition): Array<string | null> {
-  const callable = smallestCoveringCallable(context.root, definition.startLine, definition.endLine);
+  const callable = callableNodeForDefinition(context, definition);
   return callable ? callableParameterNamesFromNode(callable) : [];
-}
-
-function smallestNodeCoveringLine(root: SyntaxNode, line: number): SyntaxNode | null {
-  let match: SyntaxNode | null = null;
-  walk(root, (node) => {
-    if (node.startPosition.row > line || node.endPosition.row < line) return;
-    if (!match || node.endIndex - node.startIndex < match.endIndex - match.startIndex) match = node;
-  });
-  return match;
 }
 
 function callsCoveringLine(root: SyntaxNode, line: number): SyntaxNode[] {
@@ -655,4 +653,16 @@ function deduplicateObservations(values: readonly BoundaryObservation[]): Bounda
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function callableNodeForDefinition(context: BoundaryFileContext, definition: IndexedDefinition): SyntaxNode | null {
+  const callable = sourceCallableForDefinition(context.db, context.file, definition);
+  if (definition.symbol.startsWith('source-callable:'))
+    return sourceAnalysisRoot(context.root, definition.startLine, definition.endLine, ANALYSIS_CALLABLE_NODE_TYPES, {
+      startColumn: definition.startChar,
+      endColumn: definition.endChar,
+    });
+  return callable
+    ? sourceAnalysisRoot(context.root, callable.startLine, callable.endLine, ANALYSIS_CALLABLE_NODE_TYPES, callable)
+    : null;
 }

@@ -28,7 +28,7 @@ function writeMeta(
         updatedAt: new Date().toISOString(),
         fingerprint: {
           version: 3,
-          ...(languages.includes('typescript') ? { typescriptSymbolIdentityVersion: 1 } : {}),
+          ...(languages.includes('typescript') ? { typescriptSymbolIdentityVersion: 4 } : {}),
           languages: [...languages].sort(),
           pnpmWorkspaces: false,
           typescriptProjectMode: 'single',
@@ -175,6 +175,8 @@ describe('index freshness', () => {
 
       expect(getIndexFreshness(root, config, { dbPath, metaPath }).state).toBe('fresh');
       writeMeta(root, metaPath, ['typescript'], 3, { typescriptSymbolIdentityVersion: undefined });
+      expect(getIndexFreshness(root, config, { dbPath, metaPath }).state).toBe('stale');
+      writeMeta(root, metaPath, ['typescript'], 3, { typescriptSymbolIdentityVersion: 1 });
       expect(getIndexFreshness(root, config, { dbPath, metaPath }).state).toBe('stale');
     } finally {
       rmSync(root, { recursive: true, force: true });

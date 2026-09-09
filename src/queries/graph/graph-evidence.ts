@@ -205,7 +205,8 @@ export function graphEvidence(
     foldIds,
     inventoryOnly,
   );
-  const unsupportedFrontiers = topology.frontiers.filter((frontier) => frontier.disposition === 'unsupported').length;
+  const frontiers = projectionFrontiers(topology, allProjected, targetNodeIds, families, direction);
+  const unsupportedFrontiers = frontiers.filter((frontier) => frontier.disposition === 'unsupported').length;
   const rejectedRelationships = [...rejected.values()].reduce((total, count) => total + count, 0);
   const rejectionNotes = [...rejected].map(
     ([key, count]) =>
@@ -243,11 +244,12 @@ export function graphEvidence(
       eligibleEdges: eligibleCount,
       returnedEdges: edges.length,
       omittedEdges,
-      frontierGroups: topology.frontiers.length,
+      frontierGroups: frontiers.length,
       unsupportedFrontiers,
       rejectedRelationships,
       blindSpots: uniqueNonEmpty([
         ...topology.coverage.blindSpots,
+        ...frontiers.filter((frontier) => frontier.disposition === 'unsupported').map((frontier) => frontier.reason),
         ...rejectionNotes,
         ...graphRelationUnavailableBlindSpots(families),
       ]),
@@ -377,6 +379,39 @@ function materializeGraphProjection(
   const folds = foldIds.length > 0 || inventoryOnly ? [] : recoverableFolds;
   const omittedEdges = Math.max(0, eligible.length - edges.length);
   return { edges, folds, eligibleCount: eligible.length, omittedEdges };
+}
+
+/** Scope graph omissions to the requested relationships and reachable side of their owners. */
+function projectionFrontiers(
+  topology: ReturnType<typeof systemMapTopology>,
+  projected: readonly GraphEvidenceEdge[],
+  roots: ReadonlySet<string>,
+  families: readonly GraphEvidenceFamily[],
+  direction: GraphProjectionDirection,
+) {
+  const reachable = new Set([
+    ...roots,
+    ...reachableGraphEdges(projected, roots, direction).flatMap((edge) => [edge.from.id, edge.to.id]),
+  ]);
+  const edges = new Map(topology.edges.map((edge) => [edge.id, edge]));
+  return topology.frontiers.filter((frontier) => {
+    const members = frontier.edgeIds.flatMap((id) => (edges.has(id) ? [edges.get(id)!] : []));
+    // Untyped producer gaps cannot safely be discarded from a selected projection.
+    if (members.length === 0) return true;
+    return members.some((edge) => {
+      const selected = edge.semantics?.some((semantic) => {
+        const family = graphFamilyFor(semantic);
+        return family !== null && families.includes(family);
+      });
+      if (edge.semantics?.length && !selected) return false;
+      if (!edge.semantics?.length && edge.kind.startsWith('runtime-boundary') && !families.includes('runtime'))
+        return false;
+      return (
+        (direction !== 'incoming' && [edge.fromNodeId, ...frontier.fromNodeIds].some((id) => reachable.has(id))) ||
+        (direction !== 'outgoing' && [edge.toNodeId, ...frontier.memberNodeIds].some((id) => reachable.has(id)))
+      );
+    });
+  });
 }
 
 function normalizeFamilies(
@@ -708,9 +743,10 @@ function connectingGraphEdges(
   const orderedRoots = [...new Set(roots)].sort();
   for (let left = 0; left < orderedRoots.length; left += 1) {
     for (let right = left + 1; right < orderedRoots.length; right += 1) {
-      for (const edge of shortestGraphPath(edges, orderedRoots[left]!, orderedRoots[right]!, direction)) {
-        selected.set(edge.id, edge);
-      }
+      const paths = [shortestGraphPath(edges, orderedRoots[left]!, orderedRoots[right]!, direction)];
+      if (direction !== 'both')
+        paths.push(shortestGraphPath(edges, orderedRoots[right]!, orderedRoots[left]!, direction));
+      for (const edge of paths.flat()) selected.set(edge.id, edge);
     }
   }
   return [...selected.values()];

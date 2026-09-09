@@ -1,7 +1,7 @@
+import { lexicalCallOwners, sourceCallableOwnerKey } from './callable-owner-identity.js';
+export { lexicalCallOwners, sourceCallableOwnerKey, sourceCallableForDefinition } from './callable-owner-identity.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { detectAstLanguage, getCallSites } from '../../source/ast.js';
-import { getSourceFacts } from '../../source/facts/source-facts.js';
-import type { SourceCallableOwner } from '../../source/facts/source-fact-types.js';
 import { findNamedSourceImportBinding, getSourceImports } from '../../language-parsers/index.js';
 import { createPerDbValue } from '../../storage/per-db-cache.js';
 import { getIdentifiersByLine } from '../identifier-index.js';
@@ -17,7 +17,7 @@ import type { IndexedDefinition, SymbolLocation, SymbolMatch } from '../../domai
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from '../leaf-symbol-index.js';
 import type { GlobalLeafCandidate } from '../leaf-symbol-index.js';
 import { scipFunctionLikeKindNumbers, scipTypeLikeKindNumbers } from '../symbol-kind.js';
-import { scipOccurrenceTargetsForFile } from './scip-occurrence-call-targets.js';
+import { scipOccurrenceTargetsForFile, sourceCallTargetWasWritten } from './scip-occurrence-call-targets.js';
 import { occurrenceLeafKey, type FileOccurrenceTargets, type OccurrenceSourceRange } from './scip-chunk-occurrences.js';
 import { pathsResolveSame } from '../../domain/path-normalization.js';
 import type { SymbolSemanticEvidencePort } from '../semantic-evidence-port.js';
@@ -387,7 +387,8 @@ export function buildAstCalleeMap(db: ScipDatabase, definitions: ReadonlyArray<S
     const occurrences = occurrenceCalleeIndex(scipOccurrenceTargetsForFile(db, file));
 
     for (const site of callsites) {
-      const owner = site.owner === undefined ? ownerByLine.get(site.line) : lexicalOwners.get(ownerKey(site.owner));
+      const owner =
+        site.owner === undefined ? ownerByLine.get(site.line) : lexicalOwners.get(sourceCallableOwnerKey(site.owner));
       if (!owner) continue;
 
       const row = astCallsiteRow(db, file, leafIndex, site, occurrences);
@@ -406,6 +407,7 @@ function astCallsiteRow(
   site: NonNullable<ReturnType<typeof getCallSites>>[number],
   occurrences: ReturnType<typeof occurrenceCalleeIndex>,
 ): CalleeRow | null {
+  if (sourceCallTargetWasWritten(db, file, site)) return null;
   const targetKey = site.targetRange ? occurrenceRangeKey(site.targetRange) : null;
   if (occurrences && targetKey) {
     const pick = pickOccurrenceCallee(occurrences, targetKey);
@@ -430,40 +432,6 @@ function callsiteRow(
     callsiteLine: site.line,
     ...(site.kind === 'jsx-render' ? { kind: 'jsx-render' as const } : {}),
   };
-}
-
-function ownerKey(owner: SourceCallableOwner | null): string {
-  return owner ? `${owner.startLine}:${owner.startColumn}:${owner.endLine}:${owner.endColumn}` : '';
-}
-
-function lexicalCallOwners(
-  db: ScipDatabase,
-  file: string,
-  definitions: readonly SymbolMatch[],
-): Map<string, SymbolMatch> {
-  const callables = getSourceFacts(db, file)?.callables ?? [];
-  const owners = new Map<string, SymbolMatch>();
-  const ambiguous = new Set<string>();
-  for (const definition of definitions) {
-    // A definition may contain many functions, including another with the same
-    // name. Its first matching declaration owns it; a nested call cannot climb
-    // to an outer definition merely because the requested set omitted its owner.
-    const callable = callables.find(
-      (candidate) =>
-        candidate.name === leafName(definition.symbol) &&
-        candidate.startLine >= definition.startLine &&
-        candidate.endLine <= definition.endLine &&
-        (candidate.startLine !== definition.startLine ||
-          candidate.startColumn === undefined ||
-          candidate.startColumn >= (definition.startChar ?? 0)),
-    );
-    if (!callable || callable.startColumn === undefined || callable.endColumn === undefined) continue;
-    const key = ownerKey({ ...callable, startColumn: callable.startColumn, endColumn: callable.endColumn });
-    if (owners.has(key)) ambiguous.add(key);
-    else owners.set(key, definition);
-  }
-  for (const key of ambiguous) owners.delete(key);
-  return owners;
 }
 
 interface OccurrenceCalleeIndex {

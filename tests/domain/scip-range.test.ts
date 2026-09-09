@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { normalizeOccurrenceRange } from '../../src/domain/scip-range.js';
 
 describe('SCIP source coordinate coverage', () => {
+  it.each([
+    [0, 2, 1],
+    [1, 0, 0, 1],
+  ])('rejects reversed occurrence range %j', (...range) => {
+    expect(normalizeOccurrenceRange(range, 'UTF-16', ['abc', 'def'])).toBeUndefined();
+  });
+
   it('uses an undeclared encoding only while all preceding characters are ASCII', () => {
     for (const encoding of [undefined, null, '']) {
       expect(normalizeOccurrenceRange([0, 1, 5], encoding, ['alpha😀'])).toEqual({

@@ -1,109 +1,225 @@
 import { createHash } from 'node:crypto';
-import { getSourceImports } from '../../language-parsers/index.js';
+import { runtimeBindingIdentity } from './binding-identity.js';
+import { sourceBindingResolver } from '../../source/ast/source-binding-identity.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import { getSourceFiles } from '../../source/primitives/source-fileset.js';
-import { getSourceText } from '../../source/primitives/source-text.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { resolveImportedDefinitions } from '../../symbols/imported-definitions.js';
 import { evaluateStaticValue as evaluateBoundaryValue } from '../../symbols/graph/static-value-flow.js';
 import { boundaryFileContext } from './extractors.js';
-import type { BoundaryKeyPart, BoundaryObservation } from './types.js';
+import type {
+  BoundaryFileContext,
+  BoundaryFrontier,
+  BoundaryKeyPart,
+  BoundaryObservation,
+  BoundarySourceLocation,
+} from './types.js';
 
 interface HttpMount {
   file: string;
   line: number;
   prefix: Omit<BoundaryKeyPart, 'name'>;
-  targetFiles: string[];
+  targetIdentity: string;
+  receiver: BoundaryKeyPart;
+  source: BoundarySourceLocation;
 }
 
 export interface HttpMountCompositionResult {
   observations: BoundaryObservation[];
   filesInspected: number;
   mounts: number;
+  frontiers: BoundaryFrontier[];
 }
 
 export function composeHttpMountsWithCoverage(
   db: ScipDatabase,
   observations: readonly BoundaryObservation[],
 ): HttpMountCompositionResult {
-  const handlersByFile = new Map<string, BoundaryObservation[]>();
-  for (const observation of observations) {
-    if (observation.action !== 'http.handle' || observation.sourceScope !== 'production') continue;
-    const bucket = handlersByFile.get(observation.source.file) ?? [];
-    bucket.push(observation);
-    handlersByFile.set(observation.source.file, bucket);
-  }
-
+  const handlersByIdentity = httpHandlersByRouter(observations);
   const derived: BoundaryObservation[] = [];
   const collected = collectHttpMounts(db);
+  const frontiers = [...collected.frontiers];
+  const queue = [...handlersByIdentity].flatMap(([identity, handlers]) =>
+    handlers.map((handler) => ({ identity, handler, visited: new Set([identity]) })),
+  );
+  const mountsByTarget = new Map<string, HttpMount[]>();
   for (const mount of collected.mounts) {
-    for (const targetFile of mount.targetFiles) {
-      for (const handler of handlersByFile.get(targetFile) ?? []) {
-        appendMountedHttpHandler(mount, handler, derived);
+    const bucket = mountsByTarget.get(mount.targetIdentity) ?? [];
+    bucket.push(mount);
+    mountsByTarget.set(mount.targetIdentity, bucket);
+  }
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const state = queue[cursor]!;
+    for (const mount of mountsByTarget.get(state.identity) ?? []) {
+      if (derived.length >= 10_000) {
+        frontiers.push(mountFrontier(mount.source, 'http-mount-composition-limit', ['remaining-mount-paths']));
+        return {
+          observations: derived,
+          filesInspected: collected.filesInspected,
+          mounts: collected.mounts.length,
+          frontiers,
+        };
       }
+      const next = composeMountState(state, mount, derived, frontiers);
+      if (next) queue.push(next);
     }
   }
   return {
     observations: derived,
     filesInspected: collected.filesInspected,
     mounts: collected.mounts.length,
+    frontiers,
   };
 }
 
-function collectHttpMounts(db: ScipDatabase): { mounts: HttpMount[]; filesInspected: number } {
-  const mounts: HttpMount[] = [];
-  const files = getSourceFiles(db);
-  for (const file of files) {
-    const source = getSourceText(db, file);
-    if (!hasExpressLikeImport(source)) continue;
-    const context = boundaryFileContext(db, file);
-    if (!context) continue;
-    walk(context.root, (node) => {
-      if (node.type !== 'call_expression') return;
-      const target = node.childForFieldName('function') ?? node.namedChild(0);
-      if (!target || !target.text.replace(/\s+/gu, '').endsWith('.use')) return;
-      const args = callArguments(node);
-      if (args.length < 2) return;
-      const prefix = evaluateBoundaryValue(context, args[0]);
-      if (!prefix || prefix.evidence === 'expression') return;
-      const targetFiles = resolveMountedTargetFiles(db, file, args[1]!);
-      if (targetFiles.length === 0) return;
-      mounts.push({
-        file,
-        line: node.startPosition.row,
-        prefix: {
-          value: prefix.value,
-          evidence: prefix.evidence,
-          term: prefix.term,
-          derivation: prefix.derivation,
-        },
-        targetFiles,
-      });
-    });
+function httpHandlersByRouter(observations: readonly BoundaryObservation[]) {
+  const result = new Map<string, BoundaryObservation[]>();
+  for (const observation of observations) {
+    if (
+      observation.action !== 'http.handle' ||
+      observation.sourceScope !== 'production' ||
+      observation.strength === 'candidate'
+    )
+      continue;
+    const router = observation.keyParts.find((part) => part.name === 'router');
+    if (router?.term?.kind !== 'symbol' || router.evidence === 'expression') continue;
+    const bucket = result.get(router.term.symbol) ?? [];
+    bucket.push(observation);
+    result.set(router.term.symbol, bucket);
   }
-  return { mounts, filesInspected: files.length };
+  return result;
 }
 
-function resolveMountedTargetFiles(db: ScipDatabase, importerFile: string, expression: SyntaxNode): string[] {
-  const targetText = expression.text.replace(/\s+/gu, '');
-  const localName = /^([A-Za-z_$][\w$]*)/u.exec(targetText)?.[1];
-  if (!localName) return [];
-  const imported = getSourceImports(db, importerFile).find((item) => item.localName === localName && item.sourcePath);
-  if (!imported?.sourcePath) return [importerFile];
-  if (imported.kind === 'namespace') return [imported.sourcePath];
-  const importedName = imported.importedName === 'default' ? localName : imported.importedName;
-  const definitions = resolveImportedDefinitions(db, imported.sourcePath, importedName);
-  return [...new Set(definitions.map((definition) => definition.relativePath))];
+interface MountState {
+  identity: string;
+  handler: BoundaryObservation;
+  visited: Set<string>;
+}
+
+function composeMountState(
+  state: MountState,
+  mount: HttpMount,
+  derived: BoundaryObservation[],
+  frontiers: BoundaryFrontier[],
+): MountState | null {
+  const receiver = mount.receiver.term;
+  if (receiver?.kind !== 'symbol') return null;
+  if (state.visited.has(receiver.symbol)) {
+    frontiers.push(mountFrontier(mount.source, 'http-mount-cycle', ['acyclic-router-path']));
+    return null;
+  }
+  const before = derived.length;
+  appendMountedHttpHandler(mount, state.handler, derived);
+  return derived.length === before
+    ? null
+    : { identity: receiver.symbol, handler: derived.at(-1)!, visited: new Set(state.visited).add(receiver.symbol) };
+}
+
+function mountFrontier(source: BoundarySourceLocation, reason: string, missingKeyParts: string[]): BoundaryFrontier {
+  return {
+    observationId: `mount:${source.file}:${source.startLine}:${source.startColumn}:${reason}`,
+    reason,
+    missingKeyParts,
+    sourceScope: 'production',
+    kind: 'value-flow',
+    action: 'http.handle',
+    strength: 'candidate',
+    source,
+  };
+}
+
+function collectHttpMounts(db: ScipDatabase): {
+  mounts: HttpMount[];
+  filesInspected: number;
+  frontiers: BoundaryFrontier[];
+} {
+  const mounts: HttpMount[] = [];
+  const frontiers: BoundaryFrontier[] = [];
+  const files = getSourceFiles(db);
+  for (const file of files) {
+    const context = boundaryFileContext(db, file);
+    if (
+      !context ||
+      !sourceBindingResolver(file, context.root)
+        .moduleReferences()
+        .some((ref) => ref.literal && ref.specifier === 'express')
+    )
+      continue;
+    walk(context.root, (node) => collectMountCall(context, node, mounts, frontiers));
+  }
+  return { mounts, filesInspected: files.length, frontiers };
+}
+
+function expressMountReceiver(context: BoundaryFileContext, node: SyntaxNode): SyntaxNode | null {
+  if (node.type !== 'call_expression') return null;
+  const target = node.childForFieldName('function') ?? node.namedChild(0);
+  if (target?.type !== 'member_expression' || target.childForFieldName('property')?.text !== 'use') return null;
+  const receiver = target.childForFieldName('object');
+  return receiver && isExpressInstance(context, receiver) ? receiver : null;
+}
+
+function isExpressInstance(context: BoundaryFileContext, node: SyntaxNode): boolean {
+  const factory = sourceBindingResolver(context.file, context.root).constructedValue(node);
+  return factory?.module === 'express' && [null, 'default', 'Router'].includes(factory.member);
+}
+
+function mountArguments(
+  context: BoundaryFileContext,
+  args: SyntaxNode[],
+): { prefix: Omit<BoundaryKeyPart, 'name'>; routers: SyntaxNode[] } | null {
+  const first = args[0];
+  if (!first) return null;
+  const value = evaluateBoundaryValue(context, first);
+  if (value && value.evidence !== 'expression' && value.precision === 'literal') {
+    return { prefix: value, routers: args.slice(1) };
+  }
+  // A lone router/middleware argument uses Express's default root mount path.
+  if (args.length === 1 || isExpressInstance(context, first)) {
+    return { prefix: { value: '/', evidence: 'constant', term: { kind: 'literal', value: '/' } }, routers: args };
+  }
+  return null;
+}
+
+function collectMountCall(
+  context: BoundaryFileContext,
+  node: SyntaxNode,
+  mounts: HttpMount[],
+  frontiers: BoundaryFrontier[],
+): void {
+  const receiverNode = expressMountReceiver(context, node);
+  if (!receiverNode) return;
+  const source = {
+    file: context.file,
+    startLine: node.startPosition.row,
+    startColumn: node.startPosition.column,
+    endLine: node.endPosition.row,
+    endColumn: node.endPosition.column,
+  };
+  const args = mountArguments(context, callArguments(node));
+  if (!args) {
+    frontiers.push(mountFrontier(source, 'http-mount-prefix-unresolved', ['literal-prefix']));
+    return;
+  }
+  for (const argument of args.routers) {
+    const mounted = runtimeBindingIdentity(context, argument);
+    if (mounted.evidence === 'expression' || mounted.term?.kind !== 'symbol') {
+      frontiers.push(mountFrontier(source, 'http-mount-target-unresolved', ['router-instance-binding']));
+      continue;
+    }
+    mounts.push({
+      file: context.file,
+      line: node.startPosition.row,
+      prefix: args.prefix,
+      targetIdentity: mounted.term.symbol,
+      receiver: { name: 'router', ...runtimeBindingIdentity(context, receiverNode) },
+      source,
+    });
+  }
 }
 
 function composePath(prefix: string, path: string): string {
   const left = prefix === '/' ? '' : prefix.replace(/\/+$/u, '');
   const right = path.startsWith('/') ? path : `/${path}`;
   return `${left}${right}` || '/';
-}
-
-function hasExpressLikeImport(source: string): boolean {
-  return /(?:\bfrom\s*|\brequire\s*\(\s*)['"](?:express|fastify|hono|koa-router|@koa\/router)(?:[/']|")/u.test(source);
 }
 
 function callArguments(node: SyntaxNode): SyntaxNode[] {
@@ -126,34 +242,36 @@ function appendMountedHttpHandler(
   const composed = composePath(mount.prefix.value, path.value);
   const keyParts = handler.keyParts.map(
     (part): BoundaryKeyPart =>
-      part.name === 'path'
-        ? {
-            name: 'path',
-            value: composed,
-            evidence: 'constant',
-            term: {
-              kind: 'concat',
-              parts: [
-                mount.prefix.term ?? { kind: 'literal', value: mount.prefix.value },
-                path.term ?? { kind: 'literal', value: path.value },
-              ],
-            },
-            derivation: {
-              kind: 'mechanically-derived',
-              rule: 'http.mount-prefix',
-              ruleVersion: '1',
-              inputFactIds: [handler.id],
-              sourceSpans: [
-                handler.source,
-                { file: mount.file, startLine: mount.line, endLine: mount.line },
-                ...(mount.prefix.derivation?.sourceSpans ?? []),
-                ...(path.derivation?.sourceSpans ?? []),
-              ],
-            },
-          }
-        : part,
+      part.name === 'router'
+        ? mount.receiver
+        : part.name === 'path'
+          ? {
+              name: 'path',
+              value: composed,
+              evidence: 'constant',
+              term: {
+                kind: 'concat',
+                parts: [
+                  mount.prefix.term ?? { kind: 'literal', value: mount.prefix.value },
+                  path.term ?? { kind: 'literal', value: path.value },
+                ],
+              },
+              derivation: {
+                kind: 'mechanically-derived',
+                rule: 'http.mount-prefix',
+                ruleVersion: '1',
+                inputFactIds: [handler.id],
+                sourceSpans: [
+                  handler.source,
+                  mount.source,
+                  ...(mount.prefix.derivation?.sourceSpans ?? []),
+                  ...(path.derivation?.sourceSpans ?? []),
+                ],
+              },
+            }
+          : part,
   );
-  const identity = `${handler.id}\0${mount.file}\0${mount.line}\0${composed}`;
+  const identity = `${handler.id}\0${mount.file}\0${mount.line}:${mount.source.startColumn}\0${composed}`;
   derived.push({
     ...handler,
     id: `boundary:${createHash('sha256').update(identity).digest('hex').slice(0, 16)}`,
@@ -165,11 +283,10 @@ function appendMountedHttpHandler(
       rule: 'http.mount-prefix',
       ruleVersion: '1',
       inputFactIds: [handler.id],
-      sourceSpans: [handler.source, { file: mount.file, startLine: mount.line, endLine: mount.line }],
+      sourceSpans: [handler.source, mount.source],
     },
     resolution: 'unresolved',
   });
-  // A relative route registration is not independently a deployed address once a proved mount owns it.
-  handler.strength = 'candidate';
-  handler.resolution = 'unresolved';
+  // Preserve the independently observed registration. A mount adds a scoped path;
+  // it cannot rewrite the direct fact or the cached inputs used by incremental extraction.
 }

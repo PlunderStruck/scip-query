@@ -101,7 +101,7 @@ function sourceCallableDefinition(owner: IndexedDefinition, leaf: string, node: 
   return {
     documentId: owner.documentId,
     symbolId: -1,
-    symbol: `source-callable:${owner.relativePath}:${node.startPosition.row}:${leaf}`,
+    symbol: `source-callable:${owner.relativePath}:${node.startPosition.row}:${node.startPosition.column}:${node.endPosition.row}:${node.endPosition.column}:${leaf}`,
     relativePath: owner.relativePath,
     startLine: node.startPosition.row,
     startChar: node.startPosition.column,
@@ -159,7 +159,7 @@ function resolveExportedBinding(
   return resolveExportFromFile(db, sourceFile, binding, depth + 1, new Set(seen));
 }
 
-function sourceCallableBindings(db: ScipDatabase, sourceFile: string, binding: string): IndexedDefinition[] {
+export function sourceCallableBindings(db: ScipDatabase, sourceFile: string, binding: string): IndexedDefinition[] {
   const documentId = db.get<{ id: number }>('SELECT id FROM documents WHERE relative_path = ?', sourceFile)?.id;
   if (documentId === undefined) return [];
   return (getSourceFacts(db, sourceFile)?.callables ?? [])
@@ -167,12 +167,12 @@ function sourceCallableBindings(db: ScipDatabase, sourceFile: string, binding: s
     .map((callable) => ({
       documentId,
       symbolId: -1,
-      symbol: `source-callable:${sourceFile}:${callable.startLine}:${binding}`,
+      symbol: `source-callable:${sourceFile}:${callable.startLine}:${callable.startColumn}:${callable.endLine}:${callable.endColumn}:${binding}`,
       relativePath: sourceFile,
       startLine: callable.startLine,
-      startChar: 0,
+      startChar: callable.startColumn ?? 0,
       endLine: callable.endLine,
-      endChar: 0,
+      endChar: callable.endColumn ?? 0,
       leaf: binding,
       parentTypeName: null,
       isFunctionLike: true,
