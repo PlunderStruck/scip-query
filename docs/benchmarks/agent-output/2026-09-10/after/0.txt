@@ -1,0 +1,8 @@
+src/watch.ts:1-5  src:watch:Watcher  [typescript]
+
+     1  export class Watcher {
+     2    start() { return true; }
+     3    stop() { return false; }
+     4  }
+     5  
+Index identity: 0 stale, 1 unavailable; source text is current.

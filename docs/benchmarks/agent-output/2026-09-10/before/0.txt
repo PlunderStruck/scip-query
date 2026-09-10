@@ -1,0 +1,18 @@
+═══ REQUEST ═══
+  resolved-selector=scip-typescript npm pkg 1.0.0 src/`watch.ts`/Watcher#
+
+═══ OBSERVED FACTS ═══
+src/watch.ts:1-5  src:watch:Watcher  [typescript]
+
+     1  export class Watcher {
+     2    start() { return true; }
+     3    stop() { return false; }
+     4  }
+     5  
+
+═══ EVIDENCE CALIBRATION ═══
+  Source bodies are exact working-tree bytes; compiler identity and bindings are limited to reported semantic coverage.
+  Freshness: 1/1 text current; semantics 0 aligned, 0 stale, 1 unavailable.
+
+═══ COVERAGE ═══
+  One exact selector resolved to the complete source body shown; callers and runtime relationships are not implied.

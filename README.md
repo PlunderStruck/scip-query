@@ -63,82 +63,36 @@ scip-query capabilities
 
 ## The normal workflow
 
-Use scip-query as the primary reading surface for indexed source. First name the
-few material repository facts the answer depends on. Locate exact referents with
-`search` for trustworthy text, `outline` for a known file, or `entrypoints` for
-an external callable surface. Then select exact symbols or file/line constructs
-and project only the relationship families and directions capable of establishing
-those facts. scip-query resolves identity, typed edges, evidence strength, provider
-support, and bounded coverage; it does not decide which facts matter to the task.
+Use ordinary file search and source reads for implementation details. Use
+scip-query to inspect relationships, discover reuse opportunities, evaluate
+module dependencies and review actual changes. For a substantial change, map
+the existing central path and comparable features before choosing an extension
+point; document what will be reused and which consumers are affected.
 
 ```bash
-scip-query search 'work_session_stream_events'
-scip-query evidence \
-  --symbol 'appendWorkSessionStreamEvents' \
-  --edge execution \
-  --edge runtime \
-  --direction both \
-  --depth 2 \
-  --max-edges 32
+scip-query system --source
+scip-query evidence --at src/service.ts:42 --edge execution --direction incoming --depth 1 --max-edges 30
 ```
 
-Treat the evidence inventory, facts, calibration, coverage, and recovery paths as
-one contract. Missing output is not evidence of absence. If a material fact still
-requires implementation behavior, batch its exact constructs into `inspect --view
-behavior`. Use `code` only when exact syntax can change the decision. Do not reread
-source already rendered by either command, and do not expand unrelated frontiers.
+The module inventory shows groups and dependencies; selecting a printed group
+reveals its files, exports and import sites. The evidence command answers a
+chosen relationship question. Use incoming/outgoing execution for callers and
+callees, dataflow for values, runtime for handoffs and dependencies for imports.
+Candidate edges require confirmation. Missing or bounded evidence cannot
+establish absence. `evidence --detail` adds inventory and provider explanations
+when their limitations matter.
 
-Before answering, audit the draft itself against the material claims. A fact
-seen in evidence but left implicit in the answer is not recovered. Copy returned
-file and line identities exactly rather than reconstructing citation paths.
+`search`, `outline`, `entrypoints`, `code` and `inspect` remain optional tools
+for compiler identity, nesting, external roots or grouped source reads. `code`
+accepts exact symbols, file ranges or file paths; `--members all` selects a
+complete file and `--local-calls` adds same-file callees of a selected range.
+`inspect --view behavior` can provide a statement-accounted view of a selected
+construct. Both source commands add external literal values only with
+`--bindings`. Their machine results retain detailed evidence.
 
-A broad literal is counted exactly and returned with recoverable structural scopes.
-Narrow only when a named material fact requires one of those scopes.
-
-`code` accepts up to 24 exact symbols, ranges, or indexed file paths. A file
-path returns its exported definitions—or its top-level definitions when the
-language has no explicit export surface—plus the file-local definitions they
-reference, then lists every omitted local definition as an exact range. This
-keeps the default source surface small without hiding what remains available.
-Use `--members all` only when the complete file matters. If a proposed packet
-would exceed the active output budget, `code` emits no partial source and
-prints exact complete-packet splits; narrow to the exact units still needed
-before deciding whether every split remains necessary.
-
-Start an unknown path with `search`; batch related text, symbol, and file-line
-anchors with `inspect`; use `evidence` when one symbol and its real uses are the
-center of the question. For tracked nonbinary repository content, keep
-exploration on scip-query. Native tools are for applying edits, running checks,
-binary content, or a specific unsupported gap that scip-query has explicitly
-reported.
-
-```bash
-scip-query search work_session_stream_events
-scip-query inspect --search sessionStreamEvents --search work_session_stream_events --view behavior
-scip-query inspect --symbol appendWorkSessionStreamEvents --view behavior
-```
-
-`inspect --view behavior` returns the cheapest faithful syntax-derived view of
-each complete source unit. Compact units stay raw. Larger units become
-hierarchical outlines only when that representation is materially smaller;
-every source statement is represented, and unsupported or
-compression-sensitive statements are copied verbatim. Coverage reports the
-represented, copied, and omitted counts. Exact source can be requested for any
-unit whose complete implementation matters. `inspect --symbol` includes the definition and related caller/callee source by
-default. Candidate relationships remain qualified in the source reasons; use
-`--include` to request reference, dependency, or consumer source.
-
-Search, location, and relationship evidence is deduplicated into one ranked
-packet. Exact locations and definitions rank first; later units must add new
-file, role, scope, symbol, or behavior coverage. A default packet materializes
-at most 12 matching lines per text selector, then applies a soft ceiling of 48
-units or 20,000 displayed-evidence characters without clipping a returned
-syntax unit. Its omission ledger groups everything withheld by scope and role,
-reports what each group contains, and gives an exact command for drilling into
-that group. Drill into several relevant groups together; use `--full` only when
-all omitted evidence can change the decision. Large rendered output from other
-commands can still use the universal byte-transport continuation printed by
-every command.
+Load the relevant [workflow skill](docs/SKILLS.md), batch useful questions and
+stop when the facts needed for the change are settled. There is no requirement
+to exhaust the command catalogue, unrelated relationships or saved output.
 
 Before a nonlocal change:
 
@@ -324,28 +278,26 @@ line numbers readable. Programmatic consumers can use:
 scip-query context RetryPolicy --json --result-only
 ```
 
-Search output separates a complete occurrence ledger from source
-materialization. Every exact matching path and line is listed with its owner;
-the default expands only a representative source subset. Use the emitted
-batched drilldowns for selected owners. `search --full` expands every source
-window and is not needed to establish complete text-match coverage.
+Search displays selected matching windows once, with exact locations, optional
+compiler owners and an honest total. Use `--scope` to narrow or `--full` to
+expand all matching windows. The JSON result retains identity metadata.
 
-Cross-command evidence citations are off by default. With an explicit
-`SCIP_QUERY_SESSION`, a complete source unit, a byte-identical exact subset of a
-prior exact source read, or a graph unit/edge may be replaced by a visible
-receipt from the same index generation. Preview coverage never suppresses an
-exact unit. Changed bytes, changed graph content, a new generation, or
-`--reemit` force full evidence.
+Oversized ordinary human output is saved to a private temporary file, with a
+short preview and absolute path. Read or filter the file selectively using
+normal tools; no automatic `continue` call is required. Saved previews expire
+after one hour or can be reclaimed earlier under storage pressure. Redirect
+stdout to your own file for durable output:
 
-If output prints `Continue exactly:`, run the emitted command unchanged until
-transport is complete. Transport completion means every rendered character was
-retrieved; it does not make bounded analysis exhaustive.
+```bash
+scip-query health --full > report.txt
+scip-query health --json --json-output report.json
+```
 
-Output redirected to a regular file (`scip-query health --full > report.txt`) is written in full; page cursors apply to terminals and pipes, where the reader is an agent whose context the page budget protects.
-
-Use `--full` only when complete command coverage can change a decision. Always
-read a command's coverage note before claiming that every caller, consumer, or
-finding was considered.
+Small results, regular-file redirects and machine JSON contracts are preserved.
+Explicit pagination remains a compatibility option. Cross-command evidence
+receipts remain opt-in through `SCIP_QUERY_SESSION`; `--reemit` forces full
+evidence. Material omissions and unsupported/stale evidence remain visible,
+without routine successful coverage footers. See [output modes](docs/CLI_JSON_OUTPUT.md).
 
 ## Configuration
 

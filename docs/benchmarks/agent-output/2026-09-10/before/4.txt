@@ -1,0 +1,27 @@
+Source health — current source, 10/10 eligible files, 16 functions
+Coverage: accounted; 2 files excluded by language/path policy; 0 missing or ambiguous internal imports.
+Exclusions: unsupported-language 1; test 1.
+Import resolution: internal 3; external 0; builtin 0; excluded 0; missing 0; ambiguous 0; dynamic 0.
+Import roles: 0 type-only; 0 test; 0 dynamic/CommonJS. Production file-cycle checks use static value imports.
+Architecture: no declared groups or dependency rules. Directory groupings identify locations; conceptual ownership remains unverified.
+Test coverage: not supplied; 0 available, 16 unavailable function measurements.
+  No source-matched coverage artifact supplied.
+Blocking findings: 0; raw findings remain visible below.
+
+Finding shortlists: --limit applies separately to each category; categories are not a design grade.
+No findings from the covered source.
+
+Module evidence: 0 groups with findings. Use scip-query system --source <path-or-group> for files, dependencies and consumers.
+Recovery: use --scope <file-or-directory> for a subject, or --full for all findings, sites, supporting details and suppression decisions. Exhaustive machine reports use --json --json-output <path>.
+
+Interpretation:
+  TS/JS implemented functions; metric rules typescript-function-local-v1. Cognitive counts structural nesting and logical sequences; recursion and interprocedural behavior are not measured.
+  Duplication compares whole function body tokens (at least 60 tokens), retaining literals and property names. Renamed local bindings are candidates; similarity does not prove interchangeable behavior or justify deletion.
+  Dependencies use compiler resolution over captured source and project configuration, including aliases, repository package exports, literal dynamic imports and unshadowed CommonJS calls. External packages, excluded targets and unresolved imports are distinguished. Production file cycles use static value imports; type/test/deferred relationships remain separate. Runtime handoffs and custom loaders are not inferred.
+  Ownership and mixed responsibilities require evidence about callers, state and business rules; this scan does not infer a correct owner or an architectural grade.
+  Default exclusions: tests/fixtures/benchmarks, reference/vendor copies, generated files, declarations and build output. Use --include-tests, --include-references or --include-generated for the corresponding source roles.
+  Diff is the selected Git commit versus current files, including untracked files; staged-only review and inferred rename/split identity are not claimed.
+  Coverage without matching source hashes is unavailable, never zero. Base CRAP is unavailable unless independently measured against that base.
+  Affected files are transitive importers in the covered source graph. Use fresh diff-impact/evidence for symbol consumers and runtime effects.
+
+Plan from exact implementations and consumers; preserve behavior, review candidates, run relevant tests, then rerun review. Metric reductions alone do not establish a better design.

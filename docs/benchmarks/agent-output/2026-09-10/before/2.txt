@@ -1,0 +1,35 @@
+═══ REQUEST ═══
+  exact-text="sharedOne"; mode=literal
+
+═══ OBSERVED MATCH IDENTITIES (3/3, COMPLETE) ═══
+  src/flow.ts  [source; 3 match(es)]
+    src:flow:sharedOne() 1-1 @ 1
+    src:flow:alpha() 5-5 @ 5
+    src:flow:beta() 6-6 @ 6
+
+═══ OBSERVED SOURCE (3/3 WINDOWS) ═══
+  src/flow.ts:1-3  in src:flow:sharedOne()
+    >    1  export function sharedOne() { return 1; }
+         2  export function sharedTwo() { return 2; }
+         3  export function uniqueAlpha() { return 3; }
+  src/flow.ts:3-7  in src:flow:alpha()
+         3  export function uniqueAlpha() { return 3; }
+         4  export function uniqueBeta() { return 4; }
+    >    5  export function alpha() { sharedOne(); sharedTwo(); uniqueAlpha(); }
+         6  export function beta() { sharedOne(); sharedTwo(); uniqueBeta(); }
+         7  export function gamma() { uniqueAlpha(); uniqueBeta(); }
+  src/flow.ts:4-7  in src:flow:beta()
+         4  export function uniqueBeta() { return 4; }
+         5  export function alpha() { sharedOne(); sharedTwo(); uniqueAlpha(); }
+    >    6  export function beta() { sharedOne(); sharedTwo(); uniqueBeta(); }
+         7  export function gamma() { uniqueAlpha(); uniqueBeta(); }
+
+═══ EVIDENCE CALIBRATION ═══
+  Exact cardinality is current project text; compiler ownership is an aligned semantic overlay. Neither ownership nor co-occurrence proves task relevance or a graph relationship.
+
+═══ COVERAGE ═══
+  Exact cardinality: 3 matching line(s) across 1 file(s). Identity manifest: 3/3 matching line(s); complete. Source materialization: 3/3 window(s); 0 exact match location(s) were not expanded into source.
+  Exact text: 12/12 current project text file(s), 1,866 byte(s); semantic owners 0 aligned, 0 stale, 12 unavailable; exclusions 0 binary, 0 unreadable, 0 oversized.
+
+═══ RECOVERY ═══
+  Every matching source window was materialized; no drilldown remains.

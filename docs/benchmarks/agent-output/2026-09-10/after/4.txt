@@ -1,0 +1,8 @@
+Source health — current source, 10/10 eligible files, 16 functions
+No architecture rules configured.
+Blocking findings: 0; raw findings remain visible below.
+
+Finding shortlists: --limit applies separately to each category; categories are not a design grade.
+No findings from the covered source.
+
+Module evidence: 0 groups with findings. Use scip-query system --source <path-or-group> for files, dependencies and consumers.

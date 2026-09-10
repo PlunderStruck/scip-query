@@ -86,9 +86,10 @@ describe('change benchmark obligations', () => {
     const treatment = changePrompt(task, 'treatment', 'initial');
     expect(control).toContain(task.request);
     expect(treatment).toContain(task.request);
-    expect(control.split('Explore using native')[0]).toBe(treatment.split('Use scip-query as the primary')[0]);
+    expect(control.split('Explore using native')[0]).toBe(treatment.split('Use ordinary shell search')[0]);
     expect(control).toContain('Do not invoke scip-query');
-    expect(treatment).toContain('Drain every printed Continue exactly');
+    expect(treatment).toContain('Read saved results selectively');
+    expect(treatment).not.toContain('Drain every printed');
     expect(changePrompt(task, 'control', 'follow-up')).toContain('You may update tests added during an earlier phase');
   });
 

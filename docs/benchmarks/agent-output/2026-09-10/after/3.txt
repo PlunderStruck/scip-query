@@ -1,0 +1,10 @@
+execution outgoing (depth 1)
+  selector [matched] symbol src/flow.ts:5
+
+  execution (3)
+    [candidate] src:flow:alpha() @ src/flow.ts:5-5 -> src:flow:sharedOne() @ src/flow.ts:1-1 — call
+    [candidate] src:flow:alpha() @ src/flow.ts:5-5 -> src:flow:sharedTwo() @ src/flow.ts:2-2 — call
+    [candidate] src:flow:alpha() @ src/flow.ts:5-5 -> src:flow:uniqueAlpha() @ src/flow.ts:3-3 — call
+
+Limits
+3 unresolved relationship group(s); do not infer absence. Use --detail for provider limits.

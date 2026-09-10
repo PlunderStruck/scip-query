@@ -1,0 +1,16 @@
+Matches (3/3 shown)
+  src/flow.ts:1-3  in src:flow:sharedOne()
+    >    1  export function sharedOne() { return 1; }
+         2  export function sharedTwo() { return 2; }
+         3  export function uniqueAlpha() { return 3; }
+  src/flow.ts:3-7  in src:flow:alpha()
+         3  export function uniqueAlpha() { return 3; }
+         4  export function uniqueBeta() { return 4; }
+    >    5  export function alpha() { sharedOne(); sharedTwo(); uniqueAlpha(); }
+         6  export function beta() { sharedOne(); sharedTwo(); uniqueBeta(); }
+         7  export function gamma() { uniqueAlpha(); uniqueBeta(); }
+  src/flow.ts:4-7  in src:flow:beta()
+         4  export function uniqueBeta() { return 4; }
+         5  export function alpha() { sharedOne(); sharedTwo(); uniqueAlpha(); }
+    >    6  export function beta() { sharedOne(); sharedTwo(); uniqueBeta(); }
+         7  export function gamma() { uniqueAlpha(); uniqueBeta(); }

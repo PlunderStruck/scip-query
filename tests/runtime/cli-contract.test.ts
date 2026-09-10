@@ -520,7 +520,7 @@ describe('CLI contract', () => {
     const skillMentionedCommands = readSkillMentionedCommands();
 
     expect(
-      ['inspect', 'search', 'evidence', 'diff-impact', 'architecture', 'health'].filter(
+      ['system', 'context', 'evidence', 'health', 'review', 'diff-impact', 'architecture'].filter(
         (command) => !skillMentionedCommands.has(command),
       ),
     ).toEqual([]);
@@ -536,7 +536,7 @@ describe('CLI contract', () => {
     for (const name of routed) expect(readSkill(name)).toContain(`name: ${name}`);
     const system = commandDescriptors.find((descriptor) => descriptor.id === 'system')!;
     expect(system.options?.some((option) => option.flags === '--source')).toBe(true);
-    expect(primary).toContain('scip-query system --source');
+    expect(primary).toMatch(/`(?:scip-query )?system --source`/);
   });
 
   it('keeps command reference syntax generated from descriptors', () => {
@@ -985,7 +985,7 @@ function readSkillMentionedCommands(): Set<string> {
   const commands = new Set<string>();
   for (const path of markdownFiles('skills')) {
     const content = readFileSync(join(process.cwd(), path), 'utf8');
-    for (const match of content.matchAll(/\bscip-query\s+([a-z][a-z0-9-]*)\b/g)) {
+    for (const match of content.matchAll(/`(?:scip-query\s+)?([a-z][a-z0-9-]*)\b[^`]*`/g)) {
       commands.add(match[1]!);
     }
   }

@@ -149,7 +149,7 @@ export function renderExplorationSkillGuideMarkdown(descriptors: readonly Comman
     '',
     'Use exact evidence as an observed fact only within its coverage. Derived evidence is deterministically computed; candidate evidence is a lead; mixed evidence must retain its constituent strengths; unknown evidence cannot support a stronger claim. Missing output is not evidence of absence.',
     '',
-    'The controls above are complete for ordinary exploration. Run `scip-query capabilities --matrix` only when a named claim depends on uncertain provider support; do not run it for routine orientation.',
+    'These optional controls support source and relationship questions alongside ordinary file tools. Run `scip-query capabilities --matrix` only when a named claim depends on uncertain provider support; do not run it for routine orientation.',
   );
   return lines.join('\n');
 }

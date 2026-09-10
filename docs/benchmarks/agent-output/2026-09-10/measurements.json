@@ -1,0 +1,213 @@
+{
+  "tokenizer": {
+    "package": "tiktoken",
+    "version": "0.11.0",
+    "encodings": ["cl100k_base", "o200k_base"]
+  },
+  "baselineCommit": "5d2524eb",
+  "currentCommit": "48791208",
+  "commands": [
+    {
+      "command": "code src:watch:Watcher",
+      "before": {
+        "bytes": 693,
+        "cl100k_base": 182,
+        "o200k_base": 182
+      },
+      "after": {
+        "bytes": 235,
+        "cl100k_base": 73,
+        "o200k_base": 73
+      }
+    },
+    {
+      "command": "outline src/watch.ts",
+      "before": {
+        "bytes": 645,
+        "cl100k_base": 178,
+        "o200k_base": 178
+      },
+      "after": {
+        "bytes": 101,
+        "cl100k_base": 41,
+        "o200k_base": 41
+      }
+    },
+    {
+      "command": "search sharedOne",
+      "before": {
+        "bytes": 1938,
+        "cl100k_base": 545,
+        "o200k_base": 543
+      },
+      "after": {
+        "bytes": 928,
+        "cl100k_base": 263,
+        "o200k_base": 263
+      }
+    },
+    {
+      "command": "evidence --at src/flow.ts:5 --edge execution --direction outgoing --depth 1 --max-edges 30",
+      "before": {
+        "bytes": 5088,
+        "cl100k_base": 991,
+        "o200k_base": 994
+      },
+      "after": {
+        "bytes": 496,
+        "cl100k_base": 162,
+        "o200k_base": 162
+      }
+    },
+    {
+      "command": "health",
+      "before": {
+        "bytes": 3074,
+        "cl100k_base": 592,
+        "o200k_base": 588
+      },
+      "after": {
+        "bytes": 426,
+        "cl100k_base": 88,
+        "o200k_base": 88
+      }
+    },
+    {
+      "command": "system --source",
+      "before": {
+        "bytes": 3764,
+        "cl100k_base": 793,
+        "o200k_base": 791
+      },
+      "after": {
+        "bytes": 668,
+        "cl100k_base": 156,
+        "o200k_base": 156
+      }
+    },
+    {
+      "command": "entrypoints",
+      "before": {
+        "bytes": 367,
+        "cl100k_base": 82,
+        "o200k_base": 82
+      },
+      "after": {
+        "bytes": 62,
+        "cl100k_base": 10,
+        "o200k_base": 10
+      }
+    },
+    {
+      "command": "--help",
+      "before": {
+        "bytes": 3718,
+        "cl100k_base": 719,
+        "o200k_base": 720
+      },
+      "after": {
+        "bytes": 3454,
+        "cl100k_base": 664,
+        "o200k_base": 660
+      }
+    }
+  ],
+  "instructions": [
+    {
+      "file": "AGENTS.md",
+      "before": {
+        "bytes": 11373,
+        "cl100k_base": 2238,
+        "o200k_base": 2241
+      },
+      "after": {
+        "bytes": 3246,
+        "cl100k_base": 653,
+        "o200k_base": 653
+      }
+    },
+    {
+      "file": "skills/scip-query/SKILL.md",
+      "before": {
+        "bytes": 6088,
+        "cl100k_base": 1188,
+        "o200k_base": 1185
+      },
+      "after": {
+        "bytes": 5784,
+        "cl100k_base": 1037,
+        "o200k_base": 1036
+      }
+    },
+    {
+      "file": "skills/scip-explore/SKILL.md",
+      "before": {
+        "bytes": 5137,
+        "cl100k_base": 944,
+        "o200k_base": 938
+      },
+      "after": {
+        "bytes": 3721,
+        "cl100k_base": 658,
+        "o200k_base": 657
+      }
+    },
+    {
+      "file": "skills/scip-plan/SKILL.md",
+      "before": {
+        "bytes": 9647,
+        "cl100k_base": 1661,
+        "o200k_base": 1658
+      },
+      "after": {
+        "bytes": 9748,
+        "cl100k_base": 1671,
+        "o200k_base": 1668
+      }
+    }
+  ],
+  "transport": [
+    {
+      "label": "before",
+      "payloadBytes": 85383,
+      "firstResponseBytes": 6611,
+      "responses": 14,
+      "continuationCalls": 13,
+      "saved": false,
+      "lossless": true,
+      "firstResponse": {
+        "bytes": 6611,
+        "cl100k_base": 1923,
+        "o200k_base": 2016
+      },
+      "allResponses": {
+        "bytes": 87465,
+        "cl100k_base": 25023,
+        "o200k_base": 26210
+      }
+    },
+    {
+      "label": "after",
+      "payloadBytes": 85383,
+      "firstResponseBytes": 1791,
+      "responses": 1,
+      "continuationCalls": 0,
+      "saved": true,
+      "lossless": true,
+      "firstResponse": {
+        "bytes": 1791,
+        "cl100k_base": 541,
+        "o200k_base": 564
+      },
+      "allResponses": {
+        "bytes": 1791,
+        "cl100k_base": 541,
+        "o200k_base": 564
+      }
+    }
+  ],
+  "limits": [
+    "Token counts describe these encodings and fixed outputs, not actual agent sessions or billing.",
+    "No model requests were made; cached/uncached input and quality were not measured."
+  ]
+}

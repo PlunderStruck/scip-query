@@ -1,0 +1,17 @@
+═══ REQUEST ═══
+  file="src/watch.ts"; signatures=hidden
+
+═══ OBSERVED FACTS ═══
+1-4  src:watch:Watcher
+  2-2  src:watch:Watcher:start()
+  3-3  src:watch:Watcher:stop()
+
+═══ EVIDENCE CALIBRATION ═══
+  These are compiler-owned identities and source ranges. Ownership and nesting do not establish execution or task relevance.
+
+═══ COVERAGE ═══
+  3 compiler construct(s) returned in 1 top-level tree(s).
+
+═══ RECOVERY ═══
+  Every displayed file:line is an exact evidence root. Exact top-level symbol selectors:
+  src:watch:Watcher: 'scip-typescript npm pkg 1.0.0 src/`watch.ts`/Watcher#'

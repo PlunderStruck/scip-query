@@ -2,6 +2,8 @@
 
 scip-query is built for coding agents. Its workflows address choosing the wrong implementation, copying an existing rule, overlooking consumers, leaking coordination into callers, and mistaking an incomplete implementation for finished behavior.
 
+Ordinary source search/reads are the default. Use the tool for relationships, reuse, module structure, quality findings and change impact. Saved results can be read selectively; routine exploration needs no formal evidence ledger or mandatory page draining.
+
 ## Six skills
 
 Setup and `install-skills` install all six workflows into available Claude, Codex, and shared agent roots. `--all` remains compatible with existing scripts and has the same result. Agents load only the workflow relevant to their task.
@@ -19,7 +21,7 @@ Architecture review absorbs principal-maintainability-review, scip-system-compre
 
 Upgrade removes links into this package for retired skills. It preserves unrelated links and user-owned files. Existing prompts naming retired workflows must use the canonical names above. Historical audit documents retain their original skill names as records of those runs.
 
-All six skills link the relevant sections of the [shared command decision guide](../skills/scip-query/references/command-guide.md). Every public command has a question, selector/mode, index prerequisite and interpretation limit. The guide separates internal transport/workers and explains which overlapping-looking controls answer different questions. Agents load the needed section, not an all-command checklist.
+The shared guide and relevant workflows link the appropriate sections of the [shared command decision guide](../skills/scip-query/references/command-guide.md). Every public command has a question, selector/mode, index prerequisite and interpretation limit. The guide separates internal transport/workers and explains which overlapping-looking controls answer different questions. Agents load the needed section, not an all-command checklist.
 
 ## One module evidence view
 
@@ -32,7 +34,7 @@ scip-query system --source 'directory:src/payments' --full
 
 Source mode reads the current TS/JS snapshot and configuration without creating a compiler index. It uses the same source analysis as health, but includes modules with no findings. Unambiguous configured boundaries take precedence; remaining files are grouped by directory. A path selects whole groups containing matching files, not a guessed business subsystem.
 
-Each group exposes files, grammar-derived export declarations, imports, incoming import sites, production dependency/consumer files, and finding identities. Cross-group edges retain exact import sites and distinguish value/type, production/test, and static/dynamic/CommonJS syntax. Findings retain derived/candidate labels. The report also exposes configured boundary coverage and unknown dependency-policy rows.
+Selecting a group exposes files, grammar-derived export declarations, imports, incoming import sites, production dependency/consumer files, and finding identities. Cross-group edges retain exact import sites and distinguish value/type, production/test, and static/dynamic/CommonJS syntax. Findings retain derived/candidate labels. The report also exposes configured boundary coverage and unknown dependency-policy rows.
 
 In machine output, `imports` stores each parsed import observation once. Group `importIds`, `incomingImportIds`, and edge `importIds` are indexes into that report's table; they are not identities to reuse across runs. Human output resolves these references to source locations.
 
@@ -46,4 +48,4 @@ The tool reports structure and checks declared rules. The architecture skill req
 
 Integrity review starts with a specific promised outcome, traces the live route, and exercises cases that distinguish a real implementation from a shortcut. A parser library being present does not prove it replaced regex extraction. A missed parser probe does not prove a branch unreachable. Literal status values can be justified by preceding checks; computed status can still be misleading.
 
-Skills are agent instructions. They do not enforce their own compliance or establish better agent behavior merely by existing. Workflow effectiveness requires comparing actual agent tasks and resulting changes, alongside deterministic tests for the tool's reported facts. Inventory coverage and behavioral-review coverage must be reported separately.
+Skills are agent instructions. They do not enforce their own compliance or establish better agent behavior merely by existing. Workflow effectiveness requires comparing actual agent tasks and resulting changes, alongside deterministic tests for the tool's reported facts. A complete inventory does not establish a complete behavioral review; disclose material limitations when they affect the conclusion.

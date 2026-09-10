@@ -1,0 +1,43 @@
+Module evidence — current source: 10/10 eligible files; 2/2 groups selected.
+Coverage: accounted; 2 excluded files. Groups include files without findings; responsibility remains unverified.
+Exclusions: unsupported-language 1; test 1.
+Architecture: no configured boundaries or dependency policy; directory groups are provisional.
+
+Module groups (2/2 shown):
+  directory:src [directory]: 8 files; 19 export declarations; 1 production dependency files; 0 production consumer files; 0 findings.
+    Files (3/8): src/config.ts, src/consumer.ts, src/contracts.ts
+    Source exports (3/19; symbol consumers require indexed surface):
+      src/config.ts:1 ClassDeclaration: Settings
+      src/config.ts:4 VariableStatement: settings
+      src/contracts.ts:1 InterfaceDeclaration: PathFilter
+    Imports (3/3):
+      src/consumer.ts:1 -> src/utils.ts [import; value; production; internal]
+      src/consumer.ts:2 -> src/config.ts [import; value; production; internal]
+      src/consumer.ts:3 -> src/reindex/index.ts [import; value; production; internal]
+    Incoming imports (0/0):
+    Group: scip-query system --source 'directory:src' --full
+  directory:src/reindex [directory]: 2 files; 2 export declarations; 0 production dependency files; 1 production consumer files; 0 findings.
+    Files (2/2): src/reindex/index.ts, src/reindex/indexers.ts
+    Source exports (2/2; symbol consumers require indexed surface):
+      src/reindex/index.ts:1 FunctionDeclaration: reindex
+      src/reindex/indexers.ts:1 FunctionDeclaration: getIndexerConfig
+    Imports (0/0):
+    Incoming imports (1/1):
+      src/consumer.ts:3 -> src/reindex/index.ts [import; value; production; internal]
+    Group: scip-query system --source 'directory:src/reindex' --full
+
+Cross-group production dependencies (1/1 shown):
+  directory:src -> directory:src/reindex: 1 import sites
+    src/consumer.ts:3 -> src/reindex/index.ts [import; value; production; internal]
+
+Related findings (0/0 shown; candidates require review):
+
+Recovery for every selected row: scip-query system --source --full
+For exhaustive machine output add --json --json-output <path>. --full removes display limits, not source scan limits.
+Limit: Current TS/JS source and captured project configuration; no index or executed behavior is implied. Parse, resource and configuration failures are reported in problems.
+Limit: Import IDs index the imports table in this report; each observation is stored once. IDs are not portable between reports.
+Limit: Groups include files without findings. Unambiguous configured boundaries take precedence over provisional directories; membership does not establish business responsibility. A path selects whole groups containing matching files.
+Limit: Module edges and dependency/consumer summaries are observed internal production imports, including type, dynamic and CommonJS relationships; their syntax and roles remain explicit. They are not runtime execution paths. Only static value imports participate in production file-cycle findings.
+Limit: Export declarations are parsed source locations, not a complete resolved public API. Wildcard re-exports are not expanded; CommonJS exports, class member interfaces, external consumers, runtime registration and invocation coverage are not established. Use indexed surface/evidence and exact source when those facts matter.
+Limit: Nonliteral dynamic imports, custom loaders, runtime handoffs and shared external resources are not resolved. Coverage can be accounted for while these relationships remain unknown.
+Limit: Tests, generated/reference copies, declarations, unsupported languages and managed output are excluded by default; exclusion counts and opt-in source roles are reported. No architecture grade or module depth score is computed.

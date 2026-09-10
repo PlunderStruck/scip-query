@@ -337,6 +337,7 @@
           "scripts/benchmark-source-search.ts",
           "scripts/benchmark-statistics.ts",
           "scripts/cache-lifecycle-soak.ts",
+          "scripts/measure-human-output.ts",
           "scripts/profile-scoreboard.mjs"
         ]
       },

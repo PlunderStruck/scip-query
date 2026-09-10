@@ -1,0 +1,10 @@
+Module evidence — current source: 10/10 eligible files; 2/2 groups selected.
+Architecture: no configured boundaries or dependency policy; directory groups are provisional.
+
+Module groups (2/2 shown):
+  directory:src [directory]: 8 files; 19 export declarations; 1 production dependency files; 0 production consumer files; 0 findings.
+  directory:src/reindex [directory]: 2 files; 2 export declarations; 0 production dependency files; 1 production consumer files; 0 findings.
+
+Cross-group production dependencies (1/1 shown):
+  directory:src -> directory:src/reindex: 1 import sites
+    src/consumer.ts:3 -> src/reindex/index.ts [import; value; production; internal]

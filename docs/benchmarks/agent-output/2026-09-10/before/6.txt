@@ -1,0 +1,11 @@
+═══ REQUEST ═══
+  text=<all>; scope=<repository>
+
+═══ OBSERVED FACTS ═══
+  No entry candidates were detected.
+
+═══ EVIDENCE CALIBRATION ═══
+  Absence from this detector does not prove that the repository has no runtime ingress.
+
+═══ COVERAGE ═══
+  Complete within the detector's indexed source/compiler entry evidence.
