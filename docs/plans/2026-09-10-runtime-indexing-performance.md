@@ -1,6 +1,6 @@
 # Runtime indexing performance: VM diagnosis
 
-Status: implementation, regression tests and controlled runtime comparison complete; whole-index timing and VM deployment in progress. Starting commit: `cb487ac8`.
+Status: first improvement committed, pushed and deployed (`f960a2d4`); deeper performance work continues because the user considers the remaining five-minute cold index too slow. Starting commit: `cb487ac8`.
 
 Runtime relationship analysis is the indexing stage that reads source and compiler relationships to infer connections such as HTTP requests, registered handlers, database operations and queues. It analyzes code; it does not run the application's services.
 
@@ -36,8 +36,8 @@ Both watchers were idle and their indexes fresh before deployment. The output-on
 - [x] Compare complete observations, links, groups, unresolved evidence, extraction errors and file coverage before/after.
 - [x] Investigate wrapper/body costs through measured shared hot paths and test affected value-flow contracts.
 - [x] Run the full suite, including real incremental edit histories and comparisons against clean rebuilds. Do not present those correctness cases as a measured LaunchPoint edit-latency benchmark.
-- [ ] Finish a complete cold LaunchPoint index and measure the normal unchanged-index fast path separately.
-- [ ] Deploy the verified package under dev-agent and verify only currently active watchers are restarted.
+- [x] Finish a complete cold LaunchPoint index and measure the normal unchanged-index fast path separately.
+- [x] Deploy the verified package under dev-agent and verify only currently active watchers are restarted.
 
 ## Existing flow, conventions and ownership
 
@@ -78,6 +78,18 @@ Validation so far: the first full suite had one watcher-termination timeout (3,8
 
 ## Remaining cost and scope
 
-The remaining dominant runtime cost is conservative object-mutation/alias tracing, including LaunchPoint's 18,240-line schema module. In the final profile, direct extraction took 123.8 seconds, HTTP summaries 146.0 seconds, mounting 15.5 seconds and body propagation 21.0 seconds. Shared preparation can move between phases, so phase deltas alone do not establish independent speedups; use total runtime collection for the comparison. These changes reduce redundant work without changing relationship rules or accepting stale evidence. They do not establish that indexing is maximally optimized or that every possible TypeScript program is equally fast.
+The remaining profile is dominated by conservative object-mutation/alias tracing and source-fact/definition preparation. The initial attribution to LaunchPoint's 18,240-line schema module was not established: a later isolated check of all of that file's variable write/exposure queries took less than a second. Nested repository queries must be measured to identify the actual costly files. In the final profile, direct extraction took 123.8 seconds, HTTP summaries 146.0 seconds, mounting 15.5 seconds and body propagation 21.0 seconds. Shared preparation can move between phases, so phase deltas alone do not establish independent speedups; use total runtime collection for the comparison. These changes reduce redundant work without changing relationship rules or accepting stale evidence. They do not establish that indexing is maximally optimized or that every possible TypeScript program is equally fast.
 
 Full-build evidence cache invalidation is deliberately retained. Narrowing producer identities is a separate correctness-sensitive design change, not required for this verified improvement. No source-size cutoff, timeout, unsupported claim of absence or new dependency rule was introduced.
+
+## Whole-index validation
+
+The staged Linux build indexed 9,221 TypeScript inputs in five compiler shards (four concurrent) into an empty output directory with shared cache and watch-service reuse disabled. Total command wall time was **326.6 seconds**; the indexer's reported duration was 324.3 seconds. All five shards ran in full mode, no languages were skipped, and the complete stored runtime graph matched the original baseline, including all unresolved evidence and file coverage. This run had no CPU profiler, so its runtime-phase timings should not be substituted for the controlled before/after comparison.
+
+The normal unchanged-index fast path then completed in **1.13 seconds**, reusing the compiler index, all 7,185 runtime observations and both links. These measurements validate initial creation and ordinary reuse; one-file incremental correctness is covered by the completed full suite rather than a new LaunchPoint edit-latency benchmark. The two existing live worktrees stayed fresh and idle throughout the isolated measurements.
+
+## First deployment and next investigation
+
+The dev-agent canonical installation now contains `f960a2d4`. All 458 shipped files and 19 skill files were verified against the package; all 12 skill links resolve to that installation. Only the two watchers active at deployment were restarted (3817650 → 3850875 and 3817788 → 3851020); both remained fresh and idle on their existing compiler generations. The installed CLI passed indexing, complexity, call, health, relationship and output smoke checks. See [deployment receipt](../benchmarks/runtime-indexing/2026-09-10-vm-install.json).
+
+The user requested a substantially faster result after seeing the five-minute timing. Continue through the actual remaining algorithmic costs. The isolated persistence extraction for `src/lib/campaigns/warmup/infra/list-state-queries.test.ts` is the initial reproducer: it consumed 67.6 seconds in the full profile, although its own standalone binding effects and those of the schema module are fast. Instrument nested binding-effect, source-fact and definition calls in an unshipped diagnostic bundle to identify their real referents before changing more production code. Preserve the full graph comparison and all incremental correctness guarantees.

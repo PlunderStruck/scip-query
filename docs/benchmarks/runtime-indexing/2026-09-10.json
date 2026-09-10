@@ -146,5 +146,136 @@
     "fileCoverage": true,
     "coverageExceptPhaseWork": true
   },
-  "semanticGraphSha256": "dbed5ad746f476869a3af16a2bb9aed78381919e0df8c83a1447053a72e15e05"
+  "semanticGraphSha256": "dbed5ad746f476869a3af16a2bb9aed78381919e0df8c83a1447053a72e15e05",
+  "fullIndex": {
+    "coldWallMs": 326635.540473,
+    "coldIndexReportedMs": 324343.98657199997,
+    "unchangedWallMs": 1125.5008899999998,
+    "unchangedReused": true,
+    "languages": ["typescript"],
+    "skipped": [],
+    "shards": [
+      {
+        "id": "typescript-compiler-shard:0",
+        "strategy": "full",
+        "durationMs": 54166.334809,
+        "outputBytes": 80060597
+      },
+      {
+        "id": "typescript-compiler-shard:1",
+        "strategy": "full",
+        "durationMs": 46386.133738,
+        "outputBytes": 85127324
+      },
+      {
+        "id": "typescript-compiler-shard:2",
+        "strategy": "full",
+        "durationMs": 38465.176573000004,
+        "outputBytes": 83481766
+      },
+      {
+        "id": "typescript-compiler-shard:3",
+        "strategy": "full",
+        "durationMs": 41234.587642000006,
+        "outputBytes": 82164012
+      },
+      {
+        "id": "typescript-compiler-shard:4",
+        "strategy": "full",
+        "durationMs": 36430.081831,
+        "outputBytes": 82080545
+      }
+    ],
+    "runtimePhases": [
+      {
+        "id": "direct-extraction",
+        "durationMs": 115786.866006,
+        "inputFacts": 9296,
+        "outputFacts": 7101,
+        "filesVisited": 9296,
+        "filesReused": 0,
+        "factsReused": 0,
+        "factsInvalidated": 0
+      },
+      {
+        "id": "http-summary",
+        "durationMs": 50232.621946,
+        "inputFacts": 7103,
+        "outputFacts": 82,
+        "filesVisited": 295
+      },
+      {
+        "id": "http-mount",
+        "durationMs": 15271.27768499998,
+        "inputFacts": 7185,
+        "outputFacts": 0,
+        "filesVisited": 9296
+      },
+      {
+        "id": "carrier",
+        "durationMs": 55838.60421000002,
+        "inputFacts": 7185,
+        "outputFacts": 0,
+        "filesVisited": 189
+      },
+      {
+        "id": "relations",
+        "durationMs": 5.176586000015959,
+        "inputFacts": 7185,
+        "outputFacts": 666
+      },
+      {
+        "id": "links",
+        "durationMs": 0.8626769999973476,
+        "inputFacts": 666,
+        "outputFacts": 2
+      },
+      {
+        "id": "frontiers",
+        "durationMs": 183.55776200001128,
+        "inputFacts": 7185,
+        "outputFacts": 6232
+      }
+    ],
+    "extractionErrors": [],
+    "fullRebuildGraphEquality": {
+      "schemaVersion": true,
+      "extractorVersion": true,
+      "observations": true,
+      "relationGroups": true,
+      "links": true,
+      "frontiers": true,
+      "fileCoverage": true
+    },
+    "conditions": {
+      "compilerCache": "empty initially",
+      "evidenceCache": "empty initially",
+      "sharedCache": false,
+      "cpuProfiler": false,
+      "watchService": false,
+      "isolatedOutputs": true,
+      "runtimeHeapMb": 16384,
+      "unchanged": "normal reindex skipIfUnchanged fast path after cold build"
+    }
+  },
+  "validation": {
+    "testFiles": 416,
+    "testsPassed": 3815,
+    "typecheck": true,
+    "changedFileLintAndFormat": true,
+    "publicApiPaths": 66,
+    "publicApiDigest": "9217c44ff0f30a77",
+    "skillLinks": true,
+    "introducedBlockingReviewFindings": 0,
+    "existingReviewFindings": 8,
+    "localIndexMs": 31185.361417,
+    "localWatcher": "stopped",
+    "freshDiffImpact": {
+      "changedIndexedFiles": 4,
+      "changedSymbols": 17,
+      "affectedFiles": 13,
+      "disclosedNonindexedPaths": 5
+    },
+    "earlierWatcherCleanupTimeout": "Occurred in an earlier full run and isolated retry; subsequent complete runs passed without a watcher change. Not claimed fixed."
+  }
 }
