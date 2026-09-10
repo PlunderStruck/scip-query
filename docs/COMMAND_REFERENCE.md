@@ -12,7 +12,7 @@ This syntax summary is generated from the CLI command descriptors. Keep workflow
 
 Commands with `--json` share three structured modes: plain `--json` emits the stable public envelope, `--json --result-only` emits only the command payload, and `--json --compact` minifies either form for a program. Agents should prefer ordinary human output. See [CLI output modes](CLI_JSON_OUTPUT.md).
 
-Every command accepts `--output-page-size <characters>` and `--output-cursor <cursor>`. Run normally without choosing a page size: oversized human output stays readable text and prints one exact continuation command; oversized JSON prints the exact command that opts into versioned JSON page envelopes.
+Every command accepts `--output-page-size <characters>` and `--output-cursor <cursor>`. Run normally without choosing a page size: oversized human output prints a short preview and a complete temporary result file to read selectively. Pagination is opt-in; oversized JSON prints the exact command that opts into versioned JSON page envelopes.
 Cross-command evidence citations are off by default. With an explicit `SCIP_QUERY_SESSION`, a complete source unit, a byte-identical exact subset of a prior exact source read, or a graph unit/edge may be replaced by a visible receipt from the same index generation. Preview coverage never suppresses an exact unit; changed bytes, changed graph content, a new generation, or global `--reemit` force full evidence.
 
 ### Exploration control manual

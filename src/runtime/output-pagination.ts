@@ -127,7 +127,7 @@ interface OutputSnapshotReservation {
   pid: number;
   processIdentity?: ProcessIdentity;
   reservedBytes: number;
-  state: 'active' | 'complete';
+  state: 'active' | 'complete' | 'saved';
   createdAtMs: number;
   updatedAtMs: number;
 }
@@ -348,7 +348,7 @@ const defaultRuntime: CliOutputPaginationRuntime = {
 /**
  * Run one command behind a bounded output transport.
  *
- * Human output is captured and paged when it exceeds the default safe page.
+ * Oversized human output is saved with a short preview; paging is opt-in.
  * JSON stays byte-compatible unless bounded agent output, file export, or
  * paging is explicitly requested. Large unpaged JSON gets an early stderr
  * instruction naming the exact opt-in paging command.
@@ -458,7 +458,7 @@ function directOutputMode(
     return undefined;
   }
   // A regular file is read later as a complete document. Terminals and pipes
-  // retain cursors to protect readers whose clients truncate long tool output.
+  // receive bounded previews with saved results unless paging is explicit.
   if (options.cursor === undefined && options.pageSize === undefined && runtime.stdoutIsRegularFile?.() === true) {
     return 'human-file';
   }
@@ -528,7 +528,7 @@ async function captureInitialOutputPage(
     filteredArgv,
     pageSize,
     maxOutputCharacters,
-    pageContentByteLimit(options, invocationPrefix),
+    automaticSavedOutput(options) ? HUMAN_OUTPUT_PAGE_CONTENT_BYTES : pageContentByteLimit(options, invocationPrefix),
     snapshotRoot,
     snapshotLimits,
     options.agentOutput ? MAX_AGENT_OUTPUT_PAGES : MAX_OUTPUT_SNAPSHOT_PAGES,
@@ -564,6 +564,10 @@ async function captureInitialOutputPage(
   };
 }
 
+function automaticSavedOutput(options: CliOutputPaginationOptions): boolean {
+  return !options.json && options.pageSize === undefined && options.cursor === undefined;
+}
+
 function emitCapturedOutputPage(
   options: CliOutputPaginationOptions,
   runtime: CliOutputPaginationRuntime,
@@ -573,6 +577,17 @@ function emitCapturedOutputPage(
   const { invocationPrefix, snapshotRoot } = context;
   const nextOffset = completed.offset + completed.content.length;
   const complete = completed.pageIndex + 1 >= completed.pageCount;
+  if (!complete && automaticSavedOutput(options)) {
+    const id = requireSnapshotId(snapshotId);
+    const path = outputSnapshotPath(snapshotRoot, id, 'output');
+    updateOutputReservation(snapshotRoot, id, statSync(path).size, 'saved', context.snapshotLimits);
+    const previewEnd = outputPageEnd(completed.content, 1_800, 1_800, true);
+    const preview = completed.content.slice(0, previewEnd).split('\n').slice(0, 24).join('\n').trimEnd();
+    runtime.writeStdout(
+      `Full result: ${sanitizeTerminalLine(path)}\nPreview (${completed.totalCharacters} characters saved):\n${preview}\n`,
+    );
+    return;
+  }
   const continuation = complete
     ? undefined
     : createContinuation({
@@ -581,12 +596,7 @@ function emitCapturedOutputPage(
         snapshotId: requireSnapshotId(snapshotId),
       });
 
-  if (completed.offset === 0 && complete && options.cursor === undefined) {
-    runtime.writeStdout(completed.content);
-    finalizeSourceEmission(true);
-    if (snapshotId) removeOutputSnapshot(snapshotId, snapshotRoot);
-    return;
-  }
+  if (emitCompleteInlineOutput(options, runtime, context, { snapshotId, completed })) return;
 
   const envelope = capturedOutputPageEnvelope(options, completed, continuation, nextOffset);
 
@@ -596,6 +606,22 @@ function emitCapturedOutputPage(
     runtime.writeStdout(renderHumanOutputPage(envelope));
   }
   if (complete && snapshotId) removeOutputSnapshot(snapshotId, snapshotRoot);
+}
+
+function emitCompleteInlineOutput(
+  options: CliOutputPaginationOptions,
+  runtime: CliOutputPaginationRuntime,
+  context: OutputPaginationContext,
+  { snapshotId, completed }: CapturedOutputPage,
+): boolean {
+  const complete = completed.pageIndex + 1 >= completed.pageCount;
+  if (completed.offset === 0 && complete && options.cursor === undefined) {
+    runtime.writeStdout(completed.content);
+    finalizeSourceEmission(true);
+    if (snapshotId) removeOutputSnapshot(snapshotId, context.snapshotRoot);
+    return true;
+  }
+  return false;
 }
 
 /** Resume one immutable output snapshot without repeating its original command. */
@@ -1343,6 +1369,29 @@ function updateOutputReservation(
   });
 }
 
+function reclaimSavedOutputSnapshots(
+  reservations: OutputSnapshotReservation[],
+  snapshotRoot: string,
+  snapshotId: string,
+  reservedBytes: number,
+  limits: OutputSnapshotLimits,
+): void {
+  // Saved previews have no pending cursor to drain. Reclaim their oldest files
+  // under pressure, while preserving active writers and explicit continuations.
+  for (const saved of reservations
+    .filter((item) => item.state === 'saved' && item.snapshotId !== snapshotId)
+    .sort((a, b) => a.updatedAtMs - b.updatedAtMs)) {
+    const others = reservations.filter((item) => item.snapshotId !== snapshotId);
+    if (
+      others.length + 1 <= limits.maxSnapshotCount &&
+      others.reduce((total, item) => total + item.reservedBytes, reservedBytes) <= limits.maxAggregateBytes
+    )
+      break;
+    removeOutputSnapshotFiles(saved.snapshotId, snapshotRoot);
+    reservations.splice(reservations.indexOf(saved), 1);
+  }
+}
+
 function writeOutputReservation(
   snapshotRoot: string,
   snapshotId: string,
@@ -1354,6 +1403,7 @@ function writeOutputReservation(
     throw new Error(`Command output exceeds the ${limits.maxSnapshotBytes}-byte snapshot limit.`);
   }
   const reservations = readOutputReservations(snapshotRoot);
+  reclaimSavedOutputSnapshots(reservations, snapshotRoot, snapshotId, reservedBytes, limits);
   const current = reservations.find((reservation) => reservation.snapshotId === snapshotId);
   const aggregateBytes =
     reservations.reduce((total, reservation) => total + reservation.reservedBytes, 0) -
@@ -1362,7 +1412,7 @@ function writeOutputReservation(
   const snapshotCount = reservations.length + (current ? 0 : 1);
   if (snapshotCount > limits.maxSnapshotCount || aggregateBytes > limits.maxAggregateBytes) {
     throw new Error(
-      `Output snapshot capacity is full (${snapshotCount}/${limits.maxSnapshotCount} snapshots, ${aggregateBytes}/${limits.maxAggregateBytes} bytes). Narrow the query or finish an existing pagination sequence before retrying.`,
+      `Output snapshot capacity is full (${snapshotCount}/${limits.maxSnapshotCount} snapshots, ${aggregateBytes}/${limits.maxAggregateBytes} bytes). Redirect output to a file, narrow the query, or finish an explicit pagination sequence before retrying.`,
     );
   }
   const nowMs = Date.now();
@@ -1441,7 +1491,7 @@ function validOutputReservationBudget(reservation: Partial<OutputSnapshotReserva
   return (
     Number.isSafeInteger(reservation.reservedBytes) &&
     (reservation.reservedBytes ?? -1) >= 0 &&
-    (reservation.state === 'active' || reservation.state === 'complete') &&
+    (reservation.state === 'active' || reservation.state === 'complete' || reservation.state === 'saved') &&
     Number.isSafeInteger(reservation.createdAtMs) &&
     Number.isSafeInteger(reservation.updatedAtMs)
   );

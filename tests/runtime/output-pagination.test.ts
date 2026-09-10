@@ -332,31 +332,79 @@ describe('universal CLI output pagination', () => {
     expect(result.stderr).toBe('');
   });
 
-  it('automatically pages oversized human output as readable text with one exact continuation', async () => {
+  it('saves oversized human output once and shows only a short preview and exact file path', async () => {
+    const root = freshSnapshotRoot();
+    let calls = 0;
     const content = `${'a'.repeat(DEFAULT_OUTPUT_PAGE_SIZE)}TAIL`;
-    const result = await invoke(content, {
-      argv: ['demo', 'target with spaces'],
-      invocationPrefix: ['/usr/local/bin/node', '/repo with spaces/dist/cli.js'],
-    });
-
-    expect(result.stdout.startsWith('[scip-query output page:')).toBe(true);
-    expect(result.stdout).toContain(`characters 0-${DEFAULT_OUTPUT_PAGE_SIZE - 1} of ${content.length}`);
+    const result = await invoke(
+      () => {
+        calls++;
+        process.stdout.write(content);
+      },
+      { snapshotRoot: root },
+    );
+    const path = result.stdout.split('\n')[0]!.slice('Full result: '.length);
+    expect(calls).toBe(1);
+    expect(readFileSync(path, 'utf8')).toBe(content);
+    expect(result.stdout).toContain('Preview');
     expect(result.stdout).toContain('a'.repeat(100));
     expect(result.stdout).not.toContain('TAIL');
-    expect(result.stdout.match(/Continue exactly:/gu)).toHaveLength(1);
-    expect(result.stdout).not.toContain('"content":');
-    expect(result.stdout).not.toContain('"kind":');
-    expect(result.stdout).toContain(`/usr/local/bin/node '/repo with spaces/dist/cli.js' continue `);
-    const commandLine = result.stdout.split('Continue exactly:')[1]!.trim().split('\n')[0]!;
-    expect(commandLine).toMatch(/ continue [A-Za-z0-9_-]+$/);
+    expect(result.stdout).not.toContain('Continue exactly:');
+    expect(Buffer.byteLength(result.stdout)).toBeLessThan(2_100);
+    if (process.platform !== 'win32') expect(statSync(path).mode & 0o777).toBe(0o600);
+    // Later results get separate paths and cannot mutate already saved bytes.
+    await invoke('b'.repeat(10_000), { snapshotRoot: root });
+    expect(readFileSync(path, 'utf8')).toBe(content);
   });
 
-  it('keeps every default human page under the client-safe byte budget and reconstructs multibyte output', async () => {
+  it('saves split UTF-8 writes losslessly and bounds the preview by bytes and lines', async () => {
+    const bytes = Buffer.from('界😀 line\n'.repeat(1_000));
+    const chunks = Array.from({ length: bytes.length }, (_, index) => bytes.subarray(index, index + 1));
+    const result = await invoke(chunks, { snapshotRoot: freshSnapshotRoot() });
+    const path = result.stdout.split('\n')[0]!.slice('Full result: '.length);
+    expect(readFileSync(path)).toEqual(bytes);
+    expect(result.stdout).not.toContain('�');
+    expect(result.stdout.split('\n').length).toBeLessThanOrEqual(27);
+    expect(Buffer.byteLength(result.stdout)).toBeLessThan(2_100);
+  });
+
+  it('reclaims old saved results at capacity without invalidating explicit cursors', async () => {
+    const root = freshSnapshotRoot();
+    const options = { snapshotRoot: root, snapshotLimits: { maxSnapshotCount: 2 } };
+    const explicit = await invoke('cursor'.repeat(2_000), { ...options, pageSize: 256 });
+    const cursor = parseHumanPage(explicit.stdout).cursor!;
+    const saved = await invoke('first'.repeat(2_000), options);
+    const oldPath = saved.stdout.split('\n')[0]!.slice('Full result: '.length);
+    await invoke('second'.repeat(2_000), options);
+    expect(existsSync(oldPath)).toBe(false);
+    expect((await continueOutput(cursor, root)).stdout).toContain('cursor');
+    expect(readdirSync(root).filter((file) => file.endsWith('.output'))).toHaveLength(2);
+  });
+
+  it('does not publish partial saved results after an action failure', async () => {
+    const root = freshSnapshotRoot();
+    await expect(
+      invoke(
+        () => {
+          process.stdout.write('partial'.repeat(2_000));
+          throw new Error('action failed');
+        },
+        { snapshotRoot: root },
+      ),
+    ).rejects.toThrow('action failed');
+    expect(readdirSync(root)).toEqual([]);
+  });
+
+  it('keeps every explicit human page under the client-safe byte budget and reconstructs multibyte output', async () => {
     const content = `${'界'.repeat(DEFAULT_OUTPUT_PAGE_SIZE)}TAIL`;
     const root = freshSnapshotRoot();
     const outputs: string[] = [];
     const pages: string[] = [];
-    let result = await invoke(content, { snapshotRoot: root, invocationPrefix: ['x'.repeat(2_000)] });
+    let result = await invoke(content, {
+      snapshotRoot: root,
+      invocationPrefix: ['x'.repeat(2_000)],
+      pageSize: DEFAULT_OUTPUT_PAGE_SIZE,
+    });
 
     while (true) {
       outputs.push(result.stdout);

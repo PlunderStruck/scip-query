@@ -1,9 +1,9 @@
 import Database from 'better-sqlite3';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createFixtureDb, createFixtureProject } from '../fixtures/command-accuracy-fixtures.js';
 
 describe('code CLI output contract', { timeout: 30_000 }, () => {
@@ -14,6 +14,11 @@ describe('code CLI output contract', { timeout: 30_000 }, () => {
   beforeAll(() => {
     createFixtureProject(fixtureRoot);
     createFixtureDb(dbPath);
+  });
+
+  // Synchronous CLI children must yield between cases so Vitest can flush worker messages.
+  afterEach(async () => {
+    await new Promise<void>((resolve) => setImmediate(resolve));
   });
 
   afterAll(() => {
@@ -312,6 +317,19 @@ describe('code CLI output contract', { timeout: 30_000 }, () => {
     expect(invocation.stdout).toContain('function internalRoot()');
     expect(invocation.stdout).toContain('basis: top-level-and-same-file-reference-closure');
     expect(invocation.stdout).toContain('0 file-local definition(s) omitted');
+  });
+
+  it('saves an oversized ordinary code result for selective native reads without continuation', () => {
+    const source = Array.from({ length: 300 }, (_, i) => `// exact source line ${i}`).join('\n');
+    writeFileSync(join(fixtureRoot, 'src', 'large.ts'), source);
+    const invocation = runCode(['src/large.ts:1-300']);
+    expect(invocation.status).toBe(0);
+    const path = invocation.stdout.toString().split('\n')[0]!.slice('Full result: '.length);
+    const complete = readFileSync(path, 'utf8');
+    expect(complete).toContain('// exact source line 0');
+    expect(complete).toContain('// exact source line 299');
+    expect(invocation.stdout).not.toContain('Continue exactly:');
+    expect(Buffer.byteLength(invocation.stdout)).toBeLessThan(2_200);
   });
 
   it('paginates an oversized code packet through one immutable continuation', () => {

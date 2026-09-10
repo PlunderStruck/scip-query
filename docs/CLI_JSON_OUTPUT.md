@@ -243,21 +243,25 @@ Every command accepts these global options:
 --output-cursor <cursor>
 ```
 
-Run commands normally without choosing a page size. Human output larger than
-6,500 characters is paged automatically as ordinary multiline text, not as a
-JSON object. Each incomplete page prints one exact continuation command after
-its content. Agents must run that command unchanged until the output-complete
-marker. Supplying `--output-page-size` changes the maximum character budget; it
-does not select JSON. A page may be smaller so its UTF-8 content plus the actual
-continuation wrapper stays within the 8,000-byte client-safe budget. The option
-does not count rows, results, or model tokens. If the complete result fits,
-scip-query returns it unchanged and removes the temporary snapshot; a page
-wrapper exists only when more content remains. Partial human pages end at the
-last complete line within both budgets whenever one exists, so the next page
-begins with its own heading or source line number; a single line longer than a
-budget is the only case that requires a character-boundary split. Do not pipe
-scip-query through `head`, `tail`, or a line-range `sed`; those programs discard
-output without creating a resumable position.
+Run commands normally without choosing a page size. Human output exceeding
+6,500 characters or UTF-8 bytes is saved once to a private temporary file. The
+terminal receives its absolute path and a preview of at most 1,800 bytes and
+24 lines. Read or search the file selectively with ordinary tools; no
+`continue` request is required. The file contains the complete rendered output,
+including any analysis limitations, and is never recomputed while reading.
+Temporary results expire after one hour and the oldest saved previews may be
+removed earlier under the shared 32-file/256-MiB storage quota. Redirect stdout
+to your own file when the result needs to persist. Small results and ordinary
+shell redirects remain unchanged. JSON pipelines retain their machine contract.
+
+`--output-page-size` explicitly enables the compatibility pagination mode.
+Each partial page prints a continuation command for retrieving another part
+of the same immutable output. Its size is a character limit, additionally
+bounded by UTF-8 bytes; it does not count rows, results or model tokens. Read
+additional pages only when the omitted details matter. A preview or page cannot
+establish a claim about omitted evidence. Pages prefer complete line boundaries;
+long individual lines may be split. Explicit JSON pages must be reassembled
+before parsing their complete JSON payload.
 
 Default `--json` output remains the ordinary, additively extensible
 `scip-query-result` envelope. When that envelope exceeds
@@ -302,8 +306,8 @@ same prefix that created it.
 A genuinely partial JSON page must carry `content` as a string because an
 arbitrary character boundary is not necessarily valid nested JSON. Run the
 emitted continuation exactly until completion. Normal agent work should use
-human output, where partial pages remain multiline text rather than a JSON
-string. Model-facing JSON must use `--agent-output`; that mode selects the
+human output, where oversized results are saved as readable files with short
+previews. Model-facing JSON must use `--agent-output`; that mode selects the
 command's bounded projection and automatically enables cursor transport even
 when the caller did not provide `--output-page-size`.
 
