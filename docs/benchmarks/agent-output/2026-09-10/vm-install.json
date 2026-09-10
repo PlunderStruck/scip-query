@@ -1,0 +1,66 @@
+{
+  "commit": "0ec86d94b0d2257f51fb94663f71586a30f20761",
+  "archiveSha256": "68c8071b5e755336c9d842c788c2551577de03d7db0ead892a197418e0166d32",
+  "filesVerified": 458,
+  "skills": [
+    "scip-architecture-review",
+    "scip-explore",
+    "scip-integrity-audit",
+    "scip-plan",
+    "scip-query",
+    "scip-setup"
+  ],
+  "skillFilesVerified": 19,
+  "skillLinks": [
+    "/home/launchpoint-agent/.claude/skills/scip-architecture-review",
+    "/home/launchpoint-agent/.claude/skills/scip-explore",
+    "/home/launchpoint-agent/.claude/skills/scip-integrity-audit",
+    "/home/launchpoint-agent/.claude/skills/scip-plan",
+    "/home/launchpoint-agent/.claude/skills/scip-query",
+    "/home/launchpoint-agent/.claude/skills/scip-setup",
+    "/home/launchpoint-agent/.codex/skills/scip-architecture-review",
+    "/home/launchpoint-agent/.codex/skills/scip-explore",
+    "/home/launchpoint-agent/.codex/skills/scip-integrity-audit",
+    "/home/launchpoint-agent/.codex/skills/scip-plan",
+    "/home/launchpoint-agent/.codex/skills/scip-query",
+    "/home/launchpoint-agent/.codex/skills/scip-setup"
+  ],
+  "canonicalPackage": "/home/launchpoint-agent/.local/lib/node_modules/scip-query",
+  "executables": ["/home/launchpoint-agent/.local/bin/scip-query"],
+  "watchers": [
+    {
+      "root": "/home/launchpoint-agent/.t3/worktrees/launchpoint-backend/t3code-66bd3d33",
+      "oldPid": 3714299,
+      "pid": 3817650,
+      "freshness": "fresh",
+      "watcher": "idle",
+      "generation": "42bb07135cd23e5dde202d81b49c8f4411744cf03a86a03f14ecad7c15fc9a2b",
+      "rebuildRequired": false
+    },
+    {
+      "root": "/home/launchpoint-agent/.t3/worktrees/launchpoint-backend/t3code-93516b5b",
+      "oldPid": 3715157,
+      "pid": 3817788,
+      "freshness": "fresh",
+      "watcher": "idle",
+      "generation": "2e018dbf900e09205a506c2eb99f593f2b28d61e48a6489a1234c5bc62502652",
+      "rebuildRequired": false
+    }
+  ],
+  "smoke": {
+    "behavior": [3, 0, 137],
+    "savedOutputBytes": 20622,
+    "previewBytes": 1221,
+    "savedEqualsRedirected": true,
+    "automaticContinuation": false,
+    "bindingsOptIn": true,
+    "conciseRelationshipEvidence": true,
+    "freshness": "fresh",
+    "watcher": "stopped",
+    "cyclomaticComplexity": 2,
+    "exactCallees": 1,
+    "candidateCallees": 0
+  },
+  "rollback": "/tmp/scip-query-efficient-install-20260910-SADRtv/previous-package",
+  "remoteReceipts": "/tmp/scip-query-efficient-install-20260910-SADRtv"
+}
