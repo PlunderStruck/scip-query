@@ -5,7 +5,7 @@ description: Evaluate architecture and maintainability for coding agents. Find a
 
 # SCIP Architecture and Maintainability Review
 
-Load `$scip-query` for mechanics. This workflow covers first-use assessment, later design reassessment, and the structural consequences of changes. Use `$scip-integrity-audit` when the issue is whether a feature fulfills its promise.
+Load `$scip-query` for mechanics. Use ordinary file tools for implementation reads and scip-query for the relationships and findings that guide the investigation. This workflow covers first-use assessment, later design reassessment, and the structural consequences of changes. Use `$scip-integrity-audit` when the issue is whether a feature fulfills its promise.
 
 Choose from the shared guide's [architecture and dependency commands](../scip-query/references/command-guide.md#architecture-and-dependencies), [simplification and cleanup commands](../scip-query/references/command-guide.md#simplification-and-cleanup), or [framework investigations](../scip-query/references/command-guide.md#framework-investigations) when a concrete concern calls for that analysis. Each row explains its question, index requirement and limits.
 
@@ -23,14 +23,14 @@ For a large review, record groups inventoried, relationships investigated, conce
 
 ## Evaluate maintenance consequences
 
-| Concern | Evidence to seek | Counterevidence |
-| --- | --- | --- |
-| Unclear owner or competing implementations | One rule is independently decided in live paths; fixes or thresholds disagree | Different contracts, versions, platforms, or compatibility obligations |
-| Caller coordination | Consumers repeat preparation, transaction, ordering, or cleanup for one responsibility | The consumer owns the broader operation or transaction |
-| Weak interface | Consumers require internal formats or undocumented ordering | Required control, performance, or interoperability |
-| Mixed responsibilities | Operations have separate state, consumers, dependencies, and reasons to change | A shared lifecycle, invariant, or public capability |
-| Dependency direction | Independent policy imports delivery mechanisms; a cycle obstructs a required separation | Deliberate orchestration or a grouping-only cycle without a file cycle |
-| Unnecessary mechanisms | Copies, wrappers, registries, or pipelines require several updates for one decision | An adapter isolates a real change boundary or distinct contract |
+| Concern                                    | Evidence to seek                                                                        | Counterevidence                                                        |
+| ------------------------------------------ | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Unclear owner or competing implementations | One rule is independently decided in live paths; fixes or thresholds disagree           | Different contracts, versions, platforms, or compatibility obligations |
+| Caller coordination                        | Consumers repeat preparation, transaction, ordering, or cleanup for one responsibility  | The consumer owns the broader operation or transaction                 |
+| Weak interface                             | Consumers require internal formats or undocumented ordering                             | Required control, performance, or interoperability                     |
+| Mixed responsibilities                     | Operations have separate state, consumers, dependencies, and reasons to change          | A shared lifecycle, invariant, or public capability                    |
+| Dependency direction                       | Independent policy imports delivery mechanisms; a cycle obstructs a required separation | Deliberate orchestration or a grouping-only cycle without a file cycle |
+| Unnecessary mechanisms                     | Copies, wrappers, registries, or pipelines require several updates for one decision     | An adapter isolates a real change boundary or distinct contract        |
 
 A deep module provides useful behavior while exposing relatively little implementation knowledge to callers. Examine required knowledge and coordination. One argument with dozens of interacting settings does not establish depth; adding implementation lines does not improve it.
 

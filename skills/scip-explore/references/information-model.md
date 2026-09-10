@@ -1,6 +1,6 @@
 # scip-query information model
 
-Use this map to decide what kind of repository fact a ledger row requires. It inventories information classes rather than prescribing a route. For command selection and current index prerequisites, use the shared [command decision guide](../../scip-query/references/command-guide.md). `scip-query --help-all` remains the runtime inventory; `scip-query capabilities --matrix` reports current provider support when that is a named uncertainty.
+Use this map to decide what kind of repository fact the question requires. It inventories information classes rather than prescribing a route. For command selection and current index prerequisites, use the shared [command decision guide](../../scip-query/references/command-guide.md). `scip-query --help-all` remains the runtime inventory; `scip-query capabilities --matrix` reports current provider support when that is a named uncertainty.
 
 ## Direct system evidence
 

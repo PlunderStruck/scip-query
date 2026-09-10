@@ -1,4 +1,4 @@
 interface:
   display_name: "SCIP Query"
-  short_description: "Locate code and review actual changes."
+  short_description: "Inspect relationships, smells, and changes."
   default_prompt: "Use $scip-query to choose evidence and the workflow needed for this task."

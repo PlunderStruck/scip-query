@@ -23,14 +23,14 @@ Choose investigations below for actual evidence gaps. There is no mandatory all-
 
 ## Investigate the mechanism
 
-| Concern | Investigation |
-| --- | --- |
-| Success without checking | Run valid and deliberately invalid cases through the public path with independent expected results. Inspect delegated/asynchronous failure before declaring a decorative checker. |
-| Feature works only through fallback | Observe primary success and induced failure. Establish the selected path, result/effects, and whether degraded behavior is disclosed. |
-| Parser assumes an imagined format | Feed the actual parser/version representative captured input or valid language examples. Verify the consuming traversal and output, not a node merely appearing somewhere. |
-| Replacement beside old mechanisms | Trace relevant ingress/configuration variants. Compare cases distinguishing their guarantees; account for consumers and retirement. |
-| Status or metric overstates evidence | Trace inputs and coverage to the supporting operation. Independently calculate distinguishing examples; test omissions, errors, and partial results. |
-| Tests share implementation mistakes | Exercise a real consumer with independent expected results. Checking only a mocked value does not verify the feature. |
+| Concern                              | Investigation                                                                                                                                                                     |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success without checking             | Run valid and deliberately invalid cases through the public path with independent expected results. Inspect delegated/asynchronous failure before declaring a decorative checker. |
+| Feature works only through fallback  | Observe primary success and induced failure. Establish the selected path, result/effects, and whether degraded behavior is disclosed.                                             |
+| Parser assumes an imagined format    | Feed the actual parser/version representative captured input or valid language examples. Verify the consuming traversal and output, not a node merely appearing somewhere.        |
+| Replacement beside old mechanisms    | Trace relevant ingress/configuration variants. Compare cases distinguishing their guarantees; account for consumers and retirement.                                               |
+| Status or metric overstates evidence | Trace inputs and coverage to the supporting operation. Independently calculate distinguishing examples; test omissions, errors, and partial results.                              |
+| Tests share implementation mistakes  | Exercise a real consumer with independent expected results. Checking only a mocked value does not verify the feature.                                                             |
 
 A literal “pass” in a correctly checked branch can be justified; a computed status can be wrong. A failed branch probe is not proof of unreachability. A clean detector result establishes only that supported patterns were not found within coverage.
 

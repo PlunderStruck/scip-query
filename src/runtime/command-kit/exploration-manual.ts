@@ -125,18 +125,13 @@ export function renderExplorationManualMarkdown(descriptors: readonly CommandDes
 }
 
 export function renderExplorationManualAgentLines(descriptors: readonly CommandDescriptor[]): readonly string[] {
-  const controls = explorationControlManualRows(descriptors).map(
-    (row) => `- \`scip-query ${row.command}\` — ${row.question} Requires: ${row.requiredInput}`,
-  );
-  const relationships = explorationRelationshipManualRows()
-    .map((row) => `\`${row.family} ${row.direction}\` — ${row.question}`)
-    .join('; ');
-  return [
-    ...controls,
-    `- Choose graph controls explicitly: ${relationships}. The CLI does not infer them from English intent.`,
-    '- Calibration: exact is directly observed; derived is deterministically computed; candidate needs confirmation; mixed discloses its constituents; unknown cannot support a stronger claim. Read coverage and recovery before making absence claims.',
-    '- The controls above are complete for ordinary exploration. Run `scip-query capabilities --matrix` only when a named claim depends on uncertain provider support; do not run it for routine orientation.',
-  ];
+  const controls = ['system', 'context', 'evidence', 'health', 'review', 'diff-impact', 'architecture'].map((id) => {
+    const descriptor = descriptors.find((candidate) => candidate.id === id);
+    if (!descriptor) throw new Error(`Missing agent workflow command ${id}.`);
+    const command = id === 'system' ? 'system --source [module]' : descriptor.command;
+    return `- \`scip-query ${command}\` — ${descriptor.description}`;
+  });
+  return [...controls, '- Use `capabilities --matrix` only when a named claim depends on uncertain provider support.'];
 }
 
 export function renderExplorationSkillGuideMarkdown(descriptors: readonly CommandDescriptor[]): string {

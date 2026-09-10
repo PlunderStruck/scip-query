@@ -61,7 +61,6 @@ describe('exploration manual', () => {
     const skillGuide = renderExplorationSkillGuideMarkdown(commandDescriptors);
 
     for (const guidance of [agentLines, skillGuide]) {
-      expect(guidance).toContain('complete for ordinary exploration');
       expect(guidance).toContain('only when a named claim depends on uncertain provider support');
       expect(guidance).not.toContain('Run `scip-query capabilities` for');
     }

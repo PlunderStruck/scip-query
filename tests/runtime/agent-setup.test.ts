@@ -59,54 +59,29 @@ describe('setupAgent', () => {
 
     expect(result.written).toEqual(['AGENTS.md', 'CLAUDE.md']);
     const agentsMd = readFileSync(join(projectRoot, 'AGENTS.md'), 'utf8');
-    expect(agentsMd).toContain('Native text and file tools show matching lines or file slices');
-    expect(agentsMd).toContain('exact compiler-owned identities and typed execution');
-    expect(agentsMd).toContain('The agent chooses the repository question and relevant controls');
-    expect(agentsMd).toContain('without guessing task relevance');
-    expect(agentsMd).toContain('scip-query search <exact-text>');
-    expect(agentsMd).toContain('scip-query outline <file>');
-    expect(agentsMd).toContain('There is no required anchor-discovery phase');
-    expect(agentsMd).toContain('repeated `--symbol`, `--at`, or `--search` roots');
-    expect(agentsMd).toContain('`--direction incoming|outgoing|both`');
-    expect(agentsMd).toContain('`--subtype <subtype>`');
-    expect(agentsMd).toContain('`--inventory-only`');
-    expect(agentsMd).toContain('`--connecting`');
-    expect(agentsMd).toContain('one or more repeated `--edge <family>` flags');
-    expect(agentsMd).toContain('`--max-edges <n>`');
-    expect(agentsMd).toContain('Treat commands as controls, not a checklist');
-    expect(agentsMd).toContain('make each query answer a distinct repository question');
-    expect(agentsMd).toContain('There is no mandatory command sequence');
-    expect(agentsMd).toContain('or query-count limit');
-    expect(agentsMd).toContain('Do not repeat generic synonym searches after usable candidates exist');
-    expect(agentsMd).toContain('do not select one by path, naming, apparent recency, or result order');
-    expect(agentsMd).toContain('Missing or bounded output is not evidence of absence');
-    expect(agentsMd).toContain('candidate observations require confirmation');
-    expect(agentsMd).toContain('An emitted `Continue exactly:` command is a cursor');
-    expect(agentsMd).toContain('required transport, not optional evidence expansion');
-    expect(agentsMd).toContain('without repository preparation, reindexing, or watcher startup');
-    expect(agentsMd).toContain('add `--json --agent-output`');
-    expect(agentsMd).toContain('Never send raw `--json` output through a model-facing terminal or tool');
-    expect(agentsMd).toContain('use `--json --json-output <path>`');
-    expect(agentsMd).toContain('Batch independent roots and source gaps');
-    expect(agentsMd).not.toContain('scip-query system-map');
-    expect(agentsMd).not.toContain('scip-query anchors');
-    expect(agentsMd).not.toContain('fallback discovery');
-    expect(agentsMd).toContain('scip-query inspect');
-    expect(agentsMd).toContain('scip-query code <selectors...>');
-    expect(agentsMd).not.toContain('scip-query context <target>');
-    expect(agentsMd).toContain('scip-query diff-impact');
-    expect(agentsMd).toContain('scip-query review --base HEAD');
-    expect(agentsMd).toContain('scip-query architecture');
-    expect(agentsMd).toContain('health --indexed');
-    expect(agentsMd).toContain('scip-query system --source');
-    expect(agentsMd).toContain('specific unsupported gap reported by scip-query');
-    expect(agentsMd).toContain('not a parallel exploration workflow');
-    expect(agentsMd).not.toContain('stop-ready');
-    expect(agentsMd).not.toContain('Run the emitted `Expand together:`');
+    expect(agentsMd).toContain('Use ordinary file tools for source search and reading');
+    for (const command of [
+      'system --source',
+      'context',
+      'evidence',
+      'health',
+      'review',
+      'diff-impact',
+      'architecture',
+    ]) {
+      expect(agentsMd).toContain(`scip-query ${command}`);
+    }
+    expect(agentsMd).toContain('existing implementation path, comparable features, shared owners');
+    expect(agentsMd).toContain('--edge execution --direction incoming --depth 1 --max-edges 30');
+    expect(agentsMd).toContain('Material missing, stale or unsupported evidence');
+    expect(agentsMd).toContain('Read saved results selectively with normal file tools');
+    expect(agentsMd).toContain('--json --json-output <path>');
+    expect(agentsMd).toContain('Do not drain pages');
     expect(agentsMd).toContain('.scipquery/suppressions/*.json');
-    expect(agentsMd).not.toMatch(/evidence ledger|ledger row|final answer audit|Stop hook/i);
-    expect(agentsMd).not.toMatch(/diff-gate|Gherkin|goal record|obligation/i);
-    expect(agentsMd.length).toBeLessThan(9_000);
+    expect(agentsMd).not.toMatch(
+      /required transport|not a parallel exploration workflow|evidence ledger|ledger row|final answer audit|Stop hook/i,
+    );
+    expect(agentsMd.length).toBeLessThan(4_500);
     expect(readFileSync(join(projectRoot, 'CLAUDE.md'), 'utf8')).toContain('@AGENTS.md');
   });
 

@@ -1,56 +1,50 @@
 ---
 name: scip-query
-description: Use scip-query to locate code, inspect relationships, plan around existing owners, and review actual changes. Load this shared tool guide with the workflow needed by the task.
+description: Use code relationships, module structure, quality findings and change impact to plan and review changes alongside ordinary source-reading tools.
 ---
 
 # SCIP Query
 
-scip-query is a code analysis tool connecting current source locations with measured structure and observed relationships. It helps coding agents select the live implementation, reuse existing rules, preserve behavior, and detect incomplete work.
+scip-query connects code locations through observed relationships and measured quality findings. Use ordinary search and file tools to read source. Use scip-query when the question concerns consumers, execution, value flow, dependencies, reuse or maintenance problems.
 
-A finding identifies concrete code and evidence of a possible problem. A candidate needs investigation; it does not authorize a refactor. An owner is the implementation responsible for a rule or resource, established from behavior and consumers. A folder or lexical container alone does not establish responsibility.
+An owner is the implementation responsible for a rule or resource, established from behavior and consumers. A finding identifies concrete code with evidence of a possible problem. Candidates require confirmation; names, folders and matching text alone do not establish ownership or interchangeable behavior.
 
 ## Choose the work
 
-| Task | Skill |
-| --- | --- |
-| Understand behavior, live implementations, consumers, and effects | `$scip-explore` |
-| Plan a substantial change, migration, or retirement | `$scip-plan` |
-| Evaluate architecture and maintainability, scattered rules, and unnecessary coordination | `$scip-architecture-review` |
-| Investigate whether a feature fulfills its promise, including partial migrations and misleading checks | `$scip-integrity-audit` |
-| Install, diagnose, index, or repair the tool | `$scip-setup` |
+| Situation                   | Analysis to use                                                                            | Workflow                    |
+| --------------------------- | ------------------------------------------------------------------------------------------ | --------------------------- |
+| Understand a subsystem      | `system --source`, then selected module dependencies or `evidence`                         | `$scip-explore`             |
+| Plan a substantial change   | `context <target>` for reuse candidates; incoming/outgoing execution and relevant handoffs | `$scip-plan`                |
+| Evaluate architecture       | Module dependencies, cycles and `architecture` for configured rules                        | `$scip-architecture-review` |
+| Clean up code               | `health` for complexity/duplication/dependencies; relevant specialist detectors            | `$scip-architecture-review` |
+| Check a feature's integrity | Live consumers and distinguishing behavior; relevant incomplete-implementation detectors   | `$scip-integrity-audit`     |
+| Review actual edits         | `review --base HEAD`, `diff-impact`, and architecture if dependencies changed              | This guide                  |
+| Install or repair the tool  | `status`, then the diagnosed operation                                                     | `$scip-setup`               |
 
-Load only the workflow needed. For authorized implementation, investigate, write a concise plan when needed, implement, and review. A workflow does not create another approval gate. Review-only requests remain review-only.
+Load only the needed workflow. Simple local lookups need no workflow ceremony. These are task boundaries, not a command battery. Use the relevant section of the [command guide](references/command-guide.md) when a more specific question needs a specialist command.
 
-When a task needs a command beyond the controls below, use the relevant section of the [command decision guide](references/command-guide.md). It maps every public command to a question, selector, index requirement and interpretation limit, and explains overlapping controls. Read that section rather than treating the complete inventory as a sequence to execute.
+## Ask for relationships
 
-## Choose evidence
+Existing `file:line` locations are graph roots. Symbol lookup, `outline`, and `entrypoints` are useful when compiler identity, nesting or external roots are unclear. `code` and `inspect` are optional symbol-aware source tools; ordinary reads are usually sufficient for implementation details.
 
-- `scip-query system --source` inventories current TS/JS module groups, including groups without findings. Add an exact path or printed group ID to investigate a group. It does not infer business responsibilities.
-- `scip-query health` finds current-source complexity, duplication, and dependency issues without an index. Use `health --indexed` only for a needed specialist framework, drift, or cleanup analysis.
-- `scip-query search <exact-text>`, `outline <file>`, and `entrypoints [text]` locate referents. Ordering does not identify the implementation relevant to the task.
-- `scip-query context <target>` gathers indexed reuse and impact candidates. Confirm behavior before choosing an owner.
-- `scip-query evidence --at <file:line> --edge <family> --direction <direction> --depth <n> --max-edges <n>` projects chosen relationships. Repeat selectors to batch known participants.
-- `scip-query inspect --at <file:line> --view behavior` reads a remaining behavioral gap; `scip-query code <symbol-or-file:range>` reads exact syntax.
-- `scip-query architecture` checks declared dependency rules. Compliance does not establish well-chosen boundaries.
+For example, `scip-query evidence --at src/service.ts:42 --edge execution --direction incoming --depth 1 --max-edges 30` asks for caller evidence. Repeat `--at` or `--symbol` to batch participants. Use outgoing execution for callees, dataflow for value origins/destinations, runtime for handoffs and dependencies for imports. Select state, temporal, contract, identity or containment relationships only when they answer a concrete question. Execution and supported runtime handoffs establish reachability; other relationship families do not become call claims.
 
-Use `execution incoming|outgoing` for callers/callees; `dataflow incoming|outgoing` for value origins/destinations; `runtime both` for handoffs; `state both` for resources; `temporal both` for order; `contract both` for interface constraints; `identity both` for entity identity; `ownership both` for containment; `dependencies outgoing` for static dependencies. Only execution and supported runtime handoffs establish executable reachability.
+Before a substantial change, establish the existing central path, comparable features and reuse opportunities. A relationship query should settle an uncertainty about that path or the consequences of changing it. Read the relevant implementation with ordinary tools to verify decisions, errors, state changes and ordering.
 
-These are controls, not a mandatory sequence. State the facts needed, reuse returned identities, batch independent questions, and read named remaining gaps. Use the tool for repository exploration; native tools serve edits, checks, binary content, or a specific unsupported gap the tool disclosed.
+## Keep useful evidence
 
-## Evidence and transport
+Exact is directly observed; derived is deterministically computed; candidates need confirmation; unknown cannot support a stronger claim. Respect material stale, unsupported or incomplete results. A saved result is the complete output of its query, not proof that every possible relationship was analyzed. Missing or bounded evidence cannot establish absence.
 
-Exact evidence is directly observed; derived evidence is deterministically calculated; candidates require confirmation; mixed evidence retains its constituents; unknown cannot support a stronger claim. Read coverage, exclusions, and recovery before claiming completeness or absence. A syntax tree establishes parsed structure, resolved symbols establish declaration identity, and an executed test establishes only exercised behavior.
+Prefer concise human output. Read saved results selectively using normal search/read tools. Use `--json --json-output <path>` when programmatic filtering helps. Do not paste large raw JSON or rerun an already answered query. Optional compatibility cursors are useful only when an omitted detail could change the decision; there is no requirement to drain every page or read every saved byte.
 
-Source scans read current bytes. Indexed relationships require a fresh index. Respect disabled watching and printed recovery/rebuild policy. Run `capabilities --matrix` only when a named claim depends on uncertain support.
+Source `health`, `review` and `system --source` use current files. Indexed relationships require a fresh index. Respect disabled watching and configured rebuild policy. Check `capabilities --matrix` only for uncertain support that matters to the question.
 
-Prefer human output. For machine processing use `--json --json-output <path>` and inspect the saved result programmatically. For model-facing JSON use `--json --agent-output`. Never emit raw JSON into model context or rerun a successful human command just to get JSON. Drain every `Continue exactly:` cursor unchanged; recover omitted evidence when it can change the answer. Same-generation receipts avoid rereading identical evidence; `--reemit` recovers it.
+## Review changes
 
-## Review actual changes
+After a nontrivial edit, run `scip-query review --base <commit>` and fresh `scip-query diff-impact` against the same base. Normally use HEAD before committing. Review includes new/untracked functions and repository peers; scope the displayed findings to the change when useful. Check `architecture` when module dependencies or policy changed. Use `health --indexed` only for a needed specialist question.
 
-After a nontrivial edit run `scip-query review --base <commit>` and fresh `scip-query diff-impact`. Normally the base is HEAD before committing. Review includes new/untracked functions and existing repository peers; it is not staged-only. Inspect changed functions even below warning thresholds. Check architecture when module dependencies or policy changed.
+Confirm findings with source and behavioral checks before fixing them. Preserve existing owners, authorization, errors, state identity, ordering, concurrency and cleanup. Do not lower thresholds, widen rules or suppress findings to make a report pass.
 
-Resolve justified findings and run behavioral checks. Preserve authorization, errors, state identity, ordering, concurrency, cleanup, and consumers. Do not lower thresholds, widen policy, or suppress findings merely to make a report pass.
+CRAP combines complexity with actual test coverage. Use `scripts/record-review-coverage.mjs` with the real test command when this measure matters; missing or stale coverage is unavailable, never zero. See [review rules](../../docs/REVIEW.md).
 
-CRAP combines complexity with actual test coverage. Wrap the real test command with `scripts/record-review-coverage.mjs` for a source-matched receipt; missing/stale measurements are unavailable, never zero. [Review rules](../../docs/REVIEW.md) define the metrics and limits.
-
-Report changes, executed checks, retained findings, and unsupported claims. Compilation, fewer lines, lower complexity, an empty report, or tests that only echo their mocks do not establish correct behavior.
+Report changes, actual checks, justified retained findings and material limits. An empty report or passing mocked test alone does not establish correct behavior.

@@ -26,7 +26,7 @@ Use these for first-use assessment, planning around existing code, and checking 
 
 ## Exploration
 
-Load `$scip-explore` for following live behavior. Choose an exact root, select the relationship needed, and read source only for the remaining question.
+Use ordinary repository search and file tools for source text. Load `$scip-explore` when cross-file relationships or behavior need investigation. `context`, `call-graph`, `evidence` and dependency commands add structure beyond source reads; the locators and symbol-aware reads below are optional specialist controls.
 
 | Command | Use when / why this control | Index | Interpretation and limits |
 | --- | --- | --- | --- |
@@ -148,7 +148,7 @@ These five registered controls are not additional analysis choices. Run an emitt
 
 | Control | Purpose |
 | --- | --- |
-| `continue <cursor>` | Required transport for a saved immutable output page. Drain every emitted `Continue exactly:` command before interpreting the complete result. |
+| `continue <cursor>` | Optional compatibility transport for a saved output page. Recover omitted details only when they can change the decision; one page cannot establish an exhaustive result. |
 | `hook-architecture-stop` | Checkout-local architecture Stop hook installed by setup when its conditions are met. |
 | `__diff-impact-batch` | Private diff-impact worker protocol. |
 | `__health-phase` | Private indexed-health phase worker protocol. |
