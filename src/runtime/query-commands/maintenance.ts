@@ -56,54 +56,30 @@ export function renderSourceMaintenance(
     renderFindings(report, limit);
   }
   renderMaintenanceSuppressions(report, limit === Infinity);
-  console.log(
-    'Recovery: use --scope <file-or-directory> for a subject, or --full for all findings, sites, supporting details and suppression decisions. Exhaustive machine reports use --json --json-output <path>.',
-  );
   if (report.affectedFiles.length)
     console.log(
       `\nAffected importers (${report.affectedFiles.length}):\n${report.affectedFiles.map((file) => `  ${file}`).join('\n')}`,
     );
   if (report.coverage.problems.length)
     console.log(`\nUnresolved coverage:\n${report.coverage.problems.map((problem) => `  ${problem}`).join('\n')}`);
-  console.log(`\nInterpretation:\n${report.coverage.limits.map((item) => `  ${item}`).join('\n')}`);
-  console.log(
-    '\nPlan from exact implementations and consumers; preserve behavior, review candidates, run relevant tests, then rerun review. Metric reductions alone do not establish a better design.',
-  );
 }
 
 function renderMaintenanceCoverage(report: SourceMaintenanceReport): void {
   console.log(
     `${report.mode === 'review' ? 'Change review' : 'Source health'} — current source, ${report.coverage.analyzedFiles}/${report.coverage.eligibleFiles} eligible files, ${report.coverage.analyzedFunctions} functions`,
   );
-  if (report.base) console.log(`Base: ${report.base}; current source fingerprint: ${report.current}`);
-  console.log(
-    `Coverage: ${report.coverage.status}; ${report.coverage.excludedFiles} files excluded by language/path policy; ${report.coverage.unresolvedImports} missing or ambiguous internal imports.`,
-  );
-  console.log(
-    `Exclusions: ${Object.entries(report.coverage.exclusions)
-      .map(([reason, count]) => `${reason} ${count}`)
-      .join('; ')}.`,
-  );
-  const dependencies = report.coverage.dependencies;
-  console.log(
-    `Import resolution: ${Object.entries(dependencies.resolutions)
-      .map(([kind, count]) => `${kind} ${count}`)
-      .join('; ')}.`,
-  );
-  console.log(
-    `Import roles: ${dependencies.typeOnly} type-only; ${dependencies.test} test; ${dependencies.deferredOrCommonJs} dynamic/CommonJS. Production file-cycle checks use static value imports.`,
-  );
-  const architecture = report.architecture;
-  console.log(
-    architecture.configured
-      ? `Declared groups: ${architecture.boundaries.length}; ${architecture.coverage.mappedFiles}/${architecture.coverage.totalFiles} files mapped. Dependency rules: ${architecture.policyCoverage.declaredRows}/${architecture.policyCoverage.totalBoundaries} rows declared; ${architecture.policyCoverage.missingRows.length} directions unknown. Group cycles: ${architecture.cycles.length}; these are not necessarily cycles between files.`
-      : 'Architecture: no declared groups or dependency rules. Directory groupings identify locations; conceptual ownership remains unverified.',
-  );
+  if (report.base) console.log(`Base: ${report.base}`);
+  if (report.coverage.status === 'incomplete') console.log('Source scan incomplete; see unresolved files below.');
+  if (report.coverage.unresolvedImports > 0)
+    console.log(`${report.coverage.unresolvedImports} internal imports unresolved or ambiguous.`);
+  if (!report.architecture.configured) console.log('No architecture rules configured.');
   const testCoverage = report.coverage.testCoverage;
-  console.log(
-    `Test coverage: ${testCoverage.requested ? 'requested' : 'not supplied'}; ${testCoverage.available} available, ${testCoverage.unavailable} unavailable function measurements.`,
-  );
-  for (const reason of testCoverage.reasons) console.log(`  ${reason}`);
+  if (testCoverage.requested) {
+    console.log(
+      `Test coverage: ${testCoverage.available} available, ${testCoverage.unavailable} unavailable measurements.`,
+    );
+    for (const reason of testCoverage.reasons) console.log(`  ${reason}`);
+  }
 }
 
 function renderMaintenanceSuppressions(report: SourceMaintenanceReport, full: boolean): void {

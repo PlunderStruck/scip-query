@@ -59,22 +59,11 @@ const handleOutline = dbCommand(({ db, args, opts }) => {
     printJsonEnvelope('outline', args, opts, roots);
     return;
   }
-  console.log(
-    `═══ REQUEST ═══\n  file=${JSON.stringify(filePattern)}; signatures=${showSignatures ? 'shown' : 'hidden'}`,
-  );
   if (roots.length === 0) {
-    console.log(
-      `\n═══ OBSERVED FACTS ═══\n  No compiler-owned constructs were found for ${JSON.stringify(filePattern)}.`,
-    );
-    console.log(
-      '\n═══ EVIDENCE CALIBRATION ═══\n  Missing compiler constructs do not establish that the current text file is empty or irrelevant.',
-    );
-    console.log('\n═══ COVERAGE ═══\n  Compiler ownership is unavailable or empty for this exact file selector.');
-    console.log(
-      `\n═══ RECOVERY ═══\n  Read current source exactly with: scip-query code ${quoteShellArgument(filePattern)}`,
-    );
+    console.log(`No indexed symbols found for ${JSON.stringify(filePattern)}; current source may still contain code.`);
     return;
   }
+  console.log(filePattern);
 
   function printTree(nodes: typeof roots, indent: number): void {
     for (const node of nodes) {
@@ -84,26 +73,8 @@ const handleOutline = dbCommand(({ db, args, opts }) => {
       printTree(node.children, indent + 1);
     }
   }
-  console.log('\n═══ OBSERVED FACTS ═══');
   printTree(roots, 0);
-  console.log(
-    '\n═══ EVIDENCE CALIBRATION ═══\n  These are compiler-owned identities and source ranges. Ownership and nesting do not establish execution or task relevance.',
-  );
-  console.log(
-    `\n═══ COVERAGE ═══\n  ${outlineNodeCount(roots)} compiler construct(s) returned in ${roots.length} top-level tree(s).`,
-  );
-  console.log(
-    '\n═══ RECOVERY ═══\n  Every displayed file:line is an exact evidence root. Exact top-level symbol selectors:',
-  );
-  for (const node of roots) {
-    const symbol = `'${node.symbol.replaceAll("'", "'\\''")}'`;
-    console.log(`  ${node.shortName}: ${symbol}`);
-  }
 });
-
-function outlineNodeCount(nodes: ReturnType<typeof outline>): number {
-  return nodes.reduce((total, node) => total + 1 + outlineNodeCount(node.children), 0);
-}
 
 function trimSignature(signature: string): string {
   const maxLength = 120;
@@ -335,12 +306,7 @@ function codeFileMemberMode(opts: Readonly<Record<string, unknown>>): CodeFileMe
 }
 
 function codeBatchText(result: CodeBatchResult, sessionAware = false): string {
-  const lines: string[] = [
-    '═══ REQUEST ═══',
-    `  ${result.entries.map((entry) => entry.selector).join(', ')}`,
-    '',
-    `═══ OBSERVED FACTS (${result.requested} requested: ${result.matched} matched, ${result.ambiguous} ambiguous, ${result.missing} missing) ═══`,
-  ];
+  const lines: string[] = [];
   appendCodeBatchSources(lines, result, sessionAware);
   appendCodeBatchSections(lines, result);
   appendCodeBindingClosure(lines, result.bindingClosure);
@@ -348,7 +314,6 @@ function codeBatchText(result: CodeBatchResult, sessionAware = false): string {
     lines,
     result.entries.flatMap((entry) => entry.results),
   );
-  appendCodeCoverage(lines, result);
   return `${lines.join('\n')}\n`;
 }
 
@@ -372,27 +337,27 @@ function appendCodeBatchSources(lines: string[], result: CodeBatchResult, sessio
 }
 
 function appendCodeBatchSections(lines: string[], result: CodeBatchResult): void {
-  const fileSources = result.entries.filter((entry) => entry.kind === 'file-source');
+  const fileSources = result.entries.filter((entry) => (entry.fileCoverage?.omittedDefinitions ?? 0) > 0);
   if (fileSources.length > 0) {
-    lines.push('', '═══ FILE SOURCE COVERAGE ═══');
+    lines.push('', 'Omitted file definitions');
     for (const entry of fileSources) appendCodeFileCoverage(lines, entry);
   }
 
-  const rangeSources = result.entries.filter((entry) => entry.rangeCoverage);
+  const rangeSources = result.entries.filter((entry) => (entry.rangeCoverage?.omittedDefinitions ?? 0) > 0);
   if (rangeSources.length > 0) {
-    lines.push('', '═══ RANGE SOURCE COVERAGE ═══');
+    lines.push('', 'Omitted referenced definitions');
     for (const entry of rangeSources) appendCodeRangeCoverage(lines, entry);
   }
 
   const ambiguous = result.entries.filter((entry) => entry.status === 'ambiguous');
   if (ambiguous.length > 0) {
-    lines.push('', '═══ AMBIGUOUS SELECTORS ═══');
+    lines.push('', 'Ambiguous selectors');
     for (const entry of ambiguous) appendCodeAmbiguity(lines, entry);
   }
 
   const missing = result.entries.filter((entry) => entry.status === 'missing');
   if (missing.length > 0) {
-    lines.push('', '═══ MISSING SELECTORS ═══');
+    lines.push('', 'Missing selectors');
     for (const entry of missing) {
       appendCodeMissingSelector(lines, entry);
     }
@@ -423,37 +388,23 @@ function appendCodeRangeCoverage(lines: string[], entry: CodeBatchEntry): void {
 }
 
 function codeResultText(result: CodeResult, closure?: CodeResult['bindingClosure'], sessionAware = false): string {
-  const lines: string[] = ['═══ REQUEST ═══', `  resolved-selector=${result.symbol}`, '', '═══ OBSERVED FACTS ═══'];
+  const lines: string[] = [];
   appendCodeResult(lines, result, sessionAware);
   appendCodeBindingClosure(lines, closure);
   appendCodeFreshness(lines, [result]);
-  lines.push(
-    '',
-    '═══ COVERAGE ═══',
-    '  One exact selector resolved to the complete source body shown; callers and runtime relationships are not implied.',
-  );
   return `${lines.join('\n')}\n`;
 }
 
 function appendCodeFreshness(lines: string[], results: readonly CodeResult[]): void {
   const observations = results.flatMap((result) => (result.freshness ? [result.freshness] : []));
-  lines.push(
-    '',
-    '═══ EVIDENCE CALIBRATION ═══',
-    '  Source bodies are exact working-tree bytes; compiler identity and bindings are limited to reported semantic coverage.',
-  );
-  if (observations.length === 0) {
-    lines.push('  No source-freshness overlay was available.');
-    return;
-  }
+  if (observations.length === 0) return;
   const semantic = {
     aligned: observations.filter((item) => item.semantic.state === 'aligned').length,
     stale: observations.filter((item) => item.semantic.state === 'stale').length,
     unavailable: observations.filter((item) => item.semantic.state === 'unavailable').length,
   };
-  lines.push(
-    `  Freshness: ${observations.length}/${results.length} text current; semantics ${semantic.aligned} aligned, ${semantic.stale} stale, ${semantic.unavailable} unavailable.`,
-  );
+  if (semantic.stale || semantic.unavailable)
+    lines.push(`Index identity: ${semantic.stale} stale, ${semantic.unavailable} unavailable; source text is current.`);
 }
 
 function appendCodeResult(lines: string[], result: CodeResult, sessionAware: boolean): void {
@@ -548,47 +499,6 @@ function appendCodeBindingClosure(lines: string[], closure: CodeResult['bindingC
     );
     lines.push(`    ${binding.source ?? ''}`);
   }
-}
-
-function appendCodeCoverage(lines: string[], result: CodeBatchResult): void {
-  const resolved = result.entries.filter((entry) => entry.status === 'matched').length;
-  const fileCoverage = result.entries.flatMap((entry) => (entry.fileCoverage ? [entry.fileCoverage] : []));
-  const rangeCoverage = result.entries.flatMap((entry) => (entry.rangeCoverage ? [entry.rangeCoverage] : []));
-  if (fileCoverage.length === 0 && rangeCoverage.length === 0) {
-    lines.push(
-      '',
-      '═══ COVERAGE ═══',
-      `  ${resolved}/${result.requested} selector(s) resolved to shown source bodies; referenced definitions and runtime relationships are not claimed. Source lines use absolute file line numbers and are citation-ready.`,
-    );
-    return;
-  }
-  const returnedBodies = fileCoverage.reduce((total, coverage) => total + coverage.returnedBodies, 0);
-  const returnedDefinitions = fileCoverage.reduce((total, coverage) => total + coverage.returnedDefinitions, 0);
-  const totalDefinitions = fileCoverage.reduce((total, coverage) => total + coverage.totalDefinitions, 0);
-  const omittedDefinitions = fileCoverage.reduce((total, coverage) => total + coverage.omittedDefinitions, 0);
-  const rangeReferencedDefinitions = rangeCoverage.reduce(
-    (total, coverage) => total + coverage.referencedDefinitions,
-    0,
-  );
-  const rangeReturnedDefinitions = rangeCoverage.reduce((total, coverage) => total + coverage.returnedDefinitions, 0);
-  const rangeOmittedDefinitions = rangeCoverage.reduce((total, coverage) => total + coverage.omittedDefinitions, 0);
-  const details = [
-    ...(fileCoverage.length > 0
-      ? [
-          `${fileCoverage.length} file selector(s) returned ${returnedBodies} source body(ies) covering ${returnedDefinitions}/${totalDefinitions} indexed definition(s); ${omittedDefinitions} file-local definition(s) omitted and disclosed`,
-        ]
-      : []),
-    ...(rangeCoverage.length > 0
-      ? [
-          `${rangeCoverage.length} range selector(s) covered ${rangeReturnedDefinitions}/${rangeReferencedDefinitions} statically attributed same-file definition(s); ${rangeOmittedDefinitions} referenced definition(s) omitted and disclosed`,
-        ]
-      : []),
-  ];
-  lines.push(
-    '',
-    '═══ COVERAGE ═══',
-    `  ${resolved}/${result.requested} selectors resolved; ${details.join('; ')}. Source lines use absolute file line numbers and are citation-ready.`,
-  );
 }
 
 /**

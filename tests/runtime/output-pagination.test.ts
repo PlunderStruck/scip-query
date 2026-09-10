@@ -93,8 +93,7 @@ function parsePage(output: string): CliOutputPageEnvelopeV1 {
 function parseHumanPage(output: string): { content: string; cursor?: string } {
   const contentStart = output.indexOf('\n') + 1;
   const incompleteStart = output.lastIndexOf('\n[Incomplete:');
-  const completeStart = output.lastIndexOf('\n[scip-query transport complete; evaluate command coverage separately]');
-  const contentEnd = Math.max(incompleteStart, completeStart);
+  const contentEnd = incompleteStart < 0 ? output.length : incompleteStart;
   if (contentStart <= 0 || contentEnd < contentStart) throw new Error('Expected a rendered human output page.');
   const cursor = output.match(/\bcontinue ([A-Za-z0-9_.-]+)/u)?.[1];
   return {
@@ -472,7 +471,7 @@ describe('universal CLI output pagination', () => {
     expect(pages.join('')).toBe(content);
     expect(pages.slice(0, -1).every((page) => page.endsWith('\n'))).toBe(true);
     expect(pages.slice(1).every((page) => /^\s*\d+\s{2}line-/u.test(page))).toBe(true);
-    expect(outputs.at(-1)).toContain('[scip-query transport complete; evaluate command coverage separately]');
+    expect(outputs.at(-1)).not.toContain('transport complete');
   });
 
   it('keeps unpaged JSON byte-compatible and warns before oversized output with an exact paging command', async () => {

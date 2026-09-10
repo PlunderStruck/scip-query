@@ -402,32 +402,18 @@ const handleEntryPoints = dbCommand(({ db, args, opts }) => {
     });
     return;
   }
-  const scope = stringOptionValue(opts, 'scope');
-  console.log(`═══ REQUEST ═══\n  text=${search ? JSON.stringify(search) : '<all>'}; scope=${scope ?? '<repository>'}`);
   if (results.length === 0) {
     console.log(
-      `\n═══ OBSERVED FACTS ═══\n  ${search ? `No detected entry candidate matched ${JSON.stringify(search)}.` : 'No entry candidates were detected.'}`,
+      search
+        ? `No detected entry candidate matched ${JSON.stringify(search)}.`
+        : 'No entry candidates were detected by the available providers.',
     );
-    console.log(
-      '\n═══ EVIDENCE CALIBRATION ═══\n  Absence from this detector does not prove that the repository has no runtime ingress.',
-    );
-    console.log("\n═══ COVERAGE ═══\n  Complete within the detector's indexed source/compiler entry evidence.");
     return;
   }
-  console.log('\n═══ OBSERVED FACTS ═══');
   render.list(
     results,
     (entry) =>
-      `  [${entry.confidence}] ${entry.file}:${displayLine(entry.startLine)}  ${entry.shortName}\n` +
-      `    evidence: ${entry.evidence.join(', ')}; observed static callers: ${entry.observedCallerCount}\n` +
-      `    symbol: ${entry.symbol}`,
-  );
-  console.log(
-    '\n═══ EVIDENCE CALIBRATION ═══\n  [root] has configured, framework-dispatched, or Rust public-library evidence. [candidate] is package-public or lacks observed callers; neither label proves a runtime invocation.',
-  );
-  console.log(`\n═══ COVERAGE ═══\n  ${results.length} entry candidate(s); complete within indexed detector evidence.`);
-  console.log(
-    '\n═══ RECOVERY ═══\n  Any printed exact symbol can be projected with scip-query evidence using the family and direction required by the material question.',
+      `[${entry.confidence}] ${entry.file}:${displayLine(entry.startLine)} ${entry.shortName} — ${entry.evidence.join(', ')}; static callers=${entry.observedCallerCount}`,
   );
 });
 

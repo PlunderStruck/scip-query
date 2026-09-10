@@ -32,10 +32,6 @@ describe('code CLI output contract', { timeout: 30_000 }, () => {
     expect(invocation.stderr).toBe('');
     expect(invocation.stdout).toBe(
       [
-        '═══ REQUEST ═══',
-        '  resolved-selector=scip-typescript npm pkg 1.0.0 src/`watch.ts`/Watcher#',
-        '',
-        '═══ OBSERVED FACTS ═══',
         'src/watch.ts:1-5  src:watch:Watcher  [typescript]',
         '',
         '     1  export class Watcher {',
@@ -43,13 +39,7 @@ describe('code CLI output contract', { timeout: 30_000 }, () => {
         '     3    stop() { return false; }',
         '     4  }',
         '     5  ',
-        '',
-        '═══ EVIDENCE CALIBRATION ═══',
-        '  Source bodies are exact working-tree bytes; compiler identity and bindings are limited to reported semantic coverage.',
-        '  Freshness: 1/1 text current; semantics 0 aligned, 0 stale, 1 unavailable.',
-        '',
-        '═══ COVERAGE ═══',
-        '  One exact selector resolved to the complete source body shown; callers and runtime relationships are not implied.',
+        'Index identity: 0 stale, 1 unavailable; source text is current.',
         '',
       ].join('\n'),
     );
@@ -148,21 +138,11 @@ describe('code CLI output contract', { timeout: 30_000 }, () => {
     expect(invocation.status).toBe(0);
     expect(invocation.stdout).toBe(
       [
-        '═══ REQUEST ═══',
-        '  resolved-selector=src/watch.ts:2-3',
-        '',
-        '═══ OBSERVED FACTS ═══',
         'src/watch.ts:2-3  src/watch.ts:2-3  [typescript]',
         '',
         '     2    start() { return true; }',
         '     3    stop() { return false; }',
-        '',
-        '═══ EVIDENCE CALIBRATION ═══',
-        '  Source bodies are exact working-tree bytes; compiler identity and bindings are limited to reported semantic coverage.',
-        '  Freshness: 1/1 text current; semantics 0 aligned, 0 stale, 1 unavailable.',
-        '',
-        '═══ COVERAGE ═══',
-        '  One exact selector resolved to the complete source body shown; callers and runtime relationships are not implied.',
+        'Index identity: 0 stale, 1 unavailable; source text is current.',
         '',
       ].join('\n'),
     );
@@ -192,13 +172,9 @@ describe('code CLI output contract', { timeout: 30_000 }, () => {
 
     expect(invocation.status).toBe(0);
     expect(invocation.stderr).toBe('');
-    expect(invocation.stdout).toContain('═══ REQUEST ═══');
-    expect(invocation.stdout).toContain('═══ OBSERVED FACTS (2 requested: 2 matched, 0 ambiguous, 0 missing) ═══');
+    expect(invocation.stdout).not.toMatch(/REQUEST|CALIBRATION|COVERAGE/);
     expect(invocation.stdout).toContain('src/watch.ts:2-2  src:watch:Watcher:start()');
     expect(invocation.stdout).toContain('src/watch.ts:3-3  src/watch.ts:3-3');
-    expect(invocation.stdout).toContain('═══ COVERAGE ═══');
-    expect(invocation.stdout).toContain('2/2 selector(s) resolved');
-    expect(invocation.stdout).toContain('referenced definitions and runtime relationships are not claimed');
   });
 
   it('completes an exact range with statically attributed same-file callable definitions', () => {
@@ -210,8 +186,6 @@ describe('code CLI output contract', { timeout: 30_000 }, () => {
     expect(invocation.stdout).toContain('     2  export function sharedTwo()');
     expect(invocation.stdout).toContain('     3  export function uniqueAlpha()');
     expect(invocation.stdout).not.toContain('     4  export function uniqueBeta()');
-    expect(invocation.stdout).toContain('═══ RANGE SOURCE COVERAGE ═══');
-    expect(invocation.stdout).toContain('3/3 statically attributed same-file definition(s)');
     expect(invocation.stdout).not.toContain('no selector or matched source range was withheld');
   });
 
@@ -219,11 +193,7 @@ describe('code CLI output contract', { timeout: 30_000 }, () => {
     const invocation = runCode(['src/watch.ts']);
 
     expect(invocation.status).toBe(0);
-    expect(invocation.stdout).toContain('═══ FILE SOURCE COVERAGE ═══');
     expect(invocation.stdout).toContain('     1  export class Watcher {');
-    expect(invocation.stdout).toContain('cover 3/3 indexed definition(s)');
-    expect(invocation.stdout).toContain('0 file-local definition(s) omitted');
-    expect(invocation.stdout).toContain('absolute file line numbers and are citation-ready');
   });
 
   it('discloses unreturned file-local definitions through a compact exact-range ledger', () => {
@@ -288,7 +258,7 @@ describe('code CLI output contract', { timeout: 30_000 }, () => {
     expect(invocation.stdout).toContain('Hidden');
     expect(invocation.stdout).toContain('src/surface.ts:5-5');
     expect(invocation.stdout).toContain('reveal');
-    expect(invocation.stdout).toContain('3 file-local definition(s) omitted');
+    expect(invocation.stdout).toContain('3 omitted definition(s) disclosed below');
     expect(invocation.stdout).toContain("scip-query code 'src/surface.ts:3-3'");
     expect(invocation.stdout).toContain("'src/surface.ts:4-6'");
   });
@@ -315,8 +285,6 @@ describe('code CLI output contract', { timeout: 30_000 }, () => {
 
     expect(invocation.status).toBe(0);
     expect(invocation.stdout).toContain('function internalRoot()');
-    expect(invocation.stdout).toContain('basis: top-level-and-same-file-reference-closure');
-    expect(invocation.stdout).toContain('0 file-local definition(s) omitted');
   });
 
   it('saves an oversized ordinary code result for selective native reads without continuation', () => {
@@ -333,7 +301,8 @@ describe('code CLI output contract', { timeout: 30_000 }, () => {
   });
 
   it('paginates an oversized code packet through one immutable continuation', () => {
-    const invocation = runCode(['src/watch.ts', '--output-page-size', '256']);
+    writeFileSync(join(fixtureRoot, 'src', 'paging.ts'), '// pagination source\n'.repeat(100));
+    const invocation = runCode(['src/paging.ts:1-100', '--output-page-size', '256']);
 
     expect(invocation.status).toBe(0);
     expect(invocation.stderr).toBe('');
@@ -347,8 +316,6 @@ describe('code CLI output contract', { timeout: 30_000 }, () => {
     const invocation = runCode(['src/watch.ts', '--members', 'all']);
 
     expect(invocation.status).toBe(0);
-    expect(invocation.stdout).toContain('basis: complete-file-source; members=all');
-    expect(invocation.stdout).toContain('cover 3/3 indexed definition(s)');
   });
 
   it('keeps missing-symbol output concise and free of result metadata', () => {

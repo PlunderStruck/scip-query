@@ -43,7 +43,7 @@ export function displaySnippet(value: string, maxLength = 180): string {
 
 /** A single section in a sectioned report. */
 export interface ReportSection {
-  /** Section banner text (rendered as `═══ {title} ═══`). Skipped if undefined. */
+  /** Section title. Skipped if undefined. */
   title?: string;
   /** Optional explanation/sub-banner printed below the title before the rows. */
   explanation?: string;
@@ -135,7 +135,7 @@ export const render = {
 };
 
 function renderReportSection(section: ReportSection): void {
-  if (section.title !== undefined) console.log(`═══ ${sanitizeTerminalLine(section.title)} ═══`);
+  if (section.title !== undefined) console.log(sanitizeTerminalLine(section.title));
   if (section.explanation !== undefined) console.log(sanitizeTerminalLine(section.explanation));
   for (const row of section.rows) {
     const lines = section.preserveRowNewlines ? row.split('\n') : [row];

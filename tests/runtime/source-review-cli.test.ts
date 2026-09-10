@@ -63,7 +63,7 @@ describe('source maintenance CLI without an index', () => {
     const result = run(fixture(), ['health', '--check']);
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('1/1 eligible files');
-    expect(result.stdout).toContain('Test coverage: not supplied');
+    expect(result.stdout).not.toContain('Test coverage: not supplied');
     expect(result.stderr).not.toMatch(/reindex|watcher|missing index/i);
   });
 
@@ -158,7 +158,7 @@ it('shows concise source groups and honors reference inclusion without an index'
   const root = fixture();
   mkdirSync(join(root, 'agent_docs'));
   writeFileSync(join(root, 'agent_docs', 'sdk.ts'), 'export function sdk() {}');
-  expect(run(root, ['health']).stdout).toContain('reference 1');
+  expect(run(root, ['health']).stdout).toContain('1/1 eligible files');
   expect(run(root, ['health', '--include-references']).stdout).toContain('2/2 eligible files');
   const incompatible = run(root, ['health', '--indexed', '--include-references']);
   expect(incompatible.status).not.toBe(0);

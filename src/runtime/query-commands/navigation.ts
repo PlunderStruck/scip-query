@@ -21,7 +21,6 @@ import {
   sourceReadSemanticContract,
 } from '../command-kit/command-spec-builders.js';
 import { GRAPH_EVIDENCE_FAMILIES } from '../../domain/graph-exploration-contract.js';
-import { GRAPH_EVIDENCE_STRENGTH_DEFINITIONS } from '../../domain/graph-relation-providers.js';
 import {
   booleanOptionValue,
   budgetedListCommand,
@@ -247,17 +246,11 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
   const sourcePreviews = result.matches.map((match) => sourceSearchPreview(result, match));
   const sourceRows = sourcePreviews.map((preview) => preview.text);
   const shortenedSourceLines = sourcePreviews.reduce((total, preview) => total + preview.shortenedLines, 0);
-  const omittedPreviewContextLines = sourcePreviews.reduce((total, preview) => total + preview.omittedContextLines, 0);
   const identityRows = sourceSearchIdentityRows(identities);
   const recoveryCommands = identityCoverage.mode === 'complete' ? sourceSearchRecoveryCommands(result, identities) : [];
-  const textCoverage = result.textCoverage;
   const exactTextComplete = sourceSearchTextCoverageComplete(result);
   const recoveryRows = sourceSearchRecoveryRows(result, identityCoverage.mode, recoveryCommands);
   return [
-    {
-      title: 'REQUEST',
-      rows: [`  exact-text=${JSON.stringify(result.pattern)}; mode=${result.mode}`],
-    },
     {
       title: `OBSERVED MATCH IDENTITIES (${identities.length}/${result.matchingLines}, ${identityCoverage.mode.toUpperCase()})`,
       rows: identityRows,
@@ -268,24 +261,23 @@ function sourceSearchSections(result: queries.SourceSearchResult): ReportSection
       preserveRowNewlines: true,
     },
     {
-      title: 'EVIDENCE CALIBRATION',
-      rows: sourceSearchCalibrationRows(exactTextComplete, shortenedSourceLines, omittedPreviewContextLines),
+      title: 'Limits',
+      rows: [
+        ...(!exactTextComplete
+          ? ['Text scan incomplete: unreadable or oversized files may contain additional matches.']
+          : []),
+        ...(identityCoverage.omitted > 0
+          ? [`${identityCoverage.omitted} match identities omitted; narrow --scope.`]
+          : []),
+        ...(shortenedSourceLines > 0 ? [`${shortenedSourceLines} source line(s) shortened.`] : []),
+      ],
+      skipIfEmpty: true,
     },
     {
-      title: 'COVERAGE',
-      rows: [
-        `  ${exactTextComplete ? 'Exact' : 'Observed'} cardinality: ${result.matchingLines} matching line(s) across ${result.matchingFiles ?? result.fileCoverage?.length ?? 0} file(s). Identity manifest: ${identities.length}/${result.matchingLines} matching line(s); ${identityCoverage.mode === 'complete' ? 'complete' : `${identityCoverage.omitted} lower-ranked identities withheld before rendering`}. Source materialization: ${result.matches.length}/${result.matchingLines} window(s); ${result.omittedMatches} exact match location(s) were not expanded into source.`,
-        ...(textCoverage
-          ? [
-              `  Exact text: ${textCoverage.scannedTextFiles}/${textCoverage.candidateFiles} current project text file(s), ${textCoverage.scannedBytes.toLocaleString()} byte(s); semantic owners ${textCoverage.semanticFiles.aligned} aligned, ${textCoverage.semanticFiles.stale} stale, ${textCoverage.semanticFiles.unavailable} unavailable; exclusions ${textCoverage.skippedBinaryPaths.length} binary, ${textCoverage.skippedUnreadablePaths.length} unreadable, ${textCoverage.skippedOversizedPaths.length} oversized.`,
-              ...(exactTextComplete
-                ? []
-                : ['  Text coverage is incomplete: unreadable or oversized text may contain additional matches.']),
-            ]
-          : []),
-      ],
+      title: 'More matches',
+      rows: result.omittedMatches || identityCoverage.omitted ? recoveryRows : [],
+      skipIfEmpty: true,
     },
-    { title: 'RECOVERY', rows: recoveryRows },
   ];
 }
 
@@ -585,10 +577,10 @@ function appendSearchScopeHints(search: queries.SourceInspectionResult['searches
 
 function sourceInspectionSections(result: queries.SourceInspectionResult): ReportSection[] {
   const units = result.units ?? [];
-  const searchRows = result.searches.map(sourceInspectionSearchRow);
-  const locationRows = result.locations.map(
-    (location) => `  ${location.matched ? 'matched' : 'missing'}  ${location.target}`,
-  );
+  const searchRows = result.searches.filter((search) => search.matchingLines === 0).map(sourceInspectionSearchRow);
+  const locationRows = result.locations
+    .filter((location) => !location.matched)
+    .map((location) => `  ${location.matched ? 'matched' : 'missing'}  ${location.target}`);
   const sourceRows = units.map(sourceInspectionUnitRow);
   const bindingRows = bindingClosureRows(result.bindingClosure);
   const omissionRows = (result.omissionGroups ?? []).map(sourceInspectionOmissionGroupRow);
@@ -597,11 +589,12 @@ function sourceInspectionSections(result: queries.SourceInspectionResult): Repor
     const failure = evidenceFailureMessage(item, 'inspect');
     return failure ? [`  ${failure}`] : [];
   });
-  const packetRows = sourceInspectionPacketRows(result, units.length);
+  const packetRows = sourceInspectionPacketRows(result);
   const stoppingRows = sourceInspectionStoppingRows(result);
   return [
     {
-      title: 'REQUEST',
+      title: 'Unresolved selectors',
+      skipIfEmpty: true,
       rows: [
         ...searchRows.map((row) => `  search ${row.trimStart()}`),
         ...locationRows.map((row) => `  location ${row.trimStart()}`),
@@ -614,27 +607,14 @@ function sourceInspectionSections(result: queries.SourceInspectionResult): Repor
       preserveRowNewlines: true,
       skipIfEmpty: true,
     },
-    {
-      title: 'EVIDENCE CALIBRATION',
-      rows: [
-        `  view=${result.view}; exact source is current working-tree text; behavioral outlines label whether they are statement-complete, partial, or verbatim source units.`,
-        '  Source co-location and references do not become executable reachability. Runtime facts retain their displayed strength and resolution.',
-      ],
-    },
-    {
-      title: 'COVERAGE',
-      rows: [...packetRows, ...stoppingRows],
-    },
+    { title: 'Limits', rows: [...packetRows, ...stoppingRows], skipIfEmpty: true },
     { title: 'RECOVERY', rows: [...omissionRows, ...causalFrontierRows], skipIfEmpty: true },
   ];
 }
 
-function sourceInspectionPacketRows(result: queries.SourceInspectionResult, unitCount: number): string[] {
+function sourceInspectionPacketRows(result: queries.SourceInspectionResult): string[] {
   const packet = result.packetCoverage;
-  if (!packet)
-    return [
-      `  Complete semantic packet: ${unitCount} deduplicated unit(s), ${result.returnedLines ?? 0} source line(s), and ${result.returnedCharacters ?? 0} source character(s).`,
-    ];
+  if (!packet || packet.mode === 'complete') return [];
   return sourceInspectionBoundedPacketRows(result, packet);
 }
 
@@ -655,12 +635,11 @@ function sourceInspectionBoundedPacketRows(
           `  Expand the complete selector set only if omitted evidence can change the decision: ${packet.expansionCommand}`,
         ]
       : []),
-    '  Universal output transport may still page the rendered bytes; transport pages do not change this selection coverage.',
   ];
 }
 
 function sourceInspectionStoppingRows(result: queries.SourceInspectionResult): string[] {
-  return result.stoppingSummary
+  return result.stoppingSummary && result.stoppingSummary.openEvidence > 0
     ? [
         `  ${result.stoppingSummary.queryStatus ?? result.stoppingSummary.status}: ${result.stoppingSummary.guidance}`,
         ...(result.stoppingSummary.openEvidence > 0
@@ -908,13 +887,7 @@ function evidenceCommandSections(result: EvidenceCommandResult): ReportSection[]
     );
   }
   const foldRows = graphEvidenceFoldRows(result.graph.folds ?? []);
-  const calibrationRows = graphEvidenceCalibrationRows(result.graph.edges);
   const coverage = result.graph.coverage;
-  const coverageRows = [
-    `  ${coverage.status}: ${coverage.returnedEdges}/${coverage.eligibleEdges} materialized relationship(s); ${coverage.matchedEdges ?? coverage.eligibleEdges} matched the projection; depth <= ${coverage.maxDepth}; ${coverage.frontierGroups} accounted frontier group(s); ${coverage.unsupportedFrontiers} unsupported frontier(s).`,
-    `  ${coverage.explanation}`,
-    ...uniqueStrings(coverage.blindSpots).map((blindSpot) => `  Unsupported or unavailable: ${blindSpot}`),
-  ];
   const sourceSections = result.source.flatMap((item) => {
     if (item.kind !== 'matched') {
       return [{ title: `SOURCE SELECTOR — ${item.query}`, rows: [`  [${item.kind}]`] } satisfies ReportSection];
@@ -942,9 +915,18 @@ function evidenceCommandSections(result: EvidenceCommandResult): ReportSection[]
     { title: 'REQUEST', rows: requestRows },
     { title: 'OBSERVED FACTS', rows: [...inventoryRows, ...relationshipRows], skipIfEmpty: true },
     ...sourceSections,
-    { title: 'EVIDENCE CALIBRATION', rows: calibrationRows },
-    { title: 'COVERAGE', rows: coverageRows },
+    { title: 'Limits', rows: graphEvidenceLimitRows(coverage), skipIfEmpty: true },
     { title: 'RECOVERY', rows: recoveryRows, skipIfEmpty: true },
+  ];
+}
+
+function graphEvidenceLimitRows(coverage: queries.GraphEvidenceCoverage): string[] {
+  return [
+    ...(coverage.omittedEdges > 0
+      ? [`${coverage.omittedEdges} matching relationship(s) omitted; ${coverage.returnedEdges} shown.`]
+      : []),
+    ...(coverage.status === 'incomplete' ? [coverage.explanation] : []),
+    ...uniqueStrings(coverage.blindSpots).map((blindSpot) => `Unavailable: ${blindSpot}`),
   ];
 }
 
@@ -966,28 +948,6 @@ function graphEvidenceFoldRows(folds: readonly queries.GraphEvidenceFold[]): str
     '  Rerun the same selectors and bounds with --fold <id>; each ID materializes exactly that folded edge set.',
     ...rows,
   ];
-}
-
-function graphEvidenceCalibrationRows(edges: readonly queries.GraphEvidenceEdge[]): string[] {
-  const strengths = uniqueStrings(edges.map((edge) => edge.evidenceStrength));
-  const rows =
-    strengths.length === 0
-      ? ['  No relationships were materialized, so no edge evidence strength is claimed.']
-      : strengths.map((strength) => `  ${strength}: ${GRAPH_EVIDENCE_STRENGTH_DEFINITIONS[strength]}`);
-  const contracts = new Map<string, string>();
-  for (const edge of edges) {
-    const constituents = (
-      edge.evidenceConstituents ?? edge.evidenceMethods.map((method) => ({ method, strength: edge.evidenceStrength }))
-    )
-      .map((constituent) => `${constituent.method}=${constituent.strength}`)
-      .join(', ');
-    const key = `${edge.family}/${edge.subtype}\0${edge.providerId}\0${edge.evidenceStrength}\0${constituents}`;
-    contracts.set(
-      key,
-      `  ${edge.family}/${edge.subtype} [${edge.evidenceStrength}] provider=${edge.providerId}; ceiling=${edge.supportCeiling}; constituents=${constituents || 'none reported'}; establishes=${edge.establishes}; does-not-establish=${edge.nonClaims.join(' ') || 'no additional provider non-claim'}`,
-    );
-  }
-  return [...rows, ...contracts.values()];
 }
 
 function uniqueStrings<T extends string>(values: readonly T[]): T[] {
@@ -1865,26 +1825,6 @@ function sourceSearchRecoveryRows(
           ...recoveryCommands.map((command) => `  ${command}`),
         ]
       : ['  Every matching source window was materialized; no drilldown remains.'];
-}
-
-function sourceSearchCalibrationRows(
-  exactTextComplete: boolean,
-  shortenedSourceLines: number,
-  omittedPreviewContextLines: number,
-): string[] {
-  return [
-    `  ${exactTextComplete ? 'Exact' : 'Observed'} cardinality is current project text; compiler ownership is an aligned semantic overlay. Neither ownership nor co-occurrence proves task relevance or a graph relationship.`,
-    ...(shortenedSourceLines > 0
-      ? [
-          `  ${shortenedSourceLines} overlong matched line(s) were shortened; every exact path:line identity remains recoverable with scip-query code.`,
-        ]
-      : []),
-    ...(omittedPreviewContextLines > 0
-      ? [
-          `  ${omittedPreviewContextLines} nonfocus context line(s) were omitted from expensive previews; the matched lines remain visible and JSON retains complete windows.`,
-        ]
-      : []),
-  ];
 }
 
 function sourceInspectionBehaviorEvidenceRows(

@@ -131,9 +131,7 @@ describe('search CLI identity and materialization contract', { timeout: 30_000 }
     expect(invocation.stderr).toBe('');
     expect(invocation.stdout).toContain('OBSERVED MATCH IDENTITIES (30/30, COMPLETE)');
     expect(invocation.stdout).toContain('OBSERVED SOURCE (2/30 WINDOWS)');
-    expect(invocation.stdout).toContain('EVIDENCE CALIBRATION');
-    expect(invocation.stdout).toContain('Exact cardinality: 30 matching line(s) across 30 file(s).');
-    expect(invocation.stdout).toContain('Identity manifest: 30/30 matching line(s); complete.');
+    expect(invocation.stdout).not.toContain('EVIDENCE CALIBRATION');
     expect(invocation.stdout).toContain('Recover every unmaterialized owning unit in 2 bounded batch command(s)');
     expect(invocation.stdout).toContain('src/group-30/match.ts');
     expect(invocation.stdout).not.toContain('␤');
@@ -146,7 +144,6 @@ describe('search CLI identity and materialization contract', { timeout: 30_000 }
     expect(invocation.status).toBe(0);
     expect(invocation.stdout).toContain('OBSERVED MATCH IDENTITIES (30/30, COMPLETE)');
     expect(invocation.stdout).toContain('OBSERVED SOURCE (6/30 WINDOWS)');
-    expect(invocation.stdout).toContain('Identity manifest: 30/30 matching line(s); complete.');
   });
 
   it('centers overlong human source previews on the match without changing JSON evidence', () => {
@@ -157,7 +154,7 @@ describe('search CLI identity and materialization contract', { timeout: 30_000 }
     expect(human.stdout).toContain('src/long-line.ts');
     expect(human.stdout).toContain('long_line_token');
     expect(human.stdout).toContain('characters omitted');
-    expect(human.stdout).toContain('overlong matched line(s) were shortened');
+    expect(human.stdout).toContain('source line(s) shortened');
     expect(human.stdout).toContain('nonfocus context line(s) omitted');
     expect(Math.max(...human.stdout.split('\n').map((line) => Buffer.byteLength(line)))).toBeLessThan(1_000);
 
@@ -185,7 +182,6 @@ describe('search CLI identity and materialization contract', { timeout: 30_000 }
     expect(invocation.status).toBe(0);
     expect(invocation.stdout).toContain('OBSERVED MATCH IDENTITIES (30/30, COMPLETE)');
     expect(invocation.stdout).toContain('OBSERVED SOURCE (30/30 WINDOWS)');
-    expect(invocation.stdout).toContain('Every matching source window was materialized; no drilldown remains.');
   });
 
   it('bounds an accidentally broad identity selector before transport while preserving exact recovery scopes', () => {
@@ -194,7 +190,6 @@ describe('search CLI identity and materialization contract', { timeout: 30_000 }
     expect(invocation.status).toBe(0);
     expect(invocation.stderr).toBe('');
     expect(invocation.stdout).toContain('OBSERVED MATCH IDENTITIES (64/150, BOUNDED)');
-    expect(invocation.stdout).toContain('Exact cardinality: 150 matching line(s) across 150 file(s).');
     expect(invocation.stdout).toContain('Broad selector: identity enumeration stopped before output transport');
     expect(invocation.stdout).toContain("scip-query search 'broad_selector_token' --scope 'src'");
     expect(invocation.stdout).not.toContain('[scip-query output page:');
@@ -220,8 +215,8 @@ describe('search CLI identity and materialization contract', { timeout: 30_000 }
     expect(invocation.status).toBe(0);
     expect(invocation.stdout).toContain('REQUEST');
     expect(invocation.stdout).toContain('OBSERVED FACTS');
-    expect(invocation.stdout).toContain('EVIDENCE CALIBRATION');
-    expect(invocation.stdout).toContain('COVERAGE');
+    expect(invocation.stdout).not.toContain('EVIDENCE CALIBRATION');
+    expect(invocation.stdout).not.toContain('COVERAGE');
     expect(invocation.stdout).toContain('RECOVERY');
     expect(invocation.stdout).toContain('Graph traversal stays graph-sized');
     expect(invocation.stdout).toContain("scip-query inspect --at 'src/expansive-flow.ts:1' --view source");

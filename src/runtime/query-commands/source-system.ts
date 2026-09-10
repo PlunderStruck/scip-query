@@ -144,16 +144,7 @@ export function renderSourceSystem(
   console.log(
     `Module evidence — current source: ${report.coverage.capturedFiles}/${report.coverage.eligibleFiles} eligible files; ${report.modules.length}/${report.totalModules} groups selected.`,
   );
-  console.log(
-    `Coverage: ${report.coverage.status}; ${report.coverage.excludedFiles} excluded files. Groups include files without findings; responsibility remains unverified.`,
-  );
-  console.log(
-    `Exclusions: ${
-      Object.entries(report.coverage.exclusions)
-        .map(([kind, count]) => `${kind} ${count}`)
-        .join('; ') || 'none'
-    }.`,
-  );
+  if (report.coverage.status === 'incomplete') console.log('Source scan incomplete; see unresolved files below.');
   const policy = report.architecture;
   console.log(
     policy.configured
@@ -164,14 +155,11 @@ export function renderSourceSystem(
   for (const group of report.modules.slice(0, limit)) renderSourceModule(group, report.imports, limit, groupRecovery);
   renderModuleEdges(report, limit);
   renderModuleFindings(report, limit);
-  console.log(`\nRecovery for every selected row: ${recovery} --full`);
-  console.log(
-    'For exhaustive machine output add --json --json-output <path>. --full removes display limits, not source scan limits.',
-  );
+  if (report.modules.length > limit || report.edges.length > limit || report.findings.length > limit)
+    console.log(`More rows: ${recovery} --full`);
   for (const problem of report.coverage.problems) console.log(`Unresolved: ${problem}`);
   for (const unresolved of report.coverage.dependencies.unresolved.slice(0, limit))
     console.log(`Unresolved import: ${importLabel(unresolved)}`);
-  for (const limitation of report.coverage.limits) console.log(`Limit: ${limitation}`);
 }
 
 function renderModuleEdges(report: SourceSystemReport, limit: number): void {
