@@ -49,6 +49,7 @@ export function splitSearchableSourceLines(text: string): string[] {
 
 export function getSourceLines(db: ScipDatabase, relativePath: string): readonly string[] {
   const normalized = relativePath.replace(/\\/g, '/');
+  recordFileAccess(normalized);
   return SOURCE_LINES_CACHE.get(db, normalized, () => {
     const source = getSourceText(db, normalized);
     return source ? source.split('\n') : [];

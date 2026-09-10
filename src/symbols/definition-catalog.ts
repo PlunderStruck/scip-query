@@ -175,6 +175,7 @@ export function getDefinitionsForFile(
 }
 
 export function getFunctionLikeDefinitionsForFile(db: ScipDatabase, relativePath: string): IndexedDefinition[] {
+  recordFileAccess(relativePath);
   return FILE_FUNCTION_LIKE_DEFINITION_CACHE.get(db, relativePath, () => {
     const cached = readDefinitionEvidence(db, relativePath);
     if (cached) return cached.filter((definition) => definition.isFunctionLike);

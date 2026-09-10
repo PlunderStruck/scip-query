@@ -9,8 +9,8 @@
  * a derivation by its own file's content hash plus the recorded dependencies'
  * hashes and reference membership, so either kind of change invalidates the cached value.
  *
- * The recorder is a single synchronous ambient slot: arm it around a bounded
- * computation that neither awaits nor re-enters another armed computation.
+ * Arm the recorder around a bounded synchronous computation. Nested recordings
+ * also report their inputs to the enclosing computation; do not await inside one.
  */
 let activeRecorder: ((relativePath: string) => void) | null = null;
 let activeReferenceRecorder: ((symbol: string, files: readonly string[]) => void) | null = null;
@@ -27,7 +27,7 @@ export function recordFileAccess(relativePath: string): void {
 
 /**
  * Runs a synchronous computation with file accesses reported to `onAccess`.
- * Nested recordings restore the outer recorder on exit; the recorder is
+ * Nested recordings forward reads to the outer recorder and restore it on exit; the recorder is
  * cleared even when the computation throws.
  */
 export function withFileAccessRecording<T>(
@@ -37,8 +37,18 @@ export function withFileAccessRecording<T>(
 ): T {
   const previous = activeRecorder;
   const previousReferences = activeReferenceRecorder;
-  activeRecorder = onAccess;
-  activeReferenceRecorder = onReferences ?? null;
+  activeRecorder = previous
+    ? (file) => {
+        previous(file);
+        onAccess(file);
+      }
+    : onAccess;
+  activeReferenceRecorder = onReferences
+    ? (symbol, files) => {
+        previousReferences?.(symbol, files);
+        onReferences(symbol, files);
+      }
+    : previousReferences;
   try {
     return run();
   } finally {
