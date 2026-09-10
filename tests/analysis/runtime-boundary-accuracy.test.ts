@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import * as astRuntime from '../../src/source/ast/ast-runtime.js';
 import * as staticValueFlow from '../../src/symbols/graph/static-value-flow.js';
 import * as boundaryExtractors from '../../src/analysis/runtime-boundaries/extractors.js';
 import { composeHttpMountsWithCoverage } from '../../src/analysis/runtime-boundaries/http-mounts.js';
@@ -27,6 +28,30 @@ async function graph(source: string[]) {
 }
 
 describe('runtime boundary identity and binding accuracy', () => {
+  it('retries direct extraction after unavailable parsing instead of persisting an empty result', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'runtime-direct-recovery-'));
+    const dbPath = join(root, 'index.db');
+    const context = vi.spyOn(astRuntime, 'parseAstSource').mockReturnValueOnce(null);
+    try {
+      writeFixtureFiles(root, { 'flow.ts': ['fetch("/recovered");'] });
+      evidenceFixtureDb(dbPath).document(1, 'typescript', 'flow.ts').write();
+      for (const missing of [true, false]) {
+        const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+        try {
+          const graph = await collectRuntimeBoundaryGraph(db);
+          expect(graph.observations.filter((observation) => observation.action === 'http.request')).toHaveLength(
+            missing ? 0 : 1,
+          );
+        } finally {
+          db.close();
+        }
+      }
+    } finally {
+      context.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('reuses parsed negative mount imports across readers and invalidates them on import edits', () => {
     const root = mkdtempSync(join(tmpdir(), 'runtime-mount-imports-'));
     const dbPath = join(root, 'index.db');

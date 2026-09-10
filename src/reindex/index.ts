@@ -270,6 +270,7 @@ type SqliteMaterializationResult =
       patchDurationMs: number;
       converterDurationMs: number;
       scipCompanion: 'current' | 'deferred';
+      compilerFactsUnchanged?: boolean;
     }
   | {
       mode: 'full';
@@ -812,6 +813,7 @@ async function runRuntimeBoundaryAugmentation(
   affectedFiles?: readonly string[],
   evidenceDbPath?: string,
   forceDerivedRebuild = false,
+  compilerFactsUnchanged = false,
 ): Promise<void> {
   try {
     await runPostIndexAugmentationAsync(
@@ -821,6 +823,7 @@ async function runRuntimeBoundaryAugmentation(
         reuseExisting,
         affectedFiles,
         forceDerivedRebuild,
+        compilerFactsUnchanged,
       }),
       {
         projectRoot,
@@ -1864,8 +1867,8 @@ async function publishFreshReindexArtifacts(
   );
 
   throwIfSignalAborted(opts.opts.signal, 'Reindex cancelled by its owner.');
-  profileSpan('reindex.publish.auxiliary-documents', () => {
-    runPostIndexAugmentation(auxiliaryDocumentsAugmentationStage(), {
+  const auxiliary = profileSpan('reindex.publish.auxiliary-documents', () => {
+    return runPostIndexAugmentation(auxiliaryDocumentsAugmentationStage(), {
       projectRoot: opts.projectRoot,
       dbPath: opts.tempPaths.tempOutputDb,
       onStatus: opts.onStatus,
@@ -1873,27 +1876,23 @@ async function publishFreshReindexArtifacts(
   });
   await profileAsyncSpan('reindex.publish.runtime-boundaries', async () => {
     const replacingWholeTypeScriptProject = incrementalTypeScript?.plan.mode === 'full-project';
-    const relationshipsUnchanged = incrementalTypeScript?.dependencyGraphUnchanged === true;
     if (replacingWholeTypeScriptProject) {
       opts.onStatus(
         'Rebuilding compiler-derived runtime-boundary relationships while retaining unchanged per-file extraction facts.',
       );
-    } else if (relationshipsUnchanged) {
-      opts.onStatus('Reusing runtime-boundary relationships because TypeScript semantics are unchanged.');
     }
     await runRuntimeBoundaryAugmentation(
       opts.projectRoot,
       opts.tempPaths.tempOutputDb,
       opts.tempPaths.tempOutputScip,
       opts.onStatus,
-      relationshipsUnchanged,
-      relationshipsUnchanged
-        ? undefined
-        : replacingWholeTypeScriptProject
-          ? incrementalTypeScript?.changedFiles
-          : incrementalTypeScript?.affectedFiles,
+      false,
+      replacingWholeTypeScriptProject ? incrementalTypeScript?.changedFiles : incrementalTypeScript?.affectedFiles,
       join(dirname(opts.paths.outputDb), EVIDENCE_DB_FILENAME),
       replacingWholeTypeScriptProject,
+      sqliteMaterialization.mode === 'incremental' &&
+        sqliteMaterialization.compilerFactsUnchanged === true &&
+        auxiliary.result.inserted === 0,
     );
   });
   const indexMaintenance = profileSpan('reindex.publish.sqlite-layout', () =>
@@ -3640,6 +3639,7 @@ async function materializeIncrementalSqliteBatches(
     return {
       mode: 'incremental',
       changedDocumentPaths: [],
+      compilerFactsUnchanged: true,
       patchDurationMs: performance.now() - startedAt,
       converterDurationMs: 0,
       scipCompanion: 'deferred',

@@ -160,6 +160,30 @@ export interface RuntimeBoundaryCoverage {
   phases?: RuntimeBoundaryPhaseCoverage[];
 }
 
+export interface RuntimePhaseRecord<Result> {
+  build: string;
+  scope: string;
+  seeds: string;
+  sources: { file: string; hash: string }[];
+  result: Result;
+}
+
+export interface HttpSummaryPropagationResult {
+  observations: BoundaryObservation[];
+  frontiers: BoundaryFrontier[];
+  summaries: number;
+  filesInspected: number;
+  errors: string[];
+}
+
+export interface CarrierDiscriminatorResult {
+  observations: BoundaryObservation[];
+  bodySummaries: number;
+  discriminatorSummaries: number;
+  filesInspected: number;
+  errors: string[];
+}
+
 export interface RuntimeBoundaryGraph {
   schemaVersion: 2;
   extractorVersion: string;
@@ -170,6 +194,11 @@ export interface RuntimeBoundaryGraph {
   coverage: RuntimeBoundaryCoverage;
   /** Optional for backward compatibility with runtime-boundaries-v5 graphs. */
   fileCoverage?: RuntimeBoundaryFileCoverage[];
+  /** Internal persisted inputs; missing records require fresh phase computation. */
+  phaseRecords?: {
+    http?: RuntimePhaseRecord<HttpSummaryPropagationResult>;
+    carrier?: RuntimePhaseRecord<CarrierDiscriminatorResult>;
+  };
 }
 
 export interface BoundaryFileContext {

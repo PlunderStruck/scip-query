@@ -4,7 +4,7 @@ import {
   recordSymbolReferenceAccess,
   withFileAccessRecording,
 } from '../../src/domain/file-access-recorder.js';
-import { getSourceLines } from '../../src/source/primitives/source-text.js';
+import { getSourceLines, getSourceText } from '../../src/source/primitives/source-text.js';
 import { getFunctionLikeDefinitionsForFile } from '../../src/symbols/definition-catalog.js';
 import { withSourceDb } from '../properties/fixture.js';
 
@@ -32,6 +32,32 @@ test('nested computations contribute all file and empty-reference reads to their
   expect(references).toEqual([['no-callers', []]]);
   recordFileAccess('outside.ts');
   expect(outer).toHaveLength(3);
+});
+
+test.each([getSourceText, getSourceLines])('cached empty files and missing files remain distinguishable', (read) => {
+  withSourceDb({ 'empty.ts': '' }, (db) => {
+    read(db, 'missing.ts');
+    read(db, 'empty.ts');
+    const sources: Array<[string, string]> = [];
+    const unavailable: string[] = [];
+    withFileAccessRecording(
+      () => undefined,
+      () => {
+        read(db, 'empty.ts');
+        withFileAccessRecording(
+          () => undefined,
+          () => read(db, 'missing.ts'),
+        );
+      },
+      undefined,
+      { source: (file, text) => sources.push([file, text]), unavailable: (file) => unavailable.push(file) },
+    );
+    expect(sources).toEqual([
+      ['empty.ts', ''],
+      ['missing.ts', ''],
+    ]);
+    expect(unavailable).toEqual(['missing.ts']);
+  });
 });
 
 test('a failed nested computation restores its parent recorder', () => {

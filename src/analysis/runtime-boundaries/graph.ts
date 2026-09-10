@@ -1,3 +1,4 @@
+import { materializeRuntimePhase, runtimePhaseScope, runtimePhaseSeeds } from './phase-inputs.js';
 import { createHash } from 'node:crypto';
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises';
 import { collectNativeGarbage } from '../../domain/native-gc.js';
@@ -5,7 +6,7 @@ import { createRequire } from 'node:module';
 import type * as TypeScript from 'typescript';
 import { detectAstLanguage, isVueSfcPath } from '../../source/ast/ast-language.js';
 import type { ScipDatabase } from '../../storage/db.js';
-import { withFileAccessRecording } from '../../domain/file-access-recorder.js';
+import { withFileAccessRecording, recordSourceEvidenceUnavailable } from '../../domain/file-access-recorder.js';
 import { sharedSymbolReferencingFiles } from '../../symbols/graph/imported-value-context.js';
 import { getSourceFiles } from '../../source/primitives/source-fileset.js';
 import { readSourceTextUncached } from '../../source/primitives/source-text.js';
@@ -33,7 +34,7 @@ import type {
 
 // Increment whenever direct facts or any derived propagation rule changes so an
 // older persisted graph can never be incrementally mixed with newer semantics.
-export const RUNTIME_BOUNDARY_EXTRACTOR_VERSION = 'runtime-boundaries-v31';
+export const RUNTIME_BOUNDARY_EXTRACTOR_VERSION = 'runtime-boundaries-v32';
 
 const require = createRequire(import.meta.url);
 const typescript = require('typescript') as typeof TypeScript;
@@ -135,19 +136,13 @@ const GROUP_RULES: readonly GroupRule[] = [
 ];
 
 const MAX_MATERIALIZED_PAIRS_PER_GROUP = 64;
-const HTTP_SUMMARY_EXTRACTOR = 'builtin.http-summary';
-const DERIVED_BOUNDARY_ACTIONS = {
-  HTTP_HANDLE: 'http.handle',
-  HTTP_REQUEST: 'http.request',
-  REGISTRY_HANDLE: 'registry.handle',
-} as const;
-const DERIVED_BOUNDARY_ACTION_SET = new Set<string>(Object.values(DERIVED_BOUNDARY_ACTIONS));
-
 export interface RuntimeBoundaryCollectionOptions {
   previousGraph?: RuntimeBoundaryGraph;
   affectedFiles?: readonly string[];
   /** Recompute compiler-derived relationships while retaining unchanged per-file extraction facts. */
   forceDerivedRebuild?: boolean;
+  /** Accepted SQLite was cloned after exact-byte verification of all compiler documents. */
+  compilerFactsUnchanged?: boolean;
   profileSpan?: RuntimeBoundaryProfileSpan;
 }
 
@@ -164,7 +159,6 @@ export async function collectRuntimeBoundaryGraph(
 ): Promise<RuntimeBoundaryGraph> {
   const {
     files,
-    affectedFiles,
     previousFileCoverage,
     incrementallyReusable,
     retainedFileCoverage,
@@ -188,100 +182,48 @@ export async function collectRuntimeBoundaryGraph(
   const coverage = aggregateFileCoverage(fileCoverage);
   const extractionErrors = fileCoverage.flatMap((entry) => entry.extractionErrors);
   const primary = deduplicateObservations([...retainedObservations, ...extracted.observations]);
-  const canRetainDerivedGraph = (): boolean =>
-    Boolean(
-      incrementallyReusable &&
-      !opts.forceDerivedRebuild &&
-      opts.previousGraph &&
-      affectedDirectCoverageUnchanged(previousFileCoverage, extracted.fileCoverage, affectedFiles) &&
-      (!affectedFilesMayChangeDerivedGraph(db, opts.previousGraph, affectedFiles) ||
-        (affectedSyntaxUnchanged(previousFileCoverage, extracted.fileCoverage, affectedFiles) &&
-          !affectedFilesAppearInGraph(opts.previousGraph, affectedFiles))),
-    );
-  const retainedDerivedGraph = (previousGraph: RuntimeBoundaryGraph): RuntimeBoundaryGraph => {
-    for (const extractor of previousGraph.coverage.extractors) {
-      if (!coverage.has(extractor.id)) coverage.set(extractor.id, extractor);
-    }
-    const reusedPhases = reuseDerivedPhaseCoverage(previousGraph.coverage.phases);
-    phases.push(...reusedPhases);
-    return {
-      ...previousGraph,
-      observations: previousGraph.observations,
-      relationGroups: previousGraph.relationGroups,
-      links: previousGraph.links,
-      frontiers: previousGraph.frontiers,
-      coverage: {
-        filesScanned: files.length,
-        filesWithAst: fileCoverage.filter((entry) => entry.hasAst).length,
-        filesWithoutAst: fileCoverage.filter((entry) => !entry.hasAst).length,
-        filesReused: retainedFileCoverage.length,
-        extractors: [...coverage.values()],
-        extractionErrors: previousGraph.coverage.extractionErrors,
-        phases,
-      },
-      fileCoverage,
-    };
-  };
-  if (opts.previousGraph && canRetainDerivedGraph()) return retainedDerivedGraph(opts.previousGraph);
   const withDatabaseQueues = deduplicateObservations([...primary, ...deriveDatabaseWorkQueueObservations(primary)]);
-  const httpSummaryReuse =
-    incrementallyReusable && opts.previousGraph !== undefined
-      ? httpSummaryReuseDecision(
-          opts.previousGraph,
-          previousFileCoverage,
-          extracted.fileCoverage,
-          affectedFiles,
-          primary,
-        )
-      : { reuse: false, shapeUnchanged: false, proofFilesUnchanged: false, seedUnchanged: false };
-  const reuseHttpSummary = httpSummaryReuse.reuse;
-  opts.profileSpan?.('runtime-boundaries.http-summary.reuse-decision', () => undefined, httpSummaryReuse);
+  const scope = runtimePhaseScope(db, files);
+  const compilerFactsUnchanged =
+    opts.compilerFactsUnchanged === true &&
+    !opts.forceDerivedRebuild &&
+    opts.previousGraph?.extractorVersion === RUNTIME_BOUNDARY_EXTRACTOR_VERSION;
+  const phaseRecords: NonNullable<RuntimeBoundaryGraph['phaseRecords']> = {};
   phaseStartedAt = performance.now();
-  const materializeHttpSummary = (): ReturnType<typeof propagateCompilerResolvedHttpSummaries> => {
-    let propagated: ReturnType<typeof propagateCompilerResolvedHttpSummaries>;
-    if (reuseHttpSummary) {
-      const previousHttpPhase = opts.previousGraph!.coverage.phases?.find((phase) => phase.id === 'http-summary');
-      const previousWrapperCoverage = opts.previousGraph!.coverage.extractors.find(
-        (extractor) => extractor.id === 'builtin.wrapper',
-      );
-      propagated = {
-        observations: opts.previousGraph!.observations.filter(
-          (observation) => observation.extractor === HTTP_SUMMARY_EXTRACTOR,
-        ),
-        frontiers: opts.previousGraph!.frontiers.filter(
-          (frontier) =>
-            frontier.kind === 'call-resolution' && frontier.action === DERIVED_BOUNDARY_ACTIONS.HTTP_REQUEST,
-        ),
-        summaries: 0,
-        filesInspected: previousHttpPhase?.filesVisited ?? previousWrapperCoverage?.applicableFiles ?? 0,
-        errors: opts.previousGraph!.coverage.extractionErrors.filter((error) =>
-          error.startsWith('builtin.http-summary failed'),
-        ),
-      };
-      recordPhase(phases, 'http-summary', phaseStartedAt, withDatabaseQueues.length, propagated.observations.length, {
-        filesVisited: 0,
-        filesReused: propagated.filesInspected,
-        factsReused: propagated.observations.length + propagated.frontiers.length,
-        factsInvalidated: 0,
-      });
-      if (previousWrapperCoverage) coverage.set(previousWrapperCoverage.id, previousWrapperCoverage);
-    } else {
-      propagated = propagateCompilerResolvedHttpSummaries(db, withDatabaseQueues, opts.profileSpan);
-      recordPhase(phases, 'http-summary', phaseStartedAt, withDatabaseQueues.length, propagated.observations.length, {
-        filesVisited: propagated.filesInspected,
-      });
-      coverage.set('builtin.wrapper', {
-        id: 'builtin.wrapper',
-        applicableFiles: propagated.filesInspected,
-        observations: propagated.observations.length,
-        errors: propagated.errors.length,
-      });
-    }
-    return propagated;
-  };
-  const propagated = materializeHttpSummary();
+  const httpPhase = materializeRuntimePhase({
+    db,
+    scope,
+    seeds: runtimePhaseSeeds(withDatabaseQueues),
+    compilerFactsUnchanged,
+    previous: opts.previousGraph?.phaseRecords?.http,
+    compute: (reader) => propagateCompilerResolvedHttpSummaries(reader, withDatabaseQueues, opts.profileSpan),
+  });
+  const propagated = httpPhase.result;
+  phaseRecords.http = httpPhase.record;
+  recordPhase(phases, 'http-summary', phaseStartedAt, withDatabaseQueues.length, propagated.observations.length, {
+    filesVisited: httpPhase.reused ? 0 : propagated.filesInspected,
+    ...(httpPhase.reused
+      ? {
+          filesReused: propagated.filesInspected,
+          factsReused: propagated.observations.length + propagated.frontiers.length,
+          factsInvalidated: 0,
+        }
+      : {}),
+  });
+  coverage.set('builtin.wrapper', {
+    id: 'builtin.wrapper',
+    applicableFiles: propagated.filesInspected,
+    observations: propagated.observations.length,
+    errors: propagated.errors.length,
+  });
   extractionErrors.push(...propagated.errors);
   const withHttpDerivations = deduplicateObservations([...withDatabaseQueues, ...propagated.observations]);
+  // Fresh phase readers retain source-derived native trees only for the phase.
+  // Give their finalizers a turn before opening the next phase's reader.
+  if (!httpPhase.reused) {
+    collectNativeGarbage();
+    await yieldToEventLoop();
+  }
   phaseStartedAt = performance.now();
   const mountComposition = composeHttpMountsWithCoverage(db, withHttpDerivations);
   recordPhase(phases, 'http-mount', phaseStartedAt, withHttpDerivations.length, mountComposition.observations.length, {
@@ -289,52 +231,29 @@ export async function collectRuntimeBoundaryGraph(
   });
   const withMounts = deduplicateObservations([...withHttpDerivations, ...mountComposition.observations]);
   phaseStartedAt = performance.now();
-  const reuseCarrier =
-    reuseHttpSummary &&
-    opts.previousGraph !== undefined &&
-    canReuseCarrier(opts.previousGraph, previousFileCoverage, extracted.fileCoverage, affectedFiles);
-  const materializeCarriers = (): ReturnType<typeof deriveCarrierDiscriminators> => {
-    let carriers: ReturnType<typeof deriveCarrierDiscriminators>;
-    if (reuseCarrier) {
-      const previousCarrierPhase = opts.previousGraph!.coverage.phases?.find((phase) => phase.id === 'carrier');
-      const previousCarrierCoverage = opts.previousGraph!.coverage.extractors.find(
-        (extractor) => extractor.id === 'builtin.carrier',
-      );
-      carriers = {
-        observations: opts.previousGraph!.observations.filter(
-          (observation) => observation.extractor === 'builtin.carrier',
-        ),
-        bodySummaries: previousCarrierCoverage?.applicableFiles ?? 0,
-        discriminatorSummaries: 0,
-        filesInspected: previousCarrierPhase?.filesVisited ?? 0,
-        errors: opts.previousGraph!.coverage.extractionErrors.filter((error) => error.startsWith('builtin.carrier')),
-      };
-      recordPhase(phases, 'carrier', phaseStartedAt, withMounts.length, carriers.observations.length, {
-        filesVisited: 0,
-        filesReused: carriers.filesInspected,
-        factsReused: carriers.observations.length,
-        factsInvalidated: 0,
-      });
-      if (previousCarrierCoverage) coverage.set(previousCarrierCoverage.id, previousCarrierCoverage);
-    } else {
-      carriers = deriveCarrierDiscriminators(
-        db,
-        withMounts,
-        fileCoverage.flatMap((entry) => entry.bodySummaries ?? []),
-      );
-      recordPhase(phases, 'carrier', phaseStartedAt, withMounts.length, carriers.observations.length, {
-        filesVisited: carriers.filesInspected,
-      });
-      coverage.set('builtin.carrier', {
-        id: 'builtin.carrier',
-        applicableFiles: carriers.bodySummaries,
-        observations: carriers.observations.length,
-        errors: carriers.errors.length,
-      });
-    }
-    return carriers;
-  };
-  const carriers = materializeCarriers();
+  const bodySummaries = fileCoverage.flatMap((entry) => entry.bodySummaries ?? []);
+  const carrierPhase = materializeRuntimePhase({
+    db,
+    scope,
+    seeds: runtimePhaseSeeds(withMounts, bodySummaries),
+    compilerFactsUnchanged,
+    previous: opts.previousGraph?.phaseRecords?.carrier,
+    compute: (reader) => deriveCarrierDiscriminators(reader, withMounts, bodySummaries),
+  });
+  const carriers = carrierPhase.result;
+  phaseRecords.carrier = carrierPhase.record;
+  recordPhase(phases, 'carrier', phaseStartedAt, withMounts.length, carriers.observations.length, {
+    filesVisited: carrierPhase.reused ? 0 : carriers.filesInspected,
+    ...(carrierPhase.reused
+      ? { filesReused: carriers.filesInspected, factsReused: carriers.observations.length, factsInvalidated: 0 }
+      : {}),
+  });
+  coverage.set('builtin.carrier', {
+    id: 'builtin.carrier',
+    applicableFiles: carriers.bodySummaries,
+    observations: carriers.observations.length,
+    errors: carriers.errors.length,
+  });
   extractionErrors.push(...carriers.errors);
   const deduplicated = deduplicateObservations([...withMounts, ...carriers.observations]);
   phaseStartedAt = performance.now();
@@ -368,6 +287,7 @@ export async function collectRuntimeBoundaryGraph(
       phases,
     },
     fileCoverage,
+    phaseRecords,
   };
 }
 
@@ -415,281 +335,6 @@ function includeChangedReferenceProofs(
     const cached = reusableDirectExtraction(db, entry.file, fileContentHash(db, entry.file, source));
     if (!cached) affectedFiles.add(entry.file);
   }
-}
-
-function affectedDirectCoverageUnchanged(
-  previousFileCoverage: readonly RuntimeBoundaryFileCoverage[] | undefined,
-  currentAffectedCoverage: readonly RuntimeBoundaryFileCoverage[],
-  affectedFiles: ReadonlySet<string>,
-): boolean {
-  if (!previousFileCoverage) return false;
-  const previousAffectedCoverage = previousFileCoverage
-    .filter((entry) => affectedFiles.has(entry.file))
-    .filter(hasDirectBoundaryEffect)
-    .map(directBoundaryCoverage)
-    .sort((left, right) => left.file.localeCompare(right.file));
-  const current = currentAffectedCoverage
-    .filter(hasDirectBoundaryEffect)
-    .map(directBoundaryCoverage)
-    .sort((left, right) => left.file.localeCompare(right.file));
-  return JSON.stringify(previousAffectedCoverage) === JSON.stringify(current);
-}
-
-function hasDirectBoundaryEffect(entry: RuntimeBoundaryFileCoverage): boolean {
-  return entry.observationIds.length > 0 || entry.extractionErrors.length > 0;
-}
-
-function directBoundaryCoverage(
-  entry: RuntimeBoundaryFileCoverage,
-): Omit<RuntimeBoundaryFileCoverage, 'syntaxHash' | 'shapeHash' | 'bodySummaries'> {
-  const { syntaxHash: _syntaxHash, shapeHash: _shapeHash, bodySummaries: _bodySummaries, ...coverage } = entry;
-  return coverage;
-}
-
-function httpSummaryReuseDecision(
-  previousGraph: RuntimeBoundaryGraph,
-  previousFileCoverage: readonly RuntimeBoundaryFileCoverage[] | undefined,
-  currentAffectedCoverage: readonly RuntimeBoundaryFileCoverage[],
-  affectedFiles: ReadonlySet<string>,
-  currentDirectObservations: readonly BoundaryObservation[],
-): { reuse: boolean; shapeUnchanged: boolean; proofFilesUnchanged: boolean; seedUnchanged: boolean } {
-  const shapeUnchanged = affectedShapeUnchanged(previousFileCoverage, currentAffectedCoverage, affectedFiles);
-  const proofFiles = runtimeBoundaryHttpSummaryProofFiles(previousGraph);
-  const changedFiles = syntaxChangedFiles(previousFileCoverage, currentAffectedCoverage);
-  const proofFilesUnchanged = ![...changedFiles].some((file) => proofFiles.has(file));
-
-  const previousDirectIds = new Set(
-    (previousFileCoverage ?? [])
-      .filter((entry) => affectedFiles.has(entry.file))
-      .flatMap((entry) => entry.observationIds),
-  );
-  const currentDirectIds = new Set(currentAffectedCoverage.flatMap((entry) => entry.observationIds));
-  const seedUnchanged =
-    httpPropagationSeedSignature(previousGraph.observations, previousDirectIds) ===
-    httpPropagationSeedSignature(currentDirectObservations, currentDirectIds);
-  return {
-    reuse: shapeUnchanged && proofFilesUnchanged && seedUnchanged,
-    shapeUnchanged,
-    proofFilesUnchanged,
-    seedUnchanged,
-  };
-}
-
-function syntaxChangedFiles(
-  previousFileCoverage: readonly RuntimeBoundaryFileCoverage[] | undefined,
-  currentAffectedCoverage: readonly RuntimeBoundaryFileCoverage[],
-): Set<string> {
-  const previousHashes = new Map(previousFileCoverage?.map((entry) => [entry.file, entry.syntaxHash] as const) ?? []);
-  return new Set(
-    currentAffectedCoverage
-      .filter((entry) => entry.syntaxHash === undefined || previousHashes.get(entry.file) !== entry.syntaxHash)
-      .map((entry) => entry.file),
-  );
-}
-
-function canReuseCarrier(
-  previousGraph: RuntimeBoundaryGraph,
-  previousFileCoverage: readonly RuntimeBoundaryFileCoverage[] | undefined,
-  currentAffectedCoverage: readonly RuntimeBoundaryFileCoverage[],
-  affectedFiles: ReadonlySet<string>,
-): boolean {
-  if (!previousFileCoverage) return false;
-  const previousBodySummaries = previousFileCoverage
-    .filter((entry) => affectedFiles.has(entry.file))
-    .map(({ file, bodySummaries }) => ({ file, bodySummaries: bodySummaries ?? [] }))
-    .sort((left, right) => left.file.localeCompare(right.file));
-  const currentBodySummaries = currentAffectedCoverage
-    .map(({ file, bodySummaries }) => ({ file, bodySummaries: bodySummaries ?? [] }))
-    .sort((left, right) => left.file.localeCompare(right.file));
-  if (JSON.stringify(previousBodySummaries) !== JSON.stringify(currentBodySummaries)) return false;
-
-  const changedFiles = syntaxChangedFiles(previousFileCoverage, currentAffectedCoverage);
-  const proofFiles = runtimeBoundaryExtractorProofFiles(previousGraph, 'builtin.carrier');
-  return ![...changedFiles].some((file) => proofFiles.has(file));
-}
-
-function runtimeBoundaryExtractorProofFiles(graph: RuntimeBoundaryGraph, extractor: string): Set<string> {
-  const files = new Set<string>();
-  for (const observation of graph.observations) {
-    if (observation.extractor !== extractor) continue;
-    files.add(observation.source.file);
-    for (const span of observation.derivation.sourceSpans) files.add(span.file);
-  }
-  return files;
-}
-
-function affectedShapeUnchanged(
-  previousFileCoverage: readonly RuntimeBoundaryFileCoverage[] | undefined,
-  currentAffectedCoverage: readonly RuntimeBoundaryFileCoverage[],
-  affectedFiles: ReadonlySet<string>,
-): boolean {
-  if (!previousFileCoverage) return false;
-  const previousHashes = new Map(
-    previousFileCoverage
-      .filter((entry) => affectedFiles.has(entry.file))
-      .map((entry) => [entry.file, entry.shapeHash] as const),
-  );
-  return (
-    currentAffectedCoverage.length === affectedFiles.size &&
-    currentAffectedCoverage.every(
-      (entry) => entry.shapeHash !== undefined && previousHashes.get(entry.file) === entry.shapeHash,
-    )
-  );
-}
-
-function runtimeBoundaryHttpSummaryProofFiles(graph: RuntimeBoundaryGraph): Set<string> {
-  const files = new Set<string>();
-  for (const observation of graph.observations) {
-    if (observation.extractor !== HTTP_SUMMARY_EXTRACTOR) continue;
-    files.add(observation.source.file);
-    for (const span of observation.derivation.sourceSpans) files.add(span.file);
-  }
-  for (const frontier of graph.frontiers) {
-    if (
-      frontier.kind === 'call-resolution' &&
-      frontier.action === DERIVED_BOUNDARY_ACTIONS.HTTP_REQUEST &&
-      frontier.source
-    ) {
-      files.add(frontier.source.file);
-    }
-  }
-  return files;
-}
-
-function httpPropagationSeedSignature(
-  observations: readonly BoundaryObservation[],
-  directObservationIds: ReadonlySet<string>,
-): string {
-  return JSON.stringify(
-    observations
-      .filter(
-        (observation) =>
-          directObservationIds.has(observation.id) &&
-          observation.action === DERIVED_BOUNDARY_ACTIONS.HTTP_REQUEST &&
-          observation.owner.symbol !== null &&
-          (observation.evidence === 'call-expression' || observation.evidence === 'client-adapter'),
-      )
-      .map((observation) => ({
-        ownerSymbol: observation.owner.symbol,
-        evidence: observation.evidence,
-        methods: observation.keyParts
-          .filter((part) => part.name === 'method' && part.evidence !== 'expression')
-          .map((part) => part.value.toUpperCase())
-          .sort(),
-      }))
-      .sort((left, right) =>
-        `${left.ownerSymbol}\0${left.evidence}\0${left.methods.join(',')}`.localeCompare(
-          `${right.ownerSymbol}\0${right.evidence}\0${right.methods.join(',')}`,
-        ),
-      ),
-  );
-}
-
-function affectedFilesMayChangeDerivedGraph(
-  db: ScipDatabase,
-  previousGraph: RuntimeBoundaryGraph,
-  affectedFiles: ReadonlySet<string>,
-): boolean {
-  const proofFiles = runtimeBoundaryDerivedProofFiles(previousGraph);
-  const proofSymbols = runtimeBoundaryDerivedProofSymbols(previousGraph);
-  if ([...affectedFiles].some((file) => proofFiles.has(file))) return true;
-  if (proofSymbols.size === 0 || affectedFiles.size === 0) return false;
-
-  const hasScipReferences = Boolean(
-    db.get<{ present: number }>('SELECT 1 AS present FROM mentions WHERE role != 1 LIMIT 1'),
-  );
-  if (!hasScipReferences) return true;
-
-  const files = [...affectedFiles];
-  for (let offset = 0; offset < files.length; offset += 750) {
-    const batch = files.slice(offset, offset + 750);
-    const placeholders = batch.map(() => '?').join(',');
-    const rows = db.all<{ symbol: string }>(
-      `SELECT DISTINCT global_symbol.symbol
-       FROM mentions mention
-       JOIN chunks reference_chunk ON reference_chunk.id = mention.chunk_id
-       JOIN documents reference_document ON reference_document.id = reference_chunk.document_id
-       JOIN global_symbols global_symbol ON global_symbol.id = mention.symbol_id
-       WHERE mention.role != 1
-         AND reference_document.relative_path IN (${placeholders})`,
-      ...batch,
-    );
-    if (rows.some((row) => proofSymbols.has(row.symbol))) return true;
-  }
-  return false;
-}
-
-function runtimeBoundaryDerivedProofFiles(graph: RuntimeBoundaryGraph): Set<string> {
-  const files = new Set<string>();
-  for (const observation of graph.observations) {
-    if (!DERIVED_BOUNDARY_ACTION_SET.has(observation.action)) continue;
-    files.add(observation.source.file);
-    for (const span of observation.derivation?.sourceSpans ?? []) files.add(span.file);
-  }
-  for (const frontier of graph.frontiers) {
-    if (!frontier.action || !DERIVED_BOUNDARY_ACTION_SET.has(frontier.action) || !frontier.source) continue;
-    files.add(frontier.source.file);
-  }
-  return files;
-}
-
-function runtimeBoundaryDerivedProofSymbols(graph: RuntimeBoundaryGraph): Set<string> {
-  return new Set(
-    graph.observations.flatMap((observation) =>
-      DERIVED_BOUNDARY_ACTION_SET.has(observation.action) && observation.owner.symbol ? [observation.owner.symbol] : [],
-    ),
-  );
-}
-
-function affectedSyntaxUnchanged(
-  previousFileCoverage: readonly RuntimeBoundaryFileCoverage[] | undefined,
-  currentAffectedCoverage: readonly RuntimeBoundaryFileCoverage[],
-  affectedFiles: ReadonlySet<string>,
-): boolean {
-  if (!previousFileCoverage) return false;
-  const previousHashes = new Map(
-    previousFileCoverage
-      .filter((entry) => affectedFiles.has(entry.file))
-      .map((entry) => [entry.file, entry.syntaxHash] as const),
-  );
-  return (
-    currentAffectedCoverage.length === affectedFiles.size &&
-    currentAffectedCoverage.every(
-      (entry) => entry.syntaxHash !== undefined && previousHashes.get(entry.file) === entry.syntaxHash,
-    )
-  );
-}
-
-function affectedFilesAppearInGraph(previousGraph: RuntimeBoundaryGraph, affectedFiles: ReadonlySet<string>): boolean {
-  const proofFiles = runtimeBoundaryProofFiles(previousGraph);
-  return [...affectedFiles].some((file) => proofFiles.has(file));
-}
-
-function runtimeBoundaryProofFiles(graph: RuntimeBoundaryGraph): Set<string> {
-  const files = new Set<string>();
-  for (const observation of graph.observations) {
-    files.add(observation.source.file);
-    for (const span of observation.derivation?.sourceSpans ?? []) files.add(span.file);
-  }
-  for (const frontier of graph.frontiers) {
-    if (frontier.source) files.add(frontier.source.file);
-  }
-  return files;
-}
-
-function reuseDerivedPhaseCoverage(
-  previousPhases: readonly RuntimeBoundaryPhaseCoverage[] | undefined,
-): RuntimeBoundaryPhaseCoverage[] {
-  return (previousPhases ?? [])
-    .filter((phase) => phase.id !== 'direct-extraction')
-    .map((phase) => ({
-      ...phase,
-      durationMs: 0,
-      filesVisited: 0,
-      filesReused: phase.filesVisited ?? 0,
-      factsReused: phase.outputFacts,
-      factsInvalidated: 0,
-    }));
 }
 
 function recordPhase(
@@ -772,6 +417,7 @@ async function extractBoundaryFiles(
     });
     const consultedFiles = new Set<string>();
     const consultedReferences = new Map<string, readonly string[]>();
+    let sourceAvailable = true;
     const fileObservations: BoundaryObservation[] = [];
     const coverage = withFileAccessRecording(
       (accessed) => consultedFiles.add(accessed),
@@ -804,6 +450,7 @@ async function extractBoundaryFiles(
               fileObservations.push(...extracted);
               entry.observationIds.push(...extracted.map((observation) => observation.id));
             } catch (error) {
+              recordSourceEvidenceUnavailable(file);
               extractorCoverage.errors = 1;
               entry.extractionErrors.push(
                 `${extractor.id} failed for ${file}: ${error instanceof Error ? error.message : String(error)}`,
@@ -815,13 +462,19 @@ async function extractBoundaryFiles(
         return entry;
       },
       (symbol, references) => consultedReferences.set(symbol, references),
+      {
+        source() {},
+        unavailable() {
+          sourceAvailable = false;
+        },
+      },
     );
     if (consultedReferences.size > 0) coverage.dependsOnReferenceSet = true;
     observations.push(...fileObservations);
     fileCoverage.push(coverage);
     // A file whose extraction errored is not cached: the error may be
     // environmental, and a retry should re-attempt extraction, not replay it.
-    if (coverage.extractionErrors.length === 0) {
+    if (sourceAvailable) {
       consultedFiles.delete(file);
       freshDirect.push({
         relativePath: file,

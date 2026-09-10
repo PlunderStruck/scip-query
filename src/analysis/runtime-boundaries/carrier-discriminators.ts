@@ -1,3 +1,5 @@
+import type { CarrierDiscriminatorResult } from './types.js';
+export type { CarrierDiscriminatorResult } from './types.js';
 import { sourceCallableForDefinition } from '../../symbols/graph/callable-owner-identity.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import {
@@ -42,14 +44,6 @@ interface DiscriminatorCallableSummary {
   depth: number;
   proofObservationIds: string[];
   proofSpans: BoundarySourceLocation[];
-}
-
-export interface CarrierDiscriminatorResult {
-  observations: BoundaryObservation[];
-  bodySummaries: number;
-  discriminatorSummaries: number;
-  filesInspected: number;
-  errors: string[];
 }
 
 interface BodySummaryCollectionResult {

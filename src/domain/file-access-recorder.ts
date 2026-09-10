@@ -14,6 +14,23 @@
  */
 let activeRecorder: ((relativePath: string) => void) | null = null;
 let activeReferenceRecorder: ((symbol: string, files: readonly string[]) => void) | null = null;
+interface SourceEvidenceRecorder {
+  source(file: string, text: string): void;
+  unavailable(file: string): void;
+}
+let activeSourceRecorder: SourceEvidenceRecorder | null = null;
+
+/** Reports the actual bytes consumed, including an empty source file. */
+export function recordSourceTextAccess(file: string, text: string): void {
+  recordFileAccess(file);
+  activeSourceRecorder?.source(file, text);
+}
+
+/** A missing read or parser result cannot establish a reusable negative result. */
+export function recordSourceEvidenceUnavailable(file: string): void {
+  recordFileAccess(file);
+  activeSourceRecorder?.unavailable(file);
+}
 
 /** Records a complete indexed reference-file set, including an empty set. */
 export function recordSymbolReferenceAccess(symbol: string, files: readonly string[]): void {
@@ -34,9 +51,23 @@ export function withFileAccessRecording<T>(
   onAccess: (relativePath: string) => void,
   run: () => T,
   onReferences?: (symbol: string, files: readonly string[]) => void,
+  onSource?: SourceEvidenceRecorder,
 ): T {
   const previous = activeRecorder;
   const previousReferences = activeReferenceRecorder;
+  const previousSource = activeSourceRecorder;
+  activeSourceRecorder = onSource
+    ? {
+        source(file, text) {
+          previousSource?.source(file, text);
+          onSource.source(file, text);
+        },
+        unavailable(file) {
+          previousSource?.unavailable(file);
+          onSource.unavailable(file);
+        },
+      }
+    : previousSource;
   activeRecorder = previous
     ? (file) => {
         previous(file);
@@ -54,5 +85,6 @@ export function withFileAccessRecording<T>(
   } finally {
     activeRecorder = previous;
     activeReferenceRecorder = previousReferences;
+    activeSourceRecorder = previousSource;
   }
 }

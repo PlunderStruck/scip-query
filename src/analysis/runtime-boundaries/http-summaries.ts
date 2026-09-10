@@ -1,3 +1,5 @@
+import type { HttpSummaryPropagationResult } from './types.js';
+export type { HttpSummaryPropagationResult } from './types.js';
 import { createHash } from 'node:crypto';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { sourceAnalysisRoot, ANALYSIS_CALLABLE_NODE_TYPES } from '../../source/ast/ast-callables.js';
@@ -60,14 +62,6 @@ const HTTP_PARAMETER_ROLES_PRODUCT = createFileEvidenceProduct<CachedHttpParamet
   serialize: serializeHttpParameterRoles,
   deserialize: deserializeHttpParameterRoles,
 });
-
-export interface HttpSummaryPropagationResult {
-  observations: BoundaryObservation[];
-  frontiers: BoundaryFrontier[];
-  summaries: number;
-  filesInspected: number;
-  errors: string[];
-}
 
 /**
  * Propagate HTTP capability from proved terminal operations through compiler-resolved callers.

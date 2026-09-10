@@ -1,3 +1,4 @@
+import { recordSourceEvidenceUnavailable } from '../../domain/file-access-recorder.js';
 import { runtimeBindingIdentity, runtimeCallableDefinition } from './binding-identity.js';
 import { boundaryKeyPrecision, boundaryValuePrecision } from './value-precision.js';
 import { isPlatformFetch, fetchRequestMethod, effectiveObjectField } from './http-call-semantics.js';
@@ -123,7 +124,10 @@ export function boundaryFileContext(
   const tree = profileBoundaryWork(profileSpan, 'runtime-boundaries.context.ast', file, () =>
     knownSource === undefined ? getAst(db, file) : getAstForSource(db, file, knownSource),
   );
-  if (!tree) return null;
+  if (!tree) {
+    recordSourceEvidenceUnavailable(file);
+    return null;
+  }
   const root = tree.rootNode;
   if (knownSource !== undefined) BOUNDARY_CONTEXT_TREES.set(root, tree);
   const source = knownSource ?? getSourceText(db, file);

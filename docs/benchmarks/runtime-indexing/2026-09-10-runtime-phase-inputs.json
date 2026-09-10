@@ -1,0 +1,447 @@
+{
+  "baseCommit": "1492976d",
+  "scope": "Complete sequential index requests against an isolated LaunchPoint copy; one owned temporary watcher. No agent benchmarks or live watcher changes.",
+  "measuredArchiveSha256": "68b4a4507a08fd8dd6f24251f85551fade7caabbbfd18ba457567decbff3e5a3",
+  "finalSourceSha256": {
+    "src/analysis/runtime-boundaries/carrier-discriminators.ts": "68adc7ade3de3f6d2cad020dfaa517c012658630b2bb6e339d2eb08126d3901f",
+    "src/analysis/runtime-boundaries/extractors.ts": "d10347ae0d6195ad50cd8d95e88148d403bc89e944c8bfec42382b43dfde6dbf",
+    "src/analysis/runtime-boundaries/graph.ts": "f2e9c7c0816898dcba5a4f70d8fb9c3c667b646b54ee19d00279629f05408642",
+    "src/analysis/runtime-boundaries/http-summaries.ts": "e3d6567c02b3a549457de042dc20f3415990f2ccfb3370b482f418f7cb3c2196",
+    "src/analysis/runtime-boundaries/types.ts": "4e10ed7b5cf15bb3cf9398201ed58050477c38edd1f7c0898894eb9812c058eb",
+    "src/domain/file-access-recorder.ts": "ffc63eddfcd10994191e1921ee891f96b73d5c042f3865d61ec55afcff4223ac",
+    "src/reindex/index.ts": "f2f67ffae88ea24ccffd8caba315f97cc664f61b63b852f69e3c61aec5fd010a",
+    "src/reindex/runtime-boundaries.ts": "a4502cb22ab6a11a754982d84283aaed37f214a92174775e7889398dccb17cff",
+    "src/source/ast/ast-core.ts": "79b52f955cfa26e34a111aba0ea1d6efcc83d833ae490348ddbab98c7f3febbf",
+    "src/source/primitives/source-text.ts": "43a99ed569a57232717fe0ee4001e15b01530900c533952221b12ecb23f235a0",
+    "src/storage/evidence-cache.ts": "20aee800efe3e2976893113644c7c8738e2a20899e9f4725cdce7dd2ac02075c",
+    "src/analysis/runtime-boundaries/phase-inputs.ts": "cd63600effa130206e732823319ec419b9d4ad8ec5adef861ab18d6069903658"
+  },
+  "measurementRevisionNote": "Measured package precedes shared type ownership corrections, evidence-version helper reuse and equivalent extraction-failure notification consolidation. The final source and stable full suite include those changes. Phase input/output algorithms are unchanged; the build-key namespace additionally carries the existing evidence schema version.",
+  "verification": {
+    "stages": [
+      {
+        "stage": "first-worker-edit",
+        "wallSeconds": 223.3077245510649,
+        "peakGiB": 12.900806427001953,
+        "graphDeltas": {
+          "observations": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          },
+          "links": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          },
+          "relationGroups": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          },
+          "frontiers": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          }
+        },
+        "phaseCoverage": [
+          {
+            "id": "direct-extraction",
+            "durationMs": 2509.8881929999916,
+            "inputFacts": 5603,
+            "outputFacts": 6579,
+            "filesVisited": 5603,
+            "filesReused": 3693,
+            "factsReused": 522,
+            "factsInvalidated": 6579
+          },
+          {
+            "id": "http-summary",
+            "durationMs": 23742.165091000003,
+            "inputFacts": 7103,
+            "outputFacts": 82,
+            "filesVisited": 295
+          },
+          {
+            "id": "http-mount",
+            "durationMs": 460.33542300001136,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 9296
+          },
+          {
+            "id": "carrier",
+            "durationMs": 21234.62674799998,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 189
+          },
+          {
+            "id": "relations",
+            "durationMs": 6.194339999987278,
+            "inputFacts": 7185,
+            "outputFacts": 666
+          },
+          {
+            "id": "links",
+            "durationMs": 0.9359570000087842,
+            "inputFacts": 666,
+            "outputFacts": 2
+          },
+          {
+            "id": "frontiers",
+            "durationMs": 126.84237599998596,
+            "inputFacts": 7185,
+            "outputFacts": 6232
+          }
+        ]
+      },
+      {
+        "stage": "warm-body-edit",
+        "wallSeconds": 15.710027939057909,
+        "peakGiB": 10.248340606689453,
+        "graphDeltas": {
+          "observations": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          },
+          "links": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          },
+          "relationGroups": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          },
+          "frontiers": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          }
+        },
+        "phaseCoverage": [
+          {
+            "id": "direct-extraction",
+            "durationMs": 1466.1105640000005,
+            "inputFacts": 5603,
+            "outputFacts": 6579,
+            "filesVisited": 5603,
+            "filesReused": 3693,
+            "factsReused": 522,
+            "factsInvalidated": 6579
+          },
+          {
+            "id": "http-summary",
+            "durationMs": 85.57636000000093,
+            "inputFacts": 7103,
+            "outputFacts": 82,
+            "filesVisited": 0,
+            "filesReused": 295,
+            "factsReused": 98,
+            "factsInvalidated": 0
+          },
+          {
+            "id": "http-mount",
+            "durationMs": 457.2052840000015,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 9296
+          },
+          {
+            "id": "carrier",
+            "durationMs": 81.65313199999946,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 0,
+            "filesReused": 189,
+            "factsReused": 0,
+            "factsInvalidated": 0
+          },
+          {
+            "id": "relations",
+            "durationMs": 6.255075000000943,
+            "inputFacts": 7185,
+            "outputFacts": 666
+          },
+          {
+            "id": "links",
+            "durationMs": 0.821128999999928,
+            "inputFacts": 666,
+            "outputFacts": 2
+          },
+          {
+            "id": "frontiers",
+            "durationMs": 126.18474699999933,
+            "inputFacts": 7185,
+            "outputFacts": 6232
+          }
+        ]
+      },
+      {
+        "stage": "warm-inferred-edit",
+        "wallSeconds": 60.292914191959426,
+        "peakGiB": 11.937076568603516,
+        "graphDeltas": {
+          "observations": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          },
+          "links": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          },
+          "relationGroups": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          },
+          "frontiers": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          }
+        },
+        "phaseCoverage": [
+          {
+            "id": "direct-extraction",
+            "durationMs": 1493.1024819999984,
+            "inputFacts": 5603,
+            "outputFacts": 6579,
+            "filesVisited": 5603,
+            "filesReused": 3693,
+            "factsReused": 522,
+            "factsInvalidated": 6579
+          },
+          {
+            "id": "http-summary",
+            "durationMs": 22029.151672,
+            "inputFacts": 7103,
+            "outputFacts": 82,
+            "filesVisited": 295
+          },
+          {
+            "id": "http-mount",
+            "durationMs": 460.1368829999992,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 9296
+          },
+          {
+            "id": "carrier",
+            "durationMs": 20587.009093,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 189
+          },
+          {
+            "id": "relations",
+            "durationMs": 5.652782000004663,
+            "inputFacts": 7185,
+            "outputFacts": 666
+          },
+          {
+            "id": "links",
+            "durationMs": 0.8485910000017611,
+            "inputFacts": 666,
+            "outputFacts": 2
+          },
+          {
+            "id": "frontiers",
+            "durationMs": 120.52550399999745,
+            "inputFacts": 7185,
+            "outputFacts": 6232
+          }
+        ]
+      },
+      {
+        "stage": "warm-runtime-edit",
+        "wallSeconds": 61.3023524339078,
+        "peakGiB": 11.94986343383789,
+        "graphDeltas": {
+          "observations": {
+            "added": 1,
+            "removed": 0,
+            "changed": 0
+          },
+          "links": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          },
+          "relationGroups": {
+            "added": 1,
+            "removed": 0,
+            "changed": 0
+          },
+          "frontiers": {
+            "added": 1,
+            "removed": 0,
+            "changed": 0
+          }
+        },
+        "phaseCoverage": [
+          {
+            "id": "direct-extraction",
+            "durationMs": 1488.8229009999995,
+            "inputFacts": 5603,
+            "outputFacts": 6580,
+            "filesVisited": 5603,
+            "filesReused": 3693,
+            "factsReused": 522,
+            "factsInvalidated": 6579
+          },
+          {
+            "id": "http-summary",
+            "durationMs": 21484.744280000003,
+            "inputFacts": 7104,
+            "outputFacts": 82,
+            "filesVisited": 295
+          },
+          {
+            "id": "http-mount",
+            "durationMs": 462.204101000003,
+            "inputFacts": 7186,
+            "outputFacts": 0,
+            "filesVisited": 9296
+          },
+          {
+            "id": "carrier",
+            "durationMs": 20457.493259000003,
+            "inputFacts": 7186,
+            "outputFacts": 0,
+            "filesVisited": 189
+          },
+          {
+            "id": "relations",
+            "durationMs": 5.763593000003311,
+            "inputFacts": 7186,
+            "outputFacts": 667
+          },
+          {
+            "id": "links",
+            "durationMs": 0.8959109999996144,
+            "inputFacts": 667,
+            "outputFacts": 2
+          },
+          {
+            "id": "frontiers",
+            "durationMs": 123.45156000000134,
+            "inputFacts": 7186,
+            "outputFacts": 6233
+          }
+        ]
+      },
+      {
+        "stage": "restore",
+        "wallSeconds": 192.2788290020544,
+        "peakGiB": 12.14529800415039,
+        "graphDeltas": {
+          "observations": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          },
+          "links": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          },
+          "relationGroups": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          },
+          "frontiers": {
+            "added": 0,
+            "removed": 0,
+            "changed": 0
+          }
+        },
+        "phaseCoverage": [
+          {
+            "id": "direct-extraction",
+            "durationMs": 1687.1329980000155,
+            "inputFacts": 5603,
+            "outputFacts": 6579,
+            "filesVisited": 5603,
+            "filesReused": 3693,
+            "factsReused": 522,
+            "factsInvalidated": 6580
+          },
+          {
+            "id": "http-summary",
+            "durationMs": 22780.825167000003,
+            "inputFacts": 7103,
+            "outputFacts": 82,
+            "filesVisited": 295
+          },
+          {
+            "id": "http-mount",
+            "durationMs": 492.27963100001216,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 9296
+          },
+          {
+            "id": "carrier",
+            "durationMs": 21126.415339,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 189
+          },
+          {
+            "id": "relations",
+            "durationMs": 5.7209120000188705,
+            "inputFacts": 7185,
+            "outputFacts": 666
+          },
+          {
+            "id": "links",
+            "durationMs": 0.8446739999926649,
+            "inputFacts": 666,
+            "outputFacts": 2
+          },
+          {
+            "id": "frontiers",
+            "durationMs": 122.48823300001095,
+            "inputFacts": 7185,
+            "outputFacts": 6232
+          }
+        ]
+      }
+    ],
+    "baselineGraphMatchesPrevious": true,
+    "restoredFileCoverageMatchesBaseline": true,
+    "restoredSourceSha256": "f5b5810aa873230a614d487e026055296e3dedaf06db3357e44616400101a2e7",
+    "probeSymbolsRemoved": true,
+    "sqliteQuickCheck": "ok",
+    "sqliteForeignKeyCheck": [],
+    "privateWatcherStopped": true
+  },
+  "validation": {
+    "fullSuite": {
+      "testsPassed": 3866,
+      "filesPassed": 422,
+      "seconds": 348.45,
+      "failures": 0
+    },
+    "types": "passed",
+    "publicApiDigest": "9217c44ff0f30a77",
+    "publicApiPaths": 66,
+    "skillLinks": "passed",
+    "changedFileLint": "passed",
+    "reviewIntroducedFindings": 0
+  },
+  "limits": [
+    "Only unchanged compiler documents currently qualify for runtime phase reuse. The SQL edit changes one document and still rebuilds HTTP/body phases.",
+    "Cold compiler startup, changed exports and relevant runtime seed changes remain expensive.",
+    "The TypeScript service still retains approximately 9.5 GiB.",
+    "Earlier producer comparisons found 16 retained-versus-fresh fact disagreements that also occur without document reuse; this batch does not repair them."
+  ]
+}

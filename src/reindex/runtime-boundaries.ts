@@ -27,6 +27,7 @@ export function runtimeBoundaryAugmentationStage(
     reuseExisting?: boolean;
     affectedFiles?: readonly string[];
     forceDerivedRebuild?: boolean;
+    compilerFactsUnchanged?: boolean;
   } = {},
 ): AsyncPostIndexAugmentationStage<RuntimeBoundaryAugmentationResult> {
   return {
@@ -101,6 +102,7 @@ function refreshRuntimeBoundaryGraph(
     ...(stored ? { previousGraph: stored } : {}),
     ...(opts.affectedFiles ? { affectedFiles: opts.affectedFiles } : {}),
     ...(opts.forceDerivedRebuild ? { forceDerivedRebuild: true } : {}),
+    ...(opts.compilerFactsUnchanged ? { compilerFactsUnchanged: true } : {}),
     profileSpan,
   });
 }

@@ -164,7 +164,8 @@ const LEGACY_VERSION_PREDICATE = "version NOT LIKE 'evidence-%'";
  * producers carry explicit schema constants and are expensive to recompute.
  */
 let productVersion: string | null = null;
-function productVersionKey(): string {
+/** Persistent evidence identity combines the payload schema and installed runtime bytes. */
+export function evidenceProductVersionKey(): string {
   productVersion ??= `${VERSION}+${cliBuildIdentity()}`;
   return productVersion;
 }
@@ -260,7 +261,7 @@ function connectionFor(db: ScipDatabase): EvidenceConnection | null {
     for (const table of ['file_evidence', 'project_evidence']) {
       evidence
         .prepare(`DELETE FROM ${table} WHERE version LIKE 'evidence-%' AND version != ?`)
-        .run(productVersionKey());
+        .run(evidenceProductVersionKey());
     }
     connection = {
       evidence,
@@ -484,14 +485,17 @@ export function readCachedFileEvidence(
   const connection = connectionFor(db);
   if (!connection) return null;
   try {
-    const row = (connection.readFileEvidence.get(kind, relativePath, contentHash, productVersionKey()) ??
+    const row = (connection.readFileEvidence.get(kind, relativePath, contentHash, evidenceProductVersionKey()) ??
       connection.readLegacyFileEvidence.get(kind, relativePath, contentHash)) as { payload: string } | undefined;
     if (row?.payload !== undefined) return row.payload;
     if (!SHARED_FILE_EVIDENCE_KIND_SET.has(kind) || !connection.shared) return null;
     try {
-      const shared = connection.shared.readFileEvidence.get(kind, relativePath, contentHash, productVersionKey()) as
-        | { payload: string }
-        | undefined;
+      const shared = connection.shared.readFileEvidence.get(
+        kind,
+        relativePath,
+        contentHash,
+        evidenceProductVersionKey(),
+      ) as { payload: string } | undefined;
       if (shared?.payload !== undefined) {
         touchSharedFileEvidence(connection.shared, kind, relativePath, contentHash);
       }
@@ -517,14 +521,17 @@ export function hasCachedFileEvidence(
   const connection = connectionFor(db);
   if (!connection) return false;
   try {
-    const row = (connection.existsFileEvidence.get(kind, relativePath, contentHash, productVersionKey()) ??
+    const row = (connection.existsFileEvidence.get(kind, relativePath, contentHash, evidenceProductVersionKey()) ??
       connection.existsLegacyFileEvidence.get(kind, relativePath, contentHash)) as { present: number } | undefined;
     if (row?.present !== undefined) return true;
     if (!SHARED_FILE_EVIDENCE_KIND_SET.has(kind) || !connection.shared) return false;
     try {
-      const shared = connection.shared.existsFileEvidence.get(kind, relativePath, contentHash, productVersionKey()) as
-        | { present: number }
-        | undefined;
+      const shared = connection.shared.existsFileEvidence.get(
+        kind,
+        relativePath,
+        contentHash,
+        evidenceProductVersionKey(),
+      ) as { present: number } | undefined;
       if (shared?.present === undefined) return false;
       touchSharedFileEvidence(connection.shared, kind, relativePath, contentHash);
       return true;
@@ -551,7 +558,7 @@ function touchSharedFileEvidence(
       kind,
       relativePath,
       contentHash,
-      productVersionKey(),
+      evidenceProductVersionKey(),
       now - SHARED_EVIDENCE_ACCESS_TOUCH_INTERVAL_MS,
     );
   } catch (error) {
@@ -573,14 +580,14 @@ export function writeCachedFileEvidence(
   const connection = connectionFor(db);
   if (!connection) return;
   try {
-    connection.writeFileEvidence.run(kind, relativePath, contentHash, productVersionKey(), payload);
+    connection.writeFileEvidence.run(kind, relativePath, contentHash, evidenceProductVersionKey(), payload);
     if (SHARED_FILE_EVIDENCE_KIND_SET.has(kind) && connection.shared) {
       try {
         connection.shared.writeFileEvidence.run(
           kind,
           relativePath,
           contentHash,
-          productVersionKey(),
+          evidenceProductVersionKey(),
           payload,
           Date.now(),
         );
@@ -606,7 +613,7 @@ export function writeCachedFileEvidenceBatch(db: ScipDatabase, entries: readonly
           entry.kind,
           entry.relativePath,
           entry.contentHash,
-          productVersionKey(),
+          evidenceProductVersionKey(),
           entry.payload,
         );
       }
@@ -629,7 +636,7 @@ export function writeCachedFileEvidenceBatch(db: ScipDatabase, entries: readonly
               entry.kind,
               entry.relativePath,
               entry.contentHash,
-              productVersionKey(),
+              evidenceProductVersionKey(),
               entry.payload,
               Date.now(),
             );
@@ -663,7 +670,7 @@ export function rekeyCachedFileEvidenceBatch(
       for (const entry of entries) {
         changed += connection.rekeyFileEvidence.run(
           entry.nextContentHash,
-          productVersionKey(),
+          evidenceProductVersionKey(),
           entry.kind,
           entry.relativePath,
           entry.previousContentHash,
@@ -688,7 +695,7 @@ export function readCachedProjectEvidence(
   const connection = connectionFor(db);
   if (!connection) return null;
   try {
-    const row = (connection.readProjectEvidence.get(kind, cacheKey, projectFingerprint, productVersionKey()) ??
+    const row = (connection.readProjectEvidence.get(kind, cacheKey, projectFingerprint, evidenceProductVersionKey()) ??
       connection.readLegacyProjectEvidence.get(kind, cacheKey, projectFingerprint)) as { payload: string } | undefined;
     return row?.payload ?? null;
   } catch (error) {
@@ -709,7 +716,7 @@ export function writeCachedProjectEvidence(
   const connection = connectionFor(db);
   if (!connection) return;
   try {
-    connection.writeProjectEvidence.run(kind, cacheKey, projectFingerprint, productVersionKey(), payload);
+    connection.writeProjectEvidence.run(kind, cacheKey, projectFingerprint, evidenceProductVersionKey(), payload);
   } catch (error) {
     disable(db, 'project_evidence write', error);
   }
@@ -732,7 +739,7 @@ export function rekeyCachedProjectEvidenceKind(
   try {
     return connection.rekeyProjectEvidenceKind.run(
       nextProjectFingerprint,
-      productVersionKey(),
+      evidenceProductVersionKey(),
       kind,
       previousProjectFingerprint,
     ).changes;

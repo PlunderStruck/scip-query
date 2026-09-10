@@ -90,7 +90,7 @@ describe('runtime-boundary evidence', () => {
     const db = createBoundaryDb();
     try {
       const graph = await collectRuntimeBoundaryGraph(db);
-      expect(graph.extractorVersion).toBe('runtime-boundaries-v31');
+      expect(graph.extractorVersion).toBe('runtime-boundaries-v32');
 
       for (const expected of [
         expect.objectContaining({
@@ -591,10 +591,12 @@ describe('runtime-boundary evidence', () => {
     try {
       const refreshed = await collectRuntimeBoundaryGraph(db, {
         previousGraph: baseline,
+        compilerFactsUnchanged: true,
         affectedFiles: ['src/unrelated.ts'],
       });
       const forced = await collectRuntimeBoundaryGraph(db, {
         previousGraph: baseline,
+        compilerFactsUnchanged: true,
         affectedFiles: ['src/unrelated.ts'],
         forceDerivedRebuild: true,
       });
@@ -603,8 +605,8 @@ describe('runtime-boundary evidence', () => {
       expect(refreshed.relationGroups).toEqual(baseline.relationGroups);
       expect(refreshed.coverage.phases).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ id: 'http-summary', durationMs: 0, filesVisited: 0 }),
-          expect.objectContaining({ id: 'carrier', durationMs: 0, filesVisited: 0 }),
+          expect.objectContaining({ id: 'http-summary', factsReused: expect.any(Number), filesVisited: 0 }),
+          expect.objectContaining({ id: 'carrier', factsReused: expect.any(Number), filesVisited: 0 }),
         ]),
       );
       expect(forced.observations).toEqual(baseline.observations);
@@ -615,7 +617,7 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('reuses derived phases when deleting a file with no boundary facts or references into the prior graph', async () => {
+  it('recomputes derived phases when deleting a file with no boundary facts or references into the prior graph', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-unrelated-deletion-'));
     writeFixtureFiles(tempDir, {
       'src/client.ts': ["fetch('/events', { method: 'POST' });"],
@@ -643,6 +645,7 @@ describe('runtime-boundary evidence', () => {
     try {
       const refreshed = await collectRuntimeBoundaryGraph(db, {
         previousGraph: baseline,
+        compilerFactsUnchanged: false,
         affectedFiles: ['src/unrelated.ts'],
       });
       const clean = await collectRuntimeBoundaryGraph(db);
@@ -652,12 +655,7 @@ describe('runtime-boundary evidence', () => {
       expect(refreshed.links).toEqual(clean.links);
       expect(refreshed.frontiers).toEqual(clean.frontiers);
       expect(refreshed.fileCoverage).toEqual(clean.fileCoverage);
-      expect(refreshed.coverage.phases).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ id: 'http-summary', durationMs: 0, filesVisited: 0 }),
-          expect.objectContaining({ id: 'carrier', durationMs: 0, filesVisited: 0 }),
-        ]),
-      );
+      expect(refreshed.coverage.phases?.filter((phase) => phase.factsReused !== undefined)).toHaveLength(1);
     } finally {
       db.close();
     }
@@ -697,6 +695,7 @@ describe('runtime-boundary evidence', () => {
     try {
       const refreshed = await collectRuntimeBoundaryGraph(db, {
         previousGraph: baseline,
+        compilerFactsUnchanged: true,
         affectedFiles: ['src/caller.ts'],
       });
 
@@ -704,8 +703,8 @@ describe('runtime-boundary evidence', () => {
       expect(refreshed.relationGroups).toEqual(baseline.relationGroups);
       expect(refreshed.coverage.phases).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ id: 'http-summary', durationMs: 0, filesVisited: 0 }),
-          expect.objectContaining({ id: 'carrier', durationMs: 0, filesVisited: 0 }),
+          expect.objectContaining({ id: 'http-summary', factsReused: expect.any(Number), filesVisited: 0 }),
+          expect.objectContaining({ id: 'carrier', factsReused: expect.any(Number), filesVisited: 0 }),
         ]),
       );
     } finally {
@@ -756,14 +755,15 @@ describe('runtime-boundary evidence', () => {
     try {
       const refreshed = await collectRuntimeBoundaryGraph(db, {
         previousGraph: baseline,
+        compilerFactsUnchanged: true,
         affectedFiles: ['src/caller.ts'],
       });
 
       expect(refreshed.observations).toEqual(baseline.observations);
       expect(refreshed.coverage.phases).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ id: 'http-summary', durationMs: 0, filesVisited: 0 }),
-          expect.objectContaining({ id: 'carrier', durationMs: 0, filesVisited: 0 }),
+          expect.objectContaining({ id: 'http-summary', factsReused: expect.any(Number), filesVisited: 0 }),
+          expect.objectContaining({ id: 'carrier', factsReused: expect.any(Number), filesVisited: 0 }),
         ]),
       );
     } finally {
@@ -771,7 +771,7 @@ describe('runtime-boundary evidence', () => {
     }
   });
 
-  it('reuses HTTP call topology when only a template endpoint literal changes', async () => {
+  it('recomputes HTTP propagation when a template endpoint literal changes', async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'scip-runtime-template-endpoint-'));
     const file = 'src/client.ts';
     const source = [
@@ -795,17 +795,16 @@ describe('runtime-boundary evidence', () => {
     });
     const db = new ScipDatabase({ projectRoot: tempDir, dbPath, indexPath: join(tempDir, 'index.scip') });
     try {
-      const refreshed = await collectRuntimeBoundaryGraph(db, { previousGraph: baseline, affectedFiles: [file] });
+      const refreshed = await collectRuntimeBoundaryGraph(db, {
+        previousGraph: baseline,
+        compilerFactsUnchanged: true,
+        affectedFiles: [file],
+      });
       const clean = await collectRuntimeBoundaryGraph(db);
 
       expect(refreshed.observations).toEqual(clean.observations);
       expect(refreshed.frontiers).toEqual(clean.frontiers);
-      expect(refreshed.coverage.phases).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ id: 'http-summary', filesVisited: 0, factsReused: expect.any(Number) }),
-          expect.objectContaining({ id: 'carrier', filesVisited: 0, factsReused: expect.any(Number) }),
-        ]),
-      );
+      expect(refreshed.coverage.phases?.find((phase) => phase.id === 'http-summary')?.factsReused).toBeUndefined();
     } finally {
       db.close();
     }
@@ -889,7 +888,11 @@ describe('runtime-boundary evidence', () => {
     writeFixtureFiles(projectRoot, { [file]: source });
     const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(projectRoot, 'index.scip') });
     try {
-      const refreshed = await collectRuntimeBoundaryGraph(db, { previousGraph: baseline, affectedFiles: [file] });
+      const refreshed = await collectRuntimeBoundaryGraph(db, {
+        previousGraph: baseline,
+        compilerFactsUnchanged: true,
+        affectedFiles: [file],
+      });
       const clean = await collectRuntimeBoundaryGraph(db);
 
       expect(refreshed.observations).toEqual(clean.observations);
@@ -900,12 +903,7 @@ describe('runtime-boundary evidence', () => {
       expect(refreshed.coverage.extractionErrors).toEqual(clean.coverage.extractionErrors);
       expect(refreshed.fileCoverage).toEqual(clean.fileCoverage);
       if (label === 'terminal endpoint literal') {
-        expect(refreshed.coverage.phases).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({ id: 'http-summary', filesVisited: 0, factsReused: expect.any(Number) }),
-            expect.objectContaining({ id: 'carrier', filesVisited: 0, factsReused: expect.any(Number) }),
-          ]),
-        );
+        expect(refreshed.coverage.phases?.find((phase) => phase.id === 'http-summary')?.factsReused).toBeUndefined();
       }
     } finally {
       db.close();

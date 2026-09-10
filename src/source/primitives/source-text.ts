@@ -5,15 +5,24 @@
  * through here so we pay the disk cost once per file per process.
  */
 import type { ScipDatabase } from '../../storage/db.js';
-import { recordFileAccess } from '../../domain/file-access-recorder.js';
+import {
+  recordFileAccess,
+  recordSourceTextAccess,
+  recordSourceEvidenceUnavailable,
+} from '../../domain/file-access-recorder.js';
 import { isMissingProjectFileError, readProjectFileText } from '../../platform/project-files.js';
-import { createPerDbFileCache } from '../../storage/per-db-cache.js';
+import { createPerDbFileCache, createPerDbSourceCache } from '../../storage/per-db-cache.js';
 
-const SOURCE_TEXT_CACHE = createPerDbFileCache<string>('source-text', {
+interface SourceTextRead {
+  text: string;
+  available: boolean;
+}
+
+const SOURCE_TEXT_CACHE = createPerDbFileCache<SourceTextRead>('source-text', {
   clearGroups: ['whole-project', 'source-file'],
 });
 
-const SOURCE_LINES_CACHE = createPerDbFileCache<readonly string[]>('source-lines', {
+const SOURCE_LINES_CACHE = createPerDbSourceCache<readonly string[]>('source-lines', {
   clearGroups: ['whole-project', 'source-file'],
 });
 
@@ -22,19 +31,32 @@ export function getSourceText(db: ScipDatabase, relativePath: string): string {
   // Cache hits are still dependencies: a recorder armed around a derived
   // computation must learn about every consulted file, not just cold reads.
   recordFileAccess(normalized);
-  return SOURCE_TEXT_CACHE.get(db, normalized, () => readSourceTextUncached(db, normalized));
+  const source = SOURCE_TEXT_CACHE.get(db, normalized, () => readSourceTextResult(db, normalized));
+  return reportSourceText(normalized, source);
 }
 
 /** Reads one source file without retaining its bytes in the per-database analysis cache. */
 export function readSourceTextUncached(db: ScipDatabase, relativePath: string): string {
   const normalized = relativePath.replace(/\\/g, '/');
   recordFileAccess(normalized);
+  return reportSourceText(normalized, readSourceTextResult(db, normalized));
+}
+
+function reportSourceText(file: string, result: SourceTextRead): string {
+  recordSourceTextAccess(file, result.text);
+  if (!result.available) recordSourceEvidenceUnavailable(file);
+  return result.text;
+}
+
+function readSourceTextResult(db: ScipDatabase, file: string): SourceTextRead {
   try {
-    return readProjectFileText(db.config.projectRoot, normalized, {
-      inputKind: 'indexed source file',
-    });
+    return {
+      text: readProjectFileText(db.config.projectRoot, file, { inputKind: 'indexed source file' }),
+      available: true,
+    };
   } catch (error) {
-    if (isMissingProjectFileError(error)) return '';
+    recordSourceEvidenceUnavailable(file);
+    if (isMissingProjectFileError(error)) return { text: '', available: false };
     throw error;
   }
 }
@@ -49,9 +71,8 @@ export function splitSearchableSourceLines(text: string): string[] {
 
 export function getSourceLines(db: ScipDatabase, relativePath: string): readonly string[] {
   const normalized = relativePath.replace(/\\/g, '/');
-  recordFileAccess(normalized);
-  return SOURCE_LINES_CACHE.get(db, normalized, () => {
-    const source = getSourceText(db, normalized);
+  const source = getSourceText(db, normalized);
+  return SOURCE_LINES_CACHE.get(db, normalized, source, () => {
     return source ? source.split('\n') : [];
   });
 }
