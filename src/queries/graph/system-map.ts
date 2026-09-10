@@ -1624,7 +1624,15 @@ function referenceCallEvidence(
         (!reference.sourceRange || sameOccurrenceRange(target.sourceRange, reference.sourceRange)),
     );
     return matches.length > 0
-      ? matches.map((target) => symbolReferenceCall(reference, 'scip-occurrence-callsite', target.sourceOwner, owners))
+      ? matches.map((target) =>
+          symbolReferenceCall(
+            reference,
+            'scip-occurrence-callsite',
+            target.sourceOwner,
+            owners,
+            target.implementationStatus,
+          ),
+        )
       : [reference];
   }
   // Only occurrence-less indexes may use name-based candidates. A compiler
@@ -1643,12 +1651,16 @@ function symbolReferenceCall(
   evidence: NonNullable<SymbolReferenceEvidence['callEvidence']>['evidence'],
   sourceOwner: SourceCallableOwner | null | undefined,
   owners: ReadonlyMap<string, IndexedDefinition>,
+  implementationStatus?: ScipOccurrenceCallTarget['implementationStatus'],
 ): SymbolReferenceEvidence {
   return {
     ...reference,
     callEvidence: {
       evidence,
-      strength: evidence === 'scip-occurrence-callsite' && sourceOwner !== undefined ? 'exact' : 'candidate',
+      strength:
+        evidence === 'scip-occurrence-callsite' && sourceOwner !== undefined && implementationStatus !== 'unresolved'
+          ? 'exact'
+          : 'candidate',
     },
     sourceOwner,
     owner: sourceOwner === undefined ? reference.owner : owners.get(sourceCallableOwnerKey(sourceOwner)),
@@ -1998,7 +2010,10 @@ function addCompilerFileTarget(
     toFile: target.definition.relativePath,
     toSymbol: target.definition.symbol,
     line: target.sourceLine,
-    strength: kind === 'call' && target.sourceOwner === undefined ? 'candidate' : 'exact',
+    strength:
+      kind === 'call' && (target.sourceOwner === undefined || target.implementationStatus === 'unresolved')
+        ? 'candidate'
+        : 'exact',
   });
   if (kind === 'call') compilerResolvedCallsiteKeys.add(key);
 }

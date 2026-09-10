@@ -1,4 +1,5 @@
 import { sourceBindingResolver } from '../../source/ast/source-binding-identity.js';
+import { callableValueWasWritten, resolveCallableValue } from './imported-value-context.js';
 import { lexicalCallOwners, sourceCallableOwnerKey } from './callable-owner-identity.js';
 import { readRepositoryTextFile } from '../../source/primitives/repository-text.js';
 import { getSourceLines } from '../../source/primitives/source-text.js';
@@ -9,7 +10,8 @@ import { getSourceFacts } from '../../source/facts/source-facts.js';
 import type { SourceCallableOwner, SourceFacts } from '../../source/facts/source-fact-types.js';
 import { callSiteOwner } from '../../source/facts/source-callables.js';
 import { getAst } from '../../source/ast/ast-core.js';
-import { sourceAnalysisRoot, ANALYSIS_CALLABLE_NODE_TYPES } from '../../source/ast/ast-callables.js';
+import { sourceAnalysisRoot, ANALYSIS_CALLABLE_NODE_TYPES, walkNamedSyntax } from '../../source/ast/ast-callables.js';
+import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { readScipArtifact } from '../../storage/scip-artifact.js';
 import { getAllDefinitions, getDefinitionsForFile } from '../definition-catalog.js';
@@ -29,6 +31,8 @@ export interface ScipOccurrenceCallTarget {
   sourceDefinition?: IndexedDefinition | null;
   calleeLeaf: string;
   definition: IndexedDefinition;
+  implementationStatus?: 'established' | 'unresolved';
+  implementationReason?: string;
 }
 
 export interface ScipOccurrenceDefinitionTarget {
@@ -42,6 +46,9 @@ export interface ScipOccurrenceCallTargetsResult {
   targets: ScipOccurrenceCallTarget[];
   resolvedCallsites: number;
   unresolvedCallsites: number;
+  /** Exact compiler declarations survive even when their current values cannot be established. */
+  declarations?: ScipOccurrenceCallTarget[];
+  implementationUnresolvedCallsites?: number;
 }
 
 export interface ScipOccurrenceCallableReferencesResult {
@@ -113,22 +120,112 @@ export function scipOccurrenceCallTargetsForRange(
     return { available: false, targets: [], resolvedCallsites: 0, unresolvedCallsites: callsites.length };
   }
   const targets: ScipOccurrenceCallTarget[] = [];
+  const declarations: ScipOccurrenceCallTarget[] = [];
   let resolvedCallsites = 0;
+  let establishedImplementations = 0;
   for (const site of callsites) {
-    if (sourceCallTargetWasWritten(db, relativePath, site)) continue;
     const matches = fileTargets.targets.filter((target) => sameOccurrenceRange(target.sourceRange, site.targetRange));
     const unique = new Map(matches.map((target) => [target.definition.symbol, target]));
+    declarations.push(
+      ...[...unique.values()].map((match) => ({
+        ...match,
+        sourceLine: site.line,
+        sourceOwner: site.owner,
+        calleeLeaf: match.definition.leaf,
+      })),
+    );
+    if (sourceCallTargetWasWritten(db, relativePath, site)) continue;
     if (unique.size !== 1) continue;
     const match = [...unique.values()][0]!;
+    const proof = invocationImplementationProof(db, relativePath, site, match.definition);
+    if (proof.implementationStatus === 'established') establishedImplementations++;
     resolvedCallsites++;
-    targets.push({ ...match, sourceLine: site.line, sourceOwner: site.owner, calleeLeaf: match.definition.leaf });
+    targets.push({
+      ...match,
+      ...proof,
+      sourceLine: site.line,
+      sourceOwner: site.owner,
+      calleeLeaf: match.definition.leaf,
+    });
   }
   return {
     available: true,
     targets,
     resolvedCallsites,
     unresolvedCallsites: callsites.length - resolvedCallsites,
+    declarations,
+    implementationUnresolvedCallsites: callsites.length - establishedImplementations,
   };
+}
+
+export function invocationImplementationProof(
+  db: ScipDatabase,
+  file: string,
+  site: SourceFacts['callSites'][number],
+  definition: IndexedDefinition,
+): Pick<ScipOccurrenceCallTarget, 'implementationStatus' | 'implementationReason'> {
+  const source = sourceCallBinding(db, file, site);
+  // Keep the established contract of the other language providers.
+  if (!source?.bindings.available) {
+    const language = getSourceFacts(db, file)?.language;
+    return language === 'typescript' || language === 'javascript'
+      ? { implementationStatus: 'unresolved', implementationReason: 'source-binding-unavailable' }
+      : { implementationStatus: 'established' };
+  }
+  if (site.kind === 'new' && !site.memberAccess && (definition.isTypeLike || definition.leaf === '<constructor>'))
+    return constructorImplementationProof(db, definition);
+  const value = resolveCallableValue({ db, file, root: source.root }, source.target);
+  if (value && value.context.file === definition.relativePath && definitionContainsCallable(definition, value.callable))
+    return { implementationStatus: 'established' };
+  return {
+    implementationStatus: 'unresolved',
+    implementationReason: site.memberAccess
+      ? 'member-value-and-runtime-dispatch-unproved'
+      : 'indirect-callable-value-unproved',
+  };
+}
+
+function definitionContainsCallable(definition: IndexedDefinition, node: SyntaxNode): boolean {
+  const { startLine, startChar, endLine, endChar } = definition;
+  if (startChar === undefined || endChar === undefined || (startLine === endLine && startChar >= endChar)) return false;
+  const start = node.startPosition;
+  const end = node.endPosition;
+  return (
+    (start.row > startLine || (start.row === startLine && start.column >= startChar)) &&
+    (end.row < endLine || (end.row === endLine && end.column <= endChar))
+  );
+}
+
+function constructorImplementationProof(
+  db: ScipDatabase,
+  definition: IndexedDefinition,
+): Pick<ScipOccurrenceCallTarget, 'implementationStatus' | 'implementationReason'> {
+  const root = getAst(db, definition.relativePath)?.rootNode;
+  let owner: SyntaxNode | undefined;
+  if (root)
+    walkNamedSyntax(root, (node) => {
+      if (!['class_declaration', 'abstract_class_declaration', 'class'].includes(node.type)) return;
+      if (!syntaxContainsDefinition(node, definition)) return;
+      if (!owner || node.endIndex - node.startIndex < owner.endIndex - owner.startIndex) owner = node;
+    });
+  if (!owner) return { implementationStatus: 'unresolved', implementationReason: 'constructor-source-unproved' };
+  const decorated =
+    owner.namedChildren.some((child) => child.type === 'decorator') ||
+    (owner.parent?.type === 'export_statement' &&
+      owner.parent.namedChildren.some((child) => child.type === 'decorator'));
+  return decorated
+    ? { implementationStatus: 'unresolved', implementationReason: 'class-decorator-runtime-constructor-unproved' }
+    : { implementationStatus: 'established' };
+}
+
+function syntaxContainsDefinition(node: SyntaxNode, definition: IndexedDefinition): boolean {
+  const { startLine, startChar, endLine, endChar } = definition;
+  if (startChar === undefined || endChar === undefined) return false;
+  return (
+    (node.startPosition.row < startLine ||
+      (node.startPosition.row === startLine && node.startPosition.column <= startChar)) &&
+    (node.endPosition.row > endLine || (node.endPosition.row === endLine && node.endPosition.column >= endChar))
+  );
 }
 
 /** A compiler reference identifies a declaration, but an observed reassignment invalidates its initial callable value. */
@@ -137,11 +234,25 @@ export function sourceCallTargetWasWritten(
   file: string,
   site: SourceFacts['callSites'][number],
 ): boolean {
+  const source = sourceCallBinding(db, file, site);
+  return source ? callableValueWasWritten({ db, file, root: source.root }, source.target) : false;
+}
+
+export function sourceCallTargetUsesParameter(
+  db: ScipDatabase,
+  file: string,
+  site: SourceFacts['callSites'][number],
+): boolean {
+  const source = sourceCallBinding(db, file, site);
+  return source?.bindings.isParameterBinding(source.target) ?? false;
+}
+
+function sourceCallBinding(db: ScipDatabase, file: string, site: SourceFacts['callSites'][number]) {
   const range = site.targetExpressionRange ?? site.targetRange;
   const root = getAst(db, file)?.rootNode;
-  if (!range || !root) return false;
+  if (!range || !root) return null;
   const target = sourceAnalysisRoot(root, range.startLine, range.endLine, ANALYSIS_CALLABLE_NODE_TYPES, range);
-  return target ? sourceBindingResolver(file, root).hasObservedWrite(target, true) : false;
+  return target ? { root, target, bindings: sourceBindingResolver(file, root) } : null;
 }
 
 /** Return compiler-resolved repository definitions referenced by one exact source range. */

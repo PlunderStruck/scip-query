@@ -204,6 +204,7 @@ export const GRAPH_RELATION_PROVIDER_CONTRACTS: readonly GraphRelationProviderCo
         nonClaims: [
           'Static may-call reachability does not prove that an invocation occurred at runtime.',
           'Compiler declaration identity does not resolve virtual dispatch, cross-file callable replacement, or runtime receiver identity.',
+          'Candidate call edges preserve declaration leads; consult the invocation frontier for implementation resolution. A declaration reference is not an established implementation target.',
         ],
         recoverWith: ['call-graph', 'inspect', 'code'],
       }),

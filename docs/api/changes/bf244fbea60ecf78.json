@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-09-09T20:37:24.775Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "bf244fbea60ecf783c5b80b30771b2481fd8a6c8d41f8020b80685b4f7f6f204",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "referenced-signature-changed",
+      "message": "a changed from type CalleeEvidenceSource = 'scip-occurrence' | 'ast-callsite' | 'semantic-callee' | 'scip-chunk'; to type CalleeEvidenceSource = 'scip-occurrence' | 'scip-declaration' | 'ast-callsite' | 'semantic-callee' | 'scip-chunk';.",
+      "target": "call-graph-evidence-<hash>.d.ts:a"
+    }
+  ],
+  "classification": "breaking",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.25.0",
+  "previousDigest": "ddd77efeccfb6f6515cc1aef8c08ddbdefa8c4323de2d063831794312f7ae987",
+  "reason": "Call evidence now distinguishes compiler declaration references with the scip-declaration source; exhaustive consumers must handle this candidate evidence explicitly.",
+  "schemaVersion": 1
+}

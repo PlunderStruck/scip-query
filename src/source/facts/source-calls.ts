@@ -8,7 +8,7 @@ import { callSiteOwner } from './source-callables.js';
 export function callSiteForNode(node: SyntaxNode, language: AstLanguage) {
   const target = callTargetForNode(node, language);
   if (!target) return null;
-  const leafNode = callLeafNode(target);
+  const leafNode = callLeafNode(target) ?? (['typescript', 'tsx', 'javascript'].includes(language) ? target : null);
   if (!leafNode) return null;
   const leaf = leafNode.text.replace(/^#/u, '');
   const memberAccess = isMemberAccessTarget(target);
@@ -99,12 +99,14 @@ const CALL_TARGET_WRAPPERS = new Set([
   'non_null_expression',
   'as_expression',
   'satisfies_expression',
+  'type_assertion',
 ]);
 
 function unwrapCallTarget(node: SyntaxNode | null): SyntaxNode | null {
   let current = node;
   while (current && CALL_TARGET_WRAPPERS.has(current.type)) {
-    const inner = current.namedChild(0);
+    const inner =
+      current.type === 'type_assertion' ? current.namedChild(current.namedChildCount - 1) : current.namedChild(0);
     if (!inner) return current;
     current = inner;
   }
@@ -131,6 +133,7 @@ function isMemberAccessTarget(node: SyntaxNode): boolean {
   switch (node.type) {
     case 'field_expression':
     case 'member_expression':
+    case 'subscript_expression':
     case 'nested_identifier':
     case 'attribute':
       return true;
@@ -156,6 +159,7 @@ const CALL_IDENTIFIER_KINDS = new Set([
 
 function callLeafNode(node: SyntaxNode): SyntaxNode | null {
   if (CALL_IDENTIFIER_KINDS.has(node.type)) return node;
+  if (node.type === 'subscript_expression') return subscriptCallLeaf(node);
   let target: SyntaxNode | null = null;
   if (isMemberAccessTarget(node)) {
     target = node.namedChild(node.namedChildCount - 1);
@@ -165,4 +169,12 @@ function callLeafNode(node: SyntaxNode): SyntaxNode | null {
     target = node.childForFieldName('name') ?? node.namedChild(node.namedChildCount - 1);
   }
   return target ? callLeafNode(target) : null;
+}
+
+function subscriptCallLeaf(node: SyntaxNode): SyntaxNode {
+  const key = unwrapCallTarget(node.childForFieldName('index'));
+  // A literal member key can carry a compiler property reference. A computed
+  // expression is not its implementation: retain the complete invocation target
+  // so an index-variable reference cannot be mistaken for a callee.
+  return key && ['string', 'number', 'template_string'].includes(key.type) ? key : node;
 }

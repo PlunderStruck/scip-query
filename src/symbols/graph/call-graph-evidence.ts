@@ -17,7 +17,11 @@ import type { IndexedDefinition, SymbolLocation, SymbolMatch } from '../../domai
 import { getGlobalLeafIndex, pickAstCallCandidate, sameLanguageCandidates } from '../leaf-symbol-index.js';
 import type { GlobalLeafCandidate } from '../leaf-symbol-index.js';
 import { scipFunctionLikeKindNumbers, scipTypeLikeKindNumbers } from '../symbol-kind.js';
-import { scipOccurrenceTargetsForFile, sourceCallTargetWasWritten } from './scip-occurrence-call-targets.js';
+import {
+  scipOccurrenceTargetsForFile,
+  sourceCallTargetWasWritten,
+  invocationImplementationProof,
+} from './scip-occurrence-call-targets.js';
 import { occurrenceLeafKey, type FileOccurrenceTargets, type OccurrenceSourceRange } from './scip-chunk-occurrences.js';
 import { pathsResolveSame } from '../../domain/path-normalization.js';
 import type { SymbolSemanticEvidencePort } from '../semantic-evidence-port.js';
@@ -29,7 +33,12 @@ import { fileDependencyPaths } from './file-dep-graph.js';
  * is a leaf-name resolution over imports and local receivers; the other two
  * are the on-demand compiler and chunk co-occurrence paths.
  */
-export type CalleeEvidenceSource = 'scip-occurrence' | 'ast-callsite' | 'semantic-callee' | 'scip-chunk';
+export type CalleeEvidenceSource =
+  | 'scip-occurrence'
+  | 'scip-declaration'
+  | 'ast-callsite'
+  | 'semantic-callee'
+  | 'scip-chunk';
 export type CallerEvidenceSource = 'caller-map-inversion' | 'resolved-reference' | 'semantic-reference';
 
 // scip-query: ignore-stale — reviewed S1 owned contract; graph construction materializes this callee evidence row.
@@ -78,7 +87,10 @@ export function getCalleeRowsForSymbol(
   const callees = opts.callableOnly
     ? (map.get(symbol.symbolId) ?? []).filter(
         (callee) =>
-          isCallableSymbol(callee.symbol) || callee.source === 'ast-callsite' || callee.source === 'scip-occurrence',
+          isCallableSymbol(callee.symbol) ||
+          callee.source === 'ast-callsite' ||
+          callee.source === 'scip-occurrence' ||
+          callee.source === 'scip-declaration',
       )
     : (map.get(symbol.symbolId) ?? []);
   return typeof opts.limit === 'number' ? callees.slice(0, opts.limit) : callees;
@@ -411,7 +423,16 @@ function astCallsiteRow(
   const targetKey = site.targetRange ? occurrenceRangeKey(site.targetRange) : null;
   if (occurrences && targetKey) {
     const pick = pickOccurrenceCallee(occurrences, targetKey);
-    if (pick) return callsiteRow(pick, site, site.owner !== undefined ? 'scip-occurrence' : 'ast-callsite');
+    if (pick) {
+      const proof = invocationImplementationProof(db, file, site, pick.definition);
+      const source =
+        proof.implementationStatus === 'unresolved'
+          ? 'scip-declaration'
+          : site.owner !== undefined
+            ? 'scip-occurrence'
+            : 'ast-callsite';
+      return callsiteRow(pick, site, source);
+    }
     if (occurrences.targetsByRange.has(targetKey) || occurrences.externalRanges.has(targetKey)) return null;
   }
   if (occurrences?.externalLeafKeys.has(occurrenceLeafKey(site.line, site.calleeLeaf))) return null;
@@ -466,12 +487,12 @@ function occurrenceCalleeIndex(fileTargets: FileOccurrenceTargets | null): Occur
 function pickOccurrenceCallee(
   occurrences: OccurrenceCalleeIndex,
   key: string,
-): { symbol: string; file: string } | null {
+): { symbol: string; file: string; definition: IndexedDefinition } | null {
   const targets = occurrences.targetsByRange.get(key);
   if (!targets?.length) return null;
   const pick = targets[0]!;
   if (targets.some((target) => target.symbol !== pick.symbol)) return null;
-  return { symbol: pick.symbol, file: pick.relativePath };
+  return { symbol: pick.symbol, file: pick.relativePath, definition: pick };
 }
 
 /** Source name resolution is a candidate; a compiler binding establishes identity. */

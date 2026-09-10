@@ -37,6 +37,7 @@ export interface BoundaryKeyPart {
   value: string;
   evidence: 'literal' | 'constant' | 'identifier' | 'expression';
   term?: BoundaryTerm;
+  precision?: BoundaryValuePrecision;
   derivation?: BoundaryDerivation;
 }
 
@@ -118,6 +119,8 @@ export interface RuntimeBoundaryFileCoverage {
   syntaxHash?: string;
   /** Token-kind hash that also ignores literal values while retaining identifiers and control flow. */
   shapeHash?: string;
+  /** Shared-value proofs must recheck indexed reference membership after source changes. */
+  dependsOnReferenceSet?: boolean;
   /** Static request-body serializers found while this file was already parsed. */
   bodySummaries?: RuntimeBoundaryBodySummary[];
   observationIds: string[];

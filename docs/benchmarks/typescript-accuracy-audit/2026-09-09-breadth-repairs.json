@@ -1,0 +1,195 @@
+{
+  "date": "2026-09-09",
+  "scope": "Repair verification for the five TypeScript breadth finding groups; prior accuracy checks retained.",
+  "breadth": {
+    "passed": true,
+    "counts": {
+      "programs": 109,
+      "wrongLiteralValues": 0,
+      "httpExecutions": 51,
+      "wrongLiteralHttpPaths": 0,
+      "slicePrograms": 34,
+      "sliceExecutions": 102,
+      "falselyCompleteSlices": 0,
+      "runtimeCliProjections": 5,
+      "sliceCliProjections": 5,
+      "callGraphConsumers": 35,
+      "generalCommands": 71,
+      "commandFacts": 42,
+      "controls": 48,
+      "transport": 58,
+      "architecture": 8,
+      "frontend": 34,
+      "integrityChecks": 28
+    },
+    "limits": [
+      "Bounded executable witnesses, not exhaustive TypeScript semantics.",
+      "Unsupported effects remain explicit uncertainty; this does not implement general interprocedural slicing.",
+      "Volar provider installation and agent benchmarks were not performed."
+    ]
+  },
+  "priorAccuracy": {
+    "interpretation": "Repair verification: all six audited failure families are absent in this executed corpus. This is bounded evidence, not a proof of complete TypeScript runtime or compiler-target coverage.",
+    "counts": {
+      "totalPrograms": 686,
+      "newPrograms": 214,
+      "priorPrograms": 472,
+      "invalidPrograms": 0,
+      "executionExpectationFailures": 0,
+      "wrongNewLiteralValues": 0,
+      "wrongEstablishedBodies": 0,
+      "establishedWithoutPreciseBodyRange": 0,
+      "tracedPrograms": 27,
+      "compilerChecks": 103,
+      "missingCompilerTargets": 9,
+      "impreciseDeclarationRanges": 15,
+      "falseParameterPairs": 0,
+      "histories": 18,
+      "actualIncrementalUpdates": 16,
+      "compilerHistoryMismatches": 0,
+      "normalizedGraphHistoryMismatches": 0
+    },
+    "verification": {
+      "passed": true,
+      "combinedLiteralMismatches": 0,
+      "publicChecks": true,
+      "nativeEsmChecks": true
+    }
+  },
+  "validationStatus": "Passed: full regular suite, final breadth repair gate, prior accuracy/history gate, and static checks",
+  "repositoryReview": {
+    "comparison": "HEAD versus the entire current worktree, including earlier uncommitted changes",
+    "analyzedFiles": 587,
+    "eligibleFiles": 587,
+    "captureProblems": [],
+    "blockingFindings": [
+      {
+        "id": "architecture:limit:source:files",
+        "rule": "architecture",
+        "summary": "source: 72 files exceeds the declared limit 67.",
+        "status": "worsened"
+      },
+      {
+        "id": "complexity:src/queries/graph/system-map.ts:addCompilerFileTarget",
+        "rule": "complexity",
+        "summary": "addCompilerFileTarget: cyclomatic 17, cognitive 16.",
+        "status": "worsened"
+      },
+      {
+        "id": "complexity:src/reindex/typescript-symbol-identity.ts:anonymousDefaultCallable",
+        "rule": "complexity",
+        "summary": "anonymousDefaultCallable: cyclomatic 14, cognitive 16.",
+        "status": "introduced"
+      },
+      {
+        "id": "complexity:src/source/ast/source-binding-effects.ts:localCallable",
+        "rule": "complexity",
+        "summary": "localCallable: cyclomatic 14, cognitive 11.",
+        "status": "introduced"
+      },
+      {
+        "id": "complexity:src/symbols/graph/imported-value-context.ts:definitionBinding.<callback:walkNamedSyntax:1>",
+        "rule": "complexity",
+        "summary": "definitionBinding.<callback:walkNamedSyntax:1>: cyclomatic 14, cognitive 9.",
+        "status": "introduced"
+      },
+      {
+        "id": "complexity:src/symbols/graph/resolved-call-sites.ts:resolveCallSites",
+        "rule": "complexity",
+        "summary": "resolveCallSites: cyclomatic 11, cognitive 20.",
+        "status": "worsened"
+      },
+      {
+        "id": "complexity:src/symbols/graph/call-graph-evidence.ts:astCallsiteRow",
+        "rule": "complexity",
+        "summary": "astCallsiteRow: cyclomatic 12, cognitive 18.",
+        "status": "worsened"
+      },
+      {
+        "id": "complexity:src/symbols/graph/scip-occurrence-call-targets.ts:invocationImplementationProof",
+        "rule": "complexity",
+        "summary": "invocationImplementationProof: cyclomatic 12, cognitive 10.",
+        "status": "introduced"
+      },
+      {
+        "id": "complexity:src/queries/graph/program-execution-frontiers.ts:appendUnresolvedCall",
+        "rule": "complexity",
+        "summary": "appendUnresolvedCall: cyclomatic 11, cognitive 9.",
+        "status": "introduced"
+      },
+      {
+        "id": "complexity:src/reindex/typescript-document-emitter.ts:loadTypeScriptDocumentRuntime",
+        "rule": "complexity",
+        "summary": "loadTypeScriptDocumentRuntime: cyclomatic 11, cognitive 6.",
+        "status": "introduced"
+      },
+      {
+        "id": "complexity:src/source/ast/source-binding-effects.ts:exposedExpressionSources",
+        "rule": "complexity",
+        "summary": "exposedExpressionSources: cyclomatic 11, cognitive 10.",
+        "status": "introduced"
+      },
+      {
+        "id": "complexity:src/source/ast/source-binding-effects.ts:possibleBindingAccesses",
+        "rule": "complexity",
+        "summary": "possibleBindingAccesses: cyclomatic 11, cognitive 10.",
+        "status": "introduced"
+      },
+      {
+        "id": "complexity:src/source/ast/source-binding-identity.ts:sourceBindingResolver.resolver.directParameterPosition",
+        "rule": "complexity",
+        "summary": "sourceBindingResolver.resolver.directParameterPosition: cyclomatic 11, cognitive 8.",
+        "status": "introduced"
+      },
+      {
+        "id": "complexity:src/symbols/graph/imported-value-context.ts:callableValueWasWritten",
+        "rule": "complexity",
+        "summary": "callableValueWasWritten: cyclomatic 11, cognitive 8.",
+        "status": "introduced"
+      }
+    ],
+    "architectureCoverage": {
+      "totalFiles": 587,
+      "mappedFiles": 587,
+      "unmappedFiles": [],
+      "ambiguousFiles": []
+    }
+  },
+  "diffImpact": {
+    "totalChangedFiles": 44,
+    "totalChangedSymbols": 175,
+    "totalAffectedFiles": 211,
+    "note": "62 changed path(s) were omitted from symbol analysis because they are absent or excluded from this index. Reindex supported source or use review for current-source analysis."
+  },
+  "buildReceipt": {
+    "head": "61bb090c3f0b46e11cc3564c9ada9cb0b54be296",
+    "dirtyWorktree": true,
+    "production": {
+      "files": 540,
+      "sha256": "ab7d0410947bc4cfed1cf5715bccf65cf5ace9476f97a49e006f055705c43483",
+      "algorithm": "SHA-256 of compact, sorted-key JSON array of sorted path/sha256 entries"
+    },
+    "distribution": {
+      "files": 388,
+      "sha256": "f79af9a83a523f8af2affba47518bc147bd304c906cd2176fd295ec57e2f6e6b",
+      "algorithm": "SHA-256 of compact, sorted-key JSON array of sorted path/sha256 entries"
+    },
+    "apiDigestPrefix": "9217c44ff0f30a77"
+  },
+  "regularTests": {
+    "passed": true,
+    "files": 415,
+    "tests": 3799,
+    "durationSeconds": 361.72
+  },
+  "staticChecks": {
+    "build": true,
+    "typecheck": true,
+    "format": true,
+    "eslint": true,
+    "publicApi": true,
+    "publicApiConsumerTypes": true,
+    "skillLinks": true,
+    "diffWhitespace": true
+  }
+}

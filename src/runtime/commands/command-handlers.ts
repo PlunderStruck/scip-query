@@ -12,6 +12,7 @@ import {
   type AffectedSetShadowStatus,
 } from '../../reindex/affected-shadow.js';
 import {
+  publishSqliteAugmentation,
   inspectLocalSqliteGenerationRetention,
   inspectSqliteGeneration,
   type LocalSqliteGenerationStatus,
@@ -161,15 +162,17 @@ export async function handleReindex(rawOpts: unknown): Promise<void> {
   }
 }
 
-export function handleAugmentSources(): void {
+export async function handleAugmentSources(): Promise<void> {
   const projectRoot = resolveProjectRoot();
   const dbPath = resolveActiveDbPath(projectRoot);
   try {
-    const result = augmentAuxiliaryDocuments({
-      projectRoot,
-      dbPath,
-      onStatus: (message) => console.log(message),
-    });
+    const result = await publishSqliteAugmentation(dbPath, (candidate) =>
+      augmentAuxiliaryDocuments({
+        projectRoot,
+        dbPath: candidate,
+        onStatus: (message) => console.log(message),
+      }),
+    );
     console.log(`Scanned ${result.scanned} auxiliary source files; inserted ${result.inserted}.`);
   } catch (err) {
     console.error(`error: ${err instanceof Error ? err.message : err}`);
@@ -182,12 +185,14 @@ export async function handleAugmentVue(rawOpts: unknown): Promise<void> {
   const projectRoot = resolveProjectRoot();
   const dbPath = resolveActiveDbPath(projectRoot);
   try {
-    const result = await augmentVueResolvedReferencesAsync({
-      projectRoot,
-      dbPath,
-      tsconfig: stringOptionValue(opts, 'project') ?? 'frontend/tsconfig.scip.json',
-      onStatus: (message) => console.log(message),
-    });
+    const result = await publishSqliteAugmentation(dbPath, (candidate) =>
+      augmentVueResolvedReferencesAsync({
+        projectRoot,
+        dbPath: candidate,
+        tsconfig: stringOptionValue(opts, 'project') ?? 'frontend/tsconfig.scip.json',
+        onStatus: (message) => console.log(message),
+      }),
+    );
     console.log(
       `Vue files: ${result.vueFiles}; resolved references: ${result.resolvedReferences}; inserted mentions: ${result.insertedMentions}; not-inserted identifier tokens: ${result.skippedReferences}; synthetic symbols: ${result.syntheticSymbols}.`,
     );

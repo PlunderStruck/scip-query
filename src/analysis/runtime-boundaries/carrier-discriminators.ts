@@ -269,7 +269,7 @@ function collectProducerBodyFields(
       continue;
     }
     const value = evaluateBoundaryValue(context, valueNode);
-    if (!value || value.evidence === 'expression') continue;
+    if (!value || value.precision !== 'literal' || value.evidence === 'expression') continue;
     state.produced.push(
       createCarrierObservation(context, pair, 'carrier.publish', carrier, field, value.value, [boundary.id]),
     );
@@ -301,7 +301,7 @@ function propagateProducerDiscriminator(
     const argument = callArguments(call)[summary.parameterIndex];
     if (!argument) continue;
     const value = evaluateBoundaryValue(context, argument);
-    if (value && value.evidence !== 'expression') {
+    if (value && value.precision === 'literal' && value.evidence !== 'expression') {
       state.produced.push(
         createCarrierObservation(
           context,

@@ -1,0 +1,5701 @@
+{
+  "date": "2026-09-09",
+  "compiler": "6.0.2",
+  "node": "v26.8.1",
+  "interpretation": "Discovery observations, not an overall accuracy score. Runtime/declaration disagreements are not automatically compiler-reference bugs. A passing recorder does not mean its recorded probes passed.",
+  "counts": {
+    "cases": 472,
+    "valid": 472,
+    "invalid": 0,
+    "runtimeExpectationFailures": 0,
+    "markerInvocationCountMismatches": 0,
+    "wholeFileInvocationCountMismatches": 0,
+    "compilerDeclarationChecks": 451,
+    "compilerToCatalogMismatchCases": 10,
+    "runtimeDeclarationDisagreementCases": 227,
+    "staticValueDisagreementCases": 5
+  },
+  "areas": {
+    "mutation": 10,
+    "ordering": 5,
+    "containers": 16,
+    "async": 3,
+    "binding": 7,
+    "calls": 20,
+    "classes": 12,
+    "values": 24,
+    "generated": 320,
+    "modules": 21,
+    "dataflow": 10,
+    "invariants": 24
+  },
+  "observations": {
+    "cases": 472,
+    "valid": 472,
+    "invalid": 0,
+    "runtimeExpectationFailures": [],
+    "invocationMismatches": [],
+    "declarationMismatches": [
+      "getter-callable",
+      "field-function",
+      "module-anonymous-default",
+      "module-default-arrow",
+      "invariant-field-function-blank-lines",
+      "invariant-field-function-crlf",
+      "invariant-field-function-ascii-rename",
+      "invariant-field-function-bmp-rename",
+      "invariant-field-function-astral-rename",
+      "invariant-field-function-astral-comments"
+    ],
+    "contradictedTargets": [
+      "helper-parameter-write",
+      "helper-return-alias",
+      "helper-callback-write",
+      "object-assign",
+      "object-define-property",
+      "object-define-properties",
+      "reflect-set",
+      "object-values",
+      "object-entries",
+      "array-rest",
+      "array-rest-offset",
+      "array-push",
+      "array-pop",
+      "array-at",
+      "array-map",
+      "array-for-of",
+      "array-for-each",
+      "map-get",
+      "set-value",
+      "nested-rest-assignment",
+      "object-assign-copy",
+      "promise-callback-write",
+      "await-return-alias",
+      "generator-alias",
+      "logical-and-alias",
+      "logical-or-alias",
+      "nullish-alias",
+      "assignment-chain",
+      "logical-assignment-alias",
+      "override-through-base",
+      "constructor-method-write",
+      "other-method-write",
+      "prototype-method-write",
+      "prototype-assign",
+      "prototype-reflect",
+      "proxy-callable",
+      "set-prototype",
+      "static-override",
+      "generated-0-0-1-0",
+      "generated-0-0-1-1",
+      "generated-0-0-1-2",
+      "generated-0-0-1-3",
+      "generated-0-0-2-0",
+      "generated-0-0-2-1",
+      "generated-0-0-2-2",
+      "generated-0-0-2-3",
+      "generated-0-1-1-0",
+      "generated-0-1-1-1",
+      "generated-0-1-1-2",
+      "generated-0-1-1-3",
+      "generated-0-1-2-0",
+      "generated-0-1-2-1",
+      "generated-0-1-2-2",
+      "generated-0-1-2-3",
+      "generated-0-2-1-0",
+      "generated-0-2-1-1",
+      "generated-0-2-1-2",
+      "generated-0-2-1-3",
+      "generated-0-2-2-0",
+      "generated-0-2-2-1",
+      "generated-0-2-2-2",
+      "generated-0-2-2-3",
+      "generated-0-3-1-0",
+      "generated-0-3-1-1",
+      "generated-0-3-1-2",
+      "generated-0-3-1-3",
+      "generated-0-3-2-0",
+      "generated-0-3-2-1",
+      "generated-0-3-2-2",
+      "generated-0-3-2-3",
+      "generated-1-0-1-0",
+      "generated-1-0-1-1",
+      "generated-1-0-1-2",
+      "generated-1-0-1-3",
+      "generated-1-0-2-0",
+      "generated-1-0-2-1",
+      "generated-1-0-2-2",
+      "generated-1-0-2-3",
+      "generated-1-1-1-0",
+      "generated-1-1-1-1",
+      "generated-1-1-1-2",
+      "generated-1-1-1-3",
+      "generated-1-1-2-0",
+      "generated-1-1-2-1",
+      "generated-1-1-2-2",
+      "generated-1-1-2-3",
+      "generated-1-2-1-0",
+      "generated-1-2-1-1",
+      "generated-1-2-1-2",
+      "generated-1-2-1-3",
+      "generated-1-2-2-0",
+      "generated-1-2-2-1",
+      "generated-1-2-2-2",
+      "generated-1-2-2-3",
+      "generated-1-3-1-0",
+      "generated-1-3-1-1",
+      "generated-1-3-1-2",
+      "generated-1-3-1-3",
+      "generated-1-3-2-0",
+      "generated-1-3-2-1",
+      "generated-1-3-2-2",
+      "generated-1-3-2-3",
+      "generated-2-0-1-0",
+      "generated-2-0-1-1",
+      "generated-2-0-1-2",
+      "generated-2-0-1-3",
+      "generated-2-0-2-0",
+      "generated-2-0-2-1",
+      "generated-2-0-2-2",
+      "generated-2-0-2-3",
+      "generated-2-1-1-0",
+      "generated-2-1-1-1",
+      "generated-2-1-1-2",
+      "generated-2-1-1-3",
+      "generated-2-1-2-0",
+      "generated-2-1-2-1",
+      "generated-2-1-2-2",
+      "generated-2-1-2-3",
+      "generated-2-2-1-0",
+      "generated-2-2-1-1",
+      "generated-2-2-1-2",
+      "generated-2-2-1-3",
+      "generated-2-2-2-0",
+      "generated-2-2-2-1",
+      "generated-2-2-2-2",
+      "generated-2-2-2-3",
+      "generated-2-3-1-0",
+      "generated-2-3-1-1",
+      "generated-2-3-1-2",
+      "generated-2-3-1-3",
+      "generated-2-3-2-0",
+      "generated-2-3-2-1",
+      "generated-2-3-2-2",
+      "generated-2-3-2-3",
+      "generated-3-0-1-0",
+      "generated-3-0-1-1",
+      "generated-3-0-1-2",
+      "generated-3-0-1-3",
+      "generated-3-0-2-0",
+      "generated-3-0-2-1",
+      "generated-3-0-2-2",
+      "generated-3-0-2-3",
+      "generated-3-1-1-0",
+      "generated-3-1-1-1",
+      "generated-3-1-1-2",
+      "generated-3-1-1-3",
+      "generated-3-1-2-0",
+      "generated-3-1-2-1",
+      "generated-3-1-2-2",
+      "generated-3-1-2-3",
+      "generated-3-2-1-0",
+      "generated-3-2-1-1",
+      "generated-3-2-1-2",
+      "generated-3-2-1-3",
+      "generated-3-2-2-0",
+      "generated-3-2-2-1",
+      "generated-3-2-2-2",
+      "generated-3-2-2-3",
+      "generated-3-3-1-0",
+      "generated-3-3-1-1",
+      "generated-3-3-1-2",
+      "generated-3-3-1-3",
+      "generated-3-3-2-0",
+      "generated-3-3-2-1",
+      "generated-3-3-2-2",
+      "generated-3-3-2-3",
+      "generated-4-0-0-0",
+      "generated-4-0-0-1",
+      "generated-4-0-0-2",
+      "generated-4-0-0-3",
+      "generated-4-0-1-0",
+      "generated-4-0-1-1",
+      "generated-4-0-1-2",
+      "generated-4-0-1-3",
+      "generated-4-0-2-0",
+      "generated-4-0-2-1",
+      "generated-4-0-2-2",
+      "generated-4-0-2-3",
+      "generated-4-1-0-0",
+      "generated-4-1-0-1",
+      "generated-4-1-0-2",
+      "generated-4-1-0-3",
+      "generated-4-1-1-0",
+      "generated-4-1-1-1",
+      "generated-4-1-1-2",
+      "generated-4-1-1-3",
+      "generated-4-1-2-0",
+      "generated-4-1-2-1",
+      "generated-4-1-2-2",
+      "generated-4-1-2-3",
+      "generated-4-2-0-0",
+      "generated-4-2-0-1",
+      "generated-4-2-0-2",
+      "generated-4-2-0-3",
+      "generated-4-2-1-0",
+      "generated-4-2-1-1",
+      "generated-4-2-1-2",
+      "generated-4-2-1-3",
+      "generated-4-2-2-0",
+      "generated-4-2-2-1",
+      "generated-4-2-2-2",
+      "generated-4-2-2-3",
+      "generated-4-3-0-0",
+      "generated-4-3-0-1",
+      "generated-4-3-0-2",
+      "generated-4-3-0-3",
+      "generated-4-3-1-0",
+      "generated-4-3-1-1",
+      "generated-4-3-1-2",
+      "generated-4-3-1-3",
+      "generated-4-3-2-0",
+      "generated-4-3-2-1",
+      "generated-4-3-2-2",
+      "generated-4-3-2-3",
+      "module-direct-import-write",
+      "module-side-effect-import-write",
+      "module-writer-function",
+      "module-imported-object-assign",
+      "module-owner-object-assign",
+      "module-namespace-member-write",
+      "module-namespace-reexport-write",
+      "invariant-helper-parameter-write-blank-lines",
+      "invariant-helper-parameter-write-crlf",
+      "invariant-helper-parameter-write-ascii-rename",
+      "invariant-helper-parameter-write-bmp-rename",
+      "invariant-helper-parameter-write-astral-rename",
+      "invariant-helper-parameter-write-astral-comments"
+    ],
+    "contradictedValues": [
+      "value-argument-throws",
+      "value-initializer-throws",
+      "value-member-helper-mutation",
+      "value-member-object-assign",
+      "value-member-reflect-write"
+    ],
+    "requiredUnresolved": ["wrapped-bracket-call", "module-anonymous-default", "module-default-arrow"],
+    "unresolved": [
+      "direct-write",
+      "closure-write",
+      "never-called-write",
+      "unreachable-write",
+      "array-spread",
+      "conditional-alias",
+      "destructure-default-alias",
+      "wrapped-bracket-call",
+      "call-method",
+      "apply-method",
+      "bound-call",
+      "reflect-apply",
+      "returned-function",
+      "conditional-function",
+      "comma-function",
+      "immediate-function",
+      "immediate-arrow",
+      "getter-callable",
+      "field-function",
+      "value-generator-return",
+      "saved-function-snapshot",
+      "write-after-call",
+      "write-then-restore",
+      "generated-0-0-0-0",
+      "generated-0-0-0-1",
+      "generated-0-0-0-2",
+      "generated-0-0-0-3",
+      "generated-0-1-0-0",
+      "generated-0-1-0-1",
+      "generated-0-1-0-2",
+      "generated-0-1-0-3",
+      "generated-0-2-0-0",
+      "generated-0-2-0-1",
+      "generated-0-2-0-2",
+      "generated-0-2-0-3",
+      "generated-0-3-0-0",
+      "generated-0-3-0-1",
+      "generated-0-3-0-2",
+      "generated-0-3-0-3",
+      "generated-1-0-0-0",
+      "generated-1-0-0-1",
+      "generated-1-0-0-2",
+      "generated-1-0-0-3",
+      "generated-1-1-0-0",
+      "generated-1-1-0-1",
+      "generated-1-1-0-2",
+      "generated-1-1-0-3",
+      "generated-1-2-0-0",
+      "generated-1-2-0-1",
+      "generated-1-2-0-2",
+      "generated-1-2-0-3",
+      "generated-1-3-0-0",
+      "generated-1-3-0-1",
+      "generated-1-3-0-2",
+      "generated-1-3-0-3",
+      "generated-2-0-0-0",
+      "generated-2-0-0-1",
+      "generated-2-0-0-2",
+      "generated-2-0-0-3",
+      "generated-2-1-0-0",
+      "generated-2-1-0-1",
+      "generated-2-1-0-2",
+      "generated-2-1-0-3",
+      "generated-2-2-0-0",
+      "generated-2-2-0-1",
+      "generated-2-2-0-2",
+      "generated-2-2-0-3",
+      "generated-2-3-0-0",
+      "generated-2-3-0-1",
+      "generated-2-3-0-2",
+      "generated-2-3-0-3",
+      "generated-3-0-0-0",
+      "generated-3-0-0-1",
+      "generated-3-0-0-2",
+      "generated-3-0-0-3",
+      "generated-3-1-0-0",
+      "generated-3-1-0-1",
+      "generated-3-1-0-2",
+      "generated-3-1-0-3",
+      "generated-3-2-0-0",
+      "generated-3-2-0-1",
+      "generated-3-2-0-2",
+      "generated-3-2-0-3",
+      "generated-3-3-0-0",
+      "generated-3-3-0-1",
+      "generated-3-3-0-2",
+      "generated-3-3-0-3",
+      "module-anonymous-default",
+      "module-default-arrow",
+      "module-owner-direct-write",
+      "module-live-let-export",
+      "invariant-field-function-blank-lines",
+      "invariant-field-function-crlf",
+      "invariant-field-function-ascii-rename",
+      "invariant-field-function-bmp-rename",
+      "invariant-field-function-astral-rename",
+      "invariant-field-function-astral-comments"
+    ]
+  },
+  "flow": [
+    {
+      "id": "flow-direct",
+      "requiredByAudit": true,
+      "expected": [
+        [0, 0],
+        [1, 1]
+      ],
+      "actual": [
+        [0, 0],
+        [1, 1]
+      ],
+      "missing": [],
+      "extra": []
+    },
+    {
+      "id": "flow-swapped",
+      "requiredByAudit": true,
+      "expected": [
+        [1, 0],
+        [0, 1]
+      ],
+      "actual": [
+        [0, 1],
+        [1, 0]
+      ],
+      "missing": [],
+      "extra": []
+    },
+    {
+      "id": "flow-parentheses",
+      "requiredByAudit": true,
+      "expected": [
+        [0, 0],
+        [1, 1]
+      ],
+      "actual": [],
+      "missing": [
+        [0, 0],
+        [1, 1]
+      ],
+      "extra": []
+    },
+    {
+      "id": "flow-assertion",
+      "requiredByAudit": true,
+      "expected": [
+        [0, 0],
+        [1, 1]
+      ],
+      "actual": [],
+      "missing": [
+        [0, 0],
+        [1, 1]
+      ],
+      "extra": []
+    },
+    {
+      "id": "flow-satisfies",
+      "requiredByAudit": true,
+      "expected": [
+        [0, 0],
+        [1, 1]
+      ],
+      "actual": [[1, 1]],
+      "missing": [[0, 0]],
+      "extra": []
+    },
+    {
+      "id": "flow-constant-alias",
+      "requiredByAudit": false,
+      "expected": [
+        [0, 0],
+        [1, 1]
+      ],
+      "actual": [[1, 1]],
+      "missing": [[0, 0]],
+      "extra": []
+    },
+    {
+      "id": "flow-transformed",
+      "requiredByAudit": true,
+      "expected": [[1, 1]],
+      "actual": [[1, 1]],
+      "missing": [],
+      "extra": []
+    },
+    {
+      "id": "flow-literal",
+      "requiredByAudit": true,
+      "expected": [[1, 1]],
+      "actual": [[1, 1]],
+      "missing": [],
+      "extra": []
+    },
+    {
+      "id": "flow-spread-tuple",
+      "requiredByAudit": false,
+      "expected": [
+        [0, 0],
+        [1, 1]
+      ],
+      "actual": [],
+      "missing": [
+        [0, 0],
+        [1, 1]
+      ],
+      "extra": []
+    },
+    {
+      "id": "flow-local-shadow",
+      "requiredByAudit": true,
+      "expected": [[1, 1]],
+      "actual": [[1, 1]],
+      "missing": [],
+      "extra": []
+    }
+  ],
+  "invariants": [
+    {
+      "id": "invariant-sibling-write-blank-lines",
+      "baseline": "sibling-write",
+      "matches": true
+    },
+    {
+      "id": "invariant-sibling-write-crlf",
+      "baseline": "sibling-write",
+      "matches": true
+    },
+    {
+      "id": "invariant-sibling-write-ascii-rename",
+      "baseline": "sibling-write",
+      "matches": true
+    },
+    {
+      "id": "invariant-sibling-write-bmp-rename",
+      "baseline": "sibling-write",
+      "matches": true
+    },
+    {
+      "id": "invariant-sibling-write-astral-rename",
+      "baseline": "sibling-write",
+      "matches": true
+    },
+    {
+      "id": "invariant-sibling-write-astral-comments",
+      "baseline": "sibling-write",
+      "matches": true
+    },
+    {
+      "id": "invariant-helper-parameter-write-blank-lines",
+      "baseline": "helper-parameter-write",
+      "matches": true
+    },
+    {
+      "id": "invariant-helper-parameter-write-crlf",
+      "baseline": "helper-parameter-write",
+      "matches": true
+    },
+    {
+      "id": "invariant-helper-parameter-write-ascii-rename",
+      "baseline": "helper-parameter-write",
+      "matches": true
+    },
+    {
+      "id": "invariant-helper-parameter-write-bmp-rename",
+      "baseline": "helper-parameter-write",
+      "matches": true
+    },
+    {
+      "id": "invariant-helper-parameter-write-astral-rename",
+      "baseline": "helper-parameter-write",
+      "matches": true
+    },
+    {
+      "id": "invariant-helper-parameter-write-astral-comments",
+      "baseline": "helper-parameter-write",
+      "matches": true
+    },
+    {
+      "id": "invariant-direct-call-blank-lines",
+      "baseline": "direct-call",
+      "matches": true
+    },
+    {
+      "id": "invariant-direct-call-crlf",
+      "baseline": "direct-call",
+      "matches": true
+    },
+    {
+      "id": "invariant-direct-call-ascii-rename",
+      "baseline": "direct-call",
+      "matches": true
+    },
+    {
+      "id": "invariant-direct-call-bmp-rename",
+      "baseline": "direct-call",
+      "matches": true
+    },
+    {
+      "id": "invariant-direct-call-astral-rename",
+      "baseline": "direct-call",
+      "matches": true
+    },
+    {
+      "id": "invariant-direct-call-astral-comments",
+      "baseline": "direct-call",
+      "matches": true
+    },
+    {
+      "id": "invariant-field-function-blank-lines",
+      "baseline": "field-function",
+      "matches": true
+    },
+    {
+      "id": "invariant-field-function-crlf",
+      "baseline": "field-function",
+      "matches": true
+    },
+    {
+      "id": "invariant-field-function-ascii-rename",
+      "baseline": "field-function",
+      "matches": true
+    },
+    {
+      "id": "invariant-field-function-bmp-rename",
+      "baseline": "field-function",
+      "matches": true
+    },
+    {
+      "id": "invariant-field-function-astral-rename",
+      "baseline": "field-function",
+      "matches": true
+    },
+    {
+      "id": "invariant-field-function-astral-comments",
+      "baseline": "field-function",
+      "matches": true
+    }
+  ],
+  "histories": [
+    {
+      "name": "body-edit",
+      "actualIncremental": true,
+      "compilerParity": true,
+      "graphParity": true
+    },
+    {
+      "name": "member-replacement",
+      "actualIncremental": true,
+      "compilerParity": true,
+      "graphParity": true
+    },
+    {
+      "name": "barrel-addition",
+      "actualIncremental": false,
+      "compilerParity": true,
+      "graphParity": true
+    },
+    {
+      "name": "file-rename",
+      "actualIncremental": false,
+      "compilerParity": true,
+      "graphParity": true
+    },
+    {
+      "name": "barrel-deletion",
+      "actualIncremental": true,
+      "compilerParity": true,
+      "graphParity": true
+    },
+    {
+      "name": "restore-original",
+      "actualIncremental": false,
+      "compilerParity": true,
+      "graphParity": true
+    },
+    {
+      "name": "path-alias",
+      "actualIncremental": false,
+      "compilerParity": true,
+      "graphParity": true
+    },
+    {
+      "name": "retarget-path-alias",
+      "actualIncremental": false,
+      "compilerParity": true,
+      "graphParity": true
+    },
+    {
+      "name": "delete-alternate-restore-path",
+      "actualIncremental": false,
+      "compilerParity": true,
+      "graphParity": true
+    },
+    {
+      "name": "type-only-reference",
+      "actualIncremental": true,
+      "compilerParity": true,
+      "graphParity": true
+    },
+    {
+      "name": "unchanged-inputs",
+      "actualIncremental": false,
+      "compilerParity": true,
+      "graphParity": true
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "named",
+      "expected": {
+        "kind": "value",
+        "syntax": "import",
+        "destination": "dependency-owner.ts"
+      },
+      "actual": [
+        {
+          "specifier": "./dependency-owner.js",
+          "literal": true,
+          "line": 1,
+          "kind": "value",
+          "syntax": "import"
+        }
+      ],
+      "resolved": "dependency-owner.ts",
+      "directCompilerDestination": "dependency-owner.ts",
+      "matches": true
+    },
+    {
+      "id": "namespace",
+      "expected": {
+        "kind": "value",
+        "syntax": "import",
+        "destination": "dependency-owner.ts"
+      },
+      "actual": [
+        {
+          "specifier": "./dependency-owner.js",
+          "literal": true,
+          "line": 1,
+          "kind": "value",
+          "syntax": "import"
+        }
+      ],
+      "resolved": "dependency-owner.ts",
+      "directCompilerDestination": "dependency-owner.ts",
+      "matches": true
+    },
+    {
+      "id": "default",
+      "expected": {
+        "kind": "value",
+        "syntax": "import",
+        "destination": "dependency-owner.ts"
+      },
+      "actual": [
+        {
+          "specifier": "./dependency-owner.js",
+          "literal": true,
+          "line": 1,
+          "kind": "value",
+          "syntax": "import"
+        }
+      ],
+      "resolved": "dependency-owner.ts",
+      "directCompilerDestination": "dependency-owner.ts",
+      "matches": true
+    },
+    {
+      "id": "side-effect",
+      "expected": {
+        "kind": "value",
+        "syntax": "import",
+        "destination": "dependency-owner.ts"
+      },
+      "actual": [
+        {
+          "specifier": "./dependency-owner.js",
+          "literal": true,
+          "line": 1,
+          "kind": "value",
+          "syntax": "import"
+        }
+      ],
+      "resolved": "dependency-owner.ts",
+      "directCompilerDestination": "dependency-owner.ts",
+      "matches": true
+    },
+    {
+      "id": "type-only",
+      "expected": {
+        "kind": "type",
+        "syntax": "import",
+        "destination": "dependency-owner.ts"
+      },
+      "actual": [
+        {
+          "specifier": "./dependency-owner.js",
+          "literal": true,
+          "line": 1,
+          "kind": "type",
+          "syntax": "import"
+        }
+      ],
+      "resolved": "dependency-owner.ts",
+      "directCompilerDestination": "dependency-owner.ts",
+      "matches": true
+    },
+    {
+      "id": "specifier-type",
+      "expected": {
+        "kind": "type",
+        "syntax": "import",
+        "destination": "dependency-owner.ts"
+      },
+      "actual": [
+        {
+          "specifier": "./dependency-owner.js",
+          "literal": true,
+          "line": 1,
+          "kind": "type",
+          "syntax": "import"
+        }
+      ],
+      "resolved": "dependency-owner.ts",
+      "directCompilerDestination": "dependency-owner.ts",
+      "matches": true
+    },
+    {
+      "id": "mixed",
+      "expected": {
+        "kind": "value",
+        "syntax": "import",
+        "destination": "dependency-owner.ts"
+      },
+      "actual": [
+        {
+          "specifier": "./dependency-owner.js",
+          "literal": true,
+          "line": 1,
+          "kind": "value",
+          "syntax": "import"
+        }
+      ],
+      "resolved": "dependency-owner.ts",
+      "directCompilerDestination": "dependency-owner.ts",
+      "matches": true
+    },
+    {
+      "id": "reexport",
+      "expected": {
+        "kind": "value",
+        "syntax": "reexport",
+        "destination": "dependency-owner.ts"
+      },
+      "actual": [
+        {
+          "specifier": "./dependency-owner.js",
+          "literal": true,
+          "line": 1,
+          "kind": "value",
+          "syntax": "reexport"
+        }
+      ],
+      "resolved": "dependency-owner.ts",
+      "directCompilerDestination": null,
+      "matches": true
+    },
+    {
+      "id": "reexport-type",
+      "expected": {
+        "kind": "type",
+        "syntax": "reexport",
+        "destination": "dependency-owner.ts"
+      },
+      "actual": [
+        {
+          "specifier": "./dependency-owner.js",
+          "literal": true,
+          "line": 1,
+          "kind": "type",
+          "syntax": "reexport"
+        }
+      ],
+      "resolved": "dependency-owner.ts",
+      "directCompilerDestination": null,
+      "matches": true
+    },
+    {
+      "id": "reexport-star",
+      "expected": {
+        "kind": "value",
+        "syntax": "reexport",
+        "destination": "dependency-owner.ts"
+      },
+      "actual": [
+        {
+          "specifier": "./dependency-owner.js",
+          "literal": true,
+          "line": 1,
+          "kind": "value",
+          "syntax": "reexport"
+        }
+      ],
+      "resolved": "dependency-owner.ts",
+      "directCompilerDestination": null,
+      "matches": true
+    },
+    {
+      "id": "reexport-namespace",
+      "expected": {
+        "kind": "value",
+        "syntax": "reexport",
+        "destination": "dependency-owner.ts"
+      },
+      "actual": [
+        {
+          "specifier": "./dependency-owner.js",
+          "literal": true,
+          "line": 1,
+          "kind": "value",
+          "syntax": "reexport"
+        }
+      ],
+      "resolved": "dependency-owner.ts",
+      "directCompilerDestination": null,
+      "matches": true
+    },
+    {
+      "id": "type-expression",
+      "expected": {
+        "kind": "type",
+        "syntax": "type-import",
+        "destination": "dependency-owner.ts"
+      },
+      "actual": [
+        {
+          "specifier": "./dependency-owner.js",
+          "literal": true,
+          "line": 1,
+          "kind": "type",
+          "syntax": "type-import"
+        }
+      ],
+      "resolved": "dependency-owner.ts",
+      "directCompilerDestination": null,
+      "matches": true
+    },
+    {
+      "id": "dynamic-literal",
+      "expected": {
+        "kind": "value",
+        "syntax": "dynamic-import",
+        "destination": "dependency-owner.ts"
+      },
+      "actual": [
+        {
+          "specifier": "./dependency-owner.js",
+          "literal": true,
+          "line": 1,
+          "kind": "value",
+          "syntax": "dynamic-import"
+        }
+      ],
+      "resolved": "dependency-owner.ts",
+      "directCompilerDestination": null,
+      "matches": true
+    }
+  ],
+  "projections": [
+    {
+      "id": "direct-write",
+      "symmetry": [],
+      "foldAccounting": true,
+      "boundedEdges": 1,
+      "foldedEdges": 0
+    },
+    {
+      "id": "sibling-write",
+      "symmetry": [
+        {
+          "from": "scip-typescript npm history-fixture 1.0.0 `sibling-write.ts`/entry().",
+          "to": "scip-typescript npm history-fixture 1.0.0 `sibling-write.ts`/Service#run().",
+          "found": true,
+          "coverage": "accounted"
+        }
+      ],
+      "foldAccounting": true,
+      "boundedEdges": 1,
+      "foldedEdges": 1
+    },
+    {
+      "id": "helper-parameter-write",
+      "symmetry": [
+        {
+          "from": "scip-typescript npm history-fixture 1.0.0 `helper-parameter-write.ts`/entry().",
+          "to": "scip-typescript npm history-fixture 1.0.0 `helper-parameter-write.ts`/Service#run().",
+          "found": true,
+          "coverage": "accounted"
+        }
+      ],
+      "foldAccounting": true,
+      "boundedEdges": 1,
+      "foldedEdges": 1
+    },
+    {
+      "id": "array-rest",
+      "symmetry": [
+        {
+          "from": "scip-typescript npm history-fixture 1.0.0 `array-rest.ts`/entry().",
+          "to": "scip-typescript npm history-fixture 1.0.0 `array-rest.ts`/Service#run().",
+          "found": true,
+          "coverage": "accounted"
+        }
+      ],
+      "foldAccounting": true,
+      "boundedEdges": 1,
+      "foldedEdges": 1
+    },
+    {
+      "id": "direct-call",
+      "symmetry": [
+        {
+          "from": "scip-typescript npm history-fixture 1.0.0 `direct-call.ts`/entry().",
+          "to": "scip-typescript npm history-fixture 1.0.0 `direct-call.ts`/original().",
+          "found": true,
+          "coverage": "accounted"
+        }
+      ],
+      "foldAccounting": true,
+      "boundedEdges": 1,
+      "foldedEdges": 1
+    },
+    {
+      "id": "wrapped-bracket-call",
+      "symmetry": [],
+      "foldAccounting": true,
+      "boundedEdges": 1,
+      "foldedEdges": 0
+    },
+    {
+      "id": "prototype-method-write",
+      "symmetry": [
+        {
+          "from": "scip-typescript npm history-fixture 1.0.0 `prototype-method-write.ts`/entry().",
+          "to": "scip-typescript npm history-fixture 1.0.0 `prototype-method-write.ts`/Base#",
+          "found": true,
+          "coverage": "accounted"
+        },
+        {
+          "from": "scip-typescript npm history-fixture 1.0.0 `prototype-method-write.ts`/entry().",
+          "to": "scip-typescript npm history-fixture 1.0.0 `prototype-method-write.ts`/Base#run().",
+          "found": true,
+          "coverage": "accounted"
+        }
+      ],
+      "foldAccounting": true,
+      "boundedEdges": 1,
+      "foldedEdges": 2
+    },
+    {
+      "id": "getter-callable",
+      "symmetry": [
+        {
+          "from": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/entry().",
+          "to": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Base#",
+          "found": true,
+          "coverage": "accounted"
+        }
+      ],
+      "foldAccounting": true,
+      "boundedEdges": 1,
+      "foldedEdges": 1
+    },
+    {
+      "id": "field-function",
+      "symmetry": [
+        {
+          "from": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/entry().",
+          "to": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Base#",
+          "found": true,
+          "coverage": "accounted"
+        }
+      ],
+      "foldAccounting": true,
+      "boundedEdges": 1,
+      "foldedEdges": 1
+    },
+    {
+      "id": "module-anonymous-default",
+      "symmetry": [],
+      "foldAccounting": true,
+      "boundedEdges": 1,
+      "foldedEdges": 0
+    },
+    {
+      "id": "module-default-arrow",
+      "symmetry": [],
+      "foldAccounting": true,
+      "boundedEdges": 1,
+      "foldedEdges": 0
+    },
+    {
+      "id": "module-direct-import-write",
+      "symmetry": [
+        {
+          "from": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write.ts`/entry().",
+          "to": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/Service#run().",
+          "found": true,
+          "coverage": "accounted"
+        }
+      ],
+      "foldAccounting": true,
+      "boundedEdges": 1,
+      "foldedEdges": 1
+    },
+    {
+      "id": "module-owner-direct-write",
+      "symmetry": [],
+      "foldAccounting": true,
+      "boundedEdges": 1,
+      "foldedEdges": 1
+    },
+    {
+      "id": "flow-direct",
+      "symmetry": [],
+      "foldAccounting": true,
+      "boundedEdges": 1,
+      "foldedEdges": 4
+    },
+    {
+      "id": "flow-parentheses",
+      "symmetry": [],
+      "foldAccounting": true,
+      "boundedEdges": 1,
+      "foldedEdges": 2
+    }
+  ],
+  "transport": {
+    "pages": 2,
+    "continuationRemaining": false,
+    "missingLines": []
+  },
+  "runtimeConsumers": [
+    {
+      "id": "value-member-helper-mutation",
+      "expectedPath": "/right",
+      "executedPath": "/right",
+      "derivedPaths": ["/wrong"]
+    },
+    {
+      "id": "value-member-object-assign",
+      "expectedPath": "/right",
+      "executedPath": "/right",
+      "derivedPaths": ["/wrong"]
+    },
+    {
+      "id": "value-member-reflect-write",
+      "expectedPath": "/right",
+      "executedPath": "/right",
+      "derivedPaths": ["/wrong"]
+    }
+  ],
+  "diagnosis": {
+    "identities": [
+      {
+        "file": "direct-write.ts",
+        "producerSymbols": [
+          "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/",
+          "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/original().",
+          "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/replacement().",
+          "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/Service#",
+          "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/Service#count.",
+          "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/Service#run().",
+          "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/service.",
+          "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/entry()."
+        ],
+        "producerOccurrences": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/",
+            "range": [0, 0, 0],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/original().",
+            "range": [0, 16, 24],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/replacement().",
+            "range": [1, 16, 27],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/Service#",
+            "range": [2, 6, 13],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/Service#count.",
+            "range": [2, 16, 21],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/Service#run().",
+            "range": [2, 27, 30],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/service.",
+            "range": [3, 6, 13],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/Service#",
+            "range": [3, 20, 27],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/entry().",
+            "range": [4, 16, 21],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/service.",
+            "range": [5, 0, 7],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/Service#run().",
+            "range": [5, 8, 11],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/replacement().",
+            "range": [5, 14, 25],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/service.",
+            "range": [6, 19, 26],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/Service#run().",
+            "range": [6, 27, 30],
+            "symbolRoles": 0
+          }
+        ],
+        "catalog": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/original().",
+            "leaf": "original",
+            "startLine": 0,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/service.",
+            "leaf": "service",
+            "startLine": 3,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/",
+            "leaf": "direct-write.ts",
+            "startLine": 0,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/replacement().",
+            "leaf": "replacement",
+            "startLine": 1,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/Service#",
+            "leaf": "Service",
+            "startLine": 2,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/Service#run().",
+            "leaf": "run",
+            "startLine": 2,
+            "startChar": 27
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `direct-write.ts`/entry().",
+            "leaf": "entry",
+            "startLine": 4,
+            "startChar": 0
+          }
+        ]
+      },
+      {
+        "file": "field-function.ts",
+        "producerSymbols": [
+          "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/",
+          "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/original().",
+          "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/replacement().",
+          "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Service#",
+          "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Service#count.",
+          "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Service#run().",
+          "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/service.",
+          "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Base#",
+          "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Base#run.",
+          "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/entry().",
+          "local 2"
+        ],
+        "producerOccurrences": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/",
+            "range": [0, 0, 0],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/original().",
+            "range": [0, 16, 24],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/replacement().",
+            "range": [1, 16, 27],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Service#",
+            "range": [2, 6, 13],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Service#count.",
+            "range": [2, 16, 21],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Service#run().",
+            "range": [2, 27, 30],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/service.",
+            "range": [3, 6, 13],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Service#",
+            "range": [3, 20, 27],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Base#",
+            "range": [4, 6, 10],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Base#run.",
+            "range": [4, 13, 16],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/original().",
+            "range": [4, 19, 27],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/entry().",
+            "range": [5, 16, 21],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "local 2",
+            "range": [6, 6, 14],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Base#",
+            "range": [6, 21, 25],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "local 2",
+            "range": [7, 19, 27],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Base#run.",
+            "range": [7, 28, 31],
+            "symbolRoles": 0
+          }
+        ],
+        "catalog": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/original().",
+            "leaf": "original",
+            "startLine": 0,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/service.",
+            "leaf": "service",
+            "startLine": 3,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/",
+            "leaf": "field-function.ts",
+            "startLine": 0,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/replacement().",
+            "leaf": "replacement",
+            "startLine": 1,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Service#",
+            "leaf": "Service",
+            "startLine": 2,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Service#run().",
+            "leaf": "run",
+            "startLine": 2,
+            "startChar": 27
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/Base#",
+            "leaf": "Base",
+            "startLine": 4,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `field-function.ts`/entry().",
+            "leaf": "entry",
+            "startLine": 5,
+            "startChar": 0
+          }
+        ]
+      },
+      {
+        "file": "getter-callable.ts",
+        "producerSymbols": [
+          "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/",
+          "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/original().",
+          "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/replacement().",
+          "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Service#",
+          "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Service#count.",
+          "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Service#run().",
+          "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/service.",
+          "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Base#",
+          "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Base#`<get>run`().",
+          "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/entry().",
+          "local 2"
+        ],
+        "producerOccurrences": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/",
+            "range": [0, 0, 0],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/original().",
+            "range": [0, 16, 24],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/replacement().",
+            "range": [1, 16, 27],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Service#",
+            "range": [2, 6, 13],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Service#count.",
+            "range": [2, 16, 21],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Service#run().",
+            "range": [2, 27, 30],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/service.",
+            "range": [3, 6, 13],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Service#",
+            "range": [3, 20, 27],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Base#",
+            "range": [4, 6, 10],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Base#`<get>run`().",
+            "range": [4, 17, 20],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/replacement().",
+            "range": [4, 32, 43],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/entry().",
+            "range": [5, 16, 21],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "local 2",
+            "range": [6, 6, 14],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Base#",
+            "range": [6, 21, 25],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "local 2",
+            "range": [7, 19, 27],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Base#`<get>run`().",
+            "range": [7, 28, 31],
+            "symbolRoles": 0
+          }
+        ],
+        "catalog": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/original().",
+            "leaf": "original",
+            "startLine": 0,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/service.",
+            "leaf": "service",
+            "startLine": 3,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/",
+            "leaf": "getter-callable.ts",
+            "startLine": 0,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/replacement().",
+            "leaf": "replacement",
+            "startLine": 1,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Service#",
+            "leaf": "Service",
+            "startLine": 2,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Service#run().",
+            "leaf": "run",
+            "startLine": 2,
+            "startChar": 27
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/Base#",
+            "leaf": "Base",
+            "startLine": 4,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `getter-callable.ts`/entry().",
+            "leaf": "entry",
+            "startLine": 5,
+            "startChar": 0
+          }
+        ]
+      },
+      {
+        "file": "module-anonymous-default-owner.ts",
+        "producerSymbols": ["scip-typescript npm history-fixture 1.0.0 `module-anonymous-default-owner.ts`/"],
+        "producerOccurrences": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-anonymous-default-owner.ts`/",
+            "range": [0, 0, 0],
+            "symbolRoles": 1
+          }
+        ],
+        "catalog": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-anonymous-default-owner.ts`/",
+            "leaf": "module-anonymous-default-owner.ts",
+            "startLine": 0,
+            "startChar": 0
+          }
+        ]
+      },
+      {
+        "file": "module-anonymous-default.ts",
+        "producerSymbols": [
+          "scip-typescript npm history-fixture 1.0.0 `module-anonymous-default.ts`/",
+          "scip-typescript npm history-fixture 1.0.0 `module-anonymous-default.ts`/entry()."
+        ],
+        "producerOccurrences": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-anonymous-default.ts`/",
+            "range": [0, 0, 0],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "local 0",
+            "range": [0, 7, 15],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-anonymous-default-owner.ts`/",
+            "range": [0, 21, 58],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-anonymous-default.ts`/entry().",
+            "range": [2, 16, 21],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "local 0",
+            "range": [3, 19, 27],
+            "symbolRoles": 0
+          }
+        ],
+        "catalog": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-anonymous-default.ts`/",
+            "leaf": "module-anonymous-default.ts",
+            "startLine": 0,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-anonymous-default.ts`/entry().",
+            "leaf": "entry",
+            "startLine": 2,
+            "startChar": 0
+          }
+        ]
+      },
+      {
+        "file": "module-default-arrow-owner.ts",
+        "producerSymbols": ["scip-typescript npm history-fixture 1.0.0 `module-default-arrow-owner.ts`/"],
+        "producerOccurrences": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-default-arrow-owner.ts`/",
+            "range": [0, 0, 0],
+            "symbolRoles": 1
+          }
+        ],
+        "catalog": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-default-arrow-owner.ts`/",
+            "leaf": "module-default-arrow-owner.ts",
+            "startLine": 0,
+            "startChar": 0
+          }
+        ]
+      },
+      {
+        "file": "module-default-arrow.ts",
+        "producerSymbols": [
+          "scip-typescript npm history-fixture 1.0.0 `module-default-arrow.ts`/",
+          "scip-typescript npm history-fixture 1.0.0 `module-default-arrow.ts`/entry()."
+        ],
+        "producerOccurrences": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-default-arrow.ts`/",
+            "range": [0, 0, 0],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "local 0",
+            "range": [0, 7, 15],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-default-arrow-owner.ts`/",
+            "range": [0, 21, 54],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-default-arrow.ts`/entry().",
+            "range": [2, 16, 21],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "local 0",
+            "range": [3, 19, 27],
+            "symbolRoles": 0
+          }
+        ],
+        "catalog": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-default-arrow.ts`/",
+            "leaf": "module-default-arrow.ts",
+            "startLine": 0,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-default-arrow.ts`/entry().",
+            "leaf": "entry",
+            "startLine": 2,
+            "startChar": 0
+          }
+        ]
+      },
+      {
+        "file": "module-direct-import-write-owner.ts",
+        "producerSymbols": [
+          "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/",
+          "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/original().",
+          "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/replacement().",
+          "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/Service#",
+          "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/Service#run().",
+          "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/service."
+        ],
+        "producerOccurrences": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/",
+            "range": [0, 0, 0],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/original().",
+            "range": [0, 16, 24],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/replacement().",
+            "range": [1, 16, 27],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/Service#",
+            "range": [2, 13, 20],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/Service#run().",
+            "range": [2, 23, 26],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/service.",
+            "range": [3, 13, 20],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/Service#",
+            "range": [3, 27, 34],
+            "symbolRoles": 0
+          }
+        ],
+        "catalog": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/original().",
+            "leaf": "original",
+            "startLine": 0,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/",
+            "leaf": "module-direct-import-write-owner.ts",
+            "startLine": 0,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/service.",
+            "leaf": "service",
+            "startLine": 3,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/replacement().",
+            "leaf": "replacement",
+            "startLine": 1,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/Service#",
+            "leaf": "Service",
+            "startLine": 2,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/Service#run().",
+            "leaf": "run",
+            "startLine": 2,
+            "startChar": 23
+          }
+        ]
+      },
+      {
+        "file": "module-direct-import-write.ts",
+        "producerSymbols": [
+          "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write.ts`/",
+          "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write.ts`/entry()."
+        ],
+        "producerOccurrences": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write.ts`/",
+            "range": [0, 0, 0],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/service.",
+            "range": [0, 9, 16],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/replacement().",
+            "range": [0, 18, 29],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/",
+            "range": [0, 37, 76],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/service.",
+            "range": [1, 0, 7],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/Service#run().",
+            "range": [1, 8, 11],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/replacement().",
+            "range": [1, 14, 25],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write.ts`/entry().",
+            "range": [2, 16, 21],
+            "symbolRoles": 1
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/service.",
+            "range": [3, 19, 26],
+            "symbolRoles": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write-owner.ts`/Service#run().",
+            "range": [3, 27, 30],
+            "symbolRoles": 0
+          }
+        ],
+        "catalog": [
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write.ts`/",
+            "leaf": "module-direct-import-write.ts",
+            "startLine": 0,
+            "startChar": 0
+          },
+          {
+            "symbol": "scip-typescript npm history-fixture 1.0.0 `module-direct-import-write.ts`/entry().",
+            "leaf": "entry",
+            "startLine": 2,
+            "startChar": 0
+          }
+        ]
+      }
+    ],
+    "bindings": [
+      {
+        "id": "direct-write",
+        "hasObservedCallableWrite": true,
+        "identifiers": [
+          {
+            "text": "service",
+            "start": 140,
+            "valueDeclaration": "VariableDeclaration",
+            "declarations": ["VariableDeclaration"]
+          },
+          {
+            "text": "service",
+            "start": 191,
+            "valueDeclaration": "VariableDeclaration",
+            "declarations": ["VariableDeclaration"]
+          },
+          {
+            "text": "service",
+            "start": 237,
+            "valueDeclaration": "VariableDeclaration",
+            "declarations": ["VariableDeclaration"]
+          }
+        ]
+      },
+      {
+        "id": "module-direct-import-write",
+        "hasObservedCallableWrite": false,
+        "identifiers": [
+          {
+            "text": "service",
+            "start": 9,
+            "valueDeclaration": null,
+            "declarations": ["ImportSpecifier"]
+          },
+          {
+            "text": "service",
+            "start": 78,
+            "valueDeclaration": null,
+            "declarations": ["ImportSpecifier"]
+          },
+          {
+            "text": "service",
+            "start": 150,
+            "valueDeclaration": null,
+            "declarations": ["ImportSpecifier"]
+          }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "direct-write",
+      "area": "mutation",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "sibling-write",
+      "area": "mutation",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "helper-parameter-write",
+      "area": "mutation",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "helper-return-alias",
+      "area": "mutation",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "helper-callback-write",
+      "area": "mutation",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "closure-write",
+      "area": "mutation",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "never-called-write",
+      "area": "ordering",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "unreachable-write",
+      "area": "ordering",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "object-assign",
+      "area": "mutation",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "object-define-property",
+      "area": "mutation",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "object-define-properties",
+      "area": "mutation",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "reflect-set",
+      "area": "mutation",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "object-values",
+      "area": "containers",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "object-entries",
+      "area": "containers",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "array-rest",
+      "area": "containers",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "array-rest-offset",
+      "area": "containers",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "array-spread",
+      "area": "containers",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "array-push",
+      "area": "containers",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "array-pop",
+      "area": "containers",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "array-at",
+      "area": "containers",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "array-map",
+      "area": "containers",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "array-for-of",
+      "area": "containers",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "array-for-each",
+      "area": "containers",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "map-get",
+      "area": "containers",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "set-value",
+      "area": "containers",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "rest-assignment",
+      "area": "containers",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "nested-rest-assignment",
+      "area": "containers",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "object-assign-copy",
+      "area": "containers",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "promise-callback-write",
+      "area": "async",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "await-return-alias",
+      "area": "async",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generator-alias",
+      "area": "async",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "logical-and-alias",
+      "area": "binding",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "logical-or-alias",
+      "area": "binding",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "nullish-alias",
+      "area": "binding",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "conditional-alias",
+      "area": "binding",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "destructure-default-alias",
+      "area": "binding",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "assignment-chain",
+      "area": "binding",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "logical-assignment-alias",
+      "area": "binding",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "direct-call",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "parenthesized-call",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "asserted-call",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "satisfies-call",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "non-null-call",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "optional-call",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "bracket-call",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "wrapped-bracket-call",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "template-bracket-call",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "call-method",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "apply-method",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "bound-call",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 2
+    },
+    {
+      "id": "reflect-apply",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "returned-function",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 2
+    },
+    {
+      "id": "conditional-function",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 2
+    },
+    {
+      "id": "comma-function",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "immediate-function",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "immediate-arrow",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "inherited-method",
+      "area": "classes",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "override-through-base",
+      "area": "classes",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "constructor-method-write",
+      "area": "classes",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "other-method-write",
+      "area": "classes",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "prototype-method-write",
+      "area": "classes",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "prototype-assign",
+      "area": "classes",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "prototype-reflect",
+      "area": "classes",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "getter-callable",
+      "area": "classes",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": false,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "proxy-callable",
+      "area": "classes",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "set-prototype",
+      "area": "classes",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "field-function",
+      "area": "classes",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": false,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "static-override",
+      "area": "classes",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-literal",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-exported-return",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-arrow-return",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-parameter-return",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-default-parameter",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-default-omitted",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-argument-throws",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-initializer-throws",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-async-return",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-generator-return",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "value-conditional-return",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-finally-return",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-member-literal",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-member-bracket",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-member-wrapped-bracket",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-member-template-bracket",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-member-helper-mutation",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-member-object-assign",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-member-reflect-write",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-getter-value",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-object-spread-override",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-object-spread-last",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-template-value",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "value-concat-value",
+      "area": "values",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "tagged-template",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "constructor",
+      "area": "calls",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "saved-function-snapshot",
+      "area": "ordering",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "write-after-call",
+      "area": "ordering",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "write-then-restore",
+      "area": "ordering",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-0-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-0-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-0-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-0-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-0-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-0-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-0-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-0-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-0-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-0-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-0-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-0-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-0-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-0-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-0-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-0-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-1-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-1-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-1-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-1-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-1-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-1-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-1-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-1-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-1-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-1-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-1-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-1-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-1-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-1-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-1-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-1-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-2-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-2-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-2-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-2-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-2-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-2-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-2-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-2-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-2-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-2-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-2-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-2-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-2-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-2-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-2-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-2-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-3-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-3-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-3-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-3-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-0-3-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-3-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-3-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-3-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-3-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-3-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-3-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-3-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-3-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-3-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-3-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-0-3-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-0-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-1-0-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-1-0-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-1-0-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-1-0-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-0-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-0-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-0-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-0-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-0-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-0-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-0-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-0-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-0-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-0-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-0-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-1-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-1-1-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-1-1-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-1-1-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-1-1-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-1-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-1-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-1-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-1-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-1-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-1-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-1-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-1-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-1-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-1-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-1-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-2-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-1-2-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-1-2-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-1-2-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-1-2-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-2-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-2-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-2-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-2-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-2-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-2-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-2-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-2-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-2-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-2-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-2-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-3-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-1-3-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-1-3-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-1-3-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-1-3-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-3-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-3-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-3-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-3-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-3-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-3-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-3-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-3-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-3-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-3-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-1-3-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-0-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-2-0-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-2-0-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-2-0-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-2-0-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-0-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-0-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-0-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-0-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-0-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-0-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-0-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-0-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-0-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-0-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-0-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-1-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-2-1-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-2-1-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-2-1-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-2-1-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-1-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-1-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-1-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-1-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-1-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-1-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-1-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-1-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-1-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-1-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-1-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-2-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-2-2-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-2-2-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-2-2-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-2-2-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-2-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-2-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-2-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-2-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-2-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-2-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-2-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-2-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-2-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-2-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-2-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-3-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-2-3-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-2-3-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-2-3-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-2-3-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-3-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-3-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-3-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-3-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-3-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-3-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-3-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-3-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-3-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-3-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-2-3-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-0-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-3-0-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-3-0-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-3-0-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-3-0-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-0-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-0-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-0-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-0-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-0-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-0-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-0-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-0-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-0-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-0-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-0-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-1-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-3-1-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-3-1-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-3-1-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-3-1-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-1-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-1-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-1-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-1-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-1-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-1-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-1-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-1-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-1-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-1-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-1-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-2-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-3-2-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-3-2-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-3-2-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-3-2-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-2-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-2-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-2-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-2-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-2-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-2-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-2-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-2-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-2-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-2-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-2-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-3-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-3-3-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-3-3-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-3-3-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "generated-3-3-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-3-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-3-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-3-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-3-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-3-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-3-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-3-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-3-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-3-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-3-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-3-3-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-0-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-0-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-0-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-0-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-0-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-0-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-0-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-0-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-0-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-0-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-0-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-0-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-0-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-0-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-0-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-0-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-1-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-1-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-1-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-1-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-1-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-1-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-1-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-1-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-1-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-1-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-1-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-1-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-1-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-1-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-1-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-1-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-2-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-2-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-2-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-2-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-2-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-2-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-2-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-2-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-2-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-2-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-2-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-2-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-2-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-2-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-2-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-2-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-3-0-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-3-0-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-3-0-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-3-0-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-3-1-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-3-1-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-3-1-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-3-1-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-3-2-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-3-2-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-3-2-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-3-2-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-3-3-0",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-3-3-1",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-3-3-2",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "generated-4-3-3-3",
+      "area": "generated",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-named-control",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-namespace-control",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-default-control",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-anonymous-default",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": false,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "module-default-arrow",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": false,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "module-reexport-control",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-star-control",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-namespace-reexport-control",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-direct-import-write",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-side-effect-import-write",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-writer-function",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-imported-object-assign",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-owner-object-assign",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-owner-direct-write",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "module-namespace-member-write",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-namespace-reexport-write",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-live-let-export",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "module-default-snapshot",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-default-live-alias",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-function-replacement",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "module-function-replacement-barrel",
+      "area": "modules",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "flow-direct",
+      "area": "dataflow",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "flow-swapped",
+      "area": "dataflow",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "flow-parentheses",
+      "area": "dataflow",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "flow-assertion",
+      "area": "dataflow",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "flow-satisfies",
+      "area": "dataflow",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "flow-constant-alias",
+      "area": "dataflow",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "flow-transformed",
+      "area": "dataflow",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "flow-literal",
+      "area": "dataflow",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "flow-spread-tuple",
+      "area": "dataflow",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "flow-local-shadow",
+      "area": "dataflow",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-sibling-write-blank-lines",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-sibling-write-crlf",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-sibling-write-ascii-rename",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-sibling-write-bmp-rename",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-sibling-write-astral-rename",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-sibling-write-astral-comments",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-helper-parameter-write-blank-lines",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-helper-parameter-write-crlf",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-helper-parameter-write-ascii-rename",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-helper-parameter-write-bmp-rename",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-helper-parameter-write-astral-rename",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-helper-parameter-write-astral-comments",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": true,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-direct-call-blank-lines",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-direct-call-crlf",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-direct-call-ascii-rename",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-direct-call-bmp-rename",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-direct-call-astral-rename",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-direct-call-astral-comments",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": true,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 0
+    },
+    {
+      "id": "invariant-field-function-blank-lines",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": false,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "invariant-field-function-crlf",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": false,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "invariant-field-function-ascii-rename",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": false,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "invariant-field-function-bmp-rename",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": false,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "invariant-field-function-astral-rename",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": false,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    },
+    {
+      "id": "invariant-field-function-astral-comments",
+      "area": "invariants",
+      "runtimeMatches": true,
+      "compilerReferenceMatches": false,
+      "selectedTargetDiffersFromExecution": false,
+      "unresolvedSites": 1
+    }
+  ]
+}

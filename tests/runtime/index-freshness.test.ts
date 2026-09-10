@@ -28,7 +28,7 @@ function writeMeta(
         updatedAt: new Date().toISOString(),
         fingerprint: {
           version: 3,
-          ...(languages.includes('typescript') ? { typescriptSymbolIdentityVersion: 4 } : {}),
+          ...(languages.includes('typescript') ? { typescriptSymbolIdentityVersion: 6 } : {}),
           languages: [...languages].sort(),
           pnpmWorkspaces: false,
           typescriptProjectMode: 'single',

@@ -31,6 +31,7 @@ export type UnresolvedCallSiteReason =
   | 'ast-unavailable'
   | 'call-not-found'
   | 'ambiguous-call'
+  | 'implementation-unresolved'
   | 'compiler-binding-unavailable';
 
 export interface UnresolvedCallSite {
@@ -144,6 +145,17 @@ function resolveCallSites(
     }
     const owners = lexicalCallOwners(db, reference.file, getDefinitionsForFile(db, reference.file));
     for (const target of resolved.targets.filter((target) => target.definition.symbol === callee.symbol)) {
+      if (target.implementationStatus === 'unresolved') {
+        unresolved.push({
+          callee,
+          file: reference.file,
+          line: target.sourceLine,
+          reason: 'implementation-unresolved',
+          candidates: 1,
+          referenceProvenance: reference.provenance,
+        });
+        continue;
+      }
       const candidates = syntax.calls.filter((call) => sameOccurrenceRange(call.targetRange, target.sourceRange));
       if (candidates.length !== 1) {
         unresolved.push({

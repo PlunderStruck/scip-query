@@ -121,6 +121,34 @@ describe('runtime boundary identity and binding accuracy', () => {
     expect(result.links.filter((link) => link.joinRule === 'http.method-path')).toEqual([]);
   });
 
+  it('retains a constant request path after an unrelated property write', async () => {
+    const result = await graph([
+      'export function run() {',
+      ' const route = { path: "/original", count: 0 }; route.count++;',
+      ' fetch(route.path);',
+      '}',
+    ]);
+    const request = result.observations.find((item) => item.action === 'http.request');
+    expect(request?.keyParts.find((part) => part.name === 'path')?.value).toBe('/original');
+  });
+
+  it.each([
+    '(route).path = "/replacement";',
+    '(route as typeof route).path = "/replacement";',
+    'const alias = (route); alias.path = "/replacement";',
+  ])('does not retain an obsolete request path after %s', async (write) => {
+    const result = await graph([
+      'export function run() {',
+      ' const route = { path: "/original" };',
+      write,
+      ' fetch(route.path);',
+      '}',
+    ]);
+    const request = result.observations.find((item) => item.action === 'http.request');
+    expect(request).toBeDefined();
+    expect(request?.keyParts.find((part) => part.name === 'path')?.value).not.toBe('/original');
+  });
+
   it('does not join shadowed registry objects with the same spelling', async () => {
     const result = await graph([
       'const handlers = { run: () => 1 };',

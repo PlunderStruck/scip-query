@@ -7,6 +7,7 @@ import {
 import { chmodSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
+import { execFileSync } from 'node:child_process';
 import { describe, expect, test } from 'vitest';
 import {
   SQLITE_GENERATION_MANIFEST,
@@ -24,6 +25,63 @@ import {
 } from '../../src/reindex/sqlite-generation-store.js';
 
 describe('SQLite generation handoff', () => {
+  test('preserves WAL mode so reopening a publication does not change its file identity', () => {
+    const fixture = createFixture();
+    const candidate = new Database(fixture.paths.tempOutputDb);
+    candidate.pragma('journal_mode = WAL');
+    candidate.close();
+    promoteReindexArtifacts(fixture.paths);
+    const before = statSync(fixture.paths.outputDb);
+    const opened = new Database(fixture.paths.outputDb);
+    expect(opened.pragma('journal_mode', { simple: true })).toBe('wal');
+    opened.pragma('journal_mode = WAL');
+    opened.close();
+    const after = statSync(fixture.paths.outputDb);
+    expect(after.mtimeMs).toBe(before.mtimeMs);
+    expect(inspectSqliteGeneration(fixture.paths.outputDb, fixture.paths.metaPath).state).toBe('current');
+  });
+
+  test('does not replay a prior database WAL into its replacement', () => {
+    const fixture = createFixture();
+    execFileSync(
+      process.execPath,
+      [
+        '-e',
+        `
+      const Database = require('better-sqlite3');
+      const db = new Database(process.argv[1]);
+      db.pragma('journal_mode = WAL');
+      db.pragma('wal_autocheckpoint = 0');
+      db.exec('CREATE TABLE prior_only (payload BLOB)');
+      db.prepare('INSERT INTO prior_only VALUES (?)').run(Buffer.alloc(50000, 1));
+      process.exit(0);
+    `,
+        fixture.paths.outputDb,
+      ],
+      { cwd: process.cwd() },
+    );
+    expect(statSync(`${fixture.paths.outputDb}-wal`).size).toBeGreaterThan(0);
+    promoteReindexArtifacts(fixture.paths);
+    const current = new Database(fixture.paths.outputDb);
+    try {
+      expect(current.pragma('integrity_check')).toEqual([{ integrity_check: 'ok' }]);
+      expect(readValueFromDatabase(current)).toBe('new');
+      expect(current.prepare("SELECT name FROM sqlite_master WHERE name='prior_only'").all()).toEqual([]);
+    } finally {
+      current.close();
+    }
+  });
+
+  test('rejects an invalid candidate before publishing a new pointer or replacing accepted files', () => {
+    const fixture = createFixture();
+    ensureImmutableSqliteGeneration(fixture.paths.outputDb, fixture.paths.outputScip, fixture.paths.metaPath);
+    const before = readSqliteGenerationState(fixture.paths.outputDb);
+    writeFileSync(fixture.paths.tempOutputDb, 'not a SQLite database');
+    expect(() => promoteReindexArtifacts(fixture.paths)).toThrow();
+    expect(readSqliteGenerationState(fixture.paths.outputDb)).toEqual(before);
+    expect(readValue(fixture.paths.outputDb)).toBe('old');
+  });
+
   test.each([
     ['after-recovery-retained', 'old'],
     ['after-pointer-handoff', 'old'],

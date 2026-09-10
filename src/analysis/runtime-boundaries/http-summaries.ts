@@ -303,7 +303,11 @@ function instantiateSummaryAtCall(
   const methods = summary.methodParameterIndexes.flatMap((index) => {
     const value = evaluateBoundaryValue(context, args[index]);
     const method = value?.value.toUpperCase();
-    return value && method && value.evidence !== 'expression' && HTTP_METHODS.has(method)
+    return value &&
+      method &&
+      value.precision === 'literal' &&
+      value.evidence !== 'expression' &&
+      HTTP_METHODS.has(method)
       ? [{ index, value: { ...value, value: method } }]
       : [];
   });
@@ -317,6 +321,7 @@ function instantiateSummaryAtCall(
       value: resolvedMethods[0]!,
       evidence: method ? 'constant' : 'literal',
       term: method?.term ?? { kind: 'literal', value: resolvedMethods[0]! },
+      precision: 'literal',
       derivation: method?.derivation,
     },
     {
@@ -324,6 +329,7 @@ function instantiateSummaryAtCall(
       value: path.value,
       evidence: 'constant',
       term: path.term,
+      precision: path.precision,
       derivation: path.derivation,
     },
   ];
@@ -379,7 +385,10 @@ function resolvedMethodArguments(
   if (args.some((argument) => argument.type === 'spread_element')) return [];
   return summary.methodParameterIndexes.flatMap((index) => {
     const value = evaluateBoundaryValue(context, args[index]);
-    return value && ['constant', 'literal'].includes(value.evidence) && HTTP_METHODS.has(value.value.toUpperCase())
+    return value &&
+      value.precision === 'literal' &&
+      ['constant', 'literal'].includes(value.evidence) &&
+      HTTP_METHODS.has(value.value.toUpperCase())
       ? [value.value.toUpperCase()]
       : [];
   });

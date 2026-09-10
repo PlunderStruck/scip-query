@@ -112,8 +112,8 @@ describe('call occurrence identity', () => {
               .get(defs[0]!.symbolId)
               ?.map((row) => [row.symbol, row.source]),
           ).toEqual([
-            [runA, 'scip-occurrence'],
-            [runB, 'scip-occurrence'],
+            [runA, 'scip-declaration'],
+            [runB, 'scip-declaration'],
           ]);
           expect(
             scipOccurrenceCallTargetsForRange(db, 'src/main.ts', 0, 0).targets.map(

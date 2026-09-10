@@ -202,7 +202,12 @@ function buildParameterValueFlow(db: ScipDatabase, site: ResolvedCallSite): Call
   let spreadSeen = false;
   const transfers: ParameterValueTransfer[] = [];
   const unknown: UnknownParameterValueTransfer[] = [];
-  site.arguments.forEach((argument, calleePosition) => {
+  const argumentsToBind = site.arguments.flatMap((argument) => {
+    if (argument.type !== 'spread_element') return [argument];
+    const value = argument.namedChild(0);
+    return (value && bindings.tupleElements(value)) ?? [argument];
+  });
+  argumentsToBind.forEach((argument, calleePosition) => {
     const argumentText = argument.text.trim();
     spreadSeen ||= ['spread_element', 'list_splat', 'dictionary_splat'].includes(argument.type);
     const callerPosition = spreadSeen

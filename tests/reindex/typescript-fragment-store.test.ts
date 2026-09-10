@@ -62,12 +62,14 @@ describe('TypeScript fragment store', () => {
     const baseline = cleanOracle(root);
     const legacy = availability.runtime.Index.deserializeBinary(baseline);
     const metadata = legacy.metadata as { tool_info: { version: string } };
-    expect(metadata.tool_info.version).toBe('0.4.0+scip-query-symbols.4');
+    expect(metadata.tool_info.version).toBe('0.4.0+scip-query-symbols.6');
     for (const version of [
       '0.4.0',
       '0.4.0+scip-query-symbols.1',
       '0.4.0+scip-query-symbols.2',
       '0.4.0+scip-query-symbols.3',
+      '0.4.0+scip-query-symbols.4',
+      '0.4.0+scip-query-symbols.5',
     ]) {
       metadata.tool_info.version = version;
       expect(() =>

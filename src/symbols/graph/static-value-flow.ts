@@ -1,13 +1,22 @@
 import { sourceBindingResolver } from '../../source/ast/source-binding-identity.js';
 import { selectEffectiveObjectField } from '../../source/ast/effective-object-field.js';
-import { resolveImportPath } from '../../source/primitives/import-path-resolver.js';
 import { getAst } from '../../source/ast/ast-core.js';
 import { detectAstLanguage, isVueSfcPath } from '../../source/ast/ast-language.js';
 import { javaScriptStringValue } from './javascript-string-value.js';
-import { unwrapExpression, walkNamedSyntax as walk } from '../../source/ast/ast-callables.js';
+import { unwrapExpression } from '../../source/ast/ast-callables.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
-import type { ScipDatabase } from '../../storage/db.js';
-import { resolveImportedDefinitions } from '../../symbols/imported-definitions.js';
+import type { resolveImportedDefinitions } from '../../symbols/imported-definitions.js';
+import {
+  callableValueWasWritten,
+  definitionBinding,
+  importedDefinitionContext,
+  importedTarget,
+  memberParts,
+  resolveCallableValue,
+  sharedMemberWriteIsUnproved,
+  type BoundaryValueContext,
+} from './imported-value-context.js';
+export type { BoundaryValueContext } from './imported-value-context.js';
 import type {
   EvaluatedStaticValue,
   StaticValueDerivation,
@@ -16,12 +25,6 @@ import type {
 } from './value-flow.js';
 
 const MAX_EVALUATION_DEPTH = 8;
-
-export interface BoundaryValueContext {
-  db: ScipDatabase;
-  file: string;
-  root: SyntaxNode;
-}
 
 /** Resolve finite address-bearing values without assigning protocol meaning. */
 export function evaluateStaticValue(
@@ -73,46 +76,29 @@ function resolveBoundedCallReturn(
 ): EvaluatedStaticValue | null {
   const targetNode = call.childForFieldName('function');
   if (!targetNode) return unknownValue(call, 'call-target-unresolved');
-  const bindings = sourceBindingResolver(context.file, context.root);
-  if (bindings.hasObservedWrite(targetNode)) return unknownValue(call, 'call-target-written');
-  const target = boundedCallTarget(context, targetNode);
+  if (call.childForFieldName('arguments')?.namedChildren.some((node) => eagerCompletionIsUnproved(context, node)))
+    return unknownValue(call, 'call-argument-normal-completion-unproved');
+  if (callableValueWasWritten(context, targetNode)) return unknownValue(call, 'call-target-written');
+  const target = resolveCallableValue(context, targetNode);
   if (!target) return unknownValue(call, 'call-target-unresolved');
   const { context: targetContext, callable } = target;
+  if (
+    callable
+      .childForFieldName('parameters')
+      ?.namedChildren.some((node) => parameterCompletionIsUnproved(targetContext, node))
+  )
+    return unknownValue(call, 'call-parameter-normal-completion-unproved');
   const identity = `${targetContext.file}:${callable.startIndex}:${callable.endIndex}`;
   if (seen.has(identity)) return unknownValue(call, 'call-return-cycle');
-  const returned = singleReturnedExpression(callable);
+  const returned = singleReturnedExpression(targetContext, callable);
   if (!returned) return unknownValue(call, 'call-return-not-unconditional-synchronous-expression');
   const nextSeen = new Set(seen).add(identity);
   const value = evaluateNode(targetContext, returned, depth + 1, nextSeen);
   return value ? derivedFrom(call, 'bounded-call-return', value) : unknownValue(call, 'call-return-unresolved');
 }
 
-function boundedCallTarget(
-  context: BoundaryValueContext,
-  targetNode: SyntaxNode,
-): { context: BoundaryValueContext; callable: SyntaxNode } | null {
-  const callable = sourceBindingResolver(context.file, context.root).callableValue(targetNode);
-  if (callable) return { context, callable };
-  const target = importedTarget(context, targetNode);
-  const resolved = target && importedDefinitionContext(context, target);
-  if (!resolved) return null;
-  const imported = sourceBindingResolver(resolved.context.file, resolved.context.root).callableValue(
-    resolved.declaration,
-  );
-  return imported ? { context: resolved.context, callable: imported } : null;
-}
-
-function importedDefinitionContext(
-  context: BoundaryValueContext,
-  target: NonNullable<ReturnType<typeof importedTarget>>,
-) {
-  const root = getAst(context.db, target.relativePath)?.rootNode;
-  const declaration = root && definitionBinding(root, target);
-  return root && declaration ? { context: { ...context, file: target.relativePath, root }, declaration } : null;
-}
-
 /** A single nested return does not prove either fallthrough or finally behavior. */
-function singleReturnedExpression(callable: SyntaxNode): SyntaxNode | null {
+function singleReturnedExpression(context: BoundaryValueContext, callable: SyntaxNode): SyntaxNode | null {
   if (
     callable.children.some((child) => child.type === 'async' || child.type === '*') ||
     callable.type.includes('generator')
@@ -128,40 +114,92 @@ function singleReturnedExpression(callable: SyntaxNode): SyntaxNode | null {
   if (
     statements
       .slice(0, -1)
-      .some((child) => !['lexical_declaration', 'variable_declaration', 'function_declaration'].includes(child.type))
+      .some(
+        (child) =>
+          !['lexical_declaration', 'variable_declaration', 'function_declaration'].includes(child.type) ||
+          eagerCompletionIsUnproved(context, child),
+      )
   )
     return null;
   return last.childForFieldName('argument') ?? last.namedChild(0);
 }
 
-function importedTarget(context: BoundaryValueContext, node: SyntaxNode, namespaceMember?: string) {
-  const imported = sourceBindingResolver(context.file, context.root).importedValue(node);
-  const member = imported?.member ?? namespaceMember;
-  if (!imported || !member) return null;
-  const file = resolveImportPath(context.db, context.file, imported.module);
-  const targets = file ? resolveImportedDefinitions(context.db, file, member) : [];
-  return targets.length === 1 ? targets[0]! : null;
+/** Creating a callable is lazy; evaluating calls, accessors, and effects is not. */
+function eagerCompletionIsUnproved(
+  context: BoundaryValueContext,
+  input: SyntaxNode,
+  depth = 0,
+  parameterDefault = false,
+): boolean {
+  if (depth > MAX_EVALUATION_DEPTH) return true;
+  const node = unwrapExpression(input);
+  if (
+    [
+      'function_declaration',
+      'function_expression',
+      'arrow_function',
+      'generator_function_declaration',
+      'generator_function',
+      'number',
+      'true',
+      'false',
+      'null',
+      'regex',
+      'comment',
+    ].includes(node.type)
+  )
+    return false;
+  const string = javaScriptStringValue(node);
+  if (string) return string.interpolated;
+  const unproved = (child: SyntaxNode) => eagerCompletionIsUnproved(context, child, depth + 1, parameterDefault);
+  if (['lexical_declaration', 'variable_declaration', 'array'].includes(node.type))
+    return node.namedChildren.some(unproved);
+  if (node.type === 'variable_declarator') {
+    const value = node.childForFieldName('value');
+    return node.childForFieldName('name')?.type !== 'identifier' || (!!value && unproved(value));
+  }
+  if (node.type === 'object') return node.namedChildren.some((field) => objectCreationIsUnproved(field, unproved));
+  if (['identifier', 'shorthand_property_identifier'].includes(node.type)) {
+    return bindingReadCompletionIsUnproved(context, node, unproved, parameterDefault);
+  }
+  // All other evaluation needs an explicit proof: property access, iteration,
+  // conversion, class initialization and unknown syntax may execute or throw.
+  return true;
 }
 
-function definitionBinding(
-  root: SyntaxNode,
-  target: ReturnType<typeof resolveImportedDefinitions>[number],
-): SyntaxNode | null {
-  const candidates: SyntaxNode[] = [];
-  walk(root, (node) => {
-    if (!['variable_declarator', 'function_declaration', 'generator_function_declaration'].includes(node.type)) return;
-    const name = node.childForFieldName('name');
-    if (
-      name?.text !== target.leaf ||
-      node.startPosition.row !== target.startLine ||
-      node.endPosition.row > target.endLine
-    )
-      return;
-    if (node.startPosition.column < (target.startChar ?? 0)) return;
-    if (node.endPosition.row === target.endLine && target.endChar && node.endPosition.column > target.endChar) return;
-    candidates.push(name);
-  });
-  return candidates.length === 1 ? candidates[0]! : null;
+function bindingReadCompletionIsUnproved(
+  context: BoundaryValueContext,
+  node: SyntaxNode,
+  unproved: (node: SyntaxNode) => boolean,
+  parameterDefault: boolean,
+): boolean {
+  const bindings = sourceBindingResolver(context.file, context.root);
+  if (!parameterDefault && bindings.isParameterBinding(node)) return false;
+  const initializer = bindings.constantInitializer(node);
+  return !initializer || initializer.endIndex >= node.startIndex || unproved(initializer);
+}
+
+function objectCreationIsUnproved(field: SyntaxNode, unproved: (node: SyntaxNode) => boolean): boolean {
+  if (field.type === 'comment') return false;
+  if (field.type === 'shorthand_property_identifier') return unproved(field);
+  const key = field.childForFieldName('key') ?? field.childForFieldName('name');
+  if (!key || key.type === 'computed_property_name') return true;
+  if (field.type === 'method_definition') return false;
+  const value = field.childForFieldName('value');
+  return field.type !== 'pair' || !value || unproved(value);
+}
+
+function parameterCompletionIsUnproved(context: BoundaryValueContext, parameter: SyntaxNode): boolean {
+  if (parameter.type === 'comment') return false;
+  const name =
+    parameter.childForFieldName('pattern') ??
+    parameter.childForFieldName('name') ??
+    parameter.namedChild(0) ??
+    parameter;
+  const binding = name.type === 'rest_pattern' ? name.namedChild(0) : name;
+  if (binding?.type !== 'identifier') return true;
+  const value = parameter.childForFieldName('value');
+  return !!value && eagerCompletionIsUnproved(context, value, 0, true);
 }
 
 function resolveIdentifier(
@@ -217,21 +255,27 @@ function memberBase(
   properties: readonly string[],
 ): { context: BoundaryValueContext; node: SyntaxNode; properties: readonly string[] } | string {
   const bindings = sourceBindingResolver(context.file, context.root);
-  if (bindings.hasObservedWrite(base, true)) return 'member-base-observed-write';
+  if (bindings.hasObservedWrite(base, true, properties)) return 'member-base-observed-write';
   const local = bindings.constantInitializer(base);
-  if (local) return { context, node: local, properties };
+  if (local)
+    return sharedMemberWriteIsUnproved(context, base, properties)
+      ? 'member-shared-write-or-coverage-unproved'
+      : { context, node: local, properties };
   const target = importedTarget(context, base, properties[0]);
   if (!target) return 'member-binding-unresolved';
   const resolved = importedDefinitionContext(context, target);
   if (!resolved) return 'member-definition-unparsed';
   const imported = sourceBindingResolver(resolved.context.file, resolved.context.root);
-  if (imported.hasObservedWrite(resolved.declaration, true)) return 'member-base-observed-write';
+  const importedProperties = bindings.importedValue(base)?.member === null ? properties.slice(1) : properties;
+  if (imported.hasObservedWrite(resolved.declaration, true, importedProperties)) return 'member-base-observed-write';
+  if (sharedMemberWriteIsUnproved(resolved.context, resolved.declaration, importedProperties))
+    return 'member-shared-write-or-coverage-unproved';
   const node = imported.constantInitializer(resolved.declaration);
   if (!node) return 'member-base-nonconstant';
   return {
     context: resolved.context,
     node,
-    properties: bindings.importedValue(base)?.member === null ? properties.slice(1) : properties,
+    properties: importedProperties,
   };
 }
 
@@ -389,16 +433,6 @@ function derivation(
   };
 }
 
-function memberParts(node: SyntaxNode): { base: SyntaxNode; properties: string[] } | null {
-  if (node.type !== 'member_expression') return null;
-  const object = node.childForFieldName('object');
-  const property = node.childForFieldName('property');
-  if (!object || property?.type !== 'property_identifier') return null;
-  const parent = memberParts(object);
-  if (parent) return { base: parent.base, properties: [...parent.properties, property.text] };
-  return object.type === 'identifier' ? { base: object, properties: [property.text] } : null;
-}
-
 function evaluateStaticConcatenation(
   context: BoundaryValueContext,
   node: SyntaxNode,
@@ -407,8 +441,13 @@ function evaluateStaticConcatenation(
 ): EvaluatedStaticValue | null {
   const parts = node.namedChildren.map((child) => evaluateNode(context, child, depth + 1, new Set(seen)));
   if (parts.length >= 2 && parts.every((part): part is EvaluatedStaticValue => part !== null)) {
+    // JavaScript + also performs numeric addition. Only a proved string operand
+    // establishes concatenation; source text for an unknown operand is not its value.
+    const stringPart = (part: EvaluatedStaticValue) =>
+      part.precision === 'literal' || part.precision === 'constrained-pattern';
+    if (!parts.some(stringPart)) return unknownValue(node, 'addition-operands-unproved');
     const term: StaticValueTerm = { kind: 'concat', parts: parts.map((part) => part.term) };
-    const value = parts.map((part) => part.value).join('');
+    const value = parts.map((part) => (stringPart(part) ? part.value : '{}')).join('');
     return derivedValue(
       context.file,
       node,

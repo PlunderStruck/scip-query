@@ -2,7 +2,11 @@ import type { ScipDatabase } from '../../storage/db.js';
 import type { IndexedDefinition, SymbolMatch } from '../../domain/types.js';
 import { classifyFile } from '../../analysis/file-classifier.js';
 import { getDefinitionsForFile, getScopedDefinitions } from '../../symbols/definition-catalog.js';
-import { buildCalleeMap } from '../../symbols/graph/call-graph-evidence.js';
+import {
+  buildCalleeMap,
+  getCalleeRowsForSymbol,
+  calleeEvidenceStrength,
+} from '../../symbols/graph/call-graph-evidence.js';
 import type { CalleeRow } from '../../symbols/graph/call-graph-evidence.js';
 import { buildFileDepGraph } from '../../symbols/graph/file-dep-graph.js';
 import {
@@ -43,6 +47,16 @@ export class ProjectIndex {
     opts: { additive?: boolean; semantic?: boolean } = {},
   ): Map<number, CalleeRow[]> {
     return buildCalleeMap(this.db, definitions, { ...opts, semanticEvidence: symbolSemanticEvidence });
+  }
+
+  /** The same invocation filter and evidence calibration used by the public call graph. */
+  callableCallees(definition: SymbolMatch, opts: { semantic?: boolean } = {}) {
+    return getCalleeRowsForSymbol(this.db, definition, {
+      ...opts,
+      additive: true,
+      callableOnly: true,
+      semanticEvidence: symbolSemanticEvidence,
+    }).map((row) => ({ ...row, evidenceStrength: calleeEvidenceStrength(row.source) }));
   }
 
   crossFileCallerMap(

@@ -10,6 +10,11 @@ import {
   type TypeScriptCallOccurrenceConstructor,
 } from './typescript-super-calls.js';
 import { installTypeScriptSymbolIdentity, type TypeScriptSymbolConstructors } from './typescript-symbol-identity.js';
+import {
+  installTypeScriptDeclarationEvidence,
+  type TypeScriptDeclarationIndexer,
+  type TypeScriptEvidenceConstructors,
+} from './typescript-declaration-evidence.js';
 
 const require = createRequire(import.meta.url);
 
@@ -49,7 +54,7 @@ interface ScipIndexConstructor {
   deserializeBinary(value: Uint8Array): ScipIndexLike;
 }
 
-interface FileIndexerLike extends TypeScriptCallIndexer {
+interface FileIndexerLike extends TypeScriptCallIndexer, TypeScriptDeclarationIndexer {
   sourceFile: TypeScript.SourceFile;
   index(): void;
 }
@@ -163,7 +168,8 @@ export function loadTypeScriptDocumentRuntime(): TypeScriptDocumentRuntimeAvaila
       scip?: {
         Document?: ScipDocumentConstructor;
         Index?: ScipIndexConstructor;
-        Occurrence?: TypeScriptCallOccurrenceConstructor;
+        Occurrence?: TypeScriptCallOccurrenceConstructor & TypeScriptEvidenceConstructors['Occurrence'];
+        SymbolInformation?: TypeScriptEvidenceConstructors['SymbolInformation'];
       };
     };
     if (
@@ -172,20 +178,29 @@ export function loadTypeScriptDocumentRuntime(): TypeScriptDocumentRuntimeAvaila
       !Packages ||
       !scipModule.scip?.Document ||
       !scipModule.scip.Index ||
-      !scipModule.scip.Occurrence
+      !scipModule.scip.Occurrence ||
+      !scipModule.scip.SymbolInformation
     ) {
       return { available: false, reason: 'scip-typescript document runtime has an unsupported module shape' };
     }
     const { ScipSymbol } = require(resolve(packageRoot, 'dist/src/ScipSymbol.js')) as {
       ScipSymbol: Pick<TypeScriptSymbolConstructors, 'global'>;
     };
-    const { metaDescriptor } = require(resolve(packageRoot, 'dist/src/Descriptor.js')) as Pick<
+    const { metaDescriptor, methodDescriptor } = require(resolve(packageRoot, 'dist/src/Descriptor.js')) as Pick<
       TypeScriptSymbolConstructors,
-      'metaDescriptor'
+      'metaDescriptor' | 'methodDescriptor'
     >;
-    installTypeScriptSymbolIdentity(FileIndexer.prototype, typescript, { global: ScipSymbol.global, metaDescriptor });
+    installTypeScriptSymbolIdentity(FileIndexer.prototype, typescript, {
+      global: ScipSymbol.global,
+      metaDescriptor,
+      methodDescriptor,
+    });
     installTypeScriptDocumentEncoding(scipModule.scip.Document.prototype);
     installTypeScriptSuperCalls(FileIndexer.prototype, typescript, scipModule.scip.Occurrence);
+    installTypeScriptDeclarationEvidence(FileIndexer.prototype, typescript, {
+      Occurrence: scipModule.scip.Occurrence,
+      SymbolInformation: scipModule.scip.SymbolInformation,
+    });
     const runtime = {
       packageVersion: producer.packageVersion,
       typescript,

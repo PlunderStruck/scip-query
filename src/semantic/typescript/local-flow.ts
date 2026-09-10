@@ -372,13 +372,14 @@ function callableDeclarations(
   range: TypeScriptLocalFlowRange | undefined,
 ): AnalyzableCallable[] {
   const result: AnalyzableCallable[] = [];
-  const visit = (node: TypeScript.Node): void => {
+  const visit = (node: TypeScript.Node, insideSelected = false): void => {
     if (isAnalyzableCallable(ts, node)) {
       const startLine = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line;
       const endLine = sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line;
-      if (!range || callableIntersectsRange(sourceFile, node, startLine, endLine, range)) result.push(node);
+      insideSelected ||= !range || callableIntersectsRange(sourceFile, node, startLine, endLine, range);
+      if (insideSelected) result.push(node);
     }
-    node.forEachChild(visit);
+    node.forEachChild((child) => visit(child, insideSelected));
   };
   sourceFile.forEachChild(visit);
   return result.sort((left, right) => left.getStart(sourceFile) - right.getStart(sourceFile));
@@ -794,6 +795,7 @@ function extractAccesses(state: AnalysisState, analysis: CallableAnalysis): void
       cfgNodeValue.displayPoint = point(state, cfgNodeValue.ast, 'predicate', null, 'predicate', analysis.id);
     }
     collectNodeAccesses(state, analysis, cfgNodeValue, cfgNodeValue.ast);
+    qualifyUnmodeledEffects(state, cfgNodeValue, cfgNodeValue.ast);
     if (!cfgNodeValue.displayPoint && cfgNodeValue.definitions.length === 0 && cfgNodeValue.uses.length === 0) {
       cfgNodeValue.displayPoint = point(
         state,
@@ -805,6 +807,50 @@ function extractAccesses(state: AnalysisState, analysis: CallableAnalysis): void
       );
     }
   }
+}
+
+/** Executable syntax omitted by the local CFG must leave a visible proof boundary. */
+function qualifyUnmodeledEffects(state: AnalysisState, cfg: CfgNode, root: TypeScript.Node): void {
+  const ts = state.ts;
+  const visit = (node: TypeScript.Node): void => {
+    if (ts.isFunctionLike(node)) return;
+    if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
+      if (classHasUnmodeledEffects(ts, node)) {
+        state.unsupported.add(
+          'Class initialization, static blocks, and computed members can execute effects outside the local control-flow model.',
+        );
+        cfg.invalidatesAllDefinitions = true;
+      }
+      return;
+    }
+    if (isDirectEval(state, node)) {
+      state.unsupported.add(
+        'Direct eval can read and write lexical bindings; its dynamically parsed source is not modeled.',
+      );
+      cfg.invalidatesAllDefinitions = true;
+    }
+    node.forEachChild(visit);
+  };
+  visit(root);
+}
+
+function classHasUnmodeledEffects(ts: TypeScriptModule, node: TypeScript.ClassLikeDeclaration): boolean {
+  return (
+    !!node.heritageClauses?.length ||
+    node.members.some(
+      (member) =>
+        ts.isClassStaticBlockDeclaration(member) ||
+        (ts.isPropertyDeclaration(member) && !!member.initializer) ||
+        (!!member.name && ts.isComputedPropertyName(member.name)),
+    )
+  );
+}
+
+function isDirectEval(state: AnalysisState, node: TypeScript.Node): boolean {
+  const ts = state.ts;
+  if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression) || node.expression.text !== 'eval') return false;
+  const declarations = state.checker.getSymbolAtLocation(node.expression)?.declarations ?? [];
+  return declarations.every((declaration) => declaration.getSourceFile().isDeclarationFile);
 }
 
 function collectNodeAccesses(
@@ -1712,12 +1758,9 @@ function replaceFlowBitSet(current: BitSet, next: BitSet): boolean {
 function addCrossCallableCandidates(state: AnalysisState, analyses: readonly CallableAnalysis[]): void {
   const parentById = new Map(analyses.map((analysis) => [analysis.id, analysis.parentId]));
   const definitionsBySymbol = crossCallableDefinitionsBySymbol(analyses);
-  const reachedUses = new Set(
-    [...state.edges.values()].filter((edge) => edge.kind === 'reaching-definition').map((edge) => edge.toPointId),
-  );
   for (const analysis of analyses) {
     for (const use of [...analysis.cfg.values()].flatMap((node) => node.uses)) {
-      if (!use.point.symbolKey || reachedUses.has(use.point.id)) continue;
+      if (!use.point.symbolKey) continue;
       addCrossCallableUseCandidates(state, use, definitionsBySymbol.get(use.point.symbolKey) ?? [], parentById);
     }
   }
@@ -1752,14 +1795,17 @@ function addCrossCallableUseCandidates(
   parentById: ReadonlyMap<string, string | null>,
 ): void {
   for (const definition of candidates) {
-    if (isAncestorCallable(definition.callableId, use.point.callableId, parentById)) {
+    if (
+      isAncestorCallable(definition.callableId, use.point.callableId, parentById) ||
+      isAncestorCallable(use.point.callableId, definition.callableId, parentById)
+    ) {
       addEdge(
         state,
         'closure-capture',
         definition.id,
         use.point.id,
         'candidate',
-        'Compiler identity proves the captured binding, but invocation order can select among outer definitions.',
+        'Compiler identity proves a shared lexical binding, but closure invocation and intervening writes remain unresolved.',
       );
     } else if (use.property && definition.callableId !== use.point.callableId) {
       addEdge(

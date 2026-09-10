@@ -182,8 +182,8 @@ export const EVIDENCE_PRODUCT_MANIFEST: readonly EvidenceProductManifestEntry[] 
   }),
   fileManifest('runtime-boundary-direct-extraction', {
     // direct-deps-digest: the payload names every consulted file with its
-    // content hash (recorded at the shared read chokepoints), and the read
-    // path revalidates each one before serving the cached extraction.
+    // content hash plus consulted symbol-reference file sets. The read path
+    // revalidates both bytes and reference membership before serving a result.
     dependsOn: ['content-hash', 'direct-deps-digest', 'tool-version'],
     keyParts: ['kind', 'relativePath', 'contentHash', 'payloadVersion'],
     stalenessTest: 'tests/analysis/runtime-boundaries.test.ts',

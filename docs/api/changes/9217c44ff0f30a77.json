@@ -1,0 +1,19 @@
+{
+  "acceptedAt": "2026-09-10T00:14:53.106Z",
+  "automaticClassification": "breaking",
+  "baselineDigest": "9217c44ff0f30a779e5c298694e52e535d9b4680ce43d7c5d824eab7a5eb49a6",
+  "changes": [
+    {
+      "classification": "breaking",
+      "kind": "signature-changed",
+      "message": "ProjectIndex changed from declare class ProjectIndex { private readonly db; constructor(db: ScipDatabase); scopedDefinitions(scope?: string): IndexedDefinition[]; definitionsForFile(relativePath: string)... to declare class ProjectIndex { private readonly db; constructor(db: ScipDatabase); scopedDefinitions(scope?: string): IndexedDefinition[]; definitionsForFile(relativePath: string)....",
+      "target": ".:ProjectIndex"
+    }
+  ],
+  "classification": "compatible-correction",
+  "kind": "scip-query-api-acceptance",
+  "packageVersion": "0.25.0",
+  "previousDigest": "bf244fbea60ecf783c5b80b30771b2481fd8a6c8d41f8020b80685b4f7f6f204",
+  "reason": "ProjectIndex gains callableCallees to share invocation filtering and evidence strength with complexity. All existing methods and signatures remain unchanged; the conservative class-signature detector treats this method addition as breaking.",
+  "schemaVersion": 1
+}

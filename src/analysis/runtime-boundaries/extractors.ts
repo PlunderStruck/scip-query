@@ -1,4 +1,5 @@
 import { runtimeBindingIdentity, runtimeCallableDefinition } from './binding-identity.js';
+import { boundaryKeyPrecision, boundaryValuePrecision } from './value-precision.js';
 import { isPlatformFetch, fetchRequestMethod, effectiveObjectField } from './http-call-semantics.js';
 import { sourceBindingResolver } from '../../source/ast/source-binding-identity.js';
 import { callSiteOwner } from '../../source/facts/source-callables.js';
@@ -789,11 +790,7 @@ function observation(
         ...keyParts.flatMap((part) => part.derivation?.sourceSpans ?? []),
       ],
     },
-    valuePrecision: keyParts.some((part) => part.evidence === 'expression')
-      ? 'unknown'
-      : keyParts.some((part) => part.evidence === 'identifier')
-        ? 'symbolic'
-        : 'literal',
+    valuePrecision: boundaryValuePrecision(keyParts),
     modality: 'may',
     resolution: 'unresolved',
     sourceScope: runtimeBoundarySourceScope(context.file),
@@ -858,6 +855,7 @@ function addressedArgument(
         value: value.value,
         evidence: value.evidence,
         term: value.term,
+        precision: value.precision,
         derivation: value.derivation,
       }
     : null;
@@ -894,7 +892,15 @@ function resolvedStrength(
   keyParts: readonly BoundaryKeyPart[],
   base: BoundaryEvidenceStrength = 'exact',
 ): BoundaryEvidenceStrength {
-  if (base === 'candidate' || keyParts.some((part) => part.evidence === 'expression')) return 'candidate';
+  if (
+    base === 'candidate' ||
+    keyParts.some(
+      (part) =>
+        part.evidence === 'expression' ||
+        ['unknown', 'constrained-pattern', 'finite-set'].includes(boundaryKeyPrecision(part)),
+    )
+  )
+    return 'candidate';
   if (base === 'derived' || keyParts.some((part) => part.evidence === 'constant')) return 'derived';
   return 'exact';
 }

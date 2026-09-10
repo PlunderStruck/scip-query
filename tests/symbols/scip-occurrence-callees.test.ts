@@ -80,7 +80,7 @@ describe('occurrence-resolved callee tier', () => {
       const stamp = findFirstSymbolMatch(db, STAMP)!;
       const callees = buildCalleeMap(db, [run, stamp], { semantic: false });
       expect(callees.get(run.symbolId)).toEqual([
-        { symbol: EXECUTE, file: 'src/service.ts', chunkId: 4, source: 'scip-occurrence', callsiteLine: 4 },
+        { symbol: EXECUTE, file: 'src/service.ts', chunkId: 4, source: 'scip-declaration', callsiteLine: 4 },
       ]);
       expect(callees.get(stamp.symbolId)).toEqual([]);
     } finally {

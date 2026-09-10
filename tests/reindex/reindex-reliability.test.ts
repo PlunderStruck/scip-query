@@ -1,3 +1,5 @@
+import Database from 'better-sqlite3';
+import { createEvidenceSchema } from '../fixtures/evidence-fixture.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import type * as NodeFs from 'node:fs';
@@ -15,6 +17,27 @@ import { projectShardSlug } from '../../src/reindex/project-shards.js';
 
 const tempDirs: string[] = [];
 const originalIndexerConcurrencyEnv = process.env['SCIP_QUERY_INDEXER_CONCURRENCY'];
+
+function writeDatabaseFixture(path: string, value: string): void {
+  rmSync(path, { force: true });
+  const db = new Database(path);
+  try {
+    createEvidenceSchema(db);
+    db.exec('CREATE TABLE fixture_value (value TEXT)');
+    db.prepare('INSERT INTO fixture_value VALUES (?)').run(value);
+  } finally {
+    db.close();
+  }
+}
+
+function readDatabaseFixture(path: string): string {
+  const db = new Database(path, { readonly: true });
+  try {
+    return (db.prepare('SELECT value FROM fixture_value').get() as { value: string }).value;
+  } finally {
+    db.close();
+  }
+}
 
 function createProject(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -129,7 +152,7 @@ describe('reindex reliability', () => {
     const outputDb = join(cacheDir, 'index.db');
     const metaPath = join(cacheDir, 'meta.json');
     writeFileSync(outputScip, 'old-scip');
-    writeFileSync(outputDb, 'old-db');
+    writeDatabaseFixture(outputDb, 'old-db');
 
     const { reindex } = await loadReindexFixture({
       languages: ['typescript', 'python'],
@@ -147,7 +170,7 @@ describe('reindex reliability', () => {
     ).rejects.toThrow(/failed to index all required languages/i);
 
     expect(readFileSync(outputScip, 'utf-8')).toBe('old-scip');
-    expect(readFileSync(outputDb, 'utf-8')).toBe('old-db');
+    expect(readDatabaseFixture(outputDb)).toBe('old-db');
     expect(existsSync(metaPath)).toBe(false);
   });
 
@@ -158,7 +181,7 @@ describe('reindex reliability', () => {
     const outputScip = join(cacheDir, 'index.scip');
     const outputDb = join(cacheDir, 'index.db');
     writeFileSync(outputScip, 'old-scip');
-    writeFileSync(outputDb, 'old-db');
+    writeDatabaseFixture(outputDb, 'old-db');
 
     const { reindex } = await loadReindexFixture({
       languages: ['typescript'],
@@ -175,7 +198,7 @@ describe('reindex reliability', () => {
     ).rejects.toThrow(/failed to convert scip index/i);
 
     expect(readFileSync(outputScip, 'utf-8')).toBe('old-scip');
-    expect(readFileSync(outputDb, 'utf-8')).toBe('old-db');
+    expect(readDatabaseFixture(outputDb)).toBe('old-db');
   });
 
   it('writes partial metadata only when partial indexing is explicitly allowed', async () => {
@@ -202,7 +225,7 @@ describe('reindex reliability', () => {
 
     expect(result.languages).toEqual(['typescript']);
     expect(result.skipped).toEqual([expect.objectContaining({ language: 'python' })]);
-    expect(readFileSync(outputDb, 'utf-8')).toBe('new-db');
+    expect(readDatabaseFixture(outputDb)).toBe('new-db');
     expect(JSON.parse(readFileSync(metaPath, 'utf-8'))).toEqual(
       expect.objectContaining({
         status: 'partial',
@@ -386,7 +409,7 @@ describe('reindex reliability', () => {
         id: 'typescript',
         reused: false,
         missReason: expect.stringMatching(/inputs changed/i),
-        fallbackReason: 'file is not a database',
+        fallbackReason: 'root tsconfig unavailable',
       }),
     );
     expect(typescript?.command).toContain('typescript-indexer');
@@ -416,7 +439,7 @@ describe('reindex reliability', () => {
     });
 
     expect(attempts.get('typescript')).toBe(1);
-    expect(readFileSync(outputDb, 'utf8')).toBe('incrementally-patched-db');
+    expect(readDatabaseFixture(outputDb)).toBe('incrementally-patched-db');
     expect(JSON.parse(readFileSync(join(cacheDir, '.scipquery-generations/state.json'), 'utf8')).publication).toEqual(
       expect.objectContaining({
         mode: 'incremental',
@@ -538,7 +561,7 @@ describe('reindex reliability', () => {
     });
 
     expect(attempts.get('typescript')).toBe(1);
-    expect(readFileSync(outputDb, 'utf8')).toBe('new-db');
+    expect(readDatabaseFixture(outputDb)).toBe('new-db');
     expect(JSON.parse(readFileSync(join(cacheDir, '.scipquery-generations/state.json'), 'utf8')).publication).toEqual(
       expect.objectContaining({
         mode: 'full',
@@ -1298,7 +1321,7 @@ describe('reindex reliability', () => {
     ).rejects.toThrow(/failed to convert scip index/i);
 
     const failedMeta = JSON.parse(readFileSync(metaPath, 'utf-8'));
-    expect(readFileSync(outputDb, 'utf-8')).toBe('new-db');
+    expect(readDatabaseFixture(outputDb)).toBe('new-db');
     expect(failedMeta.updatedAt).toBe(firstMeta.updatedAt);
     expect(failedMeta.lastRefresh).toEqual(
       expect.objectContaining({
@@ -1586,7 +1609,7 @@ describe('reindex reliability', () => {
     });
 
     expect(result.reused).toBe(false);
-    expect(readFileSync(outputDb, 'utf-8')).toBe('new-db');
+    expect(readDatabaseFixture(outputDb)).toBe('new-db');
     expect(statuses.join('\n')).toContain('Affected-set shadow telemetry unavailable: forced telemetry failure');
   });
 
@@ -1597,7 +1620,7 @@ describe('reindex reliability', () => {
     const outputScip = join(cacheDir, 'index.scip');
     const outputDb = join(cacheDir, 'index.db');
     writeFileSync(outputScip, 'old-scip');
-    writeFileSync(outputDb, 'old-db');
+    writeDatabaseFixture(outputDb, 'old-db');
     const { reindex } = await loadReindexFixture({ languages: ['typescript'], failPromotion: true });
 
     await expect(
@@ -1610,7 +1633,7 @@ describe('reindex reliability', () => {
       }),
     ).rejects.toThrow('forced promotion failure');
 
-    expect(readFileSync(outputDb, 'utf-8')).toBe('old-db');
+    expect(readDatabaseFixture(outputDb)).toBe('old-db');
     expect(existsSync(join(cacheDir, 'affected-shadow-latest.json'))).toBe(false);
     expect(existsSync(join(cacheDir, 'affected-shadow.jsonl'))).toBe(false);
   });
@@ -1755,7 +1778,7 @@ async function loadReindexFixture(opts: {
         if (opts.failIncrementalPatch) {
           throw new Error('candidate SQLite generation schema changed for table documents');
         }
-        writeFileSync(input.candidateDbPath, 'incrementally-patched-db');
+        writeDatabaseFixture(input.candidateDbPath, 'incrementally-patched-db');
         return {
           candidateDbPath: input.candidateDbPath,
           affectedDocumentCount: 1,
@@ -1799,8 +1822,8 @@ async function loadReindexFixture(opts: {
   }
 
   // The in-process converter replaces the scip CLI conversion by default;
-  // this harness fakes both boundaries the same way: the output database is
-  // the literal bytes 'new-db', and opts.failConvert fails the conversion.
+  // both mocked converter boundaries produce real SQLite artifacts so the
+  // publisher still validates their integrity. opts.failConvert injects conversion failure.
   vi.doMock('../../src/reindex/scip-sqlite-converter.js', async () => {
     const fs = await import('node:fs');
     const actual = await vi.importActual<object>('../../src/reindex/scip-sqlite-converter.js');
@@ -1809,7 +1832,7 @@ async function loadReindexFixture(opts: {
       convertScipBufferToSqlite: async (_buffer: Uint8Array, outputDbPath: string) => {
         if (opts.failConvert) throw new Error('convert failed');
         fs.mkdirSync(dirname(outputDbPath), { recursive: true });
-        fs.writeFileSync(outputDbPath, 'new-db');
+        writeDatabaseFixture(outputDbPath, 'new-db');
         return {
           documents: 0,
           duplicateDocumentsSkipped: 0,
@@ -1838,7 +1861,7 @@ async function loadReindexFixture(opts: {
           const outputPath = outputArg(args);
           if (outputPath) {
             fs.mkdirSync(dirname(outputPath), { recursive: true });
-            fs.writeFileSync(outputPath, 'new-db');
+            writeDatabaseFixture(outputPath, 'new-db');
           }
           return {
             status: 0,
@@ -1918,7 +1941,7 @@ async function loadReindexFixture(opts: {
         const outputPath = outputArg(args);
         if (outputPath) {
           fs.mkdirSync(dirname(outputPath), { recursive: true });
-          fs.writeFileSync(outputPath, 'new-db');
+          writeDatabaseFixture(outputPath, 'new-db');
         }
         return Buffer.from('');
       }

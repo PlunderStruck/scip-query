@@ -47,7 +47,7 @@ describe('runtime-boundary evidence', () => {
     const db = createBoundaryDb();
     try {
       const graph = await collectRuntimeBoundaryGraph(db);
-      expect(graph.extractorVersion).toBe('runtime-boundaries-v24');
+      expect(graph.extractorVersion).toBe('runtime-boundaries-v30');
 
       for (const expected of [
         expect.objectContaining({
@@ -129,10 +129,12 @@ describe('runtime-boundary evidence', () => {
           keyParts: expect.arrayContaining([expect.objectContaining({ name: 'value', value: 'sync' })]),
         }),
         expect.objectContaining({
-          action: 'carrier.consume',
+          // A dynamic registry invocation may mutate its receiver. Preserve the declaration
+          // as a candidate instead of propagating it as an established handler.
+          action: 'registry.handle',
           strength: 'candidate',
           source: expect.objectContaining({ file: 'src/carrier-server.ts' }),
-          keyParts: expect.arrayContaining([expect.objectContaining({ name: 'value', value: 'sync' })]),
+          keyParts: expect.arrayContaining([expect.objectContaining({ name: 'key', value: 'sync' })]),
         }),
       ]) {
         expect(
@@ -178,7 +180,7 @@ describe('runtime-boundary evidence', () => {
       expect(graph.coverage.extractors).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ id: 'builtin.wrapper', observations: 4, errors: 0 }),
-          expect.objectContaining({ id: 'builtin.carrier', observations: 2, errors: 0 }),
+          expect.objectContaining({ id: 'builtin.carrier', observations: 1, errors: 0 }),
         ]),
       );
       expect(graph.coverage.phases?.map((phase) => phase.id)).toEqual([

@@ -4,6 +4,7 @@ import { scipOccurrenceTargetsForFile } from '../../symbols/graph/scip-occurrenc
 import { sameOccurrenceRange } from '../../symbols/graph/scip-chunk-occurrences.js';
 import { getDefinitionsForFile } from '../../symbols/definition-catalog.js';
 import { sourceBindingResolver } from '../../source/ast/source-binding-identity.js';
+import { callableValueWasWritten } from '../../symbols/graph/imported-value-context.js';
 import { resolveImportedDefinitions } from '../../symbols/imported-definitions.js';
 import { resolveImportPath } from '../../source/primitives/import-path-resolver.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
@@ -72,6 +73,8 @@ export function runtimeBindingIdentity(context: BoundaryFileContext, node: Synta
 
 /** Resolve a handler expression only through its exact compiler reference or local declaration. */
 export function runtimeCallableDefinition(context: BoundaryFileContext, node: SyntaxNode): IndexedDefinition | null {
+  const bindings = sourceBindingResolver(context.file, context.root);
+  if (callableValueWasWritten(context, node)) return null;
   const range = {
     startLine: node.startPosition.row,
     startColumn: node.startPosition.column,
@@ -91,7 +94,14 @@ export function runtimeCallableDefinition(context: BoundaryFileContext, node: Sy
     (definition) => definition.symbol === symbol && definition.isFunctionLike,
   );
   if (local.length === 1) return local[0]!;
-  const bindings = sourceBindingResolver(context.file, context.root);
+  return runtimeCallableFromSource(context, node, bindings);
+}
+
+function runtimeCallableFromSource(
+  context: BoundaryFileContext,
+  node: SyntaxNode,
+  bindings: ReturnType<typeof sourceBindingResolver>,
+): IndexedDefinition | null {
   const callable = bindings.callableValue(node);
   const name = bindings.valueDeclaration(node)?.name ?? callable?.childForFieldName('name')?.text;
   if (!callable || !name) return null;

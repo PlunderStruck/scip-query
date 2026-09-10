@@ -69,16 +69,12 @@ export function complexity(
   }
   const match = resolution.match;
   if (!match) return null;
-  const index = new ProjectIndex(db);
 
   const branchEstimate = branchEstimateForDefinition(db, match);
   const loc = match.endLine - match.startLine + 1;
 
-  const calleeMap = index.calleeMap([match], { additive: true, semantic: opts.semantic });
-  const allCallees = calleeMap.get(match.symbolId) ?? [];
-  const callees = allCallees.filter(
-    (callee) => callee.source === 'scip-occurrence' || callee.source === 'semantic-callee',
-  );
+  const allCallees = new ProjectIndex(db).callableCallees(match, opts);
+  const callees = allCallees.filter((callee) => callee.evidenceStrength === 'exact');
   const uniqueCallees = new Set(callees.map((c) => c.symbol));
   const candidateCallees = new Set(
     allCallees.filter((callee) => !uniqueCallees.has(callee.symbol)).map((callee) => callee.symbol),

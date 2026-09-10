@@ -1,0 +1,69 @@
+{
+  "verifiedAt": "2026-09-10T05:15:41.397763+00:00",
+  "passed": true,
+  "sshProfile": "dev-agent",
+  "account": "launchpoint-agent",
+  "host": "wnx0019585",
+  "version": "0.25.0",
+  "archiveSha256": "65d8fc1f44cb8d228ec9d5308a411999f4f65afb4eb47675ef6c354e301a087f",
+  "packagePath": "/home/launchpoint-agent/.local/lib/node_modules/scip-query",
+  "shippedFilesVerified": 458,
+  "skillFilesVerified": 19,
+  "skillLinksVerified": 12,
+  "binaryPaths": ["/home/launchpoint-agent/.local/bin/scip-query"],
+  "smoke": {
+    "passed": true,
+    "checks": [
+      "native TypeScript runtime returns 3 and 1",
+      "one conditional yields cyclomatic complexity 2",
+      "one exact helper callee and zero candidate callees",
+      "call graph selects the expected helper only",
+      "scanner covers both functions in the only source file",
+      "fresh generation after standalone augmentation",
+      "SQLite quick_check passes after augmentation",
+      "fixture watcher remains disabled"
+    ]
+  },
+  "refresh": [
+    {
+      "root": "/home/launchpoint-agent/.t3/worktrees/launchpoint-backend/t3code-66bd3d33",
+      "exitCode": 0,
+      "durationSeconds": 904.9329810430063
+    }
+  ],
+  "checkout": {
+    "root": "/home/launchpoint-agent/.t3/worktrees/launchpoint-backend/t3code-66bd3d33",
+    "freshness": "fresh",
+    "stats": {
+      "symbols": 485167,
+      "files": 9221,
+      "indexSizeBytes": 422309888,
+      "lastBuilt": "2026-09-10T05:13:00.617Z"
+    },
+    "generationState": "current",
+    "generation": "42bb07135cd23e5dde202d81b49c8f4411744cf03a86a03f14ecad7c15fc9a2b",
+    "publication": {
+      "mode": "full",
+      "validation": "passed",
+      "converterDurationMs": 10490.308974999993,
+      "scipCompanion": "current"
+    },
+    "sqliteIntegrity": "ok"
+  },
+  "restartedWatchers": [
+    {
+      "root": "/home/launchpoint-agent/.t3/worktrees/launchpoint-backend/t3code-66bd3d33",
+      "oldPid": 3228635,
+      "newPid": 3714299,
+      "state": "running"
+    }
+  ],
+  "observedActiveWatchers": [
+    {
+      "pid": 3714299,
+      "root": "/home/launchpoint-agent/.t3/worktrees/launchpoint-backend/t3code-66bd3d33",
+      "script": "/home/launchpoint-agent/.local/lib/node_modules/scip-query/dist/watch-server.js"
+    }
+  ],
+  "rollbackPath": "/tmp/scip-query-breadth-install-20260909-EHDXbZ/previous-package"
+}

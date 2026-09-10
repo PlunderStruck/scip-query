@@ -6,6 +6,7 @@ import type * as TypeScript from 'typescript';
 import { detectAstLanguage, isVueSfcPath } from '../../source/ast/ast-language.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { withFileAccessRecording } from '../../domain/file-access-recorder.js';
+import { sharedSymbolReferencingFiles } from '../../symbols/graph/imported-value-context.js';
 import { getSourceFiles } from '../../source/primitives/source-fileset.js';
 import { readSourceTextUncached } from '../../source/primitives/source-text.js';
 import { fileContentHash } from '../../storage/evidence-cache.js';
@@ -32,7 +33,7 @@ import type {
 
 // Increment whenever direct facts or any derived propagation rule changes so an
 // older persisted graph can never be incrementally mixed with newer semantics.
-export const RUNTIME_BOUNDARY_EXTRACTOR_VERSION = 'runtime-boundaries-v24';
+export const RUNTIME_BOUNDARY_EXTRACTOR_VERSION = 'runtime-boundaries-v30';
 
 const require = createRequire(import.meta.url);
 const typescript = require('typescript') as typeof TypeScript;
@@ -375,6 +376,7 @@ function boundaryExtractionPlan(db: ScipDatabase, opts: RuntimeBoundaryCollectio
   const fileSet = new Set(files);
   const affectedFiles = new Set((opts.affectedFiles ?? []).map(normalizeBoundaryFile));
   const previousFileCoverage = opts.previousGraph?.fileCoverage;
+  includeChangedReferenceProofs(db, previousFileCoverage, affectedFiles);
   const incrementallyReusable =
     affectedFiles.size > 0 &&
     opts.previousGraph?.extractorVersion === RUNTIME_BOUNDARY_EXTRACTOR_VERSION &&
@@ -399,6 +401,20 @@ function boundaryExtractionPlan(db: ScipDatabase, opts: RuntimeBoundaryCollectio
     retainedObservations,
     filesToExtract,
   };
+}
+
+function includeChangedReferenceProofs(
+  db: ScipDatabase,
+  coverage: RuntimeBoundaryFileCoverage[] | undefined,
+  affectedFiles: Set<string>,
+): void {
+  if (affectedFiles.size === 0) return;
+  for (const entry of coverage ?? []) {
+    if (!entry.dependsOnReferenceSet) continue;
+    const source = readSourceTextUncached(db, entry.file);
+    const cached = reusableDirectExtraction(db, entry.file, fileContentHash(db, entry.file, source));
+    if (!cached) affectedFiles.add(entry.file);
+  }
 }
 
 function affectedDirectCoverageUnchanged(
@@ -732,14 +748,9 @@ async function extractBoundaryFiles(
     // every file its resolvers consulted (imported constants, resolved call
     // targets, definition owners). The persisted payload names that consulted
     // set, and a hit requires every named dependency to still match.
-    const cachedDirect = recordSpan('runtime-boundaries.file.direct-product', () => {
-      const cached = DIRECT_EXTRACTION_PRODUCT.read(db, file, contentHash);
-      if (!cached || cached.extractorVersion !== RUNTIME_BOUNDARY_EXTRACTOR_VERSION) return null;
-      for (const dep of cached.deps) {
-        if (currentDepHash(dep.path) !== dep.contentHash) return null;
-      }
-      return cached;
-    });
+    const cachedDirect = recordSpan('runtime-boundaries.file.direct-product', () =>
+      reusableDirectExtraction(db, file, contentHash, currentDepHash),
+    );
     if (cachedDirect) {
       observations.push(...cachedDirect.observations);
       fileCoverage.push(cachedDirect.coverage);
@@ -760,6 +771,7 @@ async function extractBoundaryFiles(
       return computed;
     });
     const consultedFiles = new Set<string>();
+    const consultedReferences = new Map<string, readonly string[]>();
     const fileObservations: BoundaryObservation[] = [];
     const coverage = withFileAccessRecording(
       (accessed) => consultedFiles.add(accessed),
@@ -802,7 +814,9 @@ async function extractBoundaryFiles(
         }
         return entry;
       },
+      (symbol, references) => consultedReferences.set(symbol, references),
     );
+    if (consultedReferences.size > 0) coverage.dependsOnReferenceSet = true;
     observations.push(...fileObservations);
     fileCoverage.push(coverage);
     // A file whose extraction errored is not cached: the error may be
@@ -815,6 +829,10 @@ async function extractBoundaryFiles(
         value: {
           extractorVersion: RUNTIME_BOUNDARY_EXTRACTOR_VERSION,
           deps: [...consultedFiles].sort().map((path) => ({ path, contentHash: currentDepHash(path) })),
+          symbolReferences: [...consultedReferences].map(([symbol, references]) => ({
+            symbol,
+            files: [...references],
+          })),
           observations: fileObservations,
           coverage,
         },
@@ -855,9 +873,38 @@ const BOUNDARY_SOURCE_HASHES_PRODUCT = createFileEvidenceProduct<BoundarySourceH
  */
 interface DirectExtractionPayload {
   extractorVersion: string;
+  symbolReferences?: { symbol: string; files: string[] }[];
   deps: { path: string; contentHash: string }[];
   observations: BoundaryObservation[];
   coverage: RuntimeBoundaryFileCoverage;
+}
+
+function reusableDirectExtraction(
+  db: ScipDatabase,
+  file: string,
+  contentHash: string,
+  currentDepHash = (path: string) => fileContentHash(db, path, readSourceTextUncached(db, path)),
+): DirectExtractionPayload | null {
+  const cached = DIRECT_EXTRACTION_PRODUCT.read(db, file, contentHash);
+  if (!cached || cached.extractorVersion !== RUNTIME_BOUNDARY_EXTRACTOR_VERSION) return null;
+  if (cached.coverage.dependsOnReferenceSet && !cached.symbolReferences?.length) return null;
+  if (!referenceDependenciesMatch(db, cached.symbolReferences)) return null;
+  return cached.deps.every((dep) => currentDepHash(dep.path) === dep.contentHash) ? cached : null;
+}
+
+function referenceDependenciesMatch(
+  db: ScipDatabase,
+  dependencies: DirectExtractionPayload['symbolReferences'],
+): boolean {
+  if (dependencies === undefined) return true;
+  if (!Array.isArray(dependencies)) return false;
+  return dependencies.every(
+    (dependency) =>
+      dependency &&
+      typeof dependency.symbol === 'string' &&
+      Array.isArray(dependency.files) &&
+      JSON.stringify(sharedSymbolReferencingFiles(db, dependency.symbol)) === JSON.stringify(dependency.files),
+  );
 }
 
 const DIRECT_EXTRACTION_PRODUCT = createFileEvidenceProduct<DirectExtractionPayload>({

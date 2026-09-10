@@ -140,10 +140,19 @@ export function sourceAnalysisRoot(
 export function unwrapExpression(input: SyntaxNode): SyntaxNode {
   let node = input;
   while (
-    ['as_expression', 'satisfies_expression', 'type_assertion', 'parenthesized_expression'].includes(node.type) &&
+    [
+      'as_expression',
+      'satisfies_expression',
+      'type_assertion',
+      'parenthesized_expression',
+      'non_null_expression',
+    ].includes(node.type) &&
     node.namedChildren.length > 0
   ) {
-    node = node.namedChildren[0]!;
+    const children = node.namedChildren.filter((child) => child.type !== 'comment');
+    const expression = node.type === 'type_assertion' ? children.at(-1) : children[0];
+    if (!expression) break;
+    node = expression;
   }
   return node;
 }

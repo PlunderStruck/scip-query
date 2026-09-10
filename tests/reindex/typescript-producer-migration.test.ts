@@ -5,7 +5,7 @@ import { it } from 'vitest';
 import { refreshSqliteGenerationMetadata } from '../../src/reindex/sqlite-generation-store.js';
 import { IndexerHistoryFixture } from '../properties/indexer-history-fixture.js';
 
-it.each([undefined, 1, 2, 3])(
+it.each([undefined, 1, 2, 3, 4, 5])(
   'rebuilds an unchanged local index with legacy TypeScript producer %s',
   async (legacyVersion) => {
     const fixture = new IndexerHistoryFixture();
@@ -13,8 +13,8 @@ it.each([undefined, 1, 2, 3])(
       await fixture.index();
       const metaPath = join(fixture.cache, 'meta.json');
       const metadata = JSON.parse(readFileSync(metaPath, 'utf8'));
-      assert.equal(metadata.fingerprint.typescriptSymbolIdentityVersion, 4);
-      assert.equal(metadata.languageFingerprints.typescript.typescriptSymbolIdentityVersion, 4);
+      assert.equal(metadata.fingerprint.typescriptSymbolIdentityVersion, 6);
+      assert.equal(metadata.languageFingerprints.typescript.typescriptSymbolIdentityVersion, 6);
       metadata.fingerprint.typescriptSymbolIdentityVersion = legacyVersion;
       metadata.languageFingerprints.typescript.typescriptSymbolIdentityVersion = legacyVersion;
       writeFileSync(metaPath, JSON.stringify(metadata));

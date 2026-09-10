@@ -30,5 +30,7 @@ export function fetchRequestMethod(options: SyntaxNode | undefined, context: Bou
   if (field.kind === 'absent') return 'GET';
   if (field.kind === 'unknown') return null;
   const value = evaluateStaticValue(context, field.node);
-  return value && ['literal', 'constant'].includes(value.evidence) ? value.value.toUpperCase() : null;
+  return value && value.precision === 'literal' && ['literal', 'constant'].includes(value.evidence)
+    ? value.value.toUpperCase()
+    : null;
 }

@@ -451,7 +451,7 @@ function collectNextAnchorExactOccurrenceCandidates(
         evidence: [
           {
             method: 'scip-occurrence-callsite',
-            strength: 'exact',
+            strength: target.implementationStatus === 'unresolved' ? 'candidate' : 'exact',
             identity: target.definition.symbol,
             location: { file: step.location.file, line: target.sourceLine },
           },
@@ -933,7 +933,7 @@ function appendExactRangeCandidates(
         evidence: [
           {
             method: 'scip-occurrence-callsite',
-            strength: 'exact',
+            strength: target.implementationStatus === 'unresolved' ? 'candidate' : 'exact',
             identity: target.definition.symbol,
             location: { file: seed.file, line: target.sourceLine },
           },

@@ -3,6 +3,7 @@ import { getSourceFacts } from '../../source/facts/source-facts.js';
 import {
   scipOccurrenceCallTargetsForRange,
   scipOccurrenceTargetsForFile,
+  sourceCallTargetUsesParameter,
 } from '../../symbols/graph/scip-occurrence-call-targets.js';
 import { sameOccurrenceRange } from '../../symbols/graph/scip-chunk-occurrences.js';
 import type { ExplorationTopologyNode } from '../internal/exploration-topology.js';
@@ -16,8 +17,8 @@ export function programExecutionFrontiers(
 ): ProgramControlElements {
   const result: ProgramControlElements = { nodes: [], edges: [], frontiers: [], blindSpots: [] };
   for (const owner of owners) {
-    for (const { call, external } of unresolvedOwnerCalls(db, owner))
-      appendUnresolvedCall(result, owner, call, external);
+    for (const { call, external, declarations, implementationReason } of unresolvedOwnerCalls(db, owner))
+      appendUnresolvedCall(result, owner, call, external, declarations, implementationReason);
   }
   return result;
 }
@@ -38,9 +39,20 @@ function unresolvedOwnerCalls(db: ScipDatabase, owner: ExplorationTopologyNode) 
     .filter(
       (call) =>
         callBelongsToOwner(call, owner) &&
-        !resolved.targets.some((target) => sameOccurrenceRange(target.sourceRange, call.targetRange)),
+        !resolved.targets.some(
+          (target) =>
+            target.implementationStatus !== 'unresolved' && sameOccurrenceRange(target.sourceRange, call.targetRange),
+        ),
     )
-    .map((call) => ({ call, external: isExternalInvocation(call, occurrences) }));
+    .map((call) => ({
+      call,
+      external: isExternalInvocation(call, occurrences) && !sourceCallTargetUsesParameter(db, location.file, call),
+      declarations: (resolved.declarations ?? [])
+        .filter((target) => sameOccurrenceRange(target.sourceRange, call.targetRange))
+        .map((target) => target.definition.symbol),
+      implementationReason: resolved.targets.find((target) => sameOccurrenceRange(target.sourceRange, call.targetRange))
+        ?.implementationReason,
+    }));
 }
 
 function callBelongsToOwner(call: SourceFacts['callSites'][number], owner: ExplorationTopologyNode): boolean {
@@ -73,12 +85,21 @@ function appendUnresolvedCall(
   owner: ExplorationTopologyNode,
   call: SourceFacts['callSites'][number],
   external: boolean,
+  declarations: readonly string[],
+  implementationReason?: string,
 ): void {
   const location = owner.location!;
   if (!call.targetRange) return;
-  const reason = external
-    ? `Compiler reference for ${call.calleeText} has no indexed repository body; external behavior is unavailable.`
-    : `Invocation ${call.calleeText} has no established repository implementation target; indirect, mutated, or missing bindings cannot establish reachability.`;
+  const resolutionReason =
+    implementationReason ??
+    (declarations.length
+      ? 'observed-or-possible-write; execution-order-not-established'
+      : 'missing-or-indirect-binding');
+  const reason = declarations.length
+    ? `Invocation ${call.calleeText} has no established repository implementation target at ${location.file}:${call.targetRange.startLine + 1}:${call.targetRange.startColumn + 1}. Compiler declaration reference for ${call.calleeText}: ${declarations.join(', ')}. Runtime implementation remains unresolved (${resolutionReason}); the declaration reference is preserved and does not establish executable reachability.`
+    : external
+      ? `Compiler reference for ${call.calleeText} has no indexed repository body; external behavior is unavailable.`
+      : `Invocation ${call.calleeText} has no established repository implementation target; indirect, mutated, or missing bindings cannot establish reachability.`;
   const nodeId = `execution-unresolved:${owner.id}:${call.targetRange.startLine}:${call.targetRange.startColumn}:${call.targetRange.endColumn}`;
   const edgeId = `edge:${nodeId}`;
   const site = {
@@ -95,7 +116,13 @@ function appendUnresolvedCall(
     disposition: 'unsupported',
     location: site,
     anchorIds: [],
-    attributes: { ownerNodeId: owner.id, targetResolution: external ? 'external' : 'unresolved' },
+    attributes: {
+      ownerNodeId: owner.id,
+      targetResolution: external && !declarations.length ? 'external' : 'unresolved',
+      referencedDeclaration: declarations.length === 1 ? declarations[0]! : null,
+      declarationCount: declarations.length,
+      implementationReason: resolutionReason,
+    },
   });
   result.edges.push({
     id: edgeId,
@@ -104,7 +131,17 @@ function appendUnresolvedCall(
     toNodeId: nodeId,
     directed: true,
     disposition: 'unsupported',
-    semantics: [{ family: 'control', subtype: 'unresolved-call-target' }],
+    semantics: [
+      {
+        family: 'control',
+        subtype: 'unresolved-call-target',
+        attributes: {
+          referencedDeclaration: declarations.length === 1 ? declarations[0]! : null,
+          declarationCount: declarations.length,
+          implementationReason: resolutionReason,
+        },
+      },
+    ],
     evidence: [
       {
         method: 'parser-invocation-without-repository-target',

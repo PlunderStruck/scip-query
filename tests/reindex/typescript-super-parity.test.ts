@@ -22,6 +22,7 @@ it('preserves compiler super targets through incremental edits and a clean rebui
       'import { Base } from "./base.js";\nexport class Child extends Base { constructor() { super(1); } }\n',
     );
     await fixture.index({ force: true, allowExpensiveRebuild: true });
+    fixture.startService();
     expect(targets().some((target) => target.symbol.includes('Base#') && target.symbol.includes('constructor'))).toBe(
       true,
     );
@@ -32,6 +33,10 @@ it('preserves compiler super targets through incremental edits and a clean rebui
     ]) {
       fixture.write('child.ts', source);
       await fixture.index({ allowExpensiveRebuild: true });
+      expect(
+        fixture.statuses.some((status) => status.startsWith('Incremental TypeScript index emitted')),
+        fixture.statuses.join('\n'),
+      ).toBe(true);
       const incremental = targets();
       expect(
         incremental.some((target) => target.symbol.includes('Base#') && target.symbol.includes('constructor')),

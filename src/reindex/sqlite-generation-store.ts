@@ -1,6 +1,7 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   closeSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   openSync,
@@ -11,6 +12,7 @@ import {
   statSync,
 } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
+import Database from 'better-sqlite3';
 import {
   cloneFileDurable,
   ensureDirectoryDurable,
@@ -21,7 +23,7 @@ import {
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { readProcessIdentity } from '../platform/process-identity.js';
 import { isProcessAlive } from '../platform/process-liveness.js';
-import { acquireProcessFileLock } from '../platform/repository-cache-lock.js';
+import { acquireProcessFileLock, acquireProcessFileLockAsync } from '../platform/repository-cache-lock.js';
 import { writeJsonAtomic, writeJsonDurable } from '../storage/atomic-json.js';
 import {
   SQLITE_GENERATION_DIRECTORY,
@@ -132,6 +134,57 @@ export interface LocalSqliteGenerationStatus {
   reason?: string;
 }
 
+/** Standalone augmentation changes a private database and publishes only after its entire operation succeeds. */
+export async function publishSqliteAugmentation<T>(
+  outputDb: string,
+  augment: (candidate: string) => T | Promise<T>,
+): Promise<T> {
+  const directory = dirname(outputDb);
+  const outputScip = join(directory, 'index.scip');
+  const metaPath = join(directory, 'meta.json');
+  const lock = await acquireProcessFileLockAsync(join(directory, 'index.lock'), { waitMs: 10_000 });
+  if (!lock) throw new Error(`Another index writer is active for ${directory}.`);
+  const tempOutputDb = `${outputDb}.augment-${randomUUID()}`;
+  const tempMetaPath = `${tempOutputDb}.meta.json`;
+  try {
+    if (!existsSync(outputDb) || !existsSync(metaPath) || !existsSync(outputScip))
+      throw new Error('Standalone augmentation requires a published index; run scip-query reindex first.');
+    const previous = ensureImmutableSqliteGeneration(outputDb, outputScip, metaPath);
+    const source = new Database(outputDb, { readonly: true, fileMustExist: true });
+    try {
+      await source.backup(tempOutputDb);
+    } finally {
+      source.close();
+    }
+    const result = await augment(tempOutputDb);
+    copyFileSync(metaPath, tempMetaPath);
+    promoteReindexArtifacts({
+      outputDb,
+      outputScip,
+      metaPath,
+      tempOutputDb,
+      tempMetaPath,
+      tempOutputScip: outputScip,
+      preserveOutputScip: true,
+      ...(previous?.publication ? { publication: previous.publication } : {}),
+    });
+    return result;
+  } finally {
+    try {
+      for (const path of [
+        tempOutputDb,
+        `${tempOutputDb}-wal`,
+        `${tempOutputDb}-shm`,
+        `${tempOutputDb}-journal`,
+        tempMetaPath,
+      ])
+        rmSync(path, { force: true });
+    } finally {
+      lock.release();
+    }
+  }
+}
+
 /**
  * Retains the accepted database, then changes the stable artifact paths in a
  * fixed order. Each database path always names one complete SQLite file.
@@ -169,7 +222,7 @@ export function promoteReindexArtifacts(input: PromoteReindexArtifactsInput): Pr
 
   if (!input.preserveOutputScip) replaceFile(input.tempOutputScip, input.outputScip);
   input.onStage?.('after-scip-handoff');
-  replaceFile(input.tempOutputDb, input.outputDb);
+  replaceSqliteFile(input.tempOutputDb, input.outputDb);
   input.onStage?.('after-database-handoff');
   replaceFile(input.tempMetaPath, input.metaPath);
   input.onStage?.('after-metadata-handoff');
@@ -710,6 +763,7 @@ function materializeGeneration(input: {
   metadataPath?: string;
   forcedIdentity?: string;
 }): { identity: string; directorySync: Exclude<DirectorySyncStatus, 'not-requested'> } {
+  sealSqliteArtifact(input.databasePath);
   const database = describeArtifact(input.databasePath);
   const index = input.indexPath
     ? input.verifiedIndexArtifact
@@ -886,6 +940,30 @@ function storedMetadataMatches(
     stableMetadataIdentity(readSmallArtifactText(storedPath, 'stored reindex metadata')) ===
       stableMetadataIdentity(readSmallArtifactText(candidatePath, 'candidate reindex metadata'))
   );
+}
+
+/** Publication owns the repository writer lock; managed readers use immutable generations. */
+function replaceSqliteFile(source: string, target: string): void {
+  // Journals belong to the replaced inode, not to the next database at this path.
+  // Replaying one over the replacement can silently restore old pages or corrupt it.
+  for (const suffix of ['-wal', '-shm', '-journal']) rmSync(`${target}${suffix}`, { force: true });
+  replaceFile(source, target);
+}
+
+/** Flush a self-contained, readable database before hashing it or publishing its pointer. */
+function sealSqliteArtifact(path: string): void {
+  const db = new Database(path, { fileMustExist: true });
+  try {
+    const checkpoint = db.pragma('wal_checkpoint(TRUNCATE)') as Array<{ busy: number }>;
+    if (checkpoint.some((row) => row.busy !== 0))
+      throw new Error(`SQLite publication has an active writer or reader: ${path}`);
+    const integrity = db.pragma('quick_check') as Array<{ quick_check: string }>;
+    if (integrity.length !== 1 || integrity[0]?.quick_check !== 'ok') {
+      throw new Error(`SQLite publication rejected an invalid database: ${path}`);
+    }
+  } finally {
+    db.close();
+  }
 }
 
 function replaceFile(source: string, target: string): void {
