@@ -1,7 +1,10 @@
 import fc from 'fast-check';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseAstSource } from '../../src/source/ast/ast-runtime.js';
 import { sourceBindingResolver } from '../../src/source/ast/source-binding-identity.js';
+import * as bindingEffects from '../../src/source/ast/source-binding-effects.js';
+import { parseSourceBindings } from '../../src/source/ast/function-metrics.js';
+import type { ts } from '@ts-morph/common';
 
 function wrap(name: string, form: number): string {
   return [
@@ -24,6 +27,65 @@ function finalCall(source: string) {
 }
 
 describe('TypeScript member write identity', () => {
+  it('prepares aliases, property effects and exported exposure only for their consumers', () => {
+    const parsed = parseSourceBindings(
+      'fixture.ts',
+      [
+        'const service = { run() {} };',
+        'export const box = { service };',
+        'let replaced = service; replaced = service;',
+        'unknown(service);',
+      ].join('\n'),
+    );
+    const declaration = (parsed.sourceFile.statements[0] as ts.VariableStatement).declarationList.declarations[0]!;
+    const lookup = vi.spyOn(parsed.checker, 'getSymbolAtLocation');
+    const exports = vi.spyOn(parsed.checker, 'getExportsOfModule');
+    try {
+      const effects = bindingEffects.sourceBindingEffects(parsed.sourceFile, parsed.checker);
+      expect(effects.written.size).toBe(1);
+      expect(effects.hasWrite(declaration.name, false, [], true)).toBe(false);
+      expect(lookup.mock.calls.some(([node]) => node.getText() === 'unknown')).toBe(false);
+      expect(exports).not.toHaveBeenCalled();
+      expect(effects.hasWrite(declaration.name, true, ['run'], false)).toBe(true);
+      expect(lookup.mock.calls.some(([node]) => node.getText() === 'unknown')).toBe(true);
+      expect(exports).not.toHaveBeenCalled();
+      expect(effects.hasEscapedValue(declaration.name, ['run'])).toBe(true);
+      expect(effects.hasEscapedValue(declaration.name, ['run'])).toBe(true);
+      expect(exports).toHaveBeenCalledTimes(1);
+    } finally {
+      lookup.mockRestore();
+      exports.mockRestore();
+    }
+  });
+
+  it('reads module and local binding identity without preparing mutation analysis', () => {
+    const effects = vi.spyOn(bindingEffects, 'sourceBindingEffects');
+    try {
+      const { target, bindings } = finalCall(
+        'import /* comment */ express from "express"; const service = { run() {} }; service.run = () => 2; service.run();',
+      );
+      expect(bindings.available).toBe(true);
+      expect(bindings.moduleReferences()).toEqual([
+        expect.objectContaining({ specifier: 'express', literal: true, syntax: 'import' }),
+      ]);
+      expect(bindings.hasLocalBinding(target)).toBe(true);
+      expect(effects).not.toHaveBeenCalled();
+      expect(bindings.hasObservedCallableWrite(target)).toBe(true);
+      expect(bindings.hasObservedCallableWrite(target)).toBe(true);
+      expect(effects).toHaveBeenCalledTimes(1);
+    } finally {
+      effects.mockRestore();
+    }
+  });
+
+  it('keeps separately parsed source revisions isolated after lazy mutation analysis', () => {
+    const original = finalCall('const service = { run() {} }; service.run();');
+    const changed = finalCall('const service = { run() {} }; service.run = () => 2; service.run();');
+    expect(original.bindings.moduleReferences()).toEqual([]);
+    expect(changed.bindings.hasObservedCallableWrite(changed.target)).toBe(true);
+    expect(original.bindings.hasObservedCallableWrite(original.target)).toBe(false);
+  });
+
   it.each(['\n// layout\n', '\n\n  ', '\r\n// layout\r\n'])(
     'preserves helper effects after leading trivia %j',
     (prefix) => {

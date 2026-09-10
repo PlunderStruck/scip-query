@@ -4,6 +4,7 @@ import { TextDecoder } from 'node:util';
 import { decodeReindexMetadata } from '../../domain/reindex-metadata.js';
 import { listProjectFiles } from '../../platform/project-files.js';
 import type { ScipDatabase } from '../../storage/db.js';
+import { createPerDbValue } from '../../storage/per-db-cache.js';
 import {
   InputTooLargeError,
   isMissingProjectFileError,
@@ -60,6 +61,15 @@ export interface RepositoryTextScanOptions {
 }
 
 const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
+
+// These views belong to the reader's immutable compiler generation. Current
+// source bytes still have to be read and hashed on every freshness check.
+const INDEXED_DOCUMENTS = createPerDbValue<ReadonlySet<string>>('repository-text-indexed-documents', {
+  clearGroups: [],
+});
+const INDEXED_FINGERPRINTS = createPerDbValue<ReadonlyMap<string, string>>('repository-text-indexed-fingerprints', {
+  clearGroups: [],
+});
 
 /** Enumerate the current project paths used by the lossless path sensor. */
 export function repositoryProjectPaths(db: ScipDatabase): string[] {
@@ -228,20 +238,28 @@ function semanticFreshness(
   };
 }
 
-function indexedDocumentSet(db: ScipDatabase): Set<string> {
-  return new Set(
-    db
-      .all<{
-        relative_path: string;
-      }>(`SELECT documents.relative_path FROM documents WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`)
-      .map((row) => row.relative_path),
+function indexedDocumentSet(db: ScipDatabase): ReadonlySet<string> {
+  return INDEXED_DOCUMENTS.get(
+    db,
+    () =>
+      new Set(
+        db
+          .all<{
+            relative_path: string;
+          }>(`SELECT documents.relative_path FROM documents WHERE 1 = 1 ${db.pathExclusionsFor('documents')}`)
+          .map((row) => row.relative_path),
+      ),
   );
 }
 
-function indexedFingerprintMap(db: ScipDatabase): Map<string, string> {
+function indexedFingerprintMap(db: ScipDatabase): ReadonlyMap<string, string> {
+  return INDEXED_FINGERPRINTS.get(db, () => decodeIndexedFingerprints(db.generation.metadataRaw));
+}
+
+function decodeIndexedFingerprints(metadataRaw: string | undefined): ReadonlyMap<string, string> {
   const result = new Map<string, string>();
-  if (!db.generation.metadataRaw) return result;
-  const decoded = decodeReindexMetadata(db.generation.metadataRaw);
+  if (!metadataRaw) return result;
+  const decoded = decodeReindexMetadata(metadataRaw);
   if (decoded.kind !== 'legacy' && decoded.kind !== 'supported') return result;
   const fingerprint = decoded.metadata.fingerprint;
   if (!isRecord(fingerprint) || !Array.isArray(fingerprint['files'])) return result;

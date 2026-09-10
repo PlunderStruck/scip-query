@@ -447,50 +447,29 @@ function httpExtractor(): BoundaryExtractor {
       };
       const collectMethodCall = (node: SyntaxNode, args: SyntaxNode[], leaf: string): void => {
         if (!HTTP_METHODS.has(leaf)) return;
+        const receiver = httpMethodReceiver(context, node, leaf);
+        if (!receiver) return;
+        // Unrelated get/delete/etc. calls can take large imported schema objects.
+        // Resolve an address only after the receiver establishes HTTP relevance.
         const path = addressedArgument(args[0], context);
         if (!path) return;
-        const method = leaf.toUpperCase();
-        const functionNode = node.childForFieldName('function');
-        const receiverNode = functionNode?.childForFieldName('object');
-        const factory =
-          receiverNode && sourceBindingResolver(context.file, context.root).constructedValue(receiverNode);
-        const frameworkHandler = factory && HTTP_ROUTER_FACTORIES.get(factory.module)?.has(factory.member);
-        if (frameworkHandler) {
-          observations.push(
-            observation(
-              context,
-              node,
-              'builtin.http',
-              'http.handle',
-              [
-                { name: 'method', value: method, evidence: 'literal' },
-                { name: 'path', ...path },
-                { name: 'router', ...runtimeBindingIdentity(context, receiverNode!) },
-              ],
-              resolvedStrength([{ name: 'path', ...path }]),
-              'framework-adapter',
-            ),
-          );
-          return;
-        }
-        const target = node.childForFieldName('function');
-        const imported = target && sourceBindingResolver(context.file, context.root).importedValue(target);
-        if (imported?.module === 'axios' && imported.member === leaf) {
-          observations.push(
-            observation(
-              context,
-              node,
-              'builtin.http',
-              'http.request',
-              [
-                { name: 'method', value: method, evidence: 'literal' },
-                { name: 'path', ...path },
-              ],
-              resolvedStrength([{ name: 'path', ...path }]),
-              'client-adapter',
-            ),
-          );
-        }
+        observations.push(
+          observation(
+            context,
+            node,
+            'builtin.http',
+            receiver.action,
+            [
+              { name: 'method', value: leaf.toUpperCase(), evidence: 'literal' },
+              { name: 'path', ...path },
+              ...(receiver.action === 'http.handle'
+                ? [{ name: 'router', ...runtimeBindingIdentity(context, receiver.router) }]
+                : []),
+            ],
+            resolvedStrength([{ name: 'path', ...path }]),
+            receiver.evidence,
+          ),
+        );
       };
       visitDescendantsOfType(context.root, ['decorator', 'call_expression'], (node) => {
         if (node.type === 'decorator') return collectDecorator(node);
@@ -506,6 +485,27 @@ function httpExtractor(): BoundaryExtractor {
       return observations;
     },
   };
+}
+
+function httpMethodReceiver(
+  context: BoundaryFileContext,
+  node: SyntaxNode,
+  leaf: string,
+):
+  | { action: 'http.handle'; evidence: 'framework-adapter'; router: SyntaxNode }
+  | { action: 'http.request'; evidence: 'client-adapter' }
+  | null {
+  const target = node.childForFieldName('function');
+  if (!target) return null;
+  const bindings = sourceBindingResolver(context.file, context.root);
+  const router = target.childForFieldName('object');
+  const factory = router && bindings.constructedValue(router);
+  if (factory && HTTP_ROUTER_FACTORIES.get(factory.module)?.has(factory.member))
+    return { action: 'http.handle', evidence: 'framework-adapter', router: router! };
+  const imported = bindings.importedValue(target);
+  return imported?.module === 'axios' && imported.member === leaf
+    ? { action: 'http.request', evidence: 'client-adapter' }
+    : null;
 }
 
 function capabilityRegistryExtractor(): BoundaryExtractor {
@@ -550,9 +550,10 @@ function appendCapabilityDescriptor(
   const valueNode = node.childForFieldName('value') ?? node.namedChild(1);
   const field = keyNode?.text.replace(/^['"`]|['"`]$/gu, '');
   if (field !== 'name' && field !== 'id') return;
-  const key = registryKey(valueNode, context);
   const handler = capabilityDescriptorHandler(node);
-  if (!key || key.evidence !== 'literal' || !handler) return;
+  if (!handler) return;
+  const key = registryKey(valueNode, context);
+  if (!key || key.evidence !== 'literal') return;
   const identity = `handle\0${key.value}\0${handler.startPosition.row}`;
   if (seen.has(identity)) return;
   seen.add(identity);

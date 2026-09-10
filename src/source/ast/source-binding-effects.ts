@@ -13,22 +13,86 @@ import {
 /** One file's conservative write model. Aliases identify possible shared values, not execution order. */
 export function sourceBindingEffects(sourceFile: ts.SourceFile, checker: ts.TypeChecker) {
   const written = new Set<ts.Declaration>();
-  const aliases = new Map<ts.Declaration, AliasSource[]>();
-  const propertyWrites = new Map<ts.Declaration, PropertyEffect[]>();
-  const memberWrites: ts.Node[] = [];
-  const calls: Array<ts.CallExpression | ts.NewExpression> = [];
   const visit = (node: ts.Node): void => {
     for (const target of assignedIdentifiers(node)) {
       const binding = accessBinding(target, checker);
       if (binding) written.add(binding);
     }
+    if (ts.isCallExpression(node)) collectDirectEvalBindings(node, checker, written);
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  // Reassignment checks need no object graph. Build each broader proof only
+  // when requested, retaining the same immutable source/checker lifetime.
+  let aliasState: ReturnType<typeof collectAliasState> | undefined;
+  const state = () => (aliasState ??= collectAliasState(sourceFile, checker));
+  let propertyWrites: Map<ts.Declaration, PropertyEffect[]> | undefined;
+  const writes = () => (propertyWrites ??= collectPropertyWrites(state(), checker));
+  let escaped: Array<Pick<BindingAccess, 'binding' | 'path'>> | undefined;
+  const exposures = () => (escaped ??= exportedAliasAccesses(sourceFile, checker, state().aliases));
+  return {
+    written,
+    hasEscapedValue(expression: ts.Node, memberPath: readonly string[]): boolean {
+      return possibleBindingAccesses(expression, checker, state().aliases, new Set(), memberPath).some((origin) =>
+        exposures().some(
+          (exposure) =>
+            exposure.binding === origin.binding &&
+            exposure.path.length <= origin.path.length &&
+            memberPathsOverlap(exposure.path, origin.path),
+        ),
+      );
+    },
+    usesParameter(node: ts.Node): boolean {
+      return possibleBindingAccesses(node, checker, state().aliases).some(({ binding }) =>
+        isParameterDeclaration(binding),
+      );
+    },
+    hasWrite(
+      expression: ts.Node,
+      includeProperties: boolean,
+      memberPath: readonly string[],
+      contents: boolean,
+      observedAt: ts.Node | null = expression,
+    ): boolean | undefined {
+      const access = bindingAccess(expression, checker, written);
+      if (!access) return undefined;
+      return (
+        access.reassigned ||
+        (includeProperties &&
+          possibleBindingAccesses(expression, checker, state().aliases, new Set(), memberPath).some((origin) =>
+            (writes().get(origin.binding) ?? []).some(
+              (effect) =>
+                (!observedAt ||
+                  !(effect.source.getStart() <= observedAt.getStart() && effect.source.end >= observedAt.end)) &&
+                (contents || effect.path.length <= origin.path.length) &&
+                memberPathsOverlap(effect.path, origin.path),
+            ),
+          ))
+      );
+    },
+  };
+}
+
+function collectAliasState(sourceFile: ts.SourceFile, checker: ts.TypeChecker) {
+  const aliases = new Map<ts.Declaration, AliasSource[]>();
+  const memberWrites: ts.Node[] = [];
+  const calls: Array<ts.CallExpression | ts.NewExpression> = [];
+  const visit = (node: ts.Node): void => {
     collectAliasSources(node, checker, aliases);
     memberWrites.push(...assignedProperties(node));
     if (ts.isCallExpression(node) || ts.isNewExpression(node)) calls.push(node);
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  for (const call of calls) collectDirectEvalBindings(call, checker, written);
+  for (const call of calls) collectCallBindings(call, checker, aliases);
+  return { aliases, memberWrites, calls };
+}
+
+function collectPropertyWrites(
+  { aliases, memberWrites, calls }: ReturnType<typeof collectAliasState>,
+  checker: ts.TypeChecker,
+): Map<ts.Declaration, PropertyEffect[]> {
+  const propertyWrites = new Map<ts.Declaration, PropertyEffect[]>();
   const record = (target: ts.Node, path: MemberPath, source: ts.Node, unknown: boolean): void => {
     for (const access of possibleBindingAccesses(target, checker, aliases, new Set(), path)) {
       const recorded = propertyWrites.get(access.binding) ?? [];
@@ -36,8 +100,6 @@ export function sourceBindingEffects(sourceFile: ts.SourceFile, checker: ts.Type
       propertyWrites.set(access.binding, recorded);
     }
   };
-  for (const call of calls) collectCallBindings(call, checker, aliases);
-  const escaped = exportedAliasAccesses(sourceFile, checker, aliases);
   for (const target of memberWrites) record(target, [], target, false);
   for (const call of calls)
     for (const effect of callEffects(call, checker)) {
@@ -57,45 +119,7 @@ export function sourceBindingEffects(sourceFile: ts.SourceFile, checker: ts.Type
         propertyWrites.set(access.binding, recorded);
       }
     }
-  return {
-    written,
-    hasEscapedValue(expression: ts.Node, memberPath: readonly string[]): boolean {
-      return possibleBindingAccesses(expression, checker, aliases, new Set(), memberPath).some((origin) =>
-        escaped.some(
-          (exposure) =>
-            exposure.binding === origin.binding &&
-            exposure.path.length <= origin.path.length &&
-            memberPathsOverlap(exposure.path, origin.path),
-        ),
-      );
-    },
-    usesParameter(node: ts.Node): boolean {
-      return possibleBindingAccesses(node, checker, aliases).some(({ binding }) => isParameterDeclaration(binding));
-    },
-    hasWrite(
-      expression: ts.Node,
-      includeProperties: boolean,
-      memberPath: readonly string[],
-      contents: boolean,
-      observedAt: ts.Node | null = expression,
-    ): boolean | undefined {
-      const access = bindingAccess(expression, checker, written);
-      if (!access) return undefined;
-      return (
-        access.reassigned ||
-        (includeProperties &&
-          possibleBindingAccesses(expression, checker, aliases, new Set(), memberPath).some((origin) =>
-            (propertyWrites.get(origin.binding) ?? []).some(
-              (effect) =>
-                (!observedAt ||
-                  !(effect.source.getStart() <= observedAt.getStart() && effect.source.end >= observedAt.end)) &&
-                (contents || effect.path.length <= origin.path.length) &&
-                memberPathsOverlap(effect.path, origin.path),
-            ),
-          ))
-      );
-    },
-  };
+  return propertyWrites;
 }
 
 /** A second exported route to an object defeats a proof based only on direct imports of its binding. */

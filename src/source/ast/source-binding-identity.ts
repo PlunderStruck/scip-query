@@ -53,27 +53,24 @@ const cache = new WeakMap<SyntaxNode, SourceBindingResolver>();
 export function sourceBindingResolver(file: string, root: SyntaxNode): SourceBindingResolver {
   const cached = cache.get(root);
   if (cached) return cached;
-  const identifiers = new Map<number, ts.Identifier>();
-  const expressions = new Map<string, ts.Node>();
-  const syntax = new Map<string, SyntaxNode>();
-  const collectSyntax = (node: SyntaxNode): void => {
-    syntax.set(`${node.startIndex - root.startIndex}:${node.endIndex - root.startIndex}`, node);
-    for (const child of node.namedChildren) collectSyntax(child);
-  };
-  collectSyntax(root);
   const parsed = SUPPORTED_EXTENSIONS.has(extname(file)) ? parseSourceBindings(file, root.text) : null;
-  const effects = parsed && parsed.errors.length === 0 ? sourceBindingEffects(parsed.sourceFile, parsed.checker) : null;
-  const written = effects?.written ?? new Set<ts.Declaration>();
-  if (effects && parsed) {
-    const visit = (node: ts.Node): void => {
-      if (ts.isIdentifier(node)) identifiers.set(node.getStart(parsed.sourceFile) + root.startIndex, node);
-      expressions.set(`${node.getStart(parsed.sourceFile) + root.startIndex}:${node.end + root.startIndex}`, node);
-      ts.forEachChild(node, visit);
-    };
-    visit(parsed.sourceFile);
-  }
+  const valid = parsed && parsed.errors.length === 0 ? parsed : null;
+  // Module references and declaration identity do not need mutation analysis or
+  // a reverse map of every parser node. Prepare each view only for its consumers.
+  let indexedNodes: ReturnType<typeof indexBindingNodes> | undefined;
+  const nodes = () => (indexedNodes ??= indexBindingNodes(root, valid));
+  let indexedSyntax: Map<string, SyntaxNode> | undefined;
+  const syntax = () => (indexedSyntax ??= indexSourceSyntax(root));
+  let computedEffects: ReturnType<typeof sourceBindingEffects> | null | undefined;
+  const effects = () =>
+    computedEffects === undefined
+      ? (computedEffects = valid ? sourceBindingEffects(valid.sourceFile, valid.checker) : null)
+      : computedEffects;
+  const noWrites = new Set<ts.Declaration>();
+  const written = () => effects()?.written ?? noWrites;
+  const expressionFor = (node: SyntaxNode) => nodes().expressions.get(`${node.startIndex}:${node.endIndex}`);
   const declaration = (node: SyntaxNode): ts.Declaration | undefined => {
-    const identifier = identifiers.get(node.startIndex);
+    const identifier = nodes().identifiers.get(node.startIndex);
     if (!identifier || !parsed) return undefined;
     return accessBinding(identifier, parsed.checker);
   };
@@ -84,13 +81,11 @@ export function sourceBindingResolver(file: string, root: SyntaxNode): SourceBin
     contents = true,
     observedAt: SyntaxNode | null = node,
   ): boolean => {
-    const expression = expressions.get(`${node.startIndex}:${node.endIndex}`);
+    const expression = expressionFor(node);
     if (!expression || !parsed) return false;
-    const observation = observedAt
-      ? (expressions.get(`${observedAt.startIndex}:${observedAt.endIndex}`) ?? expression)
-      : null;
+    const observation = observedAt ? (expressionFor(observedAt) ?? expression) : null;
     return (
-      effects?.hasWrite(expression, includeProperties, memberPath, contents, observation) ??
+      effects()?.hasWrite(expression, includeProperties, memberPath, contents, observation) ??
       !!declaration(accessBase(node))
     );
   };
@@ -111,28 +106,28 @@ export function sourceBindingResolver(file: string, root: SyntaxNode): SourceBin
         !ts.isVariableDeclaration(binding) ||
         !binding.initializer ||
         !(binding.parent.flags & ts.NodeFlags.Const) ||
-        written.has(binding)
+        written().has(binding)
       )
         return null;
-      return syntax.get(`${binding.initializer.getStart()}:${binding.initializer.end}`) ?? null;
+      return syntax().get(`${binding.initializer.getStart()}:${binding.initializer.end}`) ?? null;
     },
     callableValue(node) {
-      const expression = expressions.get(`${node.startIndex}:${node.endIndex}`);
+      const expression = expressionFor(node);
       if (!expression || !parsed) return null;
-      const binding = aliasedDeclaration(expression, parsed.checker, written);
+      const binding = aliasedDeclaration(expression, parsed.checker, written());
       const value = binding && ts.isVariableDeclaration(binding) ? binding.initializer : binding;
-      return callableSourceNode(value, syntax);
+      return callableSourceNode(value, syntax());
     },
     hasObservedWrite: observedWrite,
     hasEscapedValue(node, memberPath) {
-      const expression = expressions.get(`${node.startIndex}:${node.endIndex}`);
-      return !!expression && !!effects?.hasEscapedValue(expression, memberPath);
+      const expression = expressionFor(node);
+      return !!expression && !!effects()?.hasEscapedValue(expression, memberPath);
     },
     hasObservedCallableWrite(node, memberPath = [], observedAt = node) {
       return observedWrite(node, true, memberPath, false, observedAt);
     },
     callableParameters(node) {
-      const matches = [...expressions.values()].filter(
+      const matches = [...nodes().expressions.values()].filter(
         (candidate) =>
           ts.isFunctionLike(candidate) &&
           candidate.end + root.startIndex === node.endIndex &&
@@ -152,17 +147,17 @@ export function sourceBindingResolver(file: string, root: SyntaxNode): SourceBin
         );
     },
     hasLocalBinding(node) {
-      const identifier = identifiers.get(accessBase(node).startIndex);
+      const identifier = nodes().identifiers.get(accessBase(node).startIndex);
       return !!identifier && !!parsed?.checker.getSymbolAtLocation(identifier)?.declarations?.length;
     },
     isParameterBinding(node) {
-      const expression = expressions.get(`${node.startIndex}:${node.endIndex}`);
-      return !!expression && !!effects?.usesParameter(expression);
+      const expression = expressionFor(node);
+      return !!expression && !!effects()?.usesParameter(expression);
     },
     valueDeclaration(node) {
       if (!parsed) return null;
-      const expression = expressions.get(`${node.startIndex}:${node.endIndex}`);
-      const binding = expression && aliasedDeclaration(expression, parsed.checker, written);
+      const expression = expressionFor(node);
+      const binding = expression && aliasedDeclaration(expression, parsed.checker, written());
       if (!binding || !ts.isVariableDeclaration(binding) || !ts.isIdentifier(binding.name)) return null;
       const start = parsed.sourceFile.getLineAndCharacterOfPosition(binding.getStart());
       const end = parsed.sourceFile.getLineAndCharacterOfPosition(binding.end);
@@ -175,11 +170,11 @@ export function sourceBindingResolver(file: string, root: SyntaxNode): SourceBin
       };
     },
     importedValue(node) {
-      const expression = expressions.get(`${node.startIndex}:${node.endIndex}`);
+      const expression = expressionFor(node);
       return expression && parsed ? importedExpression(expression, parsed.checker, new Set()) : null;
     },
     constructedValue(node) {
-      const expression = expressions.get(`${node.startIndex}:${node.endIndex}`);
+      const expression = expressionFor(node);
       return expression && parsed ? constructedExpression(expression, parsed.checker, new Set()) : null;
     },
     resource(node) {
@@ -194,39 +189,64 @@ export function sourceBindingResolver(file: string, root: SyntaxNode): SourceBin
       };
     },
     isCaptured(node) {
-      const identifier = identifiers.get(node.startIndex);
+      const identifier = nodes().identifiers.get(node.startIndex);
       const binding = declaration(node);
       const declaringCallable = binding && enclosingCallable(binding);
       const usingCallable = identifier && enclosingCallable(identifier);
       return !!declaringCallable && !!usingCallable && declaringCallable !== usingCallable;
     },
     directParameterPosition(node) {
-      const expression = expressions.get(`${node.startIndex}:${node.endIndex}`);
+      const expression = expressionFor(node);
       const identifier = expression && unwrapBindingExpression(expression);
       if (!identifier || !ts.isIdentifier(identifier) || !parsed) return null;
-      const binding = aliasedDeclaration(identifier, parsed.checker, written);
+      const binding = aliasedDeclaration(identifier, parsed.checker, written());
       if (!binding || !ts.isParameter(binding) || !ts.isIdentifier(binding.name)) return null;
-      if (enclosingCallable(identifier) !== binding.parent || written.has(binding)) return null;
+      if (enclosingCallable(identifier) !== binding.parent || written().has(binding)) return null;
       const parameters = binding.parent.parameters.filter((parameter) => parameter.name.getText() !== 'this');
       const position = parameters.indexOf(binding);
       return position >= 0 ? position : null;
     },
     tupleElements(node) {
-      const original = expressions.get(`${node.startIndex}:${node.endIndex}`);
+      const original = expressionFor(node);
       if (!original || !parsed || observedWrite(node, true)) return null;
-      const value = constantValueExpression(original, parsed.checker, written);
+      const value = constantValueExpression(original, parsed.checker, written());
       if (
         !value ||
         !ts.isArrayLiteralExpression(value) ||
         value.elements.some((element) => ts.isSpreadElement(element) || ts.isOmittedExpression(element))
       )
         return null;
-      const elements = value.elements.map((element) => syntax.get(`${element.getStart()}:${element.end}`));
+      const elements = value.elements.map((element) => syntax().get(`${element.getStart()}:${element.end}`));
       return elements.every((element): element is SyntaxNode => !!element) ? elements : null;
     },
   };
   cache.set(root, resolver);
   return resolver;
+}
+
+function indexBindingNodes(root: SyntaxNode, parsed: ReturnType<typeof parseSourceBindings> | null) {
+  const identifiers = new Map<number, ts.Identifier>();
+  const expressions = new Map<string, ts.Node>();
+  if (parsed) {
+    const visit = (node: ts.Node): void => {
+      const start = node.getStart(parsed.sourceFile) + root.startIndex;
+      if (ts.isIdentifier(node)) identifiers.set(start, node);
+      expressions.set(`${start}:${node.end + root.startIndex}`, node);
+      ts.forEachChild(node, visit);
+    };
+    visit(parsed.sourceFile);
+  }
+  return { identifiers, expressions };
+}
+
+function indexSourceSyntax(root: SyntaxNode): Map<string, SyntaxNode> {
+  const syntax = new Map<string, SyntaxNode>();
+  const visit = (node: SyntaxNode): void => {
+    syntax.set(`${node.startIndex - root.startIndex}:${node.endIndex - root.startIndex}`, node);
+    for (const child of node.namedChildren) visit(child);
+  };
+  visit(root);
+  return syntax;
 }
 
 type ImportedValue = ReturnType<SourceBindingResolver['importedValue']>;

@@ -1,0 +1,150 @@
+{
+  "project": "LaunchPoint backend t3code-66bd3d33",
+  "sourceIdentity": "de015e5b1ee71c8ecfeb048af4a6a9361fa652434c2d9a69e6d9e10947999ad4",
+  "conditions": {
+    "sourceFiles": 9296,
+    "compilerDatabase": "independent SQLite snapshots of the same accepted generation",
+    "evidenceCache": "empty at start of each process",
+    "sharedCache": false,
+    "cpuProfiler": "enabled for both runs",
+    "warmMeasurement": "forced second collector sweep; not the unchanged reindex fast path",
+    "sourceUnchangedDuringEachRun": true
+  },
+  "before": {
+    "durationMs": 809708.800441,
+    "warmMs": 218196.371423,
+    "counts": {
+      "observations": 7185,
+      "links": 2,
+      "groups": 666,
+      "frontiers": 6232,
+      "errors": 0
+    }
+  },
+  "after": {
+    "durationMs": 306522.860296,
+    "warmMs": 22718.011405999947,
+    "counts": {
+      "observations": 7185,
+      "links": 2,
+      "groups": 666,
+      "frontiers": 6232,
+      "errors": 0
+    }
+  },
+  "runtimeSpeedup": 2.6415935165784643,
+  "warmSweepSpeedup": 9.604554180537702,
+  "beforePhases": [
+    {
+      "id": "direct-extraction",
+      "durationMs": 153035.711562,
+      "inputFacts": 9296,
+      "outputFacts": 7101,
+      "filesVisited": 9296,
+      "filesReused": 0,
+      "factsReused": 0,
+      "factsInvalidated": 0
+    },
+    {
+      "id": "http-summary",
+      "durationMs": 251155.23402199996,
+      "inputFacts": 7103,
+      "outputFacts": 82,
+      "filesVisited": 295
+    },
+    {
+      "id": "http-mount",
+      "durationMs": 200465.68146700005,
+      "inputFacts": 7185,
+      "outputFacts": 0,
+      "filesVisited": 9296
+    },
+    {
+      "id": "carrier",
+      "durationMs": 204839.02701700001,
+      "inputFacts": 7185,
+      "outputFacts": 0,
+      "filesVisited": 189
+    },
+    {
+      "id": "relations",
+      "durationMs": 5.237636000034399,
+      "inputFacts": 7185,
+      "outputFacts": 666
+    },
+    {
+      "id": "links",
+      "durationMs": 0.888024999992922,
+      "inputFacts": 666,
+      "outputFacts": 2
+    },
+    {
+      "id": "frontiers",
+      "durationMs": 185.58597000001464,
+      "inputFacts": 7185,
+      "outputFacts": 6232
+    }
+  ],
+  "afterPhases": [
+    {
+      "id": "direct-extraction",
+      "durationMs": 123842.24851599999,
+      "inputFacts": 9296,
+      "outputFacts": 7101,
+      "filesVisited": 9296,
+      "filesReused": 0,
+      "factsReused": 0,
+      "factsInvalidated": 0
+    },
+    {
+      "id": "http-summary",
+      "durationMs": 145959.046675,
+      "inputFacts": 7103,
+      "outputFacts": 82,
+      "filesVisited": 295
+    },
+    {
+      "id": "http-mount",
+      "durationMs": 15467.74728000001,
+      "inputFacts": 7185,
+      "outputFacts": 0,
+      "filesVisited": 9296
+    },
+    {
+      "id": "carrier",
+      "durationMs": 21036.427260999975,
+      "inputFacts": 7185,
+      "outputFacts": 0,
+      "filesVisited": 189
+    },
+    {
+      "id": "relations",
+      "durationMs": 5.401722000038717,
+      "inputFacts": 7185,
+      "outputFacts": 666
+    },
+    {
+      "id": "links",
+      "durationMs": 0.9597109999740496,
+      "inputFacts": 666,
+      "outputFacts": 2
+    },
+    {
+      "id": "frontiers",
+      "durationMs": 185.90408899995964,
+      "inputFacts": 7185,
+      "outputFacts": 6232
+    }
+  ],
+  "equality": {
+    "schemaVersion": true,
+    "extractorVersion": true,
+    "observations": true,
+    "relationGroups": true,
+    "links": true,
+    "frontiers": true,
+    "fileCoverage": true,
+    "coverageExceptPhaseWork": true
+  },
+  "semanticGraphSha256": "dbed5ad746f476869a3af16a2bb9aed78381919e0df8c83a1447053a72e15e05"
+}

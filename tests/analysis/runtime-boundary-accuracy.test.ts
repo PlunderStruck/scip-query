@@ -1,7 +1,8 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import * as staticValueFlow from '../../src/symbols/graph/static-value-flow.js';
 import { collectRuntimeBoundaryGraph } from '../../src/analysis/runtime-boundaries/graph.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
@@ -24,6 +25,55 @@ async function graph(source: string[]) {
 }
 
 describe('runtime boundary identity and binding accuracy', () => {
+  it('does not evaluate descriptor identities without a capability handler', async () => {
+    const evaluate = vi.spyOn(staticValueFlow, 'evaluateStaticValue');
+    try {
+      const result = await graph([
+        'import { unrelatedName } from "./schema";',
+        'const display = { name: unrelatedName };',
+        'const capability = { name: "actual", execute() {} };',
+      ]);
+      expect(result.observations.filter((item) => item.evidence === 'capability-descriptor')).toHaveLength(1);
+      expect(evaluate.mock.calls.some(([, node]) => node?.text === 'unrelatedName')).toBe(false);
+      expect(evaluate.mock.calls.some(([, node]) => node?.text === '"actual"')).toBe(true);
+    } finally {
+      evaluate.mockRestore();
+    }
+  });
+
+  it('does not evaluate addresses for unrelated methods named like HTTP verbs', async () => {
+    const evaluate = vi.spyOn(staticValueFlow, 'evaluateStaticValue');
+    try {
+      const result = await graph([
+        'import axios from "axios";',
+        'import { unrelatedSchema } from "./schema";',
+        'const collection = new Map();',
+        'collection.get(unrelatedSchema);',
+        'axios.get("/actual");',
+      ]);
+      expect(result.observations.filter((item) => item.action === 'http.request')).toHaveLength(1);
+      expect(evaluate.mock.calls.some(([, node]) => node?.text === 'unrelatedSchema')).toBe(false);
+      expect(evaluate.mock.calls.some(([, node]) => node?.text === '"/actual"')).toBe(true);
+    } finally {
+      evaluate.mockRestore();
+    }
+  });
+
+  it('retains unresolved mount evidence even when there are no known HTTP handlers', async () => {
+    const result = await graph([
+      'import express from "express";',
+      'const app = express();',
+      'app.use("/api", buildRouter());',
+    ]);
+    expect(result.observations.filter((item) => item.action === 'http.handle')).toEqual([]);
+    expect(result.frontiers).toContainEqual(
+      expect.objectContaining({
+        reason: 'http-mount-target-unresolved',
+        source: expect.objectContaining({ startLine: 2 }),
+      }),
+    );
+  });
+
   it('retains repeated operations on one line', async () => {
     const result = await graph(['export function run() { fetch("/same"); fetch("/same"); }']);
     const calls = result.observations.filter((observation) => observation.action === 'http.request');

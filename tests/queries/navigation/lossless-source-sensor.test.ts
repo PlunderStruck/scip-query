@@ -2,13 +2,14 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { outline } from '../../../src/queries/navigation/outline.js';
 import { codeBatch } from '../../../src/queries/navigation/code.js';
 import { files } from '../../../src/queries/navigation/files.js';
 import { searchSourceBatch } from '../../../src/queries/navigation/source-search-batch.js';
 import { searchSource } from '../../../src/queries/navigation/source-search.js';
-import { scanRepositoryText } from '../../../src/source/primitives/repository-text.js';
+import { readRepositoryTextFile, scanRepositoryText } from '../../../src/source/primitives/repository-text.js';
+import * as reindexMetadata from '../../../src/domain/reindex-metadata.js';
 import { ScipDatabase } from '../../../src/storage/db.js';
 import { evidenceFixtureDb } from '../../fixtures/evidence-fixture.js';
 
@@ -69,8 +70,41 @@ describe('lossless repository text sensor', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     db.close();
     rmSync(fixtureRoot, { recursive: true, force: true });
+  });
+
+  it('reuses immutable index metadata while checking each current source read', () => {
+    const decode = vi.spyOn(reindexMetadata, 'decodeReindexMetadata');
+    const queries = vi.spyOn(db, 'all');
+    for (let i = 0; i < 20; i++) {
+      expect(readRepositoryTextFile(db, 'src/aligned.ts')?.freshness.semantic.state).toBe('aligned');
+    }
+    writeSource('src/aligned.ts', "export const indexedMarker = 'changed';\n");
+    expect(readRepositoryTextFile(db, 'src/aligned.ts')?.freshness.semantic.state).toBe('stale');
+    writeSource('src/aligned.ts', sources['src/aligned.ts']);
+    expect(readRepositoryTextFile(db, 'src/aligned.ts')?.freshness.semantic.state).toBe('aligned');
+    expect(readRepositoryTextFile(db, 'docs/architecture.md')?.freshness.semantic.basis).toBe('no-compiler-document');
+    expect(decode).toHaveBeenCalledTimes(1);
+    expect(queries.mock.calls.filter(([sql]) => sql.startsWith('SELECT documents.relative_path'))).toHaveLength(1);
+  });
+
+  it('keeps cached source fingerprints scoped to the reader that owns them', () => {
+    expect(readRepositoryTextFile(db, 'src/aligned.ts')?.freshness.semantic.state).toBe('aligned');
+    const changed = "export const indexedMarker = 'changed';\n";
+    writeSource('src/aligned.ts', changed);
+    const metaPath = join(fixtureRoot, 'meta.json');
+    const metadata = JSON.parse(readFileSync(metaPath, 'utf8'));
+    metadata.fingerprint.files[0].hash = sha256(Buffer.from(changed));
+    writeFileSync(metaPath, JSON.stringify(metadata));
+    const nextReader = new ScipDatabase(db.config);
+    try {
+      expect(readRepositoryTextFile(nextReader, 'src/aligned.ts')?.freshness.semantic.state).toBe('aligned');
+      expect(readRepositoryTextFile(db, 'src/aligned.ts')?.freshness.semantic.state).toBe('stale');
+    } finally {
+      nextReader.close();
+    }
   });
 
   it('keeps exact range reads local unless call expansion is explicitly requested', () => {
