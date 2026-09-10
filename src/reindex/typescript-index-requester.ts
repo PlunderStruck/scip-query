@@ -19,10 +19,12 @@ import {
   enqueueBoundedMailboxRequest,
   type BoundedMailboxLimits,
 } from '../storage/bounded-mailbox.js';
+import type { TypeScriptDocumentBlobReference } from './typescript-document-blob.js';
 import type { TypeScriptDocumentFragment } from './typescript-document-emitter.js';
 import {
   TYPESCRIPT_INDEX_PROTOCOL_VERSION,
   typeScriptIndexMailboxPaths,
+  validTypeScriptDocumentReferences,
   type TypeScriptIndexDocumentRequest,
   type TypeScriptIndexDocumentResponse,
 } from './typescript-index-protocol.js';
@@ -61,6 +63,7 @@ export interface RequestedTypeScriptDocuments {
   cold: boolean;
   durationMs: number;
   fragments: TypeScriptDocumentFragment[];
+  retainedDocuments?: TypeScriptDocumentBlobReference[];
 }
 
 export class TypeScriptIndexRequester {
@@ -100,7 +103,7 @@ export class TypeScriptIndexRequester {
     const enqueuedAtMs = this.runtime.now();
     const deadlineAtMs = enqueuedAtMs + this.timeoutMs;
     const monotonicDeadlineAtMs = (this.runtime.monotonicNow ?? monotonicNowMs)() + this.timeoutMs;
-    const operationKey = boundedMailboxOperationKey('typescript-index-v5', {
+    const operationKey = boundedMailboxOperationKey('typescript-index-v6', {
       baseGeneration: this.baseGeneration,
       request,
     });
@@ -132,8 +135,7 @@ export class TypeScriptIndexRequester {
             id,
             operationKey,
             this.baseGeneration,
-            request.producerIdentity,
-            request.affectedFiles,
+            request,
           );
         } finally {
           // Index fragments can be tens of MiB. The synchronous requester is
@@ -162,8 +164,7 @@ export class TypeScriptIndexRequester {
           id,
           operationKey,
           this.baseGeneration,
-          request.producerIdentity,
-          request.affectedFiles,
+          request,
         );
       } finally {
         rmSync(admitted.responsePath, { force: true });
@@ -195,7 +196,7 @@ export class TypeScriptIndexRequester {
       );
     }
     if (this.emitLocally) {
-      return documentsFromResponse(this.emitLocally(request), request.producerIdentity, request.affectedFiles);
+      return documentsFromResponse(this.emitLocally(request), request);
     }
     this.localHost ??= new TypeScriptIndexServiceHost({
       projectRoot: this.projectRoot,
@@ -203,8 +204,7 @@ export class TypeScriptIndexRequester {
     });
     return documentsFromResponse(
       decodeDocumentResponse(this.localHost.handle(this.baseGeneration, request), request.producerIdentity),
-      request.producerIdentity,
-      request.affectedFiles,
+      request,
     );
   }
 }
@@ -233,8 +233,7 @@ function parseResponse(
   id: string,
   operationKey: string,
   baseGeneration: string,
-  producerIdentity: string,
-  affectedFiles: readonly string[],
+  request: TypeScriptIndexDocumentRequest,
 ): RequestedTypeScriptDocuments {
   const response = JSON.parse(raw) as {
     ok?: unknown;
@@ -258,11 +257,7 @@ function parseResponse(
     if (isMemoryPressureReason(reason)) throw new TypeScriptIndexMemoryPressureError(reason);
     throw new Error(reason);
   }
-  return documentsFromResponse(
-    decodeDocumentResponse(response.response, producerIdentity),
-    producerIdentity,
-    affectedFiles,
-  );
+  return documentsFromResponse(decodeDocumentResponse(response.response, request.producerIdentity), request);
 }
 
 function isMemoryPressureReason(reason: string): boolean {
@@ -277,14 +272,25 @@ function isMemoryPressureReason(reason: string): boolean {
 
 function documentsFromResponse(
   decoded: RequestedTypeScriptDocuments,
-  producerIdentity: string,
-  affectedFiles: readonly string[],
+  request: TypeScriptIndexDocumentRequest,
 ): RequestedTypeScriptDocuments {
-  if (decoded.producerIdentity !== producerIdentity) {
+  if (decoded.producerIdentity !== request.producerIdentity) {
     throw new Error('TypeScript index service wrote an invalid response.');
   }
-  const expected = [...new Set(affectedFiles)].sort();
-  const actual = decoded.fragments.map((fragment) => fragment.relativePath).sort();
+  if (!validTypeScriptDocumentReferences(decoded.retainedDocuments, request.affectedFiles)) {
+    throw new Error('TypeScript index service wrote invalid retained documents.');
+  }
+  const known = new Map(request.knownDocuments?.map((entry) => [entry.relativePath, entry]));
+  for (const retained of decoded.retainedDocuments ?? []) {
+    const prior = known.get(retained.relativePath);
+    if (!prior || prior.blobHash !== retained.blobHash || prior.byteLength !== retained.byteLength) {
+      throw new Error('TypeScript index service retained a document the requester does not hold.');
+    }
+  }
+  const expected = [...new Set(request.affectedFiles)].sort();
+  const actual = [...decoded.fragments, ...(decoded.retainedDocuments ?? [])]
+    .map((fragment) => fragment.relativePath)
+    .sort();
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error('TypeScript index service omitted or added an affected document.');
   }
@@ -336,6 +342,7 @@ function decodeDocumentResponse(value: unknown, producerIdentity: string): Reque
     cold: response.cold,
     durationMs: response.durationMs,
     fragments,
+    ...(response.retainedDocuments === undefined ? {} : { retainedDocuments: response.retainedDocuments }),
   };
 }
 

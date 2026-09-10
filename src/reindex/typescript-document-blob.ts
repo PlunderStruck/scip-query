@@ -4,6 +4,13 @@ import { deflateRawSync, inflateRawSync } from 'node:zlib';
 import { readFileWithinLimit, SOURCE_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
 import { sha256Hex } from '../storage/evidence-cache.js';
 
+/** A serialized document already held by the receiver, identified by its exact bytes. */
+export interface TypeScriptDocumentBlobReference {
+  relativePath: string;
+  blobHash: string;
+  byteLength: number;
+}
+
 /** Write a content-addressed SCIP document blob, or verify the existing hash. */
 export function persistHashedScipDocumentBlob(input: {
   blobDir: string;
@@ -41,16 +48,26 @@ export class TypeScriptFragmentCache {
   ) {}
 
   get(path: string): Uint8Array | null | undefined {
+    return this.lookup(path)?.read();
+  }
+
+  /** Metadata lookup does not inflate bytes; the reader survives later eviction. */
+  lookup(path: string): { blobHash: string | null; byteLength: number; read(): Uint8Array | null } | undefined {
     const value = this.values.get(path) ?? this.pending.get(path);
     if (value === undefined) return undefined;
     this.pending.delete(path);
     this.values.delete(path);
     this.values.set(path, value);
-    return value.compressed
-      ? inflateRawSync(value.bytes!, { maxOutputLength: value.length })
-      : value.bytes === null
-        ? null
-        : Uint8Array.from(value.bytes);
+    return {
+      blobHash: value.blobHash,
+      byteLength: value.length,
+      read: () =>
+        value.compressed
+          ? inflateRawSync(value.bytes!, { maxOutputLength: value.length })
+          : value.bytes === null
+            ? null
+            : Uint8Array.from(value.bytes),
+    };
   }
 
   /** Preserve each prior document until this generation has had a chance to read it. */
@@ -85,15 +102,17 @@ export class TypeScriptFragmentCache {
 }
 
 interface CachedDocumentBytes {
+  blobHash: string | null;
   bytes: Uint8Array | null;
   length: number;
   compressed: boolean;
 }
 
 function encodeCachedDocument(value: Uint8Array | null): CachedDocumentBytes {
+  const blobHash = value === null ? null : sha256Hex(value);
   const length = value?.byteLength ?? 0;
   const compressed = value && length >= 1_024 ? deflateRawSync(value, { level: 1 }) : null;
   return compressed && compressed.byteLength < length
-    ? { bytes: compressed, length, compressed: true }
-    : { bytes: value === null ? null : Uint8Array.from(value), length, compressed: false };
+    ? { bytes: compressed, length, compressed: true, blobHash }
+    : { bytes: value === null ? null : Uint8Array.from(value), length, compressed: false, blobHash };
 }

@@ -12,9 +12,10 @@ import {
   type BoundedMailboxStatus,
 } from '../storage/bounded-mailbox.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
+import type { TypeScriptDocumentBlobReference } from './typescript-document-blob.js';
 
-export const TYPESCRIPT_INDEX_PROTOCOL_VERSION = 5;
-export const TYPESCRIPT_INDEX_PREVIOUS_PROTOCOL_VERSION = 4;
+export const TYPESCRIPT_INDEX_PROTOCOL_VERSION = 6;
+export const TYPESCRIPT_INDEX_PREVIOUS_PROTOCOL_VERSION = 5;
 export const TYPESCRIPT_INDEX_LEGACY_PROTOCOL_VERSION = 2;
 export const TYPESCRIPT_INDEX_MAILBOX_DIRECTORY = 'typescript-index';
 
@@ -27,6 +28,7 @@ export interface TypeScriptIndexDocumentRequest {
   modifiedFiles: string[];
   removedFiles: string[];
   affectedFiles: string[];
+  knownDocuments?: TypeScriptDocumentBlobReference[];
 }
 
 export interface TypeScriptIndexEnvelope extends BoundedMailboxRequestIdentity {
@@ -48,6 +50,7 @@ export interface TypeScriptIndexDocumentResponse {
   cold: boolean;
   durationMs: number;
   fragments: TypeScriptIndexResponseFragment[];
+  retainedDocuments?: TypeScriptDocumentBlobReference[];
 }
 
 // scip-query: ignore-stale — reviewed S1 owned contract; this protocol module defines and validates the service payload.
@@ -101,7 +104,7 @@ export function parseTypeScriptIndexEnvelope(raw: string): TypeScriptIndexEnvelo
   const parsed = JSON.parse(raw) as Partial<TypeScriptIndexEnvelope>;
   const protocolVersion = (parsed as { protocolVersion?: unknown }).protocolVersion;
   const legacy = protocolVersion === TYPESCRIPT_INDEX_LEGACY_PROTOCOL_VERSION;
-  const previous = protocolVersion === TYPESCRIPT_INDEX_PREVIOUS_PROTOCOL_VERSION;
+  const previous = [4, TYPESCRIPT_INDEX_PREVIOUS_PROTOCOL_VERSION].includes(protocolVersion as number);
   const rawRequest = parsed.request;
   const normalizedRequest = normalizedIndexDocumentRequest(rawRequest, legacy || previous);
   const supported = legacy || previous || protocolVersion === TYPESCRIPT_INDEX_PROTOCOL_VERSION;
@@ -111,7 +114,13 @@ export function parseTypeScriptIndexEnvelope(raw: string): TypeScriptIndexEnvelo
   if (!legacy && !isIndexEnvelopeMailbox(parsed)) {
     throw new Error('TypeScript index service received an invalid mailbox request.');
   }
-  if (!legacy) return currentIndexEnvelope(parsed as TypeScriptIndexEnvelope, rawRequest, normalizedRequest, previous);
+  if (!legacy)
+    return currentIndexEnvelope(
+      parsed as TypeScriptIndexEnvelope,
+      rawRequest,
+      normalizedRequest,
+      protocolVersion as number,
+    );
   const operationKey = boundedMailboxOperationKey('typescript-index-v2', {
     id: parsed.id,
     baseGeneration: parsed.baseGeneration,
@@ -134,9 +143,9 @@ function currentIndexEnvelope(
   current: TypeScriptIndexEnvelope,
   rawRequest: TypeScriptIndexDocumentRequest | undefined,
   normalizedRequest: TypeScriptIndexDocumentRequest,
-  previous: boolean,
+  protocolVersion: number,
 ): TypeScriptIndexEnvelope {
-  const expectedOperationKey = boundedMailboxOperationKey(previous ? 'typescript-index-v4' : 'typescript-index-v5', {
+  const expectedOperationKey = boundedMailboxOperationKey(`typescript-index-v${protocolVersion}`, {
     baseGeneration: current.baseGeneration,
     request: rawRequest,
   });
@@ -206,7 +215,37 @@ function isTypeScriptIndexRequest(value: unknown): value is TypeScriptIndexDocum
   const modifiedFiles = stringArray(request.modifiedFiles) ? request.modifiedFiles : null;
   const removedFiles = stringArray(request.removedFiles) ? request.removedFiles : null;
   const affectedFiles = stringArray(request.affectedFiles) ? request.affectedFiles : null;
-  return isIndexRequestProject(request) && isIndexRequestFileSet(modifiedFiles, removedFiles, affectedFiles);
+  return (
+    isIndexRequestProject(request) &&
+    isIndexRequestFileSet(modifiedFiles, removedFiles, affectedFiles) &&
+    validTypeScriptDocumentReferences(request.knownDocuments, affectedFiles ?? [])
+  );
+}
+
+/** Validate exact requested blob identities before any response can omit their bytes. */
+export function validTypeScriptDocumentReferences(
+  value: unknown,
+  affectedFiles: readonly string[],
+): value is TypeScriptDocumentBlobReference[] | undefined {
+  if (value === undefined) return true;
+  if (!Array.isArray(value)) return false;
+  const seen = new Set<string>();
+  const affected = new Set(affectedFiles);
+  return value.every((entry: Partial<TypeScriptDocumentBlobReference> | null) => {
+    if (
+      !entry ||
+      typeof entry.relativePath !== 'string' ||
+      !affected.has(entry.relativePath) ||
+      seen.has(entry.relativePath) ||
+      typeof entry.blobHash !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(entry.blobHash) ||
+      !Number.isSafeInteger(entry.byteLength) ||
+      entry.byteLength! <= 0
+    )
+      return false;
+    seen.add(entry.relativePath);
+    return true;
+  });
 }
 
 function isIndexRequestProject(request: Partial<TypeScriptIndexDocumentRequest>): boolean {

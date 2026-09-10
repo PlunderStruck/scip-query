@@ -3624,6 +3624,27 @@ async function materializeIncrementalSqliteBatches(
     incrementalTypeScript: MaterializedTypeScriptIncrementalIndex;
   },
 ): Promise<Extract<SqliteMaterializationResult, { mode: 'incremental' }>> {
+  if (
+    opts.incrementalTypeScript.affectedBatches.length === 0 &&
+    opts.incrementalTypeScript.retainedDocumentCount === opts.incrementalTypeScript.affectedFiles.length &&
+    opts.incrementalTypeScript.retainedDocumentCount > 0
+  ) {
+    const startedAt = performance.now();
+    recordFileClone(
+      opts.run.writeTelemetry,
+      cloneFileWithFallback(opts.run.paths.outputDb, opts.run.tempPaths.tempOutputDb),
+    );
+    opts.run.onStatus(
+      `Retained all ${opts.incrementalTypeScript.retainedDocumentCount} verified TypeScript documents; SQLite conversion is unnecessary.`,
+    );
+    return {
+      mode: 'incremental',
+      changedDocumentPaths: [],
+      patchDurationMs: performance.now() - startedAt,
+      converterDurationMs: 0,
+      scipCompanion: 'deferred',
+    };
+  }
   const batches =
     opts.incrementalTypeScript.affectedBatches.length > 0
       ? opts.incrementalTypeScript.affectedBatches
@@ -3663,7 +3684,7 @@ async function materializeIncrementalSqliteBatches(
     rmSync(miniDbPath, { force: true });
   }
   opts.run.onStatus(
-    `Patched ${opts.incrementalTypeScript.affectedFiles.length} SQLite document path(s) across ${batches.length} bounded batch(es) in ${(patchDurationMs / 1000).toFixed(3)}s.`,
+    `Patched ${batches.reduce((count, batch) => count + batch.affectedFiles.length, 0)} SQLite document path(s) across ${batches.length} bounded batch(es) in ${(patchDurationMs / 1000).toFixed(3)}s.`,
   );
   return {
     mode: 'incremental',

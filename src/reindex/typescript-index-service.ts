@@ -113,11 +113,20 @@ export class TypeScriptIndexServiceHost {
       this.lastDurationMs = durationMs;
       this.lastError = null;
       this.unavailable = false;
+      const known = new Map(request.knownDocuments?.map((entry) => [entry.relativePath, entry]));
+      const retainedDocuments: NonNullable<TypeScriptIndexDocumentResponse['retainedDocuments']> = [];
+      const fragments = result.fragments.filter((fragment) => {
+        const prior = known.get(fragment.relativePath);
+        if (!prior || fragment.blobHash !== prior.blobHash || fragment.byteLength !== prior.byteLength) return true;
+        retainedDocuments.push(prior);
+        return false;
+      });
       return {
         producerIdentity: result.producerIdentity,
         cold: result.stats.initializations > before.initializations,
         durationMs,
-        fragments: result.fragments.map((fragment) => ({
+        ...(retainedDocuments.length ? { retainedDocuments } : {}),
+        fragments: fragments.map((fragment) => ({
           relativePath: fragment.relativePath,
           bytesBase64: fragment.bytes === null ? null : Buffer.from(fragment.bytes).toString('base64'),
           occurrences: fragment.occurrences,

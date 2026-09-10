@@ -30,7 +30,12 @@ import {
 } from './affected-set.js';
 import { inspectTypeScriptDocumentProducer, type TypeScriptDocumentFragment } from './typescript-document-emitter.js';
 import { assembleAffectedTypeScriptFragments } from './typescript-fragment-store.js';
-import { commitTypeScriptOverlay, materializeTypeScriptOverlay } from './typescript-overlay-store.js';
+import {
+  commitTypeScriptOverlay,
+  materializeTypeScriptOverlay,
+  readTypeScriptOverlay,
+} from './typescript-overlay-store.js';
+import type { TypeScriptDocumentBlobReference } from './typescript-document-blob.js';
 import { publishedTypeScriptIndexGeneration } from './typescript-index-protocol.js';
 import { TypeScriptIndexMemoryPressureError, TypeScriptIndexRequester } from './typescript-index-requester.js';
 import { discoverTypeScriptProjectRoots } from './typescript-projects.js';
@@ -118,6 +123,7 @@ export interface MaterializedTypeScriptIncrementalIndex {
   candidateScipPath: string;
   affectedScipPath: string;
   affectedBatches: Array<{ scipPath: string; affectedFiles: string[]; deletedFiles: string[] }>;
+  retainedDocumentCount?: number;
   /** False when the accepted database is current but the whole SCIP companion is represented by an overlay. */
   completeScipUpdated: boolean;
   durationMs: number;
@@ -565,6 +571,7 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       assemblyMs,
       fragmentStoreMs,
       writeMs,
+      retainedDocumentCount,
     } = emitTypeScriptMaterializationBatches(input, eligibility, availability.producerIdentity, baseGeneration);
     const requestMs = performance.now() - phaseStartedAt;
     const result = {
@@ -572,6 +579,7 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       candidateScipPath: input.candidateShardPath,
       affectedScipPath: input.candidateAffectedScipPath,
       affectedBatches,
+      retainedDocumentCount,
       completeScipUpdated: false,
       durationMs: monotonicNowMs() - startedAt,
       cold: anyCold,
@@ -598,7 +606,7 @@ export function tryMaterializeTypeScriptIncrementalIndex(
       },
     };
     input.onStatus(
-      `${eligibility.replaceProject ? 'Bounded TypeScript project refresh' : 'Incremental TypeScript index'} emitted ${result.affectedFiles.length - result.deletedFiles.length} document(s), removed ${result.deletedFiles.length}, and produced ${affectedBatches.length} bounded batch(es) across ${eligibility.projects.length} project(s) in ${(result.durationMs / 1000).toFixed(3)}s (${result.cold ? 'cold' : 'warm'} service; whole SCIP deferred; runtime ${runtimeMs.toFixed(0)}ms, graph ${graphMs.toFixed(0)}ms, request ${requestMs.toFixed(0)}ms, assembly ${assemblyMs.toFixed(0)}ms, fragments ${fragmentStoreMs.toFixed(0)}ms, write ${writeMs.toFixed(0)}ms).`,
+      `${eligibility.replaceProject ? 'Bounded TypeScript project refresh' : 'Incremental TypeScript index'} emitted ${result.affectedFiles.length - result.deletedFiles.length - retainedDocumentCount} document(s), retained ${retainedDocumentCount}, removed ${result.deletedFiles.length}, and produced ${affectedBatches.length} bounded batch(es) across ${eligibility.projects.length} project(s) in ${(result.durationMs / 1000).toFixed(3)}s (${result.cold ? 'cold' : 'warm'} service; whole SCIP deferred; runtime ${runtimeMs.toFixed(0)}ms, graph ${graphMs.toFixed(0)}ms, request ${requestMs.toFixed(0)}ms, assembly ${assemblyMs.toFixed(0)}ms, fragments ${fragmentStoreMs.toFixed(0)}ms, write ${writeMs.toFixed(0)}ms).`,
     );
     return result;
   } catch (error) {
@@ -719,10 +727,12 @@ function emitTypeScriptMaterializationBatches(
     { requireService: true },
   );
   const plannedBatches = plannedTypeScriptDocumentBatches(eligibility.projects);
+  const knownDocuments = knownMaterializationDocuments(input, eligibility, producerIdentity);
   const affectedBatches: MaterializedTypeScriptIncrementalIndex['affectedBatches'] = [];
   const referenceFragmentsByFile = new Map<string, SemanticReferenceFragment[]>();
   const responseDurations: number[] = [];
   let anyCold = false;
+  let retainedDocumentCount = 0;
   let assemblyMs = 0;
   let fragmentStoreMs = 0;
   let writeMs = 0;
@@ -737,8 +747,10 @@ function emitTypeScriptMaterializationBatches(
       modifiedFiles: batch.firstForProject ? batch.project.modifiedFiles : [],
       removedFiles: batch.firstForProject ? batch.project.removedFiles : [],
       affectedFiles: batch.affectedFiles,
+      knownDocuments: batch.affectedFiles.flatMap((file) => knownDocuments.get(file) ?? []),
     });
     anyCold ||= response.cold;
+    retainedDocumentCount += response.retainedDocuments?.length ?? 0;
     responseDurations.push(response.durationMs);
     const tombstones: TypeScriptDocumentFragment[] = batch.removedFiles.map((relativePath) => ({
       relativePath,
@@ -768,17 +780,41 @@ function emitTypeScriptMaterializationBatches(
     writeMs += committed.writeMs;
     fragmentStoreMs += committed.fragmentStoreMs;
     previousOverlayGeneration = committed.nextOverlayGeneration;
-    affectedBatches.push(committed.affectedBatch);
+    if (committed.affectedBatch.affectedFiles.length) affectedBatches.push(committed.affectedBatch);
   }
   return {
     affectedBatches,
     referenceFragmentsByFile,
     responseDurations,
     anyCold,
+    retainedDocumentCount,
     assemblyMs,
     fragmentStoreMs,
     writeMs,
   };
+}
+
+function knownMaterializationDocuments(
+  input: MaterializeTypeScriptIncrementalInput,
+  eligibility: EligibleTypeScriptMaterialization,
+  producerIdentity: string,
+): Map<string, TypeScriptDocumentBlobReference> {
+  const known = new Map<string, TypeScriptDocumentBlobReference>();
+  if (eligibility.replaceProject || eligibility.projects.length !== 1) return known;
+  // Overlapping projects can contribute different documents for one path.
+  // Reuse is limited to one authoritative compiler project for now.
+  if (
+    input.projectMode === 'workspace' &&
+    discoverTypeScriptProjectRoots(input.projectRoot, input.currentSnapshot.typescriptProjects).length !== 1
+  )
+    return known;
+  const previous = readTypeScriptOverlay(input.cacheDir, eligibility.previousFragmentGeneration);
+  if (previous?.producerIdentity !== producerIdentity || previous.projectIdentity !== eligibility.projectIdentity)
+    return known;
+  for (const record of previous.overlays) {
+    if (record.blobHash !== null) known.set(record.relativePath, { ...record, blobHash: record.blobHash });
+  }
+  return known;
 }
 
 function commitMaterializedTypeScriptBatch(context: {
@@ -804,12 +840,12 @@ function commitMaterializedTypeScriptBatch(context: {
     previousOverlayGeneration,
   } = context;
   const assemblyStartedAt = performance.now();
-  const affectedIndexBytes = assembleAffectedTypeScriptFragments(response.fragments);
+  const affectedIndexBytes = fragments.length ? assembleAffectedTypeScriptFragments(response.fragments) : null;
   const assemblyMs = performance.now() - assemblyStartedAt;
   const scipPath =
     batchIndex === 0 ? input.candidateAffectedScipPath : `${input.candidateAffectedScipPath}.batch-${batchIndex}.scip`;
   const writeStartedAt = performance.now();
-  writeFileSync(scipPath, affectedIndexBytes);
+  if (affectedIndexBytes) writeFileSync(scipPath, affectedIndexBytes);
   const writeMs = performance.now() - writeStartedAt;
   const overlayStartedAt = performance.now();
   const nextOverlayGeneration = lastBatch
@@ -818,6 +854,7 @@ function commitMaterializedTypeScriptBatch(context: {
         previousGenerationIdentity: previousOverlayGeneration,
         targetGenerationIdentity: eligibility.nextFragmentGeneration,
         fragments,
+        retainedDocuments: response.retainedDocuments,
       });
   commitTypeScriptOverlay({
     cacheDir: input.cacheDir,
@@ -827,13 +864,14 @@ function commitMaterializedTypeScriptBatch(context: {
     projectIdentity: eligibility.projectIdentity,
     baseShardCurrent: batchIndex === 0 ? input.baseShardCurrent : false,
     fragments,
+    retainedDocuments: response.retainedDocuments,
     allowProjectIdentityChange: eligibility.replaceProject && batchIndex === 0,
     allowLegacyProjectIdentityMigration: true,
   });
   const fragmentStoreMs = performance.now() - overlayStartedAt;
   const affectedBatch = {
     scipPath,
-    affectedFiles: [...batch.affectedFiles, ...batch.removedFiles].sort(),
+    affectedFiles: fragments.map((fragment) => fragment.relativePath).sort(),
     deletedFiles: [...batch.removedFiles].sort(),
   };
   return { assemblyMs, writeMs, fragmentStoreMs, nextOverlayGeneration, affectedBatch };
@@ -862,6 +900,7 @@ export function typeScriptIntermediateOverlayGenerationIdentity(input: {
   previousGenerationIdentity: string;
   targetGenerationIdentity: string;
   fragments: readonly TypeScriptDocumentFragment[];
+  retainedDocuments?: readonly TypeScriptDocumentBlobReference[];
 }): string {
   const hash = createHash('sha256');
   hash.update('typescript-overlay-batch-v1\0');
@@ -879,6 +918,11 @@ export function typeScriptIntermediateOverlayGenerationIdentity(input: {
       hash.update('\0bytes\0');
       hash.update(createHash('sha256').update(fragment.bytes).digest());
     }
+  }
+  for (const retained of [...(input.retainedDocuments ?? [])].sort((left, right) =>
+    left.relativePath.localeCompare(right.relativePath),
+  )) {
+    hash.update('\0retained\0').update(JSON.stringify([retained.relativePath, retained.blobHash, retained.byteLength]));
   }
   return hash.digest('hex');
 }

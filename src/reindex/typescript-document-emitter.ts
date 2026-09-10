@@ -106,6 +106,9 @@ export type TypeScriptDocumentProducerAvailability =
 
 export interface TypeScriptDocumentFragment {
   relativePath: string;
+  /** Present for cached output; reading this metadata does not materialize the document. */
+  blobHash?: string | null;
+  byteLength?: number;
   bytes: Uint8Array | null;
   occurrences: number;
   symbols: number;
@@ -308,7 +311,7 @@ export class TypeScriptDocumentEmitter {
   private symbolTable = new Map<TypeScript.Node, unknown>();
   private constructorTable = new Map<TypeScript.ClassDeclaration, boolean>();
   private packages: unknown;
-  private fragments = new Map<string, Uint8Array>();
+  private fragments = new Map<string, TypeScriptDocumentFragment>();
   private documentCache = new TypeScriptFragmentCache();
   private stats: TypeScriptDocumentEmitterStats = {
     initializations: 0,
@@ -382,7 +385,7 @@ export class TypeScriptDocumentEmitter {
   }
 
   fragment(relativePath: string): Uint8Array | null {
-    return this.fragments.get(normalizeRelativePath(relativePath)) ?? null;
+    return this.fragments.get(normalizeRelativePath(relativePath))?.bytes ?? null;
   }
 
   // scip-query: ignore-twin — snapshot shape belongs to this emitter's mutable counters.
@@ -465,18 +468,12 @@ export class TypeScriptDocumentEmitter {
   private emitSourceFile(sourceFile: TypeScript.SourceFile): TypeScriptDocumentFragment {
     if (!this.checker) throw new Error('TypeScript document emitter is not initialized');
     const relativePath = normalizeRelativePath(relative(this.workspaceRoot, sourceFile.fileName));
-    const cached = this.documentCache.get(relativePath);
+    const cached = this.documentCache.lookup(relativePath);
     if (cached !== undefined) {
       this.stats.documentsReused += 1;
-      if (cached !== null) this.fragments.set(relativePath, cached);
-      const document = cached === null ? null : this.runtime.Document.deserializeBinary(cached);
-      return {
-        relativePath,
-        bytes: cached,
-        occurrences: document?.occurrences.length ?? 0,
-        symbols: document?.symbols.length ?? 0,
-        referenceFragments: document ? referenceFragmentsFromDocument(relativePath, document) : [],
-      };
+      const fragment = cachedDocumentFragment(relativePath, cached, this.runtime);
+      this.fragments.set(relativePath, fragment);
+      return fragment;
     }
     const document = new this.runtime.Document({ relative_path: relativePath, occurrences: [] });
     const indexer = this.fileIndexer(sourceFile, document);
@@ -494,15 +491,18 @@ export class TypeScriptDocumentEmitter {
       };
     }
     const bytes = document.serializeBinary();
-    this.fragments.set(relativePath, bytes);
     this.documentCache.set(relativePath, bytes);
-    return {
+    const fragment = {
       relativePath,
+      blobHash: this.documentCache.lookup(relativePath)?.blobHash,
+      byteLength: bytes.byteLength,
       bytes,
       occurrences: document.occurrences.length,
       symbols: document.symbols.length,
       referenceFragments: referenceFragmentsFromDocument(relativePath, document),
     };
+    this.fragments.set(relativePath, fragment);
+    return fragment;
   }
 
   private fileIndexer(sourceFile: TypeScript.SourceFile, document: ScipDocumentLike): FileIndexerLike {
@@ -593,6 +593,43 @@ export class TypeScriptDocumentEmitter {
       stats: this.snapshotStats(),
     };
   }
+}
+
+function cachedDocumentFragment(
+  relativePath: string,
+  cached: NonNullable<ReturnType<TypeScriptFragmentCache['lookup']>>,
+  runtime: TypeScriptDocumentRuntime,
+): TypeScriptDocumentFragment {
+  let bytes: Uint8Array | null | undefined;
+  let document: ScipDocumentLike | null | undefined;
+  let references: SemanticReferenceFragment[] | undefined;
+  const readDocument = () => {
+    if (document !== undefined) return document;
+    const value = cached.read();
+    bytes = value;
+    return (document = value === null ? null : runtime.Document.deserializeBinary(value));
+  };
+  return {
+    relativePath,
+    blobHash: cached.blobHash,
+    byteLength: cached.byteLength,
+    get bytes() {
+      // Decode before exposing mutable bytes, so later metadata reads cannot
+      // be corrupted by a caller mutating its returned buffer.
+      readDocument();
+      return bytes!;
+    },
+    get occurrences() {
+      return readDocument()?.occurrences.length ?? 0;
+    },
+    get symbols() {
+      return readDocument()?.symbols.length ?? 0;
+    },
+    get referenceFragments() {
+      const value = readDocument();
+      return (references ??= value ? referenceFragmentsFromDocument(relativePath, value) : []);
+    },
+  };
 }
 
 export function referenceFragmentsFromDocument(

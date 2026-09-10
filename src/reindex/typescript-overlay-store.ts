@@ -8,7 +8,7 @@ import {
   SMALL_ARTIFACT_MAX_BYTES,
   SOURCE_ARTIFACT_MAX_BYTES,
 } from '../platform/bounded-file.js';
-import { persistHashedScipDocumentBlob } from './typescript-document-blob.js';
+import { persistHashedScipDocumentBlob, type TypeScriptDocumentBlobReference } from './typescript-document-blob.js';
 import type { TypeScriptDocumentFragment } from './typescript-document-emitter.js';
 import { assembleTypeScriptIndex } from './typescript-fragment-store.js';
 
@@ -40,6 +40,7 @@ export interface CommitTypeScriptOverlayInput {
   projectIdentity: string;
   baseShardCurrent: boolean;
   fragments: readonly TypeScriptDocumentFragment[];
+  retainedDocuments?: readonly TypeScriptDocumentBlobReference[];
   /** Permit a complete project refresh to carry the prior overlay onto a new compiler-project identity. */
   allowProjectIdentityChange?: boolean;
   /** Permit a one-time migration from the pre-v2 source-membership identity after validating the accepted snapshot. */
@@ -65,6 +66,7 @@ export function commitTypeScriptOverlay(input: CommitTypeScriptOverlayInput): Ty
     replaced.add(relativePath);
     overlays.set(relativePath, persistOverlayFragment(input.cacheDir, fragment));
   }
+  validateRetainedOverlays(input, overlays, replaced);
   if (replaced.size === 0) throw new Error('TypeScript overlay generation requires affected documents');
   const manifest: TypeScriptOverlayManifest = {
     version: TYPESCRIPT_OVERLAY_STORE_VERSION,
@@ -77,6 +79,29 @@ export function commitTypeScriptOverlay(input: CommitTypeScriptOverlayInput): Ty
   };
   persistOverlayManifest(input.cacheDir, manifest);
   return manifest;
+}
+
+function validateRetainedOverlays(
+  input: CommitTypeScriptOverlayInput,
+  overlays: ReadonlyMap<string, TypeScriptOverlayRecord>,
+  replaced: Set<string>,
+): void {
+  for (const retained of input.retainedDocuments ?? []) {
+    validateOverlayRecord(retained);
+    const path = validateRelativePath(retained.relativePath);
+    if (replaced.has(path)) throw new Error(`duplicate TypeScript overlay: ${path}`);
+    const prior = overlays.get(path);
+    if (
+      !retained.blobHash ||
+      !prior ||
+      prior.blobHash !== retained.blobHash ||
+      prior.byteLength !== retained.byteLength
+    ) {
+      throw new Error(`retained TypeScript overlay does not match its accepted blob: ${path}`);
+    }
+    readOverlayBlob(input.cacheDir, retained);
+    replaced.add(path);
+  }
 }
 
 function validatePreviousOverlay(
@@ -119,13 +144,7 @@ export function materializeTypeScriptOverlay(input: MaterializeTypeScriptOverlay
     if (record.blobHash === null) {
       return { relativePath: record.relativePath, bytes: null, occurrences: 0, symbols: 0, referenceFragments: [] };
     }
-    const bytes = readFileWithinLimit(join(overlayRoot(input.cacheDir), 'blobs', `${record.blobHash}.scipdoc`), {
-      maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
-      inputKind: 'TypeScript overlay blob',
-    });
-    if (bytes.byteLength !== record.byteLength || sha256(bytes) !== record.blobHash) {
-      throw new Error(`TypeScript overlay blob is corrupt: ${record.relativePath}`);
-    }
+    const bytes = readOverlayBlob(input.cacheDir, record);
     return { relativePath: record.relativePath, bytes, occurrences: 0, symbols: 0, referenceFragments: [] };
   });
   return assembleTypeScriptIndex({
@@ -133,6 +152,17 @@ export function materializeTypeScriptOverlay(input: MaterializeTypeScriptOverlay
     baseIndexBytes: input.baseIndexBytes,
     fragments,
   });
+}
+
+function readOverlayBlob(cacheDir: string, record: TypeScriptOverlayRecord): Uint8Array {
+  const bytes = readFileWithinLimit(join(overlayRoot(cacheDir), 'blobs', `${record.blobHash}.scipdoc`), {
+    maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
+    inputKind: 'TypeScript overlay blob',
+  });
+  if (bytes.byteLength !== record.byteLength || sha256(bytes) !== record.blobHash) {
+    throw new Error(`TypeScript overlay blob is corrupt: ${record.relativePath}`);
+  }
+  return bytes;
 }
 
 export function pruneTypeScriptOverlays(cacheDir: string, keepGenerationIdentities: readonly string[]): void {

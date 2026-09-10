@@ -557,7 +557,7 @@ describe('TypeScript index service mailbox', () => {
 
   test('parses only complete versioned requests', () => {
     const request = indexRequest('producer');
-    const operationKey = boundedMailboxOperationKey('typescript-index-v5', {
+    const operationKey = boundedMailboxOperationKey('typescript-index-v6', {
       baseGeneration: 'generation',
       request,
     });
@@ -573,30 +573,32 @@ describe('TypeScript index service mailbox', () => {
       request,
     };
     expect(parseTypeScriptIndexEnvelope(JSON.stringify(valid))).toEqual(valid);
-    const previousOperationKey = boundedMailboxOperationKey('typescript-index-v4', {
-      baseGeneration: 'generation',
-      request,
-    });
-    expect(
-      parseTypeScriptIndexEnvelope(
-        JSON.stringify({
-          ...valid,
-          protocolVersion: TYPESCRIPT_INDEX_PREVIOUS_PROTOCOL_VERSION,
+    for (const protocolVersion of [4, TYPESCRIPT_INDEX_PREVIOUS_PROTOCOL_VERSION]) {
+      const previousOperationKey = boundedMailboxOperationKey(`typescript-index-v${protocolVersion}`, {
+        baseGeneration: 'generation',
+        request,
+      });
+      expect(
+        parseTypeScriptIndexEnvelope(
+          JSON.stringify({
+            ...valid,
+            protocolVersion,
+            id: boundedMailboxRequestId(previousOperationKey),
+            operationKey: previousOperationKey,
+          }),
+        ),
+      ).toEqual(
+        expect.objectContaining({
+          protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
           id: boundedMailboxRequestId(previousOperationKey),
-          operationKey: previousOperationKey,
         }),
-      ),
-    ).toEqual(
-      expect.objectContaining({
-        protocolVersion: TYPESCRIPT_INDEX_PROTOCOL_VERSION,
-        id: boundedMailboxRequestId(previousOperationKey),
-      }),
-    );
+      );
+    }
     expect(() =>
       parseTypeScriptIndexEnvelope(JSON.stringify({ ...valid, request: { ...valid.request, affectedFiles: [] } })),
     ).toThrow('invalid mailbox request');
     const dependencyRequest = { ...valid.request, affectedFiles: ['src/other.ts'] };
-    const dependencyOperationKey = boundedMailboxOperationKey('typescript-index-v5', {
+    const dependencyOperationKey = boundedMailboxOperationKey('typescript-index-v6', {
       baseGeneration: 'generation',
       request: dependencyRequest,
     });

@@ -1,0 +1,488 @@
+{
+  "baseCommit": "a2e0a9b6",
+  "scope": "Complete sequential index requests against an isolated LaunchPoint copy; one private compiler watcher. No agent benchmarks and no live watchers modified.",
+  "measuredArchiveSha256": "d18c66a6ffe37573eadd0e243639d6a9abdc0ee914cc7d8394fe6a2a1a7a4747",
+  "finalSourceSha256": {
+    "src/reindex/index.ts": "43ed8710d4b5add520a87979eda2a6878d28e4185add404018b82e7b38046b0a",
+    "src/reindex/typescript-document-blob.ts": "6e919ba1952a72c4a6a352f77e6ed2cf884ad573834641963516cd4a17b86e9b",
+    "src/reindex/typescript-document-emitter.ts": "03dc2979caaaf7e5bf7a6b289d720b45ab9ef7df28314d6cf5540e89db804135",
+    "src/reindex/typescript-incremental-index.ts": "fdaa69744c00b5bd05badca8dea4ef3b0fa29fc84a88e5b2e50bd3fee285a9ae",
+    "src/reindex/typescript-index-protocol.ts": "24e70f2c33bbbf159e5ae877fe23e8e73cdac1078c14f44c8be9cb099a0c82ea",
+    "src/reindex/typescript-index-requester.ts": "8ffe575f43494f16f7c6ec046512e2e0564f4261d2e12cf6580859ad22c201d3",
+    "src/reindex/typescript-index-service.ts": "420f678e943e53743c9fbd0b189733180ef87577bf8212144d3088df97f46a7d",
+    "src/reindex/typescript-overlay-store.ts": "7919f55c344bf2f50ff5afdce66297280c2499fc3c57400e91d414b2014c4ee7"
+  },
+  "measurementRevisionNote": "The measured package precedes extraction of retained-overlay validation into a helper, equivalent protocol-version membership cleanup, and a test-only v4 compatibility assertion. The final source and stable full suite include those changes. The algorithm and wire schema are unchanged.",
+  "verification": {
+    "runs": [
+      {
+        "label": "first-worker-edit",
+        "wallSeconds": 215.4174573350465,
+        "peakGiB": 13.36855697631836,
+        "equal": {
+          "observations": true,
+          "relationGroups": true,
+          "links": true,
+          "frontiers": true
+        },
+        "changedOriginalObservations": 0,
+        "extraObservations": [],
+        "coverageErrors": [],
+        "phases": [
+          {
+            "id": "direct-extraction",
+            "durationMs": 2205.7113379999937,
+            "inputFacts": 5603,
+            "outputFacts": 6579,
+            "filesVisited": 5603,
+            "filesReused": 3693,
+            "factsReused": 522,
+            "factsInvalidated": 6579
+          },
+          {
+            "id": "http-summary",
+            "durationMs": 20483.57370899999,
+            "inputFacts": 7103,
+            "outputFacts": 82,
+            "filesVisited": 295
+          },
+          {
+            "id": "http-mount",
+            "durationMs": 532.0445319999999,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 9296
+          },
+          {
+            "id": "carrier",
+            "durationMs": 17971.42852799999,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 189
+          },
+          {
+            "id": "relations",
+            "durationMs": 5.308450999989873,
+            "inputFacts": 7185,
+            "outputFacts": 666
+          },
+          {
+            "id": "links",
+            "durationMs": 0.8219810000155121,
+            "inputFacts": 666,
+            "outputFacts": 2
+          },
+          {
+            "id": "frontiers",
+            "durationMs": 127.00256299998728,
+            "inputFacts": 7185,
+            "outputFacts": 6232
+          }
+        ],
+        "writeTelemetry": {
+          "reflinkedBytes": 0,
+          "fallbackCopiedBytes": 437235712,
+          "incrementalWrittenBytes": 1317874896
+        }
+      },
+      {
+        "label": "warm-body-edit",
+        "wallSeconds": 55.91996647196356,
+        "peakGiB": 12.499237060546875,
+        "equal": {
+          "observations": true,
+          "relationGroups": true,
+          "links": true,
+          "frontiers": true
+        },
+        "changedOriginalObservations": 0,
+        "extraObservations": [],
+        "coverageErrors": [],
+        "phases": [
+          {
+            "id": "direct-extraction",
+            "durationMs": 1474.003756,
+            "inputFacts": 5603,
+            "outputFacts": 6579,
+            "filesVisited": 5603,
+            "filesReused": 3693,
+            "factsReused": 522,
+            "factsInvalidated": 6579
+          },
+          {
+            "id": "http-summary",
+            "durationMs": 20322.366521000004,
+            "inputFacts": 7103,
+            "outputFacts": 82,
+            "filesVisited": 295
+          },
+          {
+            "id": "http-mount",
+            "durationMs": 456.07230100000015,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 9296
+          },
+          {
+            "id": "carrier",
+            "durationMs": 17753.654585999997,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 189
+          },
+          {
+            "id": "relations",
+            "durationMs": 5.533136999998533,
+            "inputFacts": 7185,
+            "outputFacts": 666
+          },
+          {
+            "id": "links",
+            "durationMs": 0.8856419999938225,
+            "inputFacts": 666,
+            "outputFacts": 2
+          },
+          {
+            "id": "frontiers",
+            "durationMs": 131.82599299999856,
+            "inputFacts": 7185,
+            "outputFacts": 6232
+          }
+        ],
+        "writeTelemetry": {
+          "reflinkedBytes": 0,
+          "fallbackCopiedBytes": 437235712,
+          "incrementalWrittenBytes": 0
+        }
+      },
+      {
+        "label": "warm-inferred-edit",
+        "wallSeconds": 57.20090938999783,
+        "peakGiB": 12.423591613769531,
+        "equal": {
+          "observations": true,
+          "relationGroups": true,
+          "links": true,
+          "frontiers": true
+        },
+        "changedOriginalObservations": 0,
+        "extraObservations": [],
+        "coverageErrors": [],
+        "phases": [
+          {
+            "id": "direct-extraction",
+            "durationMs": 1438.787228000001,
+            "inputFacts": 5603,
+            "outputFacts": 6579,
+            "filesVisited": 5603,
+            "filesReused": 3693,
+            "factsReused": 522,
+            "factsInvalidated": 6579
+          },
+          {
+            "id": "http-summary",
+            "durationMs": 20883.080676999998,
+            "inputFacts": 7103,
+            "outputFacts": 82,
+            "filesVisited": 295
+          },
+          {
+            "id": "http-mount",
+            "durationMs": 446.65759400000024,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 9296
+          },
+          {
+            "id": "carrier",
+            "durationMs": 18139.338959,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 189
+          },
+          {
+            "id": "relations",
+            "durationMs": 5.43471000000136,
+            "inputFacts": 7185,
+            "outputFacts": 666
+          },
+          {
+            "id": "links",
+            "durationMs": 0.8362679999991087,
+            "inputFacts": 666,
+            "outputFacts": 2
+          },
+          {
+            "id": "frontiers",
+            "durationMs": 130.78341299999738,
+            "inputFacts": 7185,
+            "outputFacts": 6232
+          }
+        ],
+        "writeTelemetry": {
+          "reflinkedBytes": 0,
+          "fallbackCopiedBytes": 437235712,
+          "incrementalWrittenBytes": 1272352
+        }
+      },
+      {
+        "label": "warm-runtime-edit",
+        "wallSeconds": 56.176314590033144,
+        "peakGiB": 12.461250305175781,
+        "equal": {
+          "observations": false,
+          "relationGroups": false,
+          "links": true,
+          "frontiers": false
+        },
+        "changedOriginalObservations": 0,
+        "extraObservations": [
+          {
+            "id": "boundary:554ea37c894c1059",
+            "extractor": "builtin.http",
+            "action": "http.request",
+            "owner": {
+              "file": "src/lib/campaigns/warmup/infra/list-state-queries.ts",
+              "symbol": "scip-typescript npm launchpoint-backend 0.1.0 src/lib/campaigns/warmup/infra/`list-state-queries.ts`/__scipIncrementalMemoryProbe().",
+              "name": "__scipIncrementalMemoryProbe",
+              "startLine": 160,
+              "endLine": 160,
+              "startColumn": 7,
+              "endColumn": 128
+            },
+            "source": {
+              "file": "src/lib/campaigns/warmup/infra/list-state-queries.ts",
+              "startLine": 160,
+              "endLine": 160,
+              "startColumn": 75,
+              "endColumn": 107
+            },
+            "keyParts": [
+              {
+                "name": "method",
+                "value": "GET",
+                "evidence": "literal"
+              },
+              {
+                "name": "path",
+                "value": "/scip-incremental-probe",
+                "evidence": "literal",
+                "term": {
+                  "kind": "literal",
+                  "value": "/scip-incremental-probe"
+                },
+                "precision": "literal",
+                "derivation": {
+                  "kind": "direct",
+                  "rule": "direct-literal",
+                  "ruleVersion": "1",
+                  "inputFactIds": [],
+                  "sourceSpans": [
+                    {
+                      "file": "src/lib/campaigns/warmup/infra/list-state-queries.ts",
+                      "startLine": 160,
+                      "endLine": 160
+                    }
+                  ]
+                }
+              }
+            ],
+            "evidence": "call-expression",
+            "strength": "exact",
+            "protocol": "http",
+            "role": "producer",
+            "executionDomain": null,
+            "derivation": {
+              "kind": "direct",
+              "rule": "call-expression",
+              "ruleVersion": "1",
+              "inputFactIds": [],
+              "sourceSpans": [
+                {
+                  "file": "src/lib/campaigns/warmup/infra/list-state-queries.ts",
+                  "startLine": 160,
+                  "endLine": 160
+                },
+                {
+                  "file": "src/lib/campaigns/warmup/infra/list-state-queries.ts",
+                  "startLine": 160,
+                  "endLine": 160
+                }
+              ]
+            },
+            "valuePrecision": "literal",
+            "modality": "may",
+            "resolution": "unresolved",
+            "sourceScope": "production"
+          }
+        ],
+        "coverageErrors": [],
+        "phases": [
+          {
+            "id": "direct-extraction",
+            "durationMs": 1430.0874319999984,
+            "inputFacts": 5603,
+            "outputFacts": 6580,
+            "filesVisited": 5603,
+            "filesReused": 3693,
+            "factsReused": 522,
+            "factsInvalidated": 6579
+          },
+          {
+            "id": "http-summary",
+            "durationMs": 20430.143410999997,
+            "inputFacts": 7104,
+            "outputFacts": 82,
+            "filesVisited": 295
+          },
+          {
+            "id": "http-mount",
+            "durationMs": 441.2752240000009,
+            "inputFacts": 7186,
+            "outputFacts": 0,
+            "filesVisited": 9296
+          },
+          {
+            "id": "carrier",
+            "durationMs": 18001.382621,
+            "inputFacts": 7186,
+            "outputFacts": 0,
+            "filesVisited": 189
+          },
+          {
+            "id": "relations",
+            "durationMs": 5.260890999998082,
+            "inputFacts": 7186,
+            "outputFacts": 667
+          },
+          {
+            "id": "links",
+            "durationMs": 0.8210089999993215,
+            "inputFacts": 667,
+            "outputFacts": 2
+          },
+          {
+            "id": "frontiers",
+            "durationMs": 130.3907279999985,
+            "inputFacts": 7186,
+            "outputFacts": 6233
+          }
+        ],
+        "writeTelemetry": {
+          "reflinkedBytes": 0,
+          "fallbackCopiedBytes": 437235712,
+          "incrementalWrittenBytes": 992192
+        }
+      },
+      {
+        "label": "restore",
+        "wallSeconds": 183.45134260004852,
+        "peakGiB": 12.828060150146484,
+        "equal": {
+          "observations": true,
+          "relationGroups": true,
+          "links": true,
+          "frontiers": true
+        },
+        "changedOriginalObservations": 0,
+        "extraObservations": [],
+        "coverageErrors": [],
+        "phases": [
+          {
+            "id": "direct-extraction",
+            "durationMs": 1665.7311549999868,
+            "inputFacts": 5603,
+            "outputFacts": 6579,
+            "filesVisited": 5603,
+            "filesReused": 3693,
+            "factsReused": 522,
+            "factsInvalidated": 6580
+          },
+          {
+            "id": "http-summary",
+            "durationMs": 20408.175806999992,
+            "inputFacts": 7103,
+            "outputFacts": 82,
+            "filesVisited": 295
+          },
+          {
+            "id": "http-mount",
+            "durationMs": 456.2920030000096,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 9296
+          },
+          {
+            "id": "carrier",
+            "durationMs": 17685.026419,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 189
+          },
+          {
+            "id": "relations",
+            "durationMs": 5.292679999984102,
+            "inputFacts": 7185,
+            "outputFacts": 666
+          },
+          {
+            "id": "links",
+            "durationMs": 0.8437220000196248,
+            "inputFacts": 666,
+            "outputFacts": 2
+          },
+          {
+            "id": "frontiers",
+            "durationMs": 129.1703410000191,
+            "inputFacts": 7185,
+            "outputFacts": 6232
+          }
+        ],
+        "writeTelemetry": {
+          "reflinkedBytes": 0,
+          "fallbackCopiedBytes": 437235712,
+          "incrementalWrittenBytes": 604303968
+        }
+      }
+    ],
+    "sourceRestoredSha256": "f5b5810aa873230a614d487e026055296e3dedaf06db3357e44616400101a2e7",
+    "restoreFileCoverageEqual": true,
+    "quickCheck": "ok",
+    "foreignKeyCheck": "ok",
+    "probeSymbolsRemoved": true,
+    "temporaryWatcherStopped": true
+  },
+  "warmBodyPublication": {
+    "verifiedRetainedDocuments": 5603,
+    "emittedDocuments": 0,
+    "miniScipBatches": 0,
+    "materializationSeconds": 5.394,
+    "assemblyMs": 0,
+    "sqliteConversionSkipped": true,
+    "observedCompilerFactChanges": 0
+  },
+  "validation": {
+    "stableFullSuitePassed": 3852,
+    "stableFullSuiteFiles": 420,
+    "stableFullSuiteSeconds": 370.26,
+    "focusedRetainedTestsPassed": 60,
+    "postRefactorFocusedPassed": 42,
+    "build": true,
+    "completeTypecheck": true,
+    "publicApiDigest": "9217c44ff0f30a77",
+    "publicApiPaths": 66,
+    "publicConsumerTypecheck": true,
+    "skillLinks": true,
+    "introducedReviewFindings": 0,
+    "existingReviewFindings": 1
+  },
+  "invalidatedTestRun": "The earlier full run had two CLI failures because dist was rebuilt while tests ran, plus one owned watcher termination timeout. It is superseded by the stable full run above.",
+  "limitations": [
+    "Warm update still takes roughly 56 seconds; HTTP/body runtime phases consume roughly 40 seconds.",
+    "First compiler-worker edit remains about 215 seconds.",
+    "Peak aggregate RSS remains about 12.5 GiB for a warm edit, with about 9.6 GiB retained by the compiler service.",
+    "Retained transport currently requires one authoritative compiler project; multi-project updates retain existing full transport/publication.",
+    "The preexisting 16 fresh-versus-retained compiler fact inconsistencies remain documented in the boundary-reuse receipt."
+  ],
+  "deployed": false
+}
