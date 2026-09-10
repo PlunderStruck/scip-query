@@ -7,7 +7,8 @@ import { zstdDecompressSync } from 'node:zlib';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { createPerDbCache, createPerDbValue } from '../../storage/per-db-cache.js';
-import { getAllDefinitions } from '../definition-catalog.js';
+import { getDefinitionsForSymbols } from '../definition-catalog.js';
+import { recordFileAccess } from '../../domain/file-access-recorder.js';
 import { leafName } from '../symbol-parser.js';
 
 /** One compiler-resolved reference to an indexed definition on a source line. */
@@ -58,9 +59,12 @@ const FILE_OCCURRENCE_LOOKUP = createPerDbCache<string, ChunkOccurrenceLookup>('
   maxEntries: 256,
 });
 
-const DEFINITION_BY_SYMBOL = createPerDbValue<Map<string, IndexedDefinition>>('scip-chunk-occurrence-definitions', {
-  clearGroups: ['whole-project', 'definition-catalog'],
-});
+const DEFINITION_BY_SYMBOL = createPerDbValue<Map<string, IndexedDefinition | null>>(
+  'scip-chunk-occurrence-definitions',
+  {
+    clearGroups: ['whole-project', 'definition-catalog'],
+  },
+);
 
 /** A stored chunk blob shorter than this cannot be a zstd frame; fixtures store a one-byte placeholder. */
 const OCCURRENCE_BLOB_PLACEHOLDER_MAX_BYTES = 1;
@@ -113,10 +117,6 @@ function decodeFileOccurrences(db: ScipDatabase, relativePath: string): ChunkOcc
       ? { available: true, targets: [], externalLeafKeys: new Set(), locals: [] }
       : { available: false, reason: 'no-occurrence-data' };
   }
-  const definitions = DEFINITION_BY_SYMBOL.get(
-    db,
-    () => new Map(getAllDefinitions(db).map((definition) => [definition.symbol, definition])),
-  );
   const result: FileOccurrenceTargets & { externalRanges: OccurrenceSourceRange[] } = {
     targets: [],
     externalLeafKeys: new Set(),
@@ -124,28 +124,52 @@ function decodeFileOccurrences(db: ScipDatabase, relativePath: string): ChunkOcc
     externalRanges: [],
   };
   const sourceLines = getSourceLines(db, relativePath);
-  try {
-    for (const row of rows) {
-      const blob = row.occurrences;
-      if (!blob || blob.length <= OCCURRENCE_BLOB_PLACEHOLDER_MAX_BYTES) {
-        return { available: false, reason: 'no-occurrence-data' };
-      }
-      const decoded = fromBinary(DocumentSchema, new Uint8Array(zstdDecompressSync(blob)));
-      for (const occurrence of decoded.occurrences) {
-        appendChunkOccurrence(occurrence, document.position_encoding, sourceLines, definitions, result);
-      }
+  for (const row of rows) {
+    const occurrences = decodeOccurrenceBlob(row.occurrences);
+    if (!occurrences) return { available: false, reason: 'no-occurrence-data' };
+    const definitions = referencedDefinitions(db, occurrences);
+    for (const occurrence of occurrences) {
+      appendChunkOccurrence(occurrence, document.position_encoding, sourceLines, definitions, result);
     }
-  } catch {
-    return { available: false, reason: 'no-occurrence-data' };
   }
   return { available: true, ...result };
+}
+
+function decodeOccurrenceBlob(blob: Uint8Array | null) {
+  if (!blob || blob.length <= OCCURRENCE_BLOB_PLACEHOLDER_MAX_BYTES) return null;
+  try {
+    return fromBinary(DocumentSchema, new Uint8Array(zstdDecompressSync(blob))).occurrences;
+  } catch {
+    return null;
+  }
+}
+
+function referencedDefinitions(
+  db: ScipDatabase,
+  occurrences: readonly { symbol: string; symbolRoles: number }[],
+): ReadonlyMap<string, IndexedDefinition | null> {
+  const cache = DEFINITION_BY_SYMBOL.get(db, () => new Map());
+  const referenced = new Set(
+    occurrences
+      .filter((item) => item.symbol && !item.symbol.startsWith('local ') && !(item.symbolRoles & SymbolRole.Definition))
+      .map((item) => item.symbol),
+  );
+  const missing = [...referenced].filter((symbol) => !cache.has(symbol));
+  const resolved = getDefinitionsForSymbols(db, missing);
+  for (const symbol of missing) cache.set(symbol, null);
+  for (const definition of resolved) cache.set(definition.symbol, definition);
+  for (const symbol of referenced) {
+    const definition = cache.get(symbol);
+    if (definition) recordFileAccess(definition.relativePath);
+  }
+  return cache;
 }
 
 function appendChunkOccurrence(
   occurrence: { symbol: string; range: number[]; symbolRoles: number },
   encoding: string | null,
   sourceLines: Parameters<typeof normalizeOccurrenceRange>[2],
-  definitions: ReadonlyMap<string, IndexedDefinition>,
+  definitions: ReadonlyMap<string, IndexedDefinition | null>,
   result: FileOccurrenceTargets & { externalRanges: OccurrenceSourceRange[] },
 ): void {
   if (!occurrence.symbol) return;

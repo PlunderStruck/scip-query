@@ -1,0 +1,281 @@
+{
+  "sourceIdentity": "de015e5b1ee71c8ecfeb048af4a6a9361fa652434c2d9a69e6d9e10947999ad4",
+  "beforeMs": 809708.800441,
+  "afterMs": 114659.880521,
+  "speedup": 7.061831887158661,
+  "warmForcedSweepMs": 24270.161831000005,
+  "counts": {
+    "observations": 7185,
+    "links": 2,
+    "groups": 666,
+    "frontiers": 6232,
+    "errors": 0
+  },
+  "equality": {
+    "schemaVersion": true,
+    "extractorVersion": true,
+    "observations": true,
+    "relationGroups": true,
+    "links": true,
+    "frontiers": true,
+    "fileCoverage": true,
+    "coverageExceptPhases": true
+  },
+  "phases": [
+    {
+      "id": "direct-extraction",
+      "durationMs": 54662.962615,
+      "inputFacts": 9296,
+      "outputFacts": 7101,
+      "filesVisited": 9296,
+      "filesReused": 0,
+      "factsReused": 0,
+      "factsInvalidated": 0
+    },
+    {
+      "id": "http-summary",
+      "durationMs": 23104.558826,
+      "inputFacts": 7103,
+      "outputFacts": 82,
+      "filesVisited": 295
+    },
+    {
+      "id": "http-mount",
+      "durationMs": 16090.477813999998,
+      "inputFacts": 7185,
+      "outputFacts": 0,
+      "filesVisited": 9296
+    },
+    {
+      "id": "carrier",
+      "durationMs": 20588.630487000002,
+      "inputFacts": 7185,
+      "outputFacts": 0,
+      "filesVisited": 189
+    },
+    {
+      "id": "relations",
+      "durationMs": 5.277497000002768,
+      "inputFacts": 7185,
+      "outputFacts": 666
+    },
+    {
+      "id": "links",
+      "durationMs": 0.9160590000101365,
+      "inputFacts": 666,
+      "outputFacts": 2
+    },
+    {
+      "id": "frontiers",
+      "durationMs": 189.28997299999173,
+      "inputFacts": 7185,
+      "outputFacts": 6232
+    }
+  ],
+  "conditions": {
+    "sourceFiles": 9296,
+    "compilerSnapshots": "same accepted generation",
+    "evidenceCache": "empty initially",
+    "cpuProfiler": true,
+    "sharedCache": false,
+    "sourceHashVerified": true
+  },
+  "isolatedQuery": {
+    "beforeMs": 79616.989109,
+    "afterMs": 1711.630578,
+    "observations": 5,
+    "identicalObservations": true,
+    "question": "persistence extraction for one LaunchPoint test file",
+    "limitation": "The complete-graph timing, not this microbenchmark, measures overall runtime performance."
+  },
+  "intermediateSelectiveOnlyMs": 376321.239669,
+  "priorDeployedRuntimeMs": 306522.860296,
+  "fixes": [
+    "Resolve compiler reference symbols through only their candidate files, preserving complete per-file merge policy.",
+    "Use callable-range facts for definition range correction.",
+    "Retain syntax-tree roots for the existing bounded AST cache lifetime, preserving root-keyed analysis across GC."
+  ],
+  "fullColdIndex": {
+    "coldWallMs": 197740.05441500002,
+    "coldIndexReportedMs": 195517.865487,
+    "unchangedWallMs": 1028.230063,
+    "unchangedReused": true,
+    "languages": [
+      "typescript"
+    ],
+    "skipped": [],
+    "shards": [
+      {
+        "id": "typescript-compiler-shard:0",
+        "strategy": "full",
+        "durationMs": 54807.432291,
+        "outputBytes": 80060597
+      },
+      {
+        "id": "typescript-compiler-shard:1",
+        "strategy": "full",
+        "durationMs": 45840.72174,
+        "outputBytes": 85127324
+      },
+      {
+        "id": "typescript-compiler-shard:2",
+        "strategy": "full",
+        "durationMs": 37241.450165999995,
+        "outputBytes": 83481766
+      },
+      {
+        "id": "typescript-compiler-shard:3",
+        "strategy": "full",
+        "durationMs": 40393.109000000004,
+        "outputBytes": 82164012
+      },
+      {
+        "id": "typescript-compiler-shard:4",
+        "strategy": "full",
+        "durationMs": 36402.57457699999,
+        "outputBytes": 82080545
+      }
+    ],
+    "runtimePhases": [
+      {
+        "id": "direct-extraction",
+        "durationMs": 51396.15939500001,
+        "inputFacts": 9296,
+        "outputFacts": 7101,
+        "filesVisited": 9296,
+        "filesReused": 0,
+        "factsReused": 0,
+        "factsInvalidated": 0
+      },
+      {
+        "id": "http-summary",
+        "durationMs": 22676.133179000026,
+        "inputFacts": 7103,
+        "outputFacts": 82,
+        "filesVisited": 295
+      },
+      {
+        "id": "http-mount",
+        "durationMs": 15438.427900999988,
+        "inputFacts": 7185,
+        "outputFacts": 0,
+        "filesVisited": 9296
+      },
+      {
+        "id": "carrier",
+        "durationMs": 19994.94230200001,
+        "inputFacts": 7185,
+        "outputFacts": 0,
+        "filesVisited": 189
+      },
+      {
+        "id": "relations",
+        "durationMs": 5.152203000005102,
+        "inputFacts": 7185,
+        "outputFacts": 666
+      },
+      {
+        "id": "links",
+        "durationMs": 0.8884850000031292,
+        "inputFacts": 666,
+        "outputFacts": 2
+      },
+      {
+        "id": "frontiers",
+        "durationMs": 180.1565690000134,
+        "inputFacts": 7185,
+        "outputFacts": 6232
+      }
+    ],
+    "extractionErrors": [],
+    "fullRebuildGraphEquality": {
+      "schemaVersion": true,
+      "extractorVersion": true,
+      "observations": true,
+      "relationGroups": true,
+      "links": true,
+      "frontiers": true,
+      "fileCoverage": true
+    },
+    "conditions": {
+      "compilerCache": "empty initially",
+      "evidenceCache": "empty initially",
+      "sharedCache": false,
+      "cpuProfiler": false,
+      "watchService": false,
+      "isolatedOutputs": true,
+      "runtimeHeapMb": 16384,
+      "unchanged": "normal reindex skipIfUnchanged fast path after cold build",
+      "compilerConcurrency": 4
+    }
+  },
+  "fiveWorkerExperiment": {
+    "wallMs": 178122.40131500002,
+    "compilerFacts": {
+      "documents": {
+        "rows": 9221,
+        "sha256": "f82636c8720fb0f74243d0b5a91b450863ae07a4160dafa679ae471c1b59a076",
+        "identical": true
+      },
+      "global_symbols": {
+        "rows": 485167,
+        "sha256": "3f84f355b7eb64facea1cf7a6afa780b01415916d931629755e6a9ecc493944a",
+        "identical": true
+      },
+      "chunks": {
+        "rows": 21316,
+        "sha256": "ba6e0da6c1092ee0a6cff3b3938e637e1c42e08f6b81111f62a94357bd07a02c",
+        "identical": true
+      },
+      "mentions": {
+        "rows": 1511241,
+        "sha256": "cb6655bd437a5f251edfaa79db29503651203d66805c75bf9d8337e665c0610a",
+        "identical": true
+      },
+      "defn_enclosing_ranges": {
+        "rows": 118804,
+        "sha256": "50a786e1b201bb6a6dc54e6506aa8208e4ac117ff5ec5041c0f8cf9854bfd3f6",
+        "identical": true
+      }
+    },
+    "runtimeGraphEquality": {
+      "schemaVersion": true,
+      "extractorVersion": true,
+      "observations": true,
+      "relationGroups": true,
+      "links": true,
+      "frontiers": true,
+      "fileCoverage": true
+    },
+    "memory": {
+      "peakAggregateNodeRssKiB": 31070892,
+      "minimumMachineAvailableKiB": 8607968,
+      "maxCompilerChildren": 5,
+      "samples": 359,
+      "sampleIntervalMs": 500
+    },
+    "conditions": {
+      "compilerCache": "empty initially",
+      "evidenceCache": "empty initially",
+      "sharedCache": false,
+      "cpuProfiler": false,
+      "compilerConcurrency": 5,
+      "policy": "equivalent to the final hardware-budget default on this VM"
+    },
+    "shippedAsDefault": false,
+    "decision": "Retain the four-worker default: about 20 seconds saved did not justify the measured aggregate memory peak."
+  },
+  "validation": {
+    "fullSuite": {
+      "passed": 3819,
+      "failed": 1,
+      "failure": "Previously observed watcher-stop timeout in anonymous-type property history."
+    },
+    "failedTestRetry": "passed",
+    "focusedAccuracyAndCacheTests": "passed",
+    "typecheck": "passed",
+    "lintChangedFiles": "passed",
+    "apiAndSkillContracts": "passed",
+    "reviewIntroducedBlockers": 0
+  }
+}

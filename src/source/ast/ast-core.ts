@@ -9,13 +9,25 @@ import type { ScipDatabase } from '../../storage/db.js';
 import { createPerDbSourceCache } from '../../storage/per-db-cache.js';
 import { detectAstLanguage, isVueSfcPath, type AstLanguage } from './ast-language.js';
 import { parseAstSource } from './ast-runtime.js';
-import type { Tree } from './ast-types.js';
+import type { SyntaxNode, Tree } from './ast-types.js';
 import { getSourceText } from '../primitives/source-text.js';
 import { extractVueScriptBlock } from './vue-script.js';
 
-const TREE_CACHE = createPerDbSourceCache<Tree | null>('ast-trees', {
+const TREE_CACHE = createPerDbSourceCache<{ tree: Tree; root: SyntaxNode } | null>('ast-trees', {
   clearGroups: ['whole-project', 'source-file'],
 });
+
+function cachedTree(db: ScipDatabase, file: string, source: string, parse: () => Tree | null): Tree | null {
+  return (
+    TREE_CACHE.get(db, file, source, () => {
+      const tree = parse();
+      // The native tree weakly caches node wrappers. Retain its root alongside
+      // the bounded cache entry so root-keyed analyses survive GC too. Both are
+      // released on source replacement, invalidation or ordinary LRU eviction.
+      return tree ? { tree, root: tree.rootNode } : null;
+    })?.tree ?? null
+  );
+}
 
 /**
  * Parse a file with tree-sitter and cache the result. Returns null when the
@@ -37,7 +49,7 @@ export function getAst(db: ScipDatabase, relativePath: string): Tree | null {
   const source = getSourceText(db, relativePath);
   if (!source) return null;
 
-  return TREE_CACHE.get(db, relativePath, source, () => {
+  return cachedTree(db, relativePath, source, () => {
     return parseAstSource(lang, source);
   });
 }
@@ -51,7 +63,7 @@ export function getAst(db: ScipDatabase, relativePath: string): Tree | null {
  */
 export function getAstForSource(db: ScipDatabase, relativePath: string, source: string): Tree | null {
   if (isVueSfcPath(relativePath)) {
-    return TREE_CACHE.get(db, relativePath, source, () => {
+    return cachedTree(db, relativePath, source, () => {
       const block = extractVueScriptBlock(db, relativePath, source);
       if (!block) return null;
       return parseAstSource(block.language, '\n'.repeat(block.startLine) + block.body);
@@ -59,7 +71,7 @@ export function getAstForSource(db: ScipDatabase, relativePath: string, source: 
   }
   const lang = detectAstLanguage(relativePath);
   if (!lang) return null;
-  return TREE_CACHE.get(db, relativePath, source, () => parseAstSource(lang, source));
+  return cachedTree(db, relativePath, source, () => parseAstSource(lang, source));
 }
 
 /**
@@ -95,7 +107,7 @@ function getVueScriptAst(db: ScipDatabase, relativePath: string): Tree | null {
   const source = getSourceText(db, relativePath);
   if (!source) return null;
 
-  return TREE_CACHE.get(db, relativePath, source, () => {
+  return cachedTree(db, relativePath, source, () => {
     const block = extractVueScriptBlock(db, relativePath, source);
     if (!block) return null;
     const padded = '\n'.repeat(block.startLine) + block.body;

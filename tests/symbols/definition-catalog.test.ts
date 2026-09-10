@@ -13,6 +13,7 @@ import { getSourceText } from '../../src/source/primitives/source-text.js';
 import {
   findEnclosingDefinition,
   getDefinitionsForFile,
+  getDefinitionsForSymbols,
   getScopedDefinitionsMatchingSymbols,
 } from '../../src/symbols/definition-catalog.js';
 import type { IndexedDefinition } from '../../src/domain/types.js';
@@ -339,6 +340,20 @@ describe('getDefinitionsForFile includeClassMemberFallbacks (catalog-members K1)
     });
     return { db, tempDir };
   }
+
+  it('keeps mixed-row exclusions when only a fallback member is requested', () => {
+    const { db, tempDir } = widgetFixture();
+    try {
+      const field = 'scip-typescript npm fixture 1.0.0 src/`widget.ts`/Widget#count.';
+      expect(getDefinitionsForSymbols(db, [field])).toEqual([]);
+      expect(getDefinitionsForFile(db, 'src/widget.ts', { includeClassMemberFallbacks: true })).toContainEqual(
+        expect.objectContaining({ symbol: field }),
+      );
+    } finally {
+      db.close();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
 
   it('default call (opt-in absent) returns byte-for-byte the same rows as before the opt-in existed', () => {
     const { db } = widgetFixture();

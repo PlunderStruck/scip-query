@@ -27,7 +27,13 @@
  */
 import type { ScipDatabase } from '../storage/db.js';
 import { recordFileAccess } from '../domain/file-access-recorder.js';
-import { getCallableSites, type CallableSite } from '../source/ast.js';
+import {
+  callableSitesFromRoot,
+  detectAstLanguage,
+  getAst,
+  getCallableSites,
+  type CallableSite,
+} from '../source/ast.js';
 import { collectNativeGarbage } from '../domain/native-gc.js';
 import { sourceEvidence } from '../language-parsers/source-evidence.js';
 import {
@@ -407,6 +413,41 @@ export function getAllDefinitions(db: ScipDatabase, opts: { scope?: string } = {
   return getScopedDefinitions(db, opts.scope);
 }
 
+/** Resolve exact symbols through their complete per-file catalogs, preserving mixed-row policy and source ranges. */
+export function getDefinitionsForSymbols(db: ScipDatabase, symbols: readonly string[]): IndexedDefinition[] {
+  const requested = new Set(symbols);
+  if (requested.size === 0) return [];
+  const files = definitionFilesForSymbols(db, [...requested]);
+  // Keep the same file/row ordering as getAllDefinitions, including duplicate
+  // symbol declarations. Filtering before the per-file merge would incorrectly
+  // promote fallback members when another primary definition was filtered out.
+  return indexedDocumentPaths(db, { includeIgnored: false })
+    .filter((file) => files.has(file))
+    .flatMap((file) => getDefinitionsForFile(db, file))
+    .filter((definition) => requested.has(definition.symbol));
+}
+
+function definitionFilesForSymbols(db: ScipDatabase, symbols: readonly string[]): Set<string> {
+  const files = new Set<string>();
+  for (let start = 0; start < symbols.length; start += 400) {
+    const batch = symbols.slice(start, start + 400);
+    const rows = db.all<{ relative_path: string }>(
+      `WITH requested AS (SELECT id FROM global_symbols WHERE symbol IN (${batch.map(() => '?').join(',')}))
+       SELECT d.relative_path FROM requested r
+       JOIN defn_enclosing_ranges der ON der.symbol_id = r.id
+       JOIN documents d ON d.id = der.document_id
+       UNION
+       SELECT d.relative_path FROM requested r
+       JOIN mentions m ON m.symbol_id = r.id AND m.role = 1
+       JOIN chunks c ON c.id = m.chunk_id
+       JOIN documents d ON d.id = c.document_id`,
+      ...batch,
+    );
+    for (const row of rows) files.add(row.relative_path);
+  }
+  return files;
+}
+
 // scip-query: ignore-wrapper — catalog-wide definition read primitive used
 // behind ProjectIndex; it owns document iteration plus ignored-path filtering.
 export function getScopedDefinitions(db: ScipDatabase, scope?: string): IndexedDefinition[] {
@@ -740,7 +781,7 @@ export function correctDefinitionRangesFromSource(
   // parsed AST, so no brace-counting or regex sweeps are needed. This is the
   // primary path for Rust / TS / JS / Python.
   const callables = profileDefinitionWork(profileSpan, 'range-correction.callable-sites', () =>
-    rangeCorrectionEvidence ? rangeCorrectionEvidence.callables : getCallableSites(db, relativePath),
+    rangeCorrectionEvidence ? rangeCorrectionEvidence.callables : rangeCallableSites(db, relativePath),
   );
   if (callables) {
     return profileDefinitionWork(profileSpan, 'range-correction.ast-correction', () =>
@@ -756,6 +797,15 @@ export function correctDefinitionRangesFromSource(
   return profileDefinitionWork(profileSpan, 'range-correction.regex-fallback', () =>
     correctDefinitionRangesWithRegexFallback(definitions, source),
   );
+}
+
+function rangeCallableSites(db: ScipDatabase, relativePath: string): CallableSite[] | null {
+  const language = detectAstLanguage(relativePath);
+  const root = language && getAst(db, relativePath)?.rootNode;
+  // Range correction needs callable locations, not identifiers, call sites,
+  // branch counts and every other source fact. Reuse the same range-only
+  // traversal already used by runtime extraction; retain other language paths.
+  return (language && root && callableSitesFromRoot(root, language)) ?? getCallableSites(db, relativePath);
 }
 
 function correctDefinitionRangesWithRegexFallback(

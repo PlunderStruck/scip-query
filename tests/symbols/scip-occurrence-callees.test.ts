@@ -1,12 +1,16 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SymbolInformation_Kind } from '@c4312/scip';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { buildCalleeMap } from '../../src/symbols/graph/call-graph-evidence.js';
 import { findFirstSymbolMatch } from '../../src/symbols/symbol-lookup.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
+import { chunkOccurrenceTargetsForFile } from '../../src/symbols/graph/scip-chunk-occurrences.js';
+import { withFileAccessRecording } from '../../src/domain/file-access-recorder.js';
+import { getAllDefinitions, getDefinitionsForSymbols } from '../../src/symbols/definition-catalog.js';
+import * as sourceFacts from '../../src/source/facts/source-facts.js';
 
 const sym = (file: string, descriptor: string) => `scip-typescript npm test 1.0.0 src/\`${file}\`/${descriptor}`;
 const EXECUTE = sym('service.ts', 'Service#execute().');
@@ -70,6 +74,45 @@ describe('occurrence-resolved callee tier', () => {
   const tempDirs: string[] = [];
   afterEach(() => {
     for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('resolves exact occurrences without reading unrelated definition files', () => {
+    const { root, db } = buildFixture(true);
+    const fullFacts = vi.spyOn(sourceFacts, 'getSourceFacts');
+    tempDirs.push(root);
+    try {
+      const reads = new Set<string>();
+      const result = withFileAccessRecording(
+        (file) => reads.add(file),
+        () => chunkOccurrenceTargetsForFile(db, 'src/controller.ts'),
+      );
+      expect(result.available).toBe(true);
+      if (!result.available) throw new Error('Expected indexed occurrences');
+      expect(result.targets.map((target) => target.definition.symbol)).toEqual([EXECUTE]);
+      expect(reads.has('src/service.ts')).toBe(true);
+      expect(reads.has('src/other.ts')).toBe(false);
+      expect(reads.has('src/json.ts')).toBe(false);
+      expect(reads.has('src/tools.ts')).toBe(false);
+      expect(fullFacts).not.toHaveBeenCalled();
+      expect(result.targets[0]!.definition).toEqual(expect.objectContaining({ startLine: 1, endLine: 3 }));
+      expect(result.targets[0]!.definition).toEqual(getAllDefinitions(db).find((item) => item.symbol === EXECUTE));
+    } finally {
+      fullFacts.mockRestore();
+      db.close();
+    }
+  });
+
+  it('resolves large exact symbol sets while leaving absent external symbols unresolved', () => {
+    const { root, db } = buildFixture(true);
+    tempDirs.push(root);
+    try {
+      const symbols = [EXECUTE, ...Array.from({ length: 900 }, (_, i) => `external ${i}`), STAMP];
+      expect(getDefinitionsForSymbols(db, symbols)).toEqual(
+        getAllDefinitions(db).filter((item) => symbols.includes(item.symbol)),
+      );
+    } finally {
+      db.close();
+    }
   });
 
   it('uses the indexer binding at the call line and refuses guesses the compiler bound externally', () => {
