@@ -1,5 +1,5 @@
+import { GRAPH_EVIDENCE_STRENGTH_DEFINITIONS } from '../../domain/graph-relation-providers.js';
 import { SEARCH_CLI_DEFAULTS } from '../query-invocation-policy.js';
-import { chunked } from '../../domain/array-batches.js';
 import { quoteShellArgument } from '../../domain/shell-arguments.js';
 import * as queries from '../../queries/index.js';
 import { REPOSITORY_OBSERVATION_OPERATION } from '../command-operation.js';
@@ -45,10 +45,7 @@ import { displayLine, displayPathRange, displayRange, render } from '../render.j
 import { renderSessionEvidence, renderSourceEvidence } from '../source-emission-session.js';
 import { symbolResolutionBefore, symbolResolutionEmptyMessage, withSymbolResolutionJson } from './symbol-resolution.js';
 import { directNavigationQueryCommandDescriptors } from './direct-navigation.js';
-import {
-  SOURCE_INSPECTION_MAX_SELECTORS,
-  SOURCE_INSPECTION_SAFE_CHARACTERS,
-} from '../../domain/source-inspection-limits.js';
+import { SOURCE_INSPECTION_SAFE_CHARACTERS } from '../../domain/source-inspection-limits.js';
 import { trySearchSourceWithQueryService } from '../query-service.js';
 import { resolveProjectRoot } from '../cli-context.js';
 import type { SourceSearchOptions } from '../../queries/navigation/source-search.js';
@@ -241,41 +238,24 @@ function inspectionEvidenceBudgets(values: readonly string[]): queries.SourceIns
 }
 
 function sourceSearchSections(result: queries.SourceSearchResult): ReportSection[] {
-  const identities = sourceSearchRenderedIdentities(result);
-  const identityCoverage = sourceSearchIdentityCoverage(result, identities);
-  const sourcePreviews = result.matches.map((match) => sourceSearchPreview(result, match));
-  const sourceRows = sourcePreviews.map((preview) => preview.text);
-  const shortenedSourceLines = sourcePreviews.reduce((total, preview) => total + preview.shortenedLines, 0);
-  const identityRows = sourceSearchIdentityRows(identities);
-  const recoveryCommands = identityCoverage.mode === 'complete' ? sourceSearchRecoveryCommands(result, identities) : [];
-  const exactTextComplete = sourceSearchTextCoverageComplete(result);
-  const recoveryRows = sourceSearchRecoveryRows(result, identityCoverage.mode, recoveryCommands);
+  const previews = result.matches.map((match) => sourceSearchPreview(result, match));
+  const shortened = previews.reduce((total, preview) => total + preview.shortenedLines, 0);
+  const omitted = Math.max(0, result.matchingLines - result.matches.length);
   return [
     {
-      title: `OBSERVED MATCH IDENTITIES (${identities.length}/${result.matchingLines}, ${identityCoverage.mode.toUpperCase()})`,
-      rows: identityRows,
-    },
-    {
-      title: `OBSERVED SOURCE (${result.matches.length}/${result.matchingLines} WINDOWS)`,
-      rows: sourceRows,
+      title: `Matches (${result.matches.length}/${result.matchingLines} shown)`,
+      rows: previews.map((preview) => preview.text),
       preserveRowNewlines: true,
     },
     {
       title: 'Limits',
       rows: [
-        ...(!exactTextComplete
+        ...(!sourceSearchTextCoverageComplete(result)
           ? ['Text scan incomplete: unreadable or oversized files may contain additional matches.']
           : []),
-        ...(identityCoverage.omitted > 0
-          ? [`${identityCoverage.omitted} match identities omitted; narrow --scope.`]
-          : []),
-        ...(shortenedSourceLines > 0 ? [`${shortenedSourceLines} source line(s) shortened.`] : []),
+        ...(shortened > 0 ? [`${shortened} source line(s) shortened.`] : []),
+        ...(omitted > 0 ? [`${omitted} additional matching line(s); use --scope <path> or --full.`] : []),
       ],
-      skipIfEmpty: true,
-    },
-    {
-      title: 'More matches',
-      rows: result.omittedMatches || identityCoverage.omitted ? recoveryRows : [],
       skipIfEmpty: true,
     },
   ];
@@ -376,38 +356,6 @@ function sourceSearchIdentityCoverage(
   );
 }
 
-function sourceSearchScopeRows(result: queries.SourceSearchResult): string[] {
-  const files = result.fileCoverage ?? [];
-  const byScope = new Map<string, queries.SourceSearchFileCoverage[]>();
-  for (const file of files) {
-    const separator = file.relativePath.indexOf('/');
-    const scope = separator < 0 ? '<root>' : file.relativePath.slice(0, separator);
-    const rows = byScope.get(scope) ?? [];
-    rows.push(file);
-    byScope.set(scope, rows);
-  }
-  const manifestRows = [...byScope]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .flatMap(([scope, scopeFiles]) => {
-      const orderedFiles = [...scopeFiles].sort((left, right) => left.relativePath.localeCompare(right.relativePath));
-      const matchingLines = orderedFiles.reduce((total, file) => total + file.matchingLines, 0);
-      if (scope === '<root>') {
-        return orderedFiles.map(
-          (file) =>
-            `    ${file.relativePath}: ${file.matchingLines} match(es); scip-query search ${quoteShellArgument(result.pattern)} --scope ${quoteShellArgument(file.relativePath)}`,
-        );
-      }
-      return [
-        `    ${scope}: ${matchingLines} matching line(s) across ${orderedFiles.length} file(s); scip-query search ${quoteShellArgument(result.pattern)} --scope ${quoteShellArgument(scope)}`,
-      ];
-    });
-  return [
-    '  Broad selector: identity enumeration stopped before output transport; there is no cursor to drain.',
-    ...(manifestRows.length > 0 ? ['  Complete top-level recovery manifest:', ...manifestRows] : []),
-    '  Narrow one structural region; ordering does not infer task relevance.',
-  ];
-}
-
 function sourceSearchIdentities(result: queries.SourceSearchResult): queries.SourceSearchIdentity[] {
   return (
     result.identities ??
@@ -426,58 +374,6 @@ function sourceSearchIdentities(result: queries.SourceSearchResult): queries.Sou
 
 function sourceSearchRenderedIdentities(result: queries.SourceSearchResult): queries.SourceSearchIdentity[] {
   return result.identityManifest ?? sourceSearchIdentities(result);
-}
-
-function sourceSearchIdentityRows(identities: readonly queries.SourceSearchIdentity[]): string[] {
-  const byFile = new Map<string, queries.SourceSearchIdentity[]>();
-  for (const identity of identities) {
-    const rows = byFile.get(identity.relativePath) ?? [];
-    rows.push(identity);
-    byFile.set(identity.relativePath, rows);
-  }
-  return [...byFile.entries()].flatMap(([relativePath, fileIdentities]) => {
-    const byOwner = new Map<string, { label: string; lines: number[] }>();
-    for (const identity of fileIdentities) {
-      const ownerKey = identity.ownerSymbol ?? '<file>';
-      const ownerRange =
-        identity.ownerStartLine === null || identity.ownerEndLine === null
-          ? ''
-          : ` ${displayLine(identity.ownerStartLine)}-${displayLine(identity.ownerEndLine)}`;
-      const owner = byOwner.get(ownerKey) ?? {
-        label: identity.ownerShort ? `${identity.ownerShort}${ownerRange}` : '<file scope>',
-        lines: [],
-      };
-      owner.lines.push(displayLine(identity.focusLine));
-      byOwner.set(ownerKey, owner);
-    }
-    return [
-      `  ${relativePath}  [${fileIdentities[0]!.fileKind}; ${fileIdentities.length} match(es)]`,
-      ...[...byOwner.values()].flatMap((owner) =>
-        chunked(owner.lines, 24).map((lines, index) => `    ${index === 0 ? owner.label : '↳'} @ ${lines.join(',')}`),
-      ),
-    ];
-  });
-}
-
-function sourceSearchRecoveryCommands(
-  result: queries.SourceSearchResult,
-  identities: readonly queries.SourceSearchIdentity[],
-): string[] {
-  const materialized = new Set(result.matches.map((match) => sourceSearchIdentityKey(match)));
-  const selectors = new Set<string>();
-  for (const identity of identities) {
-    if (materialized.has(sourceSearchIdentityKey(identity))) continue;
-    const startLine = displayLine(identity.ownerStartLine ?? identity.focusLine);
-    const endLine = displayLine(identity.ownerEndLine ?? identity.focusLine);
-    selectors.add(`${identity.relativePath}:${startLine}-${endLine}`);
-  }
-  return chunked([...selectors], 24).map(
-    (batch) => `scip-query code ${batch.map((selector) => quoteShellArgument(selector)).join(' ')}`,
-  );
-}
-
-function sourceSearchIdentityKey(identity: Pick<queries.SourceSearchIdentity, 'relativePath' | 'focusLine'>): string {
-  return `${identity.relativePath}\0${identity.focusLine}`;
 }
 
 function inspectBehaviorFallbackCommand(opts: Readonly<Record<string, unknown>>): string {
@@ -575,22 +471,20 @@ function appendSearchScopeHints(search: queries.SourceInspectionResult['searches
   }
 }
 
-function sourceInspectionSections(result: queries.SourceInspectionResult): ReportSection[] {
+function sourceInspectionSections(result: queries.SourceInspectionResult, bindings = false): ReportSection[] {
   const units = result.units ?? [];
   const searchRows = result.searches.filter((search) => search.matchingLines === 0).map(sourceInspectionSearchRow);
   const locationRows = result.locations
     .filter((location) => !location.matched)
     .map((location) => `  ${location.matched ? 'matched' : 'missing'}  ${location.target}`);
   const sourceRows = units.map(sourceInspectionUnitRow);
-  const bindingRows = bindingClosureRows(result.bindingClosure);
+  const bindingRows = bindings ? bindingClosureRows(result.bindingClosure) : [];
   const omissionRows = (result.omissionGroups ?? []).map(sourceInspectionOmissionGroupRow);
-  const causalFrontierRows = sourceInspectionCausalFrontierRows(result);
   const resolutionRows = result.evidence.flatMap((item) => {
     const failure = evidenceFailureMessage(item, 'inspect');
     return failure ? [`  ${failure}`] : [];
   });
   const packetRows = sourceInspectionPacketRows(result);
-  const stoppingRows = sourceInspectionStoppingRows(result);
   return [
     {
       title: 'Unresolved selectors',
@@ -607,8 +501,8 @@ function sourceInspectionSections(result: queries.SourceInspectionResult): Repor
       preserveRowNewlines: true,
       skipIfEmpty: true,
     },
-    { title: 'Limits', rows: [...packetRows, ...stoppingRows], skipIfEmpty: true },
-    { title: 'RECOVERY', rows: [...omissionRows, ...causalFrontierRows], skipIfEmpty: true },
+    { title: 'Limits', rows: packetRows, skipIfEmpty: true },
+    { title: 'RECOVERY', rows: omissionRows, skipIfEmpty: true },
   ];
 }
 
@@ -636,64 +530,6 @@ function sourceInspectionBoundedPacketRows(
         ]
       : []),
   ];
-}
-
-function sourceInspectionStoppingRows(result: queries.SourceInspectionResult): string[] {
-  return result.stoppingSummary && result.stoppingSummary.openEvidence > 0
-    ? [
-        `  ${result.stoppingSummary.queryStatus ?? result.stoppingSummary.status}: ${result.stoppingSummary.guidance}`,
-        ...(result.stoppingSummary.openEvidence > 0
-          ? [
-              `  ${result.stoppingSummary.openEvidence} open evidence item(s); ${(result.omissionGroups ?? []).length} recoverable omission group(s).`,
-            ]
-          : []),
-      ]
-    : [];
-}
-
-function sourceInspectionCausalFrontierRows(result: queries.SourceInspectionResult): string[] {
-  const frontier = result.causalFrontier;
-  if (!frontier || frontier.candidateAnchors === 0) return [];
-  const selected = frontier.anchors.filter((anchor) => anchor.alternativeCount === 1);
-  const rows = [
-    `  ${selected.length}/${frontier.candidateAnchors} bounded downstream target(s) are uniquely resolved and visible; these targets are outside the materialized constructs, not evidence already inspected.`,
-  ];
-  for (const anchor of selected) {
-    const target = anchor.alternatives[0]!;
-    const signals = anchor.callsite.signals.length > 0 ? ` [${anchor.callsite.signals.join(',')}]` : '';
-    rows.push(
-      `  ${anchor.direction ?? 'downstream'} ${anchor.causalRole ?? 'callee'} from ${anchor.fromLabel} at ${anchor.callsite.file}:${displayLine(anchor.callsite.line)}${signals}`,
-      `    ${target.label} — ${target.file}:${displayLine(target.line)}`,
-    );
-  }
-
-  const locations = uniqueInspectionLocations([
-    ...(result.omissionGroups ?? []).flatMap((group) =>
-      group.anchors.map((anchor) => ({ file: anchor.relativePath, line: anchor.line })),
-    ),
-    ...selected.map((anchor) => ({ file: anchor.alternatives[0]!.file, line: anchor.alternatives[0]!.line })),
-  ]).slice(0, SOURCE_INSPECTION_MAX_SELECTORS);
-  if (locations.length > 0) {
-    rows.push(
-      `  If any listed target or withheld requested construct remains material, run this one final recovery batch before answering: scip-query inspect ${locations
-        .map((location) => `--at ${quoteShellArgument(`${location.file}:${displayLine(location.line)}`)}`)
-        .join(' ')} --view behavior`,
-    );
-  }
-  if (frontier.omittedAnchors > 0) {
-    rows.push(
-      `  ${frontier.omittedAnchors} additional downstream target(s) remain accounted in the frontier; use the printed remaining inspect commands only for a named unresolved fact.`,
-    );
-  }
-  return rows;
-}
-
-function uniqueInspectionLocations(
-  locations: readonly { file: string; line: number }[],
-): Array<{ file: string; line: number }> {
-  const unique = new Map<string, { file: string; line: number }>();
-  for (const location of locations) unique.set(`${location.file}\0${location.line}`, location);
-  return [...unique.values()];
 }
 
 function renderInspectionRoleCounts(counts: Partial<Record<queries.SourceInspectionUnitRole, number>>): string {
@@ -820,7 +656,6 @@ function evidenceSections(result: queries.QualifiedEvidenceResult): ReportSectio
           ownerSymbol: result.definition.shortName,
           headerSuffix: `  ${result.definition.shortName}`,
         }),
-        ...bindingClosureRows(result.definition.bindingClosure),
       ]
     : [];
   const referenceRows = result.referenceWindows.map((window) => {
@@ -862,7 +697,7 @@ function evidenceSections(result: queries.QualifiedEvidenceResult): ReportSectio
   ];
 }
 
-function evidenceCommandSections(result: EvidenceCommandResult): ReportSection[] {
+function evidenceCommandSections(result: EvidenceCommandResult, detail = false): ReportSection[] {
   if (result.kind !== 'graph-packet') return evidenceSections(result);
   const selection: NonNullable<MaterializedGraphEvidence['graph']['selection']> = result.graph.selection ?? {
     direction: 'both',
@@ -871,21 +706,13 @@ function evidenceCommandSections(result: EvidenceCommandResult): ReportSection[]
     inventoryOnly: false,
     foldIds: [],
   };
-  const requestRows = graphEvidenceRequestRows(result.graph, selection);
+  const requestRows = graphEvidenceRequestRows(result.graph);
   const relationshipRows = queries.GRAPH_EVIDENCE_FAMILIES.flatMap((family) => {
     const edges = result.graph.edges.filter((edge) => edge.family === family);
     if (edges.length === 0) return [];
     return [`  ${family} (${edges.length})`, ...edges.map((edge) => `    ${graphEvidenceEdgeRow(edge)}`)];
   });
-  const inventoryRows = (result.graph.inventory ?? []).map(
-    (row) =>
-      `  inventory ${row.family}/${row.subtype}: incoming=${row.incoming}; outgoing=${row.outgoing}; both=${row.both}`,
-  );
-  if (inventoryRows.length > 0) {
-    inventoryRows.unshift(
-      '  Inventory basis: incoming and outgoing are separately deduplicated reachable-edge sets around the selected roots; both is their deduplicated union, so it need not equal their sum.',
-    );
-  }
+  const inventoryRows = graphEvidenceInventoryRows(result.graph, selection, detail);
   const foldRows = graphEvidenceFoldRows(result.graph.folds ?? []);
   const coverage = result.graph.coverage;
   const sourceSections = result.source.flatMap((item) => {
@@ -912,21 +739,52 @@ function evidenceCommandSections(result: EvidenceCommandResult): ReportSection[]
       : []),
   ];
   return [
-    { title: 'REQUEST', rows: requestRows },
-    { title: 'OBSERVED FACTS', rows: [...inventoryRows, ...relationshipRows], skipIfEmpty: true },
+    {
+      title: `${result.graph.families.join(', ')} ${selection.direction} (depth ${coverage.maxDepth})`,
+      rows: requestRows,
+    },
+    { rows: [...inventoryRows, ...relationshipRows], skipIfEmpty: true },
     ...sourceSections,
-    { title: 'Limits', rows: graphEvidenceLimitRows(coverage), skipIfEmpty: true },
+    {
+      title: 'Provider details',
+      rows: detail ? graphEvidenceCalibrationRows(result.graph.edges) : [],
+      skipIfEmpty: true,
+    },
+    { title: 'Limits', rows: graphEvidenceLimitRows(coverage, detail), skipIfEmpty: true },
     { title: 'RECOVERY', rows: recoveryRows, skipIfEmpty: true },
   ];
 }
 
-function graphEvidenceLimitRows(coverage: queries.GraphEvidenceCoverage): string[] {
+function graphEvidenceInventoryRows(
+  graph: MaterializedGraphEvidence['graph'],
+  selection: NonNullable<MaterializedGraphEvidence['graph']['selection']>,
+  detail: boolean,
+): string[] {
+  const inventoryRows = (selection.inventoryOnly || detail ? (graph.inventory ?? []) : []).map(
+    (row) =>
+      `  inventory ${row.family}/${row.subtype}: incoming=${row.incoming}; outgoing=${row.outgoing}; both=${row.both}`,
+  );
+  if (inventoryRows.length > 0) {
+    inventoryRows.unshift('  Distinct reachable edges by direction:');
+  }
+  return inventoryRows;
+}
+
+function graphEvidenceLimitRows(coverage: queries.GraphEvidenceCoverage, detail: boolean): string[] {
   return [
     ...(coverage.omittedEdges > 0
       ? [`${coverage.omittedEdges} matching relationship(s) omitted; ${coverage.returnedEdges} shown.`]
       : []),
     ...(coverage.status === 'incomplete' ? [coverage.explanation] : []),
-    ...uniqueStrings(coverage.blindSpots).map((blindSpot) => `Unavailable: ${blindSpot}`),
+    ...(coverage.unsupportedFrontiers > 0
+      ? [
+          `${coverage.unsupportedFrontiers} unresolved relationship group(s); do not infer absence. Use --detail for provider limits.`,
+        ]
+      : []),
+    ...(coverage.rejectedRelationships
+      ? [`${coverage.rejectedRelationships} unsupported relationship(s) withheld.`]
+      : []),
+    ...(detail ? uniqueStrings(coverage.blindSpots).map((blindSpot) => `Unavailable: ${blindSpot}`) : []),
   ];
 }
 
@@ -948,6 +806,28 @@ function graphEvidenceFoldRows(folds: readonly queries.GraphEvidenceFold[]): str
     '  Rerun the same selectors and bounds with --fold <id>; each ID materializes exactly that folded edge set.',
     ...rows,
   ];
+}
+
+function graphEvidenceCalibrationRows(edges: readonly queries.GraphEvidenceEdge[]): string[] {
+  const strengths = uniqueStrings(edges.map((edge) => edge.evidenceStrength));
+  const rows =
+    strengths.length === 0
+      ? ['  No relationships were materialized, so no edge evidence strength is claimed.']
+      : strengths.map((strength) => `  ${strength}: ${GRAPH_EVIDENCE_STRENGTH_DEFINITIONS[strength]}`);
+  const contracts = new Map<string, string>();
+  for (const edge of edges) {
+    const constituents = (
+      edge.evidenceConstituents ?? edge.evidenceMethods.map((method) => ({ method, strength: edge.evidenceStrength }))
+    )
+      .map((constituent) => `${constituent.method}=${constituent.strength}`)
+      .join(', ');
+    const key = `${edge.family}/${edge.subtype}\0${edge.providerId}\0${edge.evidenceStrength}\0${constituents}`;
+    contracts.set(
+      key,
+      `  ${edge.family}/${edge.subtype} [${edge.evidenceStrength}] provider=${edge.providerId}; ceiling=${edge.supportCeiling}; constituents=${constituents || 'none reported'}; establishes=${edge.establishes}; does-not-establish=${edge.nonClaims.join(' ') || 'no additional provider non-claim'}`,
+    );
+  }
+  return [...rows, ...contracts.values()];
 }
 
 function uniqueStrings<T extends string>(values: readonly T[]): T[] {
@@ -1110,6 +990,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
     command: 'inspect',
     description: 'Batch related searches, symbols, and source locations into one deduplicated source packet',
     options: [
+      option('--bindings', 'Also display referenced literal values outside requested source'),
       option('--search <text>', 'Find this literal text; repeat for related anchors', collectValues, []),
       option(
         '--symbol <symbol>',
@@ -1265,12 +1146,12 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       packetCoverage: result.packetCoverage,
       stoppingSummary: result.stoppingSummary,
     }),
-    sections: sourceInspectionSections,
+    sections: (result, { opts }) => sourceInspectionSections(result, booleanOptionValue(opts, 'bindings')),
   }),
   precomputedSectionedQueryCommand({
     id: 'search',
     command: 'search <exact-text>',
-    description: 'Count current project text matches and preview a bounded, recoverable identity and source manifest',
+    description: 'Find current text matches with exact locations and optional compiler owners',
     options: [
       option('-s, --scope <path>', 'Limit the search to current project paths matching this text'),
       option(
@@ -1397,6 +1278,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       option('--direction <direction>', 'Traverse incoming, outgoing, or both directed relationships'),
       option('--subtype <subtype>', 'Select exact relationship subtypes; repeat or comma-separate', collectValues, []),
       option('--connecting', 'Return deterministic shortest paths connecting the resolved roots'),
+      option('--detail', 'Include relationship inventory and full provider limitations'),
       option('--inventory-only', 'Count relationships by family, subtype, and direction without rendering edges'),
       option(
         '--fold <id>',
@@ -1567,7 +1449,7 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
       sourceSelectors: result.source.length,
       sourceRecovery: result.sourceRecovery,
     }),
-    sections: evidenceCommandSections,
+    sections: (result, { opts }) => evidenceCommandSections(result, booleanOptionValue(opts, 'detail')),
   }),
   listQueryCommand({
     id: 'deps',
@@ -1812,21 +1694,6 @@ export const navigationQueryCommandDescriptors: CommandDescriptor[] = [
   },
 ];
 
-function sourceSearchRecoveryRows(
-  result: queries.SourceSearchResult,
-  mode: ReturnType<typeof sourceSearchIdentityCoverage>['mode'],
-  recoveryCommands: string[],
-): string[] {
-  return mode === 'bounded'
-    ? sourceSearchScopeRows(result)
-    : recoveryCommands.length > 0
-      ? [
-          `  Recover every unmaterialized owning unit in ${recoveryCommands.length} bounded batch command(s):`,
-          ...recoveryCommands.map((command) => `  ${command}`),
-        ]
-      : ['  Every matching source window was materialized; no drilldown remains.'];
-}
-
 function sourceInspectionBehaviorEvidenceRows(
   unit: Extract<queries.SourceInspectionUnit, { kind: 'source' }>,
   behavior: NonNullable<typeof unit.behavior>,
@@ -1853,13 +1720,8 @@ function sourceInspectionBehaviorEvidenceRows(
 
 type MaterializedGraphEvidence = Extract<EvidenceCommandResult, { kind: 'graph-packet' }>;
 
-function graphEvidenceRequestRows(
-  graph: MaterializedGraphEvidence['graph'],
-  selection: NonNullable<MaterializedGraphEvidence['graph']['selection']>,
-): string[] {
+function graphEvidenceRequestRows(graph: MaterializedGraphEvidence['graph']): string[] {
   return [
-    `  direction=${selection.direction}; subtypes=${selection.subtypes.length > 0 ? selection.subtypes.join(',') : 'all'}; ` +
-      `operation=${selection.connecting ? 'connecting' : 'reachability'}; materialization=${selection.inventoryOnly ? 'inventory-only' : selection.foldIds.length > 0 ? `folds(${selection.foldIds.join(',')})` : 'edges'}`,
     ...graph.targets.map((target) => {
       const omitted = target.omittedCandidates > 0 ? `; ${target.omittedCandidates} candidate(s) omitted` : '';
       return `  selector [${target.status}] ${target.kind} ${target.query}${omitted}`;

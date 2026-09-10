@@ -180,7 +180,8 @@ describe('current-source module evidence', () => {
     expect(output).toContain('Module groups (1/4 shown)');
     expect(output).toContain('Cross-group production dependencies (1/2 shown)');
     expect(output).toContain('scip-query system --source --full');
-    expect(output).toContain('symbol consumers require indexed surface');
+    expect(output).not.toContain('Source exports');
+    expect(output).not.toContain('Incoming imports');
   });
 
   it('preserves indexed dispatch and rejects source-only controls before querying', () => {

@@ -271,7 +271,10 @@ const handleCode = dbCommand(({ db, args, opts }) => {
     });
     return;
   }
-  const packet = single ? codeResultText(single, result.bindingClosure, true) : codeBatchText(result, true);
+  const bindings = booleanOptionValue(opts, 'bindings');
+  const packet = single
+    ? codeResultText(single, bindings ? result.bindingClosure : undefined, true)
+    : codeBatchText(result, true, bindings);
   if (single) {
     process.stdout.write(packet);
     return;
@@ -305,11 +308,11 @@ function codeFileMemberMode(opts: Readonly<Record<string, unknown>>): CodeFileMe
   throw new RangeError(`--members must be "exported" or "all", got "${value}".`);
 }
 
-function codeBatchText(result: CodeBatchResult, sessionAware = false): string {
+function codeBatchText(result: CodeBatchResult, sessionAware = false, bindings = false): string {
   const lines: string[] = [];
   appendCodeBatchSources(lines, result, sessionAware);
   appendCodeBatchSections(lines, result);
-  appendCodeBindingClosure(lines, result.bindingClosure);
+  if (bindings) appendCodeBindingClosure(lines, result.bindingClosure);
   appendCodeFreshness(
     lines,
     result.entries.flatMap((entry) => entry.results),
@@ -650,6 +653,7 @@ export const directNavigationQueryCommandDescriptors: CommandDescriptor[] = [
         parseNonNegativeInteger,
         CODE_CLI_DEFAULTS.context,
       ),
+      option('--bindings', 'Also display referenced literal values outside the requested source'),
       option('--local-calls', 'Also read statically attributed same-file callees of a selected line range'),
       option(
         '--members <exported|all>',

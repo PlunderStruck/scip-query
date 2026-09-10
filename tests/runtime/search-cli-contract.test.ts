@@ -124,26 +124,26 @@ describe('search CLI identity and materialization contract', { timeout: 30_000 }
     rmSync(fixtureRoot, { recursive: true, force: true });
   });
 
-  it('reports every identity while materializing only the requested representative windows', () => {
+  it('shows only requested source windows with an honest total and a concise expansion hint', () => {
     const invocation = runSearch(['needle', '--limit', '2', '--context', '0']);
 
     expect(invocation.status).toBe(0);
     expect(invocation.stderr).toBe('');
-    expect(invocation.stdout).toContain('OBSERVED MATCH IDENTITIES (30/30, COMPLETE)');
-    expect(invocation.stdout).toContain('OBSERVED SOURCE (2/30 WINDOWS)');
+    expect(invocation.stdout).not.toContain('OBSERVED MATCH IDENTITIES');
+    expect(invocation.stdout).toContain('Matches (2/30 shown)');
     expect(invocation.stdout).not.toContain('EVIDENCE CALIBRATION');
-    expect(invocation.stdout).toContain('Recover every unmaterialized owning unit in 2 bounded batch command(s)');
-    expect(invocation.stdout).toContain('src/group-30/match.ts');
+    expect(invocation.stdout).toContain('28 additional matching line(s)');
+    expect(invocation.stdout).not.toContain('src/group-30/match.ts');
     expect(invocation.stdout).not.toContain('␤');
     expect(invocation.stdout).not.toContain('[scip-query output page:');
   });
 
-  it('keeps the default locator view small while preserving the complete identity manifest', () => {
+  it('keeps the default locator view small without a duplicate identity manifest', () => {
     const invocation = runSearch(['needle']);
 
     expect(invocation.status).toBe(0);
-    expect(invocation.stdout).toContain('OBSERVED MATCH IDENTITIES (30/30, COMPLETE)');
-    expect(invocation.stdout).toContain('OBSERVED SOURCE (6/30 WINDOWS)');
+    expect(invocation.stdout).not.toContain('OBSERVED MATCH IDENTITIES');
+    expect(invocation.stdout).toContain('Matches (6/30 shown)');
   });
 
   it('centers overlong human source previews on the match without changing JSON evidence', () => {
@@ -180,8 +180,8 @@ describe('search CLI identity and materialization contract', { timeout: 30_000 }
     const invocation = runSearch(['needle', '--full', '--context', '0']);
 
     expect(invocation.status).toBe(0);
-    expect(invocation.stdout).toContain('OBSERVED MATCH IDENTITIES (30/30, COMPLETE)');
-    expect(invocation.stdout).toContain('OBSERVED SOURCE (30/30 WINDOWS)');
+    expect(invocation.stdout).not.toContain('OBSERVED MATCH IDENTITIES');
+    expect(invocation.stdout).toContain('Matches (30/30 shown)');
   });
 
   it('bounds an accidentally broad identity selector before transport while preserving exact recovery scopes', () => {
@@ -189,9 +189,9 @@ describe('search CLI identity and materialization contract', { timeout: 30_000 }
 
     expect(invocation.status).toBe(0);
     expect(invocation.stderr).toBe('');
-    expect(invocation.stdout).toContain('OBSERVED MATCH IDENTITIES (64/150, BOUNDED)');
-    expect(invocation.stdout).toContain('Broad selector: identity enumeration stopped before output transport');
-    expect(invocation.stdout).toContain("scip-query search 'broad_selector_token' --scope 'src'");
+    expect(invocation.stdout).toContain('Matches (2/150 shown)');
+    expect(invocation.stdout).toContain('148 additional matching line(s)');
+    expect(invocation.stdout).toContain('use --scope <path> or --full.');
     expect(invocation.stdout).not.toContain('[scip-query output page:');
     expect(invocation.stdout.length).toBeLessThan(32_000);
   });
@@ -213,8 +213,8 @@ describe('search CLI identity and materialization contract', { timeout: 30_000 }
     ]);
 
     expect(invocation.status).toBe(0);
-    expect(invocation.stdout).toContain('REQUEST');
-    expect(invocation.stdout).toContain('OBSERVED FACTS');
+    expect(invocation.stdout).toContain('execution both (depth 1)');
+    expect(invocation.stdout).not.toContain('OBSERVED FACTS');
     expect(invocation.stdout).not.toContain('EVIDENCE CALIBRATION');
     expect(invocation.stdout).not.toContain('COVERAGE');
     expect(invocation.stdout).toContain('RECOVERY');
@@ -272,7 +272,8 @@ describe('search CLI identity and materialization contract', { timeout: 30_000 }
     const invocation = runSearch(['sourceOwnedCommand']);
 
     expect(invocation.status).toBe(0);
-    expect(invocation.stdout).toContain('sourceOwnedCommand 2-4 @ 2');
+    expect(invocation.stdout).toContain('in sourceOwnedCommand');
+    expect(invocation.stdout).toContain('src/object-commands.ts:');
     expect(invocation.stdout).not.toContain('<file scope> @ 2');
   });
 

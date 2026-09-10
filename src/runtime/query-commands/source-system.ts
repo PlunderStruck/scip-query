@@ -144,15 +144,16 @@ export function renderSourceSystem(
   console.log(
     `Module evidence — current source: ${report.coverage.capturedFiles}/${report.coverage.eligibleFiles} eligible files; ${report.modules.length}/${report.totalModules} groups selected.`,
   );
-  if (report.coverage.status === 'incomplete') console.log('Source scan incomplete; see unresolved files below.');
-  const policy = report.architecture;
-  console.log(
-    policy.configured
-      ? `Architecture: ${policy.coverage.mappedFiles}/${policy.coverage.totalFiles} files mapped; ${policy.policyCoverage.declaredRows}/${policy.policyCoverage.totalBoundaries} dependency rows declared. Missing rows: ${policy.policyCoverage.missingRows.join(', ') || 'none'}.`
-      : 'Architecture: no configured boundaries or dependency policy; directory groups are provisional.',
-  );
+  renderSourceSystemPolicy(report);
   console.log(`\nModule groups (${Math.min(limit, report.modules.length)}/${report.modules.length} shown):`);
-  for (const group of report.modules.slice(0, limit)) renderSourceModule(group, report.imports, limit, groupRecovery);
+  for (const group of report.modules.slice(0, limit))
+    renderSourceModule(
+      group,
+      report.imports,
+      limit,
+      groupRecovery,
+      report.selector !== undefined || limit === Infinity,
+    );
   renderModuleEdges(report, limit);
   renderModuleFindings(report, limit);
   if (report.modules.length > limit || report.edges.length > limit || report.findings.length > limit)
@@ -162,7 +163,18 @@ export function renderSourceSystem(
     console.log(`Unresolved import: ${importLabel(unresolved)}`);
 }
 
+function renderSourceSystemPolicy(report: SourceSystemReport): void {
+  if (report.coverage.status === 'incomplete') console.log('Source scan incomplete; see unresolved files below.');
+  const policy = report.architecture;
+  console.log(
+    policy.configured
+      ? `Architecture: ${policy.coverage.mappedFiles}/${policy.coverage.totalFiles} files mapped; ${policy.policyCoverage.declaredRows}/${policy.policyCoverage.totalBoundaries} dependency rows declared. Missing rows: ${policy.policyCoverage.missingRows.join(', ') || 'none'}.`
+      : 'Architecture: no configured boundaries or dependency policy; directory groups are provisional.',
+  );
+}
+
 function renderModuleEdges(report: SourceSystemReport, limit: number): void {
+  if (report.edges.length === 0) return;
   console.log(
     `\nCross-group production dependencies (${Math.min(limit, report.edges.length)}/${report.edges.length} shown):`,
   );
@@ -174,6 +186,7 @@ function renderModuleEdges(report: SourceSystemReport, limit: number): void {
 }
 
 function renderModuleFindings(report: SourceSystemReport, limit: number): void {
+  if (report.findings.length === 0) return;
   console.log(
     `\nRelated findings (${Math.min(limit, report.findings.length)}/${report.findings.length} shown; candidates require review):`,
   );
@@ -188,11 +201,13 @@ function renderSourceModule(
   imports: SourceSystemReport['imports'],
   limit: number,
   recovery: (id: string) => string,
+  detail: boolean,
 ): void {
   const detailLimit = limit === Infinity ? Infinity : 3;
   console.log(
     `  ${group.id} [${group.basis}]: ${group.files.length} files; ${group.exports.length} export declarations; ${group.dependencies.length} production dependency files; ${group.consumers.length} production consumer files; ${group.findingIds.length} findings.`,
   );
+  if (!detail) return;
   console.log(
     `    Files (${Math.min(detailLimit, group.files.length)}/${group.files.length}): ${group.files.slice(0, detailLimit).join(', ')}`,
   );

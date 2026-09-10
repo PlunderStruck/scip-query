@@ -165,3 +165,5 @@ These five registered controls are not additional analysis choices. Run an emitt
 - **Candidate list versus deletion procedure:** dead classifies usage signals; cleanup-plan orders possible deletions and offers an isolated checker run. Neither authorizes deletion by itself.
 
 Full flag documentation is in [the command reference](../../../docs/COMMAND_REFERENCE.md). When this guide and a runtime packet disagree, preserve the packet's limits and report the mismatch; do not strengthen the claim to fit the guide.
+
+Ordinary oversized human results are saved to a temporary file with a short preview. Search displays the selected matching windows once; `--full` requests all source windows. The `system --source` inventory shows groups and dependencies; select a group for file/export/import detail. `evidence --detail` adds provider contracts and limitations to the selected relationship projection. `code --bindings` and `inspect --bindings` explicitly add referenced literal values; source reads omit those additions by default.

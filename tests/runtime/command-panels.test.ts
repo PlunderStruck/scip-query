@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 import { describe, expect, it } from 'vitest';
 import { commandPanels, renderRootCommandHelp } from '../../src/runtime/commands/command-panels.js';
-import { PRIMARY_EXPLORATION_COMMAND_IDS } from '../../src/runtime/command-kit/exploration-manual.js';
 import { commandDescriptors } from '../../src/runtime/commands/command-descriptors.js';
 
 describe('command cockpit panels', () => {
@@ -11,9 +10,15 @@ describe('command cockpit panels', () => {
 
     expect(ids).toHaveLength(commandDescriptors.length);
     expect(new Set(ids).size).toBe(commandDescriptors.length);
-    expect(panels.find((panel) => panel.id === 'primary-exploration')?.commands.map((command) => command.id)).toEqual(
-      PRIMARY_EXPLORATION_COMMAND_IDS,
-    );
+    expect(panels.find((panel) => panel.id === 'primary-exploration')?.commands.map((command) => command.id)).toEqual([
+      'system',
+      'context',
+      'evidence',
+      'health',
+      'review',
+      'diff-impact',
+      'architecture',
+    ]);
   });
 
   it('keeps advanced and compatibility controls out of ordinary help and exposes them explicitly', () => {
@@ -23,7 +28,7 @@ describe('command cockpit panels', () => {
     const ordinary = renderRootCommandHelp(program, commandDescriptors);
     const complete = renderRootCommandHelp(program, commandDescriptors, { includeCompatibility: true });
 
-    expect(ordinary).toContain('Primary exploration:');
+    expect(ordinary).toContain('Relationships and quality:');
     expect(ordinary).toContain('Maintenance:');
     for (const name of ['health', 'review', 'context']) expect(ordinary).toMatch(new RegExp(`^  ${name} `, 'm'));
     expect(ordinary).not.toContain('Specialized analysis:');

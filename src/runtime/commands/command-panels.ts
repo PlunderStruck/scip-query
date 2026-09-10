@@ -1,6 +1,5 @@
 import type { Command } from 'commander';
 import type { CommandDescriptor } from '../command-kit/command-descriptor-types.js';
-import { PRIMARY_EXPLORATION_COMMAND_IDS } from '../command-kit/exploration-manual.js';
 
 export type CommandPanelId =
   | 'primary-exploration'
@@ -16,6 +15,15 @@ export interface CommandPanel {
   commands: readonly CommandDescriptor[];
 }
 
+const PRIMARY_EXPLORATION_COMMAND_IDS = [
+  'system',
+  'context',
+  'evidence',
+  'health',
+  'review',
+  'diff-impact',
+  'architecture',
+];
 const PRIMARY_IDS = new Set<string>(PRIMARY_EXPLORATION_COMMAND_IDS);
 const PRIMARY_ORDER = new Map<string, number>(PRIMARY_EXPLORATION_COMMAND_IDS.map((id, index) => [id, index]));
 const SPECIALIZED_CATEGORIES = new Set(['Navigation', 'Graph', 'Impact', 'Exploration']);
@@ -25,7 +33,6 @@ const MAINTENANCE_CATEGORIES = new Set(['Indexing', 'Core', 'Maintenance']);
 export function commandPanelId(descriptor: CommandDescriptor): CommandPanelId {
   if (descriptor.hidden || descriptor.agent?.semantic?.compatibility === 'deprecated') return 'compatibility';
   if (PRIMARY_IDS.has(descriptor.id)) return 'primary-exploration';
-  if (['health', 'review', 'context'].includes(descriptor.id)) return 'maintenance';
   const category = descriptor.docs?.category;
   const panel = categoryCommandPanel(category);
   if (panel) return panel;
@@ -39,8 +46,8 @@ export function commandPanels(
   const definitions: ReadonlyArray<Omit<CommandPanel, 'commands'>> = [
     {
       id: 'primary-exploration',
-      title: 'Primary exploration',
-      purpose: 'Locate exact referents, project chosen relationships, and read only named implementation gaps.',
+      title: 'Relationships and quality',
+      purpose: 'Inspect structure, reuse existing code, find problems and review changes.',
     },
     {
       id: 'specialized-analysis',
@@ -55,7 +62,7 @@ export function commandPanels(
     {
       id: 'maintenance',
       title: 'Maintenance',
-      purpose: 'Scan current source, plan changes, review diffs, and maintain the index and local integrations.',
+      purpose: 'Manage the index and local integrations.',
     },
     {
       id: 'compatibility',
