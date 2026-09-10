@@ -4,12 +4,17 @@ import type * as TypeScript from 'typescript';
 import type { SemanticReferenceFragment } from '../semantic/types.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { installTypeScriptDocumentEncoding } from './typescript-document-encoding.js';
+import { TypeScriptFragmentCache } from './typescript-document-blob.js';
 import {
   installTypeScriptSuperCalls,
   type TypeScriptCallIndexer,
   type TypeScriptCallOccurrenceConstructor,
 } from './typescript-super-calls.js';
-import { installTypeScriptSymbolIdentity, type TypeScriptSymbolConstructors } from './typescript-symbol-identity.js';
+import {
+  installTypeScriptSymbolIdentity,
+  typeScriptExportBoundary,
+  type TypeScriptSymbolConstructors,
+} from './typescript-symbol-identity.js';
 import {
   installTypeScriptDeclarationEvidence,
   type TypeScriptDeclarationIndexer,
@@ -18,7 +23,7 @@ import {
 
 const require = createRequire(import.meta.url);
 
-export const SCIP_TYPESCRIPT_DOCUMENT_EMITTER_ADAPTER_VERSION = 6;
+export const SCIP_TYPESCRIPT_DOCUMENT_EMITTER_ADAPTER_VERSION = 7;
 const SUPPORTED_SCIP_TYPESCRIPT_VERSION = '0.4.0';
 
 type TypeScriptModule = typeof TypeScript;
@@ -111,6 +116,7 @@ export interface TypeScriptDocumentEmitterStats {
   initializations: number;
   programUpdates: number;
   documentsEmitted: number;
+  documentsReused: number;
   documentsRemoved: number;
   sourceNodesReused: number;
   sourceNodesReplaced: number;
@@ -138,6 +144,13 @@ export interface TypeScriptDocumentAdvanceResult {
   fragments: TypeScriptDocumentFragment[];
   durationMs: number;
   stats: TypeScriptDocumentEmitterStats;
+}
+
+interface ConsumerDocumentReuse {
+  program: TypeScript.Program;
+  options: string;
+  boundaries: ReadonlyMap<string, string>;
+  documents: TypeScriptFragmentCache;
 }
 
 // scip-query: ignore-stale — reviewed S1 owned contract; this union makes emitter creation failure explicit.
@@ -296,10 +309,12 @@ export class TypeScriptDocumentEmitter {
   private constructorTable = new Map<TypeScript.ClassDeclaration, boolean>();
   private packages: unknown;
   private fragments = new Map<string, Uint8Array>();
+  private documentCache = new TypeScriptFragmentCache();
   private stats: TypeScriptDocumentEmitterStats = {
     initializations: 0,
     programUpdates: 0,
     documentsEmitted: 0,
+    documentsReused: 0,
     documentsRemoved: 0,
     sourceNodesReused: 0,
     sourceNodesReplaced: 0,
@@ -341,20 +356,13 @@ export class TypeScriptDocumentEmitter {
       this.validateAffectedPaths(affectedFiles);
       return this.result(this.emitAffectedFiles(affectedFiles), startedAt);
     }
+    const reusable = this.detachConsumerDocuments(modifiedFiles, removedFiles);
     const config = readTypeScriptConfig(this.runtime.typescript, this.tsconfigPath);
     this.config = config;
     this.includedFiles = new Set(config.fileNames.map(normalizedAbsolutePath));
 
     const previousProgram = this.program;
-    const previousNodes = new Map<string, TypeScript.SourceFile>();
-    for (const relativePath of [...modifiedFiles, ...removedFiles]) {
-      const absolutePath = resolveWithin(this.workspaceRoot, relativePath);
-      const sourceFile = previousProgram.getSourceFile(absolutePath);
-      if (sourceFile) {
-        previousNodes.set(relativePath, sourceFile);
-      }
-      this.host.invalidate(absolutePath);
-    }
+    const previousNodes = this.invalidateSourceNodes([...modifiedFiles, ...removedFiles]);
 
     this.program = this.runtime.typescript.createProgram(
       config.fileNames,
@@ -366,11 +374,9 @@ export class TypeScriptDocumentEmitter {
     this.stats.programUpdates += 1;
     this.validateIncrementalPaths(modifiedFiles, removedFiles, affectedFiles);
     this.stats.documentsRemoved += removedFiles.length;
-    for (const [relativePath, previousNode] of previousNodes) {
-      const currentNode = this.program.getSourceFile(resolveWithin(this.workspaceRoot, relativePath));
-      if (currentNode === previousNode) this.stats.sourceNodesReused += 1;
-      else this.stats.sourceNodesReplaced += 1;
-    }
+    this.recordSourceNodeUpdates(previousNodes);
+
+    this.restoreConsumerDocuments(reusable, modifiedFiles);
 
     return this.result(this.emitAffectedFiles(affectedFiles), startedAt);
   }
@@ -397,6 +403,7 @@ export class TypeScriptDocumentEmitter {
   }
 
   private initializeProgram(): void {
+    this.documentCache = new TypeScriptFragmentCache();
     this.symbolTable = new Map();
     this.constructorTable.clear();
     const config = this.config ?? readTypeScriptConfig(this.runtime.typescript, this.tsconfigPath);
@@ -458,22 +465,21 @@ export class TypeScriptDocumentEmitter {
   private emitSourceFile(sourceFile: TypeScript.SourceFile): TypeScriptDocumentFragment {
     if (!this.checker) throw new Error('TypeScript document emitter is not initialized');
     const relativePath = normalizeRelativePath(relative(this.workspaceRoot, sourceFile.fileName));
+    const cached = this.documentCache.get(relativePath);
+    if (cached !== undefined) {
+      this.stats.documentsReused += 1;
+      if (cached !== null) this.fragments.set(relativePath, cached);
+      const document = cached === null ? null : this.runtime.Document.deserializeBinary(cached);
+      return {
+        relativePath,
+        bytes: cached,
+        occurrences: document?.occurrences.length ?? 0,
+        symbols: document?.symbols.length ?? 0,
+        referenceFragments: document ? referenceFragmentsFromDocument(relativePath, document) : [],
+      };
+    }
     const document = new this.runtime.Document({ relative_path: relativePath, occurrences: [] });
-    const indexer = new this.runtime.FileIndexer(
-      this.checker,
-      {
-        cwd: this.workspaceRoot,
-        projectRoot: this.projectRoot,
-        projectDisplayName: this.projectRoot,
-        maxFileByteSizeNumber: this.maxFileByteSize,
-      },
-      new this.runtime.Input(sourceFile.fileName, sourceFile.getText()),
-      document,
-      this.symbolTable,
-      this.constructorTable,
-      this.packages,
-      sourceFile,
-    );
+    const indexer = this.fileIndexer(sourceFile, document);
     indexer.index();
     this.stats.documentsEmitted += 1;
     if (document.occurrences.length === 0) {
@@ -489,6 +495,7 @@ export class TypeScriptDocumentEmitter {
     }
     const bytes = document.serializeBinary();
     this.fragments.set(relativePath, bytes);
+    this.documentCache.set(relativePath, bytes);
     return {
       relativePath,
       bytes,
@@ -496,6 +503,86 @@ export class TypeScriptDocumentEmitter {
       symbols: document.symbols.length,
       referenceFragments: referenceFragmentsFromDocument(relativePath, document),
     };
+  }
+
+  private fileIndexer(sourceFile: TypeScript.SourceFile, document: ScipDocumentLike): FileIndexerLike {
+    return new this.runtime.FileIndexer(
+      this.checker!,
+      {
+        cwd: this.workspaceRoot,
+        projectRoot: this.projectRoot,
+        projectDisplayName: this.projectRoot,
+        maxFileByteSizeNumber: this.maxFileByteSize,
+      },
+      new this.runtime.Input(sourceFile.fileName, sourceFile.getText()),
+      document,
+      this.symbolTable,
+      this.constructorTable,
+      this.packages,
+      sourceFile,
+    );
+  }
+
+  private captureBoundaries(paths: readonly string[]): Map<string, string> | null {
+    const result = new Map<string, string>();
+    // Declaration identity tables must belong to this compiler program.
+    this.symbolTable = new Map();
+    this.constructorTable.clear();
+    for (const path of paths) {
+      const source = this.program?.getSourceFile(resolveWithin(this.workspaceRoot, path));
+      if (!source || !this.program) return null;
+      const indexer = this.fileIndexer(source, new this.runtime.Document({ relative_path: path, occurrences: [] }));
+      const boundary = typeScriptExportBoundary(this.runtime.typescript, this.program, source, indexer);
+      if (boundary === null) return null;
+      result.set(path, boundary);
+    }
+    return result;
+  }
+
+  private detachConsumerDocuments(
+    modified: readonly string[],
+    removed: readonly string[],
+  ): ConsumerDocumentReuse | null {
+    const documents = this.documentCache;
+    // Detach before any fallible program update. A failed request must never
+    // leave older documents eligible for reuse in a partially advanced program.
+    this.documentCache = new TypeScriptFragmentCache();
+    const boundaries = removed.length ? null : this.captureBoundaries(modified);
+    return boundaries
+      ? { documents, boundaries, program: this.program!, options: JSON.stringify(this.config!.options) }
+      : null;
+  }
+
+  private restoreConsumerDocuments(reusable: ConsumerDocumentReuse | null, modified: readonly string[]): void {
+    if (
+      !reusable ||
+      reusable.options !== JSON.stringify(this.config!.options) ||
+      !compatibleProgramSources(reusable.program, this.program!, modified, this.workspaceRoot) ||
+      !equalBoundaries(reusable.boundaries, this.captureBoundaries(modified))
+    )
+      return;
+    for (const path of modified) reusable.documents.delete(path);
+    reusable.documents.protectForGeneration();
+    this.documentCache = reusable.documents;
+  }
+
+  private invalidateSourceNodes(paths: readonly string[]): Map<string, TypeScript.SourceFile> {
+    const previous = new Map<string, TypeScript.SourceFile>();
+    for (const path of paths) {
+      const absolutePath = resolveWithin(this.workspaceRoot, path);
+      const source = this.program!.getSourceFile(absolutePath);
+      if (source) previous.set(path, source);
+      this.host.invalidate(absolutePath);
+    }
+    return previous;
+  }
+
+  private recordSourceNodeUpdates(previous: ReadonlyMap<string, TypeScript.SourceFile>): void {
+    for (const [path, source] of previous) {
+      const current = this.program!.getSourceFile(resolveWithin(this.workspaceRoot, path));
+      if (current === source) this.stats.sourceNodesReused += 1;
+      else this.stats.sourceNodesReplaced += 1;
+    }
   }
 
   private result(fragments: TypeScriptDocumentFragment[], startedAt: number): TypeScriptDocumentAdvanceResult {
@@ -552,6 +639,33 @@ class CachedCompilerHost {
   invalidate(fileName: string): void {
     this.sourceFiles.delete(normalizedAbsolutePath(fileName));
   }
+}
+
+function compatibleProgramSources(
+  previous: TypeScript.Program,
+  current: TypeScript.Program,
+  modified: readonly string[],
+  root: string,
+): boolean {
+  if (previous.getSourceFiles().length !== current.getSourceFiles().length) return false;
+  if (JSON.stringify(previous.getRootFileNames()) !== JSON.stringify(current.getRootFileNames())) return false;
+  const changes = new Set(modified.map((path) => resolveWithin(root, path)));
+  return previous.getSourceFiles().every((source, index) => {
+    // Source order can determine merged overload precedence in global/ambient
+    // declarations, even when the set of program files is unchanged.
+    const replacement = current.getSourceFiles()[index];
+    return (
+      replacement?.fileName === source.fileName && (changes.has(resolve(source.fileName)) || source === replacement)
+    );
+  });
+}
+
+function equalBoundaries(previous: ReadonlyMap<string, string>, current: ReadonlyMap<string, string> | null): boolean {
+  return (
+    current !== null &&
+    previous.size === current.size &&
+    [...previous].every(([path, hash]) => current.get(path) === hash)
+  );
 }
 
 function readTypeScriptConfig(typescript: TypeScriptModule, tsconfigPath: string): TypeScript.ParsedCommandLine {

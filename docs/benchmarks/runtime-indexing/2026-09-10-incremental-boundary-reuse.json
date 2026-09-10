@@ -1,0 +1,429 @@
+{
+  "baseCommit": "57890506a1f90fa0e6b96544d7372123b1139323",
+  "sourceSha256": {
+    "src/reindex/typescript-document-emitter.ts": "553140e681f498936742eeb82b550e15f63404c7ea49fcf1b1f4e8eb1a85b74a",
+    "src/reindex/typescript-document-blob.ts": "8973284f562f7b558dec96ddb560d000357858b9d66106627254c89955393139",
+    "src/reindex/typescript-symbol-identity.ts": "8c83941d89de93750230195b066b07d7324a223f428907f99cdbd23d78127ff7",
+    "src/reindex/typescript-declaration-evidence.ts": "5eab9b2fac6ec3c2f294b34488b14ed8bcf1161bfbe437a9982297bc6f150078"
+  },
+  "scope": "Isolated LaunchPoint copy under the dev-agent account. No live watchers restarted. Complete-request timings below precede the contextual-property adapter correction; corrected-code emitter measurements are separate.",
+  "completeRequestsBeforeContextualRepair": {
+    "runs": [
+      {
+        "label": "first-worker-edit",
+        "wallSeconds": 212.0635635240469,
+        "peakGiB": 12.974777221679688,
+        "equal": {
+          "observations": true,
+          "relationGroups": true,
+          "links": true,
+          "frontiers": true
+        },
+        "changedOriginalObservations": 0,
+        "extraObservations": [],
+        "coverageErrors": {
+          "extractionErrors": []
+        }
+      },
+      {
+        "label": "warm-body-edit",
+        "wallSeconds": 105.96103014692198,
+        "peakGiB": 13.070919036865234,
+        "equal": {
+          "observations": true,
+          "relationGroups": true,
+          "links": true,
+          "frontiers": true
+        },
+        "changedOriginalObservations": 0,
+        "extraObservations": [],
+        "coverageErrors": {
+          "extractionErrors": []
+        }
+      },
+      {
+        "label": "warm-inferred-edit",
+        "wallSeconds": 105.7173896250315,
+        "peakGiB": 12.883338928222656,
+        "equal": {
+          "observations": true,
+          "relationGroups": true,
+          "links": true,
+          "frontiers": true
+        },
+        "changedOriginalObservations": 0,
+        "extraObservations": [],
+        "coverageErrors": {
+          "extractionErrors": []
+        }
+      },
+      {
+        "label": "warm-runtime-edit",
+        "wallSeconds": 104.00323927705176,
+        "peakGiB": 13.025871276855469,
+        "equal": {
+          "observations": false,
+          "relationGroups": false,
+          "links": true,
+          "frontiers": false
+        },
+        "changedOriginalObservations": 0,
+        "extraObservations": [
+          {
+            "id": "boundary:554ea37c894c1059",
+            "extractor": "builtin.http",
+            "action": "http.request",
+            "owner": {
+              "file": "src/lib/campaigns/warmup/infra/list-state-queries.ts",
+              "symbol": "scip-typescript npm launchpoint-backend 0.1.0 src/lib/campaigns/warmup/infra/`list-state-queries.ts`/__scipIncrementalMemoryProbe().",
+              "name": "__scipIncrementalMemoryProbe",
+              "startLine": 160,
+              "endLine": 160,
+              "startColumn": 7,
+              "endColumn": 128
+            },
+            "source": {
+              "file": "src/lib/campaigns/warmup/infra/list-state-queries.ts",
+              "startLine": 160,
+              "endLine": 160,
+              "startColumn": 75,
+              "endColumn": 107
+            },
+            "keyParts": [
+              {
+                "name": "method",
+                "value": "GET",
+                "evidence": "literal"
+              },
+              {
+                "name": "path",
+                "value": "/scip-incremental-probe",
+                "evidence": "literal",
+                "term": {
+                  "kind": "literal",
+                  "value": "/scip-incremental-probe"
+                },
+                "precision": "literal",
+                "derivation": {
+                  "kind": "direct",
+                  "rule": "direct-literal",
+                  "ruleVersion": "1",
+                  "inputFactIds": [],
+                  "sourceSpans": [
+                    {
+                      "file": "src/lib/campaigns/warmup/infra/list-state-queries.ts",
+                      "startLine": 160,
+                      "endLine": 160
+                    }
+                  ]
+                }
+              }
+            ],
+            "evidence": "call-expression",
+            "strength": "exact",
+            "protocol": "http",
+            "role": "producer",
+            "executionDomain": null,
+            "derivation": {
+              "kind": "direct",
+              "rule": "call-expression",
+              "ruleVersion": "1",
+              "inputFactIds": [],
+              "sourceSpans": [
+                {
+                  "file": "src/lib/campaigns/warmup/infra/list-state-queries.ts",
+                  "startLine": 160,
+                  "endLine": 160
+                },
+                {
+                  "file": "src/lib/campaigns/warmup/infra/list-state-queries.ts",
+                  "startLine": 160,
+                  "endLine": 160
+                }
+              ]
+            },
+            "valuePrecision": "literal",
+            "modality": "may",
+            "resolution": "unresolved",
+            "sourceScope": "production"
+          }
+        ],
+        "coverageErrors": {
+          "extractionErrors": []
+        }
+      },
+      {
+        "label": "restore",
+        "wallSeconds": 203.30484235694166,
+        "peakGiB": 13.192222595214844,
+        "equal": {
+          "observations": true,
+          "relationGroups": true,
+          "links": true,
+          "frontiers": true
+        },
+        "changedOriginalObservations": 0,
+        "extraObservations": [],
+        "coverageErrors": {
+          "extractionErrors": []
+        },
+        "fileCoverageRestored": true
+      }
+    ],
+    "sourceRestored": true,
+    "sqliteQuickCheck": "ok",
+    "remainingProbeSymbols": 0
+  },
+  "correctedEmitterMeasurements": {
+    "real-contextual.json": [
+      {
+        "round": 0,
+        "wallMs": 130497.960788,
+        "stats": {
+          "initializations": 1,
+          "programUpdates": 0,
+          "documentsEmitted": 5605,
+          "documentsReused": 0,
+          "documentsRemoved": 0,
+          "sourceNodesReused": 0,
+          "sourceNodesReplaced": 0,
+          "symbolEntriesPruned": 563381
+        },
+        "maxRssKiB": 10196360
+      },
+      {
+        "round": 1,
+        "wallMs": 23868.40273999999,
+        "stats": {
+          "initializations": 1,
+          "programUpdates": 1,
+          "documentsEmitted": 5606,
+          "documentsReused": 5604,
+          "documentsRemoved": 0,
+          "sourceNodesReused": 0,
+          "sourceNodesReplaced": 1,
+          "symbolEntriesPruned": 563633
+        },
+        "maxRssKiB": 10372648
+      },
+      {
+        "round": 2,
+        "wallMs": 22323.41420500001,
+        "stats": {
+          "initializations": 1,
+          "programUpdates": 2,
+          "documentsEmitted": 5607,
+          "documentsReused": 11208,
+          "documentsRemoved": 0,
+          "sourceNodesReused": 0,
+          "sourceNodesReplaced": 2,
+          "symbolEntriesPruned": 563885
+        },
+        "maxRssKiB": 10372648
+      }
+    ],
+    "real-contextual-uncached.json": [
+      {
+        "round": 0,
+        "wallMs": 119061.352525,
+        "stats": {
+          "initializations": 1,
+          "programUpdates": 0,
+          "documentsEmitted": 5605,
+          "documentsRemoved": 0,
+          "sourceNodesReused": 0,
+          "sourceNodesReplaced": 0,
+          "symbolEntriesPruned": 563381
+        },
+        "maxRssKiB": 10687800
+      },
+      {
+        "round": 1,
+        "wallMs": 113404.80317,
+        "stats": {
+          "initializations": 1,
+          "programUpdates": 1,
+          "documentsEmitted": 11210,
+          "documentsRemoved": 0,
+          "sourceNodesReused": 0,
+          "sourceNodesReplaced": 1,
+          "symbolEntriesPruned": 1142367
+        },
+        "maxRssKiB": 11945048
+      },
+      {
+        "round": 2,
+        "wallMs": 120595.81543300004,
+        "stats": {
+          "initializations": 1,
+          "programUpdates": 2,
+          "documentsEmitted": 16815,
+          "documentsRemoved": 0,
+          "sourceNodesReused": 0,
+          "sourceNodesReplaced": 2,
+          "symbolEntriesPruned": 1721353
+        },
+        "maxRssKiB": 11945048
+      }
+    ]
+  },
+  "correctedWarmControl": {
+    "documents": 5605,
+    "compared": 5605,
+    "differences": [],
+    "missing": [],
+    "details": []
+  },
+  "comparisonProjection": "All Document fields through protobuf toObject(), with occurrences, symbols, relationships and diagnostics compared independent of order, preserving duplicates. Excludes only the first generated TypeScript display signature in symbol documentation; retains authored documentation. Raw initial documents match byte-for-byte across 5605 files.",
+  "existingFreshCompilerDisagreement": {
+    "documents": 5605,
+    "compared": 5605,
+    "missing": [],
+    "paths": [
+      "src/lib/campaigns/videos/rejection.ts",
+      "src/lib/campaigns/videos/approval.ts",
+      "src/lib/ad-campaigns/infra/db/spend-fee-settlements.ts",
+      "src/lib/support-agents/operations/run.ts",
+      "src/app/api/admin/campaigns/add-user/route.ts",
+      "src/lib/support-agents/admin-sandbox/run.ts",
+      "src/app/api/buy/ad-campaigns/partnership-authorizations/[authorizationId]/route.test.ts",
+      "src/app/api/buy/campaigns/[id]/content/route.ts",
+      "src/app/api/buy/clients/wallet/committed/route.ts",
+      "src/app/api/offer-claim-links/[code]/auth/start/route.ts",
+      "src/app/api/v2/sell/auth/email-login/route.ts",
+      "src/app/api/v2/sell/auth/login/route.ts",
+      "src/app/api/webhook/stripe/route.ts",
+      "src/lib/campaigns/creator-read/core/use-cases/assemble-campaign.test.ts",
+      "src/app/(authenticated)/(dashboard)/todos/components/posts/UntrackedPostInfoPanel.tsx",
+      "src/app/(authenticated)/(dashboard)/todos/components/posts/UntrackedPostsSurface.tsx"
+    ],
+    "exampleDetails": [
+      {
+        "path": "src/lib/campaigns/videos/rejection.ts",
+        "fields": [
+          "occurrences"
+        ],
+        "changes": [
+          {
+            "field": "occurrences",
+            "onlyLeft": [
+              "{\"range\":[216,34,39],\"symbol\":\"scip-typescript npm launchpoint-backend 0.1.0 src/lib/admin/`video-approvals.ts`/video$3264:\",\"symbol_roles\":0,\"override_documentation\":[],\"syntax_kind\":0,\"diagnostics\":[],\"enclosing_range\":[]}"
+            ],
+            "onlyRight": []
+          }
+        ]
+      },
+      {
+        "path": "src/lib/campaigns/videos/approval.ts",
+        "fields": [
+          "occurrences"
+        ],
+        "changes": [
+          {
+            "field": "occurrences",
+            "onlyLeft": [
+              "{\"range\":[763,33,38],\"symbol\":\"scip-typescript npm launchpoint-backend 0.1.0 src/lib/admin/`video-approvals.ts`/video$3264:\",\"symbol_roles\":0,\"override_documentation\":[],\"syntax_kind\":0,\"diagnostics\":[],\"enclosing_range\":[]}"
+            ],
+            "onlyRight": [
+              "{\"range\":[763,33,38],\"symbol\":\"scip-typescript npm launchpoint-backend 0.1.0 src/lib/campaigns/videos/`rejection.ts`/video$5601:\",\"symbol_roles\":0,\"override_documentation\":[],\"syntax_kind\":0,\"diagnostics\":[],\"enclosing_range\":[]}"
+            ]
+          }
+        ]
+      },
+      {
+        "path": "src/lib/ad-campaigns/infra/db/spend-fee-settlements.ts",
+        "fields": [
+          "occurrences",
+          "symbols"
+        ],
+        "changes": [
+          {
+            "field": "occurrences",
+            "onlyLeft": [
+              "{\"range\":[458,15,40],\"symbol\":\"scip-typescript npm launchpoint-backend 0.1.0 src/lib/ad-campaigns/infra/db/`spend-fee-settlements.ts`/recoupmentAdjustmentCents$19173:\",\"symbol_roles\":0,\"override_documentation\":[],\"syntax_kind\":0,\"diagnostics\":[],\"enclosing_range\":[]}",
+              "{\"range\":[463,8,27],\"symbol\":\"local 94\",\"symbol_roles\":1,\"override_documentation\":[],\"syntax_kind\":0,\"diagnostics\":[],\"enclosing_range\":[]}",
+              "{\"range\":[471,8,24],\"symbol\":\"local 97\",\"symbol_roles\":1,\"override_documentation\":[],\"syntax_kind\":0,\"diagnostics\":[],\"enclosing_range\":[]}"
+            ],
+            "onlyRight": [
+              "{\"range\":[458,15,40],\"symbol\":\"local 94\",\"symbol_roles\":0,\"override_documentation\":[],\"syntax_kind\":0,\"diagnostics\":[],\"enclosing_range\":[]}",
+              "{\"range\":[463,8,27],\"symbol\":\"local 97\",\"symbol_roles\":1,\"override_documentation\":[],\"syntax_kind\":0,\"diagnostics\":[],\"enclosing_range\":[]}",
+              "{\"range\":[471,8,24],\"symbol\":\"local 100\",\"symbol_roles\":1,\"override_documentation\":[],\"syntax_kind\":0,\"diagnostics\":[],\"enclosing_range\":[]}"
+            ]
+          },
+          {
+            "field": "symbols",
+            "onlyLeft": [
+              "{\"symbol\":\"local 108\",\"documentation\":[],\"relationships\":[],\"kind\":0,\"display_name\":\"\",\"enclosing_symbol\":\"\"}",
+              "{\"symbol\":\"local 125\",\"documentation\":[],\"relationships\":[],\"kind\":0,\"display_name\":\"\",\"enclosing_symbol\":\"\"}",
+              "{\"symbol\":\"local 130\",\"documentation\":[],\"relationships\":[],\"kind\":0,\"display_name\":\"\",\"enclosing_symbol\":\"\"}"
+            ],
+            "onlyRight": [
+              "{\"symbol\":\"local 106\",\"documentation\":[],\"relationships\":[],\"kind\":0,\"display_name\":\"\",\"enclosing_symbol\":\"\"}",
+              "{\"symbol\":\"local 123\",\"documentation\":[],\"relationships\":[],\"kind\":0,\"display_name\":\"\",\"enclosing_symbol\":\"\"}",
+              "{\"symbol\":\"local 128\",\"documentation\":[],\"relationships\":[],\"kind\":0,\"display_name\":\"\",\"enclosing_symbol\":\"\"}"
+            ]
+          }
+        ]
+      },
+      {
+        "path": "src/lib/support-agents/operations/run.ts",
+        "fields": [
+          "occurrences"
+        ],
+        "changes": [
+          {
+            "field": "occurrences",
+            "onlyLeft": [
+              "{\"range\":[180,40,45],\"symbol\":\"scip-typescript npm launchpoint-backend 0.1.0 src/lib/support-agents/operations/`run.ts`/input$932:\",\"symbol_roles\":0,\"override_documentation\":[],\"syntax_kind\":0,\"diagnostics\":[],\"enclosing_range\":[]}",
+              "{\"range\":[183,40,46],\"symbol\":\"scip-typescript npm launchpoint-backend 0.1.0 src/lib/support-agents/operations/`run.ts`/output$944:\",\"symbol_roles\":0,\"override_documentation\":[],\"syntax_kind\":0,\"diagnostics\":[],\"enclosing_range\":[]}",
+              "{\"range\":[186,40,49],\"symbol\":\"scip-typescript npm launchpoint-backend 0.1.0 src/lib/support-agents/operations/`run.ts`/cacheRead$957:\",\"symbol_roles\":0,\"override_documentation\":[],\"syntax_kind\":0,\"diagnostics\":[],\"enclosing_range\":[]}"
+            ],
+            "onlyRight": [
+              "{\"range\":[180,40,45],\"symbol\":\"scip-typescript npm launchpoint-backend 0.1.0 src/lib/support-agents/operations/`qualification.ts`/SupportQualification#typeLiteral$1155:modelTelemetry.typeLiteral$1470:tokenUsage.typeLiteral$1527:input.\",\"symbol_roles\":0,\"override_documentation\":[],\"syntax_kind\":0,\"diagnostics\":[],\"enclosing_range\":[]}",
+              "{\"range\":[183,40,46],\"symbol\":\"scip-typescript npm launchpoint-backend 0.1.0 src/lib/support-agents/operations/`qualification.ts`/SupportQualification#typeLiteral$1155:modelTelemetry.typeLiteral$1470:tokenUsage.typeLiteral$1527:output.\",\"symbol_roles\":0,\"override_documentation\":[],\"syntax_kind\":0,\"diagnostics\":[],\"enclosing_range\":[]}",
+              "{\"range\":[186,40,49],\"symbol\":\"scip-typescript npm launchpoint-backend 0.1.0 src/lib/support-agents/operations/`qualification.ts`/SupportQualification#typeLiteral$1155:modelTelemetry.typeLiteral$1470:tokenUsage.typeLiteral$1527:cacheRead.\",\"symbol_roles\":0,\"override_documentation\":[],\"syntax_kind\":0,\"diagnostics\":[],\"enclosing_range\":[]}"
+            ]
+          }
+        ]
+      }
+    ],
+    "interpretation": "The same 16 files and sampled differences occur with document reuse disabled. The optimized warm result matches that fully re-emitted control. These are unresolved producer inconsistencies, not accepted as formatting-only differences."
+  },
+  "validation": {
+    "fullSuite": {
+      "passed": 3845,
+      "files": 418,
+      "durationSeconds": 331.28
+    },
+    "focusedPassed": 154,
+    "boundaryReuseTests": 20,
+    "contextualRegressionTests": 1,
+    "typecheck": true,
+    "build": true,
+    "publicApiDigest": "9217c44ff0f30a77",
+    "publicApiPaths": 66,
+    "publicConsumerTypecheck": true,
+    "skillLinks": true,
+    "changedFileLint": true,
+    "changedFileFormatting": true,
+    "reviewIntroducedFindings": 0,
+    "reviewExistingComplexityFindings": 2,
+    "localReindexSeconds": 24.0
+  },
+  "unresolved": [
+    "Warm complete update still roughly 106 seconds in the measured pre-contextual-repair candidate.",
+    "Cold compiler worker still roughly 212 seconds for first complete update.",
+    "Unchanged documents still traverse the service protocol and SQLite publication.",
+    "HTTP/body runtime propagation still performs broad work.",
+    "16 existing non-display fact differences between fully re-emitted incremental and fresh standalone compiler."
+  ],
+  "deployed": false,
+  "correctedRestoreControl": {
+    "documents": 5605,
+    "compared": 5605,
+    "differences": [],
+    "missing": [],
+    "details": []
+  },
+  "isolatedSourcesRestoredSha256": "f5b5810aa873230a614d487e026055296e3dedaf06db3357e44616400101a2e7"
+}

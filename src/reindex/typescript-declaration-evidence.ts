@@ -17,6 +17,7 @@ export interface TypeScriptDeclarationIndexer extends TypeScriptSymbolIndexer {
   sourceFile: TypeScript.SourceFile;
   document: { occurrences: OccurrenceValue[]; symbols: Array<{ symbol: string }> };
   index(): void;
+  getDeclarationsForPropertyAssignment(node: TypeScript.Node): readonly TypeScript.Declaration[] | undefined;
   pushOccurrence(value: unknown): void;
 }
 
@@ -34,6 +35,19 @@ export function installTypeScriptDeclarationEvidence(
   constructors: TypeScriptEvidenceConstructors,
 ): void {
   if (installed.has(prototype)) return;
+  const contextualDeclarations = prototype.getDeclarationsForPropertyAssignment;
+  if (typeof contextualDeclarations !== 'function') {
+    throw new Error('scip-typescript contextual property runtime is unavailable');
+  }
+  prototype.getDeclarationsForPropertyAssignment = function (node) {
+    // Inferred generic argument types can reuse structurally equal anonymous
+    // object types from unrelated files. Their value declarations do not name
+    // a property contract. Keep the new key's own definition in that case;
+    // explicit interface/type-literal/class property declarations remain links.
+    return contextualDeclarations
+      .call(this, node)
+      ?.filter((declaration) => declaration.parent?.kind !== ts.SyntaxKind.ObjectLiteralExpression);
+  };
   const index = prototype.index;
   prototype.index = function () {
     index.call(this);
