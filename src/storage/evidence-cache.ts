@@ -44,6 +44,7 @@ export const FILE_EVIDENCE_KINDS = [
   'typescript-import-usage',
   'typescript-signatures',
   'runtime-boundary-http-roles',
+  'runtime-boundary-mount-imports',
   'runtime-boundary-source-hashes',
   'runtime-boundary-direct-extraction',
 ] as const;

@@ -120,9 +120,20 @@ function collectBodySummaryResult(
     contexts.set(file, context);
     return context;
   };
+  const currentDefinitions = new Map(
+    [...new Set(seeds.map((seed) => seed.definition.relativePath))]
+      .flatMap((file) => getDefinitionsForFile(db, file))
+      .map((definition) => [bodyDefinitionKey(definition), definition]),
+  );
   for (const seed of seeds) {
+    const definition = currentDefinitions.get(bodyDefinitionKey(seed.definition));
+    if (!definition) {
+      errors.push(`builtin.carrier body summary definition is unavailable: ${seed.definition.symbol}`);
+      continue;
+    }
     const summary: BodyCallableSummary = {
       ...seed,
+      definition,
       depth: 0,
       proofSpans: [
         {
@@ -146,6 +157,10 @@ function collectBodySummaryResult(
     }
   }
   return { summaries, filesInspected: new Set(seeds.map((seed) => seed.definition.relativePath)).size };
+}
+
+function bodyDefinitionKey(definition: RuntimeBoundaryBodySummary['definition']): string {
+  return `${definition.symbol}\0${definition.relativePath}\0${definition.startLine}\0${definition.startChar}`;
 }
 
 interface ProducerDiscriminatorState {
@@ -463,7 +478,15 @@ export function serializedBodySummariesForFile(context: BoundaryFileContext): Ru
   });
   return definitions.flatMap((definition): RuntimeBoundaryBodySummary[] => {
     const indexes = parameterIndexesBySymbol.get(definition.symbol);
-    return indexes ? [{ definition, parameterIndexes: [...indexes].sort((left, right) => left - right) }] : [];
+    const { symbol, relativePath, startLine, startChar, endLine, endChar } = definition;
+    return indexes
+      ? [
+          {
+            definition: { symbol, relativePath, startLine, startChar, endLine, endChar },
+            parameterIndexes: [...indexes].sort((left, right) => left - right),
+          },
+        ]
+      : [];
   });
 }
 

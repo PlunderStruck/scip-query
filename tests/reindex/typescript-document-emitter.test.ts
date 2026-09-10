@@ -10,6 +10,56 @@ import {
 import { cleanOracle } from '../fixtures/typescript-oracle.js';
 
 describe('TypeScriptDocumentEmitter', () => {
+  test('refreshes consumer definition targets even when the provider document and public types are unchanged', () => {
+    const availability = loadTypeScriptDocumentRuntime();
+    expect(availability.available).toBe(true);
+    if (!availability.available) return;
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'scip-query-definition-provenance-')));
+    try {
+      writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'provenance-fixture', version: '1.0.0' }));
+      writeFileSync(
+        join(root, 'tsconfig.json'),
+        JSON.stringify({
+          compilerOptions: { target: 'ES2022', module: 'ESNext', strict: true },
+          files: ['a.ts', 'b.ts'],
+        }),
+      );
+      writeFileSync(join(root, 'b.ts'), "import { chosen } from './a';\nexport const result = chosen.value;\n");
+      const provider = (condition: string) =>
+        [
+          'const a = { value: 1 };',
+          'const b = { value: 2 };',
+          'export function choose<T extends boolean>(): T extends true ? typeof a : typeof b { return null as any; }',
+          `export const chosen = choose<${condition}>();`,
+        ].join('\n');
+      // Equal-width edits leave all provider SCIP ranges, declarations and
+      // reference occurrences unchanged. Both exported types are { value: number }.
+      writeFileSync(join(root, 'a.ts'), provider('true '));
+      const created = createTypeScriptDocumentEmitter({
+        workspaceRoot: root,
+        tsconfigPath: 'tsconfig.json',
+        runtime: availability.runtime,
+      });
+      expect(created.available).toBe(true);
+      if (!created.available) return;
+      const before = created.emitter.initialize().fragments;
+      writeFileSync(join(root, 'a.ts'), provider('false'));
+      const after = created.emitter.advance({ modifiedFiles: ['a.ts'], affectedFiles: ['a.ts', 'b.ts'] }).fragments;
+      expect(after.find((fragment) => fragment.relativePath === 'a.ts')?.bytes).toEqual(
+        before.find((fragment) => fragment.relativePath === 'a.ts')?.bytes,
+      );
+      const target = (fragments: typeof before) =>
+        fragments
+          .find((fragment) => fragment.relativePath === 'b.ts')!
+          .referenceFragments.find((fragment) => fragment.targetSymbol.includes('/value$'))?.targetSymbol;
+      expect(target(before)).toContain('/value$12:');
+      expect(target(after)).toContain('/value$36:');
+      expectFragmentsEqual(after, cleanOracle(root, availability.runtime));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test('reports an unavailable optional runtime without constructing compiler state', () => {
     expect(
       createTypeScriptDocumentEmitter({

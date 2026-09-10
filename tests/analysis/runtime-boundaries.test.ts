@@ -15,6 +15,7 @@ import {
   writeRuntimeBoundaryGraph,
 } from '../../src/analysis/runtime-boundaries/index.js';
 import { buildRelationGroups, materializeBoundedLinks } from '../../src/analysis/runtime-boundaries/graph.js';
+import { deriveCarrierDiscriminators } from '../../src/analysis/runtime-boundaries/carrier-discriminators.js';
 import { runtimeBoundarySourceScope } from '../../src/analysis/runtime-boundaries/source-scope.js';
 import type { BoundaryObservation } from '../../src/analysis/runtime-boundaries/types.js';
 import { runtimeBoundaryAugmentationStage } from '../../src/reindex/runtime-boundaries.js';
@@ -43,11 +44,53 @@ describe('runtime-boundary evidence', () => {
     tempDir = null;
   });
 
+  it('resolves persisted body-summary symbols in the current database instead of reusing old row IDs', async () => {
+    const first = createBoundaryDb();
+    const config = first.config;
+    const wrapperPath = join(config.projectRoot, 'src/wrapper-client.ts');
+    writeFileSync(
+      wrapperPath,
+      readFileSync(wrapperPath, 'utf8')
+        .replace('forwardWrapped(path: string)', 'forwardWrapped(path: string, body: unknown)')
+        .replace('return postJson(path, {});', 'return postJson(path, body);'),
+    );
+    const graph = await collectRuntimeBoundaryGraph(first);
+    first.close();
+    const seeds = graph.fileCoverage!.flatMap((entry) => entry.bodySummaries ?? []);
+    expect(seeds.length).toBeGreaterThan(0);
+    expect(seeds.every((seed) => !('symbolId' in seed.definition) && !('documentId' in seed.definition))).toBe(true);
+    const expectedDb = new ScipDatabase(config);
+    const actualDb = new ScipDatabase(config);
+    try {
+      const expected = deriveCarrierDiscriminators(expectedDb, graph.observations, seeds);
+      expect(expected.bodySummaries).toBeGreaterThan(seeds.length);
+      expect(expected.observations.some((observation) => observation.action === 'carrier.publish')).toBe(true);
+      const stale = seeds.map((seed) => ({
+        ...seed,
+        definition: { ...seed.definition, symbolId: 999_991, documentId: 999_992 },
+      }));
+      expect(deriveCarrierDiscriminators(actualDb, graph.observations, stale)).toEqual(expected);
+      const missing = deriveCarrierDiscriminators(
+        actualDb,
+        graph.observations,
+        seeds.map((seed) => ({
+          ...seed,
+          definition: { ...seed.definition, symbol: `${seed.definition.symbol}missing` },
+        })),
+      );
+      expect(missing.bodySummaries).toBe(0);
+      expect(missing.errors).toHaveLength(seeds.length);
+    } finally {
+      expectedDb.close();
+      actualDb.close();
+    }
+  });
+
   it('extracts open observations and joins only evidence-backed runtime peers', async () => {
     const db = createBoundaryDb();
     try {
       const graph = await collectRuntimeBoundaryGraph(db);
-      expect(graph.extractorVersion).toBe('runtime-boundaries-v30');
+      expect(graph.extractorVersion).toBe('runtime-boundaries-v31');
 
       for (const expected of [
         expect.objectContaining({

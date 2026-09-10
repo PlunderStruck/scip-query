@@ -108,7 +108,8 @@ export interface BoundaryExtractorCoverage {
 }
 
 export interface RuntimeBoundaryBodySummary {
-  definition: IndexedDefinition;
+  /** Persistent identity and source span; database row IDs belong to one index generation. */
+  definition: Pick<IndexedDefinition, 'symbol' | 'relativePath' | 'startLine' | 'startChar' | 'endLine' | 'endChar'>;
   parameterIndexes: number[];
 }
 

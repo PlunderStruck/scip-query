@@ -33,7 +33,7 @@ import type {
 
 // Increment whenever direct facts or any derived propagation rule changes so an
 // older persisted graph can never be incrementally mixed with newer semantics.
-export const RUNTIME_BOUNDARY_EXTRACTOR_VERSION = 'runtime-boundaries-v30';
+export const RUNTIME_BOUNDARY_EXTRACTOR_VERSION = 'runtime-boundaries-v31';
 
 const require = createRequire(import.meta.url);
 const typescript = require('typescript') as typeof TypeScript;

@@ -174,6 +174,12 @@ export const EVIDENCE_PRODUCT_MANIFEST: readonly EvidenceProductManifestEntry[] 
     stalenessTest: 'tests/analysis/runtime-boundaries.test.ts',
     owner: 'src/analysis/runtime-boundaries/http-summaries.ts',
   }),
+  fileManifest('runtime-boundary-mount-imports', {
+    dependsOn: ['content-hash', 'tool-version'],
+    keyParts: ['kind', 'relativePath', 'contentHash', 'payloadVersion'],
+    stalenessTest: 'tests/analysis/runtime-boundary-accuracy.test.ts',
+    owner: 'src/analysis/runtime-boundaries/http-mounts.ts',
+  }),
   fileManifest('runtime-boundary-source-hashes', {
     dependsOn: ['content-hash', 'tool-version'],
     keyParts: ['kind', 'relativePath', 'contentHash', 'payloadVersion'],

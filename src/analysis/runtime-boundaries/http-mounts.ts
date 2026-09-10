@@ -3,6 +3,8 @@ import { runtimeBindingIdentity } from './binding-identity.js';
 import { sourceBindingResolver } from '../../source/ast/source-binding-identity.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import { getSourceFiles } from '../../source/primitives/source-fileset.js';
+import { getSourceText } from '../../source/primitives/source-text.js';
+import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { evaluateStaticValue as evaluateBoundaryValue } from '../../symbols/graph/static-value-flow.js';
 import { boundaryFileContext } from './extractors.js';
@@ -22,6 +24,15 @@ interface HttpMount {
   receiver: BoundaryKeyPart;
   source: BoundarySourceLocation;
 }
+
+// This gate depends only on parsed imports in this file. Positive files still
+// resolve mounts against current compiler facts and source dependencies.
+const MOUNT_IMPORTS = createFileEvidenceProduct<boolean>({
+  kind: 'runtime-boundary-mount-imports',
+  invalidation: evidenceProductInvalidation('runtime-boundary-mount-imports'),
+  serialize: JSON.stringify,
+  deserialize: (payload) => (payload === 'true' ? true : payload === 'false' ? false : null),
+});
 
 export interface HttpMountCompositionResult {
   observations: BoundaryObservation[];
@@ -136,14 +147,17 @@ function collectHttpMounts(db: ScipDatabase): {
   const frontiers: BoundaryFrontier[] = [];
   const files = getSourceFiles(db);
   for (const file of files) {
-    const context = boundaryFileContext(db, file);
-    if (
-      !context ||
-      !sourceBindingResolver(file, context.root)
-        .moduleReferences()
-        .some((ref) => ref.literal && ref.specifier === 'express')
-    )
-      continue;
+    const source = getSourceText(db, file);
+    const contentHash = createHash('sha256').update(source).digest('hex');
+    if (MOUNT_IMPORTS.read(db, file, contentHash) === false) continue;
+    const context = boundaryFileContext(db, file, source);
+    // Missing parsers/contexts are not negative import evidence.
+    if (!context) continue;
+    const applicable = sourceBindingResolver(file, context.root)
+      .moduleReferences()
+      .some((ref) => ref.literal && ref.specifier === 'express');
+    MOUNT_IMPORTS.write(db, file, contentHash, applicable);
+    if (!applicable) continue;
     walk(context.root, (node) => collectMountCall(context, node, mounts, frontiers));
   }
   return { mounts, filesInspected: files.length, frontiers };

@@ -277,5 +277,634 @@
     "lintChangedFiles": "passed",
     "apiAndSkillContracts": "passed",
     "reviewIntroducedBlockers": 0
+  },
+  "realIncrementalEdits": {
+    "conditions": {
+      "sourceFiles": 9296,
+      "typescriptInputs": 9221,
+      "sourceCopy": "isolated copy of LaunchPoint; original worktree unchanged",
+      "editedFile": "src/lib/campaigns/warmup/infra/list-state-queries.ts",
+      "compiler": "real watch-service compiler; one session retained across edits",
+      "allowExpensiveRebuild": false,
+      "sampleIntervalMs": 250,
+      "memory": "Aggregate process RSS includes shared pages and is not exact unique physical memory. Compiler worker threads are included in their watch-service process RSS.",
+      "interpretation": "This file has a large transitive compiler-dependency closure; these are not representative timings for every one-file edit."
+    },
+    "edits": [
+      {
+        "edit": "first-worker-edit",
+        "wallMs": 220526.3654460432,
+        "peakAggregateRssKiB": 16153196,
+        "baselineServiceRssKiB": 272784,
+        "peakComponents": [
+          {
+            "role": "watch-service-and-compiler-worker",
+            "rssKiB": 9939416
+          },
+          {
+            "role": "reindex-requestor",
+            "rssKiB": 6213780
+          }
+        ],
+        "minimumMachineAvailableKiB": 24317804,
+        "sampleCount": 868,
+        "runtimePhases": [
+          {
+            "id": "direct-extraction",
+            "durationMs": 2196.1402850000013,
+            "inputFacts": 5607,
+            "outputFacts": 6579,
+            "filesVisited": 5607,
+            "filesReused": 3689,
+            "factsReused": 522,
+            "factsInvalidated": 6579
+          },
+          {
+            "id": "http-summary",
+            "durationMs": 20336.286282000015,
+            "inputFacts": 7103,
+            "outputFacts": 82,
+            "filesVisited": 295
+          },
+          {
+            "id": "http-mount",
+            "durationMs": 15490.289802999992,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 9296
+          },
+          {
+            "id": "carrier",
+            "durationMs": 17409.705466000014,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 189
+          },
+          {
+            "id": "relations",
+            "durationMs": 5.300629000004847,
+            "inputFacts": 7185,
+            "outputFacts": 666
+          },
+          {
+            "id": "links",
+            "durationMs": 0.8010099999955855,
+            "inputFacts": 666,
+            "outputFacts": 2
+          },
+          {
+            "id": "frontiers",
+            "durationMs": 126.7366279999842,
+            "inputFacts": 7185,
+            "outputFacts": 6232
+          }
+        ],
+        "runtimeTotalMs": 55565.26010300001,
+        "compilerReports": [
+          "Incremental TypeScript index emitted 5607 document(s), removed 0, and produced 44 bounded batch(es) across 1 project(s) in 133.024s (cold service; whole SCIP deferred; runtime 0ms, graph 530ms, request 132436ms, assembly 4169ms, fragments 793ms, write 145ms).",
+          "Affected-set shadow: 100.0% recall; 5607 predicted, 874 changed."
+        ],
+        "probeSymbolsPresent": true,
+        "skipped": [],
+        "shards": [
+          {
+            "id": "typescript",
+            "language": "typescript",
+            "reused": false,
+            "strategy": "incremental",
+            "missReason": "language inputs changed since last index",
+            "fingerprint": "78d53dd1b55d550f",
+            "outputBytes": 412916143,
+            "producedOutputBytes": 10365593,
+            "durationMs": 133023.711314,
+            "command": "watch-service:typescript-index"
+          }
+        ]
+      },
+      {
+        "edit": "warm-body-edit",
+        "wallMs": 220677.52541101072,
+        "peakAggregateRssKiB": 17658736,
+        "baselineServiceRssKiB": 9939444,
+        "peakComponents": [
+          {
+            "role": "reindex-requestor",
+            "rssKiB": 6218708
+          },
+          {
+            "role": "watch-service-and-compiler-worker",
+            "rssKiB": 11440028
+          }
+        ],
+        "minimumMachineAvailableKiB": 22794800,
+        "sampleCount": 867,
+        "runtimePhases": [
+          {
+            "id": "direct-extraction",
+            "durationMs": 2192.3558670000057,
+            "inputFacts": 5605,
+            "outputFacts": 6579,
+            "filesVisited": 5605,
+            "filesReused": 3691,
+            "factsReused": 522,
+            "factsInvalidated": 6579
+          },
+          {
+            "id": "http-summary",
+            "durationMs": 20440.743438000005,
+            "inputFacts": 7103,
+            "outputFacts": 82,
+            "filesVisited": 295
+          },
+          {
+            "id": "http-mount",
+            "durationMs": 15472.883871000027,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 9296
+          },
+          {
+            "id": "carrier",
+            "durationMs": 17701.913841,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 189
+          },
+          {
+            "id": "relations",
+            "durationMs": 5.812189999996917,
+            "inputFacts": 7185,
+            "outputFacts": 666
+          },
+          {
+            "id": "links",
+            "durationMs": 0.8593910000054166,
+            "inputFacts": 666,
+            "outputFacts": 2
+          },
+          {
+            "id": "frontiers",
+            "durationMs": 129.7156729999988,
+            "inputFacts": 7185,
+            "outputFacts": 6232
+          }
+        ],
+        "runtimeTotalMs": 55944.28427100004,
+        "compilerReports": [
+          "Incremental TypeScript index emitted 5605 document(s), removed 0, and produced 44 bounded batch(es) across 1 project(s) in 132.916s (warm service; whole SCIP deferred; runtime 0ms, graph 518ms, request 132342ms, assembly 4091ms, fragments 922ms, write 146ms).",
+          "Affected-set shadow: 100.0% recall; 5605 predicted, 0 changed."
+        ],
+        "probeSymbolsPresent": true,
+        "skipped": [],
+        "shards": [
+          {
+            "id": "typescript",
+            "language": "typescript",
+            "reused": false,
+            "strategy": "incremental",
+            "missReason": "language inputs changed since last index",
+            "fingerprint": "21fe2a2b93a23e2b",
+            "outputBytes": 412916143,
+            "producedOutputBytes": 10365593,
+            "durationMs": 132916.07654,
+            "command": "watch-service:typescript-index"
+          }
+        ]
+      },
+      {
+        "edit": "warm-runtime-edit",
+        "wallMs": 217743.1508540176,
+        "peakAggregateRssKiB": 17667688,
+        "baselineServiceRssKiB": 11440028,
+        "peakComponents": [
+          {
+            "role": "watch-service-and-compiler-worker",
+            "rssKiB": 11433992
+          },
+          {
+            "role": "reindex-requestor",
+            "rssKiB": 6233696
+          }
+        ],
+        "minimumMachineAvailableKiB": 22392340,
+        "sampleCount": 856,
+        "runtimePhases": [
+          {
+            "id": "direct-extraction",
+            "durationMs": 2244.644427000021,
+            "inputFacts": 5605,
+            "outputFacts": 6580,
+            "filesVisited": 5605,
+            "filesReused": 3691,
+            "factsReused": 522,
+            "factsInvalidated": 6579
+          },
+          {
+            "id": "http-summary",
+            "durationMs": 20537.384904000006,
+            "inputFacts": 7104,
+            "outputFacts": 82,
+            "filesVisited": 295
+          },
+          {
+            "id": "http-mount",
+            "durationMs": 15659.478438999999,
+            "inputFacts": 7186,
+            "outputFacts": 0,
+            "filesVisited": 9296
+          },
+          {
+            "id": "carrier",
+            "durationMs": 17613.932812000014,
+            "inputFacts": 7186,
+            "outputFacts": 0,
+            "filesVisited": 189
+          },
+          {
+            "id": "relations",
+            "durationMs": 5.232371999998577,
+            "inputFacts": 7186,
+            "outputFacts": 667
+          },
+          {
+            "id": "links",
+            "durationMs": 0.8784770000202116,
+            "inputFacts": 667,
+            "outputFacts": 2
+          },
+          {
+            "id": "frontiers",
+            "durationMs": 135.69027000002097,
+            "inputFacts": 7186,
+            "outputFacts": 6233
+          }
+        ],
+        "runtimeTotalMs": 56197.24170100008,
+        "compilerReports": [
+          "Incremental TypeScript index emitted 5605 document(s), removed 0, and produced 44 bounded batch(es) across 1 project(s) in 129.316s (warm service; whole SCIP deferred; runtime 1ms, graph 521ms, request 128740ms, assembly 4091ms, fragments 889ms, write 145ms).",
+          "Affected-set shadow: 100.0% recall; 5605 predicted, 1 changed."
+        ],
+        "probeSymbolsPresent": true,
+        "skipped": [],
+        "shards": [
+          {
+            "id": "typescript",
+            "language": "typescript",
+            "reused": false,
+            "strategy": "incremental",
+            "missReason": "language inputs changed since last index",
+            "fingerprint": "50e98bcdd1ea8cd1",
+            "outputBytes": 412916143,
+            "producedOutputBytes": 10365593,
+            "durationMs": 129315.804824,
+            "command": "watch-service:typescript-index"
+          }
+        ]
+      },
+      {
+        "edit": "restore",
+        "wallMs": 220658.11057202518,
+        "peakAggregateRssKiB": 17681640,
+        "baselineServiceRssKiB": 11433992,
+        "peakComponents": [
+          {
+            "role": "watch-service-and-compiler-worker",
+            "rssKiB": 11457100
+          },
+          {
+            "role": "reindex-requestor",
+            "rssKiB": 6224540
+          }
+        ],
+        "minimumMachineAvailableKiB": 22633000,
+        "sampleCount": 867,
+        "runtimePhases": [
+          {
+            "id": "direct-extraction",
+            "durationMs": 2275.3652329999895,
+            "inputFacts": 5605,
+            "outputFacts": 6579,
+            "filesVisited": 5605,
+            "filesReused": 3691,
+            "factsReused": 522,
+            "factsInvalidated": 6580
+          },
+          {
+            "id": "http-summary",
+            "durationMs": 20428.751412000012,
+            "inputFacts": 7103,
+            "outputFacts": 82,
+            "filesVisited": 295
+          },
+          {
+            "id": "http-mount",
+            "durationMs": 15667.140960000019,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 9296
+          },
+          {
+            "id": "carrier",
+            "durationMs": 17325.50500200002,
+            "inputFacts": 7185,
+            "outputFacts": 0,
+            "filesVisited": 189
+          },
+          {
+            "id": "relations",
+            "durationMs": 18.406756000011228,
+            "inputFacts": 7185,
+            "outputFacts": 666
+          },
+          {
+            "id": "links",
+            "durationMs": 1.0565349999815226,
+            "inputFacts": 666,
+            "outputFacts": 2
+          },
+          {
+            "id": "frontiers",
+            "durationMs": 118.19168600000557,
+            "inputFacts": 7185,
+            "outputFacts": 6232
+          }
+        ],
+        "runtimeTotalMs": 55834.41758400004,
+        "compilerReports": [
+          "Incremental TypeScript index emitted 5605 document(s), removed 0, and produced 44 bounded batch(es) across 1 project(s) in 133.026s (warm service; whole SCIP deferred; runtime 1ms, graph 536ms, request 132434ms, assembly 4089ms, fragments 893ms, write 151ms).",
+          "Affected-set shadow: 100.0% recall; 5605 predicted, 1 changed."
+        ],
+        "probeSymbolsPresent": false,
+        "skipped": [],
+        "shards": [
+          {
+            "id": "typescript",
+            "language": "typescript",
+            "reused": false,
+            "strategy": "incremental",
+            "missReason": "language inputs changed since last index",
+            "fingerprint": "e4c46a5864d2910f",
+            "outputBytes": 412916143,
+            "producedOutputBytes": 10365593,
+            "durationMs": 133025.829832,
+            "command": "watch-service:typescript-index"
+          }
+        ]
+      }
+    ],
+    "warmBodyGraphEquality": {
+      "schemaVersion": true,
+      "extractorVersion": true,
+      "observations": true,
+      "relationGroups": true,
+      "links": true,
+      "frontiers": true
+    },
+    "httpEdit": {
+      "observationsAdded": 1,
+      "addedAction": "http.request",
+      "addedPath": "/scip-incremental-probe",
+      "observationsRemoved": 0,
+      "existingObservationsChanged": 0,
+      "linksUnchanged": true,
+      "extractionErrors": []
+    },
+    "restoredGraphEquality": {
+      "schemaVersion": true,
+      "extractorVersion": true,
+      "observations": true,
+      "relationGroups": true,
+      "links": true,
+      "frontiers": true,
+      "fileCoverage": true
+    },
+    "originalSourceRestored": true,
+    "probeSymbolsRemoved": true,
+    "quickCheck": "ok",
+    "foreignKeyCheck": "ok",
+    "temporaryWatcherStopped": true
+  },
+  "runtimeCacheFollowup": {
+    "baseCommit": "8b526c53",
+    "installed": false,
+    "extractorVersion": "runtime-boundaries-v31",
+    "sourceIdentity": "de015e5b1ee71c8ecfeb048af4a6a9361fa652434c2d9a69e6d9e10947999ad4",
+    "productionFilesSha256": {
+      "src/analysis/runtime-boundaries/http-mounts.ts": "0b05b2892343b935faa2bf29c0f77c0077a7c1efa6cb9e00543076dae1022d27",
+      "src/analysis/runtime-boundaries/carrier-discriminators.ts": "68c8607d459f0f4cef34b9845a9c612ac736132a185d0a8d07acbe09437f72a3",
+      "src/analysis/runtime-boundaries/types.ts": "44e7520e3cf4211875e1fc7d59f62eecefa399589eef288264f6df512f132163",
+      "src/analysis/runtime-boundaries/graph.ts": "b8700e5abccd80a6142569d29725ab49a49b8661bbe8ffab4a963c7510da42f1",
+      "src/storage/evidence-cache.ts": "1c8466383c93d84097da03ee6959447c686209ea0a9e4fb2ba3b4b792a8a135f",
+      "src/storage/evidence-products.ts": "ddc9df838e0b31259546aa3ef6ae7d16abc98e254250e9f70554c3791a5bea1a"
+    },
+    "firstProcess": {
+      "collectorMs": 111271.20442,
+      "forcedWarmCollectorMs": 8976.800002999997,
+      "phases": [
+        {
+          "id": "direct-extraction",
+          "durationMs": 52103.31116,
+          "inputFacts": 9296,
+          "outputFacts": 7101,
+          "filesVisited": 9296,
+          "filesReused": 0,
+          "factsReused": 0,
+          "factsInvalidated": 0
+        },
+        {
+          "id": "http-summary",
+          "durationMs": 22690.164168999996,
+          "inputFacts": 7103,
+          "outputFacts": 82,
+          "filesVisited": 295
+        },
+        {
+          "id": "http-mount",
+          "durationMs": 16450.248301999993,
+          "inputFacts": 7185,
+          "outputFacts": 0,
+          "filesVisited": 9296
+        },
+        {
+          "id": "carrier",
+          "durationMs": 19805.442159,
+          "inputFacts": 7185,
+          "outputFacts": 0,
+          "filesVisited": 189
+        },
+        {
+          "id": "relations",
+          "durationMs": 5.278739000001224,
+          "inputFacts": 7185,
+          "outputFacts": 666
+        },
+        {
+          "id": "links",
+          "durationMs": 0.8784320000122534,
+          "inputFacts": 666,
+          "outputFacts": 2
+        },
+        {
+          "id": "frontiers",
+          "durationMs": 190.3380729999917,
+          "inputFacts": 7185,
+          "outputFacts": 6232
+        }
+      ]
+    },
+    "secondProcess": {
+      "collectorMs": 37370.402587000004,
+      "forcedWarmCollectorMs": 7668.180085,
+      "phases": [
+        {
+          "id": "direct-extraction",
+          "durationMs": 768.7956079999999,
+          "inputFacts": 9296,
+          "outputFacts": 7101,
+          "filesVisited": 9296,
+          "filesReused": 0,
+          "factsReused": 0,
+          "factsInvalidated": 0
+        },
+        {
+          "id": "http-summary",
+          "durationMs": 18767.333139,
+          "inputFacts": 7103,
+          "outputFacts": 82,
+          "filesVisited": 295
+        },
+        {
+          "id": "http-mount",
+          "durationMs": 438.68207299999995,
+          "inputFacts": 7185,
+          "outputFacts": 0,
+          "filesVisited": 9296
+        },
+        {
+          "id": "carrier",
+          "durationMs": 17233.697328,
+          "inputFacts": 7185,
+          "outputFacts": 0,
+          "filesVisited": 189
+        },
+        {
+          "id": "relations",
+          "durationMs": 5.808222999999998,
+          "inputFacts": 7185,
+          "outputFacts": 666
+        },
+        {
+          "id": "links",
+          "durationMs": 0.9037410000019008,
+          "inputFacts": 666,
+          "outputFacts": 2
+        },
+        {
+          "id": "frontiers",
+          "durationMs": 131.04649999999674,
+          "inputFacts": 7185,
+          "outputFacts": 6232
+        }
+      ]
+    },
+    "counts": {
+      "observations": 7185,
+      "links": 2,
+      "groups": 666,
+      "frontiers": 6232,
+      "errors": 0
+    },
+    "equality": {
+      "body-first": {
+        "observations": true,
+        "relationGroups": true,
+        "links": true,
+        "frontiers": true,
+        "fileCoverage": true,
+        "errorsEqual": true
+      },
+      "body-second": {
+        "observations": true,
+        "relationGroups": true,
+        "links": true,
+        "frontiers": true,
+        "fileCoverage": true,
+        "errorsEqual": true
+      }
+    },
+    "comparisonPolicy": "Every observation, relation group, link, frontier and extraction error is compared exactly with a fresh v30 collection on the same SQLite database. File coverage is compared after projecting old body-summary definitions to the six stable fields now persisted by v31; obsolete database IDs and unused definition metadata are intentionally removed.",
+    "limits": [
+      "These are runtime collector measurements, not complete incremental reindex timings.",
+      "Standalone bundles without package metadata intentionally receive process-private cache identities. Persistent-cache measurements use a fixed package runtime identity.",
+      "The main broad TypeScript compiler emission defect remains unresolved."
+    ],
+    "validation": {
+      "focusedTests": 100,
+      "finalRuntimeTests": 66,
+      "fullSuite": {
+        "passed": 3818,
+        "timeouts": 6,
+        "workerRpcTimeouts": 1,
+        "clean": false
+      },
+      "serialRetry": {
+        "files": 3,
+        "passed": 46,
+        "failed": 0
+      },
+      "build": "passed",
+      "typecheck": "passed",
+      "publicApi": "9217c44ff0f30a77; 66 paths; consumer passed",
+      "skillLinks": "passed",
+      "formatAndLint": "passed",
+      "review": {
+        "findings": 0,
+        "blockers": 0
+      },
+      "localReindexSeconds": 27.1,
+      "localWatcherRestarted": false,
+      "diffImpact": {
+        "changedSymbols": 9,
+        "affectedFiles": 5,
+        "nonindexedPaths": 6
+      }
+    }
+  },
+  "compilerBuilderExperiment": {
+    "productionChange": false,
+    "mode": "TypeScript semantic-builder affected-file traversal; diagnostic bodies skipped",
+    "steps": [
+      {
+        "edit": 1,
+        "planningMs": 11691.549068,
+        "programMs": 11601.825824,
+        "affectedFiles": 17528,
+        "maxRssKiB": 4525948
+      },
+      {
+        "edit": 2,
+        "planningMs": 23925.786929999995,
+        "programMs": 1961.7100889999983,
+        "affectedFiles": 5604,
+        "maxRssKiB": 7083336
+      },
+      {
+        "edit": 3,
+        "planningMs": 2438.3764880000017,
+        "programMs": 1905.4739520000003,
+        "affectedFiles": 1,
+        "maxRssKiB": 7756556
+      },
+      {
+        "edit": 4,
+        "planningMs": 3019.839089000001,
+        "programMs": 2488.5215490000046,
+        "affectedFiles": 1,
+        "maxRssKiB": 8065372
+      }
+    ],
+    "sourceRestored": true,
+    "counterexample": "Equal-width choose<true >() to choose<false>() preserves the provider SCIP document and emitted declarations but changes a consumer property definition target. Type shape alone, even combined with unchanged provider SCIP bytes, cannot justify graph reuse.",
+    "requiredGuard": "Preserve declaration origins reachable through exported values/types, including anonymous source-position identities; retain conservative propagation without sufficient evidence."
   }
 }

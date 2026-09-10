@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import * as staticValueFlow from '../../src/symbols/graph/static-value-flow.js';
+import * as boundaryExtractors from '../../src/analysis/runtime-boundaries/extractors.js';
+import { composeHttpMountsWithCoverage } from '../../src/analysis/runtime-boundaries/http-mounts.js';
 import { collectRuntimeBoundaryGraph } from '../../src/analysis/runtime-boundaries/graph.js';
 import { ScipDatabase } from '../../src/storage/db.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
@@ -25,6 +27,74 @@ async function graph(source: string[]) {
 }
 
 describe('runtime boundary identity and binding accuracy', () => {
+  it('reuses parsed negative mount imports across readers and invalidates them on import edits', () => {
+    const root = mkdtempSync(join(tmpdir(), 'runtime-mount-imports-'));
+    const dbPath = join(root, 'index.db');
+    const file = 'flow.ts';
+    const context = vi.spyOn(boundaryExtractors, 'boundaryFileContext');
+    const readMounts = () => {
+      const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+      try {
+        return composeHttpMountsWithCoverage(db, []);
+      } finally {
+        db.close();
+      }
+    };
+    try {
+      evidenceFixtureDb(dbPath).document(1, 'typescript', file).write();
+      const unrelated = ['// import express from "express";', 'export const value = "express";'];
+      writeFixtureFiles(root, { [file]: unrelated });
+      expect(readMounts()).toMatchObject({ filesInspected: 1, mounts: 0, frontiers: [] });
+      expect(context).toHaveBeenCalledTimes(1);
+      expect(readMounts()).toMatchObject({ filesInspected: 1, mounts: 0, frontiers: [] });
+      expect(context).toHaveBeenCalledTimes(1);
+
+      // The module specifier must be decoded by the existing parser, not a text filter.
+      writeFixtureFiles(root, {
+        [file]: ['import express from "expre\\u0073s";', 'const app = express();', 'app.use("/api", unknownRouter());'],
+      });
+      const positive = readMounts();
+      expect(positive.frontiers).toContainEqual(expect.objectContaining({ reason: 'http-mount-target-unresolved' }));
+      expect(context).toHaveBeenCalledTimes(2);
+      expect(readMounts()).toEqual(positive);
+      expect(context).toHaveBeenCalledTimes(3);
+
+      writeFixtureFiles(root, { [file]: unrelated });
+      expect(readMounts()).toMatchObject({ filesInspected: 1, mounts: 0, frontiers: [] });
+      expect(context).toHaveBeenCalledTimes(4);
+      expect(readMounts()).toMatchObject({ filesInspected: 1, mounts: 0, frontiers: [] });
+      expect(context).toHaveBeenCalledTimes(4);
+    } finally {
+      context.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not retain unavailable mount parsing as a negative import result', () => {
+    const root = mkdtempSync(join(tmpdir(), 'runtime-mount-recovery-'));
+    const dbPath = join(root, 'index.db');
+    const context = vi.spyOn(boundaryExtractors, 'boundaryFileContext').mockReturnValueOnce(null);
+    try {
+      writeFixtureFiles(root, {
+        'flow.ts': ['import express from "express";', 'const app = express();', 'app.use("/api", unknownRouter());'],
+      });
+      evidenceFixtureDb(dbPath).document(1, 'typescript', 'flow.ts').write();
+      for (const unavailable of [true, false]) {
+        const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
+        try {
+          const result = composeHttpMountsWithCoverage(db, []);
+          expect(result.frontiers).toHaveLength(unavailable ? 0 : 1);
+        } finally {
+          db.close();
+        }
+      }
+      expect(context).toHaveBeenCalledTimes(2);
+    } finally {
+      context.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('does not evaluate descriptor identities without a capability handler', async () => {
     const evaluate = vi.spyOn(staticValueFlow, 'evaluateStaticValue');
     try {
