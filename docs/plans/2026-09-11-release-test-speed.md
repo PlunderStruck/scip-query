@@ -69,7 +69,23 @@ to worker processes; it changes when checks run, not what establishes a pass.
   four files in 9.89 seconds, without the release compilation cache. Eight
   added coordinator cases cover failure ordering, cache ownership/cleanup,
   explicit cache/coverage controls, and environment propagation to a real child.
-- Source review reports no findings or blocking findings. The final clean
-  release run will retain complete timing and validation evidence in
-  `.scipquery/releases/0.26.0-fast-preparation/`; earlier preparation records
-  remain separate and unchanged.
+- Source review reports no findings or blocking findings.
+- Final clean-checkout `npm run release:npm:dry-run` at source commit
+  `f26347c4ec7d83b965f3c334bb0781bffdf7d2c3` passed every gate: 3,949 tests in
+  429 files, type checks, zero production vulnerabilities, formatting/lint,
+  build, API/consumer checks, skill links, package identities, and live
+  registry comparison. Tests took **292.35 seconds**, down from 403.46 seconds
+  (**27.54% reduction**); the entire new preflight took **351.42 seconds**.
+  No npm publication was performed.
+- The code CLI suite fell from 59.421s to 5.545s; the search CLI suite from
+  35.570s to 4.651s. The complete 25-test database read-proof suite passed in
+  1.727s, including the user's reported seed 20260918, without raising the
+  five-second timeout or reducing the generated cases.
+- Complete logs, the rejected four-worker experiment, package hashes, and the
+  coordinator's immutable record are retained in
+  `.scipquery/releases/0.26.0-fast-preparation/`. The new verified publish
+  checkout is `/tmp/scip-query-npm-0.26.0-fast-8odGkx/checkout`; it remains at
+  the exact tested source commit. Earlier preparation records are unchanged.
+- Only CHANGELOG, README, and the release guide differ in the new npm archive;
+  the other 464 packed files match the previously installed and smoke-tested
+  archive byte for byte. No VM reinstall is needed for this release-tool change.
