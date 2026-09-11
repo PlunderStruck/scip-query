@@ -7,6 +7,7 @@ import { existsSync } from 'node:fs';
 import { SymbolRole } from '@c4312/scip';
 import type { IndexedDefinition } from '../../domain/types.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
+import { getCallSites, getCallableIdentityFacts } from '../../source/facts/ast-facts.js';
 import type { SourceCallableOwner, SourceFacts } from '../../source/facts/source-fact-types.js';
 import { callSiteOwner } from '../../source/facts/source-callables.js';
 import { getAst } from '../../source/ast/ast-core.js';
@@ -111,10 +112,10 @@ export function scipOccurrenceCallTargetsForRange(
   endLine: number,
   requestedSymbols?: ReadonlySet<string>,
 ): ScipOccurrenceCallTargetsResult {
-  const facts = getSourceFacts(db, relativePath);
-  const callsites = (facts?.callSites ?? []).filter((site) => site.line >= startLine && site.line <= endLine);
-  if (!facts || callsites.length === 0) {
-    return { available: Boolean(facts), targets: [], resolvedCallsites: 0, unresolvedCallsites: 0 };
+  const fileCallsites = getCallSites(db, relativePath) ?? getSourceFacts(db, relativePath)?.callSites;
+  const callsites = (fileCallsites ?? []).filter((site) => site.line >= startLine && site.line <= endLine);
+  if (!fileCallsites || callsites.length === 0) {
+    return { available: Boolean(fileCallsites), targets: [], resolvedCallsites: 0, unresolvedCallsites: 0 };
   }
 
   const fileTargets = scipOccurrenceTargetsForFile(db, relativePath);
@@ -433,10 +434,10 @@ function decodeScipDocumentTargets(
 
 export function scipDefinitionSourceConfirmsCallable(db: ScipDatabase, definition: IndexedDefinition): boolean {
   if (!definition.isFunctionLike) return false;
-  const facts = getSourceFacts(db, definition.relativePath);
-  if (!facts) return true;
+  const callables = getCallableIdentityFacts(db, definition.relativePath);
+  if (!callables) return true;
   if (
-    facts.callables.some(
+    callables.some(
       (callable) =>
         callable.name === definition.leaf &&
         callable.startLine === definition.startLine &&

@@ -1,7 +1,7 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import type { SymbolMatch } from '../../domain/types.js';
 import type { SourceCallableOwner, SourceFacts } from '../../source/facts/source-fact-types.js';
-import { getSourceFacts } from '../../source/facts/source-facts.js';
+import { getCallableIdentityFacts } from '../../source/facts/ast-facts.js';
 import { leafName } from '../symbol-parser.js';
 
 export function sourceCallableOwnerKey(owner: SourceCallableOwner | null): string {
@@ -16,7 +16,7 @@ export function lexicalCallOwners<D extends SymbolMatch>(
 ): Map<string, D> {
   const owners = new Map<string, D>();
   if (definitions.length === 0) return owners;
-  callables ??= getSourceFacts(db, file)?.callables ?? [];
+  callables ??= getCallableIdentityFacts(db, file) ?? [];
   const ambiguous = new Set<string>();
   for (const definition of definitions) {
     // A definition may contain many functions, including another with the same
@@ -40,7 +40,7 @@ export function sourceCallableForDefinition(
   db: ScipDatabase,
   file: string,
   definition: SymbolMatch,
-  callables: Readonly<SourceFacts['callables']> = getSourceFacts(db, file)?.callables ?? [],
+  callables: Readonly<SourceFacts['callables']> = getCallableIdentityFacts(db, file) ?? [],
 ) {
   const leaf = leafName(definition.symbol);
   const name = leaf === '<constructor>' ? 'constructor' : leaf;

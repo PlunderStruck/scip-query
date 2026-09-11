@@ -1,0 +1,340 @@
+{
+  "date": "2026-09-11",
+  "goal": "Complete cold LaunchPoint index toward 60 seconds without reducing relationship coverage",
+  "targetMet": false,
+  "sourceCommit": "dd611a94bde0dd4ddbe049101048cb6fcb9d01a0",
+  "artifactSha256": "02e20eb8a1177f82922f2ef81d46af939113baa0b1cf5fa4b7f063a9ba73fa3c",
+  "change": "Focused TS/JS call and callable identity extraction; one native node-type scan; compiler implementation unchanged",
+  "method": {
+    "coldArtifacts": true,
+    "retainedCompiler": false,
+    "sharedCache": false,
+    "dependenciesInstalled": true,
+    "osPageCacheCleared": false,
+    "compilerConcurrency": 2,
+    "wallScope": "CLI process lifecycle; external sampler every 100ms",
+    "memoryScope": "RSS summed over CLI process and its descendants, sampled externally every 100ms; shared mappings may be counted more than once"
+  },
+  "cold": {
+    "wallSeconds": 192.90526039595716,
+    "peakGiB": 11.787311553955078,
+    "peakSwapGiB": 0.0,
+    "exitCode": 0,
+    "artifacts": "/tmp/scip-query-cold-focused-20260911-306cken4"
+  },
+  "previousAcceptedCold": {
+    "wallSeconds": 199.9147,
+    "peakGiB": 12.103,
+    "codeCommit": "a910a38626c98b172883733d483366293614839e"
+  },
+  "spansMs": {
+    "reindex.fingerprint": 2538,
+    "reindex.lock": 0,
+    "reindex.reuse-check": 0,
+    "reindex.language-indexer.typescript-compiler-shard:0": 51841,
+    "reindex.language-indexer.typescript-compiler-shard:1": 43081,
+    "reindex.language-indexer.typescript-compiler-shard:2": 37916,
+    "reindex.language-indexer.typescript-compiler-shard:3": 38737,
+    "reindex.language-indexer.typescript-compiler-shard:4": 38294,
+    "reindex.language-indexers": 119705,
+    "reindex.publish.scip-output": 0,
+    "reindex.publish.sqlite-output": 11433,
+    "reindex.publish.auxiliary-documents": 98,
+    "reindex.publish.source-checkpoints": 965,
+    "runtime-boundaries.file.read": 0,
+    "evidence-product.file.read": 0,
+    "runtime-boundaries.file.direct-product": 0,
+    "runtime-boundaries.file.supports": 0,
+    "runtime-boundaries.file.hashes": 0,
+    "runtime-boundaries.context.ast": 1,
+    "runtime-boundaries.extractor.builtin.node-child-process": 0,
+    "runtime-boundaries.context.callable-sites": 0,
+    "runtime-boundaries.context.definitions.evidence-read": 0,
+    "runtime-boundaries.context.definitions.primary-rows": 0,
+    "runtime-boundaries.context.definitions.fallback-rows": 0,
+    "runtime-boundaries.context.definitions.merge-rows": 0,
+    "runtime-boundaries.context.definitions.range-correction.source-text": 0,
+    "runtime-boundaries.context.definitions.range-correction.callable-sites": 0,
+    "runtime-boundaries.context.definitions.range-correction.ast-correction": 0,
+    "runtime-boundaries.context.definitions.range-correction": 0,
+    "runtime-boundaries.context.definitions.evidence-write": 0,
+    "runtime-boundaries.context.definitions": 1,
+    "runtime-boundaries.extractor.builtin.capability-registry": 3,
+    "runtime-boundaries.extractor.builtin.registry": 1,
+    "runtime-boundaries.extractor.builtin.persistence": 1,
+    "runtime-boundaries.extractor.builtin.http": 3,
+    "runtime-boundaries.http-summary.seed": 816,
+    "runtime-boundaries.http-summary.resolve-call-sites": 0,
+    "runtime-boundaries.http-summary.process-call-sites": 0,
+    "reindex.publish.runtime-boundaries": 54531,
+    "reindex.publish.sqlite-layout": 428,
+    "reindex.publish.coverage": 59,
+    "reindex.publish.affected-shadow": 0,
+    "reindex.publish.metadata": 308,
+    "reindex.publish.generation-handoff": 2003,
+    "reindex.publish.cleanup": 0,
+    "reindex.publish.shadow-telemetry": 1,
+    "reindex.publish": 69843,
+    "reindex.fresh": 189549
+  },
+  "runtimePhases": [
+    {
+      "id": "direct-extraction",
+      "durationMs": 23563.413685999985,
+      "inputFacts": 9566,
+      "outputFacts": 7274,
+      "filesVisited": 9566,
+      "filesReused": 0,
+      "factsReused": 0,
+      "factsInvalidated": 0
+    },
+    {
+      "id": "http-summary",
+      "durationMs": 11074.99785700001,
+      "inputFacts": 7276,
+      "outputFacts": 83,
+      "filesVisited": 297
+    },
+    {
+      "id": "http-mount",
+      "durationMs": 5961.810302999977,
+      "inputFacts": 7359,
+      "outputFacts": 0,
+      "filesVisited": 9566
+    },
+    {
+      "id": "body-summary",
+      "durationMs": 9732.264851999993,
+      "inputFacts": 258,
+      "outputFacts": 264,
+      "filesVisited": 194
+    },
+    {
+      "id": "carrier",
+      "durationMs": 1704.9254509999882,
+      "inputFacts": 7359,
+      "outputFacts": 0,
+      "filesVisited": 194
+    },
+    {
+      "id": "relations",
+      "durationMs": 5.26659899999504,
+      "inputFacts": 7359,
+      "outputFacts": 689
+    },
+    {
+      "id": "links",
+      "durationMs": 0.8931649999867659,
+      "inputFacts": 689,
+      "outputFacts": 2
+    },
+    {
+      "id": "frontiers",
+      "durationMs": 192.12226699999883,
+      "inputFacts": 7359,
+      "outputFacts": 6386
+    }
+  ],
+  "stats": {
+    "symbols": 511199,
+    "files": 9485,
+    "indexSizeBytes": 535175168,
+    "lastBuilt": "2026-09-11T17:25:41.500Z"
+  },
+  "compilerEquivalence": {
+    "before": 9485,
+    "after": 9485,
+    "documentsByteIdentical": true,
+    "differences": []
+  },
+  "runtimeEquivalence": {
+    "observations": {
+      "equal": true,
+      "count": 7359
+    },
+    "relationGroups": {
+      "equal": true,
+      "count": 689
+    },
+    "links": {
+      "equal": true,
+      "count": 2
+    },
+    "frontiers": {
+      "equal": true,
+      "count": 6386
+    },
+    "fileCoverage": {
+      "equal": true,
+      "count": 9566
+    }
+  },
+  "fullWalkComparison": {
+    "files": 9566,
+    "callSites": 620724,
+    "callableIdentities": 36252,
+    "differences": []
+  },
+  "incremental": [
+    {
+      "stage": "first-worker-edit",
+      "wallSeconds": 30.632635782007128,
+      "peakGiB": 5.141845703125,
+      "compiler": {
+        "batches": 45,
+        "requestedDocuments": 5760,
+        "modifiedDocuments": 1,
+        "emittedDocuments": 1,
+        "retainedDocuments": 5759,
+        "totalRequestMs": 15910.31142900001,
+        "totalServiceMs": 15236.784011999996
+      }
+    },
+    {
+      "stage": "warm-body-edit",
+      "wallSeconds": 13.414649994927458,
+      "peakGiB": 5.265972137451172,
+      "compiler": {
+        "batches": 45,
+        "requestedDocuments": 5760,
+        "modifiedDocuments": 1,
+        "emittedDocuments": 0,
+        "retainedDocuments": 5760,
+        "totalRequestMs": 2274.927014000001,
+        "totalServiceMs": 1447.3774010000052
+      }
+    },
+    {
+      "stage": "warm-inferred-edit",
+      "wallSeconds": 14.187443051952869,
+      "peakGiB": 5.1643829345703125,
+      "compiler": {
+        "batches": 45,
+        "requestedDocuments": 5760,
+        "modifiedDocuments": 1,
+        "emittedDocuments": 1,
+        "retainedDocuments": 5759,
+        "totalRequestMs": 2051.1231799999987,
+        "totalServiceMs": 1586.6802100000277
+      }
+    },
+    {
+      "stage": "warm-runtime-edit",
+      "wallSeconds": 15.97826454997994,
+      "peakGiB": 5.234783172607422,
+      "compiler": {
+        "batches": 45,
+        "requestedDocuments": 5760,
+        "modifiedDocuments": 1,
+        "emittedDocuments": 1,
+        "retainedDocuments": 5759,
+        "totalRequestMs": 2577.110774999999,
+        "totalServiceMs": 1786.2303069999616
+      }
+    },
+    {
+      "stage": "restore",
+      "wallSeconds": 16.73429185699206,
+      "peakGiB": 5.2662200927734375,
+      "compiler": {
+        "batches": 45,
+        "requestedDocuments": 5760,
+        "modifiedDocuments": 1,
+        "emittedDocuments": 1,
+        "retainedDocuments": 5759,
+        "totalRequestMs": 3685.3883879999944,
+        "totalServiceMs": 3239.7698539999983
+      }
+    }
+  ],
+  "incrementalVerification": {
+    "baselineMatchesPrevious": true,
+    "stages": [
+      {
+        "stage": "first-worker-edit",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "warm-body-edit",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "warm-inferred-edit",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "warm-runtime-edit",
+        "added": {
+          "observations": 1,
+          "relationGroups": 1,
+          "links": 0,
+          "frontiers": 1
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "restore",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      }
+    ],
+    "restoredFileCoverageMatches": true,
+    "sourceHash": "f5b5810aa873230a614d487e026055296e3dedaf06db3357e44616400101a2e7",
+    "probeSymbolsRemoved": true,
+    "quickCheck": "ok",
+    "foreignKeyCheck": "ok",
+    "temporaryWatcherStopped": true
+  },
+  "verification": {
+    "freshness": "fresh",
+    "generation": "current",
+    "watcher": "stopped",
+    "sourceUnchanged": true,
+    "activeWatchersUnchanged": true,
+    "quickCheck": "ok",
+    "foreignKeyCheck": "ok"
+  },
+  "tests": {
+    "passed": 3937,
+    "files": 427,
+    "focusedPassed": 122,
+    "typecheck": true,
+    "eslint": true,
+    "publicApi": true,
+    "skillLinks": true
+  },
+  "review": {
+    "changedSymbols": 12,
+    "affectedFiles": 25,
+    "unindexedChangedPaths": 3,
+    "cycles": 0,
+    "forbiddenEdges": 0,
+    "notes": [
+      "Existing source boundary count72 exceeds67; unchanged.",
+      "Range call-target resolver adds one fallback for other providers, raising cyclomatic complexity11 to12; existing ambiguity and mutation checks preserved. Thresholds and suppressions unchanged."
+    ]
+  }
+}

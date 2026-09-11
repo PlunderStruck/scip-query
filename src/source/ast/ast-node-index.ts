@@ -15,6 +15,9 @@ const NODE_TYPE_INDEX = new WeakMap<SyntaxNode, ReadonlyMap<string, readonly Syn
 const INDEXED_NODE_TYPES: ReadonlySet<string> = new Set([
   'call_expression',
   'call',
+  'new_expression',
+  'jsx_opening_element',
+  'jsx_self_closing_element',
   'decorator',
   'pair',
   'string',
@@ -25,6 +28,10 @@ const INDEXED_NODE_TYPES: ReadonlySet<string> = new Set([
   'generator_function_declaration',
   'function_expression',
   'arrow_function',
+  'method_definition',
+  'method_signature',
+  'function_signature',
+  'public_field_definition',
 ]);
 
 /**
@@ -75,13 +82,14 @@ function indexedNodesByType(root: SyntaxNode): ReadonlyMap<string, readonly Synt
   const cached = NODE_TYPE_INDEX.get(root);
   if (cached) return cached;
   const index = new Map<string, SyntaxNode[]>();
-  forEachTreeCursorNode(root, (cursor) => {
-    const nodeType = cursor.nodeType;
-    if (!INDEXED_NODE_TYPES.has(nodeType)) return;
+  // Keep the full-tree walk inside the native parser. A JS cursor crosses the
+  // addon boundary for every token, even when almost none are requested.
+  for (const node of root.descendantsOfType([...INDEXED_NODE_TYPES])) {
+    const nodeType = node.type;
     const bucket = index.get(nodeType);
-    if (bucket) bucket.push(cursor.currentNode);
-    else index.set(nodeType, [cursor.currentNode]);
-  });
+    if (bucket) bucket.push(node);
+    else index.set(nodeType, [node]);
+  }
   NODE_TYPE_INDEX.set(root, index);
   return index;
 }
