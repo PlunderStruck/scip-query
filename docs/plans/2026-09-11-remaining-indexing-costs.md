@@ -1,10 +1,26 @@
 # Remaining TypeScript indexing costs
 
-Status: implementation complete; final metadata regression, measurement and release verification in progress. Starting checkpoint: `ebb076c7`, with code `d9ef6802` installed on dev-agent. Preserve the unrelated untracked LaunchPoint validation document. No agent benchmarks are required.
+Status: complete, tested, pushed and installed on dev-agent. Current code commit: `85ab45c1`. Starting checkpoint: `ebb076c7`, with code `d9ef6802` installed on dev-agent. Preserve the unrelated untracked LaunchPoint validation document. No agent benchmarks are required.
 
 ## Outcome and baseline
 
 Reduce complete update latency and memory for all five measured LaunchPoint edit histories, preserving compiler relationships and runtime observations, groups, links, frontiers and source coverage. Baseline: cold-worker edit 216.54s; warm arithmetic 15.70s; warm member-reference edit 17.21s; added HTTP request 60.79s; restoration/removing an export 186.90s. Warm updates peak around 10GiB. A faster inner phase alone does not establish a faster complete update.
+
+## Verified final behavior
+
+Code commit: `85ab45c1` (pushed). Tested package: `76ee3660e095c3c07a6de8916933ffa8dae3934cb8faae6487e7d78f004de9f8`.
+
+| Complete LaunchPoint edit | Before | After |
+| --- | ---: | ---: |
+| First edit after worker restart | 216.54s | 33.40s |
+| Warm body edit | 15.70s | 16.19s |
+| Warm reference edit | 17.21s | 16.95s |
+| Add an HTTP request | 60.79s | 17.96s |
+| Reverse reference edit and remove export | 186.90s | 19.74s |
+
+Warm peak RSS is approximately 5.1GiB instead of approximately 10GiB. The ordinary warm timings are essentially unchanged. Public type/configuration changes and unsupported or missing evidence still require conservative regeneration. These measurements start with source checkpoints and current runtime phase caches; full indexing/upgrade preparation is separate. Compiler parity regressions, complete runtime graph comparisons, restored source and database checks passed. The final stable full suite passed all 3,920 tests in 426 files.
+
+The compiler recovers accepted source revisions and document references through the existing immutable index and overlay owners. Consumer reuse requires the compiler's declaration and origin proof; only isolated named function additions/removals receive the narrower import-name check. Runtime HTTP propagation retains disjoint callable groups and returns to the original combined worklist when they interact. Body propagation has its own complete source/SQL proof. Candidate metadata is available before either analysis reads the index.
 
 ## Existing flow
 
@@ -27,7 +43,7 @@ The reindex coordinator in `src/reindex/index.ts` plans changes through `typescr
 - [x] Reduce retained and peak memory without causing repeated cold starts or hiding out-of-memory failures.
 - [x] Measure complete private LaunchPoint histories, compare full graph outputs, verify restored source and SQLite integrity, and stop only the owned diagnostic watcher.
 - [x] Run focused regressions, full stable suite, types, lint, API/skills checks, fresh review/impact and architecture checks if dependencies change. Never rebuild dist during tests using it.
-- [ ] Commit/push verified changes; update the VM and skills, restarting only watchers still active at replacement time. Record measured remaining limits honestly.
+- [x] Commit/push verified changes; update the VM and skills, restarting only watchers still active at replacement time. Record measured remaining limits honestly.
 
 The prior 16 retained-versus-fresh compiler origin discrepancies also occur with phase reuse disabled. Any compiler-emission change must check them rather than treating the current producer as an infallible oracle.
 
@@ -68,4 +84,17 @@ Final measured package `76ee3660e095c3c07a6de8916933ffa8dae3934cb8faae6487e7d78f
 Final source checks: types (including property/API fixtures), changed-file format/lint, API surface and skills pass. The fresh indexed architecture graph has no forbidden production/test edges or cycles. Its pre-existing `source` boundary remains 72 files against a limit of 67; this change adds no files there. Review has zero introduced/blocking findings and three existing complexity findings in untouched function bodies. Diff impact maps 77 changed symbols to 39 affected files; nine absent/excluded paths are explicitly omitted and covered by current-source review/tests. Local reindex completed in 24.3s with its watcher still disabled. Final stable full suite and deployment are pending.
 
 
-Final stable-build suite passed: **426 files, 3,920 tests** (`npm test`, two workers), including the candidate metadata regression. Staged Linux package verification passes all 466 hashes, native SQLite, indexing, complexity, exact call relationships, health, evidence and saved output. Staged smoke fixture watcher remained stopped. Ready to commit and deploy. Deployment will perform a one-time forced refresh through the normal CLI publication owner for only the active roots, so they receive both source checkpoints and current runtime phase caches before their watchers resume. This avoids shifting upgrade preparation onto the user's next edit. No disabled watcher will be started.
+Final stable-build suite passed: **426 files, 3,920 tests** (`npm test`, two workers), including the candidate metadata regression. Staged Linux package verification passes all 466 hashes, native SQLite, indexing, complexity, exact call relationships, health, evidence and saved output. Staged smoke fixture watcher remained stopped. Ready to commit and deploy. Deployment includes a one-time forced refresh through the normal CLI publication owner for only the active roots, providing source checkpoints and current runtime phase caches. This avoids shifting upgrade preparation onto the user's next edit. Disabled watchers remain stopped.
+
+
+## Completed VM deployment
+
+Code `85ab45c18527d4fda2ba9a352893f7cff671283b` is pushed to main and installed at `/home/launchpoint-agent/.local/lib/node_modules/scip-query`. All **466 shipped file hashes** match the measured package, including 19 skill files; six skills have 12 verified Claude/Codex links to that installation. Login-shell executable resolution finds only `/home/launchpoint-agent/.local/bin/scip-query`. The previous installation is outside PATH under `/tmp/scip-query-recovery-deploy-20260911-SGrgsy/previous-package`.
+
+Only the two watchers active at replacement were restarted: `t3code-66bd3d33` PID 4185022 → **52173**, and `t3code-93516b5b` PID 4187074 → **52416**. Both are idle, their indexes are fresh and their immutable publications are current with validation passed. No disabled or previously killed watcher was restarted.
+
+The ordinary installation refresh populated source checkpoints but retained the prior runtime graph. Two explicit normal CLI `reindex --force` runs then prepared the complete current compiler/runtime caches, taking **212.3s and 212.0s**. These are one-time full rebuilds, not incremental-edit timings. Final verification confirms the installed runtime build `evidence-v1+3607d47c29a4dea0`, **2,652 / 2,656 phase source-hash checks**, **9,219 / 9,274 stored source snapshots**, and no missing eligible snapshot paths. Both databases pass SQLite quick_check and foreign_key_check. Canonical-install smoke checks pass and the smoke fixture watcher remains stopped.
+
+Deployment receipt: `docs/benchmarks/runtime-indexing/2026-09-11-vm-recovery-deployment.json`. Final checks and detailed remote logs are retained at `/tmp/scip-query-recovery-deploy-20260911-SGrgsy/`.
+
+The scoped performance work is complete. Remaining limits are explicit: ordinary warm requests are still around 16–20 seconds, full indexing/cache upgrades are expensive, and material public type/configuration changes or missing proof retain broad regeneration. No weaker graph-accuracy claim or threshold change was used to obtain the speedups.
