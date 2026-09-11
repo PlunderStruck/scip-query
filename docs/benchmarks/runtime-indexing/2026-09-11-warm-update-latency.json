@@ -15,7 +15,8 @@
     "note": "Single sequential run on the same private LaunchPoint checkout. These are edit latencies with current runtime caches, not new-repository/full-build timings or an agent benchmark.",
     "baselinePreparation": "Fresh full compiler rebuild followed by runtime-only immutable publication before the five edits. Preparation excluded from edit timings.",
     "cachePath": ".scipquery, explicitly selected by the reindex caller",
-    "limitation": "The prior cache implementation ignored this explicit directory. Default-cache installations can already reuse persisted file hashes, so their gain may be smaller. Single sequential run, not a latency distribution."
+    "limitation": "The prior cache implementation ignored this explicit directory. Default-cache installations can already reuse persisted file hashes, so their gain may be smaller. Single sequential run, not a latency distribution.",
+    "fullBaselinePreparationWallSeconds": 264.9
   },
   "stages": [
     {

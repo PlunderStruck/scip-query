@@ -1,6 +1,6 @@
 # Reduce ordinary warm TypeScript updates
 
-Status: validated; committing and deploying. Baseline code `85ab45c1`, current HEAD `8025396a`. Preserve the unrelated untracked LaunchPoint validation document and disabled watchers. No agent benchmarks.
+Status: complete. Code committed/pushed as `25281702` and installed on dev-agent. Baseline code `85ab45c1`, current HEAD `8025396a`. Preserve the unrelated untracked LaunchPoint validation document and disabled watchers. No agent benchmarks.
 
 ## Outcome
 
@@ -28,7 +28,7 @@ Profiled warm body request: 16.45s wall; initial fingerprint 2.50s; language ind
 - [x] Fix confirmed repeated work with the existing owners; record distinguishing regressions and retained limits.
 - [x] Run focused tests, stable full suite, types/lint/API, review, fresh impact and architecture checks where needed.
 - [x] Measure complete private edit histories on the frozen candidate and verify graph/source/SQLite results.
-- [ ] Commit/push and update dev-agent if behavior changes, preserving the active watcher set; record final receipts.
+- [x] Commit/push and update dev-agent if behavior changes, preserving the active watcher set; record final receipts.
 
 Scratch: `/tmp/scip-warm-perf-20260911` locally and `/tmp/scip-query-fast-install-20260910-jWoJur/warm-profile-baseline` remotely. Baseline private watchers 59789 and 63530 stopped and source was restored by the runners. The instrumented five-edit history passed graph, source, and SQLite verification.
 
@@ -56,3 +56,7 @@ Frozen final package: SHA-256 `4063d6a1ec786f9838fda583733a53772c7ea45dc59f38781
 Final stable-build suite: **426 files / 3,924 tests passed**, including generated indexer histories and process-death recovery. No build ran during this final suite.
 
 Final measured edit times: 28.83s after worker restart, 12.64s body, 13.15s reference, 14.41s HTTP, 15.68s restoration. Warm requests improve about 20–22% over the previous published private configuration; peak memory remains 4.98–5.14 GiB. All five graph comparisons, exact source restoration, removed probe symbols, SQLite quick/FK checks and temporary-worker shutdown passed. Full details: `docs/benchmarks/runtime-indexing/2026-09-11-warm-update-latency.json`. The final test included the runtime-only augmentation path that exposed the recovery bug.
+
+Deployment complete: the canonical dev-agent installation matches all 466 frozen package files; 19 skill files and 12 links are current. Only the two live pre-deployment watchers restarted (52173 → 88878 and 52416 → 90344). Both indices are fresh and workers idle. Verified 2,652/2,656 runtime phase source hashes, 9,219/9,274 compiler source checkpoints, current runtime build identities, and SQLite quick/FK checks. No source checkpoint is missing. Global CLI smoke checks pass. Receipt: `docs/benchmarks/runtime-indexing/2026-09-11-vm-warm-update-deployment.json`. No production source files changed.
+
+Remaining limits: steady warm requests still take roughly 13–16s and peak near 5 GiB. A clean full compiler/runtime rebuild in the final private setup took 264.9s; it is separate from edit timings and is not claimed to have improved. Default-cache installations may see a smaller incremental gain than the explicit-cache benchmark. No pending implementation item remains in this batch.
