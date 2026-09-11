@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "description": "One complete cold LaunchPoint backend index with the installed dev-agent build, isolated from live index caches and watchers.",
+  "startedAt": "2026-09-11T14:28:48.112601+00:00",
+  "tool": {
+    "toolCommit": "252817022e45239063df3740a81c57024cb3edd8",
+    "archiveSha256": "4063d6a1ec786f9838fda583733a53772c7ea45dc59f38781da755fb29fce44d",
+    "packageFilesVerified": 466
+  },
+  "corpus": {
+    "repository": "launchpoint-backend",
+    "sourceRoot": "/home/launchpoint-agent/projects/launchpoint-backend",
+    "commit": "dd611a94bde0dd4ddbe049101048cb6fcb9d01a0",
+    "isolatedCheckout": "/tmp/scip-query-cold-launchpoint-20260911-dc2hj72s/project",
+    "sourceFilesCopied": 14937,
+    "includedUntrackedFiles": [
+      "?? agent_docs/history/2026-09-05-next-action-parity-audit.md",
+      "?? agent_docs/scip-query/next-action-audit-2026-09-05.cjs",
+      "?? agent_docs/scip-query/next-action-audit-2026-09-05.json",
+      "?? agent_docs/scip-query/tech-debt-evidence-2026-09-05.json",
+      "?? docs/plans/2026-09-05-tech-debt-second-pass.md",
+      "?? docs/plans/2026-09-06-system-latency-assessment.md",
+      "?? docs/plans/2026-09-06-system-latency-evidence.json"
+    ],
+    "indexingConfig": {
+      "languages": [
+        "typescript"
+      ],
+      "indexer": null,
+      "indexerConcurrency": null
+    }
+  },
+  "environment": {
+    "node": "v24.20.0",
+    "cpu": "AMD Ryzen 9 7900 12-Core Processor",
+    "logicalCpus": 24,
+    "loadBefore": [
+      0.228515625,
+      0.1552734375,
+      0.05517578125
+    ],
+    "profileEnabled": true
+  },
+  "method": {
+    "command": [
+      "/home/launchpoint-agent/.local/bin/scip-query",
+      "reindex",
+      "--allow-expensive-rebuild"
+    ],
+    "cacheWasEmpty": true,
+    "sharedIndexReuseDisabled": true,
+    "retainedWorkerAvailable": false,
+    "dependenciesAlreadyInstalled": true,
+    "osDiskCacheCleared": false,
+    "copyAndPostRunValidationIncludedInTiming": false,
+    "runs": 1,
+    "note": "Cold applies to scip-query artifacts, not operating-system or installed dependency caches. Current tracked/untracked source was copied; ignored build/cache artifacts were not. The isolated checkout preserves indexer configuration but disables watcher startup. This is a single measurement, not a latency distribution."
+  },
+  "measurement": {
+    "wallSeconds": 219.31857359409332,
+    "exitCode": 0,
+    "peakGiB": 23.411678314208984,
+    "peakSwapGiB": 0.0,
+    "minimumSystemAvailableGiB": 34.51975631713867,
+    "samples": 2119,
+    "memoryScope": "RSS summed over CLI process and its descendants, sampled externally every 100ms; shared mappings may be counted more than once"
+  },
+  "reportedReindexSeconds": 216.079535421,
+  "sequentialPhaseSeconds": {
+    "sourceFingerprint": 2.557,
+    "typescriptCompiler": 77.968,
+    "sqliteConversion": 11.034,
+    "sourceCheckpoints": 0.851,
+    "runtimeGraph": 123.07,
+    "immutablePublication": 1.984,
+    "otherCliAndPublication": 1.8545735940933241
+  },
+  "runtimeSubphases": [
+    {
+      "id": "direct-extraction",
+      "durationMs": 53910.18554200001,
+      "inputFacts": 9566,
+      "outputFacts": 7274,
+      "filesVisited": 9566,
+      "filesReused": 0,
+      "factsReused": 0,
+      "factsInvalidated": 0
+    },
+    {
+      "id": "http-summary",
+      "durationMs": 25363.056327,
+      "inputFacts": 7276,
+      "outputFacts": 83,
+      "filesVisited": 297
+    },
+    {
+      "id": "http-mount",
+      "durationMs": 16121.31558700002,
+      "inputFacts": 7359,
+      "outputFacts": 0,
+      "filesVisited": 9566
+    },
+    {
+      "id": "body-summary",
+      "durationMs": 22877.59234099998,
+      "inputFacts": 258,
+      "outputFacts": 264,
+      "filesVisited": 194
+    },
+    {
+      "id": "carrier",
+      "durationMs": 1021.5441549999814,
+      "inputFacts": 7359,
+      "outputFacts": 0,
+      "filesVisited": 194
+    },
+    {
+      "id": "relations",
+      "durationMs": 5.3645419999957085,
+      "inputFacts": 7359,
+      "outputFacts": 689
+    },
+    {
+      "id": "links",
+      "durationMs": 0.9298049999924842,
+      "inputFacts": 689,
+      "outputFacts": 2
+    },
+    {
+      "id": "frontiers",
+      "durationMs": 194.9857900000061,
+      "inputFacts": 7359,
+      "outputFacts": 6386
+    }
+  ],
+  "compilerWorkers": {
+    "shards": 5,
+    "concurrent": 4,
+    "peakAtSeconds": 42.63387549901381,
+    "peakProcessGiB": [
+      0.273422,
+      5.668446,
+      5.910534,
+      5.61594,
+      5.943336
+    ]
+  },
+  "output": {
+    "stats": {
+      "symbols": 511199,
+      "files": 9485,
+      "indexSizeBytes": 535175168,
+      "lastBuilt": "2026-09-11T14:32:25.925Z"
+    },
+    "fingerprintedFiles": 9489,
+    "indexedLanguages": [
+      "typescript"
+    ],
+    "skipped": [],
+    "runtimeObservations": 7359,
+    "runtimeLinks": 2,
+    "runtimeFrontiers": 6386,
+    "runtimeFilesScanned": 9566,
+    "runtimeFilesWithAst": 9566,
+    "runtimeFilesWithoutAst": 0,
+    "runtimeExtractionErrors": []
+  },
+  "verification": {
+    "freshness": "fresh",
+    "generation": "current",
+    "watcher": "stopped",
+    "sourceUnchanged": true,
+    "activeWatchersUnchanged": true,
+    "quickCheck": "ok",
+    "foreignKeyCheck": "ok"
+  },
+  "artifacts": {
+    "remoteDirectory": "/tmp/scip-query-cold-launchpoint-20260911-dc2hj72s",
+    "runner": "/tmp/scip-cold-benchmark-20260911-run.py",
+    "files": [
+      "reindex.log",
+      "profile.jsonl",
+      "memory.jsonl",
+      "method.json",
+      "measurement.json",
+      "verification.json",
+      "status.json",
+      "reindex-spans.json"
+    ]
+  }
+}
