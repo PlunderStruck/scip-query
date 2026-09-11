@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { discoverTypeScriptProjectRoots } from '../../src/reindex/typescript-projects.js';
+import { discoverTypeScriptProjectRoots } from '../../src/platform/typescript-projects.js';
 
 const tempDirs: string[] = [];
 

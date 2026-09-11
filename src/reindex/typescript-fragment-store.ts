@@ -1,3 +1,9 @@
+import {
+  classifyProjectInputPath,
+  projectInputSnapshotContentValue,
+  type ProjectInputSnapshot,
+} from '../domain/project-input.js';
+import { isTypeScriptProjectConfigPath } from '../platform/typescript-projects.js';
 import { typeScriptIndexVersion } from '../domain/typescript-index-identity.js';
 import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -518,7 +524,7 @@ function assertNoExternalSymbols(externalSymbols: readonly unknown[]): void {
   }
 }
 
-function assertProducerMetadata(metadata: unknown, packageVersion: string): void {
+export function assertProducerMetadata(metadata: unknown, packageVersion: string): void {
   if (!metadata || typeof metadata !== 'object') {
     throw new Error('TypeScript SCIP shard has no producer metadata');
   }
@@ -580,4 +586,43 @@ function typeScriptAssemblyReplacements(input: AssembleTypeScriptIndexInput): Ma
   if (replacements.size === 0) throw new Error('TypeScript index assembly requires at least one replacement');
 
   return replacements;
+}
+
+export function typeScriptFragmentProjectIdentity(
+  snapshot: ProjectInputSnapshot,
+  producerIdentity: string,
+  activeTypeScriptConfigs: ReadonlySet<string>,
+): string {
+  const nonSourceInputs = snapshot.files
+    .filter((file) => {
+      const kind = classifyProjectInputPath(file.path, snapshot.languages);
+      return (
+        kind === 'ambient' ||
+        (kind === 'config' && (!isTypeScriptProjectConfigPath(file.path) || activeTypeScriptConfigs.has(file.path)))
+      );
+    })
+    .map((file) => {
+      const kind = classifyProjectInputPath(file.path, snapshot.languages);
+      const semanticHash = kind === 'config' ? file.semanticHash : undefined;
+      return {
+        path: file.path,
+        size: semanticHash === undefined ? file.size : 0,
+        hash: semanticHash ?? file.hash,
+      };
+    })
+    .sort((left, right) => left.path.localeCompare(right.path));
+  return `typescript-project-v3:${sha256(
+    JSON.stringify({
+      version: 3,
+      producerIdentity,
+      pnpmWorkspaces: snapshot.pnpmWorkspaces,
+      typescriptProjectMode: snapshot.typescriptProjectMode,
+      typescriptProjects: [...snapshot.typescriptProjects].sort(),
+      nonSourceInputs,
+    }),
+  )}`;
+}
+
+export function typeScriptFragmentGenerationIdentity(snapshot: ProjectInputSnapshot, producerIdentity: string): string {
+  return sha256(JSON.stringify({ version: 1, producerIdentity, snapshot: projectInputSnapshotContentValue(snapshot) }));
 }

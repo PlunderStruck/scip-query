@@ -1,7 +1,67 @@
+import { createHash } from 'node:crypto';
+import { inspectWatchService } from '../../src/runtime/watch-service.js';
 import { expect, test } from 'vitest';
 import { IndexerHistoryFixture } from '../properties/indexer-history-fixture.js';
 import { readRuntimeBoundaryGraph } from '../../src/analysis/runtime-boundaries/index.js';
 import { collectRuntimeBoundaryGraph } from '../../src/analysis/runtime-boundaries/graph.js';
+
+test('retains independent HTTP propagation and reunites interacting callable summaries', async () => {
+  const fixture = new IndexerHistoryFixture();
+  const independent = (body: string) => `export function independent(path: string): number { ${body} return 1; }\n`;
+  const graphAfterIndex = async () => {
+    await fixture.index({ allowExpensiveRebuild: false });
+    const db = fixture.open();
+    try {
+      const graph = readRuntimeBoundaryGraph(db)!;
+      expectIndexedPhaseSources(graph, fixture.sources);
+      const fresh = await collectRuntimeBoundaryGraph(db);
+      expect(graph.observations).toEqual(fresh.observations);
+      expect(graph.links).toEqual(fresh.links);
+      expect(graph.frontiers).toEqual(fresh.frontiers);
+      expect(graph.relationGroups).toEqual(fresh.relationGroups);
+      expect(graph.fileCoverage).toEqual(fresh.fileCoverage);
+      expect(graph.coverage.extractors).toEqual(fresh.coverage.extractors);
+      return graph;
+    } finally {
+      db.close();
+    }
+  };
+  try {
+    fixture.write('owner.ts', 'export function value(path: string) { return fetch(path); }\n');
+    fixture.write('consumer.ts', "import { shared } from './bridge.js';\nexport const result = shared('/one');\n");
+    fixture.write('independent.ts', independent(''));
+    await fixture.index({ skipIfUnchanged: false, allowExpensiveRebuild: true });
+    const baselineDb = fixture.open();
+    try {
+      expectIndexedPhaseSources(readRuntimeBoundaryGraph(baselineDb)!, fixture.sources);
+    } finally {
+      baselineDb.close();
+    }
+    fixture.startService();
+    fixture.write('independent.ts', independent('void fetch(path);'));
+    const separate = await graphAfterIndex();
+    expect(separate.phaseRecords?.httpPartitions).toHaveLength(2);
+    expect(separate.coverage.phases?.find((phase) => phase.id === 'http-summary')?.filesVisited).toBe(0);
+    expect(separate.coverage.phases?.find((phase) => phase.id === 'body-summary')?.filesVisited).toBe(0);
+    fixture.write(
+      'independent.ts',
+      "import { shared } from './bridge.js';\n" + independent('void shared(path); void fetch(path);'),
+    );
+    const merged = await graphAfterIndex();
+    expect(merged.phaseRecords?.httpPartitions).toHaveLength(1);
+    expect(
+      merged.phaseRecords?.httpPartitions?.[0]?.record.result.summarySymbols.some((symbol) =>
+        symbol.includes('independent'),
+      ),
+    ).toBe(true);
+    fixture.write('independent.ts', independent(''));
+    const removed = await graphAfterIndex();
+    expect(removed.observations.some((observation) => observation.source.file === 'independent.ts')).toBe(false);
+    fixture.assertCurrent();
+  } finally {
+    await fixture.dispose();
+  }
+}, 60_000);
 
 test('publishes retained documents while advancing source freshness and runtime facts', async () => {
   const fixture = new IndexerHistoryFixture();
@@ -35,7 +95,8 @@ test('publishes retained documents while advancing source freshness and runtime 
     const reusedDb = fixture.open();
     try {
       const graph = readRuntimeBoundaryGraph(reusedDb)!;
-      expect(graph.phaseRecords?.http).toBeDefined();
+      expect(graph.phaseRecords?.httpPartitions?.length).toBeGreaterThan(0);
+      expect(graph.phaseRecords?.body).toBeDefined();
       expect(graph.phaseRecords?.carrier).toBeDefined();
       for (const id of ['http-summary', 'carrier']) {
         expect(graph.coverage.phases?.find((phase) => phase.id === id)).toMatchObject({
@@ -112,7 +173,7 @@ test('reuses runtime query evidence after an unrelated compiler-reference edit a
     fixture.write('quiet.ts', quiet('high'));
     const unrelated = await graphAfterIndex();
     expect(fixture.statuses.join('\n')).toContain('Converting bounded TypeScript');
-    expect(unrelated.phaseRecords?.http?.database?.reads.length).toBeGreaterThan(0);
+    expect(unrelated.phaseRecords?.httpPartitions?.[0]?.record.database?.reads.length).toBeGreaterThan(0);
     expect(unrelated.coverage.phases?.find((phase) => phase.id === 'http-summary')?.filesVisited).toBe(0);
     const paths = (graph: typeof unrelated) =>
       graph.observations.flatMap((observation) =>
@@ -133,3 +194,54 @@ test('reuses runtime query evidence after an unrelated compiler-reference edit a
     await fixture.dispose();
   }
 }, 60_000);
+
+test('recovers accepted documents after worker restart and still propagates changed types', async () => {
+  const fixture = new IndexerHistoryFixture();
+  const source = (amount: number) => `export function value(input: number): number { return input + ${amount}; }\n`;
+  const emitted = () => {
+    const status = inspectWatchService({ projectRoot: fixture.root, cacheDir: fixture.cache, cliVersion: '0.25.0' });
+    if (status.classification.kind !== 'live') throw new Error('Expected live fixture watcher');
+    return status.classification.state.typescriptIndex?.documentsEmitted;
+  };
+  try {
+    fixture.write('owner.ts', source(1));
+    await fixture.index({ skipIfUnchanged: false, allowExpensiveRebuild: true });
+    fixture.startService();
+    fixture.write('owner.ts', source(2));
+    await fixture.index({ allowExpensiveRebuild: false });
+    expect(emitted()).toBe(1);
+    await fixture.restartService();
+    fixture.write('owner.ts', source(3));
+    await fixture.index({ allowExpensiveRebuild: false });
+    fixture.assertCurrent();
+    expect(emitted()).toBe(1);
+    await fixture.restartService();
+    fixture.write('owner.ts', 'export function value(input: number): string { return String(input); }\n');
+    await fixture.index({ allowExpensiveRebuild: false });
+    fixture.assertCurrent();
+    expect(emitted()).toBeGreaterThan(1);
+  } finally {
+    await fixture.dispose();
+  }
+}, 60_000);
+
+function expectIndexedPhaseSources(
+  graph: NonNullable<ReturnType<typeof readRuntimeBoundaryGraph>>,
+  sources: ReadonlyMap<string, string>,
+): void {
+  const records = [
+    ...(graph.phaseRecords?.httpPartitions?.map((partition) => partition.record) ?? []),
+    graph.phaseRecords?.body,
+    graph.phaseRecords?.carrier,
+  ];
+  let checked = 0;
+  for (const record of records) {
+    for (const source of record?.sources ?? []) {
+      const text = sources.get(source.file);
+      if (text === undefined) continue;
+      expect(source.indexedHash).toBe(createHash('sha256').update(text).digest('hex'));
+      checked += 1;
+    }
+  }
+  expect(checked).toBeGreaterThan(0);
+}

@@ -134,6 +134,7 @@ export type RuntimeBoundaryPhaseId =
   | 'direct-extraction'
   | 'http-summary'
   | 'http-mount'
+  | 'body-summary'
   | 'carrier'
   | 'relations'
   | 'links'
@@ -176,12 +177,33 @@ export interface HttpSummaryPropagationResult {
   summaries: number;
   filesInspected: number;
   errors: string[];
+  /** Complete visited owners and files used to prove independent propagation partitions. */
+  summarySymbols: string[];
+  inspectedFiles: string[];
+}
+
+export interface HttpPhasePartition {
+  observationIds: string[];
+  record: RuntimePhaseRecord<HttpSummaryPropagationResult>;
 }
 
 export interface CarrierDiscriminatorResult {
   observations: BoundaryObservation[];
   bodySummaries: number;
   discriminatorSummaries: number;
+  filesInspected: number;
+  errors: string[];
+}
+
+export interface BodyCallableSummary {
+  definition: IndexedDefinition;
+  parameterIndexes: number[];
+  depth: number;
+  proofSpans: BoundarySourceLocation[];
+}
+
+export interface BodySummaryPropagationResult {
+  summaries: BodyCallableSummary[];
   filesInspected: number;
   errors: string[];
 }
@@ -199,6 +221,8 @@ export interface RuntimeBoundaryGraph {
   /** Internal persisted inputs; missing records require fresh phase computation. */
   phaseRecords?: {
     http?: RuntimePhaseRecord<HttpSummaryPropagationResult>;
+    httpPartitions?: HttpPhasePartition[];
+    body?: RuntimePhaseRecord<BodySummaryPropagationResult>;
     carrier?: RuntimePhaseRecord<CarrierDiscriminatorResult>;
   };
 }

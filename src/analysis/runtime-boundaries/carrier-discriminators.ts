@@ -1,5 +1,5 @@
-import type { CarrierDiscriminatorResult } from './types.js';
-export type { CarrierDiscriminatorResult } from './types.js';
+import type { BodyCallableSummary, BodySummaryPropagationResult, CarrierDiscriminatorResult } from './types.js';
+export type { BodyCallableSummary, CarrierDiscriminatorResult } from './types.js';
 import { sourceCallableForDefinition } from '../../symbols/graph/callable-owner-identity.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import {
@@ -29,13 +29,6 @@ import type {
 const MAX_BODY_SUMMARY_DEPTH = 8;
 const MAX_DISCRIMINATOR_SUMMARY_DEPTH = 8;
 
-export interface BodyCallableSummary {
-  definition: IndexedDefinition;
-  parameterIndexes: number[];
-  depth: number;
-  proofSpans: BoundarySourceLocation[];
-}
-
 interface DiscriminatorCallableSummary {
   definition: IndexedDefinition;
   carrier: string;
@@ -62,9 +55,26 @@ export function deriveCarrierDiscriminators(
   observations: readonly BoundaryObservation[],
   bodySummarySeeds: readonly RuntimeBoundaryBodySummary[] = [],
 ): CarrierDiscriminatorResult {
+  return deriveCarrierDiscriminatorsFromSummaries(db, observations, propagateBodySummaries(db, bodySummarySeeds));
+}
+
+/** Body propagation depends on serializer seeds and callers, not the runtime observations. */
+export function propagateBodySummaries(
+  db: ScipDatabase,
+  seeds: readonly RuntimeBoundaryBodySummary[],
+): BodySummaryPropagationResult {
   const errors: string[] = [];
-  const bodySummaryCollection = collectBodySummaryResult(db, bodySummarySeeds, errors);
-  const bodySummaries = bodySummaryCollection.summaries;
+  const result = collectBodySummaryResult(db, seeds, errors);
+  return { summaries: [...result.summaries.values()], filesInspected: result.filesInspected, errors };
+}
+
+export function deriveCarrierDiscriminatorsFromSummaries(
+  db: ScipDatabase,
+  observations: readonly BoundaryObservation[],
+  bodySummaryCollection: BodySummaryPropagationResult,
+): CarrierDiscriminatorResult {
+  const errors = [...bodySummaryCollection.errors];
+  const bodySummaries = new Map(bodySummaryCollection.summaries.map((summary) => [summary.definition.symbol, summary]));
   const producer = deriveProducerDiscriminators(db, observations, bodySummaries, errors);
   const consumers = deriveConsumerDiscriminators(db, observations, errors);
   return {

@@ -137,6 +137,7 @@ export function typeScriptExportBoundary(
   program: TypeScript.Program,
   source: TypeScript.SourceFile,
   indexer: TypeScriptSymbolIndexer,
+  excluded: ReadonlySet<string> = new Set(),
 ): string | null {
   // The private builder operation is versioned with the compiler adapter.
   if (ts.version !== '5.9.3' || !eligibleModule(ts, program, source)) return null;
@@ -144,13 +145,39 @@ export function typeScriptExportBoundary(
   if (!compute) return null;
   try {
     const signatures: string[] = [];
-    compute(program, source, undefined, { createHash: hash }, (signature) => signatures.push(signature));
+    compute(declarationProgram(ts, program, excluded), source, undefined, { createHash: hash }, (signature) =>
+      signatures.push(signature),
+    );
     if (signatures.length !== 1) return null;
-    const origins = new ExportOrigins(ts, program.getTypeChecker(), indexer, source).capture();
+    const origins = new ExportOrigins(ts, program.getTypeChecker(), indexer, source).capture(excluded);
     return hash(JSON.stringify([signatures[0], origins]));
   } catch {
     return null;
   }
+}
+
+/** Keep the pinned builder's diagnostic signature while excluding proven isolated exports. */
+function declarationProgram(ts: TS, program: TypeScript.Program, excluded: ReadonlySet<string>): TypeScript.Program {
+  if (!excluded.size) return program;
+  const transform: TypeScript.TransformerFactory<TypeScript.SourceFile | TypeScript.Bundle> = () => (source) => {
+    if (!ts.isSourceFile(source)) throw new Error('Unsupported bundled declaration boundary');
+    return ts.factory.updateSourceFile(
+      source,
+      source.statements.filter(
+        (node) => !ts.isFunctionDeclaration(node) || !node.name || !excluded.has(node.name.text),
+      ),
+    );
+  };
+  return {
+    ...program,
+    emit: (...args) => {
+      // computeDtsSignature supplies the private forceDtsEmit argument too.
+      // Forward its whole argument vector and preserve every diagnostic.
+      const forwarded: unknown[] = [...args];
+      forwarded[4] = { afterDeclarations: [transform] };
+      return (program.emit as unknown as (...args: unknown[]) => TypeScript.EmitResult)(...forwarded);
+    },
+  };
 }
 
 function eligibleModule(ts: TS, program: TypeScript.Program, source: TypeScript.SourceFile): boolean {
@@ -180,18 +207,21 @@ class ExportOrigins {
     private readonly source: TypeScript.SourceFile,
   ) {}
 
-  capture(): unknown {
+  capture(excluded: ReadonlySet<string>): unknown {
     const module = this.checker.getSymbolAtLocation(this.source);
     if (!module) throw new Error('Module symbol unavailable');
-    const roots = this.checker.getExportsOfModule(module).map((exported) => {
-      const symbol = exported.flags & this.ts.SymbolFlags.Alias ? this.checker.getAliasedSymbol(exported) : exported;
-      return [
-        exported.name,
-        this.origins(symbol),
-        symbol.flags & this.ts.SymbolFlags.Value ? this.walk(this.checker.getTypeOfSymbol(symbol)) : null,
-        symbol.flags & this.ts.SymbolFlags.Type ? this.walk(this.checker.getDeclaredTypeOfSymbol(symbol)) : null,
-      ];
-    });
+    const roots = this.checker
+      .getExportsOfModule(module)
+      .filter((exported) => !excluded.has(exported.name))
+      .map((exported) => {
+        const symbol = exported.flags & this.ts.SymbolFlags.Alias ? this.checker.getAliasedSymbol(exported) : exported;
+        return [
+          exported.name,
+          this.origins(symbol),
+          symbol.flags & this.ts.SymbolFlags.Value ? this.walk(this.checker.getTypeOfSymbol(symbol)) : null,
+          symbol.flags & this.ts.SymbolFlags.Type ? this.walk(this.checker.getDeclaredTypeOfSymbol(symbol)) : null,
+        ];
+      });
     return { roots, types: this.nodes };
   }
 
@@ -311,4 +341,159 @@ function supportedPrimitive(ts: TS, type: TypeScript.Type): boolean {
 
 function hash(text: string): string {
   return createHash('sha256').update(text).digest('hex');
+}
+
+interface ResolvedModuleProgram {
+  getResolvedModuleFromModuleSpecifier(
+    specifier: TypeScript.StringLiteralLike,
+    source: TypeScript.SourceFile,
+  ): TypeScript.ResolvedModuleWithFailedLookupLocations | undefined;
+}
+interface Consumer {
+  source: TypeScript.SourceFile;
+  /** null means the consumer can observe the complete module namespace. */
+  names: readonly string[] | null;
+}
+type ModuleConsumers = ReadonlyMap<string, readonly Consumer[]>;
+const consumersByProgram = new WeakMap<TypeScript.Program, ModuleConsumers | null>();
+
+/**
+ * An isolated function declaration can be excluded from a boundary only when
+ * all remaining compiler declaration and origin evidence stays identical.
+ * Named imports of other members cannot observe this change; namespace users
+ * and their entire downstream closure must be regenerated.
+ */
+export function isolatedFunctionExportConsumers(
+  ts: TS,
+  current: TypeScript.Program,
+  changes: ReadonlyMap<string, ReadonlySet<string>>,
+): ReadonlySet<TypeScript.SourceFile> | null {
+  if (!consumersByProgram.has(current)) consumersByProgram.set(current, captureModuleConsumers(ts, current));
+  const consumers = consumersByProgram.get(current);
+  if (!consumers) return null;
+  const invalidated = changedExportConsumers(consumers, changes);
+  // A consumer can expose arbitrary inferred types and declaration origins.
+  // Follow its complete closure, never partial transitive type descriptors.
+  for (const source of invalidated) {
+    if (hasAmbientOrCommonJsExport(ts, source)) return null;
+    for (const consumer of consumers.get(source.fileName) ?? []) invalidated.add(consumer.source);
+  }
+  return invalidated;
+}
+
+function changedExportConsumers(
+  consumers: ModuleConsumers,
+  changes: ReadonlyMap<string, ReadonlySet<string>>,
+): Set<TypeScript.SourceFile> {
+  const result = new Set<TypeScript.SourceFile>();
+  for (const [path, names] of changes) {
+    for (const consumer of consumers.get(path) ?? []) {
+      if (consumer.names === null || consumer.names.some((name) => names.has(name))) result.add(consumer.source);
+    }
+  }
+  return result;
+}
+
+/** Added/removed named functions with no references elsewhere in either module revision. */
+export function changedIsolatedFunctionExports(
+  ts: TS,
+  before: TypeScript.SourceFile,
+  after: TypeScript.SourceFile,
+): ReadonlySet<string> | null {
+  const previous = namedFunctionExports(ts, before);
+  const current = namedFunctionExports(ts, after);
+  const names = new Set(
+    [...previous.keys(), ...current.keys()].filter((name) => previous.has(name) !== current.has(name)),
+  );
+  if (!names.size) return null;
+  for (const name of names) {
+    const declarations = previous.get(name) ?? current.get(name);
+    if (declarations?.length !== 1 || !declarations[0]?.body) return null;
+  }
+  const isolated = new Set<TypeScript.Node>(
+    [...names].flatMap((name) => [...(previous.get(name) ?? []), ...(current.get(name) ?? [])]),
+  );
+  const mentions = (node: TypeScript.Node): boolean =>
+    (ts.isIdentifier(node) && names.has(node.text)) ||
+    ts.forEachChild(node, (child) => mentions(child) || undefined) === true;
+  const unchanged = (source: TypeScript.SourceFile) => source.statements.filter((node) => !isolated.has(node));
+  if (unchanged(before).some(mentions) || unchanged(after).some(mentions)) return null;
+  return names;
+}
+
+function namedFunctionExports(ts: TS, source: TypeScript.SourceFile): Map<string, TypeScript.FunctionDeclaration[]> {
+  const result = new Map<string, TypeScript.FunctionDeclaration[]>();
+  for (const node of source.statements) {
+    if (!ts.isFunctionDeclaration(node) || !node.name) continue;
+    const modifiers = ts.getModifiers(node);
+    if (
+      !modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ||
+      modifiers.some(
+        (modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword || modifier.kind === ts.SyntaxKind.DeclareKeyword,
+      )
+    )
+      continue;
+    const declarations = result.get(node.name.text) ?? [];
+    declarations.push(node);
+    result.set(node.name.text, declarations);
+  }
+  return result;
+}
+
+function captureModuleConsumers(ts: TS, program: TypeScript.Program): ModuleConsumers | null {
+  const resolver = program as TypeScript.Program & Partial<ResolvedModuleProgram>;
+  if (ts.version !== '5.9.3' || !resolver.getResolvedModuleFromModuleSpecifier) return null;
+  const consumers = new Map<string, Consumer[]>();
+  let complete = true;
+  const visit = (node: TypeScript.Node, source: TypeScript.SourceFile): void => {
+    if (!complete) return;
+    const specifier = moduleSpecifier(ts, node);
+    if (specifier) {
+      try {
+        const resolved = resolver.getResolvedModuleFromModuleSpecifier!(specifier, source)?.resolvedModule;
+        const target = resolved && program.getSourceFile(resolved.resolvedFileName);
+        if (target) {
+          const entries = consumers.get(target.fileName) ?? [];
+          entries.push({ source, names: importedNames(ts, node) });
+          consumers.set(target.fileName, entries);
+        }
+      } catch {
+        complete = false;
+      }
+    }
+    ts.forEachChild(node, (child) => visit(child, source));
+  };
+  for (const source of program.getSourceFiles()) visit(source, source);
+  return complete ? consumers : null;
+}
+
+function importedNames(ts: TS, node: TypeScript.Node): readonly string[] | null {
+  if (ts.isImportDeclaration(node)) {
+    const clause = node.importClause;
+    if (!clause) return [];
+    if (clause.namedBindings && !ts.isNamedImports(clause.namedBindings)) return null;
+    return [
+      ...(clause.name ? ['default'] : []),
+      ...(clause.namedBindings?.elements.map((element) => (element.propertyName ?? element.name).text) ?? []),
+    ];
+  }
+  if (ts.isExportDeclaration(node) && node.exportClause && ts.isNamedExports(node.exportClause)) {
+    return node.exportClause.elements.map((element) => (element.propertyName ?? element.name).text);
+  }
+  return null;
+}
+
+function moduleSpecifier(ts: TS, node: TypeScript.Node): TypeScript.StringLiteralLike | null {
+  let expression: TypeScript.Node | undefined;
+  if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) expression = node.moduleSpecifier;
+  else if (ts.isExternalModuleReference(node)) expression = node.expression;
+  else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) expression = node.argument.literal;
+  else if (ts.isCallExpression(node) && isModuleCall(ts, node.expression)) expression = node.arguments[0];
+  return expression && ts.isStringLiteralLike(expression) ? expression : null;
+}
+
+function isModuleCall(ts: TS, expression: TypeScript.Expression): boolean {
+  return (
+    expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(expression) && expression.text === 'require')
+  );
 }

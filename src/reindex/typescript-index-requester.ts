@@ -200,6 +200,7 @@ export class TypeScriptIndexRequester {
     }
     this.localHost ??= new TypeScriptIndexServiceHost({
       projectRoot: this.projectRoot,
+      dbPath: join(this.cacheDir, 'index.db'),
       currentGeneration: () => this.baseGeneration,
     });
     return documentsFromResponse(

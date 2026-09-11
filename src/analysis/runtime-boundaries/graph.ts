@@ -14,9 +14,13 @@ import { fileContentHash } from '../../storage/evidence-cache.js';
 import { createFileEvidenceProduct, evidenceProductInvalidation } from '../../storage/evidence-products.js';
 import { BOUNDARY_EXTRACTORS, boundaryFileContext } from './extractors.js';
 import type { RuntimeBoundaryProfileSpan } from './extractors.js';
-import { deriveCarrierDiscriminators, serializedBodySummariesForFile } from './carrier-discriminators.js';
+import {
+  deriveCarrierDiscriminatorsFromSummaries,
+  propagateBodySummaries,
+  serializedBodySummariesForFile,
+} from './carrier-discriminators.js';
 import { composeHttpMountsWithCoverage } from './http-mounts.js';
-import { propagateCompilerResolvedHttpSummaries } from './http-summaries.js';
+import { materializeHttpPropagation } from './http-phase.js';
 import { deriveDatabaseWorkQueueObservations } from './database-work-queues.js';
 import { deduplicateFrontiers } from './frontiers.js';
 import type {
@@ -191,18 +195,18 @@ export async function collectRuntimeBoundaryGraph(
   const compilerFactsUnchanged = opts.compilerFactsUnchanged === true;
   const phaseRecords: NonNullable<RuntimeBoundaryGraph['phaseRecords']> = {};
   phaseStartedAt = performance.now();
-  const httpPhase = materializeRuntimePhase({
+  const httpPhase = materializeHttpPropagation({
     db,
     scope,
-    seeds: runtimePhaseSeeds(withDatabaseQueues),
+    observations: withDatabaseQueues,
     compilerFactsUnchanged,
-    previous: previousPhases?.http,
-    compute: (reader) => propagateCompilerResolvedHttpSummaries(reader, withDatabaseQueues, opts.profileSpan),
+    previous: previousPhases?.httpPartitions,
+    profileSpan: opts.profileSpan,
   });
   const propagated = httpPhase.result;
-  phaseRecords.http = httpPhase.record;
+  phaseRecords.httpPartitions = httpPhase.partitions;
   recordPhase(phases, 'http-summary', phaseStartedAt, withDatabaseQueues.length, propagated.observations.length, {
-    filesVisited: httpPhase.reused ? 0 : propagated.filesInspected,
+    filesVisited: httpPhase.filesVisited,
     ...(httpPhase.reused
       ? {
           filesReused: propagated.filesInspected,
@@ -221,10 +225,7 @@ export async function collectRuntimeBoundaryGraph(
   const withHttpDerivations = deduplicateObservations([...withDatabaseQueues, ...propagated.observations]);
   // Fresh phase readers retain source-derived native trees only for the phase.
   // Give their finalizers a turn before opening the next phase's reader.
-  if (!httpPhase.reused) {
-    collectNativeGarbage();
-    await yieldToEventLoop();
-  }
+  await releasePhaseTrees(httpPhase.reused);
   phaseStartedAt = performance.now();
   const mountComposition = composeHttpMountsWithCoverage(db, withHttpDerivations);
   recordPhase(phases, 'http-mount', phaseStartedAt, withHttpDerivations.length, mountComposition.observations.length, {
@@ -233,13 +234,28 @@ export async function collectRuntimeBoundaryGraph(
   const withMounts = deduplicateObservations([...withHttpDerivations, ...mountComposition.observations]);
   phaseStartedAt = performance.now();
   const bodySummaries = fileCoverage.flatMap((entry) => entry.bodySummaries ?? []);
+  const bodyPhase = materializeRuntimePhase({
+    db,
+    scope,
+    seeds: runtimePhaseSeeds([], bodySummaries),
+    compilerFactsUnchanged,
+    previous: previousPhases?.body,
+    compute: (reader) => propagateBodySummaries(reader, bodySummaries),
+  });
+  phaseRecords.body = bodyPhase.record;
+  recordPhase(phases, 'body-summary', phaseStartedAt, bodySummaries.length, bodyPhase.result.summaries.length, {
+    filesVisited: bodyPhase.reused ? 0 : bodyPhase.result.filesInspected,
+    ...(bodyPhase.reused ? { factsReused: bodyPhase.result.summaries.length, factsInvalidated: 0 } : {}),
+  });
+  await releasePhaseTrees(bodyPhase.reused);
+  phaseStartedAt = performance.now();
   const carrierPhase = materializeRuntimePhase({
     db,
     scope,
-    seeds: runtimePhaseSeeds(withMounts, bodySummaries),
+    seeds: runtimePhaseSeeds(withMounts, bodyPhase.result),
     compilerFactsUnchanged,
     previous: previousPhases?.carrier,
-    compute: (reader) => deriveCarrierDiscriminators(reader, withMounts, bodySummaries),
+    compute: (reader) => deriveCarrierDiscriminatorsFromSummaries(reader, withMounts, bodyPhase.result),
   });
   const carriers = carrierPhase.result;
   phaseRecords.carrier = carrierPhase.record;
@@ -290,6 +306,12 @@ export async function collectRuntimeBoundaryGraph(
     fileCoverage,
     phaseRecords,
   };
+}
+
+async function releasePhaseTrees(reused: boolean): Promise<void> {
+  if (reused) return;
+  collectNativeGarbage();
+  await yieldToEventLoop();
 }
 
 function boundaryExtractionPlan(db: ScipDatabase, opts: RuntimeBoundaryCollectionOptions) {

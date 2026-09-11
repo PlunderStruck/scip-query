@@ -37,6 +37,7 @@ if (!parentPort) throw new Error('TypeScript mailbox worker requires a parent po
 if (data.kind === 'index') {
   const host = new TypeScriptIndexServiceHost({
     projectRoot: data.projectRoot,
+    dbPath: data.dbPath,
     currentGeneration: () => publishedTypeScriptIndexGeneration(data.dbPath),
     ...(data.maxActiveSessions === undefined ? {} : { maxActiveSessions: data.maxActiveSessions }),
     ...(data.softMemoryLimitMb === undefined ? {} : { softMemoryLimitMb: data.softMemoryLimitMb }),

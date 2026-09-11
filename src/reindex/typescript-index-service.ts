@@ -1,3 +1,4 @@
+import { readPublishedTypeScriptCheckpoint } from './typescript-checkpoint.js';
 import { randomUUID } from 'node:crypto';
 import { getHeapStatistics } from 'node:v8';
 import { monotonicNowMs } from '../domain/time.js';
@@ -29,6 +30,8 @@ import {
 
 export interface TypeScriptIndexServiceHostOptions {
   projectRoot: string;
+  /** Accepted index used to recover compiler state after a worker restart. */
+  dbPath?: string;
   currentGeneration: () => string | null;
   createEmitter?: (opts: TypeScriptDocumentEmitterOptions) => TypeScriptDocumentEmitterCreation;
   /** @deprecated Use wallNow and monotonicNow to test the clock domains independently. */
@@ -55,6 +58,7 @@ interface ActiveEmitter {
 
 export class TypeScriptIndexServiceHost {
   private readonly projectRoot: string;
+  private readonly dbPath: string | undefined;
   private readonly currentGeneration: () => string | null;
   private readonly createEmitter: (opts: TypeScriptDocumentEmitterOptions) => TypeScriptDocumentEmitterCreation;
   private readonly wallNow: () => number;
@@ -74,6 +78,7 @@ export class TypeScriptIndexServiceHost {
 
   constructor(opts: TypeScriptIndexServiceHostOptions) {
     this.projectRoot = resolve(opts.projectRoot);
+    this.dbPath = opts.dbPath;
     this.currentGeneration = opts.currentGeneration;
     this.createEmitter = opts.createEmitter ?? createTypeScriptDocumentEmitter;
     this.wallNow = opts.wallNow ?? opts.now ?? Date.now;
@@ -102,6 +107,15 @@ export class TypeScriptIndexServiceHost {
         throw new Error('TypeScript index producer identity changed.');
       }
       const before = active.emitter.snapshotStats();
+      if (this.dbPath && before.initializations === 0) {
+        const checkpoint = readPublishedTypeScriptCheckpoint({
+          projectRoot: this.projectRoot,
+          dbPath: this.dbPath,
+          baseGeneration,
+          request,
+        });
+        if (checkpoint) active.emitter.restoreCheckpoint(checkpoint);
+      }
       const result = active.emitter.advance({
         modifiedFiles: request.modifiedFiles,
         removedFiles: request.removedFiles,

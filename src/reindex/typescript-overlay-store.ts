@@ -1,3 +1,6 @@
+import { fromBinary } from '@bufbuild/protobuf';
+import { MetadataSchema } from '@c4312/scip';
+import { eachWireField } from './scip-wire.js';
 import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeJsonAtomic } from '../storage/atomic-json.js';
@@ -10,7 +13,7 @@ import {
 } from '../platform/bounded-file.js';
 import { persistHashedScipDocumentBlob, type TypeScriptDocumentBlobReference } from './typescript-document-blob.js';
 import type { TypeScriptDocumentFragment } from './typescript-document-emitter.js';
-import { assembleTypeScriptIndex } from './typescript-fragment-store.js';
+import { assembleTypeScriptIndex, assertProducerMetadata } from './typescript-fragment-store.js';
 
 export const TYPESCRIPT_OVERLAY_STORE_VERSION = 1;
 export const TYPESCRIPT_OVERLAY_STORE_DIRECTORY = 'typescript-scip-overlays';
@@ -79,6 +82,51 @@ export function commitTypeScriptOverlay(input: CommitTypeScriptOverlayInput): Ty
   };
   persistOverlayManifest(input.cacheDir, manifest);
   return manifest;
+}
+
+/** Seed verified whole-index documents without materializing a second object graph. */
+export function seedTypeScriptOverlay(input: {
+  cacheDir: string;
+  generationIdentity: string;
+  producerIdentity: string;
+  projectIdentity: string;
+  packageVersion: string;
+  indexBytes: Uint8Array;
+}): TypeScriptOverlayManifest {
+  const fragments: TypeScriptDocumentFragment[] = [];
+  let metadata = false;
+  const text = new TextDecoder('utf-8', { fatal: true });
+  for (const field of eachWireField(input.indexBytes)) {
+    if (field.wireType !== 2) continue;
+    const bytes = input.indexBytes.subarray(field.valueStart, field.valueEnd);
+    if (field.fieldNumber === 1) {
+      assertProducerMetadata(fromBinary(MetadataSchema, bytes), input.packageVersion);
+      metadata = true;
+    } else if (field.fieldNumber === 3) {
+      throw new Error('TypeScript overlay seed cannot contain external symbols');
+    } else if (field.fieldNumber === 2) {
+      const path = overlaySeedDocumentPath(bytes, text);
+      fragments.push({ relativePath: path, bytes, occurrences: 0, symbols: 0, referenceFragments: [] });
+    }
+  }
+  if (!metadata) throw new Error('TypeScript overlay seed has no producer identity');
+  return commitTypeScriptOverlay({
+    ...input,
+    previousGenerationIdentity: input.generationIdentity,
+    nextGenerationIdentity: input.generationIdentity,
+    baseShardCurrent: true,
+    fragments,
+  });
+}
+
+function overlaySeedDocumentPath(bytes: Uint8Array, text: TextDecoder): string {
+  let path: string | undefined;
+  for (const member of eachWireField(bytes)) {
+    if (member.fieldNumber === 1 && member.wireType === 2)
+      path = text.decode(bytes.subarray(member.valueStart, member.valueEnd));
+  }
+  if (!path) throw new Error('TypeScript overlay seed document has no path');
+  return path;
 }
 
 function validateRetainedOverlays(
@@ -154,7 +202,7 @@ export function materializeTypeScriptOverlay(input: MaterializeTypeScriptOverlay
   });
 }
 
-function readOverlayBlob(cacheDir: string, record: TypeScriptOverlayRecord): Uint8Array {
+export function readOverlayBlob(cacheDir: string, record: TypeScriptOverlayRecord): Uint8Array {
   const bytes = readFileWithinLimit(join(overlayRoot(cacheDir), 'blobs', `${record.blobHash}.scipdoc`), {
     maxBytes: SOURCE_ARTIFACT_MAX_BYTES,
     inputKind: 'TypeScript overlay blob',

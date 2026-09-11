@@ -1,3 +1,4 @@
+import { TypeScriptFragmentCache } from '../../src/reindex/typescript-document-blob.js';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,6 +11,145 @@ import {
 import { cleanOracle } from '../fixtures/typescript-oracle.js';
 
 describe('TypeScriptDocumentEmitter', () => {
+  test.each([
+    {
+      name: 'removed unused export',
+      before: 'export function used(): number { return 1; }\nexport function unused(): number { return 2; }\n',
+      after: 'export function used(): number { return 1; }\n',
+      consumer: "import { used } from './a'; export const result = used();\n",
+      downstream: "import { result } from './b'; export const final = result;\n",
+      reused: 2,
+    },
+    {
+      name: 'removed unused export together with a body edit',
+      before: 'export function used(): number { return 1; }\nexport function unused(): number { return 2; }\n',
+      after: 'export function used(): number { return 3; }\n',
+      consumer: "import { used } from './a'; export const result = used();\n",
+      downstream: "import { result } from './b'; export const final = result;\n",
+      reused: 2,
+    },
+    {
+      name: 'removed unused export together with a public type change',
+      before: 'export function used() { return 1; }\nexport function unused(): number { return 2; }\n',
+      after: 'export function used() { return "changed"; }\n',
+      consumer: "import { used } from './a'; export const result = used();\n",
+      downstream: "import { result } from './b'; export const final = result;\n",
+      reused: 0,
+    },
+    {
+      name: 'removed export referenced inside the module',
+      before: 'export function used() { return unused(); }\nexport function unused(): number { return 2; }\n',
+      after: 'export function used() { return unused(); }\n',
+      consumer: "import { used } from './a'; export const result = used();\n",
+      downstream: "import { result } from './b'; export const final = result;\n",
+      reused: 0,
+    },
+    {
+      name: 'changed exported consumer type',
+      before: 'export function used() { return 1; }\n',
+      after: 'export function used() { return "changed"; }\n',
+      consumer: "import { used } from './a'; export const result = used();\n",
+      downstream: "import { result } from './b'; export const final = result;\n",
+      reused: 0,
+    },
+    {
+      name: 'namespace reexport changes',
+      before: 'export function used(): number { return 1; }\nexport function unused(): number { return 2; }\n',
+      after: 'export function used(): number { return 1; }\n',
+      consumer: "export * as result from './a';\n",
+      downstream: "import { result } from './b'; export const final = result;\n",
+      reused: 0,
+    },
+    {
+      name: 'previously unresolved named import',
+      before: 'export function used(): number { return 1; }\n',
+      after: 'export function used(): number { return 1; }\nexport function added(): string { return "new"; }\n',
+      consumer: "import { added } from './a'; export const result = added();\n",
+      downstream: "import { result } from './b'; export const final = result;\n",
+      reused: 0,
+    },
+    {
+      name: 'literal type behind a consumer alias',
+      before: 'export type Mode = "a";\n',
+      after: 'export type Mode = "b";\n',
+      consumer: "import type { Mode } from './a'; export type ModeAlias = Mode;\n",
+      downstream: "import type { ModeAlias } from './b'; export const result = null as unknown as ModeAlias;\n",
+      reused: 0,
+    },
+    {
+      name: 'equal types with changed declaration origins',
+      before: 'const aa = { value: 1 }; const bb = { value: 2 }; export function used() { return aa; }\n',
+      after: 'const aa = { value: 1 }; const bb = { value: 2 }; export function used() { return bb; }\n',
+      consumer: "import { used } from './a'; export const result = used();\n",
+      downstream: "import { result } from './b'; export const final = result.value;\n",
+      reused: 0,
+    },
+  ])(
+    'bounds isolated export changes at compiler-resolved consumers: $name',
+    ({ before, after, consumer, downstream, reused }) => {
+      const loaded = loadTypeScriptDocumentRuntime();
+      if (!loaded.available) throw new Error(loaded.reason);
+      const root = realpathSync(mkdtempSync(join(tmpdir(), 'scip-consumer-boundary-')));
+      try {
+        writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'consumer-boundary', version: '1.0.0' }));
+        writeFileSync(
+          join(root, 'tsconfig.json'),
+          JSON.stringify({ compilerOptions: { strict: true }, files: ['a.ts', 'b.ts', 'c.ts'] }),
+        );
+        writeFileSync(join(root, 'a.ts'), before);
+        writeFileSync(join(root, 'b.ts'), consumer);
+        writeFileSync(join(root, 'c.ts'), downstream);
+        const created = createTypeScriptDocumentEmitter({
+          workspaceRoot: root,
+          tsconfigPath: 'tsconfig.json',
+          runtime: loaded.runtime,
+        });
+        if (!created.available) throw new Error(created.reason);
+        created.emitter.initialize();
+        writeFileSync(join(root, 'a.ts'), after);
+        const result = created.emitter.advance({ modifiedFiles: ['a.ts'], affectedFiles: ['a.ts', 'b.ts', 'c.ts'] });
+        expect(result.stats.documentsReused).toBe(reused);
+        expectFragmentsEqual(result.fragments, cleanOracle(root, loaded.runtime));
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  test.each([false, true])('restores a prior compiler program from verified documents (BOM: %s)', (bom) => {
+    const loaded = loadTypeScriptDocumentRuntime();
+    if (!loaded.available) throw new Error(loaded.reason);
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'scip-compiler-recovery-')));
+    const before = (bom ? '\uFEFF' : '') + 'export function used(value: number): number { return value + 1; }\n';
+    const after = before.replace('value + 1', 'value + 2');
+    try {
+      writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'compiler-recovery', version: '1.0.0' }));
+      writeFileSync(
+        join(root, 'tsconfig.json'),
+        JSON.stringify({ compilerOptions: { strict: true }, files: ['a.ts', 'b.ts', 'c.ts'] }),
+      );
+      writeFileSync(join(root, 'a.ts'), before);
+      writeFileSync(join(root, 'b.ts'), "import { used } from './a'; export const result = used(1);\n");
+      writeFileSync(join(root, 'c.ts'), "import { result } from './b'; export const final = result;\n");
+      const documents = new TypeScriptFragmentCache();
+      for (const [path, bytes] of cleanOracle(root, loaded.runtime)) documents.set(path, bytes);
+      writeFileSync(join(root, 'a.ts'), after);
+      const created = createTypeScriptDocumentEmitter({
+        workspaceRoot: root,
+        tsconfigPath: 'tsconfig.json',
+        runtime: loaded.runtime,
+      });
+      if (!created.available) throw new Error(created.reason);
+      created.emitter.restoreCheckpoint({ sources: new Map([['a.ts', before]]), documents });
+      const result = created.emitter.advance({ modifiedFiles: ['a.ts'], affectedFiles: ['a.ts', 'b.ts', 'c.ts'] });
+      expect(result.stats.documentsReused).toBe(2);
+      expect(result.stats.documentsEmitted).toBe(1);
+      expectFragmentsEqual(result.fragments, cleanOracle(root, loaded.runtime));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test('refreshes consumer definition targets even when the provider document and public types are unchanged', () => {
     const availability = loadTypeScriptDocumentRuntime();
     expect(availability.available).toBe(true);

@@ -5,6 +5,7 @@ import type { SemanticReferenceFragment } from '../semantic/types.js';
 import { readSmallArtifactText } from '../platform/bounded-file.js';
 import { installTypeScriptDocumentEncoding } from './typescript-document-encoding.js';
 import { TypeScriptFragmentCache } from './typescript-document-blob.js';
+import { isolatedFunctionExportConsumers, changedIsolatedFunctionExports } from './typescript-symbol-identity.js';
 import {
   installTypeScriptSuperCalls,
   type TypeScriptCallIndexer,
@@ -135,6 +136,12 @@ export interface TypeScriptDocumentEmitterOptions {
   runtime?: TypeScriptDocumentRuntime | null;
 }
 
+/** Prior accepted source revisions and independently owned serialized documents. */
+export interface TypeScriptDocumentCheckpoint {
+  sources: ReadonlyMap<string, string>;
+  documents: TypeScriptFragmentCache;
+}
+
 export interface TypeScriptDocumentAdvanceInput {
   modifiedFiles: readonly string[];
   /** Files removed since the previous compiler program. Omitted by older direct callers. */
@@ -153,6 +160,7 @@ interface ConsumerDocumentReuse {
   program: TypeScript.Program;
   options: string;
   boundaries: ReadonlyMap<string, string>;
+  isolatedChanges: ReadonlyMap<string, ReadonlySet<string>>;
   documents: TypeScriptFragmentCache;
 }
 
@@ -384,6 +392,18 @@ export class TypeScriptDocumentEmitter {
     return this.result(this.emitAffectedFiles(affectedFiles), startedAt);
   }
 
+  /** Restore parsed compiler inputs without re-emitting the prior documents. */
+  restoreCheckpoint(checkpoint: TypeScriptDocumentCheckpoint): void {
+    if (this.program) throw new Error('TypeScript compiler checkpoint requires a cold emitter');
+    this.host.setSourceOverrides(checkpoint.sources, this.workspaceRoot);
+    try {
+      this.initializeProgram();
+      this.documentCache = checkpoint.documents;
+    } finally {
+      this.host.setSourceOverrides(new Map(), this.workspaceRoot);
+    }
+  }
+
   fragment(relativePath: string): Uint8Array | null {
     return this.fragments.get(normalizeRelativePath(relativePath))?.bytes ?? null;
   }
@@ -523,7 +543,10 @@ export class TypeScriptDocumentEmitter {
     );
   }
 
-  private captureBoundaries(paths: readonly string[]): Map<string, string> | null {
+  private captureBoundaries(
+    paths: readonly string[],
+    excluded?: ReadonlyMap<string, ReadonlySet<string>>,
+  ): Map<string, string> | null {
     const result = new Map<string, string>();
     // Declaration identity tables must belong to this compiler program.
     this.symbolTable = new Map();
@@ -532,7 +555,13 @@ export class TypeScriptDocumentEmitter {
       const source = this.program?.getSourceFile(resolveWithin(this.workspaceRoot, path));
       if (!source || !this.program) return null;
       const indexer = this.fileIndexer(source, new this.runtime.Document({ relative_path: path, occurrences: [] }));
-      const boundary = typeScriptExportBoundary(this.runtime.typescript, this.program, source, indexer);
+      const boundary = typeScriptExportBoundary(
+        this.runtime.typescript,
+        this.program,
+        source,
+        indexer,
+        excluded?.get(path),
+      );
       if (boundary === null) return null;
       result.set(path, boundary);
     }
@@ -547,9 +576,16 @@ export class TypeScriptDocumentEmitter {
     // Detach before any fallible program update. A failed request must never
     // leave older documents eligible for reuse in a partially advanced program.
     this.documentCache = new TypeScriptFragmentCache();
-    const boundaries = removed.length ? null : this.captureBoundaries(modified);
+    const isolatedChanges = this.isolatedChangesFromDisk(modified);
+    const boundaries = removed.length ? null : this.captureBoundaries(modified, isolatedChanges);
     return boundaries
-      ? { documents, boundaries, program: this.program!, options: JSON.stringify(this.config!.options) }
+      ? {
+          documents,
+          boundaries,
+          isolatedChanges,
+          program: this.program!,
+          options: JSON.stringify(this.config!.options),
+        }
       : null;
   }
 
@@ -557,13 +593,55 @@ export class TypeScriptDocumentEmitter {
     if (
       !reusable ||
       reusable.options !== JSON.stringify(this.config!.options) ||
-      !compatibleProgramSources(reusable.program, this.program!, modified, this.workspaceRoot) ||
-      !equalBoundaries(reusable.boundaries, this.captureBoundaries(modified))
+      !compatibleProgramSources(reusable.program, this.program!, modified, this.workspaceRoot)
     )
       return;
-    for (const path of modified) reusable.documents.delete(path);
+    if (!equalBoundaries(reusable.boundaries, this.captureBoundaries(modified, reusable.isolatedChanges))) return;
+    const invalidated = [...modified];
+    if (reusable.isolatedChanges.size) {
+      const changes = this.verifiedIsolatedChanges(reusable);
+      if (!changes) return;
+      const consumers = isolatedFunctionExportConsumers(this.runtime.typescript, this.program!, changes);
+      if (
+        !consumers ||
+        [...consumers].some((source) => !this.includedFiles.has(normalizedAbsolutePath(source.fileName)))
+      )
+        return;
+      invalidated.push(
+        ...[...consumers].map((source) => normalizeRelativePath(relative(this.workspaceRoot, source.fileName))),
+      );
+    }
+    for (const path of invalidated) reusable.documents.delete(path);
     reusable.documents.protectForGeneration();
     this.documentCache = reusable.documents;
+  }
+
+  private isolatedChangesFromDisk(modified: readonly string[]): Map<string, ReadonlySet<string>> {
+    const changes = new Map<string, ReadonlySet<string>>();
+    const ts = this.runtime.typescript;
+    for (const path of modified) {
+      const fileName = resolveWithin(this.workspaceRoot, path);
+      const before = this.program!.getSourceFile(fileName);
+      const text = this.host.compilerHost.readFile(fileName);
+      if (!before || text === undefined) continue;
+      const after = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest);
+      const names = changedIsolatedFunctionExports(ts, before, after);
+      if (names) changes.set(path, names);
+    }
+    return changes;
+  }
+
+  private verifiedIsolatedChanges(reusable: ConsumerDocumentReuse): Map<string, ReadonlySet<string>> | null {
+    const changes = new Map<string, ReadonlySet<string>>();
+    for (const [path, expected] of reusable.isolatedChanges) {
+      const fileName = resolveWithin(this.workspaceRoot, path);
+      const before = reusable.program.getSourceFile(fileName)!;
+      const after = this.program!.getSourceFile(fileName)!;
+      const names = changedIsolatedFunctionExports(this.runtime.typescript, before, after);
+      if (!names || names.size !== expected.size || [...names].some((name) => !expected.has(name))) return null;
+      changes.set(after.fileName, names);
+    }
+    return changes;
   }
 
   private invalidateSourceNodes(paths: readonly string[]): Map<string, TypeScript.SourceFile> {
@@ -656,9 +734,12 @@ export function referenceFragmentsFromDocument(
 class CachedCompilerHost {
   readonly compilerHost: TypeScript.CompilerHost;
   private readonly sourceFiles = new Map<string, TypeScript.SourceFile | undefined>();
+  private readonly sourceOverrides = new Map<string, string>();
 
   constructor(typescript: TypeScriptModule, options: TypeScript.CompilerOptions, currentDirectory: string) {
     const base = typescript.createCompilerHost(options);
+    const readFile = base.readFile.bind(base);
+    base.readFile = (path) => this.sourceOverrides.get(normalizedAbsolutePath(path)) ?? readFile(path);
     const getSourceFile = base.getSourceFile.bind(base);
     this.compilerHost = {
       ...base,
@@ -671,6 +752,15 @@ class CachedCompilerHost {
         return sourceFile;
       },
     };
+  }
+
+  setSourceOverrides(sources: ReadonlyMap<string, string>, root: string): void {
+    this.sourceOverrides.clear();
+    for (const [path, text] of sources)
+      this.sourceOverrides.set(
+        normalizedAbsolutePath(resolveWithin(root, path)),
+        text.charCodeAt(0) === 0xfeff ? text.slice(1) : text,
+      );
   }
 
   invalidate(fileName: string): void {

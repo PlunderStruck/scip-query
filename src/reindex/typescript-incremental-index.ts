@@ -1,3 +1,7 @@
+import {
+  typeScriptFragmentProjectIdentity,
+  typeScriptFragmentGenerationIdentity,
+} from './typescript-fragment-store.js';
 import { chunked } from '../domain/array-batches.js';
 import { createHash } from 'node:crypto';
 import { existsSync, writeFileSync } from 'node:fs';
@@ -9,7 +13,6 @@ import {
   type ProjectChangeManifest,
   type ProjectFileChange,
   type ProjectInputSnapshot,
-  projectInputSnapshotContentValue,
 } from '../domain/project-input.js';
 import type { TypeScriptProjectMode } from '../domain/types.js';
 import { monotonicNowMs } from '../domain/time.js';
@@ -34,11 +37,12 @@ import {
   commitTypeScriptOverlay,
   materializeTypeScriptOverlay,
   readTypeScriptOverlay,
+  seedTypeScriptOverlay,
 } from './typescript-overlay-store.js';
 import type { TypeScriptDocumentBlobReference } from './typescript-document-blob.js';
 import { publishedTypeScriptIndexGeneration } from './typescript-index-protocol.js';
 import { TypeScriptIndexMemoryPressureError, TypeScriptIndexRequester } from './typescript-index-requester.js';
-import { discoverTypeScriptProjectRoots } from './typescript-projects.js';
+import { discoverTypeScriptProjectRoots } from '../platform/typescript-projects.js';
 import type { SemanticReferenceFragment } from '../semantic/types.js';
 import { readFileWithinLimit, SCIP_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
 import { recoverTypeScriptPackageSemanticHash } from '../platform/typescript-semantic-hash.js';
@@ -808,13 +812,43 @@ function knownMaterializationDocuments(
     discoverTypeScriptProjectRoots(input.projectRoot, input.currentSnapshot.typescriptProjects).length !== 1
   )
     return known;
-  const previous = readTypeScriptOverlay(input.cacheDir, eligibility.previousFragmentGeneration);
+  const previous = knownMaterializationOverlay(input, eligibility, producerIdentity);
   if (previous?.producerIdentity !== producerIdentity || previous.projectIdentity !== eligibility.projectIdentity)
     return known;
   for (const record of previous.overlays) {
     if (record.blobHash !== null) known.set(record.relativePath, { ...record, blobHash: record.blobHash });
   }
   return known;
+}
+
+function knownMaterializationOverlay(
+  input: MaterializeTypeScriptIncrementalInput,
+  eligibility: EligibleTypeScriptMaterialization,
+  producerIdentity: string,
+) {
+  let previous = readTypeScriptOverlay(input.cacheDir, eligibility.previousFragmentGeneration);
+  if (
+    !previous &&
+    input.baseShardCurrent &&
+    input.currentSnapshot.languages.length === 1 &&
+    input.currentSnapshot.languages[0] === 'typescript'
+  ) {
+    const producer = inspectTypeScriptDocumentProducer();
+    if (producer.available && producer.producerIdentity === producerIdentity) {
+      previous = seedTypeScriptOverlay({
+        cacheDir: input.cacheDir,
+        generationIdentity: eligibility.previousFragmentGeneration,
+        producerIdentity,
+        projectIdentity: eligibility.projectIdentity,
+        packageVersion: producer.packageVersion,
+        indexBytes: readFileWithinLimit(input.previousIndexPath, {
+          inputKind: 'accepted TypeScript index',
+          maxBytes: SCIP_ARTIFACT_MAX_BYTES,
+        }),
+      });
+    }
+  }
+  return previous;
 }
 
 function commitMaterializedTypeScriptBatch(context: {
@@ -945,47 +979,4 @@ export function materializeDeferredTypeScriptIndex(input: {
     packageVersion: availability.packageVersion,
   });
   writeFileSync(input.candidateShardPath, bytes);
-}
-
-function typeScriptFragmentProjectIdentity(
-  snapshot: ProjectInputSnapshot,
-  producerIdentity: string,
-  activeTypeScriptConfigs: ReadonlySet<string>,
-): string {
-  const nonSourceInputs = snapshot.files
-    .filter((file) => {
-      const kind = classifyProjectInputPath(file.path, snapshot.languages);
-      return (
-        kind === 'ambient' ||
-        (kind === 'config' && (!isTypeScriptProjectConfigPath(file.path) || activeTypeScriptConfigs.has(file.path)))
-      );
-    })
-    .map((file) => {
-      const kind = classifyProjectInputPath(file.path, snapshot.languages);
-      const semanticHash = kind === 'config' ? file.semanticHash : undefined;
-      return {
-        path: file.path,
-        size: semanticHash === undefined ? file.size : 0,
-        hash: semanticHash ?? file.hash,
-      };
-    })
-    .sort((left, right) => left.path.localeCompare(right.path));
-  return `typescript-project-v3:${sha256(
-    JSON.stringify({
-      version: 3,
-      producerIdentity,
-      pnpmWorkspaces: snapshot.pnpmWorkspaces,
-      typescriptProjectMode: snapshot.typescriptProjectMode,
-      typescriptProjects: [...snapshot.typescriptProjects].sort(),
-      nonSourceInputs,
-    }),
-  )}`;
-}
-
-function typeScriptFragmentGenerationIdentity(snapshot: ProjectInputSnapshot, producerIdentity: string): string {
-  return sha256(JSON.stringify({ version: 1, producerIdentity, snapshot: projectInputSnapshotContentValue(snapshot) }));
-}
-
-function sha256(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
 }

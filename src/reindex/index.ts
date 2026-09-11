@@ -1,3 +1,4 @@
+import { checkpointTypeScriptSources } from './typescript-checkpoint.js';
 import { TYPESCRIPT_SYMBOL_IDENTITY_VERSION } from '../domain/typescript-index-identity.js';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
@@ -149,7 +150,7 @@ import {
   discoverTypeScriptProjectRoots,
   isTypeScriptProjectConfigPath,
   typeScriptProjectInputPaths,
-} from './typescript-projects.js';
+} from '../platform/typescript-projects.js';
 import {
   createTypeScriptCompilerShards,
   removeStaleTypeScriptCompilerShardConfigs,
@@ -891,6 +892,11 @@ async function reuseExistingIndexIfPossible(opts: {
     projectRoot: opts.opts.projectRoot,
     dbPath: opts.paths.outputDb,
     onStatus: opts.onStatus,
+  });
+  checkpointTypeScriptSources({
+    projectRoot: opts.opts.projectRoot,
+    dbPath: opts.paths.outputDb,
+    fingerprint: opts.fingerprint,
   });
   await runRuntimeBoundaryAugmentation(
     opts.opts.projectRoot,
@@ -1867,6 +1873,20 @@ async function publishFreshReindexArtifacts(
   );
 
   throwIfSignalAborted(opts.opts.signal, 'Reindex cancelled by its owner.');
+  const deferredScipCompanion = hasDeferredSqliteCompanion(sqliteMaterialization);
+  const { metadata, pruneProjects } = buildPublishedReindexMetadata({
+    run: opts,
+    indexedOutputs,
+    skippedLanguages,
+    reusedLanguages,
+    languageFingerprints,
+    typescriptProjectShardContext,
+  });
+  metadata.scipCompanion = deferredScipCompanion ? 'deferred' : 'current';
+  // Runtime analysis must see the source snapshot belonging to this candidate.
+  // Publication still waits for final source validation and completed metadata.
+  writeReindexMeta(opts.tempPaths.tempMetaPath, metadata);
+
   const auxiliary = profileSpan('reindex.publish.auxiliary-documents', () => {
     return runPostIndexAugmentation(auxiliaryDocumentsAugmentationStage(), {
       projectRoot: opts.projectRoot,
@@ -1874,6 +1894,14 @@ async function publishFreshReindexArtifacts(
       onStatus: opts.onStatus,
     });
   });
+  const sourceCheckpoints = profileSpan('reindex.publish.source-checkpoints', () =>
+    checkpointTypeScriptSources({
+      projectRoot: opts.projectRoot,
+      dbPath: opts.tempPaths.tempOutputDb,
+      fingerprint: opts.fingerprint,
+      changedFiles: incrementalTypeScript?.changedFiles,
+    }),
+  );
   await profileAsyncSpan('reindex.publish.runtime-boundaries', async () => {
     const replacingWholeTypeScriptProject = incrementalTypeScript?.plan.mode === 'full-project';
     if (replacingWholeTypeScriptProject) {
@@ -1892,7 +1920,8 @@ async function publishFreshReindexArtifacts(
       replacingWholeTypeScriptProject,
       sqliteMaterialization.mode === 'incremental' &&
         sqliteMaterialization.compilerFactsUnchanged === true &&
-        auxiliary.result.inserted === 0,
+        auxiliary.result.inserted === 0 &&
+        sourceCheckpoints === 0,
     );
   });
   const indexMaintenance = profileSpan('reindex.publish.sqlite-layout', () =>
@@ -1955,7 +1984,7 @@ async function publishFreshReindexArtifacts(
               materializeCarriedFileDependencyGraph(
                 candidateDb!,
                 incrementalTypeScript.dependencyGraphSnapshot!,
-                incrementalTypeScript.affectedFiles,
+                dependencyReplacementFiles(incrementalTypeScript, sqliteMaterialization),
                 incrementalTypeScript.deletedFiles,
               ),
             ) ?? undefined)
@@ -2032,17 +2061,8 @@ async function publishFreshReindexArtifacts(
     languages: indexedOutputs.map((o) => o.language),
     skipped: [...skippedLanguages],
   });
-  const deferredScipCompanion = hasDeferredSqliteCompanion(sqliteMaterialization);
-  const { metadata, pruneProjects } = buildPublishedReindexMetadata({
-    run: opts,
-    indexedOutputs,
-    skippedLanguages,
-    reusedLanguages,
-    languageFingerprints,
-    typescriptProjectShardContext,
-    lastRefresh,
-  });
-  metadata.scipCompanion = deferredScipCompanion ? 'deferred' : 'current';
+  metadata.lastRefresh = lastRefresh;
+  metadata.updatedAt = lastRefresh.completedAt;
   profileSpan('reindex.publish.metadata', () => {
     assertProjectInputsUnchanged(opts);
     pruneTypeScriptProjectShardCache(opts.paths.outputDb, pruneProjects);
@@ -2093,10 +2113,7 @@ async function publishFreshReindexArtifacts(
           dbPath: opts.paths.outputDb,
           indexPath: opts.paths.outputScip,
         });
-        const replacementFiles =
-          incrementalTypeScript.plan.mode === 'full-project' && incrementalTypeScript.plan.reasons.length === 0
-            ? incrementalTypeScript.changedFiles
-            : incrementalTypeScript.affectedFiles;
+        const replacementFiles = dependencyReplacementFiles(incrementalTypeScript, sqliteMaterialization);
         let carried = false;
         if (incrementalTypeScript.dependencyGraphUnchanged) {
           carried = rekeyUnchangedDependencyGraph(acceptedDb, previousDependencyGraphEvidenceFingerprint, opts);
@@ -2143,6 +2160,22 @@ async function publishFreshReindexArtifacts(
     persistAffectedSetShadowRecord(opts.paths.outputDb, shadowRecord, opts.onStatus),
   );
   return lastRefresh;
+}
+
+/** Exact retained compiler bytes preserve compiler-only dependency edges. */
+function dependencyReplacementFiles(
+  incremental: MaterializedTypeScriptIncrementalIndex,
+  sqlite: SqliteMaterializationResult,
+): readonly string[] {
+  if (
+    sqlite.mode === 'incremental' &&
+    sqlite.compilerFactsUnchanged &&
+    incremental.dependencyGraphSnapshot?.sourceEdges === 'none'
+  )
+    return [];
+  return incremental.plan.mode === 'full-project' && incremental.plan.reasons.length === 0
+    ? incremental.changedFiles
+    : incremental.affectedFiles;
 }
 
 function needsFreshSqliteStatistics(
@@ -2335,7 +2368,7 @@ function buildPublishedReindexMetadata(opts: {
   reusedLanguages: readonly SupportedLanguage[];
   languageFingerprints: Partial<Record<SupportedLanguage, ReindexFingerprint>>;
   typescriptProjectShardContext: TypeScriptProjectShardContext | undefined;
-  lastRefresh: LastRefreshMetadata;
+  lastRefresh?: LastRefreshMetadata;
 }): { metadata: PublishedReindexMetadata; pruneProjects: readonly string[] | null } {
   const typescriptProjectShards = resolveTypeScriptProjectShardsField({
     mode: opts.run.opts.typescriptProjectMode,

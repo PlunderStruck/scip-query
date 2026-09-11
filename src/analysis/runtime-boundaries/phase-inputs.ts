@@ -4,14 +4,19 @@ import { readProjectFileText } from '../../source/primitives/project-file-bounda
 import { ScipDatabase } from '../../storage/db.js';
 import { databaseReadsMatch, withDatabaseReadRecording } from '../../storage/database-read-proof.js';
 import { indexedSourceFingerprints } from '../../source/primitives/repository-text.js';
-import type { BoundaryObservation, RuntimeBoundaryBodySummary, RuntimePhaseRecord } from './types.js';
+import type {
+  BodySummaryPropagationResult,
+  BoundaryObservation,
+  RuntimeBoundaryBodySummary,
+  RuntimePhaseRecord,
+} from './types.js';
 
 /** Inputs and immutable output of one completed synchronous runtime phase. */
 
 /** Resolution is assigned after propagation; it is not an input to either phase. */
 export function runtimePhaseSeeds(
   observations: readonly BoundaryObservation[],
-  bodies: readonly RuntimeBoundaryBodySummary[] = [],
+  bodies: readonly RuntimeBoundaryBodySummary[] | BodySummaryPropagationResult = [],
 ): string {
   return hashText(
     JSON.stringify({

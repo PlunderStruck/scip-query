@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "description": "Complete private LaunchPoint TypeScript reindex requests through the retained compiler service and immutable SQLite/runtime publication.",
+  "sourceBase": "ebb076c7",
+  "archiveSha256": "76ee3660e095c3c07a6de8916933ffa8dae3934cb8faae6487e7d78f004de9f8",
+  "shippedFilesVerified": 466,
+  "remoteArtifacts": "/tmp/scip-query-fast-install-20260910-jWoJur/metadata-recovery-incremental",
+  "method": {
+    "requests": "manual-cli reindex API; allowExpensiveRebuild=false; new owned worker for first edit",
+    "preparedRuntimeBaseline": true,
+    "documentsRequested": 5603,
+    "cachePreparationIncludedInEditTimings": false,
+    "sourceCheckpointsPresent": true,
+    "memory": "RSS sum of the owned worker, reindex process and their descendants; sampled every 250ms",
+    "note": "Single sequential run on the same private LaunchPoint checkout. These are edit latencies with current runtime caches, not new-repository/full-build timings or an agent benchmark."
+  },
+  "stages": [
+    {
+      "label": "first-worker-edit",
+      "baselineWallSeconds": 216.54,
+      "wallSeconds": 33.39876649505459,
+      "peakGiB": 5.117435455322266,
+      "exitCode": 0
+    },
+    {
+      "label": "warm-body-edit",
+      "baselineWallSeconds": 15.7,
+      "wallSeconds": 16.194717603968456,
+      "peakGiB": 5.048530578613281,
+      "exitCode": 0
+    },
+    {
+      "label": "warm-inferred-edit",
+      "baselineWallSeconds": 17.21,
+      "wallSeconds": 16.949107324006036,
+      "peakGiB": 5.1724853515625,
+      "exitCode": 0
+    },
+    {
+      "label": "warm-runtime-edit",
+      "baselineWallSeconds": 60.79,
+      "wallSeconds": 17.959936242899857,
+      "peakGiB": 5.168079376220703,
+      "exitCode": 0
+    },
+    {
+      "label": "restore",
+      "baselineWallSeconds": 186.9,
+      "wallSeconds": 19.736748090945184,
+      "peakGiB": 5.141632080078125,
+      "exitCode": 0
+    }
+  ],
+  "verification": {
+    "baselineMatchesPrevious": true,
+    "stages": [
+      {
+        "stage": "first-worker-edit",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "warm-body-edit",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "warm-inferred-edit",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "warm-runtime-edit",
+        "added": {
+          "observations": 1,
+          "relationGroups": 1,
+          "links": 0,
+          "frontiers": 1
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "restore",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      }
+    ],
+    "restoredFileCoverageMatches": true,
+    "sourceHash": "f5b5810aa873230a614d487e026055296e3dedaf06db3357e44616400101a2e7",
+    "probeSymbolsRemoved": true,
+    "quickCheck": "ok",
+    "foreignKeyCheck": "ok",
+    "temporaryWatcherStopped": true
+  },
+  "limitations": [
+    "Ordinary warm body/reference latency is essentially unchanged; main gains are restart, added HTTP, restoration and peak memory.",
+    "Broad public type/configuration changes, missing checkpoints and unsupported export proofs retain conservative regeneration.",
+    "First install/upgrade must build current runtime phase caches; that one-time preparation is excluded from these edit timings.",
+    "These observations validate the exercised edit histories, not universal graph accuracy."
+  ]
+}

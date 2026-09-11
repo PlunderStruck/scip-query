@@ -62,11 +62,13 @@ export class TypeScriptFragmentCache {
       blobHash: value.blobHash,
       byteLength: value.length,
       read: () =>
-        value.compressed
-          ? inflateRawSync(value.bytes!, { maxOutputLength: value.length })
-          : value.bytes === null
-            ? null
-            : Uint8Array.from(value.bytes),
+        value.load
+          ? value.load()
+          : value.compressed
+            ? inflateRawSync(value.bytes!, { maxOutputLength: value.length })
+            : value.bytes === null
+              ? null
+              : Uint8Array.from(value.bytes),
     };
   }
 
@@ -93,6 +95,19 @@ export class TypeScriptFragmentCache {
     this.bytes += size;
   }
 
+  /** References come from the accepted overlay owner; loading verifies the immutable blob. */
+  setReference(reference: TypeScriptDocumentBlobReference, load: () => Uint8Array): void {
+    this.delete(reference.relativePath);
+    if (this.values.size + this.pending.size >= this.maxEntries) return;
+    this.values.set(reference.relativePath, {
+      blobHash: reference.blobHash,
+      length: reference.byteLength,
+      bytes: null,
+      compressed: false,
+      load,
+    });
+  }
+
   delete(path: string): void {
     const value = this.values.get(path) ?? this.pending.get(path);
     this.bytes -= value?.bytes?.byteLength ?? 0;
@@ -106,6 +121,7 @@ interface CachedDocumentBytes {
   bytes: Uint8Array | null;
   length: number;
   compressed: boolean;
+  load?: () => Uint8Array;
 }
 
 function encodeCachedDocument(value: Uint8Array | null): CachedDocumentBytes {

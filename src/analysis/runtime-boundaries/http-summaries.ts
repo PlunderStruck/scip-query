@@ -30,6 +30,16 @@ import type { BoundaryFrontier, BoundaryKeyPart, BoundaryObservation, BoundarySo
 const HTTP_METHODS = new Set(['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT']);
 const MAX_HTTP_SUMMARY_DEPTH = 8;
 
+/** The complete observation subset consumed by HTTP summary seeding. */
+export function httpSummarySeeds(observations: readonly BoundaryObservation[]): BoundaryObservation[] {
+  return observations.filter(
+    (observation) =>
+      observation.action === 'http.request' &&
+      !!observation.owner.symbol &&
+      (observation.evidence === 'call-expression' || observation.evidence === 'client-adapter'),
+  );
+}
+
 interface HttpCallableSummary {
   definition: IndexedDefinition;
   pathParameterIndexes: number[];
@@ -121,9 +131,7 @@ export function propagateCompilerResolvedHttpSummaries(
   };
 
   recordSpan('runtime-boundaries.http-summary.seed', () => {
-    for (const observation of observations) {
-      if (observation.action !== 'http.request' || !observation.owner.symbol) continue;
-      if (observation.evidence !== 'call-expression' && observation.evidence !== 'client-adapter') continue;
+    for (const observation of httpSummarySeeds(observations)) {
       const definition = definitionsForFile(observation.owner.file).find(
         (candidate) => candidate.symbol === observation.owner.symbol,
       );
@@ -194,6 +202,8 @@ export function propagateCompilerResolvedHttpSummaries(
     summaries: summaries.size,
     filesInspected: filesInspected.size,
     errors,
+    summarySymbols: uniqueSortedStrings([...summaries.values()].map((summary) => summary.definition.symbol)),
+    inspectedFiles: [...filesInspected].sort(),
   };
 }
 

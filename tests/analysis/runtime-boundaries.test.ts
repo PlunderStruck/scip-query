@@ -230,6 +230,7 @@ describe('runtime-boundary evidence', () => {
         'direct-extraction',
         'http-summary',
         'http-mount',
+        'body-summary',
         'carrier',
         'relations',
         'links',
@@ -904,7 +905,10 @@ describe('runtime-boundary evidence', () => {
       expect(refreshed.coverage.extractionErrors).toEqual(clean.coverage.extractionErrors);
       expect(refreshed.fileCoverage).toEqual(clean.fileCoverage);
       if (label === 'terminal endpoint literal') {
-        expect(refreshed.coverage.phases?.find((phase) => phase.id === 'http-summary')?.factsReused).toBeUndefined();
+        // This top-level request has no callable owner and cannot seed wrapper
+        // propagation. Its changed literal still appears in the complete graph.
+        expect(refreshed.coverage.phases?.find((phase) => phase.id === 'http-summary')?.factsReused).toBeGreaterThan(0);
+        expect(refreshed.coverage.phases?.find((phase) => phase.id === 'body-summary')?.filesVisited).toBe(0);
       }
     } finally {
       db.close();
