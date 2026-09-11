@@ -1,0 +1,80 @@
+{
+  "commit": "d9ef6802f2fe57264d543e08cb72e70767e6d47b",
+  "archiveSha256": "5ab95fdaa32dde2019caaa8b0a5171e31ef64d867bb2d363ee6fd94e4cbe9ae3",
+  "filesVerified": 466,
+  "skills": [
+    "scip-architecture-review",
+    "scip-explore",
+    "scip-integrity-audit",
+    "scip-plan",
+    "scip-query",
+    "scip-setup"
+  ],
+  "skillFilesVerified": 19,
+  "skillLinks": [
+    "/home/launchpoint-agent/.claude/skills/scip-architecture-review",
+    "/home/launchpoint-agent/.claude/skills/scip-explore",
+    "/home/launchpoint-agent/.claude/skills/scip-integrity-audit",
+    "/home/launchpoint-agent/.claude/skills/scip-plan",
+    "/home/launchpoint-agent/.claude/skills/scip-query",
+    "/home/launchpoint-agent/.claude/skills/scip-setup",
+    "/home/launchpoint-agent/.codex/skills/scip-architecture-review",
+    "/home/launchpoint-agent/.codex/skills/scip-explore",
+    "/home/launchpoint-agent/.codex/skills/scip-integrity-audit",
+    "/home/launchpoint-agent/.codex/skills/scip-plan",
+    "/home/launchpoint-agent/.codex/skills/scip-query",
+    "/home/launchpoint-agent/.codex/skills/scip-setup"
+  ],
+  "canonicalPackage": "/home/launchpoint-agent/.local/lib/node_modules/scip-query",
+  "executables": [
+    "/home/launchpoint-agent/.local/bin/scip-query"
+  ],
+  "watchers": [
+    {
+      "root": "/home/launchpoint-agent/.t3/worktrees/launchpoint-backend/t3code-66bd3d33",
+      "oldPid": 3850875,
+      "pid": 4185022,
+      "freshness": "fresh",
+      "watcher": "idle",
+      "generation": "87d56935119fd96571f3cb3f3f05b830ab5bc4ccb62de8a6b2585b3454578b25",
+      "generationChanged": true
+    },
+    {
+      "root": "/home/launchpoint-agent/.t3/worktrees/launchpoint-backend/t3code-93516b5b",
+      "oldPid": 3851020,
+      "pid": 4187074,
+      "freshness": "fresh",
+      "watcher": "idle",
+      "generation": "3cd41ac4754e2472f974530ddc50fa39e60d592e7e7984ce3da1107d86177372",
+      "generationChanged": true
+    }
+  ],
+  "smoke": {
+    "behavior": [
+      3,
+      0,
+      137
+    ],
+    "savedOutputBytes": 20622,
+    "previewBytes": 1221,
+    "savedEqualsRedirected": true,
+    "automaticContinuation": false,
+    "bindingsOptIn": true,
+    "conciseRelationshipEvidence": true,
+    "freshness": "fresh",
+    "watcher": "stopped",
+    "cyclomaticComplexity": 2,
+    "exactCallees": 1,
+    "candidateCallees": 0
+  },
+  "rollback": "/tmp/scip-query-runtime-deploy-20260910-HLw3nv/previous-package",
+  "remoteReceipts": "/tmp/scip-query-runtime-deploy-20260910-HLw3nv",
+  "deploymentPolicy": "Replaced the sole dev-agent global CLI; restarted only the two watchers active immediately before replacement.",
+  "watcherSetVerified": true,
+  "compilerRefreshResult": "Both reindex commands reused compiler indexes and published refreshed SQLite generations after runtime augmentation.",
+  "refreshDurationMs": {
+    "t3code-66bd3d33": 140263.112297,
+    "t3code-93516b5b": 127712.21387
+  },
+  "recordedAt": "2026-09-11T00:21:55.308903+00:00"
+}
