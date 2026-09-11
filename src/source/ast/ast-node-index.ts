@@ -21,6 +21,10 @@ const INDEXED_NODE_TYPES: ReadonlySet<string> = new Set([
   'string_literal',
   'template_string',
   'variable_declarator',
+  'function_declaration',
+  'generator_function_declaration',
+  'function_expression',
+  'arrow_function',
 ]);
 
 /**

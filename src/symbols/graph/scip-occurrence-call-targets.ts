@@ -109,6 +109,7 @@ export function scipOccurrenceCallTargetsForRange(
   relativePath: string,
   startLine: number,
   endLine: number,
+  requestedSymbols?: ReadonlySet<string>,
 ): ScipOccurrenceCallTargetsResult {
   const facts = getSourceFacts(db, relativePath);
   const callsites = (facts?.callSites ?? []).filter((site) => site.line >= startLine && site.line <= endLine);
@@ -124,9 +125,15 @@ export function scipOccurrenceCallTargetsForRange(
   const declarations: ScipOccurrenceCallTarget[] = [];
   let resolvedCallsites = 0;
   let establishedImplementations = 0;
+  let inspectedCallsites = 0;
   for (const site of callsites) {
     const matches = fileTargets.targets.filter((target) => sameOccurrenceRange(target.sourceRange, site.targetRange));
     const unique = new Map(matches.map((target) => [target.definition.symbol, target]));
+    // Incoming queries already know the compiler declaration they seek. Other
+    // calls in the same storage chunk need no value/mutation analysis. Keep all
+    // matches for a selected call so ambiguous bindings remain ambiguous.
+    if (requestedSymbols && ![...unique.keys()].some((symbol) => requestedSymbols.has(symbol))) continue;
+    inspectedCallsites++;
     declarations.push(
       ...[...unique.values()].map((match) => ({
         ...match,
@@ -153,9 +160,9 @@ export function scipOccurrenceCallTargetsForRange(
     available: true,
     targets,
     resolvedCallsites,
-    unresolvedCallsites: callsites.length - resolvedCallsites,
+    unresolvedCallsites: inspectedCallsites - resolvedCallsites,
     declarations,
-    implementationUnresolvedCallsites: callsites.length - establishedImplementations,
+    implementationUnresolvedCallsites: inspectedCallsites - establishedImplementations,
   };
 }
 

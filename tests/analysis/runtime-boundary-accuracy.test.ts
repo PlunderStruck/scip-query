@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import * as astRuntime from '../../src/source/ast/ast-runtime.js';
 import * as staticValueFlow from '../../src/symbols/graph/static-value-flow.js';
+import * as moduleReferences from '../../src/source/ast/module-references.js';
 import * as boundaryExtractors from '../../src/analysis/runtime-boundaries/extractors.js';
 import { composeHttpMountsWithCoverage } from '../../src/analysis/runtime-boundaries/http-mounts.js';
 import { collectRuntimeBoundaryGraph } from '../../src/analysis/runtime-boundaries/graph.js';
@@ -57,6 +58,7 @@ describe('runtime boundary identity and binding accuracy', () => {
     const dbPath = join(root, 'index.db');
     const file = 'flow.ts';
     const context = vi.spyOn(boundaryExtractors, 'boundaryFileContext');
+    const imports = vi.spyOn(moduleReferences, 'parseSourceModuleReferences');
     const readMounts = () => {
       const db = new ScipDatabase({ projectRoot: root, dbPath, indexPath: join(root, 'index.scip') });
       try {
@@ -70,9 +72,11 @@ describe('runtime boundary identity and binding accuracy', () => {
       const unrelated = ['// import express from "express";', 'export const value = "express";'];
       writeFixtureFiles(root, { [file]: unrelated });
       expect(readMounts()).toMatchObject({ filesInspected: 1, mounts: 0, frontiers: [] });
-      expect(context).toHaveBeenCalledTimes(1);
+      expect(imports).toHaveBeenCalledTimes(1);
+      expect(context).not.toHaveBeenCalled();
       expect(readMounts()).toMatchObject({ filesInspected: 1, mounts: 0, frontiers: [] });
-      expect(context).toHaveBeenCalledTimes(1);
+      expect(imports).toHaveBeenCalledTimes(1);
+      expect(context).not.toHaveBeenCalled();
 
       // The module specifier must be decoded by the existing parser, not a text filter.
       writeFixtureFiles(root, {
@@ -80,17 +84,20 @@ describe('runtime boundary identity and binding accuracy', () => {
       });
       const positive = readMounts();
       expect(positive.frontiers).toContainEqual(expect.objectContaining({ reason: 'http-mount-target-unresolved' }));
-      expect(context).toHaveBeenCalledTimes(2);
+      expect(context).toHaveBeenCalledTimes(1);
       expect(readMounts()).toEqual(positive);
-      expect(context).toHaveBeenCalledTimes(3);
+      expect(context).toHaveBeenCalledTimes(2);
 
       writeFixtureFiles(root, { [file]: unrelated });
       expect(readMounts()).toMatchObject({ filesInspected: 1, mounts: 0, frontiers: [] });
-      expect(context).toHaveBeenCalledTimes(4);
+      expect(imports).toHaveBeenCalledTimes(4);
+      expect(context).toHaveBeenCalledTimes(2);
       expect(readMounts()).toMatchObject({ filesInspected: 1, mounts: 0, frontiers: [] });
-      expect(context).toHaveBeenCalledTimes(4);
+      expect(imports).toHaveBeenCalledTimes(4);
+      expect(context).toHaveBeenCalledTimes(2);
     } finally {
       context.mockRestore();
+      imports.mockRestore();
       rmSync(root, { recursive: true, force: true });
     }
   });

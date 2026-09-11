@@ -93,7 +93,7 @@ export function sourceBindingResolver(file: string, root: SyntaxNode): SourceBin
     available: !!parsed && parsed.errors.length === 0,
     moduleReferences() {
       return parsed && parsed.errors.length === 0
-        ? sourceModuleReferences(parsed.sourceFile, parsed.checker).map((reference) => ({
+        ? sourceModuleReferences(parsed.sourceFile, () => parsed.checker).map((reference) => ({
             ...reference,
             line: reference.line + root.startPosition.row,
           }))

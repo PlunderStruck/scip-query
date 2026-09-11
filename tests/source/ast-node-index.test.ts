@@ -18,7 +18,12 @@ describe('per-root node type index', () => {
     expect(tree).not.toBeNull();
     const root = tree!.rootNode;
 
-    for (const request of [['call_expression'], ['pair'], ['pair', 'call_expression']] as const) {
+    for (const request of [
+      ['call_expression'],
+      ['pair'],
+      ['pair', 'call_expression'],
+      ['function_declaration', 'arrow_function', 'variable_declarator'],
+    ] as const) {
       const indexed = nodesOfTypes(root, [...request]).map((node) => [node.type, node.startIndex]);
       const direct = root.descendantsOfType([...request]).map((node) => [node.type, node.startIndex]);
       expect(indexed).toEqual(direct);
@@ -41,6 +46,6 @@ describe('per-root node type index', () => {
   it('falls back to a direct scan for unindexed types', () => {
     const tree = parseAstSource('typescript', source);
     const root = tree!.rootNode;
-    expect(nodesOfTypes(root, 'function_declaration').map((node) => node.type)).toEqual(['function_declaration']);
+    expect(nodesOfTypes(root, 'object').map((node) => node.type)).toEqual(['object', 'object']);
   });
 });

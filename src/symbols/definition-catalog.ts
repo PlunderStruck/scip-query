@@ -896,6 +896,9 @@ export function correctDefinitionRangesFromAst(
   callables: ReadonlyArray<{ name: string; startLine: number; endLine: number }>,
   source: string | null = null,
 ): IndexedDefinition[] {
+  let sourceLines: string[] | undefined;
+  const correctTerm = (definition: IndexedDefinition) =>
+    correctTopLevelTermRangeFromSource(definition, source ? (sourceLines ??= source.split(/\r?\n/)) : null);
   const sitesByName = new Map<string, Array<{ name: string; startLine: number; endLine: number }>>();
   for (const site of callables) {
     const arr = sitesByName.get(site.name);
@@ -905,10 +908,10 @@ export function correctDefinitionRangesFromAst(
 
   return definitions.map((def) => {
     if (!canUseCallableSiteRange(def) || !def.leaf) {
-      return correctTopLevelTermRangeFromSource(def, source);
+      return correctTerm(def);
     }
     const sites = sitesByName.get(def.leaf);
-    if (!sites || sites.length === 0) return correctTopLevelTermRangeFromSource(def, source);
+    if (!sites || sites.length === 0) return correctTerm(def);
 
     const rustImplSite = source ? rustImplCallableSite(def, sites, source) : null;
     if (rustImplSite) return { ...def, startLine: rustImplSite.startLine, endLine: rustImplSite.endLine };
@@ -977,14 +980,16 @@ function canUseCallableSiteRange(definition: IndexedDefinition): boolean {
   return leafSuffix(definition.symbol) === 'term' && parentTypeName(definition.symbol) === null;
 }
 
-function correctTopLevelTermRangeFromSource(definition: IndexedDefinition, source: string | null): IndexedDefinition {
-  if (!source || !definition.leaf) return definition;
+function correctTopLevelTermRangeFromSource(
+  definition: IndexedDefinition,
+  lines: readonly string[] | null,
+): IndexedDefinition {
+  if (!lines || !definition.leaf) return definition;
   if (leafSuffix(definition.symbol) !== 'term') return definition;
   if (parentTypeName(definition.symbol) !== null) return definition;
 
   const escapedLeaf = escapeRegex(definition.leaf);
   const declaration = new RegExp(`\\b(?:export\\s+)?(?:const|let|var)\\s+${escapedLeaf}\\b`);
-  const lines = source.split(/\r?\n/);
   const line = lines.findIndex((candidate) => declaration.test(candidate));
   return line >= 0 ? { ...definition, startLine: line, endLine: line } : definition;
 }

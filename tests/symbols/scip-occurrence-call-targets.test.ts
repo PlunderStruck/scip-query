@@ -196,6 +196,11 @@ describe('SCIP occurrence call targets for source ranges', () => {
           definition: expect.objectContaining({ symbol: TARGET_SYMBOL, relativePath: 'src/service.ts' }),
         }),
       ]);
+      const scoped = scipOccurrenceCallTargetsForRange(db, 'src/registry.ts', 0, 12, new Set([TARGET_SYMBOL]));
+      expect(scoped.targets).toEqual(result.targets);
+      expect(scoped.declarations).toEqual(result.declarations);
+      expect(scoped.resolvedCallsites + scoped.unresolvedCallsites).toBe(1);
+      expect(scipOccurrenceCallTargetsForRange(db, 'src/registry.ts', 0, 12, new Set()).targets).toEqual([]);
 
       expect(scipOccurrenceDefinitionTargetsForRange(db, 'src/registry.ts', 1, 5).targets).toEqual(
         expect.arrayContaining([

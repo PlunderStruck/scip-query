@@ -4,7 +4,7 @@ import type { SyntaxNode } from '../ast/ast-types.js';
 import { extractCallLeaf } from './source-calls.js';
 import { callableFactForNode, callableFactNodeTypes } from './source-callables.js';
 import { getSourceFacts } from './source-facts.js';
-import type { CallSiteKind, SourceCallableOwner } from './source-fact-types.js';
+import type { CallSiteKind, SourceCallableOwner, SourceFacts } from './source-fact-types.js';
 
 const CALLABLE_FACT_LANGUAGES = new Set<AstLanguage>(['rust', 'typescript', 'tsx', 'javascript', 'python', 'clojure']);
 const AST_CALLABLE_FACT_LANGUAGES = new Set<AstLanguage>(['rust', 'typescript', 'tsx', 'javascript', 'python']);
@@ -52,16 +52,19 @@ export function getCallableSites(db: ScipDatabase, relativePath: string): Callab
  * preserving the same callable-node policy and source-order traversal.
  */
 export function callableSitesFromRoot(root: SyntaxNode, language: AstLanguage): CallableSite[] | null {
+  return (
+    callableFactsFromRoot(root, language)?.map(({ name, startLine, endLine }) => ({ name, startLine, endLine })) ?? null
+  );
+}
+
+/** Callable identity, including columns and parameters, without computing branches, calls or identifiers. */
+export function callableFactsFromRoot(root: SyntaxNode, language: AstLanguage): SourceFacts['callables'] | null {
   if (!AST_CALLABLE_FACT_LANGUAGES.has(language)) return null;
-  const sites: CallableSite[] = [];
+  const sites: SourceFacts['callables'] = [];
   for (const node of root.descendantsOfType([...callableFactNodeTypes(language)])) {
     const callable = callableFactForNode(node, language);
     if (callable) {
-      sites.push({
-        name: callable.name,
-        startLine: callable.startLine,
-        endLine: callable.endLine,
-      });
+      sites.push({ ...callable, branches: undefined });
     }
   }
   return sites;

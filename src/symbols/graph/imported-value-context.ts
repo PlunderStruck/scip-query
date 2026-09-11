@@ -2,6 +2,7 @@ import { getAst } from '../../source/ast/ast-core.js';
 import { unwrapExpression, walkNamedSyntax } from '../../source/ast/ast-callables.js';
 import { sourceBindingResolver } from '../../source/ast/source-binding-identity.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
+import { nodesOfTypes } from '../../source/ast/ast-node-index.js';
 import { resolveImportPath } from '../../source/primitives/import-path-resolver.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { resolveImportedDefinitions } from '../imported-definitions.js';
@@ -178,17 +179,13 @@ export function definitionBinding(
   target: ReturnType<typeof resolveImportedDefinitions>[number],
 ): SyntaxNode | null {
   const candidates: SyntaxNode[] = [];
-  walkNamedSyntax(root, (node) => {
-    if (
-      ![
-        'variable_declarator',
-        'function_declaration',
-        'generator_function_declaration',
-        'function_expression',
-        'arrow_function',
-      ].includes(node.type)
-    )
-      return;
+  for (const node of nodesOfTypes(root, [
+    'variable_declarator',
+    'function_declaration',
+    'generator_function_declaration',
+    'function_expression',
+    'arrow_function',
+  ])) {
     const name = node.childForFieldName('name');
     const anonymousDefault = !name && target.symbol.endsWith('/default().') && isDefaultExportValue(node);
     if (
@@ -196,11 +193,11 @@ export function definitionBinding(
       node.startPosition.row !== target.startLine ||
       node.endPosition.row > target.endLine
     )
-      return;
-    if (node.startPosition.column < (target.startChar ?? 0)) return;
-    if (node.endPosition.row === target.endLine && target.endChar && node.endPosition.column > target.endChar) return;
+      continue;
+    if (node.startPosition.column < (target.startChar ?? 0)) continue;
+    if (node.endPosition.row === target.endLine && target.endChar && node.endPosition.column > target.endChar) continue;
     candidates.push(anonymousDefault ? node : name!);
-  });
+  }
   return candidates.length === 1 ? candidates[0]! : null;
 }
 

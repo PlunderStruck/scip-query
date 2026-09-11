@@ -105,8 +105,8 @@ describe('bounded TypeScript compiler shards', () => {
 
   it('gates shard parallelism by physical memory and CPUs', () => {
     const gib = 1024 ** 3;
-    // 48 GB / 14 CPUs: memory allows 4 concurrent 6 GB children.
-    expect(typescriptCompilerShardConcurrency(4, {}, { totalmemBytes: 48 * gib, cpuCount: 14 })).toBe(4);
+    // Large machines still default to two complete compiler contexts.
+    expect(typescriptCompilerShardConcurrency(4, {}, { totalmemBytes: 48 * gib, cpuCount: 14 })).toBe(2);
     // 16 GB: only one bounded child may run at a time.
     expect(typescriptCompilerShardConcurrency(4, {}, { totalmemBytes: 16 * gib, cpuCount: 8 })).toBe(1);
     // 24 GB: two children fit in half of physical memory.

@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { runtimeBindingIdentity } from './binding-identity.js';
 import { sourceBindingResolver } from '../../source/ast/source-binding-identity.js';
+import { parseSourceModuleReferences } from '../../source/ast/module-references.js';
+import { detectAstLanguage } from '../../source/ast/ast-language.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import { getSourceFiles } from '../../source/primitives/source-fileset.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
@@ -147,17 +149,18 @@ function collectHttpMounts(db: ScipDatabase): {
   const frontiers: BoundaryFrontier[] = [];
   const files = getSourceFiles(db);
   for (const file of files) {
+    if (!['typescript', 'tsx', 'javascript'].includes(detectAstLanguage(file) ?? '')) continue;
     const source = getSourceText(db, file);
     const contentHash = createHash('sha256').update(source).digest('hex');
     if (MOUNT_IMPORTS.read(db, file, contentHash) === false) continue;
-    const context = boundaryFileContext(db, file, source);
-    // Missing parsers/contexts are not negative import evidence.
-    if (!context) continue;
-    const applicable = sourceBindingResolver(file, context.root)
-      .moduleReferences()
-      .some((ref) => ref.literal && ref.specifier === 'express');
+    const references = parseSourceModuleReferences(file, source);
+    // Invalid source is not negative import evidence.
+    if (!references) continue;
+    const applicable = references.some((ref) => ref.literal && ref.specifier === 'express');
     MOUNT_IMPORTS.write(db, file, contentHash, applicable);
     if (!applicable) continue;
+    const context = boundaryFileContext(db, file, source);
+    if (!context) continue;
     walk(context.root, (node) => collectMountCall(context, node, mounts, frontiers));
   }
   return { mounts, filesInspected: files.length, frontiers };

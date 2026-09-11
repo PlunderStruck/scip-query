@@ -7,6 +7,8 @@ import { dead } from '../../src/queries/cleanup/dead.js';
 import { symbols } from '../../src/queries/navigation/symbols.js';
 import { getCrossLanguageDispatchNames, getRustAttrReferencedNames, getSourceFacts } from '../../src/source/ast.js';
 import { evidenceFixtureDb, writeFixtureFiles } from '../fixtures/evidence-fixture.js';
+import { getAst } from '../../src/source/ast/ast-core.js';
+import { callableFactsFromRoot } from '../../src/source/facts/ast-facts.js';
 
 describe('source facts', () => {
   it('extracts a generator function supplied to a curried callable wrapper', () => {
@@ -66,6 +68,12 @@ describe('source facts', () => {
       const db = new ScipDatabase({ projectRoot, dbPath, indexPath: join(tempDir, 'index.scip') });
       try {
         const callables = getSourceFacts(db, 'src/branchy.ts')?.callables ?? [];
+        const root = getAst(db, 'src/branchy.ts')!.rootNode;
+        // The narrow view must retain exact columns and parameter identity;
+        // only the full facts walk computes branches through nested bodies.
+        expect(callableFactsFromRoot(root, 'typescript')).toEqual(
+          callables.map((callable) => ({ ...callable, branches: undefined })),
+        );
         const byName = new Map(callables.map((callable) => [callable.name, callable.branches]));
         // outer: if (1) + one && (1) + the nested for (1), if (1), ternary (1).
         expect(byName.get('outer')).toBe(5);

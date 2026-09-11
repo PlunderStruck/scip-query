@@ -131,7 +131,13 @@ function resolveCallSites(
       continue;
     }
 
-    const resolved = scipOccurrenceCallTargetsForRange(db, reference.file, reference.startLine, reference.endLine);
+    const resolved = scipOccurrenceCallTargetsForRange(
+      db,
+      reference.file,
+      reference.startLine,
+      reference.endLine,
+      new Set([callee.symbol]),
+    );
     if (!resolved.available) {
       unresolved.push({
         callee,

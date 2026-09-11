@@ -336,7 +336,14 @@ export function parseSourceBindings(
     const line = sourceFile.getLineAndCharacterOfPosition(diagnostic.start ?? 0).line + 1;
     return `${file}:${line}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ')}`;
   });
-  return { sourceFile, checker: sourceBindingChecker(sourceFile), errors };
+  let checker: ts.TypeChecker | undefined;
+  return {
+    sourceFile,
+    get checker() {
+      return (checker ??= sourceBindingChecker(sourceFile));
+    },
+    errors,
+  };
 }
 
 function sourceBindingChecker(file: ts.SourceFile): ts.TypeChecker {

@@ -13,7 +13,9 @@ import { nodesOfTypes } from '../../source/ast/ast-node-index.js';
 import { parameterName } from '../../source/ast/ast-callables.js';
 import { detectAstLanguage } from '../../source/ast/ast-language.js';
 import type { SyntaxNode, Tree } from '../../source/ast/ast-types.js';
-import { callableSitesFromRoot, getCallableSites, type CallableSite } from '../../source/facts/ast-facts.js';
+import { callableFactsFromRoot } from '../../source/facts/ast-facts.js';
+import { getSourceFacts } from '../../source/facts/source-facts.js';
+import type { IndexedDefinition } from '../../domain/types.js';
 import { getSourceText } from '../../source/primitives/source-text.js';
 import { runtimeBoundarySourceScope } from './source-scope.js';
 import { evaluateStaticValue as evaluateBoundaryValue } from '../../symbols/graph/static-value-flow.js';
@@ -131,16 +133,20 @@ export function boundaryFileContext(
   const root = tree.rootNode;
   if (knownSource !== undefined) BOUNDARY_CONTEXT_TREES.set(root, tree);
   const source = knownSource ?? getSourceText(db, file);
-  let definitions: ReturnType<typeof getDefinitionsForFile> | undefined;
-  let callables: readonly CallableSite[] | null | undefined;
-  const callableSites = (): readonly CallableSite[] | null => {
-    if (callables !== undefined) return callables;
-    callables = profileBoundaryWork(profileSpan, 'runtime-boundaries.context.callable-sites', file, () => {
+  let ownership: { definitions: IndexedDefinition[]; owners: Map<string, IndexedDefinition> } | undefined;
+  const ownerEvidence = () => {
+    if (ownership) return ownership;
+    const callables = profileBoundaryWork(profileSpan, 'runtime-boundaries.context.callable-sites', file, () => {
       const language = detectAstLanguage(file);
-      const fromRoot = language ? callableSitesFromRoot(root, language) : null;
-      return fromRoot ?? getCallableSites(db, file);
+      const fromRoot = language ? callableFactsFromRoot(root, language) : null;
+      return fromRoot ?? getSourceFacts(db, file)?.callables ?? null;
     });
-    return callables;
+    const definitions = profileBoundaryWork(profileSpan, 'runtime-boundaries.context.definitions', file, () =>
+      getDefinitionsForFile(db, file, { rangeCorrectionEvidence: { source, callables } }, (phase, run) =>
+        profileBoundaryWork(profileSpan, `runtime-boundaries.context.definitions.${phase}`, file, run),
+      ),
+    );
+    return (ownership = { definitions, owners: lexicalCallOwners(db, file, definitions, callables ?? []) });
   };
   return {
     db,
@@ -148,22 +154,9 @@ export function boundaryFileContext(
     source,
     root,
     ownerAt: (node) => {
-      const definitionsForFile = (definitions ??= profileBoundaryWork(
-        profileSpan,
-        'runtime-boundaries.context.definitions',
-        file,
-        () =>
-          getDefinitionsForFile(
-            db,
-            file,
-            { rangeCorrectionEvidence: { source, callables: callableSites() } },
-            (phase, run) =>
-              profileBoundaryWork(profileSpan, `runtime-boundaries.context.definitions.${phase}`, file, run),
-          ),
-      ));
+      const { definitions: definitionsForFile, owners } = ownerEvidence();
       const language = detectAstLanguage(file);
       const sourceOwner = language ? callSiteOwner(node, language) : null;
-      const owners = lexicalCallOwners(db, file, definitionsForFile);
       const containing = definitionsForFile.filter(
         (definition) =>
           !definition.isFunctionLike &&

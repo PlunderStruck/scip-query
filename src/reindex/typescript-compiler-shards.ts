@@ -33,7 +33,10 @@ export const TYPESCRIPT_COMPILER_SHARD_TARGET_FILES = 2048;
  * ~5 GB peak so parallelism errs toward fewer simultaneous children.
  */
 const SHARD_ESTIMATED_PEAK_BYTES = 6 * 1024 ** 3;
-const SHARD_MAX_PARALLELISM = 4;
+// Four complete compiler contexts reached 23.4 GiB on the LaunchPoint cold
+// benchmark. Two halve that peak; an explicit concurrency override remains
+// available when a caller chooses the higher-memory throughput tradeoff.
+const SHARD_MAX_PARALLELISM = 2;
 
 export function typescriptCompilerShardTargetFiles(env: NodeJS.ProcessEnv = process.env): number {
   const parsed = Number.parseInt(env['SCIP_QUERY_TS_COMPILER_SHARD_FILES'] ?? '', 10);

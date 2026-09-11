@@ -1,4 +1,5 @@
 import { ts } from '@ts-morph/common';
+import { parseSourceBindings } from './function-metrics.js';
 
 export interface ModuleReference {
   specifier: string;
@@ -9,7 +10,10 @@ export interface ModuleReference {
 }
 
 /** Enumerate source module references, retaining dynamic expressions and type-only edges. */
-export function sourceModuleReferences(source: ts.SourceFile, checker: ts.TypeChecker): ModuleReference[] {
+export function sourceModuleReferences(
+  source: ts.SourceFile,
+  checker: ts.TypeChecker | (() => ts.TypeChecker),
+): ModuleReference[] {
   const references: ModuleReference[] = [];
   const add = (node: ts.Node | undefined, kind: ModuleReference['kind'], syntax: ModuleReference['syntax']): void => {
     if (!node) return;
@@ -39,12 +43,21 @@ export function sourceModuleReferences(source: ts.SourceFile, checker: ts.TypeCh
   return references;
 }
 
-function callImportSyntax(node: ts.CallExpression, checker: ts.TypeChecker): 'dynamic-import' | 'require' | undefined {
+/** Parse module syntax alone; require calls still consult lexical bindings. */
+export function parseSourceModuleReferences(file: string, source: string): ModuleReference[] | null {
+  const parsed = parseSourceBindings(file, source);
+  return parsed.errors.length ? null : sourceModuleReferences(parsed.sourceFile, () => parsed.checker);
+}
+
+function callImportSyntax(
+  node: ts.CallExpression,
+  checker: ts.TypeChecker | (() => ts.TypeChecker),
+): 'dynamic-import' | 'require' | undefined {
   if (node.expression.kind === ts.SyntaxKind.ImportKeyword) return 'dynamic-import';
   if (
     ts.isIdentifier(node.expression) &&
     node.expression.text === 'require' &&
-    !checker.getSymbolAtLocation(node.expression)
+    !(typeof checker === 'function' ? checker() : checker).getSymbolAtLocation(node.expression)
   )
     return 'require';
   return undefined;

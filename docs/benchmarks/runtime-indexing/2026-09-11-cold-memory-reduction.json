@@ -1,0 +1,338 @@
+{
+  "schemaVersion": 1,
+  "description": "Cold LaunchPoint index after removing repeated runtime analysis and limiting default TypeScript compiler concurrency to two. The 90-second target is not met.",
+  "baselineReceipt": "2026-09-11-cold-launchpoint.json",
+  "sourceCommit": "dd611a94bde0dd4ddbe049101048cb6fcb9d01a0",
+  "archiveSha256": "993b0fa4bb7e6db53d70ebe5113bf519d702fc246133d4e01c8829a6aa2ea1eb",
+  "remoteArtifacts": "/tmp/scip-query-cold-final-20260911-f2df9j3l",
+  "method": {
+    "emptyScipQueryCache": true,
+    "sharedCacheDisabled": true,
+    "retainedWorker": false,
+    "dependenciesInstalled": true,
+    "osDiskCacheCleared": false,
+    "compilerWorkers": 2,
+    "concurrencyOverride": false,
+    "samples": 1928,
+    "memoryScope": "RSS summed over CLI process and its descendants, sampled externally every 100ms; shared mappings may be counted more than once",
+    "singleRunNotLatencyDistribution": true
+  },
+  "before": {
+    "wallSeconds": 219.3186,
+    "peakGiB": 23.4117,
+    "compilerSeconds": 77.968,
+    "runtimeSeconds": 123.07,
+    "compilerWorkers": 4
+  },
+  "after": {
+    "wallSeconds": 199.91470009298064,
+    "exitCode": 0,
+    "peakGiB": 12.103038787841797,
+    "peakSwapGiB": 0.0,
+    "minimumSystemAvailableGiB": 38.4926643371582
+  },
+  "spans": [
+    {
+      "name": "reindex.fingerprint",
+      "durationMs": 2515,
+      "ok": true
+    },
+    {
+      "name": "reindex.language-indexer.typescript-compiler-shard:0",
+      "durationMs": 51704,
+      "ok": true
+    },
+    {
+      "name": "reindex.language-indexer.typescript-compiler-shard:1",
+      "durationMs": 44538,
+      "ok": true
+    },
+    {
+      "name": "reindex.language-indexer.typescript-compiler-shard:2",
+      "durationMs": 36898,
+      "ok": true
+    },
+    {
+      "name": "reindex.language-indexer.typescript-compiler-shard:3",
+      "durationMs": 36671,
+      "ok": true
+    },
+    {
+      "name": "reindex.language-indexer.typescript-compiler-shard:4",
+      "durationMs": 39236,
+      "ok": true
+    },
+    {
+      "name": "reindex.language-indexers",
+      "durationMs": 121080,
+      "ok": true
+    },
+    {
+      "name": "reindex.publish.sqlite-output",
+      "durationMs": 11096,
+      "ok": true
+    },
+    {
+      "name": "reindex.publish.runtime-boundaries",
+      "durationMs": 60693,
+      "ok": true
+    },
+    {
+      "name": "reindex.publish.generation-handoff",
+      "durationMs": 2014,
+      "ok": true
+    },
+    {
+      "name": "reindex.publish",
+      "durationMs": 75562,
+      "ok": true
+    },
+    {
+      "name": "reindex.fresh",
+      "durationMs": 196642,
+      "ok": true
+    }
+  ],
+  "stats": {
+    "symbols": 511199,
+    "files": 9485,
+    "indexSizeBytes": 535175168,
+    "lastBuilt": "2026-09-11T15:58:45.017Z"
+  },
+  "runtimeEquivalence": {
+    "sameFields": [
+      "observations",
+      "relationGroups",
+      "links",
+      "frontiers",
+      "fileCoverage"
+    ],
+    "allFactsIdentical": true,
+    "counts": {
+      "observations": 7359,
+      "relationGroups": 689,
+      "links": 2,
+      "frontiers": 6386,
+      "fileCoverage": 9566
+    },
+    "runtimeBuild": "evidence-v1+ee18b54790844b45",
+    "phases": [
+      {
+        "id": "direct-extraction",
+        "durationMs": 25012.413752000022,
+        "inputFacts": 9566,
+        "outputFacts": 7274,
+        "filesVisited": 9566,
+        "filesReused": 0,
+        "factsReused": 0,
+        "factsInvalidated": 0
+      },
+      {
+        "id": "http-summary",
+        "durationMs": 14098.655219999986,
+        "inputFacts": 7276,
+        "outputFacts": 83,
+        "filesVisited": 297
+      },
+      {
+        "id": "http-mount",
+        "durationMs": 5885.244395999995,
+        "inputFacts": 7359,
+        "outputFacts": 0,
+        "filesVisited": 9566
+      },
+      {
+        "id": "body-summary",
+        "durationMs": 11555.933911,
+        "inputFacts": 258,
+        "outputFacts": 264,
+        "filesVisited": 194
+      },
+      {
+        "id": "carrier",
+        "durationMs": 1424.646041,
+        "inputFacts": 7359,
+        "outputFacts": 0,
+        "filesVisited": 194
+      },
+      {
+        "id": "relations",
+        "durationMs": 5.315795000002254,
+        "inputFacts": 7359,
+        "outputFacts": 689
+      },
+      {
+        "id": "links",
+        "durationMs": 0.8792149999935646,
+        "inputFacts": 689,
+        "outputFacts": 2
+      },
+      {
+        "id": "frontiers",
+        "durationMs": 199.71823600001517,
+        "inputFacts": 7359,
+        "outputFacts": 6386
+      }
+    ]
+  },
+  "compilerEquivalence": {
+    "documents": 9485,
+    "documentsByteIdentical": true,
+    "metadataRootExcluded": true
+  },
+  "verification": {
+    "freshness": "fresh",
+    "generation": "current",
+    "watcher": "stopped",
+    "sourceUnchanged": true,
+    "activeWatchersUnchanged": true,
+    "quickCheck": "ok",
+    "foreignKeyCheck": "ok"
+  },
+  "validation": {
+    "fullSuite": {
+      "tests": 3925,
+      "files": 426,
+      "passed": true,
+      "scope": "Runtime implementation; followed by focused final default-concurrency validation"
+    },
+    "finalFocused": {
+      "tests": 93,
+      "files": 6,
+      "passed": true
+    },
+    "types": true,
+    "eslint": true,
+    "format": true,
+    "apiContractAndConsumer": true,
+    "skillLinks": true,
+    "freshLocalReindex": true,
+    "diffImpact": true,
+    "architecture": {
+      "cycles": 0,
+      "forbiddenEdges": 0,
+      "existingSourceFileLimit": "72 > 67"
+    },
+    "review": "Existing complexity and module-size findings remain. Renamed callback identity, a callback-to-loop conversion and a scoped-call guard explain changed complexity entries; thresholds and accuracy checks preserved."
+  },
+  "remaining": {
+    "coldWallTargetSeconds": 90,
+    "targetMet": false,
+    "compilerSeconds": 121.08,
+    "runtimeSeconds": 60.693,
+    "reason": "Each compiler worker retains a complete TypeScript project. Halving workers controls total memory but costs compiler throughput. Compiler-context pruning experiments are not adopted because equivalence was not established."
+  },
+  "incrementalSmoke": {
+    "stages": [
+      {
+        "label": "first-worker-edit",
+        "exitCode": 0,
+        "wallSeconds": 28.856102501042187,
+        "peakGiB": 5.1364288330078125,
+        "compilerDocumentsRequested": 5760,
+        "compilerDocumentsEmitted": 1
+      },
+      {
+        "label": "warm-body-edit",
+        "exitCode": 0,
+        "wallSeconds": 12.918822865001857,
+        "peakGiB": 5.270210266113281,
+        "compilerDocumentsRequested": 5760,
+        "compilerDocumentsEmitted": 0
+      },
+      {
+        "label": "warm-inferred-edit",
+        "exitCode": 0,
+        "wallSeconds": 13.688778289943002,
+        "peakGiB": 5.182895660400391,
+        "compilerDocumentsRequested": 5760,
+        "compilerDocumentsEmitted": 1
+      },
+      {
+        "label": "warm-runtime-edit",
+        "exitCode": 0,
+        "wallSeconds": 14.686252965941094,
+        "peakGiB": 5.258937835693359,
+        "compilerDocumentsRequested": 5760,
+        "compilerDocumentsEmitted": 1
+      },
+      {
+        "label": "restore",
+        "exitCode": 0,
+        "wallSeconds": 16.45876973401755,
+        "peakGiB": 5.2485809326171875,
+        "compilerDocumentsRequested": 5760,
+        "compilerDocumentsEmitted": 1
+      }
+    ],
+    "verification": {
+      "stages": [
+        {
+          "stage": "first-worker-edit",
+          "added": {
+            "observations": 0,
+            "relationGroups": 0,
+            "links": 0,
+            "frontiers": 0
+          },
+          "originalObjectsUnchanged": true
+        },
+        {
+          "stage": "warm-body-edit",
+          "added": {
+            "observations": 0,
+            "relationGroups": 0,
+            "links": 0,
+            "frontiers": 0
+          },
+          "originalObjectsUnchanged": true
+        },
+        {
+          "stage": "warm-inferred-edit",
+          "added": {
+            "observations": 0,
+            "relationGroups": 0,
+            "links": 0,
+            "frontiers": 0
+          },
+          "originalObjectsUnchanged": true
+        },
+        {
+          "stage": "warm-runtime-edit",
+          "added": {
+            "observations": 1,
+            "relationGroups": 1,
+            "links": 0,
+            "frontiers": 1
+          },
+          "originalObjectsUnchanged": true
+        },
+        {
+          "stage": "restore",
+          "added": {
+            "observations": 0,
+            "relationGroups": 0,
+            "links": 0,
+            "frontiers": 0
+          },
+          "originalObjectsUnchanged": true
+        }
+      ],
+      "restoredFileCoverageMatches": true,
+      "sourceHash": "f5b5810aa873230a614d487e026055296e3dedaf06db3357e44616400101a2e7",
+      "probeSymbolsRemoved": true,
+      "quickCheck": "ok",
+      "foreignKeyCheck": "ok",
+      "temporaryWatcherStopped": true,
+      "restoredRuntimeMatchesColdBaseline": true
+    },
+    "method": {
+      "allowExpensiveRebuild": false,
+      "newOwnedWorkerForFirstEdit": true,
+      "automaticRefresh": false,
+      "privateBenchmarkCheckout": true,
+      "configAndSourceRestored": true,
+      "memory": "RSS of owned watcher/request and descendants sampled every 250ms"
+    }
+  }
+}

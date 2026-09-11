@@ -4,6 +4,7 @@ import { parseAstSource } from '../../src/source/ast/ast-runtime.js';
 import { sourceBindingResolver } from '../../src/source/ast/source-binding-identity.js';
 import * as bindingEffects from '../../src/source/ast/source-binding-effects.js';
 import { parseSourceBindings } from '../../src/source/ast/function-metrics.js';
+import { parseSourceModuleReferences, sourceModuleReferences } from '../../src/source/ast/module-references.js';
 import type { ts } from '@ts-morph/common';
 
 function wrap(name: string, form: number): string {
@@ -27,6 +28,20 @@ function finalCall(source: string) {
 }
 
 describe('TypeScript member write identity', () => {
+  it('binds require names on demand while parsing static and dynamic module references', () => {
+    const parsed = parseSourceBindings('fixture.ts', 'import app from "expre\\u0073s"; import("express");');
+    const checker = vi.spyOn(parsed, 'checker', 'get');
+    expect(
+      sourceModuleReferences(parsed.sourceFile, () => parsed.checker).map((reference) => reference.specifier),
+    ).toEqual(['express', 'express']);
+    expect(checker).not.toHaveBeenCalled();
+    const source = 'function f(require: Function) { require("hidden"); } const app = require("express");';
+    expect(parseSourceModuleReferences('fixture.ts', source)).toEqual([
+      expect.objectContaining({ specifier: 'express', syntax: 'require' }),
+    ]);
+    expect(parseSourceModuleReferences('fixture.ts', 'import app from ;')).toBeNull();
+  });
+
   it('prepares aliases, property effects and exported exposure only for their consumers', () => {
     const parsed = parseSourceBindings(
       'fixture.ts',

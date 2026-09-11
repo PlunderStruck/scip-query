@@ -650,12 +650,8 @@ function hashBoundaryToken(
   tokenLine: number,
   includeText: boolean,
 ): void {
-  hash.update(String(token));
-  hash.update('\0');
-  if (includeText) hash.update(tokenText);
-  hash.update('\0');
-  hash.update(String(tokenLine));
-  hash.update('\0');
+  // Preserve the exact byte framing with one native call per token.
+  hash.update(`${token}\0${includeText ? tokenText : ''}\0${tokenLine}\0`);
 }
 
 function updateBoundaryTemplateDepth(token: TypeScript.SyntaxKind, templateBraceDepths: number[]): void {

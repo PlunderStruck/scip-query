@@ -1,6 +1,6 @@
 import type { ScipDatabase } from '../../storage/db.js';
 import type { SymbolMatch } from '../../domain/types.js';
-import type { SourceCallableOwner } from '../../source/facts/source-fact-types.js';
+import type { SourceCallableOwner, SourceFacts } from '../../source/facts/source-fact-types.js';
 import { getSourceFacts } from '../../source/facts/source-facts.js';
 import { leafName } from '../symbol-parser.js';
 
@@ -12,14 +12,17 @@ export function lexicalCallOwners<D extends SymbolMatch>(
   db: ScipDatabase,
   file: string,
   definitions: readonly D[],
+  callables?: Readonly<SourceFacts['callables']>,
 ): Map<string, D> {
   const owners = new Map<string, D>();
+  if (definitions.length === 0) return owners;
+  callables ??= getSourceFacts(db, file)?.callables ?? [];
   const ambiguous = new Set<string>();
   for (const definition of definitions) {
     // A definition may contain many functions, including another with the same
     // name. Its uniquely enclosing matching declaration owns it; a nested call cannot climb
     // to an outer definition merely because the requested set omitted its owner.
-    const callable = sourceCallableForDefinition(db, file, definition);
+    const callable = sourceCallableForDefinition(db, file, definition, callables);
     if (!callable || callable.startColumn === undefined || callable.endColumn === undefined) continue;
     const key = sourceCallableOwnerKey({
       ...callable,
@@ -33,10 +36,15 @@ export function lexicalCallOwners<D extends SymbolMatch>(
   return owners;
 }
 
-export function sourceCallableForDefinition(db: ScipDatabase, file: string, definition: SymbolMatch) {
+export function sourceCallableForDefinition(
+  db: ScipDatabase,
+  file: string,
+  definition: SymbolMatch,
+  callables: Readonly<SourceFacts['callables']> = getSourceFacts(db, file)?.callables ?? [],
+) {
   const leaf = leafName(definition.symbol);
   const name = leaf === '<constructor>' ? 'constructor' : leaf;
-  const candidates = (getSourceFacts(db, file)?.callables ?? []).filter(
+  const candidates = callables.filter(
     (candidate) =>
       candidate.name === name &&
       candidate.startLine >= definition.startLine &&
