@@ -2,6 +2,81 @@
 
 All notable changes to `scip-query` are documented here. This file starts at 0.11.0; everything below covers behavior changes made since the 0.10.12 release.
 
+## [0.26.0] - 2026-09-11
+
+### Agent workflows and quality review
+
+- `review --base <ref>` evaluates changed, new, and untracked TS/JS functions
+  for complexity and duplication. Coverage-backed risk analysis requires
+  coverage matched to the reviewed source.
+- `system --source [module]` supplies current module files, exports, imports,
+  consumers, policy, and findings without first building an index. `health`
+  reports concrete source findings instead of an aggregate health score.
+- Consolidated agent guidance into six workflows: `scip-query`, `scip-explore`,
+  `scip-plan`, `scip-architecture-review`, `scip-integrity-audit`, and
+  `scip-setup`. Planning requires documenting the existing end-to-end flow,
+  comparable features, shared owners, and reuse choices before implementation.
+  Use ordinary file tools for source reading and scip-query for relationships,
+  architecture, quality findings, and change impact.
+
+### Output and migration notes
+
+- Oversized human output now saves the complete result to a temporary file
+  and prints a preview and file location. Automatic continuation prompts and
+  routine metadata footers are removed. Explicit pagination and the internal
+  `continue` command remain available. Use `--json --json-output <path>` for
+  programmatic filtering; human output is not a stable parsing interface.
+- Source and graph additions are opt-in: for example, `inspect --bindings`
+  requests binding details and `evidence --detail` requests detailed edges.
+- Removed overlapping CLI commands: `trace`, `reference-neighborhood`,
+  `value-flow`, `reference-reachability`, `isolated`, `similar-chains`,
+  `extract-candidates`, `wrapper-candidates`, `stale-abstractions`,
+  `complexity-hotspots`, and `self-audit`. Use `evidence` for explicit typed
+  relationships, `refs` for reference sites, `dead` for unused-code candidates,
+  `dependence-slice` / `slice-cohesion` for local flow questions, and
+  `health` / `review` / `complexity` for quality findings. See
+  [the current command inventory](docs/CURRENT_COMMANDS.md) for scope and
+  [the command reference](docs/COMMAND_REFERENCE.md) for arguments.
+- Removed obsolete JavaScript package subpaths under `scip-query/queries/`:
+  `anchors`, `complexity-hotspots`, `convergence`, `dataflow`, `deep-chains`,
+  `system-map`, `extract-candidates`, `isolated`, `plan-context`,
+  `reference-neighborhood`, `reference-reachability`, `self-audit`,
+  `similar-chains`, `slice`, `stale-abstractions`, `trace`, `twin-ab`,
+  `value-flow`, and `wrapper-candidates`. Update imports to supported query
+  entries; replacements are not necessarily signature-compatible.
+
+### TypeScript accuracy and incremental indexing
+
+- Corrected compiler identity and source binding handling across index
+  partitions, anonymous/default exports, mutable bindings, and nested value
+  reads. Graph results retain the distinction between established edges,
+  derived observations, and candidates that require confirmation.
+- Strengthened stale-input detection, source dependency tracking, cache
+  invalidation, failed-publication recovery, and incremental compiler-state
+  recovery. Failed compiler work does not publish a partially replaced index.
+- Preserved watcher ownership through cleanup failures and made unavailable
+  incremental-service recovery explicit. Configured rebuild policy and
+  disabled watchers remain respected.
+- Added reproducible property-based tests and state-transition coverage for
+  indexing, caches, query inputs, and publication recovery, alongside
+  independent known-answer graph tests. These tests do not establish complete
+  TypeScript or runtime coverage.
+
+### Indexing performance
+
+- Reuse verified compiler documents and runtime analysis after incremental
+  edits; avoid repeated reference preparation and runtime mount parsing.
+- Share parsed TypeScript sources across bounded compiler batches and reuse
+  focused source facts during graph analysis.
+- On the recorded LaunchPoint backend snapshot, the final compiler-batch
+  change reduced a cold index from 192.9 to 167.4 seconds and compiler work
+  from 119.7 to 95.1 seconds. All 9,485 compiler documents and recorded
+  runtime facts matched the preceding build. Peak process-tree memory rose
+  from 11.8 to 12.5 GiB; the one-minute cold-index target remains unmet.
+  Results are workload-specific, not a universal latency or memory guarantee.
+- The Windows sidecar remains pinned to `scip-query-scip-windows@0.13.1`.
+  Node.js 22 or later is still required.
+
 ## [0.25.0]
 
 ### Slice-based cohesion
