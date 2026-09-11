@@ -1,0 +1,259 @@
+{
+  "date": "2026-09-11",
+  "goal": "Complete cold LaunchPoint index toward 60 seconds without reducing relationship coverage",
+  "targetMet": false,
+  "sourceCommit": "dd611a94bde0dd4ddbe049101048cb6fcb9d01a0",
+  "artifactSha256": "8facb8e937c7f06efbda56d5e43cb9247ca0f3dc3e9b4b0923c122eef4cd94e0",
+  "change": "Group disjoint TypeScript emission manifests into bounded workers; reuse upstream parsed sources across complete-program batches; collect inference state and isolate ordinary project caches",
+  "method": {
+    "coldArtifacts": true,
+    "retainedCompiler": false,
+    "sharedCache": false,
+    "dependenciesInstalled": true,
+    "osPageCacheCleared": false,
+    "compilerConcurrency": 2,
+    "packageFilesVerified": 467,
+    "wallScope": "CLI lifecycle including all compiler, conversion, runtime and publication work",
+    "memoryScope": "RSS summed over CLI process and its descendants, sampled externally every 100ms; shared mappings may be counted more than once"
+  },
+  "cold": {
+    "wallSeconds": 167.3677611410385,
+    "peakGiB": 12.522472381591797,
+    "peakSwapGiB": 0.0,
+    "exitCode": 0,
+    "artifacts": "/tmp/scip-query-cold-grouped-final-20260911-7liy3t2g"
+  },
+  "previousAcceptedCold": {
+    "wallSeconds": 192.90526039595716,
+    "peakGiB": 11.787311553955078,
+    "codeCommit": "77d6af09007bdf369b082427266b3a02d3682052"
+  },
+  "spansMs": {
+    "reindex.fingerprint": 2536,
+    "reindex.lock": 0,
+    "reindex.reuse-check": 0,
+    "reindex.language-indexer.typescript-compiler-worker:0": 88186,
+    "reindex.language-indexer.typescript-compiler-worker:1": 94726,
+    "reindex.language-indexers": 95140,
+    "reindex.publish.scip-output": 0,
+    "reindex.publish.sqlite-output": 11315,
+    "reindex.publish.auxiliary-documents": 95,
+    "reindex.publish.source-checkpoints": 846,
+    "reindex.publish.runtime-boundaries": 53710,
+    "reindex.publish.sqlite-layout": 433,
+    "reindex.publish.coverage": 59,
+    "reindex.publish.affected-shadow": 0,
+    "reindex.publish.metadata": 315,
+    "reindex.publish.generation-handoff": 2052,
+    "reindex.publish.cleanup": 0,
+    "reindex.publish.shadow-telemetry": 1,
+    "reindex.publish": 68843,
+    "reindex.fresh": 163983
+  },
+  "compilerEquivalence": {
+    "before": 9485,
+    "after": 9485,
+    "documentsByteIdentical": true,
+    "differences": []
+  },
+  "runtimeEquivalence": {
+    "observations": {
+      "before": 7359,
+      "after": 7359,
+      "equal": true
+    },
+    "relationGroups": {
+      "before": 689,
+      "after": 689,
+      "equal": true
+    },
+    "links": {
+      "before": 2,
+      "after": 2,
+      "equal": true
+    },
+    "frontiers": {
+      "before": 6386,
+      "after": 6386,
+      "equal": true
+    },
+    "fileCoverage": {
+      "before": 9566,
+      "after": 9566,
+      "equal": true
+    }
+  },
+  "validation": {
+    "freshness": "fresh",
+    "generation": "current",
+    "watcher": "stopped",
+    "sourceUnchanged": true,
+    "activeWatchersUnchanged": true,
+    "quickCheck": "ok",
+    "foreignKeyCheck": "ok",
+    "stats": {
+      "symbols": 511199,
+      "files": 9485,
+      "indexSizeBytes": 535175168,
+      "lastBuilt": "2026-09-11T18:14:50.379Z"
+    },
+    "fingerprintedFiles": 9489,
+    "indexedLanguages": [
+      "typescript"
+    ],
+    "skipped": []
+  },
+  "incremental": [
+    {
+      "stage": "first-worker-edit",
+      "wallSeconds": 29.605442580999807,
+      "peakGiB": 5.214878082275391,
+      "exitCode": 0,
+      "compiler": {
+        "batches": 45,
+        "requestedDocuments": 5760,
+        "modifiedDocuments": 1,
+        "emittedDocuments": 1,
+        "retainedDocuments": 5759,
+        "totalRequestMs": 15366.421692,
+        "totalServiceMs": 14814.538305999999
+      }
+    },
+    {
+      "stage": "warm-body-edit",
+      "wallSeconds": 13.157449701917358,
+      "peakGiB": 5.278202056884766,
+      "exitCode": 0,
+      "compiler": {
+        "batches": 45,
+        "requestedDocuments": 5760,
+        "modifiedDocuments": 1,
+        "emittedDocuments": 0,
+        "retainedDocuments": 5760,
+        "totalRequestMs": 2104.3045779999984,
+        "totalServiceMs": 1646.3373049999718
+      }
+    },
+    {
+      "stage": "warm-inferred-edit",
+      "wallSeconds": 13.655608210945502,
+      "peakGiB": 5.212318420410156,
+      "exitCode": 0,
+      "compiler": {
+        "batches": 45,
+        "requestedDocuments": 5760,
+        "modifiedDocuments": 1,
+        "emittedDocuments": 1,
+        "retainedDocuments": 5759,
+        "totalRequestMs": 2083.6379659999993,
+        "totalServiceMs": 1635.5989310000004
+      }
+    },
+    {
+      "stage": "warm-runtime-edit",
+      "wallSeconds": 14.926389744039625,
+      "peakGiB": 5.4267425537109375,
+      "exitCode": 0,
+      "compiler": {
+        "batches": 45,
+        "requestedDocuments": 5760,
+        "modifiedDocuments": 1,
+        "emittedDocuments": 1,
+        "retainedDocuments": 5759,
+        "totalRequestMs": 2004.1783139999998,
+        "totalServiceMs": 1575.532184999989
+      }
+    },
+    {
+      "stage": "restore",
+      "wallSeconds": 16.44312508101575,
+      "peakGiB": 5.308555603027344,
+      "exitCode": 0,
+      "compiler": {
+        "batches": 45,
+        "requestedDocuments": 5760,
+        "modifiedDocuments": 1,
+        "emittedDocuments": 1,
+        "retainedDocuments": 5759,
+        "totalRequestMs": 3651.3431180000007,
+        "totalServiceMs": 3203.202000000034
+      }
+    }
+  ],
+  "incrementalVerification": {
+    "baselineMatchesPrevious": true,
+    "stages": [
+      {
+        "stage": "first-worker-edit",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "warm-body-edit",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "warm-inferred-edit",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "warm-runtime-edit",
+        "added": {
+          "observations": 1,
+          "relationGroups": 1,
+          "links": 0,
+          "frontiers": 1
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "restore",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      }
+    ],
+    "restoredFileCoverageMatches": true,
+    "sourceHash": "f5b5810aa873230a614d487e026055296e3dedaf06db3357e44616400101a2e7",
+    "probeSymbolsRemoved": true,
+    "quickCheck": "ok",
+    "foreignKeyCheck": "ok",
+    "temporaryWatcherStopped": true
+  },
+  "tests": {
+    "fullSuite": {
+      "command": "npm test (vitest run --maxWorkers=2)",
+      "files": 429,
+      "tests": 3941,
+      "passed": true,
+      "seconds": 387.22
+    },
+    "types": "passed",
+    "eslintChangedFiles": "passed",
+    "publicApi": "9217c44ff0f30a77 (66 paths), unchanged",
+    "review": "No new findings or blocking findings; no dependency cycles",
+    "impact": "5 changed symbols, 2 affected files; 7 paths absent or excluded from symbol index"
+  },
+  "remaining": "60-second goal not met; TypeScript type inference, complete compiler context memory and runtime relationship analysis remain dominant. No compiler root pruning or inference-result caching shipped."
+}

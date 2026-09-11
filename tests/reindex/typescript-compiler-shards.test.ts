@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createTypeScriptCompilerShards,
+  groupTypeScriptCompilerShards,
   partitionTypeScriptCompilerInputs,
   partitionTypeScriptCompilerInputsIntoShards,
   removeStaleTypeScriptCompilerShardConfigs,
@@ -21,6 +22,23 @@ describe('bounded TypeScript compiler shards', () => {
   const tempDirs: string[] = [];
   afterEach(() => {
     for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('groups every emission manifest once into bounded consecutive worker assignments', () => {
+    const shards = createTypeScriptCompilerShards({
+      projectRoot: '/repo',
+      rootConfigPath: 'tsconfig.json',
+      inputPaths: ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts'],
+      targetFiles: 1,
+    });
+    const groups = groupTypeScriptCompilerShards(shards, 2);
+    expect(groups.map((group) => group.length)).toEqual([2, 3]);
+    expect(groups.flat()).toEqual(shards);
+    expect(new Set(groups.flat()).size).toBe(5);
+    expect(groupTypeScriptCompilerShards(shards, 1)).toEqual([shards]);
+    expect(groupTypeScriptCompilerShards(shards, 10)).toEqual(shards.map((shard) => [shard]));
+    expect(groupTypeScriptCompilerShards([], 2)).toEqual([]);
+    expect(() => groupTypeScriptCompilerShards(shards, 0)).toThrow('worker count');
   });
 
   it('partitions every unique input deterministically into balanced shards', () => {

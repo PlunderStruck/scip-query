@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, resolve } from 'node:path';
 import Database from 'better-sqlite3';
 import { it, vi } from 'vitest';
 import { compilerFacts, IndexerHistoryFixture } from '../properties/indexer-history-fixture.js';
+import { isTypeScriptCompilerShardConfigPath } from '../../src/platform/typescript-projects.js';
 
 const require = createRequire(import.meta.url);
 const compilerRoot = dirname(require.resolve('@sourcegraph/scip-typescript/package.json'));
@@ -35,6 +36,19 @@ class FailureFixture extends IndexerHistoryFixture {
       this.preloadPath,
       `const fs = require('node:fs');
 const { FileIndexer } = require(${JSON.stringify(join(compilerRoot, 'dist/src/FileIndexer.js'))});
+const projects = require(${JSON.stringify(join(compilerRoot, 'dist/src/ProjectIndexer.js'))});
+const OriginalProject = projects.ProjectIndexer;
+projects.ProjectIndexer = class extends OriginalProject {
+  constructor(config, options, cache) {
+    const previous = new Map(cache.sources);
+    super(config, options, cache);
+    fs.appendFileSync(${JSON.stringify(this.receiptPath)}, JSON.stringify({
+      kind: 'compiler-project', process: process.argv[1], file: options.projectRoot, occurrences: 0,
+      rootFiles: config.fileNames.length,
+      reusedSources: this.program.getSourceFiles().filter(source => previous.get(source.fileName)?.[0] === source).length,
+    }) + '\\n');
+  }
+};
 const mode = () => fs.readFileSync(${JSON.stringify(this.modePath)}, 'utf8');
 const record = (indexer, kind) => fs.appendFileSync(${JSON.stringify(this.receiptPath)}, JSON.stringify({
   kind, process: process.argv[1], file: indexer.sourceFile.fileName,
@@ -79,7 +93,14 @@ FileIndexer.prototype.visit = function(node) {
     return result;
   }
 
-  receipts(): { kind: string; process: string; file: string; occurrences: number }[] {
+  receipts(): {
+    kind: string;
+    process: string;
+    file: string;
+    occurrences: number;
+    rootFiles?: number;
+    reusedSources?: number;
+  }[] {
     return readFileSync(this.receiptPath, 'utf8')
       .trim()
       .split('\n')
@@ -187,9 +208,10 @@ it('rejects the complete language output when one real compiler shard fails', as
     writeFileSync(fixture.modePath, 'mid-file');
     const result = fixture.runCli(['reindex', '--force', '--allow-expensive-rebuild'], true);
     assert.notEqual(result.status, 0, result.stdout + result.stderr);
-    assert.match(result.stdout + result.stderr, /compiler shard/);
+    assert.match(result.stdout + result.stderr, /compiler worker/);
     assert.equal(fixture.publication()!.currentGeneration, generation);
     assert.equal(fixture.databaseDigest(), digest);
+    assert.deepEqual(readdirSync(fixture.root).filter(isTypeScriptCompilerShardConfigPath), []);
     const receipts = fixture.receipts();
     assert.ok(receipts.some((record) => record.kind === 'completed'));
     assert.ok(
@@ -198,6 +220,10 @@ it('rejects the complete language output when one real compiler shard fails', as
     writeFileSync(fixture.modePath, 'off');
     const recovered = fixture.runCli(['reindex', '--force', '--allow-expensive-rebuild'], true);
     assert.equal(recovered.status, 0, recovered.stdout + recovered.stderr);
+    assert.deepEqual(readdirSync(fixture.root).filter(isTypeScriptCompilerShardConfigPath), []);
+    const projects = fixture.receipts().filter((record) => record.kind === 'compiler-project');
+    assert.ok(projects.every((record) => record.rootFiles === fixture.sources.size));
+    assert.ok(projects.some((record) => record.reusedSources === fixture.sources.size));
     fixture.assertDefinitions();
     fixture.assertCurrent();
   } finally {

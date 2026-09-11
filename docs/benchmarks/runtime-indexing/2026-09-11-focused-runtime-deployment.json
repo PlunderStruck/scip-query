@@ -1,0 +1,94 @@
+{
+  "commit": "77d6af09007bdf369b082427266b3a02d3682052",
+  "archiveSha256": "02e20eb8a1177f82922f2ef81d46af939113baa0b1cf5fa4b7f063a9ba73fa3c",
+  "filesVerified": 466,
+  "skills": [
+    "scip-architecture-review",
+    "scip-explore",
+    "scip-integrity-audit",
+    "scip-plan",
+    "scip-query",
+    "scip-setup"
+  ],
+  "skillFilesVerified": 19,
+  "skillLinks": [
+    "/home/launchpoint-agent/.claude/skills/scip-architecture-review",
+    "/home/launchpoint-agent/.claude/skills/scip-explore",
+    "/home/launchpoint-agent/.claude/skills/scip-integrity-audit",
+    "/home/launchpoint-agent/.claude/skills/scip-plan",
+    "/home/launchpoint-agent/.claude/skills/scip-query",
+    "/home/launchpoint-agent/.claude/skills/scip-setup",
+    "/home/launchpoint-agent/.codex/skills/scip-architecture-review",
+    "/home/launchpoint-agent/.codex/skills/scip-explore",
+    "/home/launchpoint-agent/.codex/skills/scip-integrity-audit",
+    "/home/launchpoint-agent/.codex/skills/scip-plan",
+    "/home/launchpoint-agent/.codex/skills/scip-query",
+    "/home/launchpoint-agent/.codex/skills/scip-setup"
+  ],
+  "canonicalPackage": "/home/launchpoint-agent/.local/lib/node_modules/scip-query",
+  "executables": [
+    "/home/launchpoint-agent/.local/bin/scip-query"
+  ],
+  "watchers": [
+    {
+      "root": "/home/launchpoint-agent/.t3/worktrees/launchpoint-backend/t3code-66bd3d33",
+      "oldPid": 244716,
+      "pid": 351672,
+      "freshness": "fresh",
+      "watcher": "idle",
+      "generation": "4b749105069a526da341a55648889c526884caba37114ef1c0f558551c32f171",
+      "rebuildRequired": true
+    },
+    {
+      "root": "/home/launchpoint-agent/.t3/worktrees/launchpoint-backend/t3code-93516b5b",
+      "oldPid": 246464,
+      "pid": 352859,
+      "freshness": "fresh",
+      "watcher": "idle",
+      "generation": "5c74c2ef6e59496e453c3a3ad8cce682a1e39fd1486443357e7ed5291a990906",
+      "rebuildRequired": true
+    }
+  ],
+  "smoke": {
+    "behavior": [
+      3,
+      0,
+      137
+    ],
+    "savedOutputBytes": 20622,
+    "previewBytes": 1221,
+    "savedEqualsRedirected": true,
+    "automaticContinuation": false,
+    "bindingsOptIn": true,
+    "conciseRelationshipEvidence": true,
+    "freshness": "fresh",
+    "watcher": "stopped",
+    "cyclomaticComplexity": 2,
+    "exactCallees": 1,
+    "candidateCallees": 0
+  },
+  "rollback": "/tmp/scip-query-focused-deploy-20260911-vwb6ft/previous-package",
+  "remoteReceipts": "/tmp/scip-query-focused-deploy-20260911-vwb6ft",
+  "preparedCaches": [
+    {
+      "root": "/home/launchpoint-agent/.t3/worktrees/launchpoint-backend/t3code-66bd3d33",
+      "phaseSourceHashesVerified": 2652,
+      "sourceCheckpointsVerified": 9219,
+      "missingCheckpointPaths": [],
+      "runtimeBuild": "evidence-v1+481ea39372e92c3a",
+      "observations": 7185,
+      "quickCheck": "ok",
+      "foreignKeyCheck": "ok"
+    },
+    {
+      "root": "/home/launchpoint-agent/.t3/worktrees/launchpoint-backend/t3code-93516b5b",
+      "phaseSourceHashesVerified": 2656,
+      "sourceCheckpointsVerified": 9274,
+      "missingCheckpointPaths": [],
+      "runtimeBuild": "evidence-v1+481ea39372e92c3a",
+      "observations": 7223,
+      "quickCheck": "ok",
+      "foreignKeyCheck": "ok"
+    }
+  ]
+}

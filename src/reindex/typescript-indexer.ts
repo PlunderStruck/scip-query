@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { loadTypeScriptDocumentRuntime } from './typescript-document-emitter.js';
 import { typeScriptIndexVersion } from '../domain/typescript-index-identity.js';
-import { installTypeScriptProjectEmission } from './typescript-project-emission.js';
+import { installTypeScriptProjectEmission, withTypeScriptBatchCollection } from './typescript-project-emission.js';
 
 // This process uses the upstream CLI and compiler with the same declaration
 // identity adapter as the retained document emitter. No dependency files change.
@@ -12,10 +12,11 @@ const require = createRequire(import.meta.url);
 const root = dirname(require.resolve('@sourcegraph/scip-typescript/package.json'));
 const metadata = require(resolve(root, 'dist/package.json')) as { version: string };
 metadata.version = typeScriptIndexVersion(loaded.runtime.packageVersion);
-const { ProjectIndexer } = require(resolve(root, 'dist/src/ProjectIndexer.js')) as {
-  ProjectIndexer: { prototype: Parameters<typeof installTypeScriptProjectEmission>[0] };
+const projects = require(resolve(root, 'dist/src/ProjectIndexer.js')) as {
+  ProjectIndexer: Parameters<typeof withTypeScriptBatchCollection>[0];
 };
-installTypeScriptProjectEmission(ProjectIndexer.prototype);
+installTypeScriptProjectEmission(projects.ProjectIndexer.prototype);
+projects.ProjectIndexer = withTypeScriptBatchCollection(projects.ProjectIndexer);
 const { main } = require(resolve(root, 'dist/src/main.js')) as { main(): void };
 
 // Upstream catches file visitor exceptions and can still write that file's

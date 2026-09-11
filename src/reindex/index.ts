@@ -154,6 +154,7 @@ import {
 } from '../platform/typescript-projects.js';
 import {
   createTypeScriptCompilerShards,
+  groupTypeScriptCompilerShards,
   removeStaleTypeScriptCompilerShardConfigs,
   shouldShardTypeScriptCompilerInputs,
   typescriptCompilerShardParallelism,
@@ -2751,18 +2752,25 @@ function prepareBoundedTypeScriptCompilerShardRuns(
     `Indexing ${inputPaths.size} TypeScript inputs as ${compilerShards.length} ` +
       `byte-balanced compiler shard(s), ${boundedConcurrency} at a time.`,
   );
-  return compilerShards.map((shard, shardIndex) =>
-    prepareIndexerRun({
+  return groupTypeScriptCompilerShards(compilerShards, boundedConcurrency).map((shards, workerIndex) => {
+    const run = prepareIndexerRun({
       ...common,
-      id: `typescript-compiler-shard:${shardIndex}`,
-      label: `typescript compiler shard ${shardIndex + 1}/${compilerShards.length}`,
-      scipPath: tempScipPath(opts.tempOutputScip, 'typescript-compiler-shard', shardIndex),
-      projectPath: shard.configPath,
-      temporaryProjectConfigs: [{ path: shard.configPath, content: shard.content }],
+      id: `typescript-compiler-worker:${workerIndex}`,
+      label: `typescript compiler worker ${workerIndex + 1}/${boundedConcurrency} (${shards.length} emission batches)`,
+      scipPath: tempScipPath(opts.tempOutputScip, 'typescript-compiler-shard', workerIndex),
+      projectPath: shards[0]!.configPath,
+      temporaryProjectConfigs: shards.map((shard) => ({ path: shard.configPath, content: shard.content })),
       boundedConcurrency,
       outputComposition: 'protobuf-concatenate',
-    }),
-  );
+    });
+    // The bundled upstream CLI accepts additional project operands and shares
+    // parsed sources between them. Explicit repository tools bypass this path.
+    if ('prepared' in run && shards.length > 1) {
+      run.prepared.args = run.prepared.args.filter((arg) => arg !== '--no-global-caches');
+      run.prepared.args.push(...shards.slice(1).map((shard) => shard.configPath));
+    }
+    return run;
+  });
 }
 
 type PrepareIndexerRunOptions = {

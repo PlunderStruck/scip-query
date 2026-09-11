@@ -21,6 +21,18 @@ export interface TypeScriptCompilerShard {
   inputPaths: readonly string[];
 }
 
+/** Consecutive emission batches share one child's upstream parsed-source cache. */
+export function groupTypeScriptCompilerShards(
+  shards: readonly TypeScriptCompilerShard[],
+  concurrency: number,
+): TypeScriptCompilerShard[][] {
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1) throw new Error('Invalid compiler worker count');
+  const count = Math.min(shards.length, concurrency);
+  return Array.from({ length: count }, (_, index) =>
+    shards.slice(Math.floor((shards.length * index) / count), Math.floor((shards.length * (index + 1)) / count)),
+  );
+}
+
 /**
  * Target emitted documents per shard. Compiler context remains complete;
  * the existing child heap limit applies independently of this work bound.
