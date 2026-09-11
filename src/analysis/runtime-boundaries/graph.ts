@@ -184,10 +184,11 @@ export async function collectRuntimeBoundaryGraph(
   const primary = deduplicateObservations([...retainedObservations, ...extracted.observations]);
   const withDatabaseQueues = deduplicateObservations([...primary, ...deriveDatabaseWorkQueueObservations(primary)]);
   const scope = runtimePhaseScope(db, files);
-  const compilerFactsUnchanged =
-    opts.compilerFactsUnchanged === true &&
-    !opts.forceDerivedRebuild &&
-    opts.previousGraph?.extractorVersion === RUNTIME_BOUNDARY_EXTRACTOR_VERSION;
+  const previousPhases =
+    !opts.forceDerivedRebuild && opts.previousGraph?.extractorVersion === RUNTIME_BOUNDARY_EXTRACTOR_VERSION
+      ? opts.previousGraph.phaseRecords
+      : undefined;
+  const compilerFactsUnchanged = opts.compilerFactsUnchanged === true;
   const phaseRecords: NonNullable<RuntimeBoundaryGraph['phaseRecords']> = {};
   phaseStartedAt = performance.now();
   const httpPhase = materializeRuntimePhase({
@@ -195,7 +196,7 @@ export async function collectRuntimeBoundaryGraph(
     scope,
     seeds: runtimePhaseSeeds(withDatabaseQueues),
     compilerFactsUnchanged,
-    previous: opts.previousGraph?.phaseRecords?.http,
+    previous: previousPhases?.http,
     compute: (reader) => propagateCompilerResolvedHttpSummaries(reader, withDatabaseQueues, opts.profileSpan),
   });
   const propagated = httpPhase.result;
@@ -237,7 +238,7 @@ export async function collectRuntimeBoundaryGraph(
     scope,
     seeds: runtimePhaseSeeds(withMounts, bodySummaries),
     compilerFactsUnchanged,
-    previous: opts.previousGraph?.phaseRecords?.carrier,
+    previous: previousPhases?.carrier,
     compute: (reader) => deriveCarrierDiscriminators(reader, withMounts, bodySummaries),
   });
   const carriers = carrierPhase.result;

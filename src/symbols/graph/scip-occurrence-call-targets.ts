@@ -14,6 +14,7 @@ import { sourceAnalysisRoot, ANALYSIS_CALLABLE_NODE_TYPES, walkNamedSyntax } fro
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { readScipArtifact } from '../../storage/scip-artifact.js';
+import { recordUnsupportedDatabaseRead } from '../../storage/database-read-proof.js';
 import { getAllDefinitions, getDefinitionsForFile } from '../definition-catalog.js';
 import {
   chunkOccurrenceTargetsForFile,
@@ -362,6 +363,8 @@ export function occurrenceWithSourceOwner(
 }
 
 function scipOccurrenceCallTargetIndex(db: ScipDatabase): ScipOccurrenceCallTargetIndex | null {
+  // The separate artifact (including its absence) is not covered by SQLite reads.
+  recordUnsupportedDatabaseRead();
   if (SCIP_OCCURRENCE_CALL_TARGET_INDEX.has(db)) return SCIP_OCCURRENCE_CALL_TARGET_INDEX.get(db) ?? null;
   const index = loadScipOccurrenceCallTargetIndex(db);
   SCIP_OCCURRENCE_CALL_TARGET_INDEX.set(db, index);

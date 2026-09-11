@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import type { ScipQueryConfig } from '../domain/types.js';
+import { recordDatabaseRead, recordUnsupportedDatabaseRead } from './database-read-proof.js';
 import { normalizeSafeProjectRelativePath } from '../domain/path-normalization.js';
 import {
   acquireSqliteGenerationReader,
@@ -151,7 +152,7 @@ export class ScipDatabase {
   private pathFilter: PathExclusionPolicy | null;
   private readonly connection: Database.Database;
   private readonly connectionOwnership: ScipDatabaseConnectionOwnership<Database.Database>;
-  private statementCache = new Map<string, Database.Statement>();
+  private statementCache = new Map<string, ScipPreparedReadStatement>();
 
   // scip-query: ignore-wrapper — public storage boundary; callers construct
   // ScipDatabase, not better-sqlite3 connections plus pragma setup.
@@ -260,10 +261,10 @@ export class ScipDatabase {
     this.connectionOwnership.close();
   }
 
-  private statement(sql: string): Database.Statement {
+  private statement(sql: string): ScipPreparedReadStatement {
     let statement = this.statementCache.get(sql);
     if (!statement) {
-      statement = this.connection.prepare(sql);
+      statement = prepareScipReadStatement(this.connection, this.db, sql);
       this.statementCache.set(sql, statement);
     }
     return statement;
@@ -271,45 +272,84 @@ export class ScipDatabase {
 }
 
 function createScipDatabaseQueryPort(connection: Database.Database): ScipDatabaseQueryPort {
-  return Object.freeze({
+  const port: ScipDatabaseQueryPort = {
     prepare<BindParameters extends unknown[] = unknown[], Result = unknown>(source: string) {
-      const statement = connection.prepare<BindParameters, Result>(source);
-      if (!statement.readonly || !statement.reader) {
-        throw new Error('ScipDatabase.db only permits read-only statements that return rows.');
-      }
-      return createScipPreparedReadStatement(statement);
+      return prepareScipReadStatement<BindParameters, Result>(connection, port, source);
     },
-  });
+  };
+  return Object.freeze(port);
+}
+
+function prepareScipReadStatement<BindParameters extends unknown[] = unknown[], Result = unknown>(
+  connection: Database.Database,
+  owner: ScipDatabaseQueryPort,
+  source: string,
+): ScipPreparedReadStatement<BindParameters, Result> {
+  try {
+    const statement = connection.prepare<BindParameters, Result>(source);
+    if (!statement.readonly || !statement.reader) {
+      throw new Error('ScipDatabase.db only permits read-only statements that return rows.');
+    }
+    return createScipPreparedReadStatement(statement, owner);
+  } catch (error) {
+    recordUnsupportedDatabaseRead();
+    throw error;
+  }
 }
 
 function createScipPreparedReadStatement<BindParameters extends unknown[], Result>(
   statement: Database.Statement<BindParameters, Result>,
+  owner: ScipDatabaseQueryPort,
 ): ScipPreparedReadStatement<BindParameters, Result> {
+  let defaultShape = statement.readonly && statement.reader;
+  const unsupported = () => {
+    defaultShape = false;
+    recordUnsupportedDatabaseRead();
+  };
   const prepared: ScipPreparedReadStatement<BindParameters, Result> = {
-    get: (...params) => statement.get(...params),
-    all: (...params) => statement.all(...params),
-    iterate: (...params) => statement.iterate(...params),
+    get: (...params) =>
+      recordDatabaseRead(
+        { owner, sql: statement.source, method: 'get', parameters: params, supported: defaultShape },
+        () => statement.get(...params),
+      ),
+    all: (...params) =>
+      recordDatabaseRead(
+        { owner, sql: statement.source, method: 'all', parameters: params, supported: defaultShape },
+        () => statement.all(...params),
+      ),
+    iterate: (...params) => {
+      recordUnsupportedDatabaseRead();
+      return statement.iterate(...params);
+    },
     pluck(toggleState) {
+      unsupported();
       if (toggleState === undefined) statement.pluck();
       else statement.pluck(toggleState);
       return prepared;
     },
     expand(toggleState) {
+      unsupported();
       if (toggleState === undefined) statement.expand();
       else statement.expand(toggleState);
       return prepared;
     },
     raw(toggleState) {
+      unsupported();
       if (toggleState === undefined) statement.raw();
       else statement.raw(toggleState);
       return prepared;
     },
     bind(...params) {
+      unsupported();
       statement.bind(...params);
       return prepared;
     },
-    columns: () => statement.columns(),
+    columns: () => {
+      recordUnsupportedDatabaseRead();
+      return statement.columns();
+    },
     safeIntegers(toggleState) {
+      unsupported();
       if (toggleState === undefined) statement.safeIntegers();
       else statement.safeIntegers(toggleState);
       return prepared;

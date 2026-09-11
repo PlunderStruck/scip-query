@@ -30,7 +30,8 @@ import {
   writeWatchServiceState,
   type WatchServiceWatchOverrides,
 } from './watch-service.js';
-import { maybeSweepRepositoryCache, DEFAULT_REPOSITORY_SWEEP_INTERVAL_MS } from './repository-cache-lifecycle.js';
+import { DEFAULT_REPOSITORY_SWEEP_INTERVAL_MS } from './repository-cache-lifecycle.js';
+import { RepositoryCacheMaintenance } from './repository-cache-maintenance.js';
 import { WatchRefreshCoordinator } from './watch-refresh-coordinator.js';
 import { initializeBoundedMailbox, maintainBoundedMailbox } from '../storage/bounded-mailbox.js';
 import { publishedSqliteGenerationIdentity } from '../storage/sqlite-generation.js';
@@ -215,8 +216,7 @@ function createWatchServiceMaintenance(input: {
   worktreeLiveness: ReturnType<typeof captureWorktreeLivenessIdentity>;
   indexMailboxPaths: ReturnType<typeof typeScriptIndexMailboxPaths>;
   semanticMailboxPaths: ReturnType<typeof typeScriptSemanticMailboxPaths>;
-  projectRoot: string;
-  cliVersion: string;
+  requestCacheSweep(): void;
   activityPath: string;
   refreshCoordinator: WatchRefreshCoordinator;
   watcherStatus(): WatcherStatus;
@@ -260,7 +260,7 @@ function createWatchServiceMaintenance(input: {
     }
     if (nowMonotonicMs - lastCacheSweepAtMonotonicMs >= DEFAULT_REPOSITORY_SWEEP_INTERVAL_MS) {
       lastCacheSweepAtMonotonicMs = nowMonotonicMs;
-      maybeSweepRepositoryCache(input.projectRoot, input.cliVersion);
+      input.requestCacheSweep();
     }
     if (nowMonotonicMs - lastActivityPollAtMonotonicMs >= ACTIVITY_POLL_INTERVAL_MS) {
       lastActivityPollAtMonotonicMs = nowMonotonicMs;
@@ -541,6 +541,15 @@ export async function runWatchServiceServer(
       lastActivityAtMonotonicMs = monotonicNowMs();
     };
 
+    const cacheMaintenance = new RepositoryCacheMaintenance({
+      projectRoot,
+      cliVersion,
+      onError(error) {
+        lastError = { at: new Date().toISOString(), message: error.message };
+        persistState(true, 'visibility');
+      },
+    });
+
     const recordMailboxFatal = (error: Error): void => {
       recordActivity();
       mailboxFatalError ??= error;
@@ -627,8 +636,7 @@ export async function runWatchServiceServer(
       worktreeLiveness,
       indexMailboxPaths,
       semanticMailboxPaths,
-      projectRoot,
-      cliVersion,
+      requestCacheSweep: () => cacheMaintenance.start(),
       activityPath: servicePaths.activityPath,
       refreshCoordinator,
       watcherStatus: () => watcherStatus,
@@ -680,6 +688,7 @@ export async function runWatchServiceServer(
         Promise.all([
           semanticLane.close('TypeScript semantic service stopped before completing the request.'),
           indexLane.close('TypeScript index service stopped before completing the request.'),
+          cacheMaintenance.close(),
         ]).then(() => undefined),
       mailboxFatalError: () => mailboxFatalError,
       finalizeStopped() {

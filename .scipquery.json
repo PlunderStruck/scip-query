@@ -192,6 +192,8 @@
       {
         "name": "runtime-background",
         "paths": [
+          "src/runtime/repository-cache-maintenance.ts",
+          "src/runtime/repository-cache-worker.ts",
           "src/runtime/typescript-mailbox-lanes.ts",
           "src/runtime/typescript-mailbox-worker.ts",
           "src/runtime/watch-refresh-coordinator.ts",

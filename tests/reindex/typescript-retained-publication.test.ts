@@ -81,3 +81,55 @@ test('publishes retained documents while advancing source freshness and runtime 
     await fixture.dispose();
   }
 }, 60_000);
+
+test('reuses runtime query evidence after an unrelated compiler-reference edit and invalidates new callers', async () => {
+  const fixture = new IndexerHistoryFixture();
+  const quiet = (method: string) =>
+    `const operations = { high(input: number): number { return input + 1; }, loww(input: number): number { return input - 1; } };\nexport const untouched = 17;\nexport function quiet(value: number): number { return operations.${method}(value); }\n`;
+  const graphAfterIndex = async () => {
+    await fixture.index({ allowExpensiveRebuild: false });
+    const db = fixture.open();
+    try {
+      const graph = readRuntimeBoundaryGraph(db)!;
+      const fresh = await collectRuntimeBoundaryGraph(db);
+      expect(graph.observations).toEqual(fresh.observations);
+      expect(graph.links).toEqual(fresh.links);
+      expect(graph.frontiers).toEqual(fresh.frontiers);
+      expect(graph.relationGroups).toEqual(fresh.relationGroups);
+      return graph;
+    } finally {
+      db.close();
+    }
+  };
+  try {
+    fixture.write('owner.ts', 'export function value(path: string) { return fetch(path); }\n');
+    fixture.write('consumer.ts', "import { shared } from './bridge.js';\nexport const result = shared('/one');\n");
+    fixture.write('quiet.ts', quiet('high'));
+    await fixture.index({ skipIfUnchanged: false, allowExpensiveRebuild: true });
+    fixture.startService();
+    fixture.write('quiet.ts', quiet('loww'));
+    await graphAfterIndex();
+    fixture.write('quiet.ts', quiet('high'));
+    const unrelated = await graphAfterIndex();
+    expect(fixture.statuses.join('\n')).toContain('Converting bounded TypeScript');
+    expect(unrelated.phaseRecords?.http?.database?.reads.length).toBeGreaterThan(0);
+    expect(unrelated.coverage.phases?.find((phase) => phase.id === 'http-summary')?.filesVisited).toBe(0);
+    const paths = (graph: typeof unrelated) =>
+      graph.observations.flatMap((observation) =>
+        observation.action === 'http.request'
+          ? observation.keyParts.filter((part) => part.name === 'path').map((part) => part.value)
+          : [],
+      );
+    expect(paths(unrelated)).toContain('/one');
+    expect(paths(unrelated)).not.toContain('/new-caller');
+    fixture.write('quiet.ts', quiet('high') + "import { shared } from './bridge.js';\nshared('/new-caller');\n");
+    const called = await graphAfterIndex();
+    expect(paths(called)).toContain('/new-caller');
+    expect(called.coverage.phases?.find((phase) => phase.id === 'http-summary')?.filesVisited).toBeGreaterThan(0);
+    fixture.write('quiet.ts', quiet('high'));
+    expect(paths(await graphAfterIndex())).not.toContain('/new-caller');
+    fixture.assertCurrent();
+  } finally {
+    await fixture.dispose();
+  }
+}, 60_000);

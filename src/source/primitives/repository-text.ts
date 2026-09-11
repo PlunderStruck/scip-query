@@ -5,6 +5,7 @@ import { decodeReindexMetadata } from '../../domain/reindex-metadata.js';
 import { listProjectFiles } from '../../platform/project-files.js';
 import type { ScipDatabase } from '../../storage/db.js';
 import { createPerDbValue } from '../../storage/per-db-cache.js';
+import { recordSourceTextAccess, recordSourceEvidenceUnavailable } from '../../domain/file-access-recorder.js';
 import {
   InputTooLargeError,
   isMissingProjectFileError,
@@ -84,12 +85,20 @@ export function readRepositoryTextFile(db: ScipDatabase, candidatePath: string):
   try {
     bytes = readProjectFile(db.config.projectRoot, relativePath, { inputKind: 'repository text file' });
   } catch (error) {
+    recordSourceEvidenceUnavailable(relativePath);
     if (isMissingProjectFileError(error) || error instanceof InputTooLargeError) return null;
     throw error;
   }
+  // Text classification (including a NUL-byte rejection) is derived from these
+  // bytes. Record them before decoding, which can remove a UTF-8 BOM. Invalid
+  // UTF-8 cannot be represented losslessly by the source-text recorder.
+  recordSourceTextAccess(relativePath, bytes.toString('utf8'));
   const text = decodeText(bytes);
-  if (text === null) return null;
-  return repositoryTextFile(relativePath, bytes, text, indexedFingerprintMap(db), indexedDocumentSet(db));
+  if (text === null) {
+    if (!isUtf8(bytes)) recordSourceEvidenceUnavailable(relativePath);
+    return null;
+  }
+  return repositoryTextFile(relativePath, bytes, text, indexedSourceFingerprints(db), indexedDocumentSet(db));
 }
 
 /** Visits current UTF-8 project files without retaining every file body in memory. */
@@ -99,7 +108,7 @@ export function scanRepositoryText(
   visit: (file: RepositoryTextFile, matchedLiteralIndexes: readonly number[]) => void,
 ): RepositoryTextScanResult {
   const paths = repositoryProjectPaths(db).filter((relativePath) => !opts.scope || relativePath.includes(opts.scope));
-  const fingerprints = indexedFingerprintMap(db);
+  const fingerprints = indexedSourceFingerprints(db);
   const indexedDocuments = indexedDocumentSet(db);
   const skippedBinaryPaths: string[] = [];
   const skippedUnreadablePaths: string[] = [];
@@ -252,7 +261,8 @@ function indexedDocumentSet(db: ScipDatabase): ReadonlySet<string> {
   );
 }
 
-function indexedFingerprintMap(db: ScipDatabase): ReadonlyMap<string, string> {
+/** Source hashes attached to this reader's compiler generation, used to establish semantic freshness. */
+export function indexedSourceFingerprints(db: ScipDatabase): ReadonlyMap<string, string> {
   return INDEXED_FINGERPRINTS.get(db, () => decodeIndexedFingerprints(db.generation.metadataRaw));
 }
 

@@ -1,4 +1,5 @@
 import type { ScipDatabase } from './db.js';
+import { isRecordingDatabaseReads } from './database-read-proof.js';
 import { profileEnabled, profileSpan, profileWorkIdentity } from '../instrumentation/profile.js';
 import {
   FILE_EVIDENCE_KINDS,
@@ -229,9 +230,13 @@ export const EVIDENCE_PRODUCT_MANIFEST: readonly EvidenceProductManifestEntry[] 
 
 export function createFileEvidenceProduct<T>(opts: FileEvidenceProductOptions<T>): FileEvidenceProduct<T> {
   const profileIdentities = new Map<string, string>();
+  const sourceOnly = opts.invalidation.dependsOn.every((input) => input === 'content-hash' || input === 'tool-version');
   return {
     kind: opts.kind,
     read(db, relativePath, contentHash) {
+      // A persisted derivation hides the compiler queries that produced it.
+      // Source-only products remain covered by the phase's source/build proof.
+      if (!sourceOnly && isRecordingDatabaseReads(db.db)) return null;
       let hit = false;
       let payloadBytes = 0;
       let workIdentity: string | undefined;
@@ -277,6 +282,7 @@ export function createFileEvidenceProduct<T>(opts: FileEvidenceProductOptions<T>
       );
     },
     has(db, relativePath, contentHash) {
+      if (!sourceOnly && isRecordingDatabaseReads(db.db)) return false;
       return hasCachedFileEvidence(db, opts.kind, relativePath, contentHash);
     },
     write(db, relativePath, contentHash, value) {
@@ -301,6 +307,7 @@ export function createProjectEvidenceProduct<T>(opts: ProjectEvidenceProductOpti
   return {
     kind: opts.kind,
     read(db, cacheKey, projectFingerprint) {
+      if (isRecordingDatabaseReads(db.db)) return null;
       let hit = false;
       let payloadBytes = 0;
       let workIdentity: string | undefined;

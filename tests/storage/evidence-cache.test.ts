@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { withDatabaseReadRecording } from '../../src/storage/database-read-proof.js';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -501,6 +502,33 @@ describe('evidence cache', () => {
       expect(PROJECT_PRODUCT_TEST.read(db, 'scope:all', 'project-a')).toEqual({ marker: 'cached' });
       expect(readCachedProjectEvidence(db, 'file-dependency-graph', 'scope:all', 'project-a')).not.toBeNull();
       expect(PROJECT_PRODUCT_TEST.read(db, 'scope:all', 'project-b')).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('exposes compiler-dependent work during read capture while retaining source-only products', () => {
+    const db = openDb();
+    const definitions = createFileEvidenceProduct<string>({
+      kind: 'file-definitions',
+      invalidation: evidenceProductInvalidation('file-definitions'),
+      serialize: (value) => value,
+      deserialize: (value) => value,
+    });
+    try {
+      definitions.write(db, FILE, 'proof-input', 'compiler-derived');
+      PRODUCT_TEST.write(db, FILE, 'proof-input', { marker: 'source-derived' });
+      PROJECT_PRODUCT_TEST.write(db, 'proof-scope', 'project-proof', { marker: 'project-derived' });
+      expect(definitions.read(db, FILE, 'proof-input')).toBe('compiler-derived');
+      expect(definitions.has(db, FILE, 'proof-input')).toBe(true);
+      withDatabaseReadRecording(db.db, () => {
+        expect(definitions.read(db, FILE, 'proof-input')).toBeNull();
+        expect(definitions.has(db, FILE, 'proof-input')).toBe(false);
+        expect(PROJECT_PRODUCT_TEST.read(db, 'proof-scope', 'project-proof')).toBeNull();
+        expect(PRODUCT_TEST.read(db, FILE, 'proof-input')).toEqual({ marker: 'source-derived' });
+      });
+      expect(definitions.read(db, FILE, 'proof-input')).toBe('compiler-derived');
+      expect(PROJECT_PRODUCT_TEST.read(db, 'proof-scope', 'project-proof')).toEqual({ marker: 'project-derived' });
     } finally {
       db.close();
     }

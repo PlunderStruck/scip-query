@@ -66,6 +66,7 @@ export default defineConfig(() => {
         'typescript-mailbox-worker': 'src/runtime/typescript-mailbox-worker.ts',
         'query-service-server': 'src/runtime/query-service-server.ts',
         'watch-server': 'src/runtime/watch-server.ts',
+        'repository-cache-worker': 'src/runtime/repository-cache-worker.ts',
         postinstall: 'src/runtime/postinstall.ts',
       },
       format: ['esm'],

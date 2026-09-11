@@ -2,6 +2,8 @@ import { sha256Hex as hashText, evidenceProductVersionKey } from '../../storage/
 import { withFileAccessRecording } from '../../domain/file-access-recorder.js';
 import { readProjectFileText } from '../../source/primitives/project-file-boundary.js';
 import { ScipDatabase } from '../../storage/db.js';
+import { databaseReadsMatch, withDatabaseReadRecording } from '../../storage/database-read-proof.js';
+import { indexedSourceFingerprints } from '../../source/primitives/repository-text.js';
 import type { BoundaryObservation, RuntimeBoundaryBodySummary, RuntimePhaseRecord } from './types.js';
 
 /** Inputs and immutable output of one completed synchronous runtime phase. */
@@ -35,8 +37,9 @@ interface PhaseResult {
 }
 
 /**
- * Reuse requires independently verified identical compiler documents. File reads
- * include negative queries and intermediate helpers, not only displayed proofs.
+ * Reuse requires identical compiler documents or identical results for every
+ * recorded database read. File reads include intermediate helpers and their
+ * indexed source fingerprints, not only displayed proofs.
  * A fresh reader gives every source-derived in-memory cache a cold identity so
  * a cache filled outside the recording cannot hide a dependency.
  */
@@ -73,7 +76,6 @@ function reusablePhase<Result extends PhaseResult>(opts: {
 }): boolean {
   const previous = opts.previous;
   if (
-    !opts.compilerFactsUnchanged ||
     !previous ||
     previous.build !== evidenceProductVersionKey() ||
     previous.scope !== opts.scope ||
@@ -84,13 +86,16 @@ function reusablePhase<Result extends PhaseResult>(opts: {
   ) {
     return false;
   }
-  return previous.sources.every(
+  const fingerprints = indexedSourceFingerprints(opts.db);
+  const sourcesMatch = previous.sources.every(
     (source) =>
       source &&
       typeof source.file === 'string' &&
       typeof source.hash === 'string' &&
+      (fingerprints.get(source.file) ?? null) === source.indexedHash &&
       currentSourceHash(opts.db, source.file) === source.hash,
   );
+  return sourcesMatch && (opts.compilerFactsUnchanged || databaseReadsMatch(opts.db.db, previous.database));
 }
 
 function recordRuntimePhase<Result extends PhaseResult>(
@@ -105,28 +110,33 @@ function recordRuntimePhase<Result extends PhaseResult>(
   const hashes = new Map<string, string>();
   const sourceTexts = new Map<string, string>();
   let available = true;
-  const result = withFileAccessRecording(
-    (file) => files.add(file.replace(/\\/g, '/')),
-    () => opts.compute(reader),
-    undefined,
-    {
-      source(file, source) {
-        file = file.replace(/\\/g, '/');
-        if (sourceTexts.get(file) === source) return;
-        sourceTexts.set(file, source);
-        const hash = hashText(source);
-        const prior = hashes.get(file);
-        if (prior !== undefined && prior !== hash) available = false;
-        hashes.set(file, hash);
+  const { result, proof } = withDatabaseReadRecording(reader.db, () =>
+    withFileAccessRecording(
+      (file) => files.add(file.replace(/\\/g, '/')),
+      () => opts.compute(reader),
+      undefined,
+      {
+        source(file, source) {
+          file = file.replace(/\\/g, '/');
+          if (sourceTexts.get(file) === source) return;
+          sourceTexts.set(file, source);
+          const hash = hashText(source);
+          const prior = hashes.get(file);
+          if (prior !== undefined && prior !== hash) available = false;
+          hashes.set(file, hash);
+        },
+        unavailable() {
+          available = false;
+        },
       },
-      unavailable() {
-        available = false;
-      },
-    },
+    ),
   );
   // Require the actual bytes used by the computation, not bytes read later and
   // incorrectly attached to an older answer. Unrecorded reads prevent retention.
-  const sources = [...files].sort().map((file) => ({ file, hash: hashes.get(file) }));
+  const fingerprints = indexedSourceFingerprints(reader);
+  const sources = [...files]
+    .sort()
+    .map((file) => ({ file, hash: hashes.get(file), indexedHash: fingerprints.get(file) ?? null }));
   if (
     !available ||
     result.errors.length > 0 ||
@@ -141,7 +151,8 @@ function recordRuntimePhase<Result extends PhaseResult>(
       build: evidenceProductVersionKey(),
       scope: opts.scope,
       seeds: opts.seeds,
-      sources: sources as { file: string; hash: string }[],
+      sources: sources as RuntimePhaseRecord<Result>['sources'],
+      database: proof,
       result: structuredClone(result),
     },
   };

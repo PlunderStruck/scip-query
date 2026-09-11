@@ -1,4 +1,5 @@
 import type { ScipDatabase } from '../../storage/db.js';
+import type { DatabaseReadProof } from '../../storage/database-read-proof.js';
 import type { SyntaxNode } from '../../source/ast/ast-types.js';
 import type { IndexedDefinition } from '../../domain/types.js';
 import type {
@@ -164,7 +165,8 @@ export interface RuntimePhaseRecord<Result> {
   build: string;
   scope: string;
   seeds: string;
-  sources: { file: string; hash: string }[];
+  sources: { file: string; hash: string; indexedHash: string | null }[];
+  database?: DatabaseReadProof;
   result: Result;
 }
 

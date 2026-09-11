@@ -1,4 +1,6 @@
 import { rmSync, writeFileSync } from 'node:fs';
+import Database from 'better-sqlite3';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { expect, test, vi } from 'vitest';
 import { materializeRuntimePhase, runtimePhaseScope } from '../../src/analysis/runtime-boundaries/phase-inputs.js';
@@ -8,6 +10,9 @@ import { getSourceText } from '../../src/source/primitives/source-text.js';
 import { recordFileAccess } from '../../src/domain/file-access-recorder.js';
 import { createPerDbCache } from '../../src/storage/per-db-cache.js';
 import { withSourceDb } from '../properties/fixture.js';
+import { ScipDatabase } from '../../src/storage/db.js';
+import { readRepositoryTextFile } from '../../src/source/primitives/repository-text.js';
+import { scipOccurrenceTargetsForFile } from '../../src/symbols/graph/scip-occurrence-call-targets.js';
 
 test('retains a negative phase result only while all consumed inputs match', () => {
   withSourceDb({ 'helper.ts': 'old', 'unrelated.ts': 'one' }, (db, root) => {
@@ -38,13 +43,13 @@ test('retains a negative phase result only while all consumed inputs match', () 
   });
 });
 
-test('requires unchanged compiler data, input scope, seeds and build', () => {
+test('requires a compiler proof, input scope, seeds and build', () => {
   withSourceDb({ 'a.ts': 'const a = 1;' }, (db) => {
     const compute = vi.fn((reader: typeof db) => ({ errors: [], value: getSourceText(reader, 'a.ts') }));
     const opts = { db, scope: runtimePhaseScope(db, ['a.ts']), seeds: 'seed', compilerFactsUnchanged: true, compute };
     const first = materializeRuntimePhase(opts);
     for (const changed of [
-      { compilerFactsUnchanged: false },
+      { compilerFactsUnchanged: false, previous: { ...first.record!, database: undefined } },
       { scope: 'changed' },
       { seeds: 'changed' },
       { previous: { ...first.record!, build: 'old' } },
@@ -171,5 +176,154 @@ test('retained output is isolated from later result mutation', () => {
     expect(second.result.values).toEqual(['original']);
     second.result.values.length = 0;
     expect(materializeRuntimePhase({ ...opts, previous: second.record }).result.values).toEqual(['original']);
+  });
+});
+
+test('validates the actual compiler reads across unrelated changes and new or removed callers', () => {
+  withSourceDb({ 'helper.ts': 'export function helper() {}', 'other.ts': '' }, (initial) => {
+    const writer = new Database(initial.config.dbPath);
+    writer.exec('CREATE TABLE phase_calls (caller TEXT, callee TEXT)');
+    const compute = vi.fn((db: ScipDatabase) => ({
+      errors: [] as string[],
+      source: getSourceText(db, 'helper.ts'),
+      callers: db.all('SELECT caller FROM phase_calls WHERE callee = ?', 'helper'),
+    }));
+    type Phase = ReturnType<typeof materializeRuntimePhase<ReturnType<typeof compute>>>;
+    const run = (previous?: Phase['record']) => {
+      const db = new ScipDatabase(initial.config);
+      try {
+        return materializeRuntimePhase({
+          db,
+          scope: 'scope',
+          seeds: 'seed',
+          compilerFactsUnchanged: false,
+          previous,
+          compute,
+        });
+      } finally {
+        db.close();
+      }
+    };
+    try {
+      const first = run();
+      expect(first.record?.database?.reads).toHaveLength(1);
+      writer.exec("INSERT INTO phase_calls VALUES ('other', 'unrelated')");
+      expect(run(first.record).reused).toBe(true);
+      writer.exec("INSERT INTO phase_calls VALUES ('entry', 'helper')");
+      const called = run(first.record);
+      expect(called.reused).toBe(false);
+      expect(called.result.callers).toEqual([{ caller: 'entry' }]);
+      expect(called.result).toEqual(run().result);
+      writer.exec("DELETE FROM phase_calls WHERE callee = 'helper'");
+      const removed = run(called.record);
+      expect(removed.reused).toBe(false);
+      expect(removed.result.callers).toEqual([]);
+    } finally {
+      writer.close();
+    }
+  });
+});
+
+test('source freshness metadata is an input even when SQLite and source bytes are unchanged', () => {
+  withSourceDb({ 'helper.ts': 'export const helper = 1;', 'other.ts': '' }, (initial, root) => {
+    const sourceHash = createHash('sha256').update('export const helper = 1;').digest('hex');
+    const metadata = (helper: string, other: string) =>
+      writeFileSync(
+        join(root, 'meta.json'),
+        JSON.stringify({
+          version: 2,
+          status: 'complete',
+          fingerprint: {
+            files: [
+              { path: 'helper.ts', hash: helper },
+              { path: 'other.ts', hash: other },
+            ],
+          },
+        }),
+      );
+    const compute = (db: ScipDatabase) => ({
+      errors: [] as string[],
+      freshness: readRepositoryTextFile(db, 'helper.ts')!.freshness.semantic.state,
+    });
+    type Phase = ReturnType<typeof materializeRuntimePhase<ReturnType<typeof compute>>>;
+    const run = (previous?: Phase['record']) => {
+      const db = new ScipDatabase(initial.config);
+      try {
+        return materializeRuntimePhase({
+          db,
+          scope: 'scope',
+          seeds: 'seed',
+          compilerFactsUnchanged: true,
+          previous,
+          compute,
+        });
+      } finally {
+        db.close();
+      }
+    };
+    metadata(sourceHash, 'old');
+    const first = run();
+    expect(first.result.freshness).toBe('aligned');
+    expect(first.record?.sources).toEqual([{ file: 'helper.ts', hash: sourceHash, indexedHash: sourceHash }]);
+    metadata(sourceHash, 'new');
+    expect(run(first.record).reused).toBe(true);
+    metadata('different', 'new');
+    const stale = run(first.record);
+    expect(stale.reused).toBe(false);
+    expect(stale.result.freshness).toBe('stale');
+    metadata(sourceHash, 'new');
+    expect(run(stale.record).result.freshness).toBe('aligned');
+  });
+});
+
+test('the separate SCIP artifact fallback cannot be certified by SQLite reads, including a missing artifact', () => {
+  withSourceDb({ 'helper.ts': 'export function helper() {}' }, (db) => {
+    const compute = vi.fn((reader: ScipDatabase) => ({
+      errors: [] as string[],
+      targets: scipOccurrenceTargetsForFile(reader, 'helper.ts'),
+    }));
+    const opts = { db, scope: 'scope', seeds: 'seed', compilerFactsUnchanged: false, compute };
+    const first = materializeRuntimePhase(opts);
+    expect(first.result.targets).toBeNull();
+    expect(first.record).toBeDefined();
+    expect(first.record!.database).toBeUndefined();
+    expect(materializeRuntimePhase({ ...opts, previous: first.record }).reused).toBe(false);
+    expect(compute).toHaveBeenCalledTimes(2);
+  });
+});
+
+test.each(['\uFEFFexport const helper = 1;', 'export const helper = "\u0000";'])(
+  'records the original bytes for text classification and BOM decoding: %j',
+  (source) => {
+    withSourceDb({ 'helper.ts': source }, (db, root) => {
+      const compute = (reader: ScipDatabase) => ({
+        errors: [] as string[],
+        raw: getSourceText(reader, 'helper.ts'),
+        text: readRepositoryTextFile(reader, 'helper.ts')?.text ?? null,
+      });
+      const opts = { db, scope: 'scope', seeds: 'seed', compilerFactsUnchanged: false, compute };
+      const first = materializeRuntimePhase(opts);
+      expect(first.record).toBeDefined();
+      expect(materializeRuntimePhase({ ...opts, previous: first.record }).reused).toBe(true);
+      writeFileSync(join(root, 'helper.ts'), 'export const helper = "changed";');
+      const changed = materializeRuntimePhase({ ...opts, previous: first.record });
+      expect(changed.reused).toBe(false);
+      expect(changed.result.text).toBe('export const helper = "changed";');
+    });
+  },
+);
+
+test('invalid UTF-8 cannot establish an exact source-text proof', () => {
+  withSourceDb({ 'helper.ts': '' }, (db, root) => {
+    writeFileSync(join(root, 'helper.ts'), Buffer.from([255]));
+    const result = materializeRuntimePhase({
+      db,
+      scope: 'scope',
+      seeds: 'seed',
+      compilerFactsUnchanged: false,
+      compute: (reader) => ({ errors: [] as string[], text: readRepositoryTextFile(reader, 'helper.ts') }),
+    });
+    expect(result.result.text).toBeNull();
+    expect(result.record).toBeUndefined();
   });
 });

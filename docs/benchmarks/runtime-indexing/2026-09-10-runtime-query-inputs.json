@@ -1,0 +1,420 @@
+{
+  "baseCommit": "6b0f3c66",
+  "scope": "Five complete sequential index requests on a private LaunchPoint copy with one owned compiler service. No agent benchmarks or live watcher changes.",
+  "measuredArchiveSha256": "e28dc5dab2116b4115aaf308267453fe6494e64340d332e88d454a8c6ec5f6c4",
+  "shippedFilesVerified": 461,
+  "finalSourceSha256": {
+    "src/analysis/runtime-boundaries/graph.ts": "394eee14322794de4d6c4b8ef617306f08f526bc71bacf84c68bb4a9b89241ef",
+    "src/analysis/runtime-boundaries/phase-inputs.ts": "7283fa35d218f48215d1b45760926e2ef4d654ad419dc80f0e23761094aad714",
+    "src/analysis/runtime-boundaries/types.ts": "ef3a83d8d44f8a3123ad532641f8fbdaa9ae28602db8fd5c475895ffabd22c75",
+    "src/runtime/repository-cache-maintenance.ts": "fbe3dfee10a7a371baf2c1690855c8a195c9c38dac9e27904655b99f26973c93",
+    "src/runtime/repository-cache-worker.ts": "535ae1b7750d9ad883d3b95d8fe5d46504224b13cc8bd3de3a998042da8acd52",
+    "src/runtime/watch-server.ts": "6fa975f9405b46c592c235c5c399e3a72a205a0d046d06307646df6ac37a0c89",
+    "src/source/primitives/repository-text.ts": "49c3b5c4e658892fbfb6896ad8d6111d55254e363a9e05b7474e6a9c32acabdc",
+    "src/storage/database-read-proof.ts": "c0c62aac95a383a1f26da93e5852e3e4074441f08d6218d88d156e32456199d9",
+    "src/storage/db.ts": "f641618891e839a68b781fcf34f6c96b006155d629e4f342ae5f3a3cbe86813f",
+    "src/storage/evidence-products.ts": "a974dab08ed8eb7b87efe8c1eea9dfb69864e937c3630f37134b0a224bda227c",
+    "src/symbols/graph/scip-occurrence-call-targets.ts": "ae88e29dae74f009ddaa3cba60e39dca8f3a5668653d81f603879e6434d567af"
+  },
+  "measurementRevisionNote": "The measured package contains the final SQL/source input proof implementation. The final reviewed source additionally moves watcher cache cleanup into a bounded child after validation exposed a heartbeat stall; this later service change is tested separately and is not included in these timings.",
+  "conditions": {
+    "sourceFiles": 9296,
+    "typescriptInputs": 9221,
+    "editedFile": "src/lib/campaigns/warmup/infra/list-state-queries.ts",
+    "affectedCompilerDocuments": 5603,
+    "allowExpensiveRebuild": false,
+    "sampleIntervalMs": 250,
+    "memoryInterpretation": "Aggregate process RSS includes shared pages and is not unique physical memory. Compiler worker threads share the watch-service process.",
+    "scopeLimit": "These are specific sequential edits to one file with a broad compiler dependency closure, not a claim about every edit or repository."
+  },
+  "baselinePreparation": "Refreshed runtime evidence with the existing augmentation/publication owners and unchanged compiler metadata. Both SQL proofs were present before edits.",
+  "stages": [
+    {
+      "stage": "first-worker-edit",
+      "wallSeconds": 216.53825130395126,
+      "peakGiB": 12.63018798828125,
+      "baselineGiB": 0.2506866455078125,
+      "sampleCount": 855,
+      "phases": [
+        {
+          "id": "direct-extraction",
+          "durationMs": 2190.1508139999933,
+          "inputFacts": 5603,
+          "outputFacts": 6579,
+          "filesVisited": 5603,
+          "filesReused": 3693,
+          "factsReused": 522,
+          "factsInvalidated": 6579
+        },
+        {
+          "id": "http-summary",
+          "durationMs": 22040.34599,
+          "inputFacts": 7103,
+          "outputFacts": 82,
+          "filesVisited": 295
+        },
+        {
+          "id": "http-mount",
+          "durationMs": 465.5992479999841,
+          "inputFacts": 7185,
+          "outputFacts": 0,
+          "filesVisited": 9296
+        },
+        {
+          "id": "carrier",
+          "durationMs": 21236.157145000005,
+          "inputFacts": 7185,
+          "outputFacts": 0,
+          "filesVisited": 189
+        },
+        {
+          "id": "relations",
+          "durationMs": 6.452401999995345,
+          "inputFacts": 7185,
+          "outputFacts": 666
+        },
+        {
+          "id": "links",
+          "durationMs": 0.9501840000157245,
+          "inputFacts": 666,
+          "outputFacts": 2
+        },
+        {
+          "id": "frontiers",
+          "durationMs": 125.46557900001062,
+          "inputFacts": 7185,
+          "outputFacts": 6232
+        }
+      ]
+    },
+    {
+      "stage": "warm-body-edit",
+      "wallSeconds": 15.702116951928474,
+      "peakGiB": 10.322185516357422,
+      "baselineGiB": 9.775810241699219,
+      "sampleCount": 62,
+      "phases": [
+        {
+          "id": "direct-extraction",
+          "durationMs": 1490.6399689999998,
+          "inputFacts": 5603,
+          "outputFacts": 6579,
+          "filesVisited": 5603,
+          "filesReused": 3693,
+          "factsReused": 522,
+          "factsInvalidated": 6579
+        },
+        {
+          "id": "http-summary",
+          "durationMs": 84.4969430000001,
+          "inputFacts": 7103,
+          "outputFacts": 82,
+          "filesVisited": 0,
+          "filesReused": 295,
+          "factsReused": 98,
+          "factsInvalidated": 0
+        },
+        {
+          "id": "http-mount",
+          "durationMs": 455.9359659999991,
+          "inputFacts": 7185,
+          "outputFacts": 0,
+          "filesVisited": 9296
+        },
+        {
+          "id": "carrier",
+          "durationMs": 78.5624829999997,
+          "inputFacts": 7185,
+          "outputFacts": 0,
+          "filesVisited": 0,
+          "filesReused": 189,
+          "factsReused": 0,
+          "factsInvalidated": 0
+        },
+        {
+          "id": "relations",
+          "durationMs": 6.876077000000805,
+          "inputFacts": 7185,
+          "outputFacts": 666
+        },
+        {
+          "id": "links",
+          "durationMs": 0.9593819999990956,
+          "inputFacts": 666,
+          "outputFacts": 2
+        },
+        {
+          "id": "frontiers",
+          "durationMs": 131.9134240000003,
+          "inputFacts": 7185,
+          "outputFacts": 6232
+        }
+      ]
+    },
+    {
+      "stage": "warm-inferred-edit",
+      "wallSeconds": 17.21310611499939,
+      "peakGiB": 10.261085510253906,
+      "baselineGiB": 9.57357406616211,
+      "sampleCount": 68,
+      "phases": [
+        {
+          "id": "direct-extraction",
+          "durationMs": 1429.0724149999987,
+          "inputFacts": 5603,
+          "outputFacts": 6579,
+          "filesVisited": 5603,
+          "filesReused": 3693,
+          "factsReused": 522,
+          "factsInvalidated": 6579
+        },
+        {
+          "id": "http-summary",
+          "durationMs": 595.0773749999989,
+          "inputFacts": 7103,
+          "outputFacts": 82,
+          "filesVisited": 0,
+          "filesReused": 295,
+          "factsReused": 98,
+          "factsInvalidated": 0
+        },
+        {
+          "id": "http-mount",
+          "durationMs": 462.6442049999987,
+          "inputFacts": 7185,
+          "outputFacts": 0,
+          "filesVisited": 9296
+        },
+        {
+          "id": "carrier",
+          "durationMs": 542.3560010000001,
+          "inputFacts": 7185,
+          "outputFacts": 0,
+          "filesVisited": 0,
+          "filesReused": 189,
+          "factsReused": 0,
+          "factsInvalidated": 0
+        },
+        {
+          "id": "relations",
+          "durationMs": 7.851398999999219,
+          "inputFacts": 7185,
+          "outputFacts": 666
+        },
+        {
+          "id": "links",
+          "durationMs": 1.1498530000008031,
+          "inputFacts": 666,
+          "outputFacts": 2
+        },
+        {
+          "id": "frontiers",
+          "durationMs": 130.3955509999996,
+          "inputFacts": 7185,
+          "outputFacts": 6232
+        }
+      ]
+    },
+    {
+      "stage": "warm-runtime-edit",
+      "wallSeconds": 60.78606306598522,
+      "peakGiB": 11.626472473144531,
+      "baselineGiB": 9.463371276855469,
+      "sampleCount": 240,
+      "phases": [
+        {
+          "id": "direct-extraction",
+          "durationMs": 1465.5110280000008,
+          "inputFacts": 5603,
+          "outputFacts": 6580,
+          "filesVisited": 5603,
+          "filesReused": 3693,
+          "factsReused": 522,
+          "factsInvalidated": 6579
+        },
+        {
+          "id": "http-summary",
+          "durationMs": 21800.981468000005,
+          "inputFacts": 7104,
+          "outputFacts": 82,
+          "filesVisited": 295
+        },
+        {
+          "id": "http-mount",
+          "durationMs": 464.0222700000013,
+          "inputFacts": 7186,
+          "outputFacts": 0,
+          "filesVisited": 9296
+        },
+        {
+          "id": "carrier",
+          "durationMs": 21128.098611,
+          "inputFacts": 7186,
+          "outputFacts": 0,
+          "filesVisited": 189
+        },
+        {
+          "id": "relations",
+          "durationMs": 5.620193000002473,
+          "inputFacts": 7186,
+          "outputFacts": 667
+        },
+        {
+          "id": "links",
+          "durationMs": 0.8613860000041313,
+          "inputFacts": 667,
+          "outputFacts": 2
+        },
+        {
+          "id": "frontiers",
+          "durationMs": 120.5117820000014,
+          "inputFacts": 7186,
+          "outputFacts": 6233
+        }
+      ]
+    },
+    {
+      "stage": "restore",
+      "wallSeconds": 186.8963523019338,
+      "peakGiB": 12.261226654052734,
+      "baselineGiB": 9.459705352783203,
+      "sampleCount": 738,
+      "phases": [
+        {
+          "id": "direct-extraction",
+          "durationMs": 1705.1675479999976,
+          "inputFacts": 5603,
+          "outputFacts": 6579,
+          "filesVisited": 5603,
+          "filesReused": 3693,
+          "factsReused": 522,
+          "factsInvalidated": 6580
+        },
+        {
+          "id": "http-summary",
+          "durationMs": 22197.811382999993,
+          "inputFacts": 7103,
+          "outputFacts": 82,
+          "filesVisited": 295
+        },
+        {
+          "id": "http-mount",
+          "durationMs": 462.0618110000214,
+          "inputFacts": 7185,
+          "outputFacts": 0,
+          "filesVisited": 9296
+        },
+        {
+          "id": "carrier",
+          "durationMs": 20802.622704999987,
+          "inputFacts": 7185,
+          "outputFacts": 0,
+          "filesVisited": 189
+        },
+        {
+          "id": "relations",
+          "durationMs": 13.05980400001863,
+          "inputFacts": 7185,
+          "outputFacts": 666
+        },
+        {
+          "id": "links",
+          "durationMs": 1.0788689999899361,
+          "inputFacts": 666,
+          "outputFacts": 2
+        },
+        {
+          "id": "frontiers",
+          "durationMs": 121.68792300001951,
+          "inputFacts": 7185,
+          "outputFacts": 6232
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "baselineMatchesPrevious": true,
+    "stages": [
+      {
+        "stage": "first-worker-edit",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "warm-body-edit",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "warm-inferred-edit",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "warm-runtime-edit",
+        "added": {
+          "observations": 1,
+          "relationGroups": 1,
+          "links": 0,
+          "frontiers": 1
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "restore",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      }
+    ],
+    "restoredFileCoverageMatches": true,
+    "sourceHash": "f5b5810aa873230a614d487e026055296e3dedaf06db3357e44616400101a2e7",
+    "probeSymbolsRemoved": true,
+    "quickCheck": "ok",
+    "foreignKeyCheck": "ok",
+    "temporaryWatcherStopped": true
+  },
+  "comparison": {
+    "priorWarmSqlSeconds": 60.2929,
+    "currentWarmSqlSeconds": 17.21310611499939,
+    "priorWarmSqlPeakGiB": 11.9371,
+    "currentWarmSqlPeakGiB": 10.261085510253906
+  },
+  "remainingLimits": [
+    "Cold compiler startup remains about 217s.",
+    "Adding an HTTP request changes phase inputs and still takes about 61s.",
+    "Removing an exported symbol requires broad compiler emission; restoration took about 187s.",
+    "The retained compiler service still uses roughly 9.5GiB."
+  ],
+  "artifactsRoot": "/tmp/scip-query-fast-install-20260910-jWoJur/sql-final-incremental",
+  "finalValidation": {
+    "tests": 3905,
+    "testFiles": 424,
+    "fullSuiteDurationSeconds": 357.33,
+    "typecheck": "passed",
+    "lint": "passed",
+    "publicApiDigest": "9217c44ff0f30a77",
+    "skillLinks": "passed",
+    "introducedReviewFindings": 0,
+    "note": "Full suite includes the subsequent watcher cache-maintenance child fix."
+  }
+}

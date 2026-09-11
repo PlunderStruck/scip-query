@@ -611,6 +611,7 @@ describe('runtime-boundary evidence', () => {
       );
       expect(forced.observations).toEqual(baseline.observations);
       expect(forced.coverage.filesReused).toBe(1);
+      expect(forced.coverage.phases?.find((phase) => phase.id === 'http-summary')?.factsReused).toBeUndefined();
       expect(forced.coverage.phases?.find((phase) => phase.id === 'http-summary')?.durationMs).toBeGreaterThan(0);
     } finally {
       db.close();
