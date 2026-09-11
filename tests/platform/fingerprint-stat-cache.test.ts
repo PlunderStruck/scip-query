@@ -8,6 +8,7 @@ import {
   projectFileFingerprintCacheStats,
   rememberProjectFileFingerprint,
   resetProjectFileFingerprintCacheForTest,
+  withProjectFileFingerprintCache,
 } from '../../src/platform/fingerprint-stat-cache.js';
 
 const tempDirs: string[] = [];
@@ -21,6 +22,41 @@ afterEach(() => {
 });
 
 describe('fingerprint stat cache', () => {
+  it('keeps overlapping asynchronous index directories separate and restores the default scope', async () => {
+    const projectRoot = temporaryDirectory('scip-query-stat-cache-scopes-');
+    const first = temporaryDirectory('scip-query-stat-cache-first-');
+    const second = temporaryDirectory('scip-query-stat-cache-second-');
+    const stats = { dev: 1, ino: 2, mtimeMs: 10, ctimeMs: 11, size: 4 };
+    let release!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const pending = withProjectFileFingerprintCache(projectRoot, first, async () => {
+      rememberProjectFileFingerprint(projectRoot, 'value.ts', 'file', stats, { hash: 'first', size: 4 });
+      await ready;
+      expect(lookupProjectFileFingerprint(projectRoot, 'value.ts', 'file', stats)?.hash).toBe('first');
+      persistProjectFileFingerprintCache(projectRoot);
+    });
+    await withProjectFileFingerprintCache(projectRoot, second, async () => {
+      expect(lookupProjectFileFingerprint(projectRoot, 'value.ts', 'file', stats)).toBeUndefined();
+      rememberProjectFileFingerprint(projectRoot, 'value.ts', 'file', stats, { hash: 'second', size: 4 });
+      release();
+      await pending;
+      expect(lookupProjectFileFingerprint(projectRoot, 'value.ts', 'file', stats)?.hash).toBe('second');
+      persistProjectFileFingerprintCache(projectRoot);
+    });
+    expect(lookupProjectFileFingerprint(projectRoot, 'value.ts', 'file', stats)).toBeUndefined();
+    resetProjectFileFingerprintCacheForTest(projectRoot);
+    for (const [directory, hash] of [
+      [first, 'first'],
+      [second, 'second'],
+    ]) {
+      withProjectFileFingerprintCache(projectRoot, directory!, () => {
+        expect(lookupProjectFileFingerprint(projectRoot, 'value.ts', 'file', stats)?.hash).toBe(hash);
+      });
+    }
+  });
+
   it('reuses a hash only when inode, size, mtime, ctime, and kind match', () => {
     const projectRoot = temporaryDirectory('scip-query-stat-cache-');
     const stats = { dev: 1, ino: 2, mtimeMs: 10, ctimeMs: 11, size: 4 };

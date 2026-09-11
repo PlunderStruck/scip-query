@@ -19,12 +19,41 @@ import {
   inspectSqliteGeneration,
   inspectLocalSqliteGenerationRetention,
   promoteReindexArtifacts,
+  publishSqliteAugmentation,
   readSqliteGenerationState,
   refreshSqliteGenerationMetadata,
   sqliteGenerationRoot,
 } from '../../src/reindex/sqlite-generation-store.js';
 
 describe('SQLite generation handoff', () => {
+  test.each(['reindex', 'metadata'] as const)(
+    'retains the actual augmentation artifacts as recovery after %s publication',
+    async (next) => {
+      const fixture = createFixture();
+      await publishSqliteAugmentation(fixture.paths.outputDb, (candidate) => {
+        const db = new Database(candidate);
+        try {
+          db.exec("UPDATE generation_value SET value = 'augmented'");
+        } finally {
+          db.close();
+        }
+      });
+      if (next === 'reindex') {
+        promoteReindexArtifacts(fixture.paths);
+      } else {
+        writeFileSync(fixture.paths.metaPath, 'next-meta');
+        refreshSqliteGenerationMetadata(fixture.paths.outputDb, fixture.paths.metaPath);
+      }
+      const state = readSqliteGenerationState(fixture.paths.outputDb)!;
+      const recovery = state.previousGeneration!;
+      expect(readValue(join(dirname(fixture.paths.outputDb), recovery.databasePath))).toBe('augmented');
+      expect(readFileSync(join(dirname(fixture.paths.outputDb), recovery.metadataPath!), 'utf8')).toBe('old-meta');
+      expect(inspectSqliteGeneration(fixture.paths.outputDb, fixture.paths.metaPath)).toEqual(
+        expect.objectContaining({ state: 'current', currentMatches: true, recoveryExists: true }),
+      );
+    },
+  );
+
   test('preserves WAL mode so reopening a publication does not change its file identity', () => {
     const fixture = createFixture();
     const candidate = new Database(fixture.paths.tempOutputDb);

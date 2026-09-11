@@ -1,5 +1,6 @@
 import { closeSync, existsSync, openSync, realpathSync, renameSync, unlinkSync, writeSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { readFileWithinLimit } from './bounded-file.js';
 import { resolveCacheDirPath } from './cache-layout.js';
 import { writeFileCompletely } from '../filesystem/file-descriptor.js';
@@ -38,7 +39,23 @@ interface ProjectFingerprintStatCache {
   stores: number;
 }
 
-const projectCaches = new Map<string, ProjectFingerprintStatCache>();
+const projectCaches = new Map<string, Map<string | null, ProjectFingerprintStatCache>>();
+const cacheScope = new AsyncLocalStorage<{ projectRoot: string; cacheDir: string }>();
+
+/** Use the caller's selected index directory throughout one asynchronous operation. */
+export function withProjectFileFingerprintCache<T>(projectRoot: string, cacheDir: string, run: () => T): T {
+  return cacheScope.run({ projectRoot: canonicalProjectRoot(projectRoot), cacheDir: resolve(cacheDir) }, run);
+}
+
+function selectedCacheDirectory(canonicalRoot: string): string | null {
+  const scope = cacheScope.getStore();
+  return scope?.projectRoot === canonicalRoot ? scope.cacheDir : null;
+}
+
+function existingProjectCache(projectRoot: string): ProjectFingerprintStatCache | undefined {
+  const canonicalRoot = canonicalProjectRoot(projectRoot);
+  return projectCaches.get(canonicalRoot)?.get(selectedCacheDirectory(canonicalRoot));
+}
 
 /**
  * Reuse a content hash when the same path still has the same inode, size,
@@ -90,7 +107,7 @@ export function rememberProjectFileFingerprint(
 }
 
 export function persistProjectFileFingerprintCache(projectRoot: string): void {
-  const cache = projectCaches.get(canonicalProjectRoot(projectRoot));
+  const cache = existingProjectCache(projectRoot);
   if (!cache?.dirty || !cache.cachePath) return;
   try {
     const directory = dirname(cache.cachePath);
@@ -103,7 +120,7 @@ export function persistProjectFileFingerprintCache(projectRoot: string): void {
 }
 
 export function projectFileFingerprintCacheStats(projectRoot: string): { hits: number; stores: number; size: number } {
-  const cache = projectCaches.get(canonicalProjectRoot(projectRoot));
+  const cache = existingProjectCache(projectRoot);
   if (!cache) return { hits: 0, stores: 0, size: 0 };
   return { hits: cache.hits, stores: cache.stores, size: cache.files.size };
 }
@@ -118,10 +135,12 @@ export function resetProjectFileFingerprintCacheForTest(projectRoot?: string): v
 
 function projectFingerprintStatCache(projectRoot: string): ProjectFingerprintStatCache {
   const canonicalRoot = canonicalProjectRoot(projectRoot);
-  const existing = projectCaches.get(canonicalRoot);
+  const selectedDirectory = selectedCacheDirectory(canonicalRoot);
+  const caches = projectCaches.get(canonicalRoot) ?? new Map<string | null, ProjectFingerprintStatCache>();
+  const existing = caches.get(selectedDirectory);
   if (existing) return existing;
 
-  const cachePath = fingerprintStatCachePath(canonicalRoot);
+  const cachePath = fingerprintStatCachePath(canonicalRoot, selectedDirectory);
   const files = loadFingerprintStatCache(cachePath);
   const created: ProjectFingerprintStatCache = {
     cachePath,
@@ -130,13 +149,14 @@ function projectFingerprintStatCache(projectRoot: string): ProjectFingerprintSta
     hits: 0,
     stores: 0,
   };
-  projectCaches.set(canonicalRoot, created);
+  caches.set(selectedDirectory, created);
+  projectCaches.set(canonicalRoot, caches);
   return created;
 }
 
-function fingerprintStatCachePath(canonicalRoot: string): string | null {
+function fingerprintStatCachePath(canonicalRoot: string, selectedDirectory: string | null): string | null {
   try {
-    const cacheDir = resolveCacheDirPath(canonicalRoot);
+    const cacheDir = selectedDirectory ?? resolveCacheDirPath(canonicalRoot);
     // Never create a cache namespace just to persist hashes. Watch and reindex
     // already own that directory; tests and one-shot fingerprints stay in memory.
     if (!existsSync(cacheDir)) return null;

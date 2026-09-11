@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "description": "Complete private LaunchPoint TypeScript reindex requests after correcting cache routing, redundant metadata decoding, and augmentation recovery paths.",
+  "sourceBase": "8025396a",
+  "archiveSha256": "4063d6a1ec786f9838fda583733a53772c7ea45dc59f38781da755fb29fce44d",
+  "shippedFilesVerified": 466,
+  "remoteArtifacts": "/tmp/scip-query-fast-install-20260910-jWoJur/warm-final2-incremental",
+  "method": {
+    "requests": "manual-cli reindex API; allowExpensiveRebuild=false; new owned worker for first edit",
+    "preparedRuntimeBaseline": true,
+    "documentsRequested": 5603,
+    "cachePreparationIncludedInEditTimings": false,
+    "sourceCheckpointsPresent": true,
+    "memory": "RSS sum of the owned worker, reindex process and their descendants; sampled every 250ms",
+    "note": "Single sequential run on the same private LaunchPoint checkout. These are edit latencies with current runtime caches, not new-repository/full-build timings or an agent benchmark.",
+    "baselinePreparation": "Fresh full compiler rebuild followed by runtime-only immutable publication before the five edits. Preparation excluded from edit timings.",
+    "cachePath": ".scipquery, explicitly selected by the reindex caller",
+    "limitation": "The prior cache implementation ignored this explicit directory. Default-cache installations can already reuse persisted file hashes, so their gain may be smaller. Single sequential run, not a latency distribution."
+  },
+  "stages": [
+    {
+      "label": "first-worker-edit",
+      "baselineWallSeconds": 33.39876649505459,
+      "wallSeconds": 28.831212115939707,
+      "peakGiB": 5.103366851806641,
+      "exitCode": 0
+    },
+    {
+      "label": "warm-body-edit",
+      "baselineWallSeconds": 16.194717603968456,
+      "wallSeconds": 12.642826149938628,
+      "peakGiB": 4.976940155029297,
+      "exitCode": 0
+    },
+    {
+      "label": "warm-inferred-edit",
+      "baselineWallSeconds": 16.949107324006036,
+      "wallSeconds": 13.150250980979763,
+      "peakGiB": 5.10552978515625,
+      "exitCode": 0
+    },
+    {
+      "label": "warm-runtime-edit",
+      "baselineWallSeconds": 17.959936242899857,
+      "wallSeconds": 14.410598514019512,
+      "peakGiB": 5.128379821777344,
+      "exitCode": 0
+    },
+    {
+      "label": "restore",
+      "baselineWallSeconds": 19.736748090945184,
+      "wallSeconds": 15.67880418500863,
+      "peakGiB": 5.139568328857422,
+      "exitCode": 0
+    }
+  ],
+  "verification": {
+    "baselineMatchesPrevious": true,
+    "stages": [
+      {
+        "stage": "first-worker-edit",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "warm-body-edit",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "warm-inferred-edit",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "warm-runtime-edit",
+        "added": {
+          "observations": 1,
+          "relationGroups": 1,
+          "links": 0,
+          "frontiers": 1
+        },
+        "originalObjectsUnchanged": true
+      },
+      {
+        "stage": "restore",
+        "added": {
+          "observations": 0,
+          "relationGroups": 0,
+          "links": 0,
+          "frontiers": 0
+        },
+        "originalObjectsUnchanged": true
+      }
+    ],
+    "restoredFileCoverageMatches": true,
+    "sourceHash": "f5b5810aa873230a614d487e026055296e3dedaf06db3357e44616400101a2e7",
+    "probeSymbolsRemoved": true,
+    "quickCheck": "ok",
+    "foreignKeyCheck": "ok",
+    "temporaryWatcherStopped": true
+  }
+}

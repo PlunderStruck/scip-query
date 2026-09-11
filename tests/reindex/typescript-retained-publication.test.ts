@@ -1,3 +1,12 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { runtimeFingerprint } from '../../src/runtime/index-freshness.js';
+import {
+  FINGERPRINT_STAT_CACHE_FILE,
+  resetProjectFileFingerprintCacheForTest,
+  projectFileFingerprintCacheStats,
+  withProjectFileFingerprintCache,
+} from '../../src/platform/fingerprint-stat-cache.js';
 import { createHash } from 'node:crypto';
 import { inspectWatchService } from '../../src/runtime/watch-service.js';
 import { expect, test } from 'vitest';
@@ -31,6 +40,14 @@ test('retains independent HTTP propagation and reunites interacting callable sum
     fixture.write('consumer.ts', "import { shared } from './bridge.js';\nexport const result = shared('/one');\n");
     fixture.write('independent.ts', independent(''));
     await fixture.index({ skipIfUnchanged: false, allowExpensiveRebuild: true });
+    expect(existsSync(join(fixture.cache, FINGERPRINT_STAT_CACHE_FILE))).toBe(true);
+    resetProjectFileFingerprintCacheForTest(fixture.root);
+    runtimeFingerprint(fixture.root, ['typescript'], { dbPath: '.cache' });
+    withProjectFileFingerprintCache(fixture.root, fixture.cache, () => {
+      const stats = projectFileFingerprintCacheStats(fixture.root);
+      expect(stats.hits).toBeGreaterThan(0);
+      expect(stats.stores).toBe(0);
+    });
     const baselineDb = fixture.open();
     try {
       expectIndexedPhaseSources(readRuntimeBoundaryGraph(baselineDb)!, fixture.sources);

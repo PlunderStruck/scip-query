@@ -1,4 +1,5 @@
 import { checkpointTypeScriptSources } from './typescript-checkpoint.js';
+import { withProjectFileFingerprintCache } from '../platform/fingerprint-stat-cache.js';
 import { TYPESCRIPT_SYMBOL_IDENTITY_VERSION } from '../domain/typescript-index-identity.js';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
@@ -414,10 +415,15 @@ function reindexMaxHeapMb(opts: ReindexOptions): number {
  * Reindex a project: detect languages, run the appropriate SCIP indexer(s),
  * and convert the output to SQLite.
  */
+export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
+  const paths = resolveReindexOutputPaths(opts);
+  return withProjectFileFingerprintCache(opts.projectRoot, dirname(paths.outputDb), () => runReindex(opts));
+}
+
 // scip-query: ignore-extract — this is the lock/cleanup safety envelope for
 // reindex; hiding the ordered steps behind another helper would make failure
 // behavior harder to audit.
-export async function reindex(opts: ReindexOptions): Promise<ReindexResult> {
+async function runReindex(opts: ReindexOptions): Promise<ReindexResult> {
   const { projectRoot, onStatus = console.log } = opts;
   const maxHeapMb = reindexMaxHeapMb(opts);
   // Compatibility note: skipAutoInstall=true still wins, but false does not

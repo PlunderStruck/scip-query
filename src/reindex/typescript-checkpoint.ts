@@ -13,6 +13,7 @@ import {
   type ProjectInputSnapshot,
 } from '../domain/project-input.js';
 import { buildProjectInputFingerprint, readProjectFile } from '../platform/project-files.js';
+import { withProjectFileFingerprintCache } from '../platform/fingerprint-stat-cache.js';
 import { discoverTypeScriptProjectRoots } from '../platform/typescript-projects.js';
 import {
   acquireSqliteGenerationReader,
@@ -92,10 +93,12 @@ function matchingCheckpointProject(input: CheckpointInput, snapshot: ProjectInpu
 }
 
 function matchingCheckpointInputs(input: CheckpointInput, snapshot: ProjectInputSnapshot): boolean {
-  const current = buildProjectInputFingerprint(input.projectRoot, snapshot.languages, {
-    ...snapshot,
-    typescriptProjectMode: snapshot.typescriptProjectMode as 'single' | 'workspace',
-  });
+  const current = withProjectFileFingerprintCache(input.projectRoot, dirname(input.dbPath), () =>
+    buildProjectInputFingerprint(input.projectRoot, snapshot.languages, {
+      ...snapshot,
+      typescriptProjectMode: snapshot.typescriptProjectMode as 'single' | 'workspace',
+    }),
+  );
   const prior = new Map(snapshot.files.map((file) => [file.path, file]));
   const modified = new Set(input.request.modifiedFiles);
   if (prior.size !== current.files.length || modified.size !== input.request.modifiedFiles.length) return false;

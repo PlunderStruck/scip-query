@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as metadata from '../../src/domain/reindex-metadata.js';
 
 import { canonicalReindexMetadataIdentity, decodeReindexMetadata } from '../../src/domain/reindex-metadata.js';
 import { publishedTypeScriptIndexGeneration } from '../../src/reindex/typescript-index-protocol.js';
@@ -13,7 +14,37 @@ describe('reindex metadata identity consumers', () => {
   const tempDirs: string[] = [];
 
   afterEach(() => {
+    vi.restoreAllMocks();
     for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('reuses decoding only for identical bytes and detects same-size edits with restored timestamps', () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'scip-query-metadata-bytes-'));
+    tempDirs.push(cacheDir);
+    const dbPath = join(cacheDir, 'index.db');
+    const metaPath = join(cacheDir, 'meta.json');
+    const record = { ...REINDEX_METADATA_CAPABILITY_CASES[1]!.record, fingerprint: { file: cacheDir, revision: 'a' } };
+    const raw = JSON.stringify(record);
+    const decode = vi.spyOn(metadata, 'decodeReindexMetadata');
+    writeFileSync(metaPath, raw);
+    const first = publishedTypeScriptIndexGeneration(dbPath);
+    expect(first).not.toBeNull();
+    expect(publishedTypeScriptIndexGeneration(dbPath)).toBe(first);
+    expect(decode).toHaveBeenCalledTimes(1);
+    const before = statSync(metaPath);
+    writeFileSync(metaPath, JSON.stringify({ ...record, fingerprint: { ...record.fingerprint, revision: 'b' } }));
+    utimesSync(metaPath, before.atime, before.mtime);
+    const changed = publishedTypeScriptIndexGeneration(dbPath);
+    expect(changed).not.toBe(first);
+    expect(changed).not.toBeNull();
+    expect(publishedTypeScriptIndexGeneration(dbPath)).toBe(changed);
+    expect(decode).toHaveBeenCalledTimes(2);
+    writeFileSync(metaPath, JSON.stringify(FUTURE_REINDEX_METADATA));
+    expect(publishedTypeScriptIndexGeneration(dbPath)).toBeNull();
+    rmSync(metaPath);
+    expect(publishedTypeScriptIndexGeneration(dbPath)).toBeNull();
+    writeFileSync(metaPath, raw);
+    expect(publishedTypeScriptIndexGeneration(dbPath)).toBe(first);
   });
 
   it.each(REINDEX_METADATA_CAPABILITY_CASES)(

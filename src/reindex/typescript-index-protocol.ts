@@ -11,7 +11,7 @@ import {
   type BoundedMailboxRequestIdentity,
   type BoundedMailboxStatus,
 } from '../storage/bounded-mailbox.js';
-import { readSmallArtifactText } from '../platform/bounded-file.js';
+import { readFileWithinLimit, SMALL_ARTIFACT_MAX_BYTES } from '../platform/bounded-file.js';
 import type { TypeScriptDocumentBlobReference } from './typescript-document-blob.js';
 
 export const TYPESCRIPT_INDEX_PROTOCOL_VERSION = 6;
@@ -198,12 +198,22 @@ function isIndexEnvelopeOperation(parsed: Partial<TypeScriptIndexEnvelope>): boo
   );
 }
 
+let lastGenerationMetadata: { bytesHash: string; generation: string | null } | undefined;
+
 export function publishedTypeScriptIndexGeneration(dbPath: string): string | null {
   try {
-    const canonical = canonicalReindexMetadataIdentity(
-      decodeReindexMetadata(readSmallArtifactText(join(dirname(dbPath), 'meta.json'), 'reindex metadata')),
-    );
-    return canonical ? createHash('sha256').update(canonical).digest('hex') : null;
+    const bytes = readFileWithinLimit(join(dirname(dbPath), 'meta.json'), {
+      inputKind: 'reindex metadata',
+      maxBytes: SMALL_ARTIFACT_MAX_BYTES,
+    });
+    // Revalidate actual bytes on every request. The bounded batches otherwise
+    // repeatedly decode the same complete source inventory inside the worker.
+    const bytesHash = createHash('sha256').update(bytes).digest('hex');
+    if (lastGenerationMetadata?.bytesHash === bytesHash) return lastGenerationMetadata.generation;
+    const canonical = canonicalReindexMetadataIdentity(decodeReindexMetadata(bytes.toString('utf8')));
+    const generation = canonical ? createHash('sha256').update(canonical).digest('hex') : null;
+    lastGenerationMetadata = { bytesHash, generation };
+    return generation;
   } catch {
     return null;
   }

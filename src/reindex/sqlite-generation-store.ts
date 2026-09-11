@@ -723,12 +723,14 @@ function stableMirrorIdentity(
 
 function recoveryForGeneration(outputDb: string, identity: string): SqliteGenerationRecovery {
   const directory = join(sqliteGenerationRoot(outputDb), identity);
-  const databasePath = join(directory, basename(outputDb));
-  const metadataPath = join(directory, 'meta.json');
+  const manifest = readSqliteGenerationManifest(outputDb, identity);
+  if (!manifest) throw new Error('Cannot retain recovery artifacts without a valid generation manifest.');
+  const databasePath = join(directory, manifest.database.file);
+  const metadataPath = manifest.metadata ? join(directory, manifest.metadata.file) : undefined;
   return {
     generationIdentity: identity,
     databasePath: relative(dirname(outputDb), databasePath),
-    ...(existsSync(metadataPath) ? { metadataPath: relative(dirname(outputDb), metadataPath) } : {}),
+    ...(metadataPath ? { metadataPath: relative(dirname(outputDb), metadataPath) } : {}),
   };
 }
 

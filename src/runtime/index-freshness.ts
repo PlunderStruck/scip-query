@@ -1,5 +1,7 @@
 import { existsSync, lstatSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { withProjectFileFingerprintCache } from '../platform/fingerprint-stat-cache.js';
+import { resolveCacheDirPath } from '../platform/cache-layout.js';
+import { dirname, resolve } from 'node:path';
 import { decodeReindexMetadata } from '../domain/reindex-metadata.js';
 import { projectInputSnapshotOrNull, sameProjectInputSnapshotContent } from '../domain/project-input.js';
 import type { LastRefreshMetadata, ProjectConfig, SupportedLanguage } from '../domain/types.js';
@@ -145,7 +147,7 @@ function currentFingerprintForFreshness(
     languages,
     storedFingerprint,
   );
-  return managed ?? runtimeFingerprint(projectRoot, languages, config);
+  return managed ?? runtimeFingerprint(projectRoot, languages, config, paths.cacheDir ?? dirname(paths.dbPath));
 }
 
 function reusableManagedFingerprintForFreshness(
@@ -334,13 +336,16 @@ export function runtimeFingerprint(
   projectRoot: string,
   languages: readonly SupportedLanguage[],
   config: ProjectConfig,
+  cacheDir = resolveCacheDirPath(projectRoot, config),
 ): ProjectInputFingerprint {
-  return buildProjectInputFingerprint(projectRoot, languages, {
-    pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
-    typescriptProjectMode: config.indexer?.typescript?.projectMode,
-    typescriptProjects: config.indexer?.typescript?.projects,
-    clojureConfigPath: config.indexer?.clojure?.configPath,
-  });
+  return withProjectFileFingerprintCache(projectRoot, cacheDir, () =>
+    buildProjectInputFingerprint(projectRoot, languages, {
+      pnpmWorkspaces: config.indexer?.typescript?.pnpmWorkspaces,
+      typescriptProjectMode: config.indexer?.typescript?.projectMode,
+      typescriptProjects: config.indexer?.typescript?.projects,
+      clojureConfigPath: config.indexer?.clojure?.configPath,
+    }),
+  );
 }
 
 function fingerprintConfigurationMatches(
