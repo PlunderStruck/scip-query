@@ -77,6 +77,16 @@ All notable changes to `scip-query` are documented here. This file starts at 0.1
 - The Windows sidecar remains pinned to `scip-query-scip-windows@0.13.1`.
   Node.js 22 or later is still required.
 
+### Release checks
+
+- Build before the complete test suite so CLI contracts exercise the artifact
+  that will be packed. Use the compiled CLI in the source-reading contract
+  suites and share Node's compilation cache between release test subprocesses,
+  with temporary-cache cleanup and explicit cache/coverage controls preserved.
+- Reduce temporary SQLite journal churn in generated read-proof tests while
+  retaining the separate reader, every edit checkpoint, and existing timeouts.
+  Keep the two-worker test limit and all release checks.
+
 ## [0.25.0]
 
 ### Slice-based cohesion

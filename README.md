@@ -326,8 +326,8 @@ and focused use of the React, Vue, and general cleanup detectors.
 ```bash
 npm install
 npm run typecheck
-npm test
 npm run build
+npm test
 ```
 
 The React and Vue detector suites are part of the normal test surface and must

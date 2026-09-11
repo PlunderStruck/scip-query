@@ -137,9 +137,9 @@ and verifying registry truth after each publication:
 2. require a clean Git checkout and record the exact `HEAD` object ID;
 3. resolve one canonical credential-free HTTPS npm registry and retain it for
    the complete run;
-4. run typecheck, the complete test suite, and lint; lint includes formatting,
-   production build, API compatibility, downstream compilation, and skill
-   link checks;
+4. run typecheck, the production dependency audit, and lint (including
+   formatting, production build, API compatibility, downstream compilation,
+   and skill links), then the complete test suite against that fresh build;
 5. verify provenance and pack the sidecar;
 6. pack the main package with lifecycle scripts disabled;
 7. extract both packed `package.json` files, require their coordinates, and
@@ -183,6 +183,15 @@ the two packed artifacts were tested and produced.
    This runs the complete local preflight, packs both artifacts, writes the
    local recovery record, and reads/downloads any existing registry versions.
    It never invokes `npm publish`.
+
+   The complete suite keeps its two-worker limit. CLI contract tests execute
+   the built CLI instead of repeatedly loading TypeScript through a development
+   runner. Test subprocesses share Node's module compilation cache inside the
+   release's temporary directory, which is removed on success or failure.
+   Every test still executes; no previous pass is reused. Explicit
+   `NODE_DISABLE_COMPILE_CACHE=1` and `NODE_COMPILE_CACHE` settings are honored,
+   and `NODE_V8_COVERAGE` disables compilation caching for precise coverage.
+   Node versions without compilation-cache support still run the same checks.
 
 5. Review the reported coordinates, integrities, registry states, and the JSON
    record under `.scipquery/releases/`.

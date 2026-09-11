@@ -234,8 +234,11 @@ test.each(Array.from({ length: 10 }, (_, index) => 20260910 + index))(
   'generated reference histories agree with direct query comparison (seed %i)',
   (seed) => {
     withDatabase((db, writer) => {
-      // This test checks query equivalence, not crash durability. Avoid a disk
-      // synchronization for each disposable fixture mutation.
+      // Keep every committed mutation visible through the separate reader, but
+      // reuse SQLite's write-ahead journal instead of creating and unlinking a
+      // rollback journal for each of the 20,000 generated edit checkpoints.
+      // Crash durability is covered separately; these fixtures compare queries.
+      writer.pragma('journal_mode = WAL');
       writer.pragma('synchronous = OFF');
       const update = writer.prepare('INSERT OR REPLACE INTO calls VALUES (?, ?)');
       const remove = writer.prepare('DELETE FROM calls WHERE caller = ?');

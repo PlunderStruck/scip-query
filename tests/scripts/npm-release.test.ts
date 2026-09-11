@@ -1,6 +1,6 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   createNpmReleaseRuntime,
@@ -45,8 +45,8 @@ describe('ordered npm release coordinator', () => {
         'registry-config',
         'preflight-typecheck',
         'preflight-audit',
-        'preflight-test',
         'preflight-lint',
+        'preflight-test',
         'pack-sidecar',
         'pack-main',
         'git-revision',
@@ -60,6 +60,86 @@ describe('ordered npm release coordinator', () => {
       expect(fixture.logs.join('\n')).toContain('no registry mutation performed');
       expect(fixture.stateWrites()).toHaveLength(1);
     });
+  });
+
+  it.each(['lint', 'test'] as const)('stops a failed %s preflight before packing or publishing', async (stage) => {
+    await withFixture(async (fixture) => {
+      const runtime = {
+        ...fixture.runtime,
+        run: (...args: Parameters<NpmReleaseRuntime['run']>) => {
+          const result = fixture.runtime.run(...args);
+          if (fixture.commandNames().at(-1) === `preflight-${stage}`) throw new Error(`failed ${stage}`);
+          return result;
+        },
+      };
+
+      expect(() => runNpmRelease(runtime)).toThrow(`failed ${stage}`);
+      if (stage === 'lint') expect(fixture.commandNames()).not.toContain('preflight-test');
+      expect(fixture.commandNames()).not.toContain('pack-main');
+      expect(fixture.commandNames()).not.toContain('pack-sidecar');
+      expect(fixture.commandNames()).not.toContain('view-main');
+      expect(fixture.published).toEqual([]);
+      expect(fixture.stateWrites()).toEqual([]);
+      expect(fixture.lockReleaseCount).toBe(1);
+    });
+  });
+
+  it.each([false, true])('owns and cleans the test compilation cache (preflight failure=%s)', async (fail) => {
+    await withFixture(async (fixture) => {
+      const environment = { SCIP_RELEASE_TEST_CONTEXT: 'retained' };
+      let cache: string | undefined;
+      const runtime = {
+        ...fixture.runtime,
+        env: environment,
+        run: (...args: Parameters<NpmReleaseRuntime['run']>) => {
+          const result = fixture.runtime.run(...args);
+          if (fixture.commandNames().at(-1) === 'preflight-test') {
+            cache = args[2].env?.NODE_COMPILE_CACHE;
+            expect(args[2].env?.SCIP_RELEASE_TEST_CONTEXT).toBe('retained');
+            expect(cache).toBeTruthy();
+            mkdirSync(cache!, { recursive: true });
+            writeFileSync(join(cache!, 'fixture-cache'), 'compiled code');
+            if (fail) throw new Error('failed test');
+          } else {
+            expect(args[2].env?.NODE_COMPILE_CACHE).toBeUndefined();
+          }
+          return result;
+        },
+      };
+
+      if (fail) expect(() => runNpmRelease(runtime, { mode: 'dry-run' })).toThrow('failed test');
+      else runNpmRelease(runtime, { mode: 'dry-run' });
+      expect(cache).toBeTruthy();
+      expect(existsSync(dirname(cache!))).toBe(false);
+      expect(environment).toEqual({ SCIP_RELEASE_TEST_CONTEXT: 'retained' });
+    });
+  });
+
+  it.each([
+    { NODE_DISABLE_COMPILE_CACHE: '1' },
+    { NODE_COMPILE_CACHE: '/caller-owned-cache' },
+    { NODE_V8_COVERAGE: '/coverage', NODE_COMPILE_CACHE: '/caller-owned-cache' },
+  ])('respects explicit compilation and coverage controls: %j', async (environment) => {
+    await withFixture(async (fixture) => {
+      runNpmRelease({ ...fixture.runtime, env: environment }, { mode: 'dry-run' });
+      const test = fixture.calls.find((call) => call.name === 'preflight-test');
+      expect(test?.options.env).toEqual(
+        environment.NODE_V8_COVERAGE ? { ...environment, NODE_DISABLE_COMPILE_CACHE: '1' } : environment,
+      );
+    });
+  });
+
+  it('passes a scoped environment to the real child process without changing its parent', () => {
+    const runtime = createNpmReleaseRuntime();
+    const previous = process.env.SCIP_RELEASE_ENV_TEST;
+    const output = runtime.run(process.execPath, ['-e', 'process.stdout.write(process.env.SCIP_RELEASE_ENV_TEST)'], {
+      env: { ...process.env, SCIP_RELEASE_ENV_TEST: 'child-only' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeoutMs: 10_000,
+      maxOutputBytes: 1024,
+    });
+    expect(output).toBe('child-only');
+    expect(process.env.SCIP_RELEASE_ENV_TEST).toBe(previous);
   });
 
   it('publishes and verifies the sidecar before publishing and verifying the main package', async () => {

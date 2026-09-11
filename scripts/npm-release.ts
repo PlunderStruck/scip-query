@@ -143,7 +143,7 @@ function executeNpmRelease(
   };
   const gitRevision = requireCleanGitRevision(root, runtime);
   const registry = resolveNpmRegistry(root, runtime);
-  runLocalPreflight(root, runtime);
+  runLocalPreflight(root, releaseDirectory, runtime);
   const localSidecar = prepareLocalSidecar(sidecarDir, sidecarPackage, releaseDirectory, runtime);
   const localMain = packLocalMain(root, mainPackage, sidecarPackage, releaseDirectory, runtime);
   requireCleanGitRevision(root, runtime, gitRevision);
@@ -276,22 +276,39 @@ export function createNpmReleaseRuntime(): NpmReleaseRuntime {
   };
 }
 
-function runLocalPreflight(root: string, runtime: NpmReleaseRuntime): void {
-  const commands: Array<{ label: string; args: string[] }> = [
+function runLocalPreflight(root: string, releaseDirectory: string, runtime: NpmReleaseRuntime): void {
+  const commands: Array<{ label: string; args: string[]; env?: NodeJS.ProcessEnv }> = [
     { label: 'typecheck', args: ['run', 'typecheck'] },
     { label: 'production dependency audit', args: ['run', 'audit:prod'] },
-    { label: 'complete test suite', args: ['test'] },
+    // CLI integration tests must execute the build that will actually be packed.
     { label: 'lint, build, API compatibility, and skill links', args: ['run', 'lint'] },
+    {
+      label: 'complete test suite',
+      args: ['test'],
+      env: releaseTestEnvironment(runtime.env, releaseDirectory),
+    },
   ];
   for (const command of commands) {
     runtime.log(`Preflight: ${command.label}...`);
     runtime.run('npm', command.args, {
       cwd: root,
+      env: command.env,
       stdio: 'inherit',
       timeoutMs: PREFLIGHT_TIMEOUT_MS,
       maxOutputBytes: COMMAND_OUTPUT_LIMIT_BYTES,
     });
   }
+}
+
+function releaseTestEnvironment(environment: NodeJS.ProcessEnv, releaseDirectory: string): NodeJS.ProcessEnv {
+  // Cache Node's compiled module code, never test results. Keep it inside the
+  // release's owned temporary tree so success and failure both clean it up.
+  // V8 coverage requires uncached compilation for precise function coverage.
+  if (environment.NODE_V8_COVERAGE) return { ...environment, NODE_DISABLE_COMPILE_CACHE: '1' };
+  if (environment.NODE_DISABLE_COMPILE_CACHE === '1' || environment.NODE_COMPILE_CACHE !== undefined) {
+    return { ...environment };
+  }
+  return { ...environment, NODE_COMPILE_CACHE: join(releaseDirectory, 'node-compile-cache') };
 }
 
 function resolveNpmRegistry(root: string, runtime: NpmReleaseRuntime): string {

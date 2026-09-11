@@ -342,25 +342,21 @@ describe('search CLI identity and materialization contract', { timeout: 30_000 }
     args: readonly string[],
     extraEnvironment: Readonly<Record<string, string>> = {},
   ): ReturnType<typeof spawnSync> {
-    return spawnSync(
-      join(repositoryRoot, 'node_modules', '.bin', 'vite-node'),
-      ['--script', join(repositoryRoot, 'src', 'runtime', 'cli.ts'), command, ...args],
-      {
-        cwd: repositoryRoot,
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          SCIP_QUERY_PROJECT_ROOT: fixtureRoot,
-          SCIP_QUERY_INDEX_DB: dbPath,
-          SCIP_QUERY_INDEX_SCIP: join(fixtureRoot, 'index.scip'),
-          SCIP_QUERY_CACHE_DIR: join(fixtureRoot, '.cache'),
-          SCIP_QUERY_SHARED_CACHE: '0',
-          SCIP_QUERY_UPDATE_CHECK: '0',
-          XDG_CACHE_HOME: join(fixtureRoot, '.xdg-cache'),
-          ...extraEnvironment,
-        },
+    return spawnSync(process.execPath, [join(repositoryRoot, 'dist', 'cli.js'), command, ...args], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        SCIP_QUERY_PROJECT_ROOT: fixtureRoot,
+        SCIP_QUERY_INDEX_DB: dbPath,
+        SCIP_QUERY_INDEX_SCIP: join(fixtureRoot, 'index.scip'),
+        SCIP_QUERY_CACHE_DIR: join(fixtureRoot, '.cache'),
+        SCIP_QUERY_SHARED_CACHE: '0',
+        SCIP_QUERY_UPDATE_CHECK: '0',
+        XDG_CACHE_HOME: join(fixtureRoot, '.xdg-cache'),
+        ...extraEnvironment,
       },
-    );
+    });
   }
 
   function runJsonCommandFully(

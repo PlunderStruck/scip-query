@@ -25,6 +25,7 @@ const COMMAND_OUTPUT_LIMIT_BYTES = 4 * 1024 * 1024;
 
 export interface WindowsSidecarCommandOptions {
   cwd?: string;
+  env?: NodeJS.ProcessEnv;
   stdio?: 'inherit' | ['ignore', 'pipe', 'pipe'];
   timeoutMs: number;
   maxOutputBytes: number;
@@ -252,7 +253,7 @@ export function createWindowsSidecarReleaseRuntime(): WindowsSidecarReleaseRunti
       const result = spawnSync(binary, args, {
         cwd: options.cwd,
         encoding: 'utf8',
-        env: process.env,
+        env: options.env ?? process.env,
         killSignal: 'SIGTERM',
         maxBuffer: options.maxOutputBytes,
         stdio: options.stdio,

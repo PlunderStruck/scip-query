@@ -422,23 +422,19 @@ describe('code CLI output contract', { timeout: 30_000 }, () => {
   }, 10_000);
 
   function runCode(args: readonly string[]): ReturnType<typeof spawnSync> {
-    return spawnSync(
-      join(repositoryRoot, 'node_modules', '.bin', 'vite-node'),
-      ['--script', join(repositoryRoot, 'src', 'runtime', 'cli.ts'), 'code', ...args],
-      {
-        cwd: repositoryRoot,
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          SCIP_QUERY_PROJECT_ROOT: fixtureRoot,
-          SCIP_QUERY_INDEX_DB: dbPath,
-          SCIP_QUERY_INDEX_SCIP: join(fixtureRoot, 'index.scip'),
-          SCIP_QUERY_CACHE_DIR: join(fixtureRoot, '.cache'),
-          SCIP_QUERY_SHARED_CACHE: '0',
-          SCIP_QUERY_UPDATE_CHECK: '0',
-          XDG_CACHE_HOME: join(fixtureRoot, '.xdg-cache'),
-        },
+    return spawnSync(process.execPath, [join(repositoryRoot, 'dist', 'cli.js'), 'code', ...args], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        SCIP_QUERY_PROJECT_ROOT: fixtureRoot,
+        SCIP_QUERY_INDEX_DB: dbPath,
+        SCIP_QUERY_INDEX_SCIP: join(fixtureRoot, 'index.scip'),
+        SCIP_QUERY_CACHE_DIR: join(fixtureRoot, '.cache'),
+        SCIP_QUERY_SHARED_CACHE: '0',
+        SCIP_QUERY_UPDATE_CHECK: '0',
+        XDG_CACHE_HOME: join(fixtureRoot, '.xdg-cache'),
       },
-    );
+    });
   }
 });
